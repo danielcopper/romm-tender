@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.32.0](https://github.com/danielcopper/romm-tender/compare/tender-v0.31.0...tender-v0.32.0) (2026-08-22)
+
+
+### Features
+
+* **saves:** show the last known slots while RomM is unreachable ([#1756](https://github.com/danielcopper/romm-tender/issues/1756)) ([2a860d5](https://github.com/danielcopper/romm-tender/commit/2a860d5d4d45e0721f7d2c962ad0dabcf5d3236d)), closes [#1755](https://github.com/danielcopper/romm-tender/issues/1755)
+
+
+### Bug Fixes
+
+* **saves:** name no slot until one has been answered ([#1753](https://github.com/danielcopper/romm-tender/issues/1753)) ([5bb0310](https://github.com/danielcopper/romm-tender/commit/5bb0310614c878e5ceb598ef0c7059cdab87995d)), closes [#1747](https://github.com/danielcopper/romm-tender/issues/1747)
+* **ui:** bind the save tab's two write-backs to the rom they were issued for ([#1760](https://github.com/danielcopper/romm-tender/issues/1760)) ([91e7685](https://github.com/danielcopper/romm-tender/commit/91e7685a0e9525dda9c723a3c2792b282efa949b))
+* **ui:** let the game page go back for a BIOS answer it could not get ([#1761](https://github.com/danielcopper/romm-tender/issues/1761)) ([b1d0095](https://github.com/danielcopper/romm-tender/commit/b1d0095c5139f07b5207bff6c70ab6d0aad6cdb0)), closes [#1752](https://github.com/danielcopper/romm-tender/issues/1752)
+* **ui:** order two game-detail reads for the same rom by when they were issued ([#1745](https://github.com/danielcopper/romm-tender/issues/1745)) ([dfb99ac](https://github.com/danielcopper/romm-tender/commit/dfb99ac4f900795aada3334edbaf0645064f99b9))
+* **ui:** re-read the installed rom on a version switch and drop the saves pane with its tab ([#1750](https://github.com/danielcopper/romm-tender/issues/1750)) ([7d47de3](https://github.com/danielcopper/romm-tender/commit/7d47de3dc9e1a51ed46e42eb4070488c1d9d4899))
+
+
+### Performance Improvements
+
+* **romm:** stop paying a full retry ladder per call while RomM is unreachable ([#1759](https://github.com/danielcopper/romm-tender/issues/1759)) ([189a186](https://github.com/danielcopper/romm-tender/commit/189a1866954d20f3cab8e8a8b639ccb1ae82ebc4)), closes [#1758](https://github.com/danielcopper/romm-tender/issues/1758)
+
 ## [0.31.0](https://github.com/danielcopper/romm-tender/compare/tender-v0.30.1...tender-v0.31.0) (2026-08-16)
 
 
