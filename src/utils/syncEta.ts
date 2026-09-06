@@ -9,10 +9,10 @@
  * ``remainingSeconds`` / ``formatEtaCountdown``). A thin run-scoped state layer
  * (``beginEtaRun`` / ``observeApplyProgress`` / ``liveEtaSeconds`` /
  * ``displayedEtaSeconds`` / ``resetEta``) is the seam the ``sync_plan`` listener
- * (index.tsx) and MainPage drive: the plan sets the per-unit weights + total, and
- * MainPage feeds one sample per applying progress frame and renders the sticky
- * countdown via ``displayedEtaSeconds`` — the module owns the deadline, so the UI
- * holds no ETA state of its own.
+ * (index.tsx) and ``syncRunView.ts`` drive: the plan sets the per-unit weights +
+ * total, and the hook feeds one sample per applying progress frame and exposes
+ * the sticky countdown via ``displayedEtaSeconds`` — the module owns the
+ * deadline, so the UI holds no ETA state of its own.
  *
  * Approximation, by design — though a narrow one since the plan went skip-aware
  * (#1382): a unit's seeded weight is 0 when the backend predicts its wholesale
@@ -317,13 +317,13 @@ export function displayedEtaSeconds(nowMs: number): number | null {
 
 /**
  * Weighted coarse-bar fraction (0..1) over the run's per-unit plan weights —
- * the size-aware replacement for MainPage's equal-per-unit index weighting
- * (#1382). ``completedUnits`` units are done in full; the running unit (index
- * ``completedUnits``) contributes ``withinUnitFraction`` (clamped to 0..1) of
- * its own weight share. Uses the SAME weights the countdown uses (skip-aware
- * seeds, delta-corrected by {@link observeUnitTotal} as units dispatch), so a
- * predicted-skip unit occupies no bar width and a huge platform occupies its
- * real share instead of ``1/totalUnits``.
+ * the size-aware replacement for the equal-per-unit index weighting the hook
+ * falls back to (#1382). ``completedUnits`` units are done in full; the running
+ * unit (index ``completedUnits``) contributes ``withinUnitFraction`` (clamped
+ * to 0..1) of its own weight share. Uses the SAME weights the countdown uses
+ * (skip-aware seeds, delta-corrected by {@link observeUnitTotal} as units
+ * dispatch), so a predicted-skip unit occupies no bar width and a huge platform
+ * occupies its real share instead of ``1/totalUnits``.
  *
  * A zero-weight unit is not free: an empty delta still refreshes covers, so a
  * plan whose LEADING units all weigh zero would pin the bar to empty for as
@@ -341,7 +341,7 @@ export function displayedEtaSeconds(nowMs: number): number | null {
  *
  * A pure reader of the run snapshot. The monotonic bar latch that keeps an
  * upward weight correction from retracting shown width lives in
- * {@link latchedCoarseFraction}, the wrapper MainPage actually calls.
+ * {@link latchedCoarseFraction}, the wrapper ``syncRunView.ts`` actually calls.
  */
 export function weightedCoarseFraction(
   completedUnits: number,
