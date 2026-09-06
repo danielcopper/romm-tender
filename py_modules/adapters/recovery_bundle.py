@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from adapters.descriptor_paths import (
     claim_source,
+    containing_root,
     identity_for_stat,
     measure_tree,
     mount_id_for_fd,
@@ -590,13 +591,13 @@ class RecoveryBundleAdapter:
 
     @staticmethod
     def _open_regular_beneath(path: str, safe_root: str) -> int:
-        absolute_root = os.path.abspath(safe_root)
+        # *path* is never resolved — the walk below refuses a symlink among its
+        # components, which is only worth anything while they are still spelled
+        # the way the claim recorded them.
         absolute_path = os.path.abspath(path)
-        try:
-            if os.path.commonpath((absolute_root, absolute_path)) != absolute_root:
-                raise ValueError(f"Recovery source is outside its safe root: {path}")
-        except ValueError as exc:
-            raise ValueError(f"Recovery source is outside its safe root: {path}") from exc
+        absolute_root = containing_root(absolute_path, safe_root)
+        if absolute_root is None:
+            raise ValueError(f"Recovery source is outside its safe root: {path}")
         relative = os.path.relpath(absolute_path, absolute_root)
         if relative in {".", ".."} or relative.startswith(".." + os.sep):
             raise ValueError(f"Recovery source is not a file below its safe root: {path}")

@@ -64,6 +64,10 @@ class MigrationFileAdapter:
         """Return the mtime of *path* as a Unix timestamp."""
         return os.path.getmtime(path)
 
+    def realpath(self, path: str) -> str:
+        """Return *path* with every symlink in it resolved."""
+        return os.path.realpath(path)
+
     def walk_files(self, base_dir: str) -> list[tuple[str, list[str], list[str]]]:
         """Return ``os.walk``-style triples for *base_dir*.
 

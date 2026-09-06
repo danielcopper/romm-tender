@@ -6,8 +6,10 @@ vice versa — the plugin detects the change and helps you migrate your download
 ## How It Works
 
 Every time the plugin starts, it compares the current RetroDECK home path with the path it had stored from your last
-session. If the paths differ, the plugin flags a migration. This typically happens after you use RetroDECK's built-in
-move tool or manually relocate your `retrodeck/` directory.
+session. If they are different **folders**, the plugin flags a migration — two ways of writing one folder are not a
+move, so a system that reaches your home through a link (`/home` is a link to `/var/home` on Bazzite and other
+image-based distributions) does not raise a migration for the spelling alone. This typically happens after you use
+RetroDECK's built-in move tool or manually relocate your `retrodeck/` directory.
 
 The plugin does not move your RetroDECK files — RetroDECK handles that. What the plugin migrates are the files _it_
 manages: downloaded ROMs, BIOS files, and save files that it tracks for sync purposes.

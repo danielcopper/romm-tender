@@ -163,6 +163,67 @@ def test_rejects_path_escape_symlink_and_duplicate_identity(tmp_path):
         adapter.seal_bundle(bundle_id, snapshot, [], readme, "playtime")
 
 
+def _symlinked_home(tmp_path) -> tuple[Path, Path, str]:
+    """Build ``<base>/home -> <base>/var/home`` and return the base, the real roms dir, and its linked root.
+
+    The shape image-based distributions ship, in which a sealed claim's
+    ``safe_root`` can name the roms root the other way round (#1838).
+    """
+    base = tmp_path.resolve()
+    roms = base / "var" / "home" / "player" / "roms"
+    roms.mkdir(parents=True)
+    (base / "home").symlink_to(base / "var" / "home", target_is_directory=True)
+    linked_root = str(base / "home" / "player" / "roms")
+    assert linked_root != os.path.realpath(linked_root)
+    return base, roms, linked_root
+
+
+def test_seals_and_revalidates_a_source_root_reached_through_a_symlink(tmp_path):
+    _base, roms, linked_root = _symlinked_home(tmp_path)
+    (roms / "disc.bin").write_bytes(b"rom")
+    adapter = _adapter(tmp_path)
+
+    sealed = Path(
+        adapter.seal_bundle(
+            "TestGame_2026-07-24_symlink",
+            _snapshot(),
+            [
+                {
+                    "source_path": str(roms / "disc.bin"),
+                    "safe_root": linked_root,
+                    "kind": "installed_rom",
+                    "rom_id": 7,
+                }
+            ],
+            _readme_context(),
+            "playtime",
+        )
+    )
+
+    assert (sealed / "files" / "000001").read_bytes() == b"rom"
+    assert adapter.validate_sources(str(sealed)) is True
+
+
+def test_a_symlinked_source_root_still_refuses_everything_below_it_that_is_a_link(tmp_path):
+    """Only the root is resolved — a link among the path's own components stays refused."""
+    base, roms, linked_root = _symlinked_home(tmp_path)
+    real_dir = roms / "dc"
+    real_dir.mkdir()
+    (real_dir / "keep.bin").write_bytes(b"keep")
+    outside = base / "outside"
+    outside.mkdir()
+    (outside / "target.bin").write_bytes(b"keep too")
+    (roms / "escaping").symlink_to(outside, target_is_directory=True)
+    (roms / "inside").symlink_to(real_dir, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="outside its safe root"):
+        RecoveryBundleAdapter._open_regular_beneath(str(outside / "target.bin"), linked_root)
+    with pytest.raises(OSError):
+        RecoveryBundleAdapter._open_regular_beneath(str(roms / "escaping" / "target.bin"), linked_root)
+    with pytest.raises(OSError):
+        RecoveryBundleAdapter._open_regular_beneath(str(roms / "inside" / "keep.bin"), linked_root)
+
+
 def test_failed_copy_cleans_staging_without_touching_existing_bundle(tmp_path, monkeypatch):
     safe = tmp_path / "safe"
     safe.mkdir()

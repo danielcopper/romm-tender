@@ -171,6 +171,19 @@ def _rewrite_home(text: str, home: str, fake_home: str) -> str:
     return text.replace(home, fake_home)
 
 
+def _as_the_plugin_spells_it(path: str) -> str:
+    """Resolve *path* the way the plugin resolves its RetroDECK roots (#1838).
+
+    A vector's non-home root is a real absolute path — ``/mnt/sd/retrodeck`` —
+    and on an image-based host that prefix can itself be a symlink (SteamOS
+    resolves ``/mnt`` to ``/var/mnt``). The adapter answers with the resolved
+    spelling, so the two sides are compared as directories rather than as
+    strings; on a host without such a link this is a no-op and the comparison
+    is unchanged.
+    """
+    return os.path.realpath(path)
+
+
 def _materialize(files: dict[str, str], home: str, fake_home: str) -> None:
     """Write the vector's ``{path: content}`` file tree under the fake home."""
     for raw_path, raw_content in files.items():
@@ -235,7 +248,7 @@ def _check_full(
     expected_dir = expected_dir.replace("<rom_stem>", _ROM_STEM)
     if core_name is not None:
         expected_dir = expected_dir.replace("<core>", core_name)
-    expected_dir = _rewrite_home(expected_dir, home, fake_home)
+    expected_dir = _as_the_plugin_spells_it(_rewrite_home(expected_dir, home, fake_home))
 
     assert actual_dir == expected_dir, (
         f"placement dir drift on {vector['name']!r}: kernel {actual_dir!r} != atlas {expected_dir!r}"

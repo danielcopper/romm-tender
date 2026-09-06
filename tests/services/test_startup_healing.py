@@ -8,6 +8,7 @@ import logging
 import pytest
 from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
+from fakes.fake_resolved_path import FakeResolvedPath
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
@@ -66,6 +67,7 @@ def _make_service(
     logger: logging.Logger,
     retrodeck_home: str = _RETRODECK_HOME,
     path_probe: FakePathExistsReader | None = None,
+    resolve_path: FakeResolvedPath | None = None,
     uow: FakeUnitOfWork | None = None,
     clock: FakeClock | None = None,
     relaunch_options: FakeRelaunchOptionsResolver | None = None,
@@ -77,6 +79,7 @@ def _make_service(
             clock=clock if clock is not None else FakeClock(),
             retrodeck_paths=FakeRetroDeckPaths(home=retrodeck_home),
             path_probe=probe,
+            resolve_path=resolve_path if resolve_path is not None else FakeResolvedPath(),
             uow_factory=FakeUnitOfWorkFactory(uow) if uow is not None else FakeUnitOfWorkFactory(),
             relaunch_options=relaunch_options if relaunch_options is not None else FakeRelaunchOptionsResolver(),
         ),
@@ -167,6 +170,53 @@ class TestPruneStaleInstalledRoms:
             service.prune_stale_installed_roms()
         assert uow.rom_installs.get(1) is not None
         assert any("Skipping prune" in rec.message and "/hop/retrodeck" in rec.message for rec in caplog.records)
+
+    def test_preserve_entry_under_a_pending_home_spelled_through_a_symlink(self, logger, caplog):
+        """#1838: the marker and the install path name one directory two ways.
+
+        A pending home recorded before the RetroDECK roots were resolved is
+        spelled ``/home/...``, while every install under it was recorded through
+        ``safe_join`` as ``/var/home/...``. The prefix match never fires across
+        the two, and the install this rule exists to protect is pruned instead.
+        """
+        uow = FakeUnitOfWork()
+        _seed_install(uow, 1, file_path="/var/home/player/old-retrodeck/roms/n64/zelda.z64")
+        with uow:
+            uow.kv_config.set("retrodeck_home_path_previous", "/home/player/old-retrodeck")
+        service = _make_service(logger=logger, resolve_path=FakeResolvedPath({"/home": "/var/home"}), uow=uow)
+        with caplog.at_level(logging.INFO):
+            service.prune_stale_installed_roms()
+        assert uow.rom_installs.get(1) is not None
+        assert any("Skipping prune" in rec.message for rec in caplog.records)
+
+    def test_preserve_entry_a_migration_recorded_under_the_other_spelling(self, logger, caplog):
+        """A row an older migration relocated carries the home's spelling of the day.
+
+        ``remap_under_current`` joins the home the migration ran under verbatim,
+        so such a row is not resolved the way a ``safe_join`` download is — here
+        the marker is the resolved one and the row is not. Resolving only the
+        marker would miss it and prune a record whose files are still on disk.
+        """
+        uow = FakeUnitOfWork()
+        _seed_install(uow, 1, file_path="/home/player/old-retrodeck/roms/n64/zelda.z64")
+        with uow:
+            uow.kv_config.set("retrodeck_home_path_previous", "/var/home/player/old-retrodeck")
+        service = _make_service(logger=logger, resolve_path=FakeResolvedPath({"/home": "/var/home"}), uow=uow)
+        with caplog.at_level(logging.INFO):
+            service.prune_stale_installed_roms()
+        assert uow.rom_installs.get(1) is not None
+        assert any("Skipping prune" in rec.message for rec in caplog.records)
+
+    def test_preserve_rom_dir_entry_recorded_under_the_other_spelling(self, logger):
+        """The same for a folder-backed ROM, whose ``rom_dir`` is the matched path."""
+        uow = FakeUnitOfWork()
+        rom_dir = "/home/player/old-retrodeck/roms/psx/FF7"
+        _seed_install(uow, 1, file_path=f"{rom_dir}/FF7.m3u", rom_dir=rom_dir)
+        with uow:
+            uow.kv_config.set("retrodeck_home_path_previous", "/var/home/player/old-retrodeck")
+        service = _make_service(logger=logger, resolve_path=FakeResolvedPath({"/home": "/var/home"}), uow=uow)
+        service.prune_stale_installed_roms()
+        assert uow.rom_installs.get(1) is not None
 
     def test_no_prune_does_not_write(self, logger):
         """When no record is pruned, no write UoW is opened."""

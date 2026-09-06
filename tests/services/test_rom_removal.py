@@ -388,6 +388,54 @@ class TestDeleteRomFiles:
         assert "identity changed" in result["message"]
         assert (rom_dir / "disc.bin").read_bytes() == b"replacement"
 
+    @pytest.mark.parametrize("multi_file", [False, True], ids=["single-file", "rom-dir"])
+    def test_uninstalls_when_the_roms_root_is_reached_through_a_symlink(self, tmp_path, logger, multi_file):
+        """#1838: the roms root and the install record spell one directory two ways.
+
+        Image-based distributions (Bazzite, Silverblue) ship ``/home`` as a link
+        to ``/var/home``. The root is handed in the spelling ``retrodeck.json``
+        used — what an install row recorded before the roots were resolved is
+        matched against — so the uninstall must still go through. Run against
+        the real ``RomFileAdapter``, since a fake store cannot have this problem.
+        """
+        base = tmp_path.resolve()
+        system = base / "var" / "home" / "player" / "retrodeck" / "roms" / "ps2"
+        system.mkdir(parents=True)
+        (base / "home").symlink_to(base / "var" / "home", target_is_directory=True)
+        linked_roms = str(base / "home" / "player" / "retrodeck" / "roms")
+        assert linked_roms != os.path.realpath(linked_roms)
+        rom_dir = system / "Game" if multi_file else None
+        if rom_dir is not None:
+            rom_dir.mkdir()
+        rom_path = (rom_dir or system) / "388.chd"
+        rom_path.write_bytes(b"disc")
+        uow = FakeUnitOfWork()
+        _seed_install(
+            uow,
+            _make_install(1, file_path=str(rom_path), rom_dir=str(rom_dir) if rom_dir else None, system="ps2"),
+            platform_slug="ps2",
+        )
+        real_service = RomRemovalService(
+            config=RomRemovalServiceConfig(
+                logger=logger,
+                loop=asyncio.new_event_loop(),
+                clock=FakeClock(),
+                emit=RecordingEmitter(),
+                rom_file_store=RomFileAdapter(),
+                retrodeck_paths=FakeRetroDeckPaths(roms=linked_roms),
+                download_queue_cleanup=None,
+                uow_factory=FakeUnitOfWorkFactory(uow),
+            )
+        )
+
+        result = real_service.delete_rom_files(1)
+
+        assert result["success"] is True, result["message"]
+        assert result["changed"] is True
+        assert not rom_path.exists()
+        # The shared per-system directory is never the thing removed.
+        assert system.is_dir()
+
 
 class TestRemoveRom:
     @pytest.mark.asyncio

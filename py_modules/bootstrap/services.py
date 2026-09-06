@@ -466,6 +466,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
             clock=cfg.runtime.clock,
             retrodeck_paths=cfg.callbacks.retrodeck_paths,
             path_probe=cfg.adapters.path_probe,
+            resolve_path=cfg.adapters.resolve_path,
             uow_factory=cfg.callbacks.uow_factory,
             relaunch_options=relaunch_options_resolver,
         ),

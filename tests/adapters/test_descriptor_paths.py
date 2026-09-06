@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 from adapters.descriptor_paths import (
     claim_source,
+    containing_root,
     ensure_directory,
     measure_tree,
     remove_claimed,
@@ -51,6 +52,80 @@ def test_intermediate_symlink_never_authorizes_deletion_outside_root(tmp_path):
         claim_source(str(safe / "linked" / "target.srm"), str(safe))
 
     assert target.read_bytes() == b"keep"
+
+
+def test_a_root_reached_through_a_symlink_authorizes_the_files_below_it(tmp_path):
+    """An unresolved root still contains the resolved paths below it.
+
+    The shape a recovery bundle replays: the root arrives in the spelling its
+    claim was sealed with, the path resolved (#1838). The reverse is refused,
+    which the ``containing_root`` assertion below pins.
+    """
+    base = tmp_path.resolve()
+    roms = base / "var" / "home" / "player" / "retrodeck" / "roms" / "ps2"
+    roms.mkdir(parents=True)
+    rom = roms / "388.chd"
+    rom.write_bytes(b"disc")
+    (base / "home").symlink_to(base / "var" / "home", target_is_directory=True)
+    linked_root = str(base / "home" / "player" / "retrodeck" / "roms")
+    # Without this the test would pass on a filesystem that never had the
+    # problem: both spellings must really differ.
+    assert linked_root != os.path.realpath(linked_root)
+
+    assert measure_tree(str(rom), linked_root) == 4
+    # The root's own spelling still answers too — it is what the walk anchors on.
+    assert measure_tree(os.path.join(linked_root, "ps2", "388.chd"), linked_root) == 4
+    # The tolerance runs one way only: the ROOT may be spelled either way, the
+    # path may not. A path through the link under a resolved root is outside it.
+    assert containing_root(os.path.join(linked_root, "ps2"), os.path.realpath(linked_root)) is None
+
+    claim = claim_source(str(rom), linked_root)
+    outcome = remove_claimed(str(rom), linked_root, claim)
+
+    assert outcome["success"]
+    assert outcome["changed"]
+    assert not rom.exists()
+
+
+def test_a_path_that_cannot_be_compared_to_the_root_is_outside_it(tmp_path):
+    """``commonpath`` refuses to mix an absolute root with a relative path — that is a refusal, not a crash."""
+    assert containing_root("not/absolute.chd", str(tmp_path)) is None
+
+
+def test_resolving_the_root_never_resolves_the_path_below_it(tmp_path):
+    """A symlink among the path's own components is refused, symlinked root or not.
+
+    The components below the root are walked with ``O_NOFOLLOW``; resolving the
+    path would resolve away the very links that walk exists to reject, and the
+    inside-the-root case is the quiet one — it authorizes deleting a link's
+    target instead of the link.
+    """
+    base = tmp_path.resolve()
+    safe = base / "var" / "home" / "player" / "roms"
+    real_dir = safe / "ps2"
+    real_dir.mkdir(parents=True)
+    (real_dir / "keep.chd").write_bytes(b"keep")
+    (base / "home").symlink_to(base / "var" / "home", target_is_directory=True)
+    outside = base / "outside"
+    outside.mkdir()
+    (outside / "target.chd").write_bytes(b"keep too")
+    (safe / "escaping").symlink_to(outside, target_is_directory=True)
+    (safe / "inside").symlink_to(real_dir, target_is_directory=True)
+    linked_root = str(base / "home" / "player" / "roms")
+
+    escaping_resolved = str(safe / "escaping" / "target.chd")
+    escaping_linked = os.path.join(linked_root, "escaping", "target.chd")
+    inside_resolved = str(safe / "inside" / "keep.chd")
+
+    with pytest.raises(OSError):
+        claim_source(escaping_resolved, linked_root)
+    with pytest.raises(OSError):
+        claim_source(escaping_linked, linked_root)
+    with pytest.raises(OSError):
+        claim_source(inside_resolved, linked_root)
+
+    assert (outside / "target.chd").read_bytes() == b"keep too"
+    assert (real_dir / "keep.chd").read_bytes() == b"keep"
 
 
 def test_replacement_in_pre_rename_window_is_verified_and_rolled_back(tmp_path, monkeypatch):

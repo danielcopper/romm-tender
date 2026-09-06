@@ -317,35 +317,46 @@ Format: **invariant** — tier — enforced by.
   `retrodeck.json`, and does no network work despite living on the RomM HTTP adapter), `SystemSupportedExtensionsFn` /
   `SystemKnownFn` (two more questions to the same catalogue, through the same adapter cache), and
   `FirmwareFolderVerdictFn` (lists one core's declared folder and reads every candidate inside it the way the core does
-  — 0.26 s for LRPS2 on the reference machine, the one seam here a cost was measured for). Two other real I/O seams were
-  weighed and kept out — the reasons are in the script's docstring, and neither is an exemption; nor are those two an
-  inventory of what else touches the disk. **"It's only a read" is the reasoning this rule exists to refuse**:
-  `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the write lock. The database is
-  in WAL, so readers are unaffected — but every other **writer** waits on the lock for up to `busy_timeout=5000` and
-  fails with `SQLITE_BUSY` if it is still held then, and `FakeUnitOfWork` shares no connection, so no unit test notices.
-  Six call sites had drifted across the rule before anything looked (#1779), for the reason the check exists: nothing at
-  a call site reveals that an injected seam touches the disk. **The rule and the gate come from reading code — no
-  measurement of how long any of those transactions actually held the lock exists, and nothing here should be read as
-  one.** What the check sees is the deadlock rule's matcher unchanged — an **attribute** call naming a listed seam,
-  lexically inside a `with <...>uow_factory()` block in the same function scope — so it inherits every blind spot of
-  that half: a seam behind a helper one level down, an alias to a local, a factory attribute whose name does not end in
-  `uow_factory`, a nested `def`/`lambda` (which resets the scope by design), a seam **passed as a bound method**
+  — 0.26 s for LRPS2 on the reference machine, the one seam here a cost was measured for), the two path resolvers —
+  `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker, a directory that may sit on the SD card the
+  marker is pending a migration away from) and `ResolvedPathFn` (the same walk, but on **both** sides of a comparison,
+  so a call site costs what the rows it checks cost, not what it checks them against) — and the `RetroDeckPaths` getters
+  that answer with a root: `bios_path`, `roms_path`, `saves_path`, `states_path` and `retrodeck_home`, five of the
+  Protocol's six path getters, each resolving on every call. The sixth, `config_path`, stays out because it resolves
+  nothing — it is `os.path.join` over the user home, so calling it costs no I/O. One other real I/O seam was weighed and
+  kept out — the reason is in the script's docstring, and it is not an exemption; nor is it an inventory of what else
+  touches the disk. **"It's only a read" is the reasoning this rule exists to refuse**: `SqliteUnitOfWork.__enter__`
+  issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the write lock. The database is in WAL, so readers are
+  unaffected — but every other **writer** waits on the lock for up to `busy_timeout=5000` and fails with `SQLITE_BUSY`
+  if it is still held then, and `FakeUnitOfWork` shares no connection, so no unit test notices. Six call sites had
+  drifted across the rule before anything looked (#1779), for the reason the check exists: nothing at a call site
+  reveals that an injected seam touches the disk. **The rule and the gate come from reading code — no measurement of how
+  long any of those transactions actually held the lock exists, and nothing here should be read as one.** What the check
+  sees is the deadlock rule's matcher unchanged — an **attribute** call naming a listed seam, lexically inside a
+  `with <...>uow_factory()` block in the same function scope — so it inherits every blind spot of that half: a seam
+  behind a helper one level down, an alias to a local, a factory attribute whose name does not end in `uow_factory`, a
+  nested `def`/`lambda` (which resets the scope by design), a seam **passed as a bound method**
   (`run_in_executor(None, self._disc_resolver.enumerate_discs, install)` — an attribute, not a call, and
   `run_in_executor` is exactly how `disc.py` and `cores.py` reach their `_io` bodies; the same shape
   `check_read_only_module.py` records for its own gate), and the hand-maintained list itself, which cannot notice a seam
   whose implementation _grows_ a file read later. Matching only attribute calls is deliberate: the pure
   `domain.disc_selection.enumerate_discs` shares a name with the seam and does no I/O — it is safe because its call site
   imports it bare, not because of the name. The call-shaped blind spot is shared with the deadlock rule and only this
-  family closes it: for its five `__call__`-only seams the list carries the attribute each is bound to
-  (`_resolve_system`, `_sandbox_launcher`, `_system_extensions`, `_system_known`, `_firmware_folder_verdicts`) — by
-  convention rather than by construction, and only while such a name means one thing, which is exactly what keeps
-  `_list_files` out. Three of the five have no method name a consumer could write instead; `SystemResolver` and
-  `SandboxLauncherFn` do, their implementations being `RommHttpAdapter.resolve_system` and
-  `EsFindRulesAdapter.resolve_sandbox_launcher`, which is why `resolve_system` and `resolve_sandbox_launcher` are listed
-  beside their attributes. The deadlock rule's own call-shaped seams stay open. `SystemResolver` is the odd one out for
-  a second reason: the adapter memoises its map for the life of the process, so exactly one call ever opens the file,
-  and the entry earns its place because that one call can land inside a UoW. One `# pragma: no uow-check` covers both
-  families — it suppresses the line, and no seam is in both lists, so where a line does name two seams it silences both
+  family closes it: for each `__call__`-only seam the list carries the attribute it is bound to — by convention rather
+  than by construction, and only while such a name means one thing, which is exactly what keeps `_list_files` out.
+  **Count them by their leading underscore**, which is what marks an entry as a holding attribute rather than a method
+  name: six today (`_resolve_system`, `_sandbox_launcher`, `_system_extensions`, `_system_known`,
+  `_firmware_folder_verdicts`, `_resolve_path`), and the number is re-derivable from `IO_SEAM_METHODS` rather than
+  remembered. Two of those six are listed a second time under their implementation's own method name, for a peer holding
+  the object rather than the bound method — `RommHttpAdapter.resolve_system` beside `_resolve_system`, and
+  `EsFindRulesAdapter.resolve_sandbox_launcher` beside `_sandbox_launcher`. The first pair happens to be the attribute
+  minus its underscore and the second plainly is not, which is the point: a twin exists where the implementation has a
+  method name a peer could write, and it is read off the implementation rather than derived from the attribute. The
+  other four have no such twin. The deadlock rule's own call-shaped seams stay open. `SystemResolver` is the odd one out
+  for a second reason: the adapter memoises its map for the life of the process, so exactly one call ever opens the
+  file, and the entry earns its place because that one call can land inside a UoW. One `# pragma: no uow-check` covers
+  both families — it suppresses the line, and no seam is in both lists, so where a line does name two seams it silences
+  both
 - **Services never call clocks / sleep / uuid / random directly (inject the Protocol)** — check —
   `scripts/check_cosmic_call_bans.sh`
 - **No module in `services/`, `bootstrap/`, `adapters/`, `domain/`, `lib/` or `models/` crosses the ~1000-LOC

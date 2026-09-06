@@ -11,6 +11,7 @@ from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
+from fakes.fake_resolved_path import FakeResolvedPath
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
@@ -197,6 +198,7 @@ def plugin():
             clock=FakeClock(),
             retrodeck_paths=p._retrodeck_paths,
             path_probe=FakePathExistsReader(),
+            resolve_path=FakeResolvedPath(),
             uow_factory=FakeUnitOfWorkFactory(),
             relaunch_options=FakeRelaunchOptionsResolver(),
         ),
@@ -1129,6 +1131,7 @@ class TestMainStartupOrdering:
                 rom_file_store=MagicMock(),
                 save_file_store=MagicMock(),
                 path_probe=MagicMock(),
+                resolve_path=MagicMock(),
                 core_info_provider=MagicMock(),
                 renderer_rss=FakeRendererRss(),
                 renderer_gc=FakeRendererGc(),

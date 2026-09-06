@@ -344,6 +344,35 @@ def mount_id_for_fd(fd: int) -> int:
     return _mount_id(fd)
 
 
+def containing_root(absolute_path: str, safe_root: str) -> str | None:
+    """Return the spelling of *safe_root* that *absolute_path* lies below, or ``None``.
+
+    One directory answers to two names when the root itself is reached through a
+    symlink — image-based distributions ship ``/home`` as a link to
+    ``/var/home``. What is tolerated is the ROOT's spelling, because a caller
+    can hand one back rather than derive it: a recovery bundle replays the
+    ``safe_root`` its claim was sealed with, and a bundle sealed before the
+    RetroDECK roots were resolved stored the other spelling (#1838). Both name
+    the directory the caller declared as its root.
+
+    The *path* gets no such tolerance, and must not: it is matched against the
+    root as spelled, so one handed in the other spelling is refused outright.
+
+    Only the ROOT is resolved here. The components below it are left exactly as
+    spelled, because the callers walk them with ``O_NOFOLLOW`` from the root's
+    realpath: resolving them would authorize a traversal through a symlink the
+    walk exists to refuse.
+    """
+    lexical_root = os.path.abspath(safe_root)
+    for candidate in (lexical_root, os.path.realpath(lexical_root)):
+        try:
+            if os.path.commonpath((candidate, absolute_path)) == candidate:
+                return candidate
+        except ValueError:
+            continue
+    return None
+
+
 def _open_parent(path: str, safe_root: str) -> tuple[int, str]:
     parts = _relative_parts(path, safe_root)
     if not parts:
@@ -374,13 +403,13 @@ def _open_directory(path: str, safe_root: str) -> int:
 
 
 def _relative_parts(path: str, safe_root: str) -> list[str]:
-    absolute_root = os.path.abspath(safe_root)
+    # *path* is deliberately never resolved: the components below the root are
+    # walked with O_NOFOLLOW so that a symlink among them is refused, and a
+    # realpath here would resolve away exactly what the guard exists to reject.
     absolute_path = os.path.abspath(path)
-    try:
-        if os.path.commonpath((absolute_root, absolute_path)) != absolute_root:
-            raise ValueError(f"Path is outside its safe root: {path}")
-    except ValueError as exc:
-        raise ValueError(f"Path is outside its safe root: {path}") from exc
+    absolute_root = containing_root(absolute_path, safe_root)
+    if absolute_root is None:
+        raise ValueError(f"Path is outside its safe root: {path}")
     relative = os.path.relpath(absolute_path, absolute_root)
     if relative == ".":
         return []

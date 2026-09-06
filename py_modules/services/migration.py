@@ -156,6 +156,15 @@ class MigrationService:
         transition that re-emits ``retrodeck_path_changed`` with the oldest
         pending home as ``old_path`` (so the banner still reads "From: A →
         To: C").
+
+        What the kernel is asked is whether the home MOVED, so the stored marker
+        is resolved before the comparison: a marker written when the roots were
+        handed out unresolved names the same directory the live home does, and
+        answering "changed" there would offer to migrate that directory onto
+        itself (#1838). A real move still reads as one, including a move away
+        from a home since deleted — ``realpath`` follows whichever links in it
+        still exist and leaves the missing tail as spelled, so what it answers
+        with is a directory, and not the live one.
         """
         current_home = self._retrodeck_paths.retrodeck_home()
         if not current_home:
@@ -166,10 +175,12 @@ class MigrationService:
 
         with self._uow_factory() as uow:
             stored_home = uow.kv_config.get(_KV_RETRODECK_HOME) or ""
-            pending = self._read_pending_homes(uow)
+            stored_pending = self._read_pending_homes(uow)
 
-        transition = compute_pending_home_transition(stored_home, current_home, pending)
+        pending = self._resolved_homes(stored_pending)
+        transition = compute_pending_home_transition(self._resolved_home(stored_home), current_home, pending)
         if transition.kind == "unchanged":
+            self._clear_pending_home_never_left(current_home, pending)
             return
         if transition.kind == "first_run":
             with self._uow_factory() as uow:
@@ -191,12 +202,62 @@ class MigrationService:
             self._logger.warning(f"RetroDECK home path changed: {transition.emit_old} -> {transition.emit_new}")
         self._spawn_background_task(self._emit("retrodeck_path_changed", payload))
 
+    def _clear_pending_home_never_left(self, current_home: str, pending: Sequence[str]) -> None:
+        """Drop any pending home that turns out to BE the live home.
+
+        A pending home is one RetroDECK has left; one that names the home it
+        reports now was never left, so there is nothing to migrate out of it.
+        The kernel already excludes the arriving home from the set it writes
+        (``_dedupe_exclude``) — this is that same rule applied on the path that
+        decided nothing moved, which is where such a marker can survive: a
+        migration left pending before the roots were resolved names its old home
+        in the other spelling, and comparing directories now finds it is the
+        live one (#1838). The kernel's own auto-clear cannot reach this shape:
+        it tests the sole pending home only after ``unchanged`` has already
+        returned. So without this the marker would stand until the user migrates
+        or dismisses.
+        """
+        remaining = [home for home in pending if home != current_home]
+        if len(remaining) == len(pending):
+            return
+        self._logger.info(f"Clearing pending migration marker for the live RetroDECK home: {current_home}")
+        with self._uow_factory() as uow:
+            self._write_pending_homes(uow, remaining)
+
+    def _resolved_home(self, home: str) -> str:
+        """Return the directory one stored home marker names, leaving an unset marker unset.
+
+        Never called with a Unit of Work open: resolving is filesystem I/O and a
+        UoW holds the database's write lock (ADR-0006). The unset guard matters
+        because ``realpath("")`` answers with the process's working directory,
+        which is not a home anybody stored.
+        """
+        return self._migration_file_store.realpath(home) if home else ""
+
+    def _resolved_homes(self, homes: Sequence[str]) -> list[str]:
+        """Return each pending-home marker as the directory it names.
+
+        A marker written while the RetroDECK roots were handed out unresolved
+        spells a directory the other way round from every install path recorded
+        under it, and each of this service's consumers compares the two —
+        prefix-matching a stranded file, diffing the live home, counting what a
+        migration would move. None of those comparisons fires across two
+        spellings of one directory (#1838). The destination home is resolved
+        beside them for a second reason: the migration builds each relocated
+        record's new path from it, and a path recorded unresolved is one the
+        guards will later refuse.
+        """
+        return [self._resolved_home(home) for home in homes]
+
     @staticmethod
     def _read_pending_homes(uow) -> list[str]:
-        """Read the pending-home set (oldest→newest) from kv_config.
+        """Read the pending-home set (oldest→newest) from kv_config, as stored.
 
         Reassembles ``[previous, *hops]`` from the ``_previous`` marker and the
-        ``_hops`` JSON array; returns ``[]`` when no migration is pending.
+        ``_hops`` JSON array; returns ``[]`` when no migration is pending. These
+        are the spellings on record, not directories — pass them through
+        :meth:`_resolved_homes` once the UoW is closed before comparing any of
+        them with a path.
         """
         return pending_homes_from_kv(
             uow.kv_config.get(_KV_RETRODECK_HOME_PREVIOUS) or "",
@@ -710,8 +771,10 @@ class MigrationService:
                 and just update state paths.
         """
         with self._uow_factory() as uow:
-            pending = self._read_pending_homes(uow)
-            new_home = uow.kv_config.get(_KV_RETRODECK_HOME) or ""
+            stored_pending = self._read_pending_homes(uow)
+            stored_home = uow.kv_config.get(_KV_RETRODECK_HOME) or ""
+        pending = self._resolved_homes(stored_pending)
+        new_home = self._resolved_home(stored_home)
 
         if not pending or not new_home:
             return {"success": False, "reason": "no_migration_needed", "message": "No path migration needed"}
@@ -776,8 +839,10 @@ class MigrationService:
     async def get_migration_status(self):
         """Return whether a RetroDECK path migration is pending and file counts."""
         with self._uow_factory() as uow:
-            pending = self._read_pending_homes(uow)
-            new_home = uow.kv_config.get(_KV_RETRODECK_HOME) or ""
+            stored_pending = self._read_pending_homes(uow)
+            stored_home = uow.kv_config.get(_KV_RETRODECK_HOME) or ""
+        pending = self._resolved_homes(stored_pending)
+        new_home = self._resolved_home(stored_home)
 
         if not pending or not new_home:
             return {"pending": False}

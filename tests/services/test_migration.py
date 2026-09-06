@@ -291,6 +291,140 @@ class TestPathChangeDetection:
         assert loop.tasks == []
         assert plugin._migration_service._emit.calls == []
 
+    def test_two_spellings_of_one_home_are_not_a_move(self, plugin, tmp_path):
+        """#1838: a marker naming the live home through a symlink is the same directory.
+
+        A home stored before the roots were resolved is spelled the way
+        ``retrodeck.json`` spelled it. Reading that as a move would raise the
+        migration banner and offer to relocate a directory onto itself — whose
+        Overwrite branch deletes the destination first.
+        """
+        import decky
+
+        decky.DECKY_USER_HOME = str(tmp_path)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+
+        base = tmp_path.resolve()
+        real_home = base / "var" / "home" / "player" / "retrodeck"
+        real_home.mkdir(parents=True)
+        (base / "home").symlink_to(base / "var" / "home", target_is_directory=True)
+        stored_home = str(base / "home" / "player" / "retrodeck")
+        assert stored_home != str(real_home)
+
+        with plugin._uow as uow:
+            uow.kv_config.set("retrodeck_home_path", stored_home)
+        loop = _RecordingLoop()
+        plugin._migration_service._loop = loop
+        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home=str(real_home))
+
+        plugin._migration_service.detect_retrodeck_path_change()
+
+        assert loop.tasks == []
+        assert plugin._migration_service._emit.calls == []
+        with plugin._uow as uow:
+            assert uow.kv_config.get("retrodeck_home_path_previous") is None
+            assert uow.kv_config.get("retrodeck_home_path_hops") is None
+            # Nothing moved, so nothing is written — the marker keeps the
+            # spelling it was stored with and is resolved again next startup.
+            assert uow.kv_config.get("retrodeck_home_path") == stored_home
+
+    def test_a_pending_marker_naming_the_live_home_is_cleared(self, plugin, tmp_path):
+        """A marker naming the home RetroDECK is already on is dropped.
+
+        Otherwise it stands until the user migrates or dismisses, over a home
+        that was never left.
+        """
+        import decky
+
+        decky.DECKY_USER_HOME = str(tmp_path)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+
+        base = tmp_path.resolve()
+        real_home = base / "var" / "home" / "player" / "retrodeck"
+        real_home.mkdir(parents=True)
+        (base / "home").symlink_to(base / "var" / "home", target_is_directory=True)
+        linked_home = str(base / "home" / "player" / "retrodeck")
+
+        with plugin._uow as uow:
+            uow.kv_config.set("retrodeck_home_path", linked_home)
+            uow.kv_config.set("retrodeck_home_path_previous", linked_home)
+        loop = _RecordingLoop()
+        plugin._migration_service._loop = loop
+        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home=str(real_home))
+
+        plugin._migration_service.detect_retrodeck_path_change()
+
+        with plugin._uow as uow:
+            assert uow.kv_config.get("retrodeck_home_path_previous") is None
+            assert uow.kv_config.get("retrodeck_home_path_hops") is None
+        assert plugin._migration_service.is_retrodeck_migration_pending() is False
+        assert loop.tasks == []
+
+    def test_a_pending_hop_that_was_really_left_survives_the_clear(self, plugin, tmp_path):
+        """Only the marker naming the live home is dropped; a genuine hop stays pending."""
+        import decky
+
+        decky.DECKY_USER_HOME = str(tmp_path)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+
+        home = str(tmp_path / "retrodeck")
+        os.makedirs(home, exist_ok=True)
+        with plugin._uow as uow:
+            uow.kv_config.set("retrodeck_home_path", home)
+            uow.kv_config.set("retrodeck_home_path_previous", home)
+            uow.kv_config.set("retrodeck_home_path_hops", json.dumps([str(tmp_path / "sd-card" / "retrodeck")]))
+        plugin._migration_service._loop = _RecordingLoop()
+        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home=home)
+
+        plugin._migration_service.detect_retrodeck_path_change()
+
+        with plugin._uow as uow:
+            assert uow.kv_config.get("retrodeck_home_path_previous") == str(tmp_path / "sd-card" / "retrodeck")
+            assert uow.kv_config.get("retrodeck_home_path_hops") is None
+
+    async def test_a_home_that_really_moved_is_still_a_change(self, plugin, tmp_path):
+        """Comparing directories must not swallow a real move, including one already gone.
+
+        The gone home sits under a symlinked prefix, so ``realpath`` really does
+        rewrite it — it follows the links that still exist and leaves the
+        missing tail as spelled. What it answers with is still a different
+        directory from the one RetroDECK reports now, which is what makes this a
+        move rather than a spelling.
+        """
+        import decky
+
+        decky.DECKY_USER_HOME = str(tmp_path)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+
+        base = tmp_path.resolve()
+        (base / "var" / "home" / "player").mkdir(parents=True)
+        (base / "home").symlink_to(base / "var" / "home", target_is_directory=True)
+        gone_home = str(base / "home" / "player" / "sd-card" / "retrodeck")
+        new_home = str(base / "internal" / "retrodeck")
+        os.makedirs(new_home, exist_ok=True)
+        assert not os.path.exists(gone_home)
+        # The marker really is rewritten by resolving, and still is not the live home.
+        resolved_gone = os.path.realpath(gone_home)
+        assert resolved_gone != gone_home
+        assert resolved_gone != new_home
+
+        with plugin._uow as uow:
+            uow.kv_config.set("retrodeck_home_path", gone_home)
+        plugin._migration_service._retrodeck_paths = FakeRetroDeckPaths(home=new_home)
+
+        plugin._migration_service.detect_retrodeck_path_change()
+        await asyncio.sleep(0)
+
+        with plugin._uow as uow:
+            assert uow.kv_config.get("retrodeck_home_path") == new_home
+            # What is recorded as pending is the directory the marker named,
+            # not the spelling it was stored under.
+            assert uow.kv_config.get("retrodeck_home_path_previous") == resolved_gone
+        event, args = plugin._migration_service._emit.calls[0]
+        assert event == "retrodeck_path_changed"
+        assert args[0]["old_path"] == resolved_gone
+        assert args[0]["new_path"] == new_home
+
     async def test_path_change_emits_event(self, plugin, tmp_path):
         """Path changed — stores both old and new, emits event."""
         import decky
@@ -504,6 +638,73 @@ class TestMigrateRetroDeckFiles:
             assert install.file_path == new_rom
             # Single-file ROM owns no folder before or after migration.
             assert install.rom_dir is None
+
+    @pytest.mark.asyncio
+    async def test_a_pending_home_that_is_the_live_home_moves_and_destroys_nothing(self, plugin, tmp_path):
+        """Acting on such a marker must not treat the live home as a move source.
+
+        Source and destination would be the same path, and Overwrite removes the
+        destination before moving. What prevents it is the sweep dropping any
+        pending home equal to the live one — a comparison that only holds
+        because both sides are resolved.
+        """
+        import decky
+
+        decky.DECKY_USER_HOME = str(tmp_path)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+
+        base = tmp_path.resolve()
+        rom = base / "var" / "home" / "player" / "retrodeck" / "roms" / "n64" / "zelda.z64"
+        rom.parent.mkdir(parents=True)
+        rom.write_text("rom data")
+        (base / "home").symlink_to(base / "var" / "home", target_is_directory=True)
+        linked_home = str(base / "home" / "player" / "retrodeck")
+
+        with plugin._uow as uow:
+            uow.kv_config.set("retrodeck_home_path", linked_home)
+            uow.kv_config.set("retrodeck_home_path_previous", linked_home)
+        _seed_install(plugin._uow, 1, file_path=str(rom), system="n64")
+
+        result = await plugin.migrate_retrodeck_files("overwrite")
+
+        assert result["success"] is True
+        assert result["roms_moved"] == 0
+        assert rom.read_text() == "rom data"
+
+    @pytest.mark.asyncio
+    async def test_migrating_into_a_symlinked_home_records_the_resolved_path(self, plugin, tmp_path):
+        """#1838: both markers name directories, so what is recorded is the resolved path.
+
+        A migration left pending across the upgrade carries markers spelled the
+        way ``retrodeck.json`` spelled them. The new path each relocated record
+        gets is built from the destination marker, and a path recorded through a
+        symlink is one the uninstall guard later refuses.
+        """
+        import decky
+
+        decky.DECKY_USER_HOME = str(tmp_path)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+
+        base = tmp_path.resolve()
+        old_rom = base / "old" / "roms" / "n64" / "zelda.z64"
+        old_rom.parent.mkdir(parents=True)
+        old_rom.write_text("rom data")
+        (base / "new" / "retrodeck").mkdir(parents=True)
+        (base / "home").symlink_to(base, target_is_directory=True)
+        linked_new_home = str(base / "home" / "new" / "retrodeck")
+        assert linked_new_home != os.path.realpath(linked_new_home)
+
+        with plugin._uow as uow:
+            uow.kv_config.set("retrodeck_home_path_previous", str(base / "old"))
+            uow.kv_config.set("retrodeck_home_path", linked_new_home)
+        _seed_install(plugin._uow, 1, file_path=str(old_rom), system="n64")
+
+        result = await plugin.migrate_retrodeck_files()
+
+        assert result["success"] is True
+        assert result["roms_moved"] == 1
+        with plugin._uow as uow:
+            assert uow.rom_installs.get(1).file_path == str(base / "new" / "retrodeck" / "roms" / "n64" / "zelda.z64")
 
     @pytest.mark.asyncio
     async def test_migration_records_applied_launch_options_for_bound_rom(self, plugin, tmp_path):

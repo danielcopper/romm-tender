@@ -194,6 +194,12 @@ ctime, every descendant's identity, and every regular file's hash. Mutation is d
 throughout, and a nested mount transition — including a same-device bind mount — fails closed. A path re-lookup alone
 never authorizes a delete or a quarantine.
 
+The safe root a source is anchored to is matched **symlink-resolved**, so a root named through a link — `/home` is a
+link to `/var/home` on image-based distributions — still contains the paths recorded under its resolved spelling
+([#1838](https://github.com/danielcopper/decky-romm-sync/issues/1838)). The root only: everything below it is compared
+and walked exactly as spelled, because resolving those components would resolve away the very symlinks the no-follow
+walk exists to refuse.
+
 ### What the hashes are for, and where they stop
 
 Why the disciplines are split this way, and what was rejected on the way there, is
