@@ -30,19 +30,8 @@ import {
 import { formatTimeAgo } from "../utils/formatters";
 import { pluralize } from "../utils/pluralize";
 import { formatDuration, formatTimeRemaining, previewApplySeconds } from "../utils/syncEstimate";
-import {
-  observeApplyProgress,
-  displayedEtaSeconds,
-  resetEta,
-  formatEtaCountdown,
-  latchedCoarseFraction,
-} from "../utils/syncEta";
-import {
-  getSyncProgress,
-  setSyncProgress as setStoredSyncProgress,
-  onSyncProgressChange,
-  withinUnitFraction,
-} from "../utils/syncProgress";
+import { getSyncProgress, setSyncProgress as setStoredSyncProgress } from "../utils/syncProgress";
+import { useSyncRunView } from "../utils/syncRunView";
 import { useDownloads } from "../utils/downloadStore";
 import {
   usePendingPreview,
@@ -74,7 +63,7 @@ import { MigrationBlockedPage } from "./MigrationBlockedPage";
 import { SettingsResetBanner } from "./SettingsResetBanner";
 import { PlaytimeScopeBanner } from "./PlaytimeScopeBanner";
 import { SessionBudgetBanner, formatGb, formatSignedGb, memoryLevelColor } from "./SessionBudgetBanner";
-import type { SyncProgress, SyncStage, SyncStats, SyncPreview, SyncPreviewSummary, Page } from "../types";
+import type { SyncProgress, SyncStats, SyncPreview, SyncPreviewSummary, Page } from "../types";
 import { detach } from "../utils/detach";
 import { wrapText } from "../utils/textStyles";
 
@@ -152,34 +141,6 @@ export const ConnectionIndicator: FC<{
     </>
   );
 };
-
-const TERMINAL_STAGES: ReadonlySet<SyncStage> = new Set<SyncStage>(["done", "cancelled", "error"]);
-
-function isTerminalStage(stage: SyncProgress["stage"]): boolean {
-  return !!stage && TERMINAL_STAGES.has(stage);
-}
-
-const STAGE_LABELS: Record<SyncStage, string> = {
-  discovering: "Discovering platforms",
-  fetching: "Fetching library",
-  applying: "Applying shortcuts",
-  finalizing: "Finalizing",
-  done: "Done",
-  cancelled: "Cancelled",
-  error: "Error",
-};
-
-function stageLabel(stage: SyncProgress["stage"]): string {
-  return stage ? STAGE_LABELS[stage] : "Syncing";
-}
-
-function formatProgressText(progress: SyncProgress | null): string {
-  // The bare fine-detail message. The coarse "step/totalSteps" is already shown
-  // on the bar row (sync-step), so it is not repeated here. The message wraps to
-  // up to two lines in the QAM via CSS rather than being clipped mid-word.
-  if (!progress) return "Syncing...";
-  return progress.message || "Syncing...";
-}
 
 // The fine-detail line is clamped to two lines (``WebkitLineClamp``) and its box
 // is reserved at exactly that height up front. Without the reservation a message
@@ -450,38 +411,6 @@ function terminalStatusTone(stage: SyncProgress["stage"]): StatusTone {
   return stage === "done" ? "success" : "neutral";
 }
 
-/** The id of the run a frame belongs to, `""` for a frame that names none — the
- *  panel's own optimistic start, or a backend with no run stamped yet. */
-function frameRunId(progress: SyncProgress): string {
-  return progress.runId ?? "";
-}
-
-/** The run a frame puts in flight, or `null` when the frame has none running. */
-function inFlightRunId(progress: SyncProgress): string | null {
-  return progress.running ? frameRunId(progress) : null;
-}
-
-/**
- * Whether a terminal frame ends the run the panel is watching — true unless it
- * names a DIFFERENT run, since an unnamed run on either side (the panel's own
- * optimistic start before the backend stamps an id, or a frame that carries
- * none) cannot be shown to be another one, and refusing it would strand the
- * panel on a run that has already ended. `null` — nothing watched at all — is
- * the one case that ends nothing: that is a terminal frame the panel FOUND
- * rather than witnessed, the stored frame every QAM close leaves behind (#1019).
- *
- * The leniency leaves one window open, knowingly: between a run's two terminal
- * signals — the merged `sync_complete` and the frame that follows it, under
- * 100 ms apart — a user who starts the next run in the gap has the old run's
- * second frame taken as ending the new one, costing that run its first status
- * line. Accepted rather than closed: the previous boolean had the same window,
- * nothing here can widen it, and the alternative — refusing an unnamed terminal
- * frame — strands the panel on the far more reachable case above.
- */
-function endsWatchedRun(watched: string | null, runId: string): boolean {
-  return watched !== null && (watched === "" || runId === "" || watched === runId);
-}
-
 export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   // Both facts are owned by `utils/syncStatsStore.ts`: seven refresh sites in
   // this file ask for them, and the store is what keeps an older answer from
@@ -502,28 +431,6 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   // sync_progress stage re-arms it, so a quick re-press can't hit the
   // sync_in_progress reject and look like an instant finish (#1202, RC-B).
   const [cancelling, setCancelling] = useState(false);
-  // The frame this panel last saw, seeded from the store so a remount mid-run
-  // renders the live run on its first pass rather than a frame later.
-  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(() => getSyncProgress());
-  // "A run is in flight" is DERIVED from that frame, never mirrored in a second
-  // boolean: DangerZone and RemovedGamesCleanup read the same store field, so a
-  // path that ends the run locally without ending it in the store would make the
-  // three disagree (#1019). The optimistic start is not lost — a Sync click writes
-  // running:true into the store, which the subscription below feeds straight back.
-  const syncing = syncProgress?.running ?? false;
-  // Last non-empty fine-detail line, carried across unit-boundary anchor frames
-  // so the fine-detail row (and its inline spinner) stay MOUNTED when the next
-  // unit's FETCHING anchor frame resets current/total to 0 (#1415) — otherwise
-  // the row unmounts for a frame and the panel flickers. Populated by the store
-  // subscriber from any frame with real fine detail; reset to null when the run
-  // ends, so a terminal/idle state never surfaces a stale line.
-  const [carriedFineDetail, setCarriedFineDetail] = useState<string | null>(null);
-  // A dumb mirror of syncEta's live countdown (seconds), or null when not measured
-  // yet / between runs. syncEta owns the sticky deadline; the impure now-read that
-  // resolves it to seconds lives in the store subscriber (an event handler), NOT
-  // the render — the render must stay pure. Progress frames drive the subscriber,
-  // so the countdown ticks per frame exactly as before.
-  const [liveEtaDisplay, setLiveEtaDisplay] = useState<number | null>(null);
   const [status, setStatus] = useState<TransientStatus | null>(null);
   // The preview lives in a module store, not here: the answer to `sync_preview`
   // is delivered to the instance that pressed Sync, and leaving the main page
@@ -548,28 +455,51 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   const saveSortMigration = useSaveSortMigrationState();
   const downloads = useDownloads();
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // The run this panel is watching, by id, and whether its end has been handled.
-  // Seeded at first render — BEFORE the subscription below exists, so the mount
-  // seed's own write is measured against the state it replaced rather than against
-  // itself; a stored terminal frame the panel merely finds therefore watches
-  // nothing and announces nothing (#1019).
-  //
-  // The pair is a run key rather than a "have I seen a terminal" boolean because
-  // the backend signals a run's end TWICE, in a fixed order: `sync_complete`,
-  // which index.tsx merges into the store as `{running:false, stage}` — keeping
-  // the PREVIOUS frame's message, e.g. "Finalizing…" — and then the run's own
-  // terminal frame carrying the authoritative wording ("Sync complete: N games
-  // from M platforms", the cancelled/interrupted sentence, or a budget pause's
-  // resume guidance). Both belong to the same run: the first does the once-per-run
-  // teardown, the second is allowed to correct the text it left behind.
-  const watchedRunId = useRef<string | null>(inFlightRunId(getSyncProgress()));
-  const watchedRunEnded = useRef(false);
 
   const showTransientStatus = (text: string, tone: StatusTone = "neutral") => {
     if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
     setStatus({ text, tone });
     statusTimeoutRef.current = setTimeout(() => setStatus(null), STATUS_CLEAR_MS);
   };
+
+  // The run in flight, read through the shared hook, so the Sync page will show
+  // the same derivation of it rather than a second copy. What stays here is what
+  // belongs to THIS page: the once-per-run work below, the "Cancelling…" drain,
+  // the transient status line and the optimistic start the handlers retract.
+  //
+  // "A run is in flight" is DERIVED from the run's own frame, never mirrored in
+  // a second boolean: DangerZone and RemovedGamesCleanup read the same store
+  // field, so a path that ends the run locally without ending it in the store
+  // would make the three disagree (#1019). The optimistic start is not lost — a
+  // Sync click writes running:true into the store, which the hook feeds straight
+  // back.
+  const run = useSyncRunView({
+    onRunEnd: (progress) => {
+      // True terminal reached — re-arm the button out of any "Cancelling…"
+      // drain state (#1202, RC-B).
+      setCancelling(false);
+      showTransientStatus(progress.message || "Sync finished", terminalStatusTone(progress.stage));
+      // A preview run that just ended may have staged a card this panel never
+      // received: `sync_preview` answers the instance that pressed Sync, and that
+      // instance is gone whenever the user left the page mid-run. Ask for it —
+      // unless the store already has it, which is the same run answering through
+      // the other door. A run that staged nothing (an apply, a cancel, Skip
+      // Preview) is answered `preview: null` and the store is left as it stands.
+      // Stamp the countdown's clock either way: this is where a preview can
+      // appear without this instance adopting it, and the impure now-read
+      // belongs in a handler.
+      setPreviewNowMs(Date.now());
+      if (getPendingPreviewSnapshot() === null) detach(refreshPendingPreview());
+      // Both re-reads are provoked by the run ending, so neither may join a read
+      // issued while it was still going — see the two AfterChange functions.
+      detach(refreshSyncStatsAfterChange());
+      // Refresh the live heap reading so the paused / high-heap banner reflects
+      // the run's end state (a pause leaves it high; a completed run may too).
+      detach(refreshSessionBudgetAfterChange());
+    },
+    onTerminalWording: (message, stage) => showTransientStatus(message, terminalStatusTone(stage)),
+  });
+  const syncing = run.running;
 
   useEffect(() => {
     refreshMigrationState()
@@ -690,149 +620,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
       })
       .catch((e) => logError(`Failed to query sync status: ${e}`));
 
-    /**
-     * The watched run has ended: everything that happens once per run.
-     *
-     * Which of the three actions below a frame calls for is decided at the call
-     * site and never re-derived in any of them. Those verdicts are taken from the
-     * run refs before the refs move on and OUTSIDE the subscriber's try, so a
-     * throw in here can never leave the panel believing a finished run is still
-     * live; recomputing them inside would put that decision back into the guarded
-     * region. This is also why the run's ending and the correction that follows
-     * it are two functions rather than one with a mode: they are different
-     * actions, not one action told which way to behave.
-     */
-    const endWatchedRun = (progress: SyncProgress) => {
-      // Tear down the run's live-ETA state (deadline included) so the next run
-      // measures fresh, and clear the display mirror.
-      resetEta();
-      setLiveEtaDisplay(null);
-      // True terminal reached — re-arm the button out of any "Cancelling…"
-      // drain state (#1202, RC-B).
-      setCancelling(false);
-      showTransientStatus(progress.message || "Sync finished", terminalStatusTone(progress.stage));
-      // A preview run that just ended may have staged a card this panel never
-      // received: `sync_preview` answers the instance that pressed Sync, and that
-      // instance is gone whenever the user left the page mid-run. Ask for it —
-      // unless the store already has it, which is the same run answering through
-      // the other door. A run that staged nothing (an apply, a cancel, Skip
-      // Preview) is answered `preview: null` and the store is left as it stands.
-      // Stamp the countdown's clock either way: this is where a preview can
-      // appear without this instance adopting it, and the impure now-read
-      // belongs in a handler.
-      setPreviewNowMs(Date.now());
-      if (getPendingPreviewSnapshot() === null) detach(refreshPendingPreview());
-      // Both re-reads are provoked by the run ending, so neither may join a read
-      // issued while it was still going — see the two AfterChange functions.
-      detach(refreshSyncStatsAfterChange());
-      // Refresh the live heap reading so the paused / high-heap banner reflects
-      // the run's end state (a pause leaves it high; a completed run may too).
-      detach(refreshSessionBudgetAfterChange());
-    };
-
-    /**
-     * The same run's SECOND terminal signal, which ends nothing — {@link
-     * endWatchedRun} has already run for this run. What this frame adds is the
-     * run's own account of how it ended, replacing the text the merged
-     * sync_complete frame carried over from mid-run. A frame with no message of
-     * its own changes nothing rather than blanking what is already shown, which
-     * is why the message is a required argument: the caller's guard is the only
-     * place that decision is taken, and the signature makes calling without one
-     * impossible rather than merely wrong.
-     */
-    const correctTerminalWording = (message: string, stage: SyncProgress["stage"]) => {
-      showTransientStatus(message, terminalStatusTone(stage));
-    };
-
-    /**
-     * The non-terminal half: keep the live-rate ETA moving. Called only from the
-     * subscriber, and only for a frame whose stage is not terminal.
-     *
-     * Feeds the estimator from applying frames that carry ITEM progress only —
-     * fetch frames carry page/cover counters, and an applying-stage cover-refresh
-     * frame (``coverRefresh``, #1456) carries a cover counter, not item progress,
-     * so both must be skipped. syncEta re-anchors its sticky deadline internally;
-     * the countdown is then mirrored into state here. Both now-reads are impure
-     * and so must stay on this side of the render boundary, which they do — this
-     * runs from an event handler, never from render.
-     */
-    const advanceLiveEta = (progress: SyncProgress) => {
-      if (
-        progress.stage === "applying" &&
-        progress.step !== undefined &&
-        progress.current !== undefined &&
-        !progress.coverRefresh
-      ) {
-        observeApplyProgress(progress.step, progress.current, Date.now());
-      }
-      setLiveEtaDisplay(displayedEtaSeconds(Date.now()));
-    };
-
-    // Subscribe to the module store — every backend sync_progress event and
-    // every frontend updateSyncProgress notifies, driving a re-render. What the
-    // end-of-run work keys on is the watched RUN reaching a terminal stage, not a
-    // terminal stage being present: the frame the panel finds in the store on
-    // mount ends nothing, and the two frames that end the same run are one ending
-    // (see the run refs above).
-    const unsubProgress = onSyncProgressChange(() => {
-      // The local mirror must update FIRST and unconditionally — it is what
-      // drives the re-render. Everything after it is derived work (terminal
-      // teardown, estimator feeding, ETA state) that must never be able to break
-      // the re-render chain (on-device freeze, cause not yet reproduced in tests).
-      const progress = getSyncProgress();
-      setSyncProgress(progress);
-      // Run bookkeeping, taken before the refs move on and outside the try below so
-      // a subscriber throw can never leave the panel believing a finished run is
-      // still live. A running frame is what starts a watch; the frames that end one
-      // split into the first (the run ended: tear down and announce) and any that
-      // follow it (the same run's authoritative wording: the text, nothing else).
-      const inFlight = inFlightRunId(progress);
-      if (inFlight !== null) {
-        watchedRunId.current = inFlight;
-        watchedRunEnded.current = false;
-      }
-      const terminal = isTerminalStage(progress.stage);
-      const runEndedNow =
-        terminal && !watchedRunEnded.current && endsWatchedRun(watchedRunId.current, frameRunId(progress));
-      const laterTerminalFrame = terminal && watchedRunEnded.current;
-      if (runEndedNow) watchedRunEnded.current = true;
-      // Carry the fine-detail line so the row survives a unit boundary's anchor
-      // frame (which resets current/total, #1415); drop it the moment the run
-      // ends so the next run starts clean. Kept outside the try below so the
-      // reset can never be skipped by a subscriber throw.
-      //
-      // The carry is refreshed by any running frame that has a message AND a
-      // position: a real fine-detail frame (``total`` > 0) OR a unit-boundary
-      // FETCHING anchor (``total`` 0 but ``totalSteps`` > 0). At the boundary the
-      // anchor's own message ("Fetching <next unit>") REPLACES the previous
-      // unit's carried text, so the fine line names the new unit immediately
-      // instead of lagging on the old one until the next real frame lands a
-      // network RTT later. The initial optimistic "Fetching library…" start (no
-      // total, no totalSteps) is excluded, so it keeps the stage-label spinner;
-      // an empty-message frame never clears the carry (replace, never remove).
-      if (!progress.running) {
-        setCarriedFineDetail(null);
-      } else if (progress.message && (progress.total || progress.totalSteps)) {
-        setCarriedFineDetail(progress.message);
-      }
-      // A terminal frame that is neither verdict — the stored one a mount merely
-      // finds, watching nothing (#1019) — matches no arm and does nothing, which
-      // is the whole of what it should do.
-      try {
-        if (runEndedNow) {
-          endWatchedRun(progress);
-        } else if (laterTerminalFrame && progress.message) {
-          correctTerminalWording(progress.message, progress.stage);
-        } else if (!terminal) {
-          advanceLiveEta(progress);
-        }
-      } catch (e) {
-        logError(`sync-progress subscriber failed: ${e}`);
-      }
-    });
-
     return () => {
-      unsubProgress();
       if (statusTimeoutRef.current) clearTimeout(statusTimeoutRef.current);
     };
   }, []);
@@ -1055,68 +843,6 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
     }
   };
 
-  // Two-level progress. The main determinate bar tracks COARSE unit progress
-  // but INTERPOLATES within the running unit so a large unit (e.g. 2091 items at
-  // step 2/8) doesn't sit frozen: the bar fills from the step's floor toward the
-  // next notch as the unit is worked. Notch positions come from the plan's
-  // per-unit item weights when measured (#1382), else each unit is an equal
-  // 1/totalSteps slice. 0/0 totalSteps means the run hasn't reached a unit yet →
-  // indeterminate. ``nProgress`` is a percentage (0-100), not a fraction.
-  //
-  // While actively working a unit (``fetching``/``applying``) the current unit
-  // is not yet done, so the completed count is ``step - 1``; the terminal-ish
-  // stages (``finalizing``/``done``) carry ``step == totalSteps`` as a
-  // completed count, so they keep the full ``step`` and the bar reads 100%.
-  // The within-unit fill splits the running unit's width into three monotonic
-  // sub-slices — fetch → covers → apply (#1407, ``withinUnitFraction``) — each
-  // filling by its own phase's ``current/total`` within a strictly-higher band
-  // than the phase before. So the fetch and cover frames now DO advance the bar
-  // (within their own sub-slice), never backwards at a phase boundary even
-  // though each phase restarts ``current/total`` from zero. An old backend that
-  // sends no sub-stage falls back to resting at the unit floor during fetch.
-  const step = syncProgress?.step ?? 0;
-  const activeUnit = syncProgress?.stage === "fetching" || syncProgress?.stage === "applying";
-  const completedSteps = activeUnit ? Math.max(0, step - 1) : step;
-  const withinUnit = withinUnitFraction(syncProgress);
-  // Weight the bar by the plan's per-unit item weights (#1382) — the same
-  // skip-aware, delta-corrected weights the countdown uses — so a
-  // predicted-skip unit takes no width and a huge platform takes its real
-  // share — except a run's LEADING zero-weight units, which still refresh
-  // covers and so claim an equal index slice rather than pinning the bar to
-  // empty (#1506). The latched wrapper adds a run-scoped high-water floor so a
-  // mid-run upward weight correction (observeUnitTotal on a mispredicted
-  // trailing skip) can't retract shown width (#1509). Falls back to
-  // equal-per-unit index weighting when no plan is measured (QAM opened mid-run
-  // before any sync_plan, old backend) or the plan can't apportion (unit-count
-  // mismatch, all-zero weights).
-  const weightedFraction = syncProgress?.totalSteps
-    ? latchedCoarseFraction(completedSteps, withinUnit, syncProgress.totalSteps)
-    : null;
-  const coarseFraction = syncProgress?.totalSteps
-    ? Math.max(0, Math.min(100, (weightedFraction ?? (completedSteps + withinUnit) / syncProgress.totalSteps) * 100))
-    : undefined;
-  const currentHasFineDetail = !!(syncProgress?.total && syncProgress.message);
-  // Keep the fine-detail row mounted across unit boundaries: the next unit's
-  // FETCHING anchor frame resets current/total (#1415), so fall back to the last
-  // non-empty fine detail carried by the store subscriber. Cleared when the run
-  // ends, so terminal/idle states never surface a stale line. The bar's own
-  // within-unit fill still reads the live current/total (never the carry), so
-  // this affects only which rows mount, not the bar (#1407).
-  const hasFineDetail = currentHasFineDetail || carriedFineDetail !== null;
-  const fineDetailText = currentHasFineDetail ? formatProgressText(syncProgress) : (carriedFineDetail ?? "");
-
-  // Estimated-time readout for the in-flight run. Prefer the live measured
-  // countdown ("9 min left") once the estimator has a rate; before that, fall
-  // back to the static seed carried on the store as an upper bound ("up to
-  // X min"). Absent both, the row is omitted (honest silence).
-  const staticEtaSeconds = syncProgress?.etaSeconds;
-  let etaText: string | null = null;
-  if (liveEtaDisplay !== null) {
-    etaText = formatEtaCountdown(liveEtaDisplay);
-  } else if (staticEtaSeconds !== undefined) {
-    etaText = `up to ${formatDuration(staticEtaSeconds)}`;
-  }
-
   const activeDownloads = downloads.filter((d) => d.status === "queued" || d.status === "downloading");
   const completedDownloads = downloads.filter(
     (d) => d.status === "completed" || d.status === "failed" || d.status === "cancelled",
@@ -1315,7 +1041,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
       </>
     );
   } else if (syncing) {
-    const stepText = syncProgress?.totalSteps ? `${syncProgress.step ?? 0}/${syncProgress.totalSteps}` : "";
+    const stepText = run.totalSteps ? `${run.step}/${run.totalSteps}` : "";
     syncBody = (
       <>
         <PanelSectionRow>
@@ -1343,18 +1069,18 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
                     Show the spinner inline with the stage label so a running
                     sync always has motion. When the fine line is present it
                     already has its own spinner — don't show two. */}
-                {!hasFineDetail && <Spinner width={14} height={14} />}
-                <span data-testid="sync-stage">{stageLabel(syncProgress?.stage)}</span>
+                {!run.hasFineDetail && <Spinner width={14} height={14} />}
+                <span data-testid="sync-stage">{run.stageLabel}</span>
               </span>
               {stepText && <span data-testid="sync-step">{stepText}</span>}
             </div>
             <ProgressBar
-              indeterminate={coarseFraction === undefined}
-              {...(coarseFraction !== undefined ? { nProgress: coarseFraction } : {})}
+              indeterminate={run.coarseFraction === undefined}
+              {...(run.coarseFraction !== undefined ? { nProgress: run.coarseFraction } : {})}
             />
           </div>
         </PanelSectionRow>
-        {hasFineDetail && (
+        {run.hasFineDetail && (
           <PanelSectionRow>
             <Field
               bottomSeparator="none"
@@ -1380,18 +1106,18 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
                       minHeight: `${FINE_DETAIL_CLAMP_LINES * FINE_DETAIL_LINE_HEIGHT}em`,
                     }}
                   >
-                    {fineDetailText}
+                    {run.fineDetailText}
                   </span>
                 </div>
               }
             />
           </PanelSectionRow>
         )}
-        {etaText !== null && (
+        {run.etaText !== null && (
           <PanelSectionRow>
             <Field label="Estimated time" bottomSeparator="none">
               <span data-testid="estimate-time" style={{ fontSize: "12px" }}>
-                {etaText}
+                {run.etaText}
               </span>
             </Field>
           </PanelSectionRow>
