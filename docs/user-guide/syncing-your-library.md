@@ -16,20 +16,22 @@ games appear in the Steam Library with cover art, metadata, and organized into c
 ## Starting a Sync
 
 1. Open the QAM and navigate to the plugin
-2. Tap **Sync Library** on the main page
-3. The **Sync page** opens and the plugin works out what would change. When it lands you get a table of the changes; tap
-   **Apply Sync** to start the run, **Refresh** to work out a fresh one, or **Cancel** to throw it away (with **Skip
-   preview** switched on, the run starts straight away instead)
-4. A progress bar shows the sync status — on the main page as one bar, and on the Sync page with a row per platform
+2. Tap **Sync** in the menu on the main page
+3. On the **Sync page**, tap **Sync Library** and the plugin works out what would change. When it lands you get a table
+   of the changes; tap **Apply Sync** to start the run, **Refresh** to work out a fresh one, or **Cancel** to throw it
+   away (with **Skip preview** switched on, the run starts straight away instead)
+4. A progress bar shows the sync status — on the main page as one bar with a step counter, and on the Sync page with a
+   row per platform
 5. When complete, a toast reports what actually changed — the true delta, not the total in your library. It shows the
    number of shortcuts added and/or removed this run (e.g. "Sync complete — 42 added, 3 removed."), omitting a part that
    is zero. If nothing changed, it reads "Library up to date."
 
 ## The Sync page
 
-Everything about a sync lives on one full-width page, reached from **Sync Library**, from the **Last sync** line, or
-from **Sync** in the menu. The main page keeps the button, the status lines and the progress of a run in flight; the
-Sync page is where you look at a change list, where the switches are, and where past runs are listed.
+Everything about a sync lives on one full-width page, reached from **Sync** in the menu — and, while something is
+happening, from the row that appears under the main page's status lines. The main page keeps the status lines, that one
+row and **Cancel Sync**; every button that starts, resumes or applies a sync is on the Sync page, along with the change
+list, the switches and the list of past runs.
 
 **The change table.** One row per platform with something to change, with **New**, **Updated** and **Removed** counts, a
 row for your collections naming which were added and removed, a row counting the per-platform Steam collections when
@@ -45,8 +47,8 @@ split, the page says so and shows the totals on their own rather than inventing 
 
 **Three buttons end a preview.** **Apply Sync** starts the run. **Refresh** throws the preview away and works out a
 fresh one against whatever your server holds now. **Cancel** throws it away and leaves it at that. The only other thing
-that discards it is **Force Full Sync**, described below. While a preview is waiting the main page's button reads
-**Review changes · N new**, and pressing it opens this page with that preview rather than starting over.
+that discards it is **Force Full Sync**, described below. While a preview is waiting the main page shows a **Changes
+ready** row with its counts, and pressing that row opens this page with that preview rather than starting over.
 
 **While a sync runs**, the left of the page becomes the run itself: one bar for the whole run, and under it every
 platform and collection the run plans to touch. A finished one shows what it added and updated, the one being worked
@@ -69,7 +71,7 @@ be re-fetched. Work out a fresh preview, or start the run. And if the plugin cou
 synced, the button stays pressable and says so rather than going quiet: not being able to check is not the same as there
 being nothing to clear.
 
-![Tender QAM panel with connection status and the Sync Library button](../assets/screenshot-qam.jpg)
+![Tender QAM panel with connection status and the menu](../assets/screenshot-qam.jpg)
 
 <!-- Screenshot: Sync in progress with progress bar -->
 
@@ -99,7 +101,8 @@ get the progress for the comparison that is still running, then its table the mo
 watching or not. The Sync page says how long it has left — "expires in 26 min" beside the heading, counting down. If you
 leave it past the half hour it says "expired"; the change table stays readable, **Apply Sync** greys out, and
 **Refresh** is what moves you on. Nothing you were shown is discarded behind your back. Once it has expired the main
-page's button reads **Sync Library** again, and pressing it works out a fresh preview in place of the old one.
+page's **Changes ready** row disappears, and this page's **Sync Library** works out a fresh preview in place of the old
+one.
 
 That starting estimate is **skip-aware**: when the run is planned, the plugin already knows which platforms haven't
 changed since their last sync and expects to skip them wholesale, so they don't inflate the number — an incremental
@@ -176,12 +179,12 @@ A few things worth knowing for a large library:
   It restarts the Steam client (Steam closes and reopens) — the reliable way to reset its memory — and you can Resume
   Sync once it comes back. The button is disabled while a game is running (a restart would close your game), so close
   your game first; it is also unavailable while a sync is actively running.
-- **Both pages show Steam's current memory.** A **Steam memory** row sits alongside Connection and Last sync on the main
-  page, and the Sync page shows the same reading beside the last run's growth, so you can see how close Steam is to its
-  limit at a glance (it's hidden only if the reading can't be taken); while a sync is running it refreshes every few
-  seconds so you can watch the number climb. The number is colour-coded — green when there's plenty of headroom, yellow
-  as it gets high, red once it's near the limit where syncs pause. The main page puts the last run's growth on the same
-  line — for example "0.6 GB · last run +1.5" — so a big import tells you why the number climbed.
+- **The Sync page shows Steam's current memory.** A **Steam memory** reading sits under Options beside the last run's
+  growth, so you can see how close Steam is to its limit at a glance (it's hidden only if the reading can't be taken);
+  while a sync is running it refreshes every few seconds so you can watch the number climb. The number is colour-coded —
+  green when there's plenty of headroom, yellow as it gets high, red once it's near the limit where syncs pause. It is
+  on the Sync page and nowhere else, next to the buttons it is about; what the main page carries is the "Sync paused"
+  notice that points you here.
 
 ## Resuming an interrupted sync
 
@@ -189,19 +192,19 @@ Because progress is saved as the sync goes, a run that does not finish is never 
 complete the job.
 
 - **The main page tells you when the last run didn't finish.** The **Last sync** line normally shows when the last full
-  sync completed, and pressing it opens the Sync page, where your last ten runs are listed. If your most recent run
-  ended early, a second line reports that attempt and how it ended — "last attempt: 17:48 (interrupted)" if a crash or a
-  Steam reload stopped it, "(paused)" if the memory guard paused it, or "(cancelled)" if you tapped Cancel Sync — so a
-  partial run that still added hundreds of games never reads a misleading "Never". The end-of-run toast and the sync
-  status line make the same distinction: a run stopped by a crash or Steam reload reads "Sync interrupted — … so far."
-  rather than blaming a Cancel you never pressed, and the status line compares progress against the run's planned total
-  (e.g. "3 of 10 games processed").
-- **The Sync button becomes "Resume Sync".** When a run was cancelled, interrupted, or paused and left work the next run
-  can skip, the **Sync Library** button changes to **Resume Sync**. Pressing it completes the library: the platforms
-  that already synced in full are skipped, and even in the platform that stopped, only the games it hadn't finished are
-  processed — the ones already correct are skipped, so a resume finishes quickly and the counter shows just the
-  remaining work. This is true whether or not you restart Steam in between. Once a run finishes in full, the button goes
-  back to **Sync Library**.
+  sync completed. If your most recent run ended early, a second line reports how it ended and when — "interrupted 3h
+  ago" if a crash or a Steam reload stopped it, "paused 10m ago" if the memory guard paused it, or "cancelled 10m ago"
+  if you tapped Cancel Sync — so a partial run that still added hundreds of games never reads a misleading "Never". The
+  line states what happened and does nothing; **Sync** in the menu is the way to the page where your last ten runs are
+  listed and where a resume is offered. The end-of-run toast and the sync status line make the same distinction: a run
+  stopped by a crash or Steam reload reads "Sync interrupted — … so far." rather than blaming a Cancel you never
+  pressed, and the status line compares progress against the run's planned total (e.g. "3 of 10 games processed").
+- **The Sync page's button becomes "Resume Sync".** When a run was cancelled, interrupted, or paused and left work the
+  next run can skip, that page's **Sync Library** button changes to **Resume Sync**. Pressing it completes the library:
+  the platforms that already synced in full are skipped, and even in the platform that stopped, only the games it hadn't
+  finished are processed — the ones already correct are skipped, so a resume finishes quickly and the counter shows just
+  the remaining work. This is true whether or not you restart Steam in between. Once a run finishes in full, the button
+  goes back to **Sync Library**.
   - **A run that stopped early still counts.** Even a run cancelled inside its very first platform had already added
     games and would skip them next time, so that is a resume too. The button stays **Sync Library** whenever there is
     nothing for the next run to skip — for instance a first run stopped before a single game was added, a **Force Full

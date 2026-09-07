@@ -2,11 +2,11 @@
  * Whether the next sync CONTINUES an incomplete run or starts one over — the
  * name the sync button carries, and the line that says how much is already done.
  *
- * Two pages ask the same question. Main names its Sync button from it; the Sync
- * page names the button that starts a run from it and hands the session-budget
- * card the same name, which is the whole point of that card taking the name
- * rather than deriving it (#1789). A second spelling of the reasoning below is
- * what would drift.
+ * The Sync page names the button that starts a run from it and hands the
+ * session-budget card the same name, which is the whole point of that card
+ * taking the name rather than deriving it (#1789). Main asks nothing of it: it
+ * starts no run, so it has no button to name. A second spelling of the reasoning
+ * below is what would drift.
  */
 
 import type { SyncStats } from "../types";

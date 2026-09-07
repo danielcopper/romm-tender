@@ -255,10 +255,10 @@ Format: **invariant** — tier — enforced by.
   through an aliased callable, slips past it; its own scope tests pin the producers and the root it reaches, so a
   narrowing fails rather than shrinking the rule in silence. Frame producers are not confined to `services/library/`:
   `services/artwork.py` emits through an injected `emit_progress`). The QAM panel derives "a run is in flight" from
-  `running` and keys the run's end — the status line, the live-ETA teardown, the two change-driven re-reads — on the
-  stage, so a stopping frame with a non-terminal stage would collapse the in-progress rows while ending nothing. The
-  panel cannot defend against it: a bare `running: false` is exactly what its own retraction of an optimistic start
-  looks like
+  `running` and keys the run's end — the status line, the live-ETA teardown, Main's stats re-read and the Sync page's
+  three — on the stage, so a stopping frame with a non-terminal stage would collapse the in-progress rows while ending
+  nothing. The panel cannot defend against it: a bare `running: false` is exactly what the Sync page's own retraction of
+  an optimistic start looks like
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py` pins the adapter's degradation (a
   raising resolver, a missing installation, an answer with no root all come back with `resolved` clear, never as an
@@ -546,11 +546,11 @@ Format: **invariant** — tier — enforced by.
   rule by discarding server-side alone. A fifth path is not an answer at all and is held to the same rule: a successful
   **Force Full Sync** (`forceFullSync`) discards the state the preview was computed against, so it clears the store and
   tells the backend too — a preview left standing there offers an Apply that would skip exactly what the clear armed a
-  re-fetch for. Main holds none of them any more, and that is itself part of the rule: its Sync button opens the page
-  rather than replacing what the page is holding, so the answer is given once, where the change table is. Nothing
-  mechanical can tell: an answer path is a page handler, and neither the store nor the backend can know that a call it
-  never received was an answer. Forget the store and a table stands over a decision already made; forget the backend and
-  the terminal-stage re-ask fetches it back a round trip later
+  re-fetch for. Main holds none of them, and holds none of them for a stronger reason than a division of labour: it has
+  no sync action at all, only a slot that opens the page. So the answer is given once, where the change table is.
+  Nothing mechanical can tell: an answer path is a page handler, and neither the store nor the backend can know that a
+  call it never received was an answer. Forget the store and a table stands over a decision already made; forget the
+  backend and the terminal-stage re-ask fetches it back a round trip later
 - **A prune run's claim reservation and its refusal of every conflicting callable happen in one atomic gate hold (the
   preview rebuild does not), and frontend-owned Steam work holds a heartbeated, generation-tombstoned lease through
   every continuation's final write** — test + prompt-only — prune service/gate race tests + contract callable-entry

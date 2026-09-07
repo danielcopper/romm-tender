@@ -484,12 +484,12 @@ sync (no Force Full Sync). Same-name-**within-one-label** still unions.
 
 What the plugin's Quick Access Menu panel shows at one time, chosen by the panel's router (`Page` in
 `src/types/navigation.ts`). Exactly one page is mounted at a time; navigating to another unmounts it. **Main** is the
-page the panel opens on: notices, status, the Sync button, the download summary and the menu. A **wide page** is a page
-that widens the panel from 348 px to 854 px for as long as it is mounted — the full screen width on the Deck, whose Big
-Picture viewport is 854 CSS px across. The width belongs to the page, not to a view inside it, and it collapses again
-when the page unmounts, the QAM tab changes, the panel closes or the plugin is dismounted. Every page is one or the
-other, and the page table in `docs/architecture/qam-panel.md` is where each page's width is decided. _Avoid_: sub-page,
-screen, route (a **route** is a Steam page outside the QAM, such as the game detail page).
+page the panel opens on: notices, status, the conditional slot, the download summary and the menu. A **wide page** is a
+page that widens the panel from 348 px to 854 px for as long as it is mounted — the full screen width on the Deck, whose
+Big Picture viewport is 854 CSS px across. The width belongs to the page, not to a view inside it, and it collapses
+again when the page unmounts, the QAM tab changes, the panel closes or the plugin is dismounted. Every page is one or
+the other, and the page table in `docs/architecture/qam-panel.md` is where each page's width is decided. _Avoid_:
+sub-page, screen, route (a **route** is a Steam page outside the QAM, such as the game detail page).
 
 ### List and detail
 
@@ -509,6 +509,14 @@ page's own: a successful **Force Full Sync** discards the state the preview was 
 with it, discarded on both sides exactly as Cancel discards one. An expired preview is still shown, so nothing the
 reader was told disappears behind them; what goes is the offer to apply it. _Avoid_: dry run, plan (a **plan** is the
 run's own work queue, one unit per platform or collection), diff.
+
+### Conditional slot
+
+The one row under Main's status rows that can be pressed, present only while the Sync page has something to report — a
+run in flight, or a preview waiting to be answered — and absent otherwise. It states coarsely (two words and a number)
+and opens the Sync page, exactly as the menu's Sync entry does, which is what keeps the menu the panel's only navigation
+surface: the status rows above it state and do nothing, and the slot is the single exception. _Avoid_: status card,
+banner (a **notice** is the card above the status block), button.
 
 ### Notice / home
 

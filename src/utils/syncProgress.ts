@@ -5,7 +5,8 @@
  *   - sync_progress events from the backend (persistent listener in index.tsx)
  *   - syncManager.ts during the frontend applying phase
  *   - MainPage on mount via getSyncStatus() (backend-authoritative seed)
- *   - MainPage on handleSync click (optimistic running:true)
+ *   - the Sync page's own start and apply presses (optimistic running:true, and
+ *     the retraction when a preview answers)
  *
  * Read by:
  *   - utils/syncRunView.ts, whose hook subscribes via onSyncProgressChange and

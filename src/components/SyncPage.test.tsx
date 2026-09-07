@@ -33,7 +33,6 @@ import * as syncManager from "../utils/syncManager";
 import { getSyncProgress, setSyncProgress } from "../utils/syncProgress";
 import { resetEta } from "../utils/syncEta";
 import { adoptPreview, resetPendingPreviewStoreForTests } from "../utils/pendingPreviewStore";
-import { requestPreviewOnOpen, resetPreviewRequestForTests } from "../utils/previewRequest";
 import { attachRunUnitsMirror, resetRunUnitsStoreForTests, seedRunUnits } from "../utils/runUnitsStore";
 import { resetSyncStatsStoreForTests } from "../utils/syncStatsStore";
 import { NEW_ITEM_SEC, UPDATED_ITEM_SEC, COVER_DOWNLOAD_SEC, FETCH_ALLOWANCE_SEC } from "../utils/syncEstimate";
@@ -255,13 +254,24 @@ async function renderPage() {
   return result;
 }
 
+/** Render the page and press the button that works out a preview — the page's
+ *  own, and since #1814 the only thing that asks for one. */
+async function renderAndStartPreview() {
+  const result = await renderPage();
+  await act(async () => {
+    fireEvent.click(buttonByExactText(result.container, "Sync Library")!);
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  return result;
+}
+
 describe("SyncPage", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     resetEta();
     resetSyncStatsStoreForTests();
     resetPendingPreviewStoreForTests();
-    resetPreviewRequestForTests();
     resetRunUnitsStoreForTests();
     setSyncProgress({ running: false, stage: "", current: 0, total: 0, message: "" });
 
@@ -1198,8 +1208,7 @@ describe("SyncPage", () => {
           finishFirst = res;
         }),
       );
-      requestPreviewOnOpen();
-      const { container } = await renderPage();
+      const { container } = await renderAndStartPreview();
 
       await act(async () => {
         fireEvent.click(buttonByExactText(container, "Cancel Sync")!);
@@ -1643,8 +1652,7 @@ describe("SyncPage", () => {
           finish = res;
         }),
       );
-      requestPreviewOnOpen();
-      await renderPage();
+      await renderAndStartPreview();
       vi.mocked(backend.getSyncRuns).mockClear();
       vi.mocked(backend.getSyncStats).mockClear();
       vi.mocked(backend.getSessionBudgetStatus).mockClear();
@@ -1787,29 +1795,17 @@ describe("SyncPage", () => {
   });
 
   // ===========================================================================
-  // Working out a preview — the call Main hands to this page.
+  // Working out a preview — this page's own call, and nobody else's.
   // ===========================================================================
   describe("working out a preview", () => {
-    it("takes the request Main left and computes one as the page opens", async () => {
-      requestPreviewOnOpen();
-      const { container } = await renderPage();
+    it("works one out when its own button is pressed", async () => {
+      const { container } = await renderAndStartPreview();
 
       expect(vi.mocked(backend.syncPreview)).toHaveBeenCalled();
       expect(buttonByExactText(container, "Apply Sync")).not.toBeNull();
     });
 
-    it("takes the request only once — coming back later recomputes nothing", async () => {
-      requestPreviewOnOpen();
-      const first = await renderPage();
-      first.unmount();
-      vi.mocked(backend.syncPreview).mockClear();
-      resetPendingPreviewStoreForTests();
-
-      await renderPage();
-      expect(vi.mocked(backend.syncPreview)).not.toHaveBeenCalled();
-    });
-
-    it("computes none when the page is merely opened", async () => {
+    it("computes none when the page is merely opened — no page asks it to", async () => {
       await renderPage();
       expect(vi.mocked(backend.syncPreview)).not.toHaveBeenCalled();
     });
@@ -1821,8 +1817,7 @@ describe("SyncPage", () => {
           finish = res;
         }),
       );
-      requestPreviewOnOpen();
-      const { container } = await renderPage();
+      const { container } = await renderAndStartPreview();
 
       expect(container.querySelector('[data-testid="progress"]')).not.toBeNull();
       expect(getSyncProgress().running).toBe(true);
@@ -1844,8 +1839,7 @@ describe("SyncPage", () => {
         message: "A RetroDECK migration is pending",
         blocked_by_migration: true,
       } as unknown as SyncPreview);
-      requestPreviewOnOpen();
-      const { container } = await renderPage();
+      const { container } = await renderAndStartPreview();
 
       expect(container.textContent).toContain("A RetroDECK migration is pending");
       expect(getSyncProgress().running).toBe(false);
@@ -1854,15 +1848,13 @@ describe("SyncPage", () => {
 
     it("falls back to its own words when a refusal carries none", async () => {
       vi.mocked(backend.syncPreview).mockResolvedValue({ success: false, message: "" } as unknown as SyncPreview);
-      requestPreviewOnOpen();
-      const { container } = await renderPage();
+      const { container } = await renderAndStartPreview();
       expect(container.textContent).toContain("Could not work out what would change.");
     });
 
     it("says a rejection too", async () => {
       vi.mocked(backend.syncPreview).mockRejectedValue(new Error("boom"));
-      requestPreviewOnOpen();
-      const { container } = await renderPage();
+      const { container } = await renderAndStartPreview();
       expect(container.textContent).toContain("Could not work out what would change.");
       expect(getSyncProgress().running).toBe(false);
     });
@@ -1876,8 +1868,7 @@ describe("SyncPage", () => {
         order.push("preview");
         return preview();
       });
-      requestPreviewOnOpen();
-      await renderPage();
+      await renderAndStartPreview();
       expect(order).toEqual(["reconcile", "preview"]);
     });
 
@@ -1886,8 +1877,7 @@ describe("SyncPage", () => {
       // run answers success and only the local flag knows the user pressed
       // Cancel. Without telling the backend, the staged snapshot survives.
       vi.mocked(syncManager.isCancelRequested).mockReturnValue(true);
-      requestPreviewOnOpen();
-      const { container } = await renderPage();
+      const { container } = await renderAndStartPreview();
 
       expect(vi.mocked(backend.syncCancelPreview)).toHaveBeenCalled();
       expect(buttonByExactText(container, "Apply Sync")).toBeNull();

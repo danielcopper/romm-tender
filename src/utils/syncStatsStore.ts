@@ -14,8 +14,8 @@
  * landed.
  *
  * Owning both facts here fixes both. The store holds the data; the POLICY about
- * when to ask stays with the caller — MainPage keeps its 5s/10s interval and
- * decides when a re-read is worth issuing.
+ * when to ask stays with the caller — each page keeps its own polls and decides
+ * when a re-read is worth issuing.
  *
  * Two properties carry it:
  *
@@ -46,9 +46,9 @@
  * call sites: a new caller re-reading because something changed takes the twin,
  * whatever it was that changed.
  *
- * Read through {@link useSyncStats} and {@link useSessionBudget} by
- * `components/MainPage.tsx` and by the Sync page's `useSyncPage`, which is also
- * the one reader of {@link useSyncStatsFailed}.
+ * {@link useSyncStats} is read by `components/MainPage.tsx` and by the Sync
+ * page's `useSyncPage`; {@link useSessionBudget} and {@link useSyncStatsFailed}
+ * only by the latter, which is where the session-budget card lives.
  */
 
 import { useSyncExternalStore } from "react";

@@ -1,0 +1,661 @@
+<title>Tender Main Layouts</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --bg: #eef0f3; --surface: #ffffff; --ink: #1b2027; --muted: #5b6470; --line: #d5d9df;
+    --line-strong: #b9c0c9; --mark: #c4731a; --mark-ink: #ffffff; --chip: #e3e7ec;
+    --chip-on: #1b2027; --chip-on-ink: #ffffff; --rec: #2b6a3e; --rec-bg: #e6f2ea; --no: #b3401e;
+    --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    --font-mock: "Motiva Sans", "Noto Sans", "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151a; --surface: #1a1e25; --ink: #e4e8ee; --muted: #9aa3ae; --line: #2a3038;
+      --line-strong: #3a424c; --mark: #d98a2e; --mark-ink: #12151a; --chip: #262c35;
+      --chip-on: #e4e8ee; --chip-on-ink: #12151a; --rec: #8fd3a5; --rec-bg: #1c2f23; --no: #e0865f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151a; --surface: #1a1e25; --ink: #e4e8ee; --muted: #9aa3ae; --line: #2a3038;
+    --line-strong: #3a424c; --mark: #d98a2e; --mark-ink: #12151a; --chip: #262c35;
+    --chip-on: #e4e8ee; --chip-on-ink: #12151a; --rec: #8fd3a5; --rec-bg: #1c2f23; --no: #e0865f;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font-ui); }
+  button { font: inherit; color: inherit; }
+  button:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+
+  .top { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; padding: 18px 28px;
+         border-bottom: 1px solid var(--line); background: var(--surface); position: sticky; top: 0; z-index: 5; }
+  .top h1 { margin: 0; font-size: 17px; font-weight: 600; }
+  .top h1 small { font-family: var(--font-mono); font-weight: 400; color: var(--muted); margin-left: 10px; font-size: 12px; }
+  .switch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .switch .lab { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; }
+  .chip { border: 1px solid var(--line-strong); background: var(--chip); border-radius: 3px; padding: 4px 10px; font-size: 13px; cursor: pointer; }
+  .chip[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-ink); border-color: var(--chip-on); }
+  .chip .rec { font-family: var(--font-mono); font-size: 10px; margin-left: 6px; color: var(--rec); letter-spacing: .06em; }
+  .chip[aria-pressed="true"] .rec { color: inherit; opacity: .75; }
+
+  main { padding: 26px 28px 80px; max-width: 1180px; }
+  h2 { margin: 0 0 4px; font-size: 22px; font-weight: 600; text-wrap: balance; }
+  .sub { margin: 0 0 18px; color: var(--muted); max-width: 74ch; }
+  h3 { margin: 0 0 8px; font-size: 13px; font-family: var(--font-mono); letter-spacing: .06em;
+       text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  h4 { margin: 26px 0 6px; font-size: 15px; font-weight: 600; }
+
+  .stage { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 4px; background: #0e1116; }
+  .caption { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 8px 0 26px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .variant { display: none; }
+  .variant.on { display: block; }
+  .three { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 22px; margin-bottom: 8px; }
+  .three .caption { margin: 8px 0 0; }
+
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px 36px; margin-bottom: 26px; }
+  .notes ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .notes ol > li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; max-width: 62ch; }
+  .notes ol > li p { margin: 0; }
+  .notes ul { margin: 0; padding-left: 18px; max-width: 62ch; display: grid; gap: 6px; }
+  .mk { width: 20px; height: 20px; border-radius: 50%; background: var(--mark); color: var(--mark-ink);
+        font: 600 11px/20px var(--font-mono); text-align: center; margin-top: 2px; }
+  .recbox { border-left: 3px solid var(--rec); background: var(--rec-bg); padding: 10px 14px; border-radius: 0 3px 3px 0; max-width: 66ch; margin-bottom: 26px; }
+  .recbox b { color: var(--rec); font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em;
+              text-transform: uppercase; display: block; margin-bottom: 4px; font-weight: 500; }
+
+  .facts { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 16px 20px; margin-bottom: 26px; max-width: 900px; }
+  .facts dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 20px; }
+  .facts dt { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .facts dd { margin: 0; }
+
+  .cmpwrap { overflow-x: auto; margin-bottom: 26px; }
+  .cmp { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); font-size: 14px; min-width: 720px; }
+  .cmp th, .cmp td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .cmp th { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  .cmp td.y { color: var(--rec); } .cmp td.n { color: var(--no); }
+
+  /* ---------- the Steam mock ---------- */
+  .deck { position: absolute; top: 0; left: 0; transform-origin: 0 0; overflow: hidden;
+          background: radial-gradient(900px 520px at 24% 20%, #262c39, #0e1116 70%);
+          --p: #23262e; --p2: #1a1d23; --t: #dcdedf; --mu: #8b929a; --ln: rgba(255,255,255,.07);
+          --ln2: rgba(255,255,255,.14); --blue: #1a9fff; --ok: #59bf40; --warn: #f0a030; --dng: #e8686a;
+          --fill: rgba(255,255,255,.08); --fill2: rgba(255,255,255,.14);
+          font-family: var(--font-mock); color: var(--t); font-size: 14px; line-height: 1.35; }
+  .deck::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 80px; background: #0b0d11; }
+  .deck::after { content: "95 %   13:28"; position: absolute; top: 28px; right: 24px; font: 600 15px/1 var(--font-mock); color: #dcdedf; }
+  .bgtile { position: absolute; border-radius: 6px; background: rgba(255,255,255,.035); }
+  .qam { position: absolute; top: 80px; right: 0; bottom: 0; width: 348px; display: flex; box-shadow: -12px 0 40px rgba(0,0,0,.45); }
+  .rail { width: 48px; background: var(--p2); display: flex; flex-direction: column; align-items: center; padding-top: 14px; gap: 16px; flex: none; }
+  .rail i { width: 18px; height: 18px; border: 2px solid #5a6270; border-radius: 4px; display: block; }
+  .rail i.c { border-radius: 50%; }
+  .rail i.on { border-color: #fff; background: rgba(255,255,255,.15); }
+  .content { flex: 1; min-width: 0; background: var(--p); display: flex; flex-direction: column; overflow: hidden; position: relative; }
+  .dtitle { height: 34px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 600; font-size: 15px; border-bottom: 1px solid var(--ln); color: #fff; }
+  .body { padding: 6px 16px 10px; flex: 1; min-height: 0; overflow: hidden; }
+
+  .sec-t { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--mu); padding: 9px 0 3px; }
+  .sec-t:first-child { padding-top: 2px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--ln); }
+  .row .nm { min-width: 0; }
+  .row .val { color: var(--mu); font-variant-numeric: tabular-nums; text-align: right; display: flex; align-items: center; gap: 7px; flex: none; }
+  .row .val.t { color: var(--t); }
+  .row.foc { background: var(--fill2); outline: 2px solid #fff; outline-offset: -2px; border-radius: 2px; padding-left: 6px; padding-right: 6px; }
+  .ar { color: var(--mu); font-size: 15px; line-height: 1; }
+  .row.door .ar { color: #fff; }
+  .desc { font-size: 11.5px; color: var(--mu); margin-top: 1px; }
+  .btn { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--fill); padding: 7px 10px; border-radius: 2px; font-weight: 500; margin-top: 6px; color: #fff; font-size: 13px; }
+  .btn.dng { color: var(--dng); }
+  .btn.dis { color: var(--mu); }
+  .btn.foc { outline: 2px solid #fff; outline-offset: -2px; background: var(--fill2); }
+  .btn .ar { color: var(--mu); }
+  .sep { height: 1px; background: var(--ln2); margin: 10px 0 2px; }
+  .notice { background: rgba(240,160,48,.10); border-left: 2px solid var(--warn); padding: 6px 9px; border-radius: 0 2px 2px 0; margin-bottom: 6px; }
+  .notice .t { font-weight: 600; color: #fff; font-size: 13px; }
+  .notice .d { font-size: 11.5px; color: var(--mu); }
+  .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); margin: 7px 0 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--blue); }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .mu { color: var(--mu); } .dngt { color: var(--dng); }
+  .pill { background: var(--blue); color: #fff; font-size: 10px; font-weight: 600; border-radius: 8px; padding: 1px 6px; }
+
+  /* the fold: everything below is off-screen until the reader walks focus down */
+  .fold { position: absolute; left: 0; right: 0; z-index: 3; border-top: 1px dashed rgba(232,104,106,.85); }
+  .fold span { position: absolute; right: 0; top: 2px; font: 500 9px/1.4 var(--font-mono); letter-spacing: .08em;
+               text-transform: uppercase; color: #e8686a; background: rgba(14,17,22,.85); padding: 1px 5px; border-radius: 2px; }
+  .under { opacity: .38; }
+</style>
+
+<div class="top">
+  <h1>Tender Main Layouts <small>#1808 · Main is 348 px wide, 420 px tall before it scrolls</small></h1>
+  <div class="switch">
+    <span class="lab">LAYOUT</span>
+    <button class="chip" data-v="a" aria-pressed="false">A · Status ist die Karte</button>
+    <button class="chip" data-v="b" aria-pressed="false">B · Menü ist die Karte</button>
+    <button class="chip" data-v="c" aria-pressed="false">C · Menü zuerst</button>
+    <button class="chip" data-v="fin" aria-pressed="false">B+ · gewählt <span class="rec">BESCHLOSSEN</span></button>
+    <button class="chip" data-v="now" aria-pressed="false">Heute</button>
+  </div>
+</div>
+
+<main>
+  <div class="facts">
+    <dl>
+      <dt>Die Frage</dt><dd>Main hat drei Türen zur Sync-Seite — die drückbare <em>Last sync</em>-Zeile, den <em>Sync Library</em>-Knopf und den Menüeintrag — und der Knopf berechnet beim Drücken eine Vorschau, die man vielleicht gar nicht wollte. Was hier zur Wahl steht, ist nicht die Tür zu Sync allein, sondern die Regel für alle Seiten.</dd>
+      <dt>Die Falz</dt><dd>Der Panel ist <strong>454 px</strong> hoch, davon gehen 34 px an Deckys Titelzeile: <strong>420 px</strong> sind sichtbar. Die rote Linie in den Zeichnungen ist diese Grenze — was darunter liegt, erreicht man nur, indem man den Fokus Zeile für Zeile hinunterschiebt. Es gibt keinen zweiten Weg: das QAM scrollt <em>nur</em> über den Fokus.</dd>
+      <dt>Jeder Halt zählt</dt><dd>Jede fokussierbare Zeile ist ein Stick-Druck. <em>Connection</em>, <em>Library</em> und <em>Steam memory</em> sind heute Haltestellen, an denen nichts passiert — man läuft durch sie hindurch, um ans Menü zu kommen.</dd>
+      <dt>Unverändert in allen drei</dt><dd>Kein Knopf auf Main berechnet noch etwas. Hinweise behalten ihre eigenen Aktionsknöpfe. Läuft ein Sync, steht der Fortschrittsblock mit <em>Cancel</em> auf Main — das ist Anzeige, keine Tür, und bleibt einen Druck entfernt.</dd>
+    </dl>
+  </div>
+
+  <!-- ============================ A ============================ -->
+  <div class="variant" id="v-a">
+    <h2>A · Status ist die Karte</h2>
+    <p class="sub">Jede Statuszeile führt zu der Seite, der ihre Tatsache gehört. Der eigene Sync-Knopf entfällt, das Menü behält nur, was keine Zeile beschreibt. Aus drei toten Haltestellen werden drei Türen — und die Navigation rückt an den oberen Rand, wo sie billig zu erreichen ist.</p>
+
+    <div class="three">
+      <div>
+        <h3>Ruhezustand</h3>
+        <div class="stage" data-w="854" data-h="534"><div class="deck">
+          <div class="bgtile" style="left:28px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:192px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:356px;top:110px;width:130px;height:210px"></div>
+          <div class="qam">
+            <div class="rail"><i class="c"></i><i></i><i class="on"></i></div>
+            <div class="content">
+              <div class="dtitle">RomM Sync</div>
+              <div class="body">
+                <div class="sec-t">Status</div>
+                <div class="row door"><div class="nm">Connection</div><div class="val t"><span class="ok">Connected</span><span class="ar">›</span></div></div>
+                <div class="row door foc"><div class="nm">Last sync</div><div class="val t">2 hours ago<span class="ar">›</span></div></div>
+                <div class="row door"><div class="nm">Library</div><div class="val t">842 games<span class="ar">›</span></div></div>
+                <div class="row door"><div class="nm">Steam memory</div><div class="val t">~180 MB<span class="ar">›</span></div></div>
+                <div class="sep"></div>
+                <div class="btn">Settings<span class="ar">›</span></div>
+                <div class="btn">Data Management<span class="ar">›</span></div>
+              </div>
+              <div class="fold" style="top:420px"><span>Falz · 420 px</span></div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption"><span>Vier Türen, zwei Knöpfe — 250 px, alles über der Falz</span></div>
+      </div>
+
+      <div>
+        <h3>Vorschau wartet · Hinweis · Downloads</h3>
+        <div class="stage" data-w="854" data-h="534"><div class="deck">
+          <div class="bgtile" style="left:28px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:192px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:356px;top:110px;width:130px;height:210px"></div>
+          <div class="qam">
+            <div class="rail"><i class="c"></i><i></i><i class="on"></i></div>
+            <div class="content">
+              <div class="dtitle">RomM Sync</div>
+              <div class="body">
+                <div class="notice"><div class="t">RetroArch: input_driver</div><div class="d">Controller in RetroArch-Menüs</div><div class="btn" style="margin-top:5px">Fix in Settings<span class="ar">›</span></div></div>
+                <div class="sec-t">Status</div>
+                <div class="row door"><div class="nm">Connection</div><div class="val t"><span class="ok">Connected</span><span class="ar">›</span></div></div>
+                <div class="row door foc"><div class="nm">Changes ready <span class="pill">13</span></div><div class="val t">13 new, 4 upd.<span class="ar">›</span></div></div>
+                <div class="row door"><div class="nm">Library</div><div class="val t">842 games<span class="ar">›</span></div></div>
+                <div class="row door"><div class="nm">Steam memory</div><div class="val t">~180 MB<span class="ar">›</span></div></div>
+                <div class="sep"></div>
+                <div class="row"><div class="nm">Chrono Trigger</div><div class="val">62 %</div></div>
+                <div class="bar"><i style="width:62%"></i></div>
+                <div class="row"><div class="nm mu">+2 more downloading</div><div class="val"></div></div>
+                <div class="btn">View All<span class="ar">›</span></div>
+                <div class="sep"></div>
+                <div class="btn under">Settings<span class="ar">›</span></div>
+                <div class="btn under">Data Management<span class="ar">›</span></div>
+              </div>
+              <div class="fold" style="top:420px"><span>Falz · 420 px</span></div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption"><span>Alle vier Türen bleiben oben; nur das Rest-Menü rutscht darunter</span></div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <ol>
+        <li><span class="mk">1</span><p><strong>Die Regel ist ein Satz.</strong> „Drück die Tatsache, um zu der Seite zu kommen, der sie gehört." <em>Connection</em> → Settings, <em>Last sync</em> → Sync, <em>Library</em> → Library, <em>Steam memory</em> → Sync (dort steht der Sitzungs-Haushalt und der Steam-Neustart). Der Chevron sagt an jeder Zeile, dass sie führt.</p></li>
+        <li><span class="mk">2</span><p><strong>Die Sync-Zeile trägt den Zustand als Überschrift</strong>, nicht als Zusatz: <em>Last sync · 2 hours ago</em>, <em>Changes ready · 13 new, 4 updated</em>, <em>Sync cancelled · resume on the Sync page</em>, <em>Syncing · unit 3 of 16</em>. Eine Zeile, ein Ort, und die Neuigkeit steht da, wo man sie liest.</p></li>
+      </ol>
+      <ol>
+        <li><span class="mk">3</span><p><strong>Was das Menü noch ist.</strong> Zwei Knöpfe für die zwei Seiten, die keine Statuszeile beschreibt. Kein Verlust an Erreichbarkeit — nur an Redundanz.</p></li>
+        <li><span class="mk">4</span><p><strong>Der Preis.</strong> Sync und Library stehen nirgends mehr als Wort im Menü; wer sie sucht, findet sie am Chevron der Zeile. Und wer <em>nur</em> synchronisieren will, drückt zweimal statt einmal: Zeile, dann der Startknopf auf der Seite, auf dem der Fokus schon liegt.</p></li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ============================ B ============================ -->
+  <div class="variant" id="v-b">
+    <h2>B · Das Menü ist die Karte</h2>
+    <p class="sub">Genau eine Navigationsfläche, immer an derselben Stelle, immer vollständig. Der Status ist Text und tut nichts — auch die <em>Last sync</em>-Zeile nicht mehr. Der eigene Sync-Knopf entfällt, weil das Menü ihn schon enthält.</p>
+
+    <div class="three">
+      <div>
+        <h3>Ruhezustand</h3>
+        <div class="stage" data-w="854" data-h="534"><div class="deck">
+          <div class="bgtile" style="left:28px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:192px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:356px;top:110px;width:130px;height:210px"></div>
+          <div class="qam">
+            <div class="rail"><i class="c"></i><i></i><i class="on"></i></div>
+            <div class="content">
+              <div class="dtitle">RomM Sync</div>
+              <div class="body">
+                <div class="sec-t">Status</div>
+                <div class="row"><div class="nm">Connection</div><div class="val t"><span class="ok">Connected</span></div></div>
+                <div class="row"><div class="nm">Last sync</div><div class="val t">2 hours ago</div></div>
+                <div class="row"><div class="nm">Library</div><div class="val t">842 games</div></div>
+                <div class="row"><div class="nm">Steam memory</div><div class="val t">~180 MB</div></div>
+                <div class="sep"></div>
+                <div class="btn foc">Sync<span class="ar">›</span></div>
+                <div class="btn">Library<span class="ar">›</span></div>
+                <div class="btn">Settings<span class="ar">›</span></div>
+                <div class="btn">Data Management<span class="ar">›</span></div>
+              </div>
+              <div class="fold" style="top:420px"><span>Falz · 420 px</span></div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption"><span>Passt — knapp: 330 px, das letzte Menüwort sitzt 20 px über der Falz</span></div>
+      </div>
+
+      <div>
+        <h3>Vorschau wartet · Hinweis · Downloads</h3>
+        <div class="stage" data-w="854" data-h="534"><div class="deck">
+          <div class="bgtile" style="left:28px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:192px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:356px;top:110px;width:130px;height:210px"></div>
+          <div class="qam">
+            <div class="rail"><i class="c"></i><i></i><i class="on"></i></div>
+            <div class="content">
+              <div class="dtitle">RomM Sync</div>
+              <div class="body">
+                <div class="notice"><div class="t">RetroArch: input_driver</div><div class="d">Controller in RetroArch-Menüs</div><div class="btn" style="margin-top:5px">Fix in Settings<span class="ar">›</span></div></div>
+                <div class="sec-t">Status</div>
+                <div class="row"><div class="nm">Connection</div><div class="val t"><span class="ok">Connected</span></div></div>
+                <div class="row"><div class="nm">Last sync</div><div class="val t">2 hours ago<span class="pill" style="margin-left:6px">13</span></div></div>
+                <div class="row"><div class="nm">Library</div><div class="val t">842 games</div></div>
+                <div class="row"><div class="nm">Steam memory</div><div class="val t">~180 MB</div></div>
+                <div class="sep"></div>
+                <div class="row"><div class="nm">Chrono Trigger</div><div class="val">62 %</div></div>
+                <div class="bar"><i style="width:62%"></i></div>
+                <div class="row under"><div class="nm mu">+2 more downloading</div><div class="val"></div></div>
+                <div class="btn under">View All<span class="ar">›</span></div>
+                <div class="sep under"></div>
+                <div class="btn under">Sync<span class="ar">›</span></div>
+                <div class="btn under">Library<span class="ar">›</span></div>
+                <div class="btn under">Settings<span class="ar">›</span></div>
+                <div class="btn under">Data Management<span class="ar">›</span></div>
+              </div>
+              <div class="fold" style="top:420px"><span>Falz · 420 px</span></div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption"><span>Das ganze Menü liegt unter der Falz — sieben Stick-Drücke bis „Sync"</span></div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <ol>
+        <li><span class="mk">1</span><p><strong>Der stärkste Punkt:</strong> es gibt genau einen Ort, an dem man navigiert, und er sieht immer gleich aus. Nichts ist zweimal erreichbar, nichts versteckt sich hinter einem Chevron.</p></li>
+        <li><span class="mk">2</span><p><strong>Der teuerste Punkt:</strong> das Menü steht ganz unten, hinter allem, was gerade sonst noch los ist. Sobald ein Hinweis oder ein Download da ist, fällt es unter die Falz — und weil das QAM nur über den Fokus scrollt, kostet jede Seite dann sieben bis neun Stick-Drücke.</p></li>
+      </ol>
+      <ol>
+        <li><span class="mk">3</span><p><strong>Die vier Statuszeilen bleiben tote Haltestellen</strong>, durch die man hindurchläuft. Nicht-fokussierbar machen hilft nicht: dann springt der Fokus beim Öffnen auf den ersten Menüknopf, und Steam scrollt den Status nach oben aus dem Bild.</p></li>
+        <li><span class="mk">4</span><p><strong>Wartende Änderungen brauchen ein Abzeichen</strong>, weil die Zeile sie nicht mehr anbieten kann — die Zahl steht da, die Tür ist woanders.</p></li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ============================ C ============================ -->
+  <div class="variant" id="v-c">
+    <h2>C · Menü zuerst</h2>
+    <p class="sub">Dasselbe vollständige Menü wie in B, aber ganz oben: Navigation vor Zustand. Man öffnet das Plugin, um etwas zu tun, und das Erste unter dem Cursor ist die Liste dessen, was man tun kann. Der Status rückt darunter und ist reiner Text.</p>
+
+    <div class="three">
+      <div>
+        <h3>Ruhezustand</h3>
+        <div class="stage" data-w="854" data-h="534"><div class="deck">
+          <div class="bgtile" style="left:28px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:192px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:356px;top:110px;width:130px;height:210px"></div>
+          <div class="qam">
+            <div class="rail"><i class="c"></i><i></i><i class="on"></i></div>
+            <div class="content">
+              <div class="dtitle">RomM Sync</div>
+              <div class="body">
+                <div class="btn foc" style="margin-top:2px">Sync<span class="ar">›</span></div>
+                <div class="btn">Library<span class="ar">›</span></div>
+                <div class="btn">Settings<span class="ar">›</span></div>
+                <div class="btn">Data Management<span class="ar">›</span></div>
+                <div class="sep"></div>
+                <div class="sec-t">Status</div>
+                <div class="row"><div class="nm">Connection</div><div class="val t"><span class="ok">Connected</span></div></div>
+                <div class="row"><div class="nm">Last sync</div><div class="val t">2 hours ago</div></div>
+                <div class="row"><div class="nm">Library</div><div class="val t">842 games</div></div>
+                <div class="row"><div class="nm">Steam memory</div><div class="val t">~180 MB</div></div>
+              </div>
+              <div class="fold" style="top:420px"><span>Falz · 420 px</span></div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption"><span>Jede Seite ist ein Druck entfernt — der Zustand aber erst nach vier</span></div>
+      </div>
+
+      <div>
+        <h3>Vorschau wartet · Hinweis · Downloads</h3>
+        <div class="stage" data-w="854" data-h="534"><div class="deck">
+          <div class="bgtile" style="left:28px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:192px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:356px;top:110px;width:130px;height:210px"></div>
+          <div class="qam">
+            <div class="rail"><i class="c"></i><i></i><i class="on"></i></div>
+            <div class="content">
+              <div class="dtitle">RomM Sync</div>
+              <div class="body">
+                <div class="notice"><div class="t">RetroArch: input_driver</div><div class="d">Controller in RetroArch-Menüs</div><div class="btn" style="margin-top:5px">Fix in Settings<span class="ar">›</span></div></div>
+                <div class="btn foc">Sync <span class="pill">13</span><span class="ar">›</span></div>
+                <div class="btn">Library<span class="ar">›</span></div>
+                <div class="btn">Settings<span class="ar">›</span></div>
+                <div class="btn">Data Management<span class="ar">›</span></div>
+                <div class="sep"></div>
+                <div class="sec-t">Status</div>
+                <div class="row"><div class="nm">Connection</div><div class="val t"><span class="ok">Connected</span></div></div>
+                <div class="row"><div class="nm">Last sync</div><div class="val t">2 hours ago</div></div>
+                <div class="row"><div class="nm">Library</div><div class="val t">842 games</div></div>
+                <div class="row under"><div class="nm">Steam memory</div><div class="val t">~180 MB</div></div>
+                <div class="sep under"></div>
+                <div class="row under"><div class="nm">Chrono Trigger</div><div class="val">62 %</div></div>
+                <div class="bar under"><i style="width:62%"></i></div>
+                <div class="btn under">View All<span class="ar">›</span></div>
+              </div>
+              <div class="fold" style="top:420px"><span>Falz · 420 px</span></div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption"><span>Navigation bleibt oben — dafür fallen Zustand und Downloads hinunter</span></div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <ol>
+        <li><span class="mk">1</span><p><strong>Schnellster Weg zu jeder Seite</strong>, in jedem Zustand: der Fokus landet beim Öffnen auf <em>Sync</em>, alles andere ist ein bis drei Drücke weiter. Kein Hinweis und kein Download schiebt die Navigation je nach unten.</p></li>
+        <li><span class="mk">2</span><p><strong>Der Charakter kippt.</strong> Das Plugin öffnet nicht mehr mit „so steht es", sondern mit „was willst du". Ob RomM überhaupt erreichbar ist, liest man erst darunter — und die laufenden Downloads sieht man gar nicht mehr, ohne zu scrollen.</p></li>
+      </ol>
+      <ol>
+        <li><span class="mk">3</span><p><strong>Der Fortschritt eines laufenden Syncs</strong> müsste über das Menü rutschen, sonst steht die auffälligste Sache im Panel unter der Falz. Das heißt: die Reihenfolge ist doch nicht fest, sondern hat einen Sonderfall.</p></li>
+        <li><span class="mk">4</span><p><strong>Wartende Änderungen</strong> stehen als Abzeichen am Menüwort — sichtbar, aber ohne die Zahlen, die eine Statuszeile tragen kann.</p></li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ============================ FINAL ============================ -->
+  <div class="variant" id="v-fin">
+    <h2>B+ · gewählt</h2>
+    <p class="sub">B, mit zwei Ergänzungen: <em>Steam memory</em> verlässt Main und lebt auf der Sync-Seite weiter, und der Status bekommt einen <strong>konditionalen Platz</strong>, der nur belegt ist, wenn zur Sync-Seite gerade etwas zu melden ist — ein laufender Lauf mit grobem Schritt und Balken, oder eine wartende Vorschau. Dieser eine Platz ist drückbar und führt dorthin, wohin auch der Menüeintrag führt. Die drei bleibenden Statuszeilen tun nichts.</p>
+
+    <div class="three">
+      <div>
+        <h3>Ruhezustand</h3>
+        <div class="stage" data-w="854" data-h="534"><div class="deck">
+          <div class="bgtile" style="left:28px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:192px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:356px;top:110px;width:130px;height:210px"></div>
+          <div class="qam">
+            <div class="rail"><i class="c"></i><i></i><i class="on"></i></div>
+            <div class="content">
+              <div class="dtitle">RomM Sync</div>
+              <div class="body">
+                <div class="sec-t">Status</div>
+                <div class="row"><div class="nm">Connection</div><div class="val t"><span class="ok">Connected</span></div></div>
+                <div class="row"><div class="nm">Last sync</div><div class="val t">2 hours ago</div></div>
+                <div class="row"><div class="nm">Library</div><div class="val t">842 games</div></div>
+                <div class="sep"></div>
+                <div class="btn foc">Sync<span class="ar">›</span></div>
+                <div class="btn">Library<span class="ar">›</span></div>
+                <div class="btn">Settings<span class="ar">›</span></div>
+                <div class="btn">Data Management<span class="ar">›</span></div>
+              </div>
+              <div class="fold" style="top:420px"><span>Falz · 420 px</span></div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption"><span>Drei Zeilen statt vier — der konditionale Platz ist leer</span></div>
+      </div>
+
+      <div>
+        <h3>Sync läuft · <span style="color:var(--rec)">mit</span> Cancel auf Main</h3>
+        <div class="stage" data-w="854" data-h="534"><div class="deck">
+          <div class="bgtile" style="left:28px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:192px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:356px;top:110px;width:130px;height:210px"></div>
+          <div class="qam">
+            <div class="rail"><i class="c"></i><i></i><i class="on"></i></div>
+            <div class="content">
+              <div class="dtitle">RomM Sync</div>
+              <div class="body">
+                <div class="sec-t">Status</div>
+                <div class="row"><div class="nm">Connection</div><div class="val t"><span class="ok">Connected</span></div></div>
+                <div class="row"><div class="nm">Last sync</div><div class="val t">2 hours ago</div></div>
+                <div class="row"><div class="nm">Library</div><div class="val t">842 games</div></div>
+                <div class="row door foc" style="border-bottom:0"><div class="nm">Syncing</div><div class="val t">3 of 16<span class="ar">›</span></div></div>
+                <div class="bar" style="margin-top:0"><i style="width:47%"></i></div>
+                <div class="btn dng" style="justify-content:center">Cancel Sync</div>
+                <div class="sep"></div>
+                <div class="btn">Sync<span class="ar">›</span></div>
+                <div class="btn">Library<span class="ar">›</span></div>
+                <div class="btn">Settings<span class="ar">›</span></div>
+                <div class="btn under">Data Management<span class="ar">›</span></div>
+              </div>
+              <div class="fold" style="top:420px"><span>Falz · 420 px</span></div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption"><span>Abbrechen bleibt ein Druck — kostet 44 px und schiebt das Menü an die Falz</span></div>
+      </div>
+
+      <div>
+        <h3>Sync läuft · <span style="color:var(--no)">ohne</span> Cancel auf Main</h3>
+        <div class="stage" data-w="854" data-h="534"><div class="deck">
+          <div class="bgtile" style="left:28px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:192px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:356px;top:110px;width:130px;height:210px"></div>
+          <div class="qam">
+            <div class="rail"><i class="c"></i><i></i><i class="on"></i></div>
+            <div class="content">
+              <div class="dtitle">RomM Sync</div>
+              <div class="body">
+                <div class="sec-t">Status</div>
+                <div class="row"><div class="nm">Connection</div><div class="val t"><span class="ok">Connected</span></div></div>
+                <div class="row"><div class="nm">Last sync</div><div class="val t">2 hours ago</div></div>
+                <div class="row"><div class="nm">Library</div><div class="val t">842 games</div></div>
+                <div class="row door foc" style="border-bottom:0"><div class="nm">Syncing</div><div class="val t">3 of 16<span class="ar">›</span></div></div>
+                <div class="bar" style="margin-top:0"><i style="width:47%"></i></div>
+                <div class="sep"></div>
+                <div class="btn">Sync<span class="ar">›</span></div>
+                <div class="btn">Library<span class="ar">›</span></div>
+                <div class="btn">Settings<span class="ar">›</span></div>
+                <div class="btn">Data Management<span class="ar">›</span></div>
+              </div>
+              <div class="fold" style="top:420px"><span>Falz · 420 px</span></div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption"><span>Main zeigt nur; Abbrechen liegt hinter der drückbaren Zeile</span></div>
+      </div>
+
+      <div>
+        <h3>Vorschau wartet</h3>
+        <div class="stage" data-w="854" data-h="534"><div class="deck">
+          <div class="bgtile" style="left:28px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:192px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:356px;top:110px;width:130px;height:210px"></div>
+          <div class="qam">
+            <div class="rail"><i class="c"></i><i></i><i class="on"></i></div>
+            <div class="content">
+              <div class="dtitle">RomM Sync</div>
+              <div class="body">
+                <div class="sec-t">Status</div>
+                <div class="row"><div class="nm">Connection</div><div class="val t"><span class="ok">Connected</span></div></div>
+                <div class="row"><div class="nm">Last sync</div><div class="val t">2 hours ago</div></div>
+                <div class="row"><div class="nm">Library</div><div class="val t">842 games</div></div>
+                <div class="row door foc"><div class="nm">Changes ready</div><div class="val t">13 new, 4 upd.<span class="ar">›</span></div></div>
+                <div class="sep"></div>
+                <div class="btn">Sync<span class="ar">›</span></div>
+                <div class="btn">Library<span class="ar">›</span></div>
+                <div class="btn">Settings<span class="ar">›</span></div>
+                <div class="btn">Data Management<span class="ar">›</span></div>
+              </div>
+              <div class="fold" style="top:420px"><span>Falz · 420 px</span></div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption"><span>Derselbe Platz, dieselbe Tür — ohne Balken, weil nichts läuft</span></div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <ol>
+        <li><span class="mk">1</span><p><strong>Ein Platz, zwei Anlässe.</strong> Belegt ist er, solange ein Lauf geht — grober Schritt (<em>Checking for changes</em> oder <em>Syncing</em>), Zähler, Balken — und solange eine Vorschau wartet. Sonst ist er nicht da. Er ist der einzige drückbare Teil des Status und führt genau dorthin, wohin der Menüeintrag <em>Sync</em> führt.</p></li>
+        <li><span class="mk">2</span><p><strong>Grob heißt grob.</strong> Zwei Worte und ein Balken; die Einheiten-Tabelle, die Feindetails und die Schätzung bleiben der Sync-Seite. Das ist die Arbeitsteilung, die B ausmacht: Main sagt, was ist, die Seite zeigt, was passiert.</p></li>
+      </ol>
+      <ol>
+        <li><span class="mk">3</span><p><strong>Ein abgebrochener oder unterbrochener Lauf</strong> braucht keinen eigenen Platz: <em>Last sync</em> sagt „cancelled 10 minutes ago", und Fortsetzen ist einer der Knöpfe auf der Sync-Seite.</p></li>
+        <li><span class="mk">4</span><p><strong>Steam memory</strong> verschwindet von Main, nicht aus dem Plugin — die Karte zum Sitzungs-Haushalt steht auf der Sync-Seite, und wenn es eng wird, meldet sich weiterhin der Hinweis oben auf Main.</p></li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ============================ HEUTE ============================ -->
+  <div class="variant" id="v-now">
+    <h2>Heute</h2>
+    <p class="sub">Zum Vergleich, wie Main auf dem Sync-Zweig gerade steht: vier Statuszeilen, von denen eine führt und drei nichts tun; der Sync-Knopf, der beim Drücken eine Vorschau berechnet; und darunter das vollständige Menü. Drei Türen zu Sync, eine davon teuer.</p>
+
+    <div class="three">
+      <div>
+        <h3>Ruhezustand</h3>
+        <div class="stage" data-w="854" data-h="534"><div class="deck">
+          <div class="bgtile" style="left:28px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:192px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:356px;top:110px;width:130px;height:210px"></div>
+          <div class="qam">
+            <div class="rail"><i class="c"></i><i></i><i class="on"></i></div>
+            <div class="content">
+              <div class="dtitle">RomM Sync</div>
+              <div class="body">
+                <div class="sec-t">Status</div>
+                <div class="row"><div class="nm">Connection</div><div class="val t"><span class="ok">Connected</span></div></div>
+                <div class="row door"><div class="nm">Last sync</div><div class="val t">2 hours ago<span class="ar">›</span></div></div>
+                <div class="row"><div class="nm">Library</div><div class="val t">842 games</div></div>
+                <div class="row"><div class="nm">Steam memory</div><div class="val t">~180 MB</div></div>
+                <div class="sep"></div>
+                <div class="btn foc" style="justify-content:center">Sync Library</div>
+                <div class="sep"></div>
+                <div class="btn">Sync<span class="ar">›</span></div>
+                <div class="btn">Library<span class="ar">›</span></div>
+                <div class="btn under">Settings<span class="ar">›</span></div>
+                <div class="btn under">Data Management<span class="ar">›</span></div>
+              </div>
+              <div class="fold" style="top:420px"><span>Falz · 420 px</span></div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption"><span>Schon ohne Hinweis fallen zwei Menüworte unter die Falz</span></div>
+      </div>
+
+      <div>
+        <h3>Sync läuft — in allen Entwürfen gleich</h3>
+        <div class="stage" data-w="854" data-h="534"><div class="deck">
+          <div class="bgtile" style="left:28px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:192px;top:110px;width:150px;height:210px"></div>
+          <div class="bgtile" style="left:356px;top:110px;width:130px;height:210px"></div>
+          <div class="qam">
+            <div class="rail"><i class="c"></i><i></i><i class="on"></i></div>
+            <div class="content">
+              <div class="dtitle">RomM Sync</div>
+              <div class="body">
+                <div class="sec-t">Status</div>
+                <div class="row door"><div class="nm">Connection</div><div class="val t"><span class="ok">Connected</span><span class="ar">›</span></div></div>
+                <div class="row door foc"><div class="nm">Syncing</div><div class="val t">unit 3 of 16<span class="ar">›</span></div></div>
+                <div class="row door"><div class="nm">Library</div><div class="val t">842 games<span class="ar">›</span></div></div>
+                <div class="row door"><div class="nm">Steam memory</div><div class="val t">~180 MB<span class="ar">›</span></div></div>
+                <div class="sep"></div>
+                <div class="row"><div class="nm">Applying · Game Boy Advance</div><div class="val">148 / 312</div></div>
+                <div class="bar"><i style="width:47%"></i></div>
+                <div class="row"><div class="nm mu">Estimated time</div><div class="val">about 4 minutes</div></div>
+                <div class="btn dng" style="justify-content:center">Cancel Sync</div>
+                <div class="sep"></div>
+                <div class="btn under">Settings<span class="ar">›</span></div>
+                <div class="btn under">Data Management<span class="ar">›</span></div>
+              </div>
+              <div class="fold" style="top:420px"><span>Falz · 420 px</span></div>
+            </div>
+          </div>
+        </div></div>
+        <div class="caption"><span>Der Fortschrittsblock ist Anzeige, keine Tür — Cancel bleibt ein Druck entfernt</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h4>Was jede Wahl kostet</h4>
+  <div class="cmpwrap">
+    <table class="cmp">
+      <thead><tr><th>Frage</th><th>A · Status ist die Karte</th><th>B · Menü ist die Karte</th><th>C · Menü zuerst</th></tr></thead>
+      <tbody>
+        <tr><td>Türen zur Sync-Seite</td><td class="y">eine</td><td class="y">eine</td><td class="y">eine</td></tr>
+        <tr><td>Fokus-Halte bis „Library" (mit Hinweis + Download)</td><td class="y">3</td><td class="n">9</td><td class="y">2</td></tr>
+        <tr><td>Halte, an denen nichts passiert</td><td class="y">keine</td><td class="n">vier</td><td class="n">vier</td></tr>
+        <tr><td>Navigation bleibt über der Falz</td><td class="y">immer</td><td class="n">nur im Ruhezustand</td><td class="y">immer</td></tr>
+        <tr><td>Zustand ohne Scrollen sichtbar</td><td class="y">ja</td><td class="y">ja</td><td class="n">teilweise</td></tr>
+        <tr><td>Seiten als Wort auffindbar</td><td class="n">Settings, Data Mgmt.</td><td class="y">alle vier</td><td class="y">alle vier</td></tr>
+        <tr><td>Wartende Änderungen mit Zahlen</td><td class="y">in der Zeile</td><td class="n">nur als Abzeichen</td><td class="n">nur als Abzeichen</td></tr>
+        <tr><td>Einmal drücken und Sync startet</td><td class="n">nein</td><td class="n">nein</td><td class="n">nein</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="recbox"><b>Entscheidung</b>
+    <strong>B, mit dem konditionalen Platz — hier als B+ gezeichnet.</strong> Das Menü bleibt vollständig und ist die einzige Navigationsfläche; die Statuszeilen tun nichts. Was B allein fehlte, war ein Ort für die Dinge, die sich von selbst melden müssen — ein laufender Lauf und eine wartende Vorschau. Beide bekommen denselben konditionalen Platz unter dem Status, der nur dann existiert und als einziger Teil des Status drückbar ist. Damit hat Main nie mehr als eine Tür zur Sync-Seite, die aber immer da, wo man gerade hinschaut. <em>Steam memory</em> zieht auf die Sync-Seite um. Offen bleibt nur, ob <em>Cancel Sync</em> auf Main stehen bleibt — die beiden mittleren Zeichnungen stellen genau das gegenüber.
+  </div>
+
+  <h4>Offene Unterfrage, unabhängig von der Wahl</h4>
+  <ul style="max-width:66ch;margin:0 0 26px;padding-left:18px;display:grid;gap:6px">
+    <li><strong>Steam memory</strong> ist eine Diagnosezeile. Sie hat auf der Sync-Seite ihre eigene Karte und meldet sich von selbst als Hinweis, wenn es eng wird. Fällt sie auf Main weg, bleiben in A genau drei Zeilen — eine pro Seite, die einen Zustand hat.</li>
+    <li><strong>Fortsetzen</strong> kostet in allen drei Entwürfen zwei Drücke statt einem: Tür, dann der Startknopf auf der Seite, auf dem der Fokus schon liegt. Soll Main für diesen einen Fall doch einen eigenen Knopf behalten?</li>
+  </ul>
+</main>
+
+<script>
+  (function () {
+    var KEY = "tender-main-layouts-2";
+    var state = { v: "fin" };
+    try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
+
+    function fit() {
+      document.querySelectorAll(".variant.on .stage").forEach(function (s) {
+        var w = s.clientWidth; if (!w) return;
+        var dw = Number(s.dataset.w), dh = Number(s.dataset.h);
+        var sc = Math.min(1, w / dw);
+        var deck = s.querySelector(".deck");
+        deck.style.width = dw + "px";
+        deck.style.height = dh + "px";
+        deck.style.transform = "scale(" + sc + ")";
+        s.style.height = Math.round(dh * sc) + "px";
+      });
+    }
+    function apply() {
+      document.querySelectorAll(".variant").forEach(function (el) { el.classList.toggle("on", el.id === "v-" + state.v); });
+      document.querySelectorAll(".chip[data-v]").forEach(function (c) { c.setAttribute("aria-pressed", String(c.dataset.v === state.v)); });
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+      fit();
+    }
+    document.querySelectorAll(".chip[data-v]").forEach(function (c) {
+      c.addEventListener("click", function () { state.v = c.dataset.v; apply(); window.scrollTo({ top: 0 }); });
+    });
+    if ("ResizeObserver" in window) new ResizeObserver(fit).observe(document.body);
+    window.addEventListener("resize", fit);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+    apply();
+  })();
+</script>

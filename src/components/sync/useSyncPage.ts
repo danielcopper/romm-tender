@@ -42,7 +42,6 @@ import {
   usePendingPreview,
 } from "../../utils/pendingPreviewStore";
 import { PREVIEW_COUNTDOWN_TICK_MS, previewHasChanges, previewSecondsLeft } from "../../utils/previewState";
-import { takePreviewRequest } from "../../utils/previewRequest";
 import { useRunUnits, type RunUnit } from "../../utils/runUnitsStore";
 import { previewApplySeconds } from "../../utils/syncEstimate";
 import { getSyncProgress, setSyncProgress as setStoredSyncProgress } from "../../utils/syncProgress";
@@ -437,10 +436,7 @@ export function useSyncPage(): SyncPageState {
     getSettings()
       .then((s) => setSkipPreviewState(s.skip_preview ?? false))
       .catch((e) => logError(`Failed to read the skip-preview setting: ${e}`));
-    // Main's Sync button starts a preview by asking this page to, so the
-    // progress, the answer and a refusal are all shown where the reader is.
-    if (takePreviewRequest()) detach(computePreview(false));
-  }, [computePreview, loadRuns]);
+  }, [loadRuns]);
 
   // These three reads are about a RUN's end — the run list, the stats and the
   // session-budget reading all describe the run that just stopped — so they are

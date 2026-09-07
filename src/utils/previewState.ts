@@ -3,8 +3,8 @@
  * long is the backend still going to accept it.
  *
  * They live here rather than on the Sync page because Main asks the second one
- * too — its Sync button reads "Review changes" only while the preview is still
- * good, and an expired preview counts as none. The first is the Sync page's
+ * too — its conditional slot names a pending preview only while the preview is
+ * still good, and an expired one counts as none. The first is the Sync page's
  * alone.
  */
 
