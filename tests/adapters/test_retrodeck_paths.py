@@ -67,8 +67,12 @@ class TestPathResolution:
         assert adapter.retrodeck_home() == "/custom/home"
 
     def test_retrodeck_home_fallback(self, tmp_path):
+        # The fallback is built with an empty subdir, so it is spelled with a
+        # trailing separator; resolving the root drops it. Nothing wanted the
+        # separator — ``is_pending_migration_path`` appends its own, and a home
+        # ending in one could never match a path below it.
         adapter = _make_adapter(tmp_path)
-        assert adapter.retrodeck_home() == os.path.join(str(tmp_path), "retrodeck", "")
+        assert adapter.retrodeck_home() == os.path.join(str(tmp_path), "retrodeck")
 
     def test_empty_path_uses_fallback(self, tmp_path):
         adapter = _make_adapter(tmp_path, {"paths": {"roms_path": ""}})
@@ -84,6 +88,71 @@ class TestPathResolution:
         (config_dir / "retrodeck.json").write_text("not valid json")
         adapter = RetroDeckPathsAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
         assert adapter.bios_path() == os.path.join(str(tmp_path), "retrodeck", "bios")
+
+
+class TestSymlinkResolvedRoots:
+    """#1838: a root reached through a symlink must be spelled the way ``safe_join`` spells it."""
+
+    @staticmethod
+    def _linked_home(tmp_path):
+        """Return ``(user_home_through_the_link, real_retrodeck_dir)`` for a ``/home -> /var/home`` layout."""
+        base = tmp_path.resolve()
+        retrodeck = base / "var" / "home" / "player" / "retrodeck"
+        for subdir in ("bios", "roms", "saves", "states"):
+            (retrodeck / subdir).mkdir(parents=True)
+        (base / "home").symlink_to(base / "var" / "home", target_is_directory=True)
+        linked_home = base / "home" / "player"
+        assert str(linked_home) != os.path.realpath(linked_home)
+        return linked_home, retrodeck
+
+    def test_configured_content_roots_are_resolved(self, tmp_path):
+        linked_home, retrodeck = self._linked_home(tmp_path)
+        linked = linked_home / "retrodeck"
+        adapter = _make_adapter(
+            linked_home,
+            {
+                "paths": {
+                    "bios_path": str(linked / "bios"),
+                    "roms_path": str(linked / "roms"),
+                    "saves_path": str(linked / "saves"),
+                    "states_path": str(linked / "states"),
+                }
+            },
+        )
+
+        assert adapter.bios_path() == str(retrodeck / "bios")
+        assert adapter.roms_path() == str(retrodeck / "roms")
+        assert adapter.saves_path() == str(retrodeck / "saves")
+        assert adapter.states_path() == str(retrodeck / "states")
+
+    def test_fallback_content_roots_are_resolved(self, tmp_path):
+        linked_home, retrodeck = self._linked_home(tmp_path)
+        adapter = _make_adapter(linked_home)
+
+        assert adapter.bios_path() == str(retrodeck / "bios")
+        assert adapter.roms_path() == str(retrodeck / "roms")
+        assert adapter.saves_path() == str(retrodeck / "saves")
+        assert adapter.states_path() == str(retrodeck / "states")
+
+    def test_a_root_that_is_not_on_disk_resolves_as_far_as_it_can(self, tmp_path):
+        """``realpath`` never raises on a missing tail, so the getters stay best-effort."""
+        linked_home, retrodeck = self._linked_home(tmp_path)
+        adapter = _make_adapter(
+            linked_home, {"paths": {"roms_path": str(linked_home / "retrodeck" / "not-created-yet")}}
+        )
+
+        assert adapter.roms_path() == str(retrodeck / "not-created-yet")
+
+    def test_the_home_is_resolved_like_every_other_root(self, tmp_path):
+        """The home is the marker ``MigrationService`` diffs, so it too must name a directory.
+
+        Left unresolved it would be compared against a stored spelling of the
+        same directory and read as a move.
+        """
+        linked_home, retrodeck = self._linked_home(tmp_path)
+        adapter = _make_adapter(linked_home, {"paths": {"rd_home_path": str(linked_home / "retrodeck")}})
+
+        assert adapter.retrodeck_home() == str(retrodeck)
 
 
 class TestTTLCache:

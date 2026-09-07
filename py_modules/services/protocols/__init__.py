@@ -90,6 +90,7 @@ from services.protocols.infra import (
     PendingSyncReader,
     RendererGcFn,
     RendererRssFn,
+    ResolvedPathFn,
     ResolveUploadConflictFn,
 )
 from services.protocols.paths import (
@@ -202,6 +203,7 @@ __all__ = [
     "RendererGcFn",
     "RendererRssFn",
     "ResolveUploadConflictFn",
+    "ResolvedPathFn",
     "RetroArchConfigReader",
     "RetroArchCoreInfoReader",
     "RetroArchSaveLayoutProvider",

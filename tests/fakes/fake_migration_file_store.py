@@ -25,6 +25,9 @@ class FakeMigrationFileStore:
     - ``walk_returns`` — explicit ``{base_dir: triples}`` override for
       ``walk_files``; when absent, triples are synthesised from the
       ``files`` and ``dirs`` snapshot.
+    - ``links`` — ``{link spelling: target spelling}`` for ``realpath``,
+      applied to a path's prefix so one entry stages a whole symlinked
+      tree.
     """
 
     def __init__(self, files: dict[str, bytes] | None = None) -> None:
@@ -36,6 +39,7 @@ class FakeMigrationFileStore:
         self.get_mtime_failures: set[str] = set()
         self.mtimes: dict[str, float] = {}
         self.walk_returns: dict[str, list[tuple[str, list[str], list[str]]]] | None = None
+        self.links: dict[str, str] = {}
         self.move_calls: list[tuple[str, str]] = []
         self.rename_calls: list[tuple[str, str]] = []
 
@@ -81,6 +85,20 @@ class FakeMigrationFileStore:
         if src not in self.files:
             raise FileNotFoundError(src)
         self.files[dst] = self.files.pop(src)
+
+    def realpath(self, path: str) -> str:
+        """Resolve *path*'s prefix through ``links``, the way a symlinked root does.
+
+        One entry stages a whole tree: ``{"/home": "/var/home"}`` resolves
+        ``/home/deck/retrodeck`` to ``/var/home/deck/retrodeck``. A path no entry
+        covers answers as itself, including one that is no longer on disk.
+        """
+        for link, target in self.links.items():
+            if path == link:
+                return target
+            if path.startswith(link + "/"):
+                return target + path[len(link) :]
+        return path
 
     def get_mtime(self, path: str) -> float:
         if path in self.get_mtime_failures:

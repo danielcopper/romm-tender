@@ -124,6 +124,21 @@ class PathExistsReader(Protocol):
         ...
 
 
+class ResolvedPathFn(Protocol):
+    """The single spelling of one path — every symlink in it resolved.
+
+    Used where a service compares paths recorded at different times that can
+    spell one directory two ways: a root reached through a symlink (``/home`` is
+    a link to ``/var/home`` on image-based distributions) answers to both names,
+    and a string comparison reads that as two different directories (#1838).
+
+    Both sides of such a comparison go through here, so a consumer's cost scales
+    with the rows it checks and not with the values it checks them against.
+    """
+
+    def __call__(self, path: str) -> str: ...
+
+
 class RendererRssFn(Protocol):
     """Current RSS of the Steam ``SharedJSContext`` renderer, in KB.
 

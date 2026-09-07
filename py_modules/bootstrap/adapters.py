@@ -32,7 +32,7 @@ from adapters.gavel_native import GavelNativeAdapter
 from adapters.hostname import HostnameAdapter
 from adapters.machine_id import MachineIdAdapter
 from adapters.migration_file import MigrationFileAdapter
-from adapters.path_probe import PathProbeAdapter
+from adapters.path_probe import PathProbeAdapter, ResolvedPathAdapter
 from adapters.persistence import (
     PersistenceAdapter,
     PlatformCoreReaderAdapter,
@@ -90,6 +90,7 @@ if TYPE_CHECKING:
         RecoveryBundleStore,
         RendererGcFn,
         RendererRssFn,
+        ResolvedPathFn,
         ResolveUploadConflictFn,
         RetroArchSaveLayoutProvider,
         RetroArchSavestateLayoutProvider,
@@ -134,6 +135,7 @@ class AdapterBundle:
     rom_file_store: RomFileStore
     save_file_store: SaveFileStore
     path_probe: PathExistsReader
+    resolve_path: ResolvedPathFn
     core_info_provider: CoreInfoProvider
     renderer_rss: RendererRssFn
     renderer_gc: RendererGcFn
@@ -352,6 +354,7 @@ def bootstrap(
     rom_file_store = RomFileAdapter()
     save_file_store = SaveFileAdapter(logger=logger)
     path_probe = PathProbeAdapter()
+    resolve_path = ResolvedPathAdapter()
     renderer_rss = RendererRssAdapter()
     renderer_gc = RendererGcAdapter(logger=logger)
     game_process = GameProcessAdapter()
@@ -398,6 +401,7 @@ def bootstrap(
         rom_file_store=rom_file_store,
         save_file_store=save_file_store,
         path_probe=path_probe,
+        resolve_path=resolve_path,
         core_info_provider=emulator_catalogue,
         renderer_rss=renderer_rss,
         renderer_gc=renderer_gc,

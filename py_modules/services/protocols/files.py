@@ -468,6 +468,19 @@ class MigrationFileStore(Protocol):
         """Return the mtime of *path* as a Unix timestamp."""
         ...
 
+    def realpath(self, path: str) -> str:
+        """Return *path* with every symlink in it resolved.
+
+        The home markers are compared as directories, not as strings: one
+        directory answers to two names wherever a root is reached through a
+        symlink, and reading that as a move would offer to migrate a directory
+        onto itself. A path that is not on disk still answers: the links in it
+        that exist are followed and the missing tail is normalized as spelled,
+        so a home the user moved away from and deleted resolves to a directory,
+        and one that is not the live one.
+        """
+        ...
+
     def walk_files(self, base_dir: str) -> list[tuple[str, list[str], list[str]]]:
         """Return ``os.walk``-style ``(dirpath, dirnames, filenames)`` triples for *base_dir*.
 

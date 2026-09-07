@@ -274,6 +274,37 @@ class TestIoSeamsViolations:
         assert len(findings) == 1
         assert "enumerate_discs" in findings[0]
 
+    @pytest.mark.parametrize("getter", ["bios_path", "roms_path", "saves_path", "states_path", "retrodeck_home"])
+    def test_every_retrodeck_root_getter_inside_uow_is_flagged(self, getter: str):
+        # Each getter resolves its answer, so a call walks the path even on a
+        # config-cache hit — the reason they stopped being an exclusion.
+        findings = check.scan_source(
+            "class S:\n"
+            "    def go(self):\n"
+            "        with self._uow_factory() as uow:\n"
+            f"            root = self._retrodeck_paths.{getter}()\n"
+            "        return root\n",
+            "svc.py",
+        )
+        assert len(findings) == 1
+        assert getter in findings[0]
+        assert "file-I/O seam" in findings[0]
+
+    def test_realpath_inside_uow_is_flagged(self):
+        # The shape the home markers invite: read a marker out of kv_config and
+        # resolve it without leaving the transaction first.
+        findings = check.scan_source(
+            "class S:\n"
+            "    def detect(self):\n"
+            "        with self._uow_factory() as uow:\n"
+            "            stored = self._migration_file_store.realpath(uow.kv_config.get('home'))\n"
+            "        return stored\n",
+            "svc.py",
+        )
+        assert len(findings) == 1
+        assert "realpath" in findings[0]
+        assert "file-I/O seam" in findings[0]
+
     @pytest.mark.parametrize(
         "method",
         ["get_active_core", "get_default_emulator", "get_emulator_options"],
@@ -295,7 +326,14 @@ class TestIoSeamsViolations:
 
     @pytest.mark.parametrize(
         "attribute",
-        ["_resolve_system", "_sandbox_launcher", "_system_extensions", "_system_known"],
+        [
+            "_resolve_system",
+            "_sandbox_launcher",
+            "_system_extensions",
+            "_system_known",
+            "_firmware_folder_verdicts",
+            "_resolve_path",
+        ],
     )
     def test_call_shaped_seams_are_matched_by_their_holding_attribute(self, attribute: str):
         # These Protocols are __call__-only, so no consumer ever writes a method

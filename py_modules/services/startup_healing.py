@@ -19,11 +19,13 @@ from domain.migration_paths import pending_homes_from_kv
 
 if TYPE_CHECKING:
     import logging
+    from collections.abc import Sequence
 
     from services.protocols import (
         Clock,
         PathExistsReader,
         RelaunchOptionsReader,
+        ResolvedPathFn,
         RetroDeckPaths,
         UnitOfWorkFactory,
     )
@@ -34,7 +36,8 @@ class StartupHealingServiceConfig:
     """Frozen wiring bundle handed to ``StartupHealingService.__init__``.
 
     Carries the runtime logger, the clock, the bundled RetroDECK paths
-    provider, the generic path-exists probe, and the SQLite Unit-of-Work
+    provider, the generic path-exists probe, the path resolver that turns a
+    stored home marker into the directory it names, and the SQLite Unit-of-Work
     factory (the transactional seam over the ``rom_installs``, ``sync_runs``,
     and ``kv_config`` repositories — the last holding the pending-migration
     previous home marker). The shared ``relaunch_options`` seam builds each
@@ -48,6 +51,7 @@ class StartupHealingServiceConfig:
     clock: Clock
     retrodeck_paths: RetroDeckPaths
     path_probe: PathExistsReader
+    resolve_path: ResolvedPathFn
     uow_factory: UnitOfWorkFactory
     relaunch_options: RelaunchOptionsReader
 
@@ -60,6 +64,7 @@ class StartupHealingService:
         self._clock = config.clock
         self._retrodeck_paths = config.retrodeck_paths
         self._path_probe = config.path_probe
+        self._resolve_path = config.resolve_path
         self._uow_factory = config.uow_factory
         self._relaunch_options = config.relaunch_options
 
@@ -83,15 +88,16 @@ class StartupHealingService:
 
         with self._uow_factory() as uow:
             installs = list(uow.rom_installs.iter_all())
-            pending_homes = pending_homes_from_kv(
+            stored_homes = pending_homes_from_kv(
                 uow.kv_config.get("retrodeck_home_path_previous") or "",
                 uow.kv_config.get("retrodeck_home_path_hops"),
             )
+        pending_homes = [self._resolve_path(home) for home in stored_homes]
         stale: list[int] = []
         for install in installs:
             file_path = install.file_path
             rom_dir = install.rom_dir
-            if is_pending_migration_path(file_path, rom_dir, pending_homes):
+            if self._under_pending_home(file_path, rom_dir, pending_homes):
                 self._logger.info(f"Skipping prune of {install.rom_id} ({file_path}): pending migration")
                 continue
             if (file_path and self._path_probe.exists(file_path)) or (rom_dir and self._path_probe.exists(rom_dir)):
@@ -103,6 +109,29 @@ class StartupHealingService:
             with self._uow_factory() as uow:
                 for rom_id in stale:
                     uow.rom_installs.delete(rom_id)
+
+    def _under_pending_home(self, file_path: str, rom_dir: str | None, pending_homes: Sequence[str]) -> bool:
+        """Answer whether one install's recorded paths live under a pending home.
+
+        Both sides are resolved before the prefix match, because either can be
+        spelled two ways for one directory: a path recorded through
+        ``lib.path_safety.safe_join`` is resolved, one an older migration
+        relocated carries whatever spelling the home had when it ran
+        (``remap_under_current`` joins that home verbatim), and a marker written
+        before the roots were resolved carries the other spelling again (#1838).
+        A match that misses prunes a record whose files are still on disk, so
+        the question has to be about directories rather than strings.
+
+        Resolving the recorded path is safe here in a way it is not in the
+        deletion guards: this decides what to KEEP and authorizes nothing. The
+        loop already probes each path's existence, so it is no new class of
+        cost.
+        """
+        return is_pending_migration_path(
+            self._resolve_path(file_path) if file_path else file_path,
+            self._resolve_path(rom_dir) if rom_dir else rom_dir,
+            pending_homes,
+        )
 
     def reconcile_orphaned_sync_runs(self) -> None:
         """Transition a ``running`` ``SyncRun`` left by a crash into ``interrupted``.

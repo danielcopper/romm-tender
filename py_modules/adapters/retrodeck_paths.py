@@ -12,6 +12,25 @@ malformed ``retrodeck.json`` falls back to ``<user_home>/retrodeck/*``.
 On an SD-card install that fallback root is wrong, so the silent
 fallback is paired with :meth:`RetroDeckPathsAdapter.config_health`,
 the loud signal ``main.py`` surfaces to the frontend banner.
+
+Every root is symlink-resolved, whichever of the two sources answered.
+The content roots are handed to the path guards as safe roots, and the
+ROM paths those guards are asked about are recorded resolved wherever
+``lib.path_safety.safe_join`` built them — so a root left as
+``retrodeck.json`` spells it makes one directory look like two on any
+system where ``/home`` is a link to ``/var/home``, and a ROM recorded
+inside the root is refused as outside it (#1838).
+
+The home is not a safe root, and is resolved for its own reason:
+``MigrationService`` diffs it against the home it stored to decide
+whether RetroDECK moved, and two spellings of one directory are not a
+move.
+
+``realpath`` on a path that is not on disk resolves as far as it can and
+normalizes the rest rather than raising, so the getters keep their
+best-effort, never-raises contract. Normalizing is not nothing: the
+home's ``<user_home>/retrodeck/`` fallback loses its trailing separator,
+which is what a prefix match wanted anyway.
 """
 
 from __future__ import annotations
@@ -83,12 +102,13 @@ class RetroDeckPathsAdapter:
             return None
 
     def _get_path(self, key: str, fallback_subdir: str) -> str:
+        """Return the symlink-resolved root for *key*, or its ``~/retrodeck`` fallback."""
         config = self._load_config()
         if config:
             path = config.get("paths", {}).get(key, "")
             if path:
-                return path
-        return os.path.join(self._user_home, "retrodeck", fallback_subdir)
+                return os.path.realpath(path)
+        return os.path.realpath(os.path.join(self._user_home, "retrodeck", fallback_subdir))
 
     def bios_path(self) -> str:
         return self._get_path("bios_path", "bios")

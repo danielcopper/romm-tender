@@ -73,16 +73,23 @@ own) has no method name to match: the consumer writes
 ``self._candidate_probe(...)``, never the seam's own name. Rule 1 leaves it
 open — the ``current_save_sorting`` / ``has_adoption_candidate`` entries guard
 only call sites that name the method, which is the owning service's own and any
-peer holding the object rather than the bound method. Rule 2's five
-call-shaped seams are closed the cheap way instead: every consumer in
-``services/`` binds each to one attribute — ``self._resolve_system``,
-``self._sandbox_launcher``, ``self._system_extensions``, ``self._system_known``,
-``self._firmware_folder_verdicts`` — and those attribute names are what the
-list carries (``resolve_system`` and ``resolve_sandbox_launcher`` are listed
-beside theirs, being the implementations' real method names,
-``RommHttpAdapter.resolve_system`` and
-``EsFindRulesAdapter.resolve_sandbox_launcher``, for a peer holding the object;
-the other three have no such twin). That is a convention, not a guarantee — a
+peer holding the object rather than the bound method. Rule 2's call-shaped
+seams are closed the cheap way instead: every consumer in ``services/`` binds
+each to one attribute, and that attribute name is what the list carries. **The
+leading underscore is what marks such an entry**, which makes the count
+derivable rather than remembered: the entries in :data:`IO_SEAM_METHODS`
+beginning with ``_`` are exactly the call-shaped seams — six today,
+``_resolve_system``, ``_sandbox_launcher``, ``_system_extensions``,
+``_system_known``, ``_firmware_folder_verdicts`` and ``_resolve_path``. Two of
+those six are listed a second time under their implementation's own method name,
+for a peer that holds the object rather than the bound method:
+``RommHttpAdapter.resolve_system`` beside ``_resolve_system``, and
+``EsFindRulesAdapter.resolve_sandbox_launcher`` beside ``_sandbox_launcher``.
+The first pair happens to be the attribute minus its underscore and the second
+plainly is not, which is the point: a twin exists when the implementation has a
+method name a peer could write, and it has to be read off the implementation
+rather than derived from the attribute. The other four have no such twin.
+That is a convention, not a guarantee — a
 consumer binding one under a different attribute slips past, and it only works
 while the attribute name means one thing. Doing the same for rule 1 means a
 second list of holding attributes to keep in step, and is not built.
@@ -94,10 +101,10 @@ flagged — the safety is in the call site's bare import, not in the name.
 
 Seams considered and left out
 -----------------------------
-These were weighed for :data:`IO_SEAM_METHODS` and kept out. It is a record of
-two decisions, not a survey of what touches the disk. Neither is exempt from the
-rule — a UoW held across either is a breach — and the reason is not that their
-I/O matters less:
+One seam was weighed for :data:`IO_SEAM_METHODS` and kept out. This records that
+decision, and one that was reversed; neither is a survey of what touches the
+disk, and the kept-out one is not exempt from the rule — a UoW held across that
+listing is a breach, and the reason is not that its I/O matters less:
 
 * ``DirectoryFileListerFn`` — a directory listing, and its consumer binds it to
   ``self._list_files``. Its call-shaped siblings are *in* the list, matched by
@@ -106,12 +113,13 @@ I/O matters less:
   it holds — any class might bind it to something unrelated — so an entry would
   key the gate on a coincidence, where ``_system_extensions`` and
   ``_resolve_system`` each mean one thing.
-* ``RetroDeckPaths``'s path getters sit behind a 30-second TTL cache
-  (``adapters/retrodeck_paths.py``), so a call is usually a dict lookup and a
-  ban would fire mostly where nothing is spent — which teaches writers to reach
-  for a pragma instead of looking. The caveat is that only a successfully-read
-  config is ever cached, and the TTL guard tests the cached value first, so on a
-  machine without RetroDECK every getter reopens.
+* ``RetroDeckPaths``'s path getters were kept out on the grounds that a
+  30-second TTL cache made a call usually a dict lookup, so a ban would fire
+  mostly where nothing is spent — which teaches writers to reach for a pragma
+  instead of looking. That argument died with #1838: every getter now resolves
+  its answer, so a call walks the path with ``realpath`` whether or not the
+  config cache hits. They are listed. Adding them moved no code — every call
+  site in ``services/`` already sat outside its UoW.
 
 The escape hatch is a trailing comment on the seam-call line:
 
@@ -225,6 +233,26 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # thing in the tree.
         "_system_extensions",
         "_system_known",
+        # MigrationFileStore.realpath (services/protocols/files.py) — one lstat
+        # per component of a stored home marker, which is a directory that may
+        # sit on the SD card the marker is pending a migration away from.
+        "realpath",
+        # ResolvedPathFn (services/protocols/infra.py) — the same resolution for
+        # a service holding no file store. Both sides of a comparison go through
+        # it, so a call site's cost scales with the rows it checks, not with the
+        # values it checks them against. Call-shaped, so what the list carries is
+        # the attribute its consumers bind it to, as for its siblings above.
+        "_resolve_path",
+        # RetroDeckPaths (services/protocols/paths.py) — every root getter
+        # resolves its answer with realpath (#1838), so a call walks the path
+        # component by component even when the 30-second config cache hits.
+        # These were excluded while they were string algebra over a cached dict;
+        # the docstring records why that no longer holds.
+        "bios_path",
+        "roms_path",
+        "saves_path",
+        "states_path",
+        "retrodeck_home",
     }
 )
 

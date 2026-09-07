@@ -1512,7 +1512,7 @@ Adapters own all I/O and implement the Protocols defined in `services/protocols/
 | `es_find_rules.py`                                                         | `EsFindRulesAdapter` — ES-DE `es_find_rules.xml`: whether a standalone emulator's binary is installed, and the sandbox component launcher the folder-boot bake execs                                                                                                                                                     |
 | `gavel_native.py`                                                          | `GavelNativeAdapter` — loads the compiled [romm-gavel](https://github.com/danielcopper/romm-gavel) core (`py_modules/native/libgavel-x86_64-linux.so`) via `ctypes`; is itself the `ResolveUploadConflictFn` seam and provides the `ComputeSyncActionFn` seam, the two save-sync decisions (no Python fallback)          |
 | `system_clock.py` / `system_uuid_gen.py` / `asyncio_sleeper.py`            | concrete `Clock` / `UuidGen` / `Sleeper` seams                                                                                                                                                                                                                                                                           |
-| `hostname.py` / `path_probe.py` / `plugin_metadata.py` / `debug_logger.py` | hostname, path-exists probe, `package.json` name/version reader, settings-aware debug logger                                                                                                                                                                                                                             |
+| `hostname.py` / `path_probe.py` / `plugin_metadata.py` / `debug_logger.py` | hostname, the generic path seams (exists, symlink-resolve), `package.json` name/version reader, settings-aware debug logger                                                                                                                                                                                              |
 | `renderer_rss.py` / `renderer_gc.py`                                       | `RendererRssFn` — max `steamwebhelper` `VmRSS` from `/proc`; `RendererGcFn` (`HeapProfiler.collectGarbage`) over the CEF debugger. The session-budget measure + settle seams (ADR-0024). The "free memory" action is a frontend `SteamClient.User.StartRestart`, not a backend adapter                                   |
 | `game_process.py`                                                          | `GameProcessControl` — resolves a flatpak app's live instances via the per-user registry (`info` / `bwrapinfo.json`) plus the `/proc` child walk, reporting each tree's PIDs and argv separately, and signals them. Direct reads + `os.kill`, no subprocess; fail-soft on every read                                     |
 
@@ -1951,8 +1951,8 @@ package, organised topically (consumers always deep-import `from services.protoc
 - **`paths`** — `RetroDeckPaths`, `SystemResolver`, `CoreInfoProvider`, `SandboxLauncherFn`, `CoreResolverFn`,
   `CoreNameProviderFn`, `RetroArchConfigReader`, `RetroArchCoreInfoReader`, `RetroArchSaveSortingProvider`,
   `PlatformCoreReader`.
-- **`infra`** — cross-cutting callable seams: `EventEmitter`, `DebugLogger`, `PathExistsReader`, `HostnameReader`,
-  `PendingSyncReader`, `DownloadQueueCleanup`.
+- **`infra`** — cross-cutting callable seams: `EventEmitter`, `DebugLogger`, `PathExistsReader`, `ResolvedPathFn`,
+  `HostnameReader`, `PendingSyncReader`, `DownloadQueueCleanup`.
 - **`files`** — filesystem seams: `CoverArtFileStore`, `DownloadFileStore`, `FirmwareFileStore`, `MigrationFileStore`,
   `RomFileStore`, `SaveFileStore`, `SgdbArtworkCache`.
 - **`cross_service`** — narrowly-typed multi-method seams one service exposes to another so services stay independent:

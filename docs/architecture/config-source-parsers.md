@@ -263,6 +263,33 @@ never raise**: when the file is missing, unreadable, or malformed, each getter f
 `<user_home>/retrodeck/<subdir>`. That fallback is RetroDECK's own default root, so it is correct for a default install
 but **wrong** for an SD-card install where the user pointed RetroDECK at external storage.
 
+Every root is returned **symlink-resolved**, whichever of the two sources answered. The content roots (`roms_path`,
+`saves_path`, `bios_path`, `states_path`) are handed to the path guards as safe roots, and the ROM paths those guards
+are asked about are recorded resolved wherever `lib/path_safety.safe_join` built them — so a root left as
+`retrodeck.json` spells it makes one directory look like two on any system where `/home` is a link to `/var/home`
+(Bazzite, Silverblue, and the other image-based distributions), and uninstalling a downloaded ROM fails with
+`Path is outside its safe root` ([#1838](https://github.com/danielcopper/decky-romm-sync/issues/1838)). `realpath` on a
+path that is not on disk resolves as far as it can instead of raising, so the getters stay best-effort.
+
+`retrodeck_home()` is not a safe root, and it is resolved for a different reason: `MigrationService` stores it and diffs
+the stored value against the live one on every startup to decide whether RetroDECK moved. Resolving one side is not
+enough there, because a marker written before this change still carries the other spelling — so the service resolves
+what it read from `kv_config` before comparing, through a `realpath` seam on `MigrationFileStore`. Two spellings of one
+directory read as "unchanged"; a move away from a home since deleted still reads as a move, because `realpath` follows
+the links in it that still exist and leaves the missing tail as spelled. A marker that survived from before the change
+and turns out to name the live home is dropped on that same pass, because otherwise it would stand until the user
+migrates or dismisses.
+
+The install prune (`StartupHealingService`, via the `ResolvedPathFn` seam) resolves **both** sides before its prefix
+match: the pending-home markers, and each install's own recorded paths. Neither side is reliably one spelling — a
+download is recorded through `safe_join` and so resolved, while a row an older migration relocated carries whatever
+spelling the home had when it ran — and a match that misses prunes a record whose files are still on disk. Resolving the
+recorded path is safe there in a way it is not in the deletion guards: the prune decides what to keep and authorizes
+nothing.
+
+Three user-visible spellings change with this: the `root_missing` banner's "Expected at:" line reports `resolved_home`,
+and the migration-blocked page renders `old_path` and `new_path`, both of which are now the resolved markers.
+
 Silently operating on the wrong root is the failure mode
 [#948](https://github.com/danielcopper/decky-romm-sync/issues/948) addresses. The fix keeps the getters
 silent-and-best-effort but pairs them with a loud health signal that the frontend surfaces as a QAM banner.
