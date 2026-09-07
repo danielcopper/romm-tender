@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, cast
 
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 
+from domain.save_answer import SaveAnswer
+
 if TYPE_CHECKING:
     from fakes.fake_save_location_reader import FakeSaveLocationReader
 
@@ -23,6 +25,31 @@ from tests.services.saves._helpers import (
 def _asked(svc) -> list[tuple[str, str, str | None]]:
     """Every question the save-location seam was put, as the fake recorded them."""
     return cast("FakeSaveLocationReader", svc._rom_info._save_locations).calls
+
+
+def _seed_amiga_inside_content(svc) -> None:
+    """Make the fake answer for Amiga the way PUAE really does for an ``.adf``.
+
+    The save is inside the disk image, so there is no separate file. Left at the
+    fake's per-game default these tests would assert a state the real machine
+    never gives this content, and the page's own docstrings would contradict
+    their assertions.
+    """
+    cast("FakeSaveLocationReader", svc._rom_info._save_locations).answer_with(
+        "amiga",
+        SaveAnswer(
+            state="inside_content",
+            unestablished=None,
+            emulator="PUAE",
+            directory=None,
+            backing_directory=None,
+            granularity=None,
+            needs=(),
+            components=(),
+            caveats=("save-inside-content",),
+            content_installed=True,
+        ),
+    )
 
 
 class TestFindSaveFiles:
@@ -135,6 +162,7 @@ class TestFindSaveFiles:
         uninstalled ROM pairs its names with no directory.
         """
         svc, _ = make_service(tmp_path)
+        _seed_amiga_inside_content(svc)
         # The slug DIFFERS from its system, so a site that passes the raw RomM
         # slug fails here rather than hiding behind an identity map — the same
         # ADR-0010 leak the installed site guards, on the other path.
@@ -143,7 +171,7 @@ class TestFindSaveFiles:
         answer = svc._rom_info.save_answer(80)
 
         assert _asked(svc) == [("amiga", str(tmp_path / "retrodeck" / "roms" / "amiga" / "Turrican.adf"), None)]
-        assert answer.state == "per_game_files"
+        assert answer.state == "inside_content"
         # ...and the answer says its names are a prediction, so a page can word
         # them as "would use" rather than rendering save files for a game the
         # user has not installed.
@@ -168,12 +196,14 @@ class TestFindSaveFiles:
         all for an ``.hdf``; a synthetic stem would ask about neither.
         """
         svc, _ = make_service(tmp_path)
+        _seed_amiga_inside_content(svc)
         content = str(tmp_path / "retrodeck" / "roms" / "amiga" / "Turrican.adf")
         _seed_install(svc, 71, file_path=content, system="amiga", platform_slug="commodore-amiga")
 
         answer = svc._rom_info.save_answer(71)
 
         assert _asked(svc) == [("amiga", content, None)]
+        assert answer.state == "inside_content"
         assert answer.content_installed is True
 
 

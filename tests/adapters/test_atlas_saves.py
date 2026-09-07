@@ -237,8 +237,13 @@ class TestTheFiveStates:
         assert answer.state == SAVE_STATE_HOLE
 
 
-class TestTheTwoShapesOfNotEstablished:
-    """State five says two different things and must keep saying both."""
+class TestTheTwoShapesAnAnswerReaches:
+    """State five holds three shapes; these are the two a real answer produces.
+
+    The third, ``not_asked``, is reached by never putting the question at all —
+    :class:`TestEveryWayTheQuestionCannotBePut` owns it, because no placement
+    can produce it.
+    """
 
     def test_a_file_set_the_resolver_refuses_to_state_is_nothing_established(self, traces):
         answer = _ask(_placement(files=(), state=FILE_SET_UNKNOWN, granularity=None), traces)

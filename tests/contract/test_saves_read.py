@@ -133,8 +133,8 @@ async def test_get_save_status_carries_the_save_resolution(harness):
     # The game is on disk, so the names describe files rather than predicting
     # the ones an install would create.
     assert resolution["content_installed"] is True
-    # Not a refusing state, so the discriminator the next cut words two ways is
-    # absent rather than defaulted to one of them.
+    # Not a refusing state, so the discriminator the next cut words three ways
+    # is absent rather than defaulted to one of them.
     assert resolution["unestablished"] is None
     assert isinstance(resolution["needs"], list)
     assert isinstance(resolution["caveats"], list)

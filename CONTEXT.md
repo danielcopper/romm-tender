@@ -402,8 +402,9 @@ benign-skip shape rather than a failure.
 - **hole** — the shape is known, but part of the path or the name is the game's own identity, which nothing here
   supplies. Flycast needs a `save_id` in the filename; Dolphin needs the `region` in the directory.
 - **not established** — nobody established what this emulator writes, or the directory is known and the names in it are
-  not. **These are two shapes, `nothing_established` and `directory_known`, and they stay apart**: they are different
-  sentences to a reader, and collapsing them claims ignorance about a folder we can point at.
+  not, or no question reached the resolver at all. **These are three shapes, `nothing_established`, `directory_known`
+  and `not_asked`, and they stay apart**: they are different sentences to a reader, and collapsing them claims ignorance
+  about a folder we can point at, or claims a refusal where nobody was ever asked.
 
 Detail, including which systems land where on a stock RetroDECK, is in
 [Save sync coverage](docs/architecture/save-sync-coverage.md).

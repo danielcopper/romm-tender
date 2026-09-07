@@ -146,7 +146,7 @@ class SaveAnswer:
     """Where one ROM's save lives, what it consists of, and what may be done with it.
 
     ``state`` is the verdict and the only thing a sync path may act on;
-    ``unestablished`` discriminates the two shapes of
+    ``unestablished`` discriminates the three shapes of
     :data:`SAVE_STATE_UNESTABLISHED` and is ``None`` for every other state.
     ``emulator`` names whose answer this is. ``directory`` is the directory the
     emulator opens — the one to read and write through — while
@@ -157,14 +157,15 @@ class SaveAnswer:
     emulator groups save data, and ``caveats`` carries the resolver's stable
     codes verbatim for the log and for a later rendering.
 
-    ``content_installed`` says whether the CONTENT PATH the question was put
-    about is a file on disk. It is ``False`` for a ROM the library holds but has
-    not installed — the question was about the path the ROM WOULD occupy, so
-    every name in the answer is a prediction — and ``False`` where there was no
-    path at all. It describes the question, not the answer: an installed game
-    whose emulator establishes nothing is still installed. A surface that
-    renders the names without reading it tells a user their uninstalled game
-    already has three save files.
+    ``content_installed`` says whether this ROM's content is on disk. It is
+    ``False`` for a ROM the library holds but has not installed — the question
+    was then about the path the ROM WOULD occupy, so every name in the answer is
+    a prediction. It describes the ROM, never what the resolver came back with:
+    an installed game whose emulator establishes nothing is still installed, and
+    a caller fabricating a refusal fills the field in from the install row
+    rather than leaving it at its default. A surface that renders the names
+    without reading it tells a user their uninstalled game already has three
+    save files.
     """
 
     state: SaveState
@@ -273,10 +274,11 @@ def unestablished_answer(
     it was asked and could establish nothing, including where it declined or
     raised.
 
-    *content_installed* still describes the PATH the question was about, not
-    whether anything came back: an installed game whose entry declines is
-    installed all the same. It defaults to ``False`` for the callers that had no
-    path at all.
+    *content_installed* still describes the ROM, not whether anything came back:
+    an installed game whose entry declines is installed all the same, so a
+    caller that knows the ROM is on disk passes ``True`` here. It defaults to
+    ``False``, which is right for the callers that reach this with no ROM row
+    and so no path at all.
     """
     return SaveAnswer(
         state=SAVE_STATE_UNESTABLISHED,

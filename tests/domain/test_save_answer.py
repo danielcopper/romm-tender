@@ -116,7 +116,7 @@ class TestExactlyOneStateHolds:
         assert answer.owned_files == ()
 
 
-class TestTheTwoShapesOfNotEstablished:
+class TestTheShapesOfNotEstablished:
     def test_names_that_could_not_be_established_keep_the_directory(self):
         answer = _answer(caveats=("file-names-unestablished",), files=())
 

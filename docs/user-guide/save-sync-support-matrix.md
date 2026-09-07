@@ -44,7 +44,7 @@ read again for the new one.
 
 |    | Meaning                                                                                                                                                                                                                                                        |
 | -- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ✅ | **Synced today.** Your saves for this system carry across devices automatically.                                                                                                                                                                               |
+| ✅ | **Synced today.** Your saves for this system carry across devices automatically. A few systems answer differently for a disc image than for a raw dump — where that is so, the note says which file gets you the per-game save.                                |
 | 🔜 | **Planned.** This save type isn't synced yet, but it fits the model and is on the way in a future release.                                                                                                                                                     |
 | ❌ | **Not synced yet.** This system's default core writes a _shared_ card (one file for many games), keeps saves outside the per-game save folder, or hasn't been pinned down yet — so it doesn't fit per-game sync today. Handled differently in a later release. |
 | ⚪ | **No save data.** This system's emulator has no in-game save to sync (you can still use save states locally).                                                                                                                                                  |
@@ -116,6 +116,7 @@ states still work locally). See the full table for specifics.
 
     | Platform | Status | Notes |
     | --- | --- | --- |
+    | `amiga` | ❌ | An `.adf` floppy keeps the save inside the disk image; an `.hdf` or `.lha` is not answered |
     | `amstradcpc` | ❌ | Not synced |
     | `apple2` | ❌ | Saves are stored separately by the emulator (MAME) |
     | `apple2gs` | ❌ | Saves are stored separately by the emulator (MAME) |
@@ -167,6 +168,7 @@ states still work locally). See the full table for specifics.
     | `cdimono1` | 🔜 | Under review |
     | `cdtv` | 🔜 | Planned — pending platform mapping (#907) |
     | `dos` | 🔜 | Planned |
+    | `neogeo` | 🔜 | Per-game saves, but in the FinalBurn Neo core's own `fbneo/` subfolder |
     | `pc` | 🔜 | Planned |
     | `pico8` | 🔜 | Planned |
     | `psx` | 🔜 | Planned |
@@ -176,8 +178,7 @@ states still work locally). See the full table for specifics.
     | `wasm4` | 🔜 | Under review |
     | `windows3x` | 🔜 | Planned |
     | `windows9x` | 🔜 | Planned |
-    | `amiga` | ✅ | Synced |
-    | `amigacd32` | ✅ | Synced |
+    | `amigacd32` | ✅ | A `.chd` disc image saves per game; a raw `.bin` is not answered |
     | `atari2600` | ✅ | Synced |
     | `c64` | ✅ | Synced |
     | `famicom` | ✅ | Synced |
@@ -190,7 +191,7 @@ states still work locally). See the full table for specifics.
     | `genesis` | ✅ | Synced |
     | `mark3` | ✅ | Synced |
     | `mastersystem` | ✅ | Synced |
-    | `megacd` | ✅ | Synced |
+    | `megacd` | ✅ | A raw `.bin` dump saves per game; a disc image uses a shared BRAM card |
     | `megacdjp` | ✅ | Synced |
     | `megadrive` | ✅ | Synced |
     | `megadrivejp` | ✅ | Synced |
@@ -199,7 +200,6 @@ states still work locally). See the full table for specifics.
     | `n64` | ✅ | Synced |
     | `n64dd` | ✅ | Synced |
     | `nds` | ✅ | Synced |
-    | `neogeo` | ✅ | Synced |
     | `nes` | ✅ | Synced |
     | `ngp` | ✅ | Synced |
     | `ngpc` | ✅ | Synced |
@@ -214,7 +214,7 @@ states still work locally). See the full table for specifics.
     | `sega32x` | ✅ | Synced |
     | `sega32xjp` | ✅ | Synced |
     | `sega32xna` | ✅ | Synced |
-    | `segacd` | ✅ | Synced |
+    | `segacd` | ✅ | A raw `.bin` dump saves per game; a disc image uses a shared BRAM card |
     | `sfc` | ✅ | Synced |
     | `sg-1000` | ✅ | Synced |
     | `sgb` | ✅ | Synced |

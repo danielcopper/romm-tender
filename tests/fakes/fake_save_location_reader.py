@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 
 from domain.save_answer import (
     SaveAnswer,
@@ -53,7 +54,12 @@ class FakeSaveLocationReader:
         self._by_system[system] = answer
 
     def refuse(self, system: str) -> None:
-        """Seed *system* with the answer a question nobody could put produces."""
+        """Seed *system* with the answer an emulator that was ASKED and could establish nothing gives.
+
+        ``nothing_established``, not ``not_asked``: the question reached the
+        resolver here. A test about a question nobody could put wants the seam
+        never to be called at all, which is what the ``not_asked`` shape says.
+        """
         self._by_system[system] = unestablished_answer()
 
     def resolve_save_answer(
@@ -62,7 +68,11 @@ class FakeSaveLocationReader:
         self.calls.append((system, content_path, emulator_label))
         seeded = self._by_system.get(system)
         if seeded is not None:
-            return seeded
+            # ``content_installed`` describes the QUESTION, so it comes from the
+            # caller even for a seeded answer — a seed states what the emulator
+            # says, never whether this ROM is on disk. Returning the seed
+            # verbatim would make the field untestable alongside a seeded state.
+            return replace(seeded, content_installed=content_installed)
         stem = os.path.splitext(os.path.basename(content_path))[0]
         directory = os.path.dirname(content_path)
         parts = _BY_SYSTEM.get(system) or tuple((ext, "battery") for ext in self._extensions)

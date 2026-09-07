@@ -88,8 +88,10 @@ the reference machine — and no write this plugin performs can invalidate it.
 no path is probed, no sync state is written, and the result is the benign-skip shape (`save_shape_unsupported`) rather
 than a failure — the same shape the `savefiles_in_content_dir` skip has returned since #239.
 
-The last state keeps **two shapes** — `nothing_established` and `directory_known` — because they are different sentences
-to a reader, and a folder we can point at is not the same as a folder nobody has heard of.
+The last state keeps **three shapes** — `nothing_established`, `directory_known` and `not_asked` — because they are
+different sentences to a reader: a folder we can point at is not the same as a folder nobody has heard of, and neither
+is the same as a question that never reached the resolver, which is what an uninstalled game or a content-dir machine
+produces.
 
 **3. A configuration-role file is never synced.**
 
@@ -112,8 +114,12 @@ a user will be told that their PS2 saves live on a shared card rather than being
 emulator (Apple II, Apple IIGS, Macintosh, PS Vita, Xbox) there is no entry to ask, so the answer refuses. Those
 platforms found nothing under the old extension list either; what changes is that the plugin now says so.
 
-**Saturn syncs one file fewer.** The `.smpc` console-settings file is no longer carried. That is the configuration rule
-working as intended, and it is the one behavioural change a user with existing saves will notice.
+**Four things a user with existing saves can notice.** Saturn syncs one file fewer — the `.smpc` console-settings file
+is no longer carried, which is the configuration rule working as intended. The post-exit failure toast stops appearing
+for every refusing system, because a refusal is a benign skip rather than an error. A server-side file this emulator's
+answer does not name — a `.smpc` uploaded before the role rule existed, or a legacy `.sav` from the guessed-extension
+era — is no longer pulled down over the local file, on the sync path and on the slot-switch path alike. And a save that
+is left where it is stays on the server: nothing here deletes it.
 
 **A live reading costs time.** About 170 ms per ROM warm. Single-ROM paths absorb it beside their network round-trip;
 the per-platform loops behind the save-count and save-delete buttons pay it per ROM, so a fifty-game platform count

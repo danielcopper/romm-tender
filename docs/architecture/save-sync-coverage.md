@@ -32,9 +32,12 @@ cannot remove it while another owner remains.
 The names come from the **save answer**, read live off the machine per ROM and per the emulator that would launch it
 (`services/protocols/paths.py` → `SaveLocationReader`, implemented by `adapters/atlas_saves.py` over the vendored
 resolver). They used to come from a static per-system extension table this repo maintained by hand; that table is
-retired, and nothing replaces it — for every system it covered the machine's answer is at least as good, and for Amiga,
-Amiga CD32, Sega CD and Saturn it is better. The reasoning is in
-[ADR-0031](../adr/0031-a-save-is-answered-by-the-emulator-that-writes-it.md).
+retired, and nothing replaces it — for every system it covered the machine's answer is at least as good, and for four it
+is better in one of two ways. For Amiga, Sega CD and Saturn the machine names something the table got wrong: a save
+inside the disk image, a shared BRAM card, a `.smpc` that is configuration rather than progress. For Amiga CD32 the
+machine agrees with the table on a `.chd` and REFUSES on a `.bin`, where the table answered `.nvr` for both — a refusal
+replacing a guess, which is the smaller of the two improvements and the easier one to mistake for a regression. The
+reasoning is in [ADR-0031](../adr/0031-a-save-is-answered-by-the-emulator-that-writes-it.md).
 
 ## The answer is per ROM, never per platform
 
@@ -72,10 +75,18 @@ separate change: discovery and the save-sort migration must agree on the directo
 reopens the race the migration's markers exist to prevent. The
 [Save sync support matrix](../user-guide/save-sync-support-matrix.md) reports both as not syncing.
 
-**Cost.** A live reading is roughly 170 ms warm and 490 ms cold per ROM on the reference device. A sync and a status
-read each take one: the sync's entry gate reads the answer to decide whether to refuse at all, and hands that same
-reading down rather than letting the matrix take a second. "Ask live" is a rule about operations, not about layers. The
-two per-platform loops — `count_platform_saves` and `delete_platform_saves` — take one per **installed** ROM on that
+**Cost.** A live reading is roughly 170 ms warm and 490 ms cold per ROM on the reference device. A single-ROM sync and a
+status read each take one, whether or not the ROM's slot is confirmed: the sync's entry gate reads the answer to decide
+whether to refuse at all, and hands that same reading both to the matrix and to the negotiate session's inventory rather
+than letting either take a second. "Ask live" is a rule about operations, not about layers.
+
+The whole-library sweep is the exception, at **two per ROM**. It posts one device-wide inventory before its per-ROM loop
+begins, and that inventory walks each confirmed ROM's save files — so it reads every answer once before any ROM's run
+exists to hand one to, and each run then takes its own. Reusing the inventory's readings would mean carrying a per-run
+map of them across the loop, which is a cache in everything but name on the one path where nothing is launched
+afterwards; the sweep is a background operation and pays the second reading instead.
+
+The two per-platform loops — `count_platform_saves` and `delete_platform_saves` — take one per **installed** ROM on that
 platform, so four installed games is well under a second and fifty is several. Nothing is cached: the correctness rule
 is that every sync path asks live, and the count exists so the number the button offers equals the number the delete
 removes.
