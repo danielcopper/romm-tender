@@ -5,13 +5,20 @@
 decky-romm-sync provides bidirectional save file synchronization between RetroDECK and a self-hosted RomM server. Saves
 are uploaded after play sessions and downloaded before game launch, enabling seamless multi-device play.
 
-The scope is **per-game RetroArch save files** across all systems that use RetroArch cores via RetroDECK (NES, SNES, GB,
-GBC, GBA, Genesis, N64, PSX via RetroArch cores, Saturn, Dreamcast, PC Engine, and more). Each system's full save-file
-**set** is discovered and synced — the default `.srm` / `.rtc` / `.sav` plus system-specific extensions (e.g. Saturn
-`.bkr` / `.bcr` / `.smpc`, NDS `.dsv`, Sega CD `.brm`); the extension list lives in `domain/save_extensions.py`. Every
-file syncs **independently against the server save sharing its own canonical target**, so a multi-file set never
-cross-mixes extensions. Standalone emulator saves (PCSX2, DuckStation, Dolphin, PPSSPP, melonDS, etc.) are deferred to
-Phase 7.
+The scope is **a per-game set of save files that this plugin can carry**. Which files those are is not a property of the
+platform and never was: it belongs to the **emulator** that opens the game, and it is read live off the machine by the
+vendored [emu-atlas](https://github.com/danielcopper/emu-atlas) resolver through `adapters/atlas_saves.py`. Services see
+a `domain.save_answer.SaveAnswer` and never a resolver type.
+
+That answer classifies every ROM into exactly one of **five save states**, and the sync runs in only the first of them —
+see [Save sync coverage](save-sync-coverage.md), which owns the states and the reasoning. Every file in a syncable set
+syncs **independently against the server save sharing its own canonical target**, so a multi-file set never cross-mixes
+extensions.
+
+The plugin used to hold its own per-system extension table (`domain/save_extensions.py`, retired). It was written from a
+one-pass desk audit and it was wrong in both directions: it searched forever for an Amiga `.nvr` that no core writes,
+and it never knew about the version digit in 3DO's `<stem>.0.srm`. Neither failure was visible — the search simply found
+nothing.
 
 ## RomM Save API
 

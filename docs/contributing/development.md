@@ -371,7 +371,7 @@ py_modules/
     rom.py / rom_install.py / rom_metadata.py / rom_metadata_mapping.py / playtime.py
     rom_save_sync_state.py / bios_file.py / firmware_cache.py / sync_run.py
     sync_action.py / sync_diff.py / preview_delta.py / work_unit.py
-    save_path.py / save_status*.py / save_attribution.py / save_extensions.py
+    save_path.py / save_status*.py / save_attribution.py / save_answer.py
     firmware_paths.py / bios.py / achievements.py / shortcut_data.py / steam_categories.py
     sgdb_artwork.py / installed_roms.py / rom_files.py / retroarch_core_info.py
     state_migrations.py / sync_state.py / emulator_tag.py / version.py

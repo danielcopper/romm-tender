@@ -29,11 +29,43 @@ save states are left physically untouched and recorded as warnings where applica
 the same canonical current-save path, that path is shared ownership; purging one owner may copy it into recovery but
 cannot remove it while another owner remains.
 
-The extension list is a small static map keyed by the **RetroDECK system** (the normalized value from `resolve_system` /
-`platform_map`, not the raw RomM platform slug — keying by system keeps the lookup aligned with the save directory,
-cores, and gamelists, which are all system-keyed): a default of `.srm` / `.rtc` / `.sav`, plus per-system overrides
-(`nds` → `.dsv`, `segacd` → `.brm`, `saturn` → `.bkr`/`.bcr`/`.smpc`, `ngp`/`ngpc` → `.flash`/`.ngf`, `pokemini` →
-`.eep`, and `amiga`/`amigacd32` → `.nvr`).
+The names come from the **save answer**, read live off the machine per ROM and per the emulator that would launch it
+(`services/protocols/paths.py` → `SaveLocationReader`, implemented by `adapters/atlas_saves.py` over the vendored
+resolver). They used to come from a static per-system extension table this repo maintained by hand; that table is
+retired, and nothing replaces it — for every system it covered the machine's answer is at least as good, and in four
+cases better. The reasoning is in [ADR-0031](../adr/0031-a-save-is-answered-by-the-emulator-that-writes-it.md).
+
+## The five save states
+
+The answer classifies every ROM into **exactly one** of five states. Only the first is a save this plugin can carry; the
+other four are refusals, and each says something different about why. A refusal costs nothing: no path is probed, no
+sync state is written, and the sync returns the benign-skip shape (`reason: "save_shape_unsupported"`) rather than a
+failure — the same shape the `savefiles_in_content_dir` skip returns.
+
+| State                  | What it means                                                                 | Example on a stock RetroDECK        |
+| ---------------------- | ----------------------------------------------------------------------------- | ----------------------------------- |
+| **per-game files**     | The answer names concrete files with no hole. Sync as usual, any number.      | Game Boy Advance, Saturn, 3DO       |
+| **shared**             | One card or file that many games write, so per-game sync would overwrite.     | PS2 under standalone PCSX2          |
+| **inside the content** | The save is written into the game file itself; there is nothing separate.     | (no system on the reference deck)   |
+| **hole**               | The names are known but part of one comes from the game's own id.             | Dreamcast, GameCube, 3DS, Wii U     |
+| **not established**    | Nobody established what this emulator writes, or the names in a known folder. | MAME, PSP, ScummVM, unaudited cores |
+
+**The last state has two shapes and they are kept apart**, because they are different sentences to a reader: nobody has
+ever established what this emulator writes (`nothing_established`), versus the directory is known and the file names in
+it are not (`directory_known`). Collapsing them would tell a user "nothing is known" about a folder we can point at.
+
+**Scope is the emulator, never the platform.** PS2 is not unsupported — standalone PCSX2 is, and a libretro core for the
+same platform can answer differently. Every state the payload carries names the emulator it is about.
+
+## Progress and configuration
+
+The answer states each file's **role**, and a file whose role is the emulator's configuration rather than the player's
+progress is **never synced**: it is machine-local by nature, so carrying it to another device would overwrite settings
+the user chose there. On a stock RetroDECK that is Saturn's `.smpc` console-settings file and MAME's per-game `.cfg`.
+
+Such a file is still named on the wire, flagged `synced: false`, so a page can say "this file exists and we deliberately
+leave it alone" rather than simply not showing it. A **directory move** — the save-sort migration — does carry it,
+because splitting one save across two directories breaks the game as surely as leaving the battery file behind.
 
 ## How RomM stores saves
 

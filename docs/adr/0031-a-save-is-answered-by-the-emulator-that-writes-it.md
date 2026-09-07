@@ -1,0 +1,121 @@
+# A save is answered by the emulator that writes it, live, in one of five states
+
+## Status
+
+Accepted. **Retires the plugin's own per-system save knowledge** (`domain/save_extensions.py`) in favour of a live
+reading through the vendored [emu-atlas](https://github.com/danielcopper/emu-atlas) resolver. **Builds on
+[ADR-0030](0030-the-emulator-catalogue-is-read-by-the-vendored-resolver.md):** that cut made the resolver the reader of
+ES-DE's catalogue, which is what lets this one ask a catalogue **entry** where its emulator writes saves instead of
+mapping plugin labels onto resolver entries through a bridge. **Does not touch
+[ADR-0017](0017-newest-wins-matrix-is-the-only-decision.md)** — which files are synced changes; how a file's sync is
+decided does not. Tracked under [#1858](https://github.com/danielcopper/decky-romm-sync/issues/1858), cut 4 of
+[#1660](https://github.com/danielcopper/decky-romm-sync/issues/1660).
+
+## Context
+
+Which files make up a game's save was a hand-maintained table in this repo, keyed by RetroDECK system: a default of
+`.srm` / `.rtc` / `.sav` plus eight per-system overrides, written from a one-pass desk audit.
+
+Measured against the resolver on a stock RetroDECK, for the systems the table had entries for:
+
+| System         | The table                      | The machine                                           |
+| -------------- | ------------------------------ | ----------------------------------------------------- |
+| Neo Geo Pocket | `.flash`, from a desk audit    | `.flash`, read out of the core                        |
+| Amiga CD32     | `.nvr`                         | `.nvr`                                                |
+| Amiga          | `.nvr`                         | nothing established — PUAE's mode could not be read   |
+| 3DO            | the three default extensions   | `<stem>.0.srm`, with a version digit the table lacked |
+| Saturn         | three extensions, all progress | two are progress, one is console configuration        |
+
+**The failures were invisible.** For Amiga the plugin searched forever for a file that cannot be there; for 3DO it
+searched for a name no core writes. Neither surfaced as an error — the exact-name probe simply found nothing, which is
+indistinguishable from "this game has no save yet".
+
+Two deeper problems were not fixable by adding rows.
+
+**A save is not a property of a platform.** The same PS2 game keeps two shared memory cards under standalone PCSX2 and
+could keep a file per game under a libretro core. A table keyed by system cannot express that, so it answered for
+whichever emulator the author had in mind.
+
+**Some shapes are not syncable at all, and the plugin had no way to say so.** A shared card, a save written inside the
+game file, a name whose middle comes from the game's own id — the per-game model is simply wrong for each, and the table
+answered them all with a list of extensions to go looking for. The sync then probed, found nothing, and reported "no
+saves", which is a different and much more comforting sentence than the truth.
+
+## Decision
+
+**1. The save question goes to the emulator, live, on every path.**
+
+A new seam (`services/protocols/paths.py` → `SaveLocationReader`, implemented by `adapters/atlas_saves.py`) answers per
+ROM: the directory the emulator opens, the link-resolved backing directory, the concrete file names, each file's role,
+the holes, the granularity, and the resolver's caveat codes. Services see a `domain.save_answer.SaveAnswer` and never a
+resolver type.
+
+The question is put to the **catalogue entry** the plugin resolved for this ROM — the label `ActiveCoreResolver`
+produced, which is the label the launch bakes — not to a bare core. That is what lets a standalone emulator answer for
+itself, and it keeps the read path and the launch path on one emulator.
+
+**Nothing is cached but the installation handle.** The user changes a core's options in the emulator's own quick menu
+between one launch and the next sync; a remembered granularity would have the plugin carry a shared card as though it
+belonged to one game. Holding the handle is what keeps a live reading affordable — 170 ms warm against 490 ms cold on
+the reference machine — and no write this plugin performs can invalidate it.
+
+**2. Five states, exactly one of which holds, and four of them refuse.**
+
+`per-game files` is the one this plugin can carry. `shared`, `inside the content`, `hole` and `not established` refuse:
+no path is probed, no sync state is written, and the result is the benign-skip shape (`save_shape_unsupported`) rather
+than a failure — the same shape the `savefiles_in_content_dir` skip has returned since #239.
+
+The last state keeps **two shapes** — `nothing_established` and `directory_known` — because they are different sentences
+to a reader, and a folder we can point at is not the same as a folder nobody has heard of.
+
+**3. A configuration-role file is never synced.**
+
+The answer states each file's role. A file that holds the emulator's settings rather than the player's progress is
+machine-local by nature, so carrying it to another device overwrites settings the user chose there. It stays visible on
+the wire, flagged, and a directory move still carries it — splitting one save across two directories breaks the game as
+surely as leaving the battery file behind.
+
+**4. The table is deleted, not kept as a fallback.**
+
+A fallback would fire exactly where the resolver refuses, which is where guessing is most dangerous: it would put the
+Amiga probe back, and it would answer a shared card with a per-game name.
+
+## Consequences
+
+**A refusal is now sayable.** The states reach the game-detail payload in this cut and are rendered in the next one, so
+a user will be told that their PS2 saves live on a shared card rather than being shown "no saves".
+
+**Five systems on the reference machine lose a sync they never really had.** Where the plugin resolves no bakeable
+emulator (Apple II, Apple IIGS, Macintosh, PS Vita, Xbox) there is no entry to ask, so the answer refuses. Those
+platforms found nothing under the old extension list either; what changes is that the plugin now says so.
+
+**Saturn syncs one file fewer.** The `.smpc` console-settings file is no longer carried. That is the configuration rule
+working as intended, and it is the one behavioural change a user with existing saves will notice.
+
+**A live reading costs time.** About 170 ms per ROM warm. Single-ROM paths absorb it beside their network round-trip;
+the per-platform loops behind the save-count and save-delete buttons pay it per ROM, so a fifty-game platform count
+takes seconds where it took milliseconds. Caching display answers is permitted and deliberately not done here — the
+correctness rule is that every sync path asks live, and a cache that a future entry point forgets to invalidate breaks
+it silently.
+
+**The plugin's own save-path math is untouched.** The directory still comes from `resolve_save_dir`, and
+`compute_local_save_target` still builds the download name, now folded against the answer wherever the answer names the
+file. Retiring that math is a later cut.
+
+**The answer is only as good as the resolver.** A future emu-atlas bump can change what a system answers, so
+`tests/adapters/test_atlas_saves.py` pins today's answer for every system the deleted table covered. That tier drives
+the real machine and skips where none is installed, so it is a developer's pre-push gate rather than a CI one.
+
+## Alternatives rejected
+
+**Keep the table and consult the resolver only where the table is silent.** The table's errors were in the systems it
+_did_ cover, so this preserves exactly the wrong half.
+
+**Ask for a bare core rather than a catalogue entry.** Then a standalone emulator has no answer at all, which is most of
+the interesting cases — PCSX2, Dolphin, RPCS3, PPSSPP.
+
+**Report a refusal as a sync failure.** It is not a failure; nothing went wrong and the game still launches. Reporting
+it as one would put an error toast on every launch of a PS2 or MAME game.
+
+**Sync the shared card anyway, keyed to whichever game touched it.** This is the data-loss shape the state exists to
+prevent: the card holds other games' progress, and a per-game download would overwrite it on every device.

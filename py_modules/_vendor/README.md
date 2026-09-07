@@ -62,11 +62,12 @@ verbatim as `atlas.SHA256SUMS`. That keeps `atlas/` exactly equal to the manifes
 exceptions. The equality half is not optional: `sha256sum -c --ignore-missing` exits 0 after a vendored file is deleted,
 so a plain checksum sweep would pass a half-copied tree.
 
-`_vendor.atlas` is consumed by two adapters: `adapters/atlas_firmware.py` (the firmware seams behind
-`services.protocols.FirmwareResolver` and `FirmwareFolderVerdictFn`) and `adapters/atlas_catalogue.py` (the emulator
-catalogue behind `CoreInfoProvider`, `SystemSupportedExtensionsFn`, `SystemM3uSupportFn` and `SystemKnownFn`).
+`_vendor.atlas` is consumed by three adapters: `adapters/atlas_firmware.py` (the firmware seams behind
+`services.protocols.FirmwareResolver` and `FirmwareFolderVerdictFn`), `adapters/atlas_catalogue.py` (the emulator
+catalogue behind `CoreInfoProvider`, `SystemSupportedExtensionsFn`, `SystemM3uSupportFn` and `SystemKnownFn`), and
+`adapters/atlas_saves.py` (where one ROM's save lives and what it consists of, behind `SaveLocationReader`).
 `tests/test_vendored_atlas.py` additionally imports it and asserts the pinned version, so the copy is proven to resolve
-and not merely to hash correctly even if both adapters ever stop importing it. That test also imports the tree with
+and not merely to hash correctly even if all three adapters ever stop importing it. That test also imports the tree with
 `xml.etree` blocked at `sys.meta_path`: Decky Loader's PyInstaller runtime does not ship that module, upstream answers
 it with `atlas/_xml.py` (ElementTree's shape on expat directly), and nothing about a release states which parser it
 reaches for — so a version bump that reintroduces `xml.etree` would import cleanly in CI and kill the backend at

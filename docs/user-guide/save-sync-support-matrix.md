@@ -6,21 +6,39 @@ this page shows what syncs for each system today, and what's planned.
 
 ## How reliable is this page?
 
-Be aware of what this table is before you plan around it. Most of it is **derived from libretro's documentation and from
-reading core source**, not from watching each core actually write a save. A separate project,
-[emu-atlas](https://github.com/danielcopper/emu-atlas), is auditing the same ground with evidence grades per core; at
-the time of writing it has confirmed **17 of RetroDECK's 159 libretro cores**, and none of the 22 standalone emulators.
+**The plugin no longer decides what a save is from a table like this one.** It asks your machine, per game and per the
+emulator that will launch it, every time it syncs — so the answer follows your actual core choice and your actual core
+options rather than a row written in advance. This page is now background reading: it explains why a platform behaves
+the way it does, and the plugin's own answer is what governs.
 
-Two things follow that matter to you:
+Two things still matter when you read a row:
 
 - **A ❌ often means "not with the settings that ship", not "impossible".** Several cores can write per-game saves if
-  you change a core option — the rows below say which. Turning that on is not yet something the plugin does or detects
-  for you.
+  you change a core option — the rows below say which. Turning that on is not yet something the plugin does for you, but
+  it does now **notice**: change the option and the next sync reads the new answer.
 - **Rows are stated for each platform's _default_ core.** You can override the core per system and per game, and a
-  different core can behave differently. RetroArch settings such as `savefiles_in_content_dir` also move saves out of
-  where the plugin looks.
+  different core can behave differently — which is exactly why the plugin asks per game. RetroArch's
+  `savefiles_in_content_dir` still moves saves out of where the plugin looks, and that is reported separately.
 
-Where the audit has already corrected an earlier assumption, this page reflects the audit.
+Most of this table is derived from libretro's documentation and from reading core source, not from watching each core
+write a save. Where the [emu-atlas](https://github.com/danielcopper/emu-atlas) audit has corrected an earlier
+assumption, this page reflects the audit.
+
+## When save sync does nothing, and why
+
+Where the plugin cannot carry a game's saves it now says so instead of quietly finding nothing. There are four reasons,
+and they mean different things:
+
+- **The emulator keeps one save card that all games share.** Standalone PCSX2 is the common case. Syncing it per game
+  would copy other games' progress onto this one's record, so the plugin leaves it alone.
+- **The save is written inside the game file itself.** There is no separate file to carry.
+- **Part of the file name comes from the game's own id**, which the plugin cannot read yet. Dreamcast, GameCube,
+  Nintendo 3DS and Wii U are here.
+- **What the emulator writes could not be established** — either nobody has audited that core yet, or the folder is
+  known and the names inside it are not.
+
+None of these is an error, and none of them stops a game launching. If you change the emulator for a game, the answer is
+read again for the new one.
 
 ## Categories
 

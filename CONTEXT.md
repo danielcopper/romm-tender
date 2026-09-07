@@ -370,6 +370,46 @@ to how the override changes the invocation without touching `file_path`
 ([ADR-0014](docs/adr/0014-per-game-disc-selection-in-db-applied-as-bake-time-launch-path-override.md)). A stale pin (the
 disc no longer present) degrades to the default with a WARNING, never fatal.
 
+### Save answer
+
+What one ROM's save consists of, where the emulator keeps it, and whether this plugin may carry it —
+`domain.save_answer.SaveAnswer`, read live off the machine by the vendored resolver through `adapters/atlas_saves.py`.
+It replaced a per-system extension table the plugin maintained by hand.
+
+An answer is about an **emulator**, never a platform (see [Save scope](#save-scope-the-emulator-not-the-platform)), and
+it names the files, their directory, their roles, the holes left in any name, and the resolver's caveat codes. A file
+whose role is the emulator's **configuration** rather than the player's **progress** — Saturn's `.smpc`, MAME's per-game
+`.cfg` — is named on the answer and never synced; a directory move still carries it, because splitting one save across
+two directories breaks the game.
+
+### Save state: per-game files / shared / inside the content / hole / not established
+
+The five values a save answer classifies a ROM into, **exactly one of which holds**. Only the first is a save this
+plugin can carry; the other four **refuse** — no path is probed, no sync state is written, and the sync returns the
+benign-skip shape rather than a failure.
+
+- **per-game files** — the answer names concrete files with no hole. Sync as usual, any number of files.
+- **shared** — the emulator's granularity is a shared card or a shared file, so one file holds many games' progress and
+  a per-game sync would carry another game's save onto this ROM's record.
+- **inside the content** — the save is written into the game file itself. There is nothing separate to carry.
+- **hole** — the names are known, but part of one comes from the game's own id, which nothing here supplies.
+- **not established** — nobody established what this emulator writes, or the directory is known and the names in it are
+  not. **These are two shapes, `nothing_established` and `directory_known`, and they stay apart**: they are different
+  sentences to a reader, and collapsing them claims ignorance about a folder we can point at.
+
+Detail, including which systems land where on a stock RetroDECK, is in
+[Save sync coverage](docs/architecture/save-sync-coverage.md).
+
+### Save scope: the emulator, not the platform
+
+A save answer is about the emulator that would launch the ROM, and means nothing without it. PS2 is not unsupported —
+**standalone PCSX2** is, because it keeps two shared memory cards, and a libretro core for the same platform can answer
+per-game. So a save state is never reported for a platform, and whatever carries one names the emulator it is about.
+
+This is why the question goes to the **catalogue entry** the plugin resolved for this ROM (the label
+`ActiveCoreResolver` produced, which is the label the launch bakes) rather than to a bare core: a standalone emulator
+answers for itself.
+
 ### Save-sync slot
 
 A named channel for a ROM's saves (e.g. `default`). **Every slot is a real, addressable name** — the active slot for a

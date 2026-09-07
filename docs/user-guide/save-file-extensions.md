@@ -3,16 +3,22 @@
 Research results for which save file extensions RetroDECK cores produce, and what our plugin needs to support. This
 informs the implementation of [#196](https://github.com/danielcopper/decky-romm-sync/issues/196).
 
-!!! note "Superseded in part by the full audit"
+!!! warning "Historical — the extension table this page designed no longer exists"
 
-    A later core-by-core audit of all 155 RetroDECK cores is captured in the
-    [Save sync support matrix](save-sync-support-matrix.md), with the rationale in
-    [Save sync coverage](../architecture/save-sync-coverage.md). It **revisits some assumptions on this page** —
-    notably that Saturn (Beetle Saturn writes `.bkr`/`.bcr`/`.smpc`, not `.srm`), Neo Geo Pocket (`.flash`/`.ngf`),
-    and Pokémon Mini (`.eep`) are _not_ standard `.srm`. All three have since been confirmed on-device by the
-    [emu-atlas](https://github.com/danielcopper/emu-atlas) core audit — content-keyed files in the standard save
-    directory on RetroDECK 0.10.9b. Treat the matrix as the broader, current view; this page remains the record of the
-    original `.srm`/`.dsv`/`.brm` decision.
+    The plugin held a per-system list of save extensions, and this page is the research behind it. **That list is
+    retired.** The plugin now asks the machine which files a game's save consists of, per game and per the emulator
+    that will launch it, and reads the answer fresh on every sync — see
+    [Save sync coverage](../architecture/save-sync-coverage.md) and
+    [ADR-0031](https://github.com/danielcopper/decky-romm-sync/blob/main/docs/adr/0031-a-save-is-answered-by-the-emulator-that-writes-it.md).
+
+    Measuring the same systems against that live reading showed the table was wrong in both directions: Amiga has no
+    separate save file at all (the writes go into the disk image, so the plugin was searching for a `.nvr` that cannot
+    exist), and 3DO's real name carries a version digit (`<rom>.0.srm`) the table never had. Saturn's third extension
+    turned out to be console configuration rather than progress, and is no longer synced.
+
+    Keep this page as the record of how the original `.srm`/`.dsv`/`.brm` decision was reached. Do not use it to
+    predict what syncs today — the [Save sync support matrix](save-sync-support-matrix.md) is the broader view, and
+    your own machine is the authority.
 
 ## How RetroArch Save Extensions Work
 

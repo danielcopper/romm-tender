@@ -538,6 +538,27 @@ Format: **invariant** — tier — enforced by.
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — prompt-only — sync
   paths, `get_save_status`, and the four slot mutations hold the lock; mechanize via a `rom_save_sync_states.save`
   call-site audit
+- **Which files a game's save consists of is the EMULATOR's answer, read live, and four of its five states refuse the
+  sync — no probe, no state written** — test + prompt-only — `tests/adapters/test_atlas_saves.py` pins the five states
+  and every way the question cannot be put, `tests/domain/test_save_answer.py` pins the precedence that makes "exactly
+  one" well defined, and `tests/services/saves/test_save_shape_gate.py` pins the absences **each beside a control that
+  asserts the same probe DOES happen for a syncable answer** — without those controls a service that had stopped probing
+  entirely would pass. The rule spans five modules and no diff-scoped review sees it whole: the adapter reads the
+  machine, `domain/save_answer.py` decides what the reading means, `RomInfoService` turns it into names, `SyncEngine`
+  refuses on it, and `services/saves/status/service.py` puts it on the wire. **Three halves have no mechanical check at
+  all.** (1) The refusal is enforced at four call sites — the three per-ROM entry points, which report the skip, and
+  `_run_rom_sync`, the backstop that covers the whole-library sweep; a fifth entry point added without either goes
+  green, and its failure is silent because a per-game probe for a shared card finds nothing and reports "no saves". (2)
+  A configuration-role file is excluded by `SaveAnswer.synced_files` and included by `owned_files`, which is what a
+  directory move must carry — a caller reading `components` directly gets neither rule, and syncing Saturn's `.smpc` or
+  MAME's `.cfg` overwrites settings the user chose on the other device. (3) The two shapes inside `unestablished` are
+  one field (`SaveAnswer.unestablished`) that nothing forces a consumer to read; a truthiness test on
+  `state == "unestablished"` collapses "nobody has audited this core" into "the folder is known and the names are not",
+  which the next cut words differently. **Every path asks live and nothing caches an answer** — only the installation
+  handle is memoised — because the user changes a core's options in the emulator's own quick menu between a launch and
+  the next sync; a display cache added without invalidating it on every sync entry is the one change that makes this
+  rule fail silently and expensively. Detail: `docs/architecture/save-sync-coverage.md`, CONTEXT.md → Save state / Save
+  scope
 - **Per-slot server reads/deletes go through `domain/save_slot.py` (legacy omits `&slot=`, client-filters)** —
   prompt-only — `get_slot_saves` / `get_slot_delete_info` / `delete_slot` / `list_file_versions` / `rollback_to_version`
   use `slot_query_param` + `save_in_slot`; RomM can't address `slot:null` via the param, so legacy MUST omit it + filter
