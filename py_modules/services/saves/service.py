@@ -96,6 +96,7 @@ class SaveService:
                 save_file_store=config.save_file_store,
                 retrodeck_paths=config.retrodeck_paths,
                 active_core=config.active_core,
+                save_locations=config.save_locations,
                 get_core_name=config.get_core_name,
                 logger=config.logger,
             ),

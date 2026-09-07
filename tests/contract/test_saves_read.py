@@ -55,6 +55,7 @@ async def test_get_save_status_full_shape_and_partial_flag(harness):
         "conflicts",
         "save_sort_changed",
         "savefiles_in_content_dir",
+        "save_resolution",
         "save_sync_display",
         "server_query_failed",
         "server_query_reason",
@@ -101,6 +102,86 @@ async def test_get_save_status_definitive_404_is_not_unreachable(harness):
     assert result["server_query_reason"] == "not_found"
     assert result["server_query_reason"] != "server_unreachable"
     assert result["rom_id"] == 42
+
+
+async def test_get_save_status_carries_the_save_resolution(harness):
+    """The save answer reaches the wire: the state, its scope, and every file it names.
+
+    The state is what a later rendering keys on, and it is about the EMULATOR —
+    a payload that named only the platform could not tell a shared PS2 card
+    under standalone PCSX2 from a per-game answer under a libretro core for the
+    same platform.
+    """
+    enable_save_sync(harness)
+    seed_install(harness, 42, system="gba", platform_slug="gba", file_name="game.gba")
+
+    resolution = (await harness.plugin.get_save_status(42))["save_resolution"]
+
+    assert set(resolution.keys()) == {
+        "state",
+        "unestablished",
+        "emulator",
+        "directory",
+        "backing_directory",
+        "granularity",
+        "needs",
+        "caveats",
+        "files",
+    }
+    assert resolution["state"] == "per_game_files"
+    # Not a refusing state, so the discriminator the next cut words two ways is
+    # absent rather than defaulted to one of them.
+    assert resolution["unestablished"] is None
+    assert isinstance(resolution["needs"], list)
+    assert isinstance(resolution["caveats"], list)
+    assert [entry["name"] for entry in resolution["files"]] == ["game.srm", "game.rtc", "game.sav"]
+    assert all(entry["synced"] is True for entry in resolution["files"])
+
+
+async def test_a_configuration_file_is_named_on_the_wire_and_flagged_unsynced(harness):
+    """A file the answer names and the sync leaves alone is visible, not hidden.
+
+    The next cut renders it as a row saying it is not synced, so dropping it
+    from the payload would leave a user with a file on disk that the page never
+    mentions.
+    """
+    enable_save_sync(harness)
+    seed_install(harness, 42, system="saturn", platform_slug="sega-saturn", file_name="rally.cue")
+
+    files = (await harness.plugin.get_save_status(42))["save_resolution"]["files"]
+
+    by_name = {entry["name"]: entry for entry in files}
+    assert by_name["rally.smpc"]["role"] == "settings"
+    assert by_name["rally.smpc"]["synced"] is False
+    assert by_name["rally.bkr"]["synced"] is True
+
+
+async def test_a_refusing_state_names_the_emulator_and_syncs_nothing(harness):
+    """Scope is the emulator: the payload says whose answer refused."""
+    from domain.save_answer import SaveAnswer
+
+    enable_save_sync(harness)
+    seed_install(harness, 42, system="ps2", platform_slug="ps2", file_name="game.iso")
+    harness.plugin._save_sync_service._rom_info._save_locations.answer_with(
+        "ps2",
+        SaveAnswer(
+            state="shared",
+            unestablished=None,
+            emulator="PCSX2 (Standalone)",
+            directory="/saves/ps2/pcsx2/memcards",
+            backing_directory=None,
+            granularity="shared-card",
+            needs=(),
+            components=(),
+            caveats=(),
+        ),
+    )
+
+    resolution = (await harness.plugin.get_save_status(42))["save_resolution"]
+
+    assert resolution["state"] == "shared"
+    assert resolution["emulator"] == "PCSX2 (Standalone)"
+    assert resolution["granularity"] == "shared-card"
 
 
 async def test_get_save_status_pending_upload_display(harness):

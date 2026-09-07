@@ -897,6 +897,36 @@ describe("launchInterceptor — full funnel watcher", () => {
       expect(backend.logError).toHaveBeenCalledWith(expect.stringContaining("pre-launch sync failed"));
     });
 
+    it("preLaunchSync: save_shape_unsupported → success, so a shared-card game never nags on launch", async () => {
+      // #1858: the emulator keeps no per-game save set this plugin can carry.
+      // Nothing went wrong and the game still launches, so treating it as a
+      // failure would put the fallback confirm on every PS2 or MAME launch.
+      const ops = await captureOps();
+
+      vi.mocked(backend.preLaunchSync).mockResolvedValueOnce({
+        success: false,
+        message: "Save sync is unavailable: this emulator keeps one save card that all games share.",
+        reason: "save_shape_unsupported",
+      });
+
+      expect(await ops.preLaunchSync()).toEqual({
+        success: true,
+        message: "Save sync is unavailable: this emulator keeps one save card that all games share.",
+      });
+    });
+
+    it("preLaunchSync: a reason outside the benign set still fails, so the set is not a blanket pass", async () => {
+      const ops = await captureOps();
+
+      vi.mocked(backend.preLaunchSync).mockResolvedValueOnce({
+        success: false,
+        message: "Server offline",
+        reason: "server_unreachable",
+      });
+
+      expect(await ops.preLaunchSync()).toEqual({ success: false, message: "Server offline" });
+    });
+
     it("ensureTrackingConfigured: already-configured proceeds; a tracking-check throw logs and proceeds", async () => {
       const ops = await captureOps();
 

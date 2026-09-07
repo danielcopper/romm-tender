@@ -22,7 +22,6 @@ from domain.migration_paths import (
     remap_under_current,
     stranded_source_candidates,
 )
-from domain.save_extensions import get_save_extensions
 from domain.save_layout import ContentDir
 from domain.save_path import resolve_save_dir
 
@@ -43,6 +42,7 @@ if TYPE_CHECKING:
         RelaunchOptionsReader,
         RetroArchSaveLayoutProvider,
         RetroDeckPaths,
+        SaveLocationReader,
         SettingsPersister,
         UnitOfWorkFactory,
     )
@@ -69,10 +69,12 @@ class MigrationServiceConfig:
     dict, runtime infrastructure, persistence callbacks, event emitter,
     and the provider callables MigrationService needs at construction
     time. The shared ``active_core`` resolver answers which RetroArch core a
-    ROM launches with when re-deriving the save-sort subdirectory name. The
-    ``relaunch_options`` seam re-bakes every relocated ROM's full Steam
-    ``launch_options`` (active core + selected disc) from its moved path so the
-    pick survives the home migration. ``firmware_resolver`` names which files in
+    ROM launches with when re-deriving the save-sort subdirectory name, and
+    ``save_locations`` answers which files that ROM's save actually consists of,
+    so a sort-change move carries the emulator's own file set rather than a
+    guessed list of extensions. The ``relaunch_options`` seam re-bakes every
+    relocated ROM's full Steam ``launch_options`` (active core + selected disc)
+    from its moved path so the pick survives the home migration. ``firmware_resolver`` names which files in
     a pending home are firmware at all, so the untracked-BIOS sweep moves those
     and leaves everything else alone. Relational migration state (ROM installs,
     BIOS records, change markers) is read through the injected ``uow_factory``.
@@ -88,6 +90,7 @@ class MigrationServiceConfig:
     retrodeck_paths: RetroDeckPaths
     get_save_layout: RetroArchSaveLayoutProvider
     active_core: ActiveCoreReader
+    save_locations: SaveLocationReader
     relaunch_options: RelaunchOptionsReader
     get_core_name: CoreNameProviderFn
     uow_factory: UnitOfWorkFactory
@@ -107,6 +110,7 @@ class MigrationService:
         self._retrodeck_paths = config.retrodeck_paths
         self._get_save_layout = config.get_save_layout
         self._active_core = config.active_core
+        self._save_locations = config.save_locations
         self._relaunch_options = config.relaunch_options
         self._get_core_name = config.get_core_name
         self._uow_factory = config.uow_factory
@@ -962,8 +966,11 @@ class MigrationService:
     ) -> list[tuple[str, str, str, object, str]]:
         """Collect save files that need migration due to sort setting change.
 
-        ``installs`` is the pre-snapshotted ``RomInstall`` list (the caller opens
-        the read UoW); this method is pure compute over it.
+        ``installs`` is the pre-snapshotted ``RomInstall`` list, and the caller
+        closes its read UoW before calling: the walk below reads the machine —
+        the core's ``.info`` for a sort-by-core name, the resolver for each
+        ROM's file set, and the old directory for what is actually there — and a
+        Unit of Work never spans file I/O.
         """
         saves_base = self._retrodeck_paths.saves_path()
         roms_base = self._retrodeck_paths.roms_path()
@@ -1032,13 +1039,22 @@ class MigrationService:
         )
         if old_dir == new_dir:
             return
-        rom_name = os.path.splitext(os.path.basename(file_path))[0]
-        for ext in get_save_extensions(system):
-            filename = rom_name + ext
-            old_file = os.path.join(old_dir, filename)
-            new_file = os.path.join(new_dir, filename)
+        emulator = self._active_core.active_emulator_for_rom(install.rom_id)
+        answer = self._save_locations.resolve_save_answer(
+            system=system,
+            content_path=file_path,
+            emulator_label=emulator.label if emulator is not None else None,
+        )
+        # Every file the ROM keeps under its own name, configuration included:
+        # moving a Saturn ``.bkr`` while leaving its ``.smpc`` behind splits one
+        # save across two directories. An answer that establishes nothing moves
+        # nothing — the extension list this replaced would have moved a guessed
+        # ``.srm`` for a core nobody has audited.
+        for component in answer.owned_files:
+            old_file = os.path.join(old_dir, component.name)
+            new_file = os.path.join(new_dir, component.name)
             if self._migration_file_store.exists(old_file):
-                items.append((filename, old_file, new_file, lambda: None, "save"))
+                items.append((component.name, old_file, new_file, lambda: None, "save"))
 
     def _get_save_sort_migration_status_io(
         self, old_settings: SaveSortSettings, new_settings: SaveSortSettings

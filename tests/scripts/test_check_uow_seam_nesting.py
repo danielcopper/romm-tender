@@ -305,6 +305,25 @@ class TestIoSeamsViolations:
         assert "realpath" in findings[0]
         assert "file-I/O seam" in findings[0]
 
+    @pytest.mark.parametrize("method", ["resolve_save_answer", "save_answer"])
+    def test_the_save_answer_inside_uow_is_flagged(self, method: str):
+        # The seam and the saves package's own wrapper around it. Both are
+        # listed, because the seam itself is reached from one module and the
+        # wrapper is what every peer in services/saves/ calls — a rule enforced
+        # in one file would be green everywhere it actually matters.
+        findings = check.scan_source(
+            "class S:\n"
+            "    def go(self, rom_id):\n"
+            "        with self._uow_factory() as uow:\n"
+            "            install = uow.rom_installs.get(rom_id)\n"
+            f"            answer = self._saves.{method}(rom_id)\n"
+            "        return answer\n",
+            "svc.py",
+        )
+        assert len(findings) == 1
+        assert method in findings[0]
+        assert "file-I/O seam" in findings[0]
+
     @pytest.mark.parametrize(
         "method",
         ["get_active_core", "get_default_emulator", "get_emulator_options"],

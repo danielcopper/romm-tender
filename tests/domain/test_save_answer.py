@@ -1,0 +1,221 @@
+"""Tests for the save-answer vocabulary and the rule that picks one state.
+
+The classification is pure, so it is tested here without a machine and without
+the resolver's types. What ties these plain strings to the resolver's own
+constants is ``tests/adapters/test_atlas_saves.py``; what is under test here is
+the RULE — which state wins where two could apply, what may be synced, and what
+a download lands as.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from domain.save_answer import (
+    SAVE_SHAPE_UNSUPPORTED_REASON,
+    SAVE_STATE_HOLE,
+    SAVE_STATE_INSIDE_CONTENT,
+    SAVE_STATE_PER_GAME_FILES,
+    SAVE_STATE_SHARED,
+    SAVE_STATE_UNESTABLISHED,
+    UNESTABLISHED_DIRECTORY_KNOWN,
+    UNESTABLISHED_NOTHING,
+    SaveGroup,
+    build_save_answer,
+    pick_download_name,
+    save_shape_message,
+    unestablished_answer,
+)
+
+_DIR = "/saves/gba"
+
+
+def _answer(**overrides):
+    kwargs = {
+        "emulator": "mGBA",
+        "directory": _DIR,
+        "backing_directory": None,
+        "granularity": "per-game-file",
+        "needs": (),
+        "file_set_state": "declared",
+        "files": ("Game.srm",),
+        "groups": (),
+        "caveats": (),
+    }
+    kwargs.update(overrides)
+    return build_save_answer(**kwargs)
+
+
+class TestExactlyOneStateHolds:
+    """Where two states could apply, the precedence decides — and it is fixed."""
+
+    def test_inside_content_outranks_everything(self):
+        # A positive statement about where the save is makes the directory
+        # answer meaningless, so it wins even over a hole and a shared card.
+        answer = _answer(
+            caveats=("save-inside-content", "file-names-unestablished"),
+            needs=("save_id",),
+            granularity="shared-card",
+            files=(),
+        )
+
+        assert answer.state == SAVE_STATE_INSIDE_CONTENT
+
+    def test_a_refused_file_set_outranks_a_hole(self):
+        answer = _answer(file_set_state="unknown", files=(), needs=("save_id",))
+
+        assert answer.state == SAVE_STATE_UNESTABLISHED
+        assert answer.unestablished == UNESTABLISHED_NOTHING
+
+    def test_a_hole_outranks_a_shared_card(self):
+        # Neither can be completed, and naming the hole says more about why.
+        answer = _answer(needs=("region",), granularity="shared-card", files=())
+
+        assert answer.state == SAVE_STATE_HOLE
+
+    def test_shared_outranks_unnamed_contents(self):
+        answer = _answer(granularity="shared-file", caveats=("file-names-unestablished",), files=("scd_E.brm",))
+
+        assert answer.state == SAVE_STATE_SHARED
+
+    def test_shared_reads_the_answers_granularity_and_never_a_groups(self):
+        # MAME keeps an emulator-wide ``default.cfg`` beside per-game files.
+        # That group being shared does not make the GAME's save shared.
+        answer = _answer(
+            granularity="per-game-file",
+            files=("Game.nv",),
+            groups=(
+                SaveGroup(directory=_DIR, files=("Game.nv",), role="battery", granularity="per-game-file"),
+                SaveGroup(directory=_DIR, files=("default.cfg",), role="settings", granularity="shared-file"),
+            ),
+        )
+
+        assert answer.state == SAVE_STATE_PER_GAME_FILES
+
+    def test_named_files_with_no_hole_are_the_only_syncable_state(self):
+        assert _answer().state == SAVE_STATE_PER_GAME_FILES
+        assert _answer().syncable is True
+
+    @pytest.mark.parametrize(
+        ("kwargs", "state"),
+        [
+            ({"granularity": "shared-card", "files": ("Mcd001.ps2",)}, SAVE_STATE_SHARED),
+            ({"caveats": ("save-inside-image",), "files": ()}, SAVE_STATE_INSIDE_CONTENT),
+            ({"needs": ("save_id",)}, SAVE_STATE_HOLE),
+            ({"file_set_state": "unknown", "files": ()}, SAVE_STATE_UNESTABLISHED),
+        ],
+    )
+    def test_the_other_four_states_all_refuse(self, kwargs: dict[str, object], state: str):
+        answer = _answer(**kwargs)
+
+        assert answer.state == state
+        assert answer.syncable is False
+        assert answer.synced_names == ()
+        assert answer.owned_files == ()
+
+
+class TestTheTwoShapesOfNotEstablished:
+    def test_names_that_could_not_be_established_keep_the_directory(self):
+        answer = _answer(caveats=("file-names-unestablished",), files=())
+
+        assert answer.unestablished == UNESTABLISHED_DIRECTORY_KNOWN
+        assert answer.directory == _DIR
+
+    def test_a_group_with_no_names_is_not_an_empty_directory(self):
+        answer = _answer(
+            files=(),
+            groups=(SaveGroup(directory=_DIR, files=None, role="battery", granularity="per-game-files"),),
+        )
+
+        assert answer.unestablished == UNESTABLISHED_DIRECTORY_KNOWN
+
+    def test_naming_nothing_at_all_is_the_bare_shape(self):
+        answer = _answer(files=(), granularity=None, caveats=("core-unaudited",))
+
+        assert answer.unestablished == UNESTABLISHED_NOTHING
+
+    def test_a_question_nobody_could_put_is_the_bare_shape(self):
+        answer = unestablished_answer(emulator="Ryubing (Standalone)")
+
+        assert answer.state == SAVE_STATE_UNESTABLISHED
+        assert answer.unestablished == UNESTABLISHED_NOTHING
+        assert answer.emulator == "Ryubing (Standalone)"
+
+
+class TestProgressAndConfiguration:
+    def _saturn(self):
+        return _answer(
+            files=("Game.bkr", "Game.bcr", "Game.smpc"),
+            groups=(
+                SaveGroup(directory=_DIR, files=("Game.bkr",), role="battery", granularity="per-game-file"),
+                SaveGroup(directory=_DIR, files=("Game.bcr",), role="battery", granularity="per-game-file"),
+                SaveGroup(directory=_DIR, files=("Game.smpc",), role="settings", granularity="per-game-file"),
+            ),
+        )
+
+    def test_a_configuration_file_is_owned_and_never_synced(self):
+        answer = self._saturn()
+
+        assert [component.name for component in answer.owned_files] == ["Game.bkr", "Game.bcr", "Game.smpc"]
+        assert answer.synced_names == ("Game.bkr", "Game.bcr")
+
+    def test_a_file_no_group_claimed_counts_as_progress(self):
+        # The plain per-game case: the placement names files and decomposes
+        # nothing, so there is no role to read and the file is the save.
+        answer = _answer(files=("Game.srm",), groups=())
+
+        assert answer.components[0].role is None
+        assert answer.synced_names == ("Game.srm",)
+
+
+class TestPickDownloadName:
+    """The server's extension is a pointer into what the emulator writes."""
+
+    def test_an_exact_match_stands(self):
+        assert pick_download_name(("Game.srm",), "Game.srm") == "Game.srm"
+
+    def test_the_answers_longer_name_wins_over_the_path_math(self):
+        # Opera writes ``<stem>.0.srm``; a server row carrying extension ``srm``
+        # would otherwise download to a file the core never opens.
+        assert pick_download_name(("Game.0.srm",), "Game.srm") == "Game.0.srm"
+
+    def test_a_name_the_answer_does_not_hold_keeps_the_computed_one(self):
+        assert pick_download_name(("Game.bkr",), "Game.srm") == "Game.srm"
+
+    def test_an_ambiguous_match_is_never_guessed(self):
+        assert pick_download_name(("Game.0.srm", "Game.1.srm"), "Game.srm") == "Game.srm"
+
+    def test_a_different_stem_is_not_a_match(self):
+        assert pick_download_name(("Other.0.srm",), "Game.srm") == "Game.srm"
+
+    def test_no_answer_at_all_keeps_the_computed_name(self):
+        assert pick_download_name((), "Game.srm") == "Game.srm"
+
+    def test_a_computed_name_with_no_extension_is_left_alone(self):
+        assert pick_download_name(("Game.srm",), "Game") == "Game"
+
+
+class TestTheRefusalIsReportedNeutrally:
+    def test_the_slug_says_nothing_about_the_server(self):
+        assert SAVE_SHAPE_UNSUPPORTED_REASON == "save_shape_unsupported"
+
+    @pytest.mark.parametrize(
+        ("kwargs", "needle"),
+        [
+            ({"granularity": "shared-card", "files": ("Mcd001.ps2",)}, "share"),
+            ({"caveats": ("save-inside-content",), "files": ()}, "inside the game file"),
+            ({"needs": ("save_id",)}, "game's own id"),
+            ({"file_set_state": "unknown", "files": ()}, "could not be established"),
+        ],
+    )
+    def test_each_refusal_says_something_different(self, kwargs: dict[str, object], needle: str):
+        assert needle in save_shape_message(_answer(**kwargs))
+
+    def test_the_message_names_the_emulator_it_is_about(self):
+        # Scope is the emulator: PS2 is not unsupported, standalone PCSX2 is.
+        message = save_shape_message(_answer(emulator="PCSX2 (Standalone)", granularity="shared-card"))
+
+        assert "(PCSX2 (Standalone))" in message
+
+    def test_an_answer_with_no_emulator_still_reads_as_a_sentence(self):
+        assert save_shape_message(unestablished_answer()).endswith(".")

@@ -20,6 +20,7 @@ from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_save_api import FakeSaveApi
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
@@ -111,6 +112,7 @@ def plugin(tmp_path):
                 saves=saves_path,
                 roms=str(tmp_path / "retrodeck" / "roms"),
             ),
+            save_locations=FakeSaveLocationReader(),
             active_core=FakeActiveCoreResolver(default=(None, None)),
             hostname_provider=FakeHostnameReader(),
             machine_id_provider=FakeMachineIdReader(),

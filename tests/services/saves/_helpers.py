@@ -13,6 +13,7 @@ from fakes.fake_machine_id_reader import FakeMachineIdReader
 from fakes.fake_plugin_metadata_reader import FakePluginMetadataReader
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_save_api import FakeSaveApi
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
@@ -59,6 +60,7 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
             roms=str(tmp_path / "retrodeck" / "roms"),
         ),
         "active_core": FakeActiveCoreResolver(default=(None, None)),
+        "save_locations": FakeSaveLocationReader(),
         "hostname_provider": FakeHostnameReader(),
         "machine_id_provider": FakeMachineIdReader(),
         "log_debug": lambda _msg: None,

@@ -1103,7 +1103,7 @@ class TestPathTraversalDefense:
         from services.saves._helpers import local_save_target
 
         with caplog.at_level(logging.WARNING):
-            target = local_save_target({"file_extension": "../etc/passwd"}, "pokemon")
+            target = local_save_target({"file_extension": "../etc/passwd"}, "pokemon", known_names=())
         # Sanitization reduces to a simple basename — no separators, no parent refs.
         assert "/" not in target
         assert ".." not in target.split(".")
@@ -1115,7 +1115,7 @@ class TestPathTraversalDefense:
         """Clean ``file_extension`` produces ``<rom_name>.<ext>`` unchanged."""
         from services.saves._helpers import local_save_target
 
-        assert local_save_target({"file_extension": "srm"}, "pokemon") == "pokemon.srm"
+        assert local_save_target({"file_extension": "srm"}, "pokemon", known_names=()) == "pokemon.srm"
 
     def test_local_save_target_falls_back_to_srm_on_unusable_ext(self, caplog):
         """When the server's extension produces an empty/dot-only name, fall back to ``srm``."""
@@ -1124,7 +1124,7 @@ class TestPathTraversalDefense:
         with caplog.at_level(logging.WARNING):
             # An ``ext`` that drives the basename to ``""`` after sanitization
             # (e.g. trailing separator) — the helper degrades to ``"srm"``.
-            target = local_save_target({"file_extension": "evil/"}, "pokemon")
+            target = local_save_target({"file_extension": "evil/"}, "pokemon", known_names=())
         # Either the sanitized basename or the safe default — never traversal.
         assert "/" not in target
         assert target.endswith(".srm") or target == "pokemon.srm"

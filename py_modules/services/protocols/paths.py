@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from domain.firmware_wants import FirmwareCatalogue, FolderVerdict
+    from domain.save_answer import SaveAnswer
     from domain.save_layout import SaveLayout
     from domain.shortcut_data import EmulatorInvocation
     from lib.retrodeck_health import RetroDeckConfigHealth
@@ -149,6 +150,32 @@ class CoreInfoProvider(Protocol):
     def get_emulator_options(self, system_name: str) -> dict[str, Any]: ...
 
     def reset_cache(self) -> None: ...
+
+
+class SaveLocationReader(Protocol):
+    """Where one ROM's save lives, what it consists of, and whether it may be synced.
+
+    The read seam behind every save-file question this plugin used to answer
+    from its own per-system extension table. It is asked per ROM and per the
+    emulator that would launch it, because a save location is a property of the
+    emulator and not of the platform: the same PS2 game is two shared memory
+    cards under standalone PCSX2 and could be a file per game under a libretro
+    core.
+
+    Implementations never raise and never guess. Every way the question cannot
+    be put — no emulator resolved, no installation, the catalogue not offering
+    the label, the entry declining, the reader failing — comes back as a
+    :class:`domain.save_answer.SaveAnswer` in the ``unestablished`` state, which
+    refuses the sync. The one thing an implementation may never do is answer
+    "nothing to sync", which a caller reads as a green light.
+
+    Every call is a live reading. A remembered granularity is the failure this
+    seam exists to avoid: the user changes a core's options in the emulator's
+    own quick menu between one launch and the next sync, and a stale answer
+    would have the plugin carry a shared card as though it were one game's.
+    """
+
+    def resolve_save_answer(self, *, system: str, content_path: str, emulator_label: str | None) -> SaveAnswer: ...
 
 
 class SandboxLauncherFn(Protocol):

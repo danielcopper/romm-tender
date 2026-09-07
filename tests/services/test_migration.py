@@ -19,6 +19,7 @@ from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
@@ -156,6 +157,7 @@ def plugin(tmp_path, fake_romm_api):
             firmware_resolver=firmware_resolver,
             retrodeck_paths=FakeRetroDeckPaths(),
             get_save_layout=_default_save_layout,
+            save_locations=FakeSaveLocationReader(),
             active_core=p._active_core,
             relaunch_options=relaunch_options,
             get_core_name=_no_core_name,
@@ -1744,6 +1746,7 @@ class TestMigrationFailureInjection:
             "relaunch_options": FakeRelaunchOptionsResolver(),
             "get_core_name": lambda core_so: None,
             "uow_factory": FakeUnitOfWorkFactory(uow=uow),
+            "save_locations": FakeSaveLocationReader(),
         }
         defaults.update(overrides)
         return MigrationService(

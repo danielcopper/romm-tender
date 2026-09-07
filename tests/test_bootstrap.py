@@ -33,6 +33,7 @@ from fakes.fake_resolved_path import FakeResolvedPath
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_rom_file_store import FakeRomFileStore
 from fakes.fake_save_file_store import FakeSaveFileStore
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
@@ -319,6 +320,7 @@ class TestWireServices:
                 path_probe=deps["path_probe"],
                 resolve_path=deps["resolve_path"],
                 core_info_provider=deps["core_info_provider"],
+                save_locations=FakeSaveLocationReader(),
                 renderer_rss=deps["renderer_rss"],
                 renderer_gc=deps["renderer_gc"],
                 game_process=deps["game_process"],

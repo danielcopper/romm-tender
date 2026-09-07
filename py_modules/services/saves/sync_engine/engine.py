@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.rom_save_sync_state import RomSaveSyncState
+from domain.save_answer import save_shape_message
 from domain.save_layout import ContentDir
 from lib.errors import RommConnectionError, RommSyncDisabledError, RommTimeoutError, classify_error
 from lib.list_result import ErrorCode
@@ -42,6 +43,7 @@ from services.saves._messages import (
     DEVICE_NOT_REGISTERED_REASON,
     DEVICE_SYNC_DISABLED,
     DEVICE_SYNC_DISABLED_REASON,
+    SAVE_SHAPE_UNSUPPORTED,
     SAVE_SYNC_BUSY,
     SAVE_SYNC_BUSY_REASON,
     SAVE_SYNC_DISABLED,
@@ -71,6 +73,7 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Iterator
 
+    from domain.save_answer import SaveAnswer
     from domain.save_layout import SaveLayout
     from services.protocols import (
         ActiveCoreReader,
@@ -355,16 +358,22 @@ class SyncEngine:
 
     def iter_matrix_outcomes(
         self,
-        rom_id: int,
         server_in_slot: list[dict[str, Any]],
         *,
         save_state: RomSaveSyncState | None,
         device_id: str | None,
         info: dict[str, Any],
+        save_names: tuple[str, ...],
+        saves_dir: str | None,
     ) -> Iterator[MatrixOutcome]:
         """Yield one :class:`MatrixOutcome` per save file in the ROM's active slot."""
         return self._matrix.iter_matrix_outcomes(
-            rom_id, server_in_slot, save_state=save_state, device_id=device_id, info=info
+            server_in_slot,
+            save_state=save_state,
+            device_id=device_id,
+            info=info,
+            save_names=save_names,
+            saves_dir=saves_dir,
         )
 
     def adopt_baseline_hash(self, save_state: RomSaveSyncState, filename: str, local_hash: str) -> None:
@@ -543,6 +552,52 @@ class SyncEngine:
             base["conflicts"] = []
         return base
 
+    def unsupported_save_shape(self, rom_id: int) -> SaveAnswer | None:
+        """The refusing answer for *rom_id*, or ``None`` when its save may be synced.
+
+        Public (peer-called): the three per-ROM entry points ask it so they can
+        NAME the skip in their own result. It is not the gate — the gate is in
+        ``do_sync_rom_saves``, where the answer is already resolved and every
+        sync path crosses it, including the whole-library sweep whose one result
+        has no room to say which ROM was passed over.
+
+        A ROM with no install record answers ``None`` — not installed is not a
+        statement about any emulator's save shape, and the runner's own
+        not-installed branch owns that case. Without this the launch path would
+        be told the emulator is unsupported for a game that is simply not on
+        disk.
+
+        Asked live every time, never remembered. The user changes a core's
+        options in the emulator's own quick menu between one launch and the next
+        sync, and a granularity read before that change would have this plugin
+        carry a shared card as though it belonged to one game.
+        """
+        if self._rom_info.get_rom_save_info(rom_id) is None:
+            return None
+        answer = self._rom_info.save_answer(rom_id)
+        return None if answer.syncable else answer
+
+    @staticmethod
+    def _save_shape_skip(answer: SaveAnswer) -> dict[str, Any]:
+        """Build the benign-skip result returned when a save's shape cannot be synced.
+
+        The same shape :meth:`_content_dir_skip` returns and for the same reason
+        — this is not a failure, nothing went wrong, and the game still launches
+        — carrying its own ``reason`` slug so a caller can tell the two skips
+        apart and say which one it was.
+
+        Single-ROM only: a whole-library sweep passes a refusing ROM over inside
+        the run and reports its own totals, so it never returns this.
+        """
+        return {
+            "success": False,
+            "reason": SAVE_SHAPE_UNSUPPORTED,
+            "message": save_shape_message(answer),
+            "synced": 0,
+            "errors": [],
+            "conflicts": [],
+        }
+
     def _heartbeat_failure_result(self, where: str, exc: Exception) -> dict[str, Any]:
         """Build the sync-result dict for a heartbeat failure, classified by type.
 
@@ -596,7 +651,13 @@ class SyncEngine:
 
         A ROM with no install record has nothing to sync — and no ``roms`` row
         to anchor a ``rom_save_sync_states`` write against (ADR-0007 FK) — so we
-        short-circuit before touching the aggregate.
+        short-circuit before touching the aggregate. A ROM whose emulator keeps
+        no per-game save file set is short-circuited one level down, inside
+        ``do_sync_rom_saves``, which is where the answer is already resolved: the
+        single-ROM entry points check it themselves so they can name the skip in
+        their result, and that backstop is what makes the rule hold for the
+        whole-library sweep, whose one result has no room to say which ROM was
+        passed over.
 
         When *require_confirmed* is set (the bulk ``sync_all_saves`` sweep), a ROM
         whose slot the user has not confirmed is skipped entirely — no transfer,
@@ -732,6 +793,10 @@ class SyncEngine:
                 if self._save_sync_blocked():
                     return self._content_dir_skip()
 
+                unsupported = await self._loop.run_in_executor(None, self.unsupported_save_shape, rom_id)
+                if unsupported is not None:
+                    return self._save_shape_skip(unsupported)
+
                 if self._rom_info.is_save_sort_changed():
                     return {
                         "success": False,
@@ -829,6 +894,11 @@ class SyncEngine:
                     self._logger.info("post_exit_sync skipped: savefiles_in_content_dir")
                     return self._content_dir_skip()
 
+                unsupported = await self._loop.run_in_executor(None, self.unsupported_save_shape, rom_id)
+                if unsupported is not None:
+                    self._logger.info("post_exit_sync skipped: %s", SAVE_SHAPE_UNSUPPORTED)
+                    return self._save_shape_skip(unsupported)
+
                 try:
                     await self._loop.run_in_executor(None, self._romm_api.heartbeat)
                 except Exception as e:
@@ -910,6 +980,10 @@ class SyncEngine:
                 # Hard-gate: saves go to the content dir — sync is impossible (#239).
                 if self._save_sync_blocked():
                     return self._content_dir_skip()
+
+                unsupported = await self._loop.run_in_executor(None, self.unsupported_save_shape, rom_id)
+                if unsupported is not None:
+                    return self._save_shape_skip(unsupported)
 
                 failure = await self._ensure_device_live_or_fail()
                 if failure is not None:

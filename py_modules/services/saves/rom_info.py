@@ -17,7 +17,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.save_extensions import get_save_extensions
+from domain.save_answer import unestablished_answer
 from domain.save_layout import InSaveDir
 from domain.save_path import resolve_save_dir
 
@@ -33,11 +33,13 @@ if TYPE_CHECKING:
 
     from models.state import SaveSortSettings
 
+    from domain.save_answer import SaveAnswer
     from services.protocols import (
         ActiveCoreReader,
         CoreNameProviderFn,
         RetroDeckPaths,
         SaveFileStore,
+        SaveLocationReader,
         UnitOfWorkFactory,
     )
 
@@ -50,6 +52,7 @@ class RomInfoServiceConfig:
     source of truth for installed-ROM file records — WS3 — and ``kv_config``
     holds the save-sort markers), the Protocol-typed filesystem adapter, the
     RetroDECK runtime-path accessor, the per-ROM active-core resolver, the
+    save-location reader that answers what a game's save consists of, the
     RetroArch core-name provider, and the standard-library logger.
     """
 
@@ -57,6 +60,7 @@ class RomInfoServiceConfig:
     save_file_store: SaveFileStore
     retrodeck_paths: RetroDeckPaths
     active_core: ActiveCoreReader
+    save_locations: SaveLocationReader
     get_core_name: CoreNameProviderFn
     logger: logging.Logger
 
@@ -70,6 +74,7 @@ class RomInfoService:
         self._save_file_store = config.save_file_store
         self._retrodeck_paths = config.retrodeck_paths
         self._active_core = config.active_core
+        self._save_locations = config.save_locations
         self._get_core_name = config.get_core_name
         self._logger = config.logger
 
@@ -196,38 +201,85 @@ class RomInfoService:
         corename = self._get_core_name(core_so)
         return (corename or None, core_so)
 
+    def save_answer(self, rom_id: int) -> SaveAnswer:
+        """What this ROM's save consists of and whether it may be synced at all.
+
+        Read live off the machine on every call, through the emulator this ROM
+        would launch with. An uninstalled ROM, or one whose emulator does not
+        resolve, answers ``unestablished`` — the refusing state — so a caller
+        that forgets to check the state still cannot be told to sync something
+        that is not there.
+        """
+        info = self.get_rom_save_info(rom_id)
+        return unestablished_answer() if not info else self._answer_for(rom_id, info)
+
+    def _answer_for(self, rom_id: int, info: dict[str, Any]) -> SaveAnswer:
+        """Ask the resolver about *rom_id*, given save info already read for it."""
+        emulator = self._active_core.active_emulator_for_rom(int(rom_id))
+        return self._save_locations.resolve_save_answer(
+            system=info["system"],
+            content_path=info["file_path"],
+            emulator_label=emulator.label if emulator is not None else None,
+        )
+
+    def synced_save_names(self, rom_id: int) -> tuple[list[str], str | None]:
+        """The basenames a sync may carry for this ROM, and the directory they sit in.
+
+        Empty names with a ``None`` directory whenever the ROM's save may not be
+        synced — every refusing state, and an uninstalled ROM. That pairing is
+        what makes a refusal cost no probe: there is nothing to look for and
+        nowhere to look.
+
+        The directory is still the plugin's own ``resolve_save_dir`` answer
+        rather than the resolver's, because retiring that path math is its own
+        change; what has moved here is the NAMES, which used to come from a
+        hand-maintained per-system extension table.
+        """
+        info = self.get_rom_save_info(rom_id)
+        if not info:
+            return ([], None)
+        answer = self._answer_for(rom_id, info)
+        return (list(answer.synced_names), info["saves_dir"] if answer.syncable else None)
+
     def find_save_files(self, rom_id: int) -> list[dict[str, str]]:
         """Find local save files for a ROM.
 
         Returns list of ``{"path": str, "filename": str}``.
         """
-        info = self.get_rom_save_info(rom_id)
-        if not info:
-            return []
-        rom_name = info["rom_name"]
-        saves_dir = info["saves_dir"]
-        system = info["system"]
-        if not self._save_file_store.is_dir(saves_dir):
+        return self.probe_save_files(*self.synced_save_names(rom_id))
+
+    def probe_save_files(self, names: list[str], saves_dir: str | None) -> list[dict[str, str]]:
+        """Which of *names* are actually on disk under *saves_dir*.
+
+        Public (peer-called): the sync matrix already holds the answer's names —
+        it needs them to group server saves onto their canonical targets — and
+        asking the resolver a second time for the same ROM costs a live reading
+        of the machine. A ``None`` directory is the refusing answer's pairing and
+        probes nothing.
+
+        Returns a list of ``{"path", "filename"}``.
+        """
+        if saves_dir is None or not self._save_file_store.is_dir(saves_dir):
             return []
         results = []
-        for ext in get_save_extensions(system):
-            save_path = os.path.join(saves_dir, rom_name + ext)
+        for name in names:
+            save_path = os.path.join(saves_dir, name)
             if self._save_file_store.is_file(save_path):
-                results.append({"path": save_path, "filename": rom_name + ext})
+                results.append({"path": save_path, "filename": name})
         return results
 
     def expected_save_files(self, rom_id: int) -> list[dict[str, str]]:
         """Project exact save paths for one installed ROM without broad scanning."""
-        info = self.get_rom_save_info(rom_id)
-        if not info:
+        names, saves_dir = self.synced_save_names(rom_id)
+        if saves_dir is None:
             return []
         return [
             {
-                "path": os.path.join(info["saves_dir"], info["rom_name"] + ext),
-                "filename": info["rom_name"] + ext,
-                "saves_dir": info["saves_dir"],
+                "path": os.path.join(saves_dir, name),
+                "filename": name,
+                "saves_dir": saves_dir,
             }
-            for ext in get_save_extensions(info["system"])
+            for name in names
         ]
 
     def pending_sort_settings(self) -> SaveSortSettings | None:

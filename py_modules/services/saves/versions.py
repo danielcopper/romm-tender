@@ -245,7 +245,9 @@ class VersionsService:
         system = info["system"]
         rom_name = info["rom_name"]
         default_slot = resolve_default_slot(self._settings)
-        target_filename = local_save_target(target_save, rom_name)
+        target_filename = local_save_target(
+            target_save, rom_name, known_names=self._rom_info.save_answer(rom_id).synced_names
+        )
         local_path = os.path.join(saves_dir, target_filename)
 
         self._sync_engine.do_download_save(

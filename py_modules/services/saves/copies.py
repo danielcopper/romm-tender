@@ -181,7 +181,8 @@ class SaveCopyService:
         saves_dir = info["saves_dir"]
         system = info["system"]
         rom_name = info["rom_name"]
-        canonical = local_save_target(target_save, rom_name)
+        save_names = self._rom_info.save_answer(rom_id).synced_names
+        canonical = local_save_target(target_save, rom_name, known_names=save_names)
         local_path = os.path.join(saves_dir, canonical)
 
         # Make the target current BEFORE the upload: do_upload_save resolves the

@@ -3,16 +3,28 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from domain.iso_time import parse_iso_to_epoch
+from domain.save_answer import pick_download_name
 from domain.save_path import compute_local_save_target
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 _logger = logging.getLogger(__name__)
 
 
-def local_save_target(server_save: dict[str, Any], rom_name: str) -> str:
-    """Resolve the local filename for *server_save*, logging any sanitization."""
+def local_save_target(server_save: dict[str, Any], rom_name: str, *, known_names: Sequence[str]) -> str:
+    """Resolve the local filename for *server_save*, logging any sanitization.
+
+    *known_names* is what the save resolver says this ROM's emulator writes, and
+    it decides the name wherever it can: the path math builds
+    ``<rom_name>.<server file_extension>``, which is not the name every core
+    opens. Pass an empty sequence only where no answer is available — the caller
+    then gets the path math alone, which is what this did for every save before
+    the resolver could be asked.
+    """
     result = compute_local_save_target(server_save, rom_name)
     if result.fallback_extension is not None:
         _logger.warning(
@@ -26,10 +38,12 @@ def local_save_target(server_save: dict[str, Any], rom_name: str) -> str:
             result.filename,
             server_save.get("file_extension", "srm"),
         )
-    return result.filename
+    return pick_download_name(known_names, result.filename)
 
 
-def newest_server_saves_by_target(server_saves: list[dict[str, Any]], rom_name: str) -> dict[str, dict[str, Any]]:
+def newest_server_saves_by_target(
+    server_saves: list[dict[str, Any]], rom_name: str, *, known_names: Sequence[str]
+) -> dict[str, dict[str, Any]]:
     """Pick the newest server save per canonical local target.
 
     Groups *server_saves* by the canonical on-disk filename each would download
@@ -41,7 +55,7 @@ def newest_server_saves_by_target(server_saves: list[dict[str, Any]], rom_name: 
     """
     newest: dict[str, dict[str, Any]] = {}
     for ss in server_saves:
-        target = local_save_target(ss, rom_name)
+        target = local_save_target(ss, rom_name, known_names=known_names)
         current = newest.get(target)
         if current is None or (parse_iso_to_epoch(ss.get("updated_at")) or 0.0) > (
             parse_iso_to_epoch(current.get("updated_at")) or 0.0

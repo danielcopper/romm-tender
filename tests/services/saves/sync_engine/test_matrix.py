@@ -1283,11 +1283,12 @@ class TestMultiFileSaveSetGrouping:
         outcomes = {
             o.filename: o
             for o in svc._sync_engine._matrix.iter_matrix_outcomes(
-                42,
                 [srm_ss, rtc_ss],
                 save_state=save_state,
                 device_id="dev-1",
                 info=info,
+                save_names=("pokemon.srm", "pokemon.rtc", "pokemon.sav"),
+                saves_dir=info["saves_dir"],
             )
         }
 
@@ -1355,7 +1356,14 @@ class TestZipSaveContentHashParity:
         assert info is not None
 
         outcomes = list(
-            svc._sync_engine._matrix.iter_matrix_outcomes(42, [ss], save_state=save_state, device_id="dev-1", info=info)
+            svc._sync_engine._matrix.iter_matrix_outcomes(
+                [ss],
+                save_state=save_state,
+                device_id="dev-1",
+                info=info,
+                save_names=("pokemon.srm", "pokemon.rtc", "pokemon.sav"),
+                saves_dir=info["saves_dir"],
+            )
         )
         assert len(outcomes) == 1
         outcome = outcomes[0]
@@ -2328,6 +2336,7 @@ class TestSyncRomSavesDispatch:
                 save_state=RomSaveSyncState(active_slot="default"),
                 device_id="device-1",
                 rom_name="pokemon",
+                save_names=("pokemon.srm", "pokemon.rtc", "pokemon.sav"),
                 saves_dir=str(tmp_path / "saves" / "gba"),
                 system="gba",
                 core_so=None,
@@ -2431,6 +2440,7 @@ class TestHandleUnexpectedError:
                 save_state=RomSaveSyncState(),
                 device_id=None,
                 rom_name="pokemon",
+                save_names=("pokemon.srm", "pokemon.rtc", "pokemon.sav"),
                 saves_dir=str(saves_dir),
                 system="gba",
                 core_so=None,
@@ -2483,6 +2493,7 @@ class TestDispatchSyncActionErrorBranches:
                 save_state=RomSaveSyncState(),
                 device_id=None,
                 rom_name="pokemon",
+                save_names=("pokemon.srm", "pokemon.rtc", "pokemon.sav"),
                 saves_dir=str(saves_dir),
                 system="gba",
                 core_so=None,
@@ -2530,6 +2541,7 @@ class TestDispatchUploadDefensiveBranches:
                 save_state=RomSaveSyncState(),
                 device_id=None,
                 rom_name="pokemon",
+                save_names=("pokemon.srm", "pokemon.rtc", "pokemon.sav"),
                 saves_dir=str(tmp_path / "saves" / "gba"),
                 system="gba",
                 core_so=None,

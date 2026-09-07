@@ -15,6 +15,7 @@ from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_migration_file_store import FakeMigrationFileStore
 from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from adapters.migration_file import MigrationFileAdapter
@@ -127,6 +128,7 @@ def _make_service(
                 home=str(tmp_path),
             ),
             get_save_layout=lambda: layout,
+            save_locations=FakeSaveLocationReader(),
             active_core=active_core if active_core is not None else FakeActiveCoreResolver(default=(None, None)),
             relaunch_options=FakeRelaunchOptionsResolver(),
             get_core_name=get_core_name,
