@@ -566,6 +566,62 @@ REASON_CONTENT_CLASS_UNRECORDED = "content-class-unrecorded"
 # hard-disk model otherwise, neither of which this answer reads. ``model``
 # carries the configured value the reading saw.
 REASON_EMULATED_MODEL_UNRECORDED = "emulated-model-unrecorded"
+# What the loaded archive holds decides the save story, and here the archive
+# itself could not be read that far. ``archive-format-unread`` is a format
+# atlas reads none of — PUAE extracts 7-Zip archives and no reader for that
+# format ships in a runtime atlas may assume, so what is inside stays unknown
+# (``extension`` carries the one seen); ``archive-unread`` is an archive of a
+# format atlas does read whose member list this machine did not yield
+# (``status`` carries the seam's own word); ``archive-content-ambiguous`` is an
+# archive holding WHDLoad members that mount *different* volumes, where which
+# one the core takes is decided by the order its own directory listing returns
+# them in — not a fact about the archive at all (``volumes`` names the mounted
+# roots it could take, which is what those members differ in; members mounting
+# one volume are one mount and no refusal).
+REASON_ARCHIVE_FORMAT_UNREAD = "archive-format-unread"
+REASON_ARCHIVE_UNREAD = "archive-unread"
+REASON_ARCHIVE_CONTENT_AMBIGUOUS = "archive-content-ambiguous"
+# The launch path pins one member inside an archive (RetroArch's browse-inside
+# form, ``archive.zip#member``), which the core honours by making that member
+# the content — a launch shape no mode here states, because the member is a
+# copy in a temporary tree and is named after itself rather than after the
+# archive. ``member`` carries the pinned name.
+REASON_ARCHIVE_MEMBER_PINNED = "archive-member-pinned"
+# Nothing inside the archive is a class the core recognises, and there is more
+# than one entry it could mount instead: the branch that picks one takes the
+# *last* entry its own directory listing returned, so which directory the
+# writes land in is that listing's order and not a fact about the archive.
+# ``entries`` names what the walk saw.
+REASON_ARCHIVE_CONTENT_UNRECOGNISED = "archive-content-unrecognised"
+# The archive holds members of several classes at once. The core does not
+# choose between them: it writes one playlist across all of them and runs
+# that, and no mode here states what a composition of two save stories
+# amounts to. ``classes`` names the ones found.
+REASON_ARCHIVE_CONTENT_MIXED = "archive-content-mixed"
+# Hard-disk content whose boot this answer cannot settle. ``hd-image-unread``
+# is an image whose filesystem atlas does not read while the WHDLoad helper is
+# mounted alongside it, so whether the image boots its own startup script
+# (writing inside itself) or holds a WHDLoad install (writing to the saves
+# volume) is inside bytes nothing here opens — ``extension`` carries the one
+# seen. ``hd-boot-absent`` is content that was read and holds neither: no
+# startup script of its own and no slave to run, so nothing boots and no save
+# story begins.
+REASON_HD_IMAGE_UNREAD = "hd-image-unread"
+REASON_HD_BOOT_ABSENT = "hd-boot-absent"
+# WHDLoad's own prefs decide where the saves go, and these two say the answer
+# cannot rest on them: ``whdload-savepath-unrecorded`` is a SavePath or a
+# SaveDir stating something other than the volume the modes are built on
+# (``savepath`` / ``savedir`` carry what was read, from the prefs file or from
+# a ``custom`` file at the mounted root, which overrides it);
+# ``whdload-prefs-unread`` is a prefs file that is there and could not be read.
+REASON_WHDLOAD_SAVEPATH_UNRECORDED = "whdload-savepath-unrecorded"
+REASON_WHDLOAD_PREFS_UNREAD = "whdload-prefs-unread"
+# The mounted volume carries a startup sequence of its own, so it boots itself
+# rather than letting the WHDLoad helper search it for a slave — and the
+# volume is an archive, mounted read-only, so where the writes its own script
+# makes end up is inside a script this package does not read. ``container``
+# names the archive.
+REASON_VOLUME_BOOTS_ITSELF = "volume-boots-itself"
 # ScummVM's own save directory: its ini could not be read, or the path it sets
 # has no host spelling (``path`` carries the configured value).
 REASON_SAVEPATH_CONFIG_UNREADABLE = "savepath-config-unreadable"
@@ -604,6 +660,17 @@ CORE_MODE_UNESTABLISHED_REASONS = (
     REASON_VIRTUAL_SD_DISABLED,
     REASON_CONTENT_CLASS_UNNAMED,
     REASON_CONTENT_CLASS_UNRECORDED,
+    REASON_ARCHIVE_FORMAT_UNREAD,
+    REASON_ARCHIVE_UNREAD,
+    REASON_ARCHIVE_CONTENT_AMBIGUOUS,
+    REASON_ARCHIVE_MEMBER_PINNED,
+    REASON_ARCHIVE_CONTENT_UNRECOGNISED,
+    REASON_ARCHIVE_CONTENT_MIXED,
+    REASON_HD_IMAGE_UNREAD,
+    REASON_HD_BOOT_ABSENT,
+    REASON_WHDLOAD_SAVEPATH_UNRECORDED,
+    REASON_WHDLOAD_PREFS_UNREAD,
+    REASON_VOLUME_BOOTS_ITSELF,
     REASON_EMULATED_MODEL_UNRECORDED,
     REASON_SAVEPATH_CONFIG_UNREADABLE,
     REASON_SAVEPATH_UNTRANSLATABLE,
@@ -803,6 +870,25 @@ _FILE_NAME_HOLES: Mapping[str, str] = MappingProxyType({TEMPLATE_SAVE_ID: HOLE_S
 SUBDIR_TEMPLATE_HOLES: Mapping[str, str] = MappingProxyType(
     {TEMPLATE_ROM_STEM: HOLE_ROM_STEM, TEMPLATE_CONTENT_DIR_NAME: HOLE_CONTENT_DIR_NAME}
 )
+
+# The templates a card's own *rule* fills, from a read no path arithmetic
+# reaches. They are not holes and never become one: where the read fails, the
+# rule selects a different mode that states no such name — PUAE's unnamed
+# WHDLoad fallback is exactly that — so a caller never receives one of these
+# tokens in an answer, and a group carrying one the rule did not fill is a
+# build mistake that fails loudly.
+#
+# ``<whdload_name>`` is the program name inside a WHDLoad slave (``ws_name``),
+# which is what WHDLoad derives its per-game save directory from and what no
+# spelling of the archive's own path gives: an install archive's directory,
+# its slave's file name and its ``ws_name`` are three different strings.
+# ``<archive_member_stem>`` is one archived image's own stem, because a core
+# that extracts an archive names each member's write file after the member
+# rather than after the question's content — one value per member, so the
+# fill is a list and the declared file list grows with it.
+TEMPLATE_WHDLOAD_NAME = "<whdload_name>"
+TEMPLATE_ARCHIVE_MEMBER_STEM = "<archive_member_stem>"
+RULE_FILLED_TEMPLATES = (TEMPLATE_WHDLOAD_NAME, TEMPLATE_ARCHIVE_MEMBER_STEM)
 
 
 def _holes(named: list[str]) -> tuple[str, ...]:
