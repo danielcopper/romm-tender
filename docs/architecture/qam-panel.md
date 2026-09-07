@@ -21,6 +21,7 @@ without restating it. The width mechanism's decision record is
 | `src/index.tsx` (`QAMPanel`)                                  | The router: one `Page` value, one mounted page, a module-level `currentPage` that survives a QAM remount                                                            |
 | `src/types/navigation.ts`                                     | The `Page` union — every page the router can land on                                                                                                                |
 | `src/components/MainPage.tsx`                                 | Main                                                                                                                                                                |
+| `src/components/SyncPage.tsx`, `src/components/sync/`         | Sync — the frame and its three left-column bodies, plus `useSyncPage` (its reads and actions) and the table pieces both its tables are built from                   |
 | `src/components/LibraryPage.tsx`                              | Library — the frame, the two tabs and their state                                                                                                                   |
 | `src/components/SettingsPage.tsx`, `src/components/settings/` | Settings and its sections                                                                                                                                           |
 | `src/components/DangerZone.tsx`, `RemovedGamesCleanup.tsx`    | Data Management                                                                                                                                                     |
@@ -32,6 +33,8 @@ without restating it. The width mechanism's decision record is
 | `src/utils/entryFocus.ts`                                     | Which stop a page opens on, and the `.focus()` + `gpfocus` pair that places it — the frame's and the router's one implementation                                    |
 | `src/utils/syncRunView.ts`                                    | `useSyncRunView` — the run in flight as a page renders it: stage label, coarse bar, position within the running unit, fine-detail line, estimate, and the run's end |
 | `src/utils/runUnitsStore.ts`                                  | The run's work queue, one row per unit: the plan's riders, how far the run has got, and what each unit's apply produced                                             |
+| `src/utils/previewState.ts`, `previewRequest.ts`              | What a page asks of a pending preview — has it anything to apply, how long is it still accepted (the half Main reads) — and the one-shot request Main leaves        |
+| `src/utils/syncResume.ts`                                     | Whether the next sync continues a run or starts one over: the sync button's name on both pages, and the name the session-budget card quotes                         |
 | `src/utils/` module stores                                    | State that must outlive a page: sync progress, pending preview, downloads, prune, the game-detail caches                                                            |
 
 ## Two widths
@@ -163,35 +166,34 @@ does not say it owns its regions. A tabbed body gets none from the frame, and ne
 
 ## Pages
 
-| Page            | Width | Holds                                                                                                         | Today                                                                                                         |
-| --------------- | ----- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Main            | 348   | notices, status, the Sync button, the download summary, the menu                                              | also holds the preview card, Skip preview, Force Full Sync and the session-budget card                        |
-| Sync            | 854   | preview as a table, the import choice, Skip preview, Force Full Sync, Steam memory, session budget, last runs | does not exist; its controls sit on Main. Its backend half is built: the breakdown, the run read, the setting |
-| Library         | 854   | Platforms as list and detail (sync, core, BIOS files, removal); Collections as filter and list                | Platforms is built; Collections still carries the narrow page's controls and list                             |
-| Settings        | 854   | five sections, list and detail                                                                                | narrow; eight sections stacked                                                                                |
-| Data Management | 854   | five library-wide operations, list and detail                                                                 | narrow; opens the cleanup in a modal                                                                          |
-| Downloads       | 348   | the queue with its controls                                                                                   | unchanged                                                                                                     |
+| Page            | Width | Holds                                                                                                         | Today                                                                             |
+| --------------- | ----- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Main            | 348   | notices, status, the Sync button, the download summary, the menu                                              | as described                                                                      |
+| Sync            | 854   | preview as a table, the run as a plan, Skip preview, Force Full Sync, Steam memory, session budget, last runs | as described; the import choice (#1364) is the one thing still to come            |
+| Library         | 854   | Platforms as list and detail (sync, core, BIOS files, removal); Collections as filter and list                | Platforms is built; Collections still carries the narrow page's controls and list |
+| Settings        | 854   | five sections, list and detail                                                                                | narrow; eight sections stacked                                                    |
+| Data Management | 854   | five library-wide operations, list and detail                                                                 | narrow; opens the cleanup in a modal                                              |
+| Downloads       | 348   | the queue with its controls                                                                                   | unchanged                                                                         |
 
-`Page` is `"main" | "library" | "settings" | "data" | "downloads"`, and becomes
-`"main" | "sync" | "library" | "settings" | "data" | "downloads"` once the Sync page lands. **System is gone** — its
-core picker and BIOS files are in Library › Platforms, and the value, the router branch and the menu entry left with it.
+`Page` is `"main" | "sync" | "library" | "settings" | "data" | "downloads"`. **System is gone** — its core picker and
+BIOS files are in Library › Platforms, and the value, the router branch and the menu entry left with it.
 
-Main's menu opens Library, Settings and Data Management. The Sync page opens from the Sync button and from the **Last
-sync** status row; Downloads opens from **View All** in the download summary, which is shown only while the queue is not
-empty. Every page but Main opens with a **Back** chip, which returns to Main. The chip shares its line with the page
-title — one row, not the three a full-width button plus a title line used to cost, which on the Deck's body is most of
-what a detail pane has to spend. Back is also on **B**, and the binding lives in the panel's router (`src/index.tsx`)
-rather than on a page: one `Focusable` with `onCancelButton` wraps the mounted content **only while `page` is not
-`main`**, so every sub-page — wide and narrow — answers B from wherever focus sits, and Main answers nothing, so Decky's
-own B still leaves the plugin. That condition is what makes taking B safe: the escape route is never removed, it is
-exactly as far away as the user walked in, and the last press is never swallowed. Steam already prints "B ZURÜCK" in its
-footer legend, which this makes true rather than misleading, so no legend entry of ours is needed. The chip stays as the
-discoverable half and as the mouse path, and it carries **Steam's own B glyph** — drawn for the controller in the user's
-hands, so it is ○ on a PlayStation pad and the swapped face button under a Nintendo layout. `@decky/ui` does not
-re-export that component, so `src/utils/deckyUiInternals.ts` reaches it by a module probe and types it as possibly
-absent; the chip falls back to its chevron the day the probe misses. The button number it passes is Steam's own
-action-button enum (`A=0, B=1, X=2, Y=3`), **not** `@decky/ui`'s `GamepadButton`, where 1 is A — the two disagree on
-every value, and the wrong one draws the wrong glyph without failing.
+The Sync page opens from the Sync button and from the **Last sync** status row; Downloads opens from **View All** in the
+download summary, which is shown only while the queue is not empty. Every page but Main opens with a **Back** chip,
+which returns to Main. The chip shares its line with the page title — one row, not the three a full-width button plus a
+title line used to cost, which on the Deck's body is most of what a detail pane has to spend. Back is also on **B**, and
+the binding lives in the panel's router (`src/index.tsx`) rather than on a page: one `Focusable` with `onCancelButton`
+wraps the mounted content **only while `page` is not `main`**, so every sub-page — wide and narrow — answers B from
+wherever focus sits, and Main answers nothing, so Decky's own B still leaves the plugin. That condition is what makes
+taking B safe: the escape route is never removed, it is exactly as far away as the user walked in, and the last press is
+never swallowed. Steam already prints "B ZURÜCK" in its footer legend, which this makes true rather than misleading, so
+no legend entry of ours is needed. The chip stays as the discoverable half and as the mouse path, and it carries
+**Steam's own B glyph** — drawn for the controller in the user's hands, so it is ○ on a PlayStation pad and the swapped
+face button under a Nintendo layout. `@decky/ui` does not re-export that component, so `src/utils/deckyUiInternals.ts`
+reaches it by a module probe and types it as possibly absent; the chip falls back to its chevron the day the probe
+misses. The button number it passes is Steam's own action-button enum (`A=0, B=1, X=2, Y=3`), **not** `@decky/ui`'s
+`GamepadButton`, where 1 is A — the two disagree on every value, and the wrong one draws the wrong glyph without
+failing.
 
 **A tabbed wide page has to get out of the way for that to work.** Steam's tabbed page renders its content pane as
 `onCancelButton: !cancelSkipTabHeader && <focus the tab row>` (`chunk~2dcc5aaf7.js`), so without the flag the first B
@@ -243,6 +245,15 @@ from the frame would only nest a second scroller around it. Rows of one column t
 added. A page that needs more than that one scroller — a list and a detail scrolling independently side by side — builds
 its regions with `ScrollRegion` itself, which is what Library's tabs do, and an untabbed page that does the same says so
 with `ownRegions` so the frame wraps its body in none either.
+
+### Scrolling a region without moving focus
+
+A region scrolls by focus, and that is the whole of it for a page a reader walks. A page whose content advances on its
+own has no focus move to ride on — the sync run walks its own unit rows — so it scrolls the region itself, and names the
+region (`ScrollRegion`'s `testId`) to find it. A name rather than a ref: Steam's scroll panel is reached through a
+webpack probe and nothing establishes that it forwards one, while the attribute lands on the element either way. Such a
+scroll is clamped to the region's own ends, so a first or last row is left where it sits rather than centred past the
+start or the end of the list, and a region whose content already fits is not scrolled at all.
 
 ### Columns
 
@@ -298,6 +309,12 @@ preview (a row per platform; New, Updated, Removed), registered devices, cleanup
 facts were folded into a field's label and description, which is why #1803's third axis had no slot on the rows the
 System page drew; the platform detail's BIOS table is where that column now sits.
 
+**A cell clips; it never overflows.** A grid track sized `minmax(0, 1fr)` shrinks under its content and the content then
+spills across the track beside it — on the Deck a platform name and its note ran into the New column's digit. The clip
+(`overflow: hidden`, `text-overflow: ellipsis`, `white-space: nowrap`, `min-width: 0`) belongs on the **cell**, because
+a grid item is blockified and those properties apply to it, where an inline `span` nested inside it is not and the same
+three do nothing at all. What the clip takes away is handed back in a `title`, note included.
+
 ### Destructive actions
 
 Last in their group, red, behind the confirmation they carry today — two-tap or modal. Nothing here changes the
@@ -326,49 +343,138 @@ as they are.
 
 Narrow, in this order: notices; the **Status** section, titled so the notices above it read as a separate block, which
 is what #1442 asks for by another route — Connection, Last sync, Library, Steam memory; the Sync button; the download
-summary (up to two rows, an overflow count, a completed count, View All); the menu — Library, Settings, Data Management.
+summary (up to two rows, an overflow count, a completed count, View All); the menu — Sync, Library, Settings, Data
+Management.
 
-**Last sync** is a row that opens the Sync page. The Sync button is one button with four states:
+**Last sync** is a row that opens the Sync page. It is a `Field` carrying an activate handler, which is what makes it a
+stop that ACTS rather than one a reader can land on and do nothing at. The Sync button is one button with four states:
 
-| State                                                                             | Label                    | Press                                                                              |
-| --------------------------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------- |
-| no preview pending                                                                | Sync Library             | starts a preview and opens the Sync page, which shows it when it arrives           |
-| a preview is pending and not expired                                              | Review changes · _N_ new | opens the Sync page with that preview; nothing is recomputed                       |
-| an incomplete run can be resumed — cancelled, interrupted or paused (`canResume`) | Resume Sync              | resumes the run, as today; the Sync page offers the same next to Restart Steam now |
-| a run is in flight                                                                | progress and Cancel Sync | as today                                                                           |
+| State                                                                             | Label                    | Press                                                                             |
+| --------------------------------------------------------------------------------- | ------------------------ | --------------------------------------------------------------------------------- |
+| no preview pending                                                                | Sync Library             | asks the Sync page for a preview and opens it, which shows it when it arrives     |
+| a preview is pending and not expired                                              | Review changes · _N_ new | opens the Sync page with that preview; nothing is recomputed                      |
+| an incomplete run can be resumed — cancelled, interrupted or paused (`canResume`) | Resume Sync              | the same press under another name; the Sync page's own start button says the same |
+| a run is in flight                                                                | progress and Cancel Sync | unchanged                                                                         |
 
-An expired preview counts as none; the backend drops one past its 30-minute TTL (`PREVIEW_MAX_AGE_SECONDS`). **Main
-never discards a preview.** A preview ends only on the Sync page: Apply, Cancel, or Refresh (which replaces it with a
-fresh one). Today a second press of Sync Library discards the pending preview on both sides; that path goes away, and
-the invariant register's pending-preview entry names the Sync page's three paths in its place once the page lands. Its
-fourth path — a cancel that lands just after a preview was staged and is discharged server-side alone — is unchanged.
-With **Skip preview** on, the button starts the run directly and Main shows progress as today. The last run's one-line
-result stays on Main for a moment after a run, as today; the run itself is on the Sync page's list.
+The label with no count — plain **Review changes** — is a preview whose delta has no new games in it: pure updates,
+removals or cover work. "0 new" would read as nothing to do over a run with plenty, and the page behind the button
+states all of it.
+
+**Main computes no preview.** The press leaves a one-shot request (`src/utils/previewRequest.ts`) and navigates; the
+Sync page issues the call. That is where the progress, the answer and — the reason it is done this way — a refusal are
+shown, because Main is unmounted a moment after the press and a `@migration_blocked` answer or a server that went away
+in between would otherwise be reported to nobody.
+
+An expired preview counts as none; the backend drops one past its 30-minute TTL (`PREVIEW_MAX_AGE_SECONDS`). What ticks
+for that is a single timer aimed at the deadline, not a per-second interval: nothing on Main counts a preview down, so
+the only moment the clock changes anything here is the one the label flips at. **Main never discards a preview.** A
+preview ends only on the Sync page: Apply, Cancel, or Refresh (which replaces it with a fresh one); the invariant
+register's pending-preview entry names those three. Its fourth path — a cancel that lands just after a preview was
+staged and is discharged server-side alone — is unchanged. With **Skip preview** on, the button starts the run directly
+and Main shows progress; the setting lives on the Sync page and Main re-reads it from `get_settings` on every mount,
+which is every return from that page, since the router unmounts the page it leaves. The last run's one-line result stays
+on Main for a moment after a run; the run itself is on the Sync page's list.
 
 While a run is in flight Main shows the stage caption and step counter, the bar, the fine-detail line, the estimate and
-Cancel. Those numbers come from `useSyncRunView`, and the Sync page will read the same hook, so one derivation of a run
-serves both pages rather than each keeping its own. What stays Main's is what belongs to Main. Two of those are the
-run's end, which the hook hands back as callbacks: the once-per-run announcement, with the two re-reads it provokes and
-the ask for a preview the run may have staged, and the correction that follows when the run's own terminal frame arrives
-with better wording. Only the page that owns those side effects passes any, or a second page reading the same run would
-announce the end a second time. The rest never leaves Main's own handlers — the "Cancelling…" drain, the transient
-status line, and the optimistic start those handlers retract.
+Cancel. Those numbers come from `useSyncRunView`, which the Sync page reads too, so one derivation of a run serves both
+pages rather than each keeping its own. What stays Main's is what belongs to Main. Two of those are the run's end, which
+the hook hands back as callbacks: the once-per-run announcement, with the two re-reads it provokes and the ask for a
+preview the run may have staged, and the correction that follows when the run's own terminal frame arrives with better
+wording. Only the page that owns those side effects passes any, or a second page reading the same run would announce the
+end a second time. The rest never leaves Main's own handlers — the "Cancelling…" drain, the transient status line, and
+the optimistic start those handlers retract. The Sync page passes neither callback and reads the same numbers; what it
+keys on the run's end for is its own three reads — the run list, the stats and the session-budget reading all describe
+the run that just stopped — taken on a stop that carries a **terminal stage** rather than through a second announcement
+of it. The stage is what separates a run's end from that page retracting its own optimistic frame after a preview: both
+stop the store's `running`, and only one of them ended a run. Its Cancel button re-arms on the stop alone, because a
+cancelled preview run stops through exactly that retraction.
 
 Alongside the hook, `runUnitsStore.ts` holds one run's work queue per unit: a row per unit, seeded from the plan and
 bound to the run id the plan carried, advanced to `running` and then `done` by that run's frames, and carrying what the
 unit's apply created and updated. The binding is what keeps a later run off an earlier run's rows — a preview emits a
 frame per unit over the same queue and no plan at all, so the step index alone would walk them a second time. The store
 outlives every page, so a page opened mid-run can show the units already worked through rather than only the current
-one. Main renders none of it.
+one. Main renders none of it; the Sync page's run view is what draws it.
 
 ## Sync
 
-Wide. Left, the preview: a table with one row per platform that changes and one for collections, columns New, Updated,
-Removed, a total row, the estimated duration, the hints about progress being saved and long runs. Under it the import
-choice (#1364, later; the page leaves the space) and Apply / Cancel. Right: Skip preview as a persisted setting (the
-setting exists; the control on Main is still local state and off again on the next mount), Force Full Sync with its
-explanation, Steam memory now and the last run's delta, the session-budget card with **Restart Steam now** and Resume,
-and the last runs.
+Wide, untabbed, and it owns its regions: two `Columns` — the left flexible, the right 270 px — each scrolling on its own
+inside the frame's measured height. The layout study it was chosen from is
+[sync-layouts.html](../assets/sync-layouts.html).
+
+**The left column shows exactly one of three things, and the order they are decided in is the order of authority.** A
+run in flight owns the page: the progress rows are the true state of the machine at that moment, and a preview held
+while one is going is not dropped — the store keeps it and the table comes back when the run ends. Then a pending
+preview. Then the line saying nothing is waiting, with the button that changes it. The session-budget card sits above
+whichever it is, and only while no run is going: a paused `last_attempt` survives into the resume that clears it, so the
+card would otherwise stand over the very run it is asking for.
+
+**The preview is a table.** One row per platform the backend reports a change for (Platform, New, Updated, Removed), one
+for the RomM collections built from the added and removed names, one for the Steam collections the sync keeps per
+platform wherever `platform_collection_diff` reports a change, and a total row. The total comes from the summary's own
+counts rather than from adding the rows up: the platform rows sum to it by construction, and the two collection rows
+count collections rather than games, so each carries what changed on its second line and an em dash in every game
+column. That leaves the **total** free to read `0 0 0` over a preview whose only change is a collection membership, with
+Apply Sync live under it, so a line beneath the total states what the columns cannot carry — "plus 1 collection added",
+"plus 2 platform collections changed" — built from the same two diffs and shown only where one of them has something to
+say. The platform-collections row is drawn on the backend's own `has_changes` — the field the Apply button's condition
+reads too. The empty-preview sentence takes that same condition (`previewHasChanges`) as an argument rather than
+deciding the question a second time, so a leg of it with no wording of its own falls to a generic line and the table can
+never read "Everything is up to date." while Apply stands over it. A `synced: false` row is marked rather than hidden.
+Where `platform_breakdown` is absent the page says so and draws the totals alone; it never reconstructs a split it was
+not sent. Under the table: the run's scope and estimated duration, the hint about progress being saved (with the sleep
+caveat past ten minutes), and the pause advisory when the backend expects one. The deadline rides the section title
+rather than taking a line of its own, because on the Deck the column has about four rows to spend and the table is what
+they are for. A preview with nothing in the table — cover-only work, a re-stamp, or a genuinely empty delta — reads as
+one sentence instead of a table of zeros, and the first two still have an Apply to press. The import choice (#1364) goes
+under the table, later.
+
+**Three buttons end a preview**, and each ends it on both sides: **Apply Sync**, **Refresh** (discard, then work out
+another — the third path, new here) and **Cancel**. They are the three the reader chooses between; a fourth ending is
+the page's own, and it is Force Full Sync, below. Apply is rendered and disabled rather than hidden where there is
+nothing to apply, or where the preview has expired; past the deadline the table stays and Refresh is what moves.
+
+**While a run is in flight the column is the run view**: the whole run as one bar under the stage caption, with the step
+counter and the estimate on the section title beside it, and under all of it every unit of the plan — Unit, Status,
+Result. Done rows show what their apply produced, the running row shows its stage with its own bar from
+`withinUnitFraction`, waiting rows show what the plan holds for them (an expected skip is worded as the prediction it
+is, never as the run's verdict). **The unit list is a scrolling region of its own**, taking what is left of the column
+under the bar and above Cancel: a plan of seventeen units is taller than the Deck's column, and without it the running
+unit walks out of sight below the fold. Nothing moves focus during a run, so the page scrolls that region itself and
+puts the running row in the middle of it, clamped to the list's own ends. Both tables' rows are set in one flat, small
+register, held in one place (`paneTable.tsx`) so that stays a decision rather than a drift.
+
+The bar and the counter come from `useSyncRunView`, the rows from `runUnitsStore`. A run with **no rows** — a preview,
+which seeds none, or a run whose plan was lost to a plugin reload — shows the frame's own fine-detail line in their
+place ("Fetching Game Boy Advance (page 12/62)") — `useSyncRunView`'s own `fineDetailText`, the same line Main renders;
+the page says the per-unit detail is unavailable only where there is neither a row nor a detail line.
+
+**Every row of both tables is a focus stop** — a `Focusable` with an activate handler — because a region scrolls only by
+moving focus, so an unreachable row is an unscrollable one.
+
+**The right column**, always: **Options** — Skip preview as the persisted setting, and **Force Full Sync**, red, last in
+its group, behind a `ConfirmModal` stating that it forgets what was synced and rebuilds everything. A successful clear
+**ends the pending preview** on both sides, the way Cancel does: the clear has just discarded the state that preview was
+worked out against, so applying it afterwards would skip exactly what the clear armed a re-fetch for. It is the fourth
+path that ends a preview, and the only one the page takes rather than the reader.
+
+Force Full Sync is rendered and disabled, never hidden, and the line under it says which state it is in rather than
+describing a press: while a run is in flight; while a clear already made is waiting for its run, since pressing again
+would clear nothing (that state ends when a run has been and gone); while the stats say nothing has been synced; and
+while the stats have not answered yet. Those last two are both a `null` snapshot and they part here. A read still on its
+way disables the button, since not knowing is not evidence that there IS something to clear. A read that **failed**
+leaves it live and says the reading is missing, because a failure is not an absence. The page's one unconditional stats
+read is the one on mount — every other is conditional on something happening (a run ending, a clear, a poll while the
+last run is paused) — so a mount read that never answered used to leave the button dead for as long as the page stayed
+open, which is what a cancelled preview left behind on the device (#1814). Skip preview stays live throughout: the
+setting is read by the next press of a start button, so flipping it during a run changes nothing about that run. **Steam
+memory** — the reading now and the last run's delta, saying "unavailable" and "not recorded" rather than showing a zero.
+**Last runs** — the ten newest, newest first, each a focus stop with the start time, what the run covered and how it
+ended.
+
+**Working out a preview is this page's call.** Main's Sync button leaves a one-shot request and navigates; this page
+takes it on mount, exactly once, so returning later recomputes nothing. Everything the call can answer — the run while
+it works, the table when it lands, and a refusal — is therefore reported where the reader is looking.
 
 What the backend holds for it: the preview answer carries library-wide totals (`SyncPreviewSummary`: new, changed,
 unchanged and removed counts, the platform and collection counts, and more), the names of new and changed games, and the
@@ -380,13 +486,14 @@ platform enablement. The causes compose, so one row can carry removals for the R
 changed counts for the ROMs a collection still reaches. Its name is the run's where there is one, else a real name
 carried on one of the platform's fetched entries — a reconstructed collection member carries the slug there and does not
 count — else what the backend recorded, and the bare slug where no tier answers. There is no collections row there:
-`collection_diff` on the same summary already carries the added and removed collection names. `get_sync_runs` answers
-the ten newest `sync_runs` rows of any status, newest first, each verbatim from the `SyncRun` aggregate (id, started,
-finished, status, planned counts, completed platforms and collections, error) — a field a run never recorded stays null,
-and the status is what says why. Skip preview is a user-intent setting in `settings.json` written by its owner
-(`adapters/persistence.py`) and reported by `get_settings`. No backend sync path consults it and nothing reads it back
-yet: it is the value the page's toggle will choose between the preview and the run with. Everything else the page shows
-is what Main shows today, moved.
+`collection_diff` on the same summary already carries the added and removed collection names. The Steam collections kept
+one per platform are a third field, `platform_collection_diff` — `has_changes` and an added and a removed count, no
+names, which is why the page's row for them states counts where the collections row states names. `get_sync_runs`
+answers the ten newest `sync_runs` rows of any status, newest first, each verbatim from the `SyncRun` aggregate (id,
+started, finished, status, planned counts, completed platforms and collections, error) — a field a run never recorded
+stays null, and the status is what says why. Skip preview is a user-intent setting in `settings.json` written by its
+owner (`adapters/persistence.py`) and reported by `get_settings`. No backend sync path consults it: the choice between
+asking for a preview and starting the run is made on the frontend, by this page's own start button and by Main's.
 
 ## Library
 
@@ -720,9 +827,9 @@ menu entry.
 | Action                             | Today                  | Target                                       |
 | ---------------------------------- | ---------------------- | -------------------------------------------- |
 | Start a sync                       | Main                   | Main; the button opens the Sync page         |
-| Review and apply a preview         | Main, one line         | Sync, as a table                             |
-| Force Full Sync, Skip preview      | Main                   | Sync                                         |
-| Restart Steam now (session budget) | Main                   | Sync; Main shows the notice                  |
+| Review and apply a preview         | Sync, as a table       | Sync, as a table                             |
+| Force Full Sync, Skip preview      | Sync                   | Sync                                         |
+| Restart Steam now (session budget) | Sync                   | Sync; Main shows the notice                  |
 | Sync a platform on or off          | Library                | Library › Platforms                          |
 | Choose the emulator core           | Library › Platforms    | Library › Platforms                          |
 | Download BIOS files                | Library › Platforms    | Library › Platforms                          |
@@ -748,7 +855,8 @@ The pages land in this order under #1808, each with the open work that already s
    landed**; Collections keeps the narrow page's controls and list until its own PR.
 3. **Sync** ([#1814](https://github.com/danielcopper/romm-tender/issues/1814)) — the new page, Main's four-state button
    and the Last sync row, Skip preview persisted, the run-list read, the per-platform preview breakdown. Carries #886's
-   presentation half. **The backend half has landed**; the page and Main's button are still to come.
+   presentation half. **Landed**, in two PRs: the backend half, then the page and Main's reduction. The import choice
+   (#1364) is the one thing the page leaves space for.
 4. **Settings** ([#1816](https://github.com/danielcopper/romm-tender/issues/1816)) — the sections, Steam Library, the
    homes for the `input_driver` fix and the save-sort migration with their notices on Main. Carries #1020's URL and
    double-press fixes.
@@ -768,6 +876,12 @@ store screenshots (#830) are taken after.
   with what it costs. The second is what shipped. **Superseded on two points by the device rounds**: the list row's BIOS
   ratio (dropped — the row is dot, name, toggle) and the core picker's full-width button (now an icon in the header
   line). The study is a record of a choice, not a description of the page.
+- The layout study the Sync page was chosen from: [sync-layouts.html](../assets/sync-layouts.html) — three layouts at
+  the Deck's real size (a table beside a controls column, one column, list and detail), each with what it costs. The
+  first is what shipped, and its second board settled the run view: one bar for the whole run, one row per planned unit,
+  one bar for the unit being worked. **Superseded on one point**: its note 3 leaves the Force Full Sync confirmation an
+  open decision and shows the button with none — the shipped page puts it behind a `ConfirmModal` that states what it
+  forgets. Like the Platforms study, it is a record of a choice rather than a description of the page.
 - The static prototype the decisions were made on: [qam-prototype.html](../assets/qam-prototype.html), a single
   self-contained page kept in `docs/assets/`. Every page at device size with numbered notes; its example data is
   invented, and it reflects the decisions as of this page's first version. Redrawn to the Deck's real 854 × 534 CSS px —

@@ -497,6 +497,19 @@ The layout of a wide page whose entries each carry a detail: the list on the lef
 right. **Focus selects** — moving through the list changes the detail at once; A operates the control in the row (a sync
 toggle), never the selection. The two regions scroll independently. _Avoid_: master/detail, sidebar.
 
+### Preview
+
+The answer to "what would a sync change" — the delta the backend computes without applying it, holds for **30 minutes**,
+and hands over as a `SyncPreview`: the library-wide counts, the per-platform split, the added and removed collection
+names, and the id an apply names it by. It is a **held** thing, not a screen: the backend stages one snapshot at a time
+and the frontend keeps whatever it was handed in a module store, so it outlives the panel that asked for it. A preview
+ends exactly three ways the reader chooses, all of them on the Sync page — **applied**, **cancelled**, or **refreshed**
+(discarded and replaced by a fresh one) — and it expires on its own if none of them happens. A fourth ending is the
+page's own: a successful **Force Full Sync** discards the state the preview was worked out against, so the preview goes
+with it, discarded on both sides exactly as Cancel discards one. An expired preview is still shown, so nothing the
+reader was told disappears behind them; what goes is the offer to apply it. _Avoid_: dry run, plan (a **plan** is the
+run's own work queue, one unit per platform or collection), diff.
+
 ### Notice / home
 
 A **notice** is a card at the top of Main naming a condition that needs the user (settings were reset, the RetroArch

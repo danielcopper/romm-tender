@@ -540,12 +540,17 @@ Format: **invariant** — tier — enforced by.
   already applied — slow, plausible-looking, and silent (#1052 / #1367)
 - **Every path on which the user answers the preview question leaves a live snapshot on neither side — the
   pending-preview store (`src/utils/pendingPreviewStore.ts`) and the backend's `pending_delta`** — prompt-only — three
-  paths clear the store and tell the backend (`handleDismiss`, `handleApply`, a fresh `handleSync` press); the fourth is
+  paths clear the store and tell the backend, and all three are the Sync page's: Apply (`applyPreview`), Cancel
+  (`cancelPreview`) and Refresh (`computePreview(true)`, which discards before asking for the next one). The fourth is
   the cancel that lands just after a preview was staged, which never adopted it into the store and so discharges the
-  rule by discarding server-side alone. Nothing mechanical can tell: an answer path is a `MainPage` handler, and neither
-  the store nor the backend can know that a call it never received was an answer. Forget the store and a card stands
-  over a decision already made; forget the backend and the terminal-stage re-ask fetches that card back a round trip
-  later
+  rule by discarding server-side alone. A fifth path is not an answer at all and is held to the same rule: a successful
+  **Force Full Sync** (`forceFullSync`) discards the state the preview was computed against, so it clears the store and
+  tells the backend too — a preview left standing there offers an Apply that would skip exactly what the clear armed a
+  re-fetch for. Main holds none of them any more, and that is itself part of the rule: its Sync button opens the page
+  rather than replacing what the page is holding, so the answer is given once, where the change table is. Nothing
+  mechanical can tell: an answer path is a page handler, and neither the store nor the backend can know that a call it
+  never received was an answer. Forget the store and a table stands over a decision already made; forget the backend and
+  the terminal-stage re-ask fetches it back a round trip later
 - **A prune run's claim reservation and its refusal of every conflicting callable happen in one atomic gate hold (the
   preview rebuild does not), and frontend-owned Steam work holds a heartbeated, generation-tombstoned lease through
   every continuation's final write** — test + prompt-only — prune service/gate race tests + contract callable-entry
