@@ -33,9 +33,20 @@ indistinguishable from "this game has no save yet".
 
 Two deeper problems were not fixable by adding rows.
 
-**A save is not a property of a platform.** The same PS2 game keeps two shared memory cards under standalone PCSX2 and
-could keep a file per game under a libretro core. A table keyed by system cannot express that, so it answered for
-whichever emulator the author had in mind.
+**A save is not a property of a platform.** It is a property of the ROM and of the emulator that opens it, on two axes
+at once.
+
+The emulator axis: the same PS2 game keeps two shared memory cards under standalone PCSX2 and could keep a file per game
+under a libretro core.
+
+The ROM axis: the answer turns on the **content file's own extension**. Measured at emu-atlas 0.13.0, PUAE puts an Amiga
+`.adf`'s save inside the disk image, states a directory it cannot name the contents of for a `.lha`, and establishes
+nothing for an `.hdf`; Genesis Plus GX keeps a Sega CD `.chd` on a shared BRAM card and a `.bin` in a per-game `.srm`.
+This axis is easy to miss and expensive to get wrong — two people measuring the same systems with differently shaped
+content reach opposite conclusions and both are right.
+
+A table keyed by system can express neither axis, so it answered for whichever emulator and whichever content shape the
+author had in mind.
 
 **Some shapes are not syncable at all, and the plugin had no way to say so.** A shared card, a save written inside the
 game file, a name whose middle comes from the game's own id — the per-game model is simply wrong for each, and the table
@@ -54,6 +65,11 @@ resolver type.
 The question is put to the **catalogue entry** the plugin resolved for this ROM — the label `ActiveCoreResolver`
 produced, which is the label the launch bakes — not to a bare core. That is what lets a standalone emulator answer for
 itself, and it keeps the read path and the launch path on one emulator.
+
+It is also put with the ROM's **real** content path, never a synthetic stem: `RomInstall.file_path` for an installed
+ROM, and the path built from `roms.fs_name` for one the library holds but has not installed. Where no path can be formed
+at all, the answer is "not established". Every per-system pinning test names the content extension it asked with, for
+the same reason — a pin that does not say which extension it used is pinning nothing.
 
 **Nothing is cached but the installation handle.** The user changes a core's options in the emulator's own quick menu
 between one launch and the next sync; a remembered granularity would have the plugin carry a shared card as though it

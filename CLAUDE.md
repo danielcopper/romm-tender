@@ -554,11 +554,18 @@ Format: **invariant** — tier — enforced by.
   MAME's `.cfg` overwrites settings the user chose on the other device. (3) The two shapes inside `unestablished` are
   one field (`SaveAnswer.unestablished`) that nothing forces a consumer to read; a truthiness test on
   `state == "unestablished"` collapses "nobody has audited this core" into "the folder is known and the names are not",
-  which the next cut words differently. **Every path asks live and nothing caches an answer** — only the installation
-  handle is memoised — because the user changes a core's options in the emulator's own quick menu between a launch and
-  the next sync; a display cache added without invalidating it on every sync entry is the one change that makes this
-  rule fail silently and expensively. Detail: `docs/architecture/save-sync-coverage.md`, CONTEXT.md → Save state / Save
-  scope
+  which the next cut words differently. (4) **The question must carry the ROM's REAL content path**, because the answer
+  turns on the content file's own EXTENSION — PUAE answers `save-inside-content` for an Amiga `.adf` and establishes
+  nothing for an `.hdf`; Genesis Plus GX answers a shared `scd_*.brm` for a Sega CD `.chd` and a per-game `.srm` for a
+  `.bin`. `RomInfoService._installed_answer` is the single site that decides the system and the path, so ADR-0010's slug
+  leak has one place to guard rather than one per caller; a synthetic stem passed anywhere else answers a different
+  question in a shape that looks like an answer to this one, and nothing would say so. It is also why every per-system
+  pin in `tests/adapters/test_atlas_saves.py` is keyed by `(system, extension)`: a pin that does not name the extension
+  it asked with is pinning nothing, which is how two independent measurements of the same systems produced contradictory
+  fact lists. **Every path asks live and nothing caches an answer** — only the installation handle is memoised — because
+  the user changes a core's options in the emulator's own quick menu between a launch and the next sync; a display cache
+  added without invalidating it on every sync entry is the one change that makes this rule fail silently and
+  expensively. Detail: `docs/architecture/save-sync-coverage.md`, CONTEXT.md → Save state / Save scope
 - **Per-slot server reads/deletes go through `domain/save_slot.py` (legacy omits `&slot=`, client-filters)** —
   prompt-only — `get_slot_saves` / `get_slot_delete_info` / `delete_slot` / `list_file_versions` / `rollback_to_version`
   use `slot_query_param` + `save_in_slot`; RomM can't address `slot:null` via the param, so legacy MUST omit it + filter

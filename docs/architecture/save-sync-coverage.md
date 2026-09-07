@@ -35,6 +35,32 @@ resolver). They used to come from a static per-system extension table this repo 
 retired, and nothing replaces it — for every system it covered the machine's answer is at least as good, and in four
 cases better. The reasoning is in [ADR-0031](../adr/0031-a-save-is-answered-by-the-emulator-that-writes-it.md).
 
+## The answer is per ROM, never per platform
+
+**The answer turns on the content file's own extension**, so it is a property of the ROM and not of its system. Measured
+on a stock RetroDECK at emu-atlas 0.13.0:
+
+| System     | Content | Answer                                              |
+| ---------- | ------- | --------------------------------------------------- |
+| Amiga      | `.adf`  | the save is inside the disk image                   |
+| Amiga      | `.lha`  | a directory is known, its file names are not        |
+| Amiga      | `.hdf`  | nothing established — PUAE's mode could not be read |
+| Amiga CD32 | `.chd`  | `<stem>.nvr`                                        |
+| Amiga CD32 | `.bin`  | nothing established                                 |
+| Sega CD    | `.chd`  | a shared BRAM card (`scd_E.brm`, …)                 |
+| Sega CD    | `.bin`  | per-game `<stem>.srm`                               |
+
+That is why every question carries the ROM's **real** content path: `RomInstall.file_path` for an installed ROM, and the
+path built from `roms.fs_name` for one the library holds but has not installed. A synthetic stem would answer a
+different question and look like an answer to this one — which is how a table keyed by system came to search forever for
+an Amiga `.nvr` no core writes. Where no path can be formed at all, the answer is "not established", never a guess.
+
+**Cost.** A live reading is roughly 170 ms warm and 490 ms cold per ROM on the reference device. A sync and a status
+read each take one. The two per-platform loops — `count_platform_saves` and `delete_platform_saves` — take one per
+**installed** ROM on that platform, so four installed games is well under a second and fifty is several. Nothing is
+cached: the correctness rule is that every sync path asks live, and the count exists so the number the button offers
+equals the number the delete removes.
+
 ## The five save states
 
 The answer classifies every ROM into **exactly one** of five states. Only the first is a save this plugin can carry; the

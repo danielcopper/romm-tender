@@ -376,11 +376,12 @@ What one ROM's save consists of, where the emulator keeps it, and whether this p
 `domain.save_answer.SaveAnswer`, read live off the machine by the vendored resolver through `adapters/atlas_saves.py`.
 It replaced a per-system extension table the plugin maintained by hand.
 
-An answer is about an **emulator**, never a platform (see [Save scope](#save-scope-the-emulator-not-the-platform)), and
-it names the files, their directory, their roles, the holes left in any name, and the resolver's caveat codes. A file
-whose role is the emulator's **configuration** rather than the player's **progress** — Saturn's `.smpc`, MAME's per-game
-`.cfg` — is named on the answer and never synced; a directory move still carries it, because splitting one save across
-two directories breaks the game.
+An answer is about one **ROM** and one **emulator**, never a platform (see
+[Save scope](#save-scope-per-rom-and-per-emulator-never-per-platform)), and it names the files, their directory, their
+roles, the holes left in any name, and the resolver's caveat codes. A file whose role is the emulator's
+**configuration** rather than the player's **progress** — Saturn's `.smpc`, MAME's per-game `.cfg` — is named on the
+answer and never synced; a directory move still carries it, because splitting one save across two directories breaks the
+game.
 
 ### Save state: per-game files / shared / inside the content / hole / not established
 
@@ -400,11 +401,20 @@ benign-skip shape rather than a failure.
 Detail, including which systems land where on a stock RetroDECK, is in
 [Save sync coverage](docs/architecture/save-sync-coverage.md).
 
-### Save scope: the emulator, not the platform
+### Save scope: per ROM and per emulator, never per platform
 
-A save answer is about the emulator that would launch the ROM, and means nothing without it. PS2 is not unsupported —
-**standalone PCSX2** is, because it keeps two shared memory cards, and a libretro core for the same platform can answer
-per-game. So a save state is never reported for a platform, and whatever carries one names the emulator it is about.
+A save answer is about **one ROM** and **the emulator that would launch it**, and means nothing without both.
+
+The emulator half: PS2 is not unsupported — **standalone PCSX2** is, because it keeps two shared memory cards, and a
+libretro core for the same platform can answer per-game.
+
+The ROM half: the answer turns on the **content file's own extension**. An Amiga `.adf` keeps its save inside the disk
+image, an Amiga `.lha` states a directory whose file names PUAE does not list, and an `.hdf` establishes nothing; a Sega
+CD `.chd` is a shared BRAM card where a `.bin` is a per-game `.srm`. So every question carries the ROM's real content
+path — `RomInstall.file_path` when installed, the path built from `roms.fs_name` when not — and a synthetic stem is
+never an acceptable stand-in, because it answers a different question in a shape that looks like an answer to this one.
+
+So a save state is never reported for a platform, and whatever carries one names the emulator it is about.
 
 This is why the question goes to the **catalogue entry** the plugin resolved for this ROM (the label
 `ActiveCoreResolver` produced, which is the label the launch bakes) rather than to a bare core: a standalone emulator
