@@ -19,6 +19,7 @@ from domain.save_answer import (
     SAVE_STATE_SHARED,
     SAVE_STATE_UNESTABLISHED,
     UNESTABLISHED_DIRECTORY_KNOWN,
+    UNESTABLISHED_NOT_ASKED,
     UNESTABLISHED_NOTHING,
     SaveGroup,
     build_save_answer,
@@ -134,12 +135,23 @@ class TestTheTwoShapesOfNotEstablished:
 
         assert answer.unestablished == UNESTABLISHED_NOTHING
 
-    def test_a_question_nobody_could_put_is_the_bare_shape(self):
+    def test_a_question_that_was_put_and_refused_is_the_bare_shape(self):
         answer = unestablished_answer(emulator="Ryubing (Standalone)")
 
         assert answer.state == SAVE_STATE_UNESTABLISHED
         assert answer.unestablished == UNESTABLISHED_NOTHING
         assert answer.emulator == "Ryubing (Standalone)"
+
+    def test_a_question_that_was_never_put_is_its_own_shape(self):
+        # RetroArch writing to the content dir, or no emulator resolving at
+        # all: the emulator is not implicated, and a page must not say it is.
+        answer = unestablished_answer(shape=UNESTABLISHED_NOT_ASKED)
+
+        assert answer.unestablished == UNESTABLISHED_NOT_ASKED
+        assert answer.syncable is False
+
+    def test_the_three_shapes_are_three_values(self):
+        assert len({UNESTABLISHED_NOTHING, UNESTABLISHED_DIRECTORY_KNOWN, UNESTABLISHED_NOT_ASKED}) == 3
 
 
 class TestProgressAndConfiguration:
@@ -204,7 +216,7 @@ class TestTheRefusalIsReportedNeutrally:
         [
             ({"granularity": "shared-card", "files": ("Mcd001.ps2",)}, "share"),
             ({"caveats": ("save-inside-content",), "files": ()}, "inside the game file"),
-            ({"needs": ("save_id",)}, "game's own id"),
+            ({"needs": ("save_id",)}, "identity of the game"),
             ({"file_set_state": "unknown", "files": ()}, "could not be established"),
         ],
     )

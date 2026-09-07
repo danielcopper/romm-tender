@@ -393,7 +393,8 @@ benign-skip shape rather than a failure.
 - **shared** — the emulator's granularity is a shared card or a shared file, so one file holds many games' progress and
   a per-game sync would carry another game's save onto this ROM's record.
 - **inside the content** — the save is written into the game file itself. There is nothing separate to carry.
-- **hole** — the names are known, but part of one comes from the game's own id, which nothing here supplies.
+- **hole** — the shape is known, but part of the path or the name is the game's own identity, which nothing here
+  supplies. Flycast needs a `save_id` in the filename; Dolphin needs the `region` in the directory.
 - **not established** — nobody established what this emulator writes, or the directory is known and the names in it are
   not. **These are two shapes, `nothing_established` and `directory_known`, and they stay apart**: they are different
   sentences to a reader, and collapsing them claims ignorance about a folder we can point at.

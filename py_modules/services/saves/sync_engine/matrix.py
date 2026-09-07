@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Iterator
 
+    from domain.save_answer import SaveAnswer
     from services.protocols import (
         Clock,
         ComputeSyncActionFn,
@@ -858,10 +859,27 @@ class MatrixExecutor:
         # Group server saves by canonical local target filename. Server-only
         # groups (no local file) get matrix-evaluated against their own group;
         # compute_sync_action picks newest-in-group internally.
+        #
+        # A target the answer does not name is passed over in BOTH directions.
+        # Nothing local was probed for it — the probe walks the answer's names —
+        # so without this it would look server-only, and the matrix would
+        # download it over a local file it never looked at. Two shapes reach
+        # here: a configuration file the rule says is never carried (a Saturn
+        # ``.smpc`` this plugin uploaded before the resolver decided the role),
+        # and a save whose extension this emulator no longer writes at all. The
+        # server copy is left exactly as it is; deleting it is not this cut's
+        # business, and it is the only copy of something a user may want back.
+        carried = frozenset(save_names)
         server_only_groups: dict[str, list[dict[str, Any]]] = {}
         for ss in server_in_slot:
             target = local_save_target(ss, rom_name, known_names=save_names)
             if target in handled_filenames:
+                continue
+            if target not in carried:
+                self._log_debug(
+                    f"iter_matrix_outcomes({rom_name!r}): server save {target!r} is not a file this emulator's "
+                    f"answer carries — leaving both copies alone"
+                )
                 continue
             server_only_groups.setdefault(target, []).append(ss)
 
@@ -893,8 +911,15 @@ class MatrixExecutor:
         core_so: str | None,
         default_slot: str | None = None,
         autocleanup_limit: int | None = None,
+        save_answer: SaveAnswer | None = None,
     ) -> tuple[int, int, list[str], list[dict[str, Any]]]:
         """Sync saves for a single ROM, mutating *save_state* in memory.
+
+        *save_answer* is the live reading a caller already took for THIS sync —
+        the entry points take one to decide whether to refuse at all, and
+        handing it down is what keeps one operation to one reading of the
+        machine instead of two. It is never carried between operations: absent
+        it (the whole-library sweep), this takes its own.
 
         Drives :meth:`iter_matrix_outcomes` and dispatches each emitted
         outcome through :meth:`_dispatch_sync_action`. Returns
@@ -919,8 +944,9 @@ class MatrixExecutor:
         # server's saves onto their canonical targets AND say which files to
         # probe for, and asking twice would double the cost of every ROM in a
         # whole-library sweep.
-        names, answer_dir = self._rom_info.synced_save_names(rom_id)
-        save_names = tuple(names)
+        answer = save_answer if save_answer is not None else self._rom_info.save_answer(rom_id)
+        save_names = answer.synced_names
+        answer_dir = info["saves_dir"] if answer.syncable else None
         # The backstop every sync path crosses. A refusing answer pairs its names
         # with a ``None`` directory, so nothing is probed and no state is written
         # — the sweep has no room in its one result to say which ROM was passed

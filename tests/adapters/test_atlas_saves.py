@@ -62,6 +62,7 @@ from domain.save_answer import (
     SAVE_STATE_SHARED,
     SAVE_STATE_UNESTABLISHED,
     UNESTABLISHED_DIRECTORY_KNOWN,
+    UNESTABLISHED_NOT_ASKED,
     UNESTABLISHED_NOTHING,
 )
 
@@ -330,11 +331,17 @@ class TestAConfigurationFileIsOfferedAndNeverSynced:
 
 
 class TestEveryWayTheQuestionCannotBePut:
-    """All of them are the same honest refusal — never "nothing to sync"."""
+    """All of them refuse — never "nothing to sync" — and the shape says which kind.
 
-    def _assert_refused(self, answer) -> None:
+    ``not_asked`` where nothing reached the resolver, so the emulator is not
+    implicated. ``nothing_established`` where it WAS asked and could not answer.
+    Rendering those as one sentence would tell a user their emulator is a
+    mystery when the truth is that the plugin never asked.
+    """
+
+    def _assert_refused(self, answer, shape: str) -> None:
         assert answer.state == SAVE_STATE_UNESTABLISHED
-        assert answer.unestablished == UNESTABLISHED_NOTHING
+        assert answer.unestablished == shape
         assert answer.syncable is False
 
     def test_no_emulator_resolved_asks_nobody(self, traces):
@@ -344,20 +351,23 @@ class TestEveryWayTheQuestionCannotBePut:
 
         answer = adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label=None)
 
-        self._assert_refused(answer)
+        self._assert_refused(answer, UNESTABLISHED_NOT_ASKED)
         assert installation.asked == []
         assert entry.asked == []
 
     def test_no_installation_detected(self, traces):
         adapter = _adapter(None, traces)
 
-        self._assert_refused(adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label="mGBA"))
+        self._assert_refused(
+            adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label="mGBA"),
+            UNESTABLISHED_NOT_ASKED,
+        )
         assert any("no emulator installation detected" in line for line in traces)
 
     def test_the_catalogue_offers_no_entry_under_that_label(self, traces):
         answer = _ask(_placement(), traces, label="Beetle Saturn", emulator="mGBA")
 
-        self._assert_refused(answer)
+        self._assert_refused(answer, UNESTABLISHED_NOT_ASKED)
         assert answer.emulator == "mGBA"
 
     def test_the_entry_declines(self, traces):
@@ -365,19 +375,22 @@ class TestEveryWayTheQuestionCannotBePut:
 
         answer = _ask(declined, traces)
 
-        self._assert_refused(answer)
+        self._assert_refused(answer, UNESTABLISHED_NOTHING)
         assert any("standalone-unsupported" in line for line in traces)
 
     def test_the_resolver_raises(self, traces):
         answer = _ask(AssertionError("an invariant of its own"), traces)
 
-        self._assert_refused(answer)
+        self._assert_refused(answer, UNESTABLISHED_NOTHING)
         assert any("resolver failed" in line for line in traces)
 
     def test_the_catalogue_read_raises(self, traces):
         adapter = _adapter(_Installation((), raises=RuntimeError("packaged data")), traces)
 
-        self._assert_refused(adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label="mGBA"))
+        self._assert_refused(
+            adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label="mGBA"),
+            UNESTABLISHED_NOT_ASKED,
+        )
 
     def test_detection_itself_raises(self, traces):
         def boom() -> Any:
@@ -385,7 +398,10 @@ class TestEveryWayTheQuestionCannotBePut:
 
         adapter = AtlasSaveLocationAdapter(choose_installation=boom, log_debug=traces.append)
 
-        self._assert_refused(adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label="mGBA"))
+        self._assert_refused(
+            adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label="mGBA"),
+            UNESTABLISHED_NOT_ASKED,
+        )
 
 
 class TestHowTheQuestionIsPut:
@@ -618,17 +634,19 @@ class TestTheRealMachineAnswers:
 
         assert answer.unestablished == _PINNED_SHAPES[(system, extension)]
 
-    def test_one_system_answers_three_different_states_by_extension(self, machine, traces):
+    def test_one_system_answers_differently_for_three_content_shapes(self, machine, traces):
         """The whole reason a pin names its extension: Amiga is three answers.
 
-        A table keyed by system could state only one of them, which is how the
-        retired one came to search forever for a ``.nvr`` no core writes.
+        Two of them are different STATES and the third differs only in the shape
+        inside ``unestablished`` — which is exactly why the shape is carried
+        separately. A table keyed by system could state one of the three.
         """
-        states = {ext: self._answer(machine, "amiga", ext, traces).state for ext in (".adf", ".lha", ".hdf")}
+        answers = {ext: self._answer(machine, "amiga", ext, traces) for ext in (".adf", ".lha", ".hdf")}
 
-        assert states[".adf"] == SAVE_STATE_INSIDE_CONTENT
-        assert states[".lha"] == SAVE_STATE_UNESTABLISHED
-        assert len({states[".adf"], states[".lha"]}) == 2
+        assert answers[".adf"].state == SAVE_STATE_INSIDE_CONTENT
+        assert answers[".lha"].state == SAVE_STATE_UNESTABLISHED
+        assert answers[".hdf"].state == SAVE_STATE_UNESTABLISHED
+        assert len({(a.state, a.unestablished) for a in answers.values()}) == 3
 
     def test_the_platform_map_produces_only_systems_the_resolver_knows(self, machine, traces):
         with open(_PLATFORM_MAP, encoding="utf-8") as handle:

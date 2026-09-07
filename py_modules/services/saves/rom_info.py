@@ -17,7 +17,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.save_answer import unestablished_answer
+from domain.save_answer import UNESTABLISHED_NOT_ASKED, unestablished_answer
 from domain.save_layout import InSaveDir
 from domain.save_path import resolve_save_dir
 
@@ -244,7 +244,9 @@ class RomInfoService:
         with self._uow_factory() as uow:
             rom = uow.roms.get(int(rom_id))
         if rom is None or not rom.fs_name or not rom.platform_slug:
-            return unestablished_answer()
+            # No name, so no extension, so no question — not a statement about
+            # any emulator.
+            return unestablished_answer(shape=UNESTABLISHED_NOT_ASKED)
         system = self._resolve_system(rom.platform_slug)
         return self._ask_resolver(rom_id, system, os.path.join(self._retrodeck_paths.roms_path(), system, rom.fs_name))
 
@@ -254,7 +256,9 @@ class RomInfoService:
         The system is the NORMALIZED one the install record carries, never the
         raw RomM ``platform_slug`` beside it (ADR-0010): the slug names no
         system any emulator declares, so asking with it answers about nothing.
-        The single place that decides, so the leak has one site to guard.
+        One of the two places that decide a system and a path —
+        :meth:`_uninstalled_answer` is the other — so the leak has two sites to
+        guard rather than one per caller.
         """
         return self._ask_resolver(rom_id, info["system"], info["file_path"])
 

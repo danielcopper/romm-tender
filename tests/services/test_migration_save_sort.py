@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -428,6 +428,80 @@ class TestSaveSortMigrationStatus:
         assert result["saves_count"] == 1
         assert result["old_settings"] == old_settings
         assert result["new_settings"] == new_settings
+
+
+class TestASortMoveNeverStrandsAFile:
+    """A move is not a sync: a refusing answer still relocates what is on disk.
+
+    Discovery may not be able to say what an emulator writes, but the files are
+    already there and the sort change is only moving them. Leaving one behind
+    where the emulator will not look is worse than moving one this plugin would
+    never upload — and the extension list this replaced DID move those files.
+    """
+
+    def _machine(self, tmp_path, *, save_names: list[str]):
+        roms_path = tmp_path / "roms"
+        saves_path = tmp_path / "saves"
+        (roms_path / "atari2600").mkdir(parents=True)
+        (roms_path / "atari2600" / "Adventure.a26").write_text("rom")
+        old_save_dir = saves_path / "atari2600"
+        old_save_dir.mkdir(parents=True)
+        for name in save_names:
+            (old_save_dir / name).write_text(f"content of {name}")
+        installed_roms = {
+            "1": {
+                "system": "atari2600",
+                "file_path": str(roms_path / "atari2600" / "Adventure.a26"),
+                "platform_slug": "atari2600",
+            }
+        }
+        old_settings: SaveSortSettings = {"sort_by_content": True, "sort_by_core": False}
+        new_settings: SaveSortSettings = {"sort_by_content": False, "sort_by_core": False}
+        svc, _uow = _make_service(
+            tmp_path,
+            installed_roms=installed_roms,
+            state_overrides={
+                "save_sort_settings_previous": old_settings,
+                "save_sort_settings": new_settings,
+            },
+        )
+        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        cast("FakeSaveLocationReader", svc._save_locations).refuse("atari2600")
+        return svc, saves_path, old_save_dir
+
+    @pytest.mark.asyncio
+    async def test_a_refusing_answer_still_moves_what_the_directory_holds(self, tmp_path):
+        # Stella is unaudited, so the answer establishes nothing — and the file
+        # is right there under the ROM's name.
+        svc, saves_path, old_save_dir = self._machine(tmp_path, save_names=["Adventure.srm"])
+
+        result = await svc.migrate_save_sort_files()
+
+        assert result["success"] is True
+        assert result["saves_moved"] == 1
+        assert (saves_path / "Adventure.srm").read_text() == "content of Adventure.srm"
+        assert not (old_save_dir / "Adventure.srm").exists()
+
+    @pytest.mark.asyncio
+    async def test_it_carries_every_file_named_after_the_rom(self, tmp_path):
+        svc, saves_path, _old = self._machine(tmp_path, save_names=["Adventure.srm", "Adventure.rtc"])
+
+        result = await svc.migrate_save_sort_files()
+
+        assert result["saves_moved"] == 2
+        assert (saves_path / "Adventure.rtc").exists()
+
+    @pytest.mark.asyncio
+    async def test_it_does_not_drag_a_different_games_saves_along(self, tmp_path):
+        # ``Adventure 2.srm`` begins with the stem but belongs to another game.
+        # The match is anchored on ``<stem>.`` for exactly this reason.
+        svc, saves_path, old_save_dir = self._machine(tmp_path, save_names=["Adventure.srm", "Adventure 2.srm"])
+
+        result = await svc.migrate_save_sort_files()
+
+        assert result["saves_moved"] == 1
+        assert (old_save_dir / "Adventure 2.srm").exists()
+        assert not (saves_path / "Adventure 2.srm").exists()
 
 
 class TestMigrateSaveSortFiles:

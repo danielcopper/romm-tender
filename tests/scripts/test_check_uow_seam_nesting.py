@@ -308,9 +308,10 @@ class TestIoSeamsViolations:
     @pytest.mark.parametrize("method", ["resolve_save_answer", "save_answer"])
     def test_the_save_answer_inside_uow_is_flagged(self, method: str):
         # The seam and the saves package's own wrapper around it. Both are
-        # listed, because the seam itself is reached from one module and the
-        # wrapper is what every peer in services/saves/ calls — a rule enforced
-        # in one file would be green everywhere it actually matters.
+        # listed: the seam is reached directly from two modules (rom_info and
+        # migration) and the wrapper is what every peer in services/saves/
+        # calls, so listing only the seam would leave the rule green everywhere
+        # it is actually reached from.
         findings = check.scan_source(
             "class S:\n"
             "    def go(self, rom_id):\n"

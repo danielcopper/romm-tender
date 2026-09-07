@@ -11,10 +11,12 @@ informs the implementation of [#196](https://github.com/danielcopper/decky-romm-
     [Save sync coverage](../architecture/save-sync-coverage.md) and
     [ADR-0031](https://github.com/danielcopper/decky-romm-sync/blob/main/docs/adr/0031-a-save-is-answered-by-the-emulator-that-writes-it.md).
 
-    Measuring the same systems against that live reading showed the table was wrong in both directions: Amiga has no
-    separate save file at all (the writes go into the disk image, so the plugin was searching for a `.nvr` that cannot
-    exist), and 3DO's real name carries a version digit (`<rom>.0.srm`) the table never had. Saturn's third extension
-    turned out to be console configuration rather than progress, and is no longer synced.
+    Measuring the same systems against that live reading showed the table was wrong in both directions, and wrong in a
+    way a table cannot fix: **the answer depends on the game file's own extension.** An Amiga `.adf` keeps its save
+    inside the disk image, so there is no `.nvr` to find; an Amiga `.hdf` establishes nothing at all. A Sega CD `.chd`
+    is a shared card that no per-game sync can carry, while a `.bin` is a per-game `.srm`. 3DO's real name carries a
+    version digit (`<rom>.0.srm`) the table never had, and Saturn's third extension turned out to be console
+    configuration rather than progress, and is no longer synced.
 
     Keep this page as the record of how the original `.srm`/`.dsv`/`.brm` decision was reached. Do not use it to
     predict what syncs today — the [Save sync support matrix](save-sync-support-matrix.md) is the broader view, and

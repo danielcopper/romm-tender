@@ -45,7 +45,13 @@ from typing import TYPE_CHECKING, Any
 
 from _vendor.atlas import Unresolved
 
-from domain.save_answer import SaveAnswer, SaveGroup, build_save_answer, unestablished_answer
+from domain.save_answer import (
+    UNESTABLISHED_NOT_ASKED,
+    SaveAnswer,
+    SaveGroup,
+    build_save_answer,
+    unestablished_answer,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -71,18 +77,22 @@ class AtlasSaveLocationAdapter:
         """What *emulator_label* saves for the game at *content_path*, and whether it may be synced.
 
         *emulator_label* is the emulator the plugin resolved for this ROM;
-        ``None`` means it resolved none, so there is no entry to ask and the
-        answer is "nothing established". The same answer covers every other way
-        the question cannot be put: no installation detected, the catalogue no
-        longer offering that label, the entry declining, or the resolver raising.
+        ``None`` means it resolved none, so there is no entry to ask. That, no
+        installation, and a catalogue no longer offering the label are all
+        ``not_asked`` — the question never reached the resolver, so none of them
+        is a statement about the emulator. An entry that declines and a resolver
+        that raises WERE asked, so both are ``nothing_established``.
         """
         if emulator_label is None:
             self._log_debug(f"[saves] {system}: no emulator resolved for this ROM; nothing to ask")
-            return unestablished_answer()
+            return unestablished_answer(shape=UNESTABLISHED_NOT_ASKED)
 
         entry = self._entry(system, content_path, emulator_label)
         if entry is None:
-            return unestablished_answer(emulator=emulator_label)
+            # No installation, an unreadable catalogue, or no entry under that
+            # label: the question never reached the resolver, so this says
+            # nothing about the emulator itself.
+            return unestablished_answer(emulator=emulator_label, shape=UNESTABLISHED_NOT_ASKED)
 
         subject = f"savefile_location({system!r}, {emulator_label!r})"
         placement = self._ask(lambda: entry.savefile_location(content_path=content_path), subject)

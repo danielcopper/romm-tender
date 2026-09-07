@@ -17,15 +17,21 @@ how a file's sync is decided does not. Tracked under
 Which files make up a game's save was a hand-maintained table in this repo, keyed by RetroDECK system: a default of
 `.srm` / `.rtc` / `.sav` plus eight per-system overrides, written from a one-pass desk audit.
 
-Measured against the resolver on a stock RetroDECK, for the systems the table had entries for:
+Measured against the resolver on a stock RetroDECK, for the systems the table had entries for. The table could state one
+answer per system; the machine answers per **content file**, so where that matters the row says which one it was asked
+with:
 
-| System         | The table                      | The machine                                           |
-| -------------- | ------------------------------ | ----------------------------------------------------- |
-| Neo Geo Pocket | `.flash`, from a desk audit    | `.flash`, read out of the core                        |
-| Amiga CD32     | `.nvr`                         | `.nvr`                                                |
-| Amiga          | `.nvr`                         | nothing established — PUAE's mode could not be read   |
-| 3DO            | the three default extensions   | `<stem>.0.srm`, with a version digit the table lacked |
-| Saturn         | three extensions, all progress | two are progress, one is console configuration        |
+| System         | Content | The table                      | The machine                                           |
+| -------------- | ------- | ------------------------------ | ----------------------------------------------------- |
+| Neo Geo Pocket | `.ngp`  | `.flash`, from a desk audit    | `.flash`, read out of the core                        |
+| Amiga CD32     | `.chd`  | `.nvr`                         | `.nvr`                                                |
+| Amiga CD32     | `.bin`  | `.nvr`                         | nothing established                                   |
+| Amiga          | `.adf`  | `.nvr`                         | no separate file — the save is inside the disk image  |
+| Amiga          | `.hdf`  | `.nvr`                         | nothing established — PUAE's mode could not be read   |
+| Sega CD        | `.chd`  | `.brm`                         | a shared BRAM card, not a per-game file at all        |
+| Sega CD        | `.bin`  | `.brm`                         | per-game `<stem>.srm`                                 |
+| 3DO            | `.chd`  | the three default extensions   | `<stem>.0.srm`, with a version digit the table lacked |
+| Saturn         | `.chd`  | three extensions, all progress | two are progress, one is console configuration        |
 
 **The failures were invisible.** For Amiga the plugin searched forever for a file that cannot be there; for 3DO it
 searched for a name no core writes. Neither surfaced as an error — the exact-name probe simply found nothing, which is
@@ -49,9 +55,9 @@ A table keyed by system can express neither axis, so it answered for whichever e
 author had in mind.
 
 **Some shapes are not syncable at all, and the plugin had no way to say so.** A shared card, a save written inside the
-game file, a name whose middle comes from the game's own id — the per-game model is simply wrong for each, and the table
-answered them all with a list of extensions to go looking for. The sync then probed, found nothing, and reported "no
-saves", which is a different and much more comforting sentence than the truth.
+game file, a path or name whose middle is the game's own identity — the per-game model is simply wrong for each, and the
+table answered them all with a list of extensions to go looking for. The sync then probed, found nothing, and reported
+"no saves", which is a different and much more comforting sentence than the truth.
 
 ## Decision
 
@@ -115,9 +121,16 @@ takes seconds where it took milliseconds. Caching display answers is permitted a
 correctness rule is that every sync path asks live, and a cache that a future entry point forgets to invalidate breaks
 it silently.
 
-**The plugin's own save-path math is untouched.** The directory still comes from `resolve_save_dir`, and
-`compute_local_save_target` still builds the download name, now folded against the answer wherever the answer names the
-file. Retiring that math is a later cut.
+**The plugin's own save-path math is untouched, and for two systems it now disagrees with the answer.** The names come
+from the resolver; the DIRECTORY still comes from `resolve_save_dir`. Opera keeps 3DO saves in
+`saves/3do/opera/per_game` and FinalBurn Neo keeps Neo Geo saves in `saves/neogeo/fbneo`, while the plugin probes the
+flat system folder for both. **So 3DO and Neo Geo saves are still not found** — exactly as before this change, since the
+old extension list had the name wrong as well as the directory. What improved is that the name is now right.
+
+Fixing the directory is deliberately a separate change rather than part of this one: discovery and the save-sort
+migration must agree on where a save lives, and moving one without the other reopens the race the migration's markers
+exist to prevent. `compute_local_save_target` still builds the download name, now folded against the answer wherever the
+answer names the file.
 
 **The answer is only as good as the resolver.** A future emu-atlas bump can change what a system answers, so
 `tests/adapters/test_atlas_saves.py` pins today's answer for every system the deleted table covered. That tier drives

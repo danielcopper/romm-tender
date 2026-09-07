@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from models.state import SaveSortSettings
 
     from domain.rom_install import RomInstall
+    from domain.save_answer import SaveAnswer
     from domain.save_layout import InSaveDir, SaveLayout
     from services.protocols import (
         ActiveCoreReader,
@@ -1045,16 +1046,50 @@ class MigrationService:
             content_path=file_path,
             emulator_label=emulator.label if emulator is not None else None,
         )
-        # Every file the ROM keeps under its own name, configuration included:
-        # moving a Saturn ``.bkr`` while leaving its ``.smpc`` behind splits one
-        # save across two directories. An answer that establishes nothing moves
-        # nothing — the extension list this replaced would have moved a guessed
-        # ``.srm`` for a core nobody has audited.
-        for component in answer.owned_files:
-            old_file = os.path.join(old_dir, component.name)
-            new_file = os.path.join(new_dir, component.name)
+        rom_name = os.path.splitext(os.path.basename(file_path))[0]
+        names = self._sort_migration_names(answer, old_dir, rom_name)
+        for name in names:
+            old_file = os.path.join(old_dir, name)
+            new_file = os.path.join(new_dir, name)
             if self._migration_file_store.exists(old_file):
-                items.append((component.name, old_file, new_file, lambda: None, "save"))
+                items.append((name, old_file, new_file, lambda: None, "save"))
+
+    def _sort_migration_names(self, answer: SaveAnswer, old_dir: str, rom_name: str) -> list[str]:
+        """Which files in *old_dir* this ROM's save-sort move has to carry.
+
+        **A move is not a sync.** Discovery may refuse to say what a save
+        consists of, but the files are already on the user's disk and the sort
+        change is only relocating them — leaving one behind where the emulator
+        will not look is worse than moving one this plugin would never upload.
+        So the two paths differ:
+
+        - The answer names files: carry exactly those, configuration included.
+          Moving a Saturn ``.bkr`` and leaving its ``.smpc`` behind would split
+          one save across two directories.
+        - The answer refuses: carry whatever the old directory holds under this
+          ROM's name. Judging what counts as a save is not the migration's job.
+
+        The refusing path anchors on ``<stem>.`` rather than the bare stem, so a
+        library holding both ``Sonic`` and ``Sonic 2`` does not drag the second
+        game's saves along with the first's. Every real save name measured on
+        this machine — ``<stem>.srm``, ``<stem>.0.srm``, ``<stem>.dsk.sav`` —
+        matches either way.
+        """
+        if answer.syncable:
+            return [component.name for component in answer.owned_files]
+        prefix = f"{rom_name}."
+        walked = self._migration_file_store.walk_files(old_dir)
+        found = sorted(name for name in (walked[0][2] if walked else []) if name.startswith(prefix))
+        if found:
+            self._logger.info(
+                "Save-sort migration: %s answers %s, so moving the %d file(s) named after it in %s: %s",
+                rom_name,
+                answer.state,
+                len(found),
+                old_dir,
+                found,
+            )
+        return found
 
     def _get_save_sort_migration_status_io(
         self, old_settings: SaveSortSettings, new_settings: SaveSortSettings

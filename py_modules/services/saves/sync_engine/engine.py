@@ -30,11 +30,11 @@ matrix run — the session is an envelope, never a gate on sync.
 from __future__ import annotations
 
 import asyncio
+import functools
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.rom_save_sync_state import RomSaveSyncState
-from domain.save_answer import save_shape_message
 from domain.save_layout import ContentDir
 from lib.errors import RommConnectionError, RommSyncDisabledError, RommTimeoutError, classify_error
 from lib.list_result import ErrorCode
@@ -66,6 +66,7 @@ from services.saves.sync_engine._gate import (
     SaveSyncGate,
     SaveSyncTimeoutError,
 )
+from services.saves.sync_engine._shape_refusal import live_save_answer, save_shape_skip
 from services.saves.sync_engine.matrix import MatrixExecutor, MatrixOutcome
 from services.saves.sync_engine.rollback import RollbackOrchestrator
 
@@ -302,13 +303,18 @@ class SyncEngine:
         core_so: str | None,
         default_slot: str | None = None,
         autocleanup_limit: int | None = None,
+        save_answer: SaveAnswer | None = None,
     ) -> tuple[int, int, list[str], list[dict[str, Any]]]:
         """Sync saves for a single ROM (delegate to :class:`MatrixExecutor`).
 
         Returns ``(uploaded, downloaded, errors, conflicts)`` — the per-direction
-        transfer counts (#250).
+        transfer counts (#250). *save_answer* is this operation's own live
+        reading, passed down so it is taken once rather than once per layer;
+        absent it, the matrix takes its own.
         """
-        return self._matrix.sync_rom_saves(rom_id, save_state, device_id, core_so, default_slot, autocleanup_limit)
+        return self._matrix.sync_rom_saves(
+            rom_id, save_state, device_id, core_so, default_slot, autocleanup_limit, save_answer=save_answer
+        )
 
     def do_download_save(
         self,
@@ -552,52 +558,6 @@ class SyncEngine:
             base["conflicts"] = []
         return base
 
-    def unsupported_save_shape(self, rom_id: int) -> SaveAnswer | None:
-        """The refusing answer for *rom_id*, or ``None`` when its save may be synced.
-
-        Public (peer-called): the three per-ROM entry points ask it so they can
-        NAME the skip in their own result. It is not the gate — the gate is in
-        ``do_sync_rom_saves``, where the answer is already resolved and every
-        sync path crosses it, including the whole-library sweep whose one result
-        has no room to say which ROM was passed over.
-
-        A ROM with no install record answers ``None`` — not installed is not a
-        statement about any emulator's save shape, and the runner's own
-        not-installed branch owns that case. Without this the launch path would
-        be told the emulator is unsupported for a game that is simply not on
-        disk.
-
-        Asked live every time, never remembered. The user changes a core's
-        options in the emulator's own quick menu between one launch and the next
-        sync, and a granularity read before that change would have this plugin
-        carry a shared card as though it belonged to one game.
-        """
-        if self._rom_info.get_rom_save_info(rom_id) is None:
-            return None
-        answer = self._rom_info.save_answer(rom_id)
-        return None if answer.syncable else answer
-
-    @staticmethod
-    def _save_shape_skip(answer: SaveAnswer) -> dict[str, Any]:
-        """Build the benign-skip result returned when a save's shape cannot be synced.
-
-        The same shape :meth:`_content_dir_skip` returns and for the same reason
-        — this is not a failure, nothing went wrong, and the game still launches
-        — carrying its own ``reason`` slug so a caller can tell the two skips
-        apart and say which one it was.
-
-        Single-ROM only: a whole-library sweep passes a refusing ROM over inside
-        the run and reports its own totals, so it never returns this.
-        """
-        return {
-            "success": False,
-            "reason": SAVE_SHAPE_UNSUPPORTED,
-            "message": save_shape_message(answer),
-            "synced": 0,
-            "errors": [],
-            "conflicts": [],
-        }
-
     def _heartbeat_failure_result(self, where: str, exc: Exception) -> dict[str, Any]:
         """Build the sync-result dict for a heartbeat failure, classified by type.
 
@@ -637,6 +597,7 @@ class SyncEngine:
         require_confirmed: bool = False,
         session_id: int | None = None,
         session_counts: list[int] | None = None,
+        save_answer: SaveAnswer | None = None,
     ) -> tuple[int, int, list[str], list[dict[str, Any]]]:
         """Read inputs → sync in executor → persist, for one ROM under its lock.
 
@@ -705,7 +666,17 @@ class SyncEngine:
             conflicts: list[dict[str, Any]] = []
             try:
                 uploaded, downloaded, errors, conflicts = await self._loop.run_in_executor(
-                    None, self.do_sync_rom_saves, rom_id, save_state, device_id, core_so, default_slot, cleanup_limit
+                    None,
+                    functools.partial(
+                        self.do_sync_rom_saves,
+                        rom_id,
+                        save_state,
+                        device_id,
+                        core_so,
+                        default_slot,
+                        cleanup_limit,
+                        save_answer=save_answer,
+                    ),
                 )
                 await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
             finally:
@@ -793,9 +764,9 @@ class SyncEngine:
                 if self._save_sync_blocked():
                     return self._content_dir_skip()
 
-                unsupported = await self._loop.run_in_executor(None, self.unsupported_save_shape, rom_id)
-                if unsupported is not None:
-                    return self._save_shape_skip(unsupported)
+                save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+                if save_answer is not None and not save_answer.syncable:
+                    return save_shape_skip(save_answer)
 
                 if self._rom_info.is_save_sort_changed():
                     return {
@@ -824,7 +795,7 @@ class SyncEngine:
                 if failure is not None:
                     return failure
 
-                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id)
+                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id, save_answer=save_answer)
                 synced = uploaded + downloaded
 
                 msg = f"Downloaded {synced} save(s)"
@@ -894,10 +865,10 @@ class SyncEngine:
                     self._logger.info("post_exit_sync skipped: savefiles_in_content_dir")
                     return self._content_dir_skip()
 
-                unsupported = await self._loop.run_in_executor(None, self.unsupported_save_shape, rom_id)
-                if unsupported is not None:
+                save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+                if save_answer is not None and not save_answer.syncable:
                     self._logger.info("post_exit_sync skipped: %s", SAVE_SHAPE_UNSUPPORTED)
-                    return self._save_shape_skip(unsupported)
+                    return save_shape_skip(save_answer)
 
                 try:
                     await self._loop.run_in_executor(None, self._romm_api.heartbeat)
@@ -908,7 +879,7 @@ class SyncEngine:
                 if failure is not None:
                     return failure
 
-                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id)
+                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id, save_answer=save_answer)
                 synced = uploaded + downloaded
 
                 self._logger.info(
@@ -981,15 +952,15 @@ class SyncEngine:
                 if self._save_sync_blocked():
                     return self._content_dir_skip()
 
-                unsupported = await self._loop.run_in_executor(None, self.unsupported_save_shape, rom_id)
-                if unsupported is not None:
-                    return self._save_shape_skip(unsupported)
+                save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+                if save_answer is not None and not save_answer.syncable:
+                    return save_shape_skip(save_answer)
 
                 failure = await self._ensure_device_live_or_fail()
                 if failure is not None:
                     return failure
 
-                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id)
+                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id, save_answer=save_answer)
                 synced = uploaded + downloaded
 
                 msg = _summarize_sync_result(

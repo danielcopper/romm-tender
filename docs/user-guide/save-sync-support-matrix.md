@@ -32,8 +32,8 @@ and they mean different things:
 - **The emulator keeps one save card that all games share.** Standalone PCSX2 is the common case. Syncing it per game
   would copy other games' progress onto this one's record, so the plugin leaves it alone.
 - **The save is written inside the game file itself.** There is no separate file to carry.
-- **Part of the file name comes from the game's own id**, which the plugin cannot read yet. Dreamcast, GameCube,
-  Nintendo 3DS and Wii U are here.
+- **The emulator files saves under the game's own identity**, which the plugin cannot read yet — in the file name for
+  Dreamcast, in the folder name for GameCube. Dreamcast, GameCube, Nintendo 3DS and Wii U are here.
 - **What the emulator writes could not be established** — either nobody has audited that core yet, or the folder is
   known and the names inside it are not.
 
@@ -52,8 +52,16 @@ read again for the new one.
 ## What syncs today ✅
 
 Standard per-game cartridge saves sync automatically. That covers the large majority of systems — Nintendo (NES, SNES,
-Game Boy / Color / Advance, N64, DS), Sega (Master System, Game Gear, Genesis / Mega Drive, Sega CD), PC Engine /
-TurboGrafx, WonderSwan, Atari Lynx, Virtual Boy, and more.
+Game Boy / Color / Advance, N64, DS), Sega (Master System, Game Gear, Genesis / Mega Drive), PC Engine / TurboGrafx,
+WonderSwan, Atari Lynx, Virtual Boy, and more.
+
+**Sega CD depends on your game file.** A raw `.bin` dump saves per game and syncs; a `.chd`, `.cue` or `.iso` disc image
+puts the save on a shared BRAM card that all your Sega CD games write to, which cannot be carried per game. Amiga is the
+same story with different answers: a `.chd` CD32 image saves per game, while an `.adf` floppy writes into the disk image
+itself and an `.hdf` hard-disk image cannot be established at all.
+
+3DO and Neo Geo are named right and still not found: those emulators keep saves in a per-emulator subfolder that the
+plugin does not yet look in.
 
 The systems whose default core has been **watched writing a save on a stock RetroDECK install** are Game Boy / Color /
 Advance, N64, Saturn, Neo Geo Pocket (Color) and Pokémon Mini. The rest of the ✅ rows follow the same standard `.srm`

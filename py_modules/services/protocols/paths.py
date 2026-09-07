@@ -173,6 +173,15 @@ class SaveLocationReader(Protocol):
     seam exists to avoid: the user changes a core's options in the emulator's
     own quick menu between one launch and the next sync, and a stale answer
     would have the plugin carry a shared card as though it were one game's.
+    Within one sync operation the entry gate's reading is handed down rather
+    than taken again — live is a property of operations, not of layers.
+
+    Named ``…Reader`` although it has a single method, which the suffix
+    convention reserves for object-shaped Protocols with several. It is not
+    ``__call__``-only, so ``…Fn`` would be the wrong half of that rule, and the
+    named method is load-bearing: `scripts/check_uow_seam_nesting.py` matches
+    this seam by ``resolve_save_answer``, where a call-shaped seam is matchable
+    only by whatever attribute a consumer happens to bind it to.
     """
 
     def resolve_save_answer(self, *, system: str, content_path: str, emulator_label: str | None) -> SaveAnswer: ...

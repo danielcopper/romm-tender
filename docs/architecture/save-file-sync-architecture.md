@@ -1027,23 +1027,22 @@ bulk strategy modal (overwrite / skip / cancel). That is intentional. ROMs and B
 
 All paths below are relative to `<saves_path>` from `retrodeck.json`.
 
-| System                    | Save Path Example             | Extension |
-| ------------------------- | ----------------------------- | --------- |
-| NES                       | `saves/nes/game.srm`          | `.srm`    |
-| SNES                      | `saves/snes/game.srm`         | `.srm`    |
-| Game Boy                  | `saves/gb/game.srm`           | `.srm`    |
-| Game Boy Color            | `saves/gbc/game.srm`          | `.srm`    |
-| Game Boy Advance          | `saves/gba/game.srm`          | `.srm`    |
-| Genesis / Mega Drive      | `saves/genesis/game.srm`      | `.srm`    |
-| Master System             | `saves/mastersystem/game.srm` | `.srm`    |
-| Nintendo 64               | `saves/n64/game.srm`          | `.srm`    |
-| PlayStation (RetroArch)   | `saves/psx/game.srm`          | `.srm`    |
-| Saturn                    | `saves/saturn/game.srm`       | `.srm`    |
-| Dreamcast                 | `saves/dreamcast/game.srm`    | `.srm`    |
-| PC Engine / TurboGrafx-16 | `saves/pcengine/game.srm`     | `.srm`    |
-| Neo Geo Pocket            | `saves/ngp/game.srm`          | `.srm`    |
-| WonderSwan                | `saves/wonderswan/game.srm`   | `.srm`    |
-| Atari Lynx                | `saves/atarilynx/game.srm`    | `.srm`    |
+**There is no fixed table any more.** The file names come from the save answer, read per ROM and per the emulator that
+would launch it, so the examples below are illustrations of the SHAPE rather than a list to rely on — the same system
+answers differently for a different game file, and three of the rows a table like this used to carry were wrong.
+
+| System           | Save path example       | What the answer names                                                                   |
+| ---------------- | ----------------------- | --------------------------------------------------------------------------------------- |
+| Game Boy Advance | `saves/gba/game.srm`    | `<stem>.srm`                                                                            |
+| Game Boy         | `saves/gb/game.srm`     | `<stem>.srm` and `<stem>.rtc`                                                           |
+| Saturn           | `saves/saturn/game.bkr` | `<stem>.bkr` and `<stem>.bcr`, plus a `.smpc` that is configuration and is never synced |
+| Nintendo DS      | `saves/nds/game.dsv`    | `<stem>.dsv`                                                                            |
+| Neo Geo Pocket   | `saves/ngp/game.flash`  | `<stem>.flash`                                                                          |
+| PlayStation 2    | —                       | a shared memory card: refused                                                           |
+| Dreamcast        | —                       | a card named after the game's own id: refused                                           |
+
+The per-state picture, and which systems land where on a stock RetroDECK, is in
+[Save sync coverage](save-sync-coverage.md).
 
 ## Slot Deletion
 
@@ -2084,11 +2083,13 @@ Key challenges:
 
 Standalone emulator support is tracked on the [GitHub Projects board](https://github.com/users/danielcopper/projects/2).
 
-### Shared memory cards deferred
+### Shared memory cards are refused, not deferred
 
-PS1 and PS2 games using RetroArch cores that save to shared memory cards (rather than per-game `.srm`) are not handled.
-Syncing a shared memory card affects all games on the card, requiring system-level tracking rather than per-game
-tracking. Deferred to Phase 7.
+An emulator that writes a card many games share cannot be synced per game — a download would carry another game's
+progress onto this one's record and back out to every device. The machine now decides this per ROM: the save answer
+reports the `shared` state and the sync refuses with the benign-skip shape, so the user is told rather than shown "no
+saves". Offering to switch a core off its shared card is separate work, tracked on the
+[GitHub Projects board](https://github.com/users/danielcopper/projects/2).
 
 ### No aggregate playtime field in RomM (yet)
 

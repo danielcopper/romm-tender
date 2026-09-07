@@ -1195,12 +1195,12 @@ class TestPerRomLockSerialization:
         events: list[tuple[str, float]] = []
         original = svc._sync_engine.do_sync_rom_saves
 
-        def wrapped(rom_id: int, *args):
+        def wrapped(rom_id: int, *args, **kwargs):
             events.append(("enter", time.time()))
             # Sleep to ensure overlap is *possible* if the lock is broken.
             time.sleep(0.05)
             try:
-                return original(rom_id, *args)
+                return original(rom_id, *args, **kwargs)
             finally:
                 events.append(("exit", time.time()))
 
@@ -1232,11 +1232,11 @@ class TestPerRomLockSerialization:
         events: list[tuple[int, str, float]] = []
         original = svc._sync_engine.do_sync_rom_saves
 
-        def wrapped(rom_id: int, *args):
+        def wrapped(rom_id: int, *args, **kwargs):
             events.append((rom_id, "enter", time.time()))
             time.sleep(0.05)
             try:
-                return original(rom_id, *args)
+                return original(rom_id, *args, **kwargs)
             finally:
                 events.append((rom_id, "exit", time.time()))
 

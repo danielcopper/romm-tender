@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from domain.emulator_tag import detect_core_change
 from domain.iso_time import parse_iso_to_epoch
 from domain.rom_save_sync_state import RomSaveSyncState
-from domain.save_answer import unestablished_answer
+from domain.save_answer import UNESTABLISHED_NOT_ASKED, unestablished_answer
 from domain.save_attribution import compute_uploaded_by_us
 from domain.save_layout import ContentDir
 from domain.save_slot import filter_saves_to_slot
@@ -227,7 +227,11 @@ class StatusService:
         # states refuse the sync, and the refusal is the same one the content-dir
         # gate performs: no ``info`` means no local probe and no baseline-adopt
         # write, so nothing is looked for and nothing is recorded.
-        save_answer = unestablished_answer() if savefiles_in_content_dir else self._rom_info.save_answer(rom_id)
+        save_answer = (
+            unestablished_answer(shape=UNESTABLISHED_NOT_ASKED)
+            if savefiles_in_content_dir
+            else self._rom_info.save_answer(rom_id)
+        )
 
         skip_probe = savefiles_in_content_dir or not save_answer.syncable
         info = None if skip_probe else self._rom_info.get_rom_save_info(rom_id)

@@ -8,7 +8,8 @@ testable without a machine, and so ``services/`` never sees a resolver type.
 The five states are the whole point. Save sync copies a per-game file to a
 per-ROM record on the server, and that model is simply wrong for most of what
 emulators actually write — a card many games share, a directory whose contents
-nobody enumerated, a name half of which comes from the game's own id. Only
+nobody enumerated, a path or a name half of which is the game's own identity.
+Only
 :data:`SAVE_STATE_PER_GAME_FILES` is a save this plugin can carry; the other four
 are refusals, and each says something different about why. Every one of them is
 an honest "we are not touching this", never "there is nothing here".
@@ -30,6 +31,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+from domain.save_layout import SAVE_SYNC_CONTENT_DIR_REASON
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -48,13 +51,21 @@ SaveState = Literal[
     "unestablished",
 ]
 
-# The two shapes inside ``unestablished``. They are kept apart because they are
-# different sentences to a user: one says nobody has ever established what this
-# emulator writes, the other says we know the directory and not the names in it.
+# The three shapes inside ``unestablished``. They are kept apart because they
+# are three different sentences to a user, and the fifth state is where every
+# doubt lands, so collapsing them would make one message stand for all of them.
+#
+# ``not_asked`` is the one that is easy to lose: the question was never put, so
+# the emulator is not implicated at all. RetroArch writing saves to the content
+# directory reaches it, and so does a ROM with no resolvable emulator. Without
+# it those payloads are byte-identical to an unaudited core's, and a page would
+# tell a user their emulator is a mystery when the truth is that the plugin
+# never asked.
 UNESTABLISHED_NOTHING = "nothing_established"
 UNESTABLISHED_DIRECTORY_KNOWN = "directory_known"
+UNESTABLISHED_NOT_ASKED = "not_asked"
 
-UnestablishedShape = Literal["nothing_established", "directory_known"]
+UnestablishedShape = Literal["nothing_established", "directory_known", "not_asked"]
 
 # Roles that are the emulator's configuration rather than the player's progress.
 # A configuration file is never synced: it is machine-local by nature, and
@@ -81,6 +92,20 @@ _FILE_NAMES_UNESTABLISHED = "file-names-unestablished"
 # It says the SHAPE of this game's save is not one the plugin can carry per
 # game, which is a statement about the emulator and never about the server.
 SAVE_SHAPE_UNSUPPORTED_REASON = "save_shape_unsupported"
+
+# Every ``reason`` slug that means "the sync did not run, and that is fine".
+# Both are statements about the machine, not failures, so no surface may report
+# one as an error: the launch path proceeds silently and the post-exit path
+# raises no toast. A reason outside this set IS a failure. Kept here, beside the
+# state that produces the second one, so every consumer routes on one list
+# rather than growing its own equality test — which is exactly how the
+# post-exit toast came to fire for half the mapped systems.
+BENIGN_SYNC_SKIP_REASONS: frozenset[str] = frozenset(
+    {
+        SAVE_SYNC_CONTENT_DIR_REASON,
+        SAVE_SHAPE_UNSUPPORTED_REASON,
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,7 +208,10 @@ class SaveAnswer:
 _STATE_MESSAGES: dict[str, str] = {
     SAVE_STATE_SHARED: "Save sync is unavailable: this emulator keeps one save card that all games share.",
     SAVE_STATE_INSIDE_CONTENT: "Save sync is unavailable: this emulator writes saves inside the game file itself.",
-    SAVE_STATE_HOLE: "Save sync is unavailable: part of this game's save file name comes from the game's own id.",
+    SAVE_STATE_HOLE: (
+        "Save sync is unavailable: this emulator files saves under an identity of the game "
+        "that this plugin cannot read."
+    ),
     SAVE_STATE_UNESTABLISHED: "Save sync is unavailable: what this emulator writes could not be established.",
 }
 
@@ -223,16 +251,20 @@ def unestablished_answer(
     *,
     emulator: str | None = None,
     caveats: tuple[str, ...] = (),
+    shape: UnestablishedShape = UNESTABLISHED_NOTHING,
 ) -> SaveAnswer:
-    """The answer for a question that could not be put, or was refused.
+    """The answer for a question that could not be put, or was put and refused.
 
-    Nothing was detected, the plugin resolved no emulator to ask about, the
-    entry declined, or the resolver raised. All four are the same fact — nobody
-    established anything — and all four refuse.
+    All of them refuse the sync; *shape* is what separates them for a reader.
+    :data:`UNESTABLISHED_NOT_ASKED` where no question reached the resolver — no
+    emulator resolved, nothing detected, no catalogue entry under that label,
+    saves written to the content directory. :data:`UNESTABLISHED_NOTHING` where
+    it was asked and could establish nothing, including where it declined or
+    raised.
     """
     return SaveAnswer(
         state=SAVE_STATE_UNESTABLISHED,
-        unestablished=UNESTABLISHED_NOTHING,
+        unestablished=shape,
         emulator=emulator,
         directory=None,
         backing_directory=None,
