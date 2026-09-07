@@ -158,16 +158,30 @@ function formatLibraryLine(stats: SyncStats): string {
   return parts.join(" · ");
 }
 
+/** Whether the preview's work includes a collection the sync would add, drop or
+ *  re-populate — read off the two diffs `previewHasChanges` reads for the same
+ *  question, so the slot and the Apply button cannot disagree about it. */
+function previewMovesACollection(summary: SyncPreview["summary"]): boolean {
+  return (
+    !!(summary.collection_diff?.added.length || summary.collection_diff?.removed.length) ||
+    !!summary.platform_collection_diff?.has_changes
+  );
+}
+
 /**
  * What the conditional slot states about a preview waiting to be reviewed: its
  * counts, in the same three words the page's own table column headings use.
  *
  * A zero part is dropped rather than shown, and a preview with none of the three
- * names the work it does hold instead of showing a row of zeros. Cover work is
- * the one such preview that can be named in two words, so it is; the others a
- * zero-count preview can be — a platform re-stamp, a collection membership that
- * moved, or a delta that is genuinely empty — are not cover work and must not be
- * called it, so they keep the plain invitation and the page states which it is.
+ * names the work it does hold instead of showing a row of zeros — there being
+ * exactly one line to spend, and that being the case where the counts cannot
+ * spend it. Two of the three such previews can be named: a collection that
+ * moved, and cover work. **The collection wins where a preview is both**,
+ * because it is the one whose result the reader will see in Steam. What is left
+ * keeps the plain invitation: a platform re-stamp, which has nothing a reader
+ * would recognise to name, and a genuinely empty delta, which has nothing at
+ * all. Neither may be called cover work, and the page behind the slot is where
+ * it is said which of them it is.
  */
 function previewCountsLine(preview: SyncPreview): string {
   const s = preview.summary;
@@ -176,6 +190,7 @@ function previewCountsLine(preview: SyncPreview): string {
   if (s.changed_count > 0) parts.push(`${s.changed_count} updated`);
   if (s.remove_count > 0) parts.push(`${s.remove_count} removed`);
   if (parts.length > 0) return parts.join(" · ");
+  if (previewMovesACollection(s)) return "collection changes";
   return (s.cover_refresh_count ?? 0) > 0 ? "cover work only" : "ready to review";
 }
 

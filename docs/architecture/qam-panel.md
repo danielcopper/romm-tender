@@ -381,14 +381,17 @@ numbers beside it still come from `useSyncRunView`, which the Sync page reads to
 both pages.
 
 A pending preview's counts drop their zero parts, and one with none of the three names the work it does hold rather than
-showing a row of zeros: **cover work only** where the delta is cover refreshes, and the plain **ready to review** for
-the other zero-count previews — a platform re-stamp, a collection membership that moved, a genuinely empty delta —
-because none of those is cover work and the page is where it is said which. An expired preview counts as none; the
-backend drops one past its 30-minute TTL (`PREVIEW_MAX_AGE_SECONDS`). What ticks for that is a single timer aimed at the
-deadline, not a per-second interval: nothing on Main counts a preview down, so the only moment the clock changes
-anything here is the one the slot disappears at. **Main never discards a preview**, and since it can no longer start one
-either, it holds none of the paths that answer the preview question — the invariant register's pending-preview entry
-names all of them, and every one is the Sync page's.
+showing a row of zeros — there being one line to spend, and that being the case where the counts cannot spend it. Two of
+those previews can be named: **collection changes** where the sync would add, drop or re-populate one, and **cover work
+only** where the delta is cover refreshes. A preview holding both reads as the collection, because that is the one whose
+result the reader will see in Steam. The rest keep the plain **ready to review** — a platform re-stamp, which has
+nothing a reader would recognise to name, and a genuinely empty delta, which has nothing at all — and the page behind
+the slot is where it is said which. An expired preview counts as none; the backend drops one past its 30-minute TTL
+(`PREVIEW_MAX_AGE_SECONDS`). What ticks for that is a single timer aimed at the deadline, not a per-second interval:
+nothing on Main counts a preview down, so the only moment the clock changes anything here is the one the slot disappears
+at. **Main never discards a preview**, and since it can no longer start one either, it holds none of the paths that
+answer the preview question — the invariant register's pending-preview entry names all of them, and every one is the
+Sync page's.
 
 **Cancel Sync** sits directly under the slot while a run is in flight, and nowhere else. It is an action on the thing
 being displayed rather than navigation, so it does not break the rule above; the alternative was two presses to stop a

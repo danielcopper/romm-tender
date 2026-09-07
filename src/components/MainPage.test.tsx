@@ -2061,10 +2061,41 @@ describe("MainPage", () => {
       expect(container.textContent).not.toContain("0 new");
     });
 
+    it("names a collection change, the one the reader will see in Steam", async () => {
+      adoptPreview(
+        previewSummary({
+          new_count: 0,
+          changed_count: 0,
+          collection_diff: { has_changes: true, added: ["Favourites"], removed: [] },
+        }),
+      );
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+
+      expect(slotValue(container)).toBe("collection changes");
+    });
+
+    it("names the collection over the covers where a preview holds both", async () => {
+      // The reader sees a collection appear in Steam; a refreshed cover only
+      // replaces a tile they already have.
+      adoptPreview(
+        previewSummary({
+          new_count: 0,
+          changed_count: 0,
+          cover_refresh_count: 7,
+          platform_collection_diff: { has_changes: true, added_count: 1, removed_count: 0 },
+        }),
+      );
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+
+      expect(slotValue(container)).toBe("collection changes");
+    });
+
     it("does not call a re-stamp cover work — it invites a review instead", async () => {
-      // The other zero-count previews: a platform re-stamp, a collection
-      // membership that moved, an empty delta. Each still has something for
-      // Apply to do, and none of it is cover work — the page says which.
+      // What is left once the two nameable cases are taken: a platform re-stamp
+      // has something for Apply to do and nothing a reader would recognise to
+      // name, and it is not cover work — the page says which it is.
       adoptPreview(previewSummary({ new_count: 0, changed_count: 0, restamp_platform_count: 2 }));
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
