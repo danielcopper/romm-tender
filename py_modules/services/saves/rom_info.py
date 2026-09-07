@@ -151,6 +151,19 @@ class RomInfoService:
             "file_path": file_path,
         }
 
+    def is_content_installed(self, rom_id: int) -> bool:
+        """Whether this ROM's content is on disk, without resolving where its saves go.
+
+        The same install-row question :meth:`get_rom_save_info` asks first, minus
+        the save-directory math behind it — which under ``sort_by_core`` parses a
+        core's ``.info`` file. Callers that need only ``content_installed`` for a
+        :class:`~domain.save_answer.SaveAnswer` they fabricate themselves ask
+        here, so stating an honest install state costs one row read.
+        """
+        with self._uow_factory() as uow:
+            installed = uow.rom_installs.get(int(rom_id))
+        return bool(installed and installed.system and installed.file_path)
+
     def current_save_sorting(self) -> InSaveDir:
         """The subdirectory sorting savefile paths are resolved with right now.
 
@@ -257,9 +270,10 @@ class RomInfoService:
         The system is the NORMALIZED one the install record carries, never the
         raw RomM ``platform_slug`` beside it (ADR-0010): the slug names no
         system any emulator declares, so asking with it answers about nothing.
-        One of the two places that decide a system and a path —
+        One of the two places in THIS service that decide a system and a path —
         :meth:`_uninstalled_answer` is the other — so the leak has two sites to
-        guard rather than one per caller.
+        guard here rather than one per caller. ``services/migration.py`` decides
+        its own, off the install record, and is the third site the rule holds at.
         """
         return self._ask_resolver(rom_id, info["system"], info["file_path"], installed=True)
 
@@ -278,13 +292,18 @@ class RomInfoService:
             content_installed=installed,
         )
 
-    def synced_save_names(self, rom_id: int) -> tuple[list[str], str | None]:
+    def synced_save_names(self, rom_id: int, *, save_answer: SaveAnswer | None = None) -> tuple[list[str], str | None]:
         """The basenames a sync may carry for this ROM, and the directory they sit in.
 
         Empty names with a ``None`` directory whenever the ROM's save may not be
         synced — every refusing state, and an uninstalled ROM. That pairing is
         what makes a refusal cost no probe: there is nothing to look for and
         nowhere to look.
+
+        *save_answer* is this ROM's reading where the caller already took one in
+        the same operation, and it is used instead of taking a second. Live is a
+        property of operations rather than of layers, and a reading costs real
+        machine I/O on a path that runs at every launch and every exit.
 
         The directory is still the plugin's own ``resolve_save_dir`` answer
         rather than the resolver's, because retiring that path math is its own
@@ -294,15 +313,16 @@ class RomInfoService:
         info = self.get_rom_save_info(rom_id)
         if not info:
             return ([], None)
-        answer = self._installed_answer(rom_id, info)
+        answer = save_answer if save_answer is not None else self._installed_answer(rom_id, info)
         return (list(answer.synced_names), info["saves_dir"] if answer.syncable else None)
 
-    def find_save_files(self, rom_id: int) -> list[dict[str, str]]:
+    def find_save_files(self, rom_id: int, *, save_answer: SaveAnswer | None = None) -> list[dict[str, str]]:
         """Find local save files for a ROM.
 
-        Returns list of ``{"path": str, "filename": str}``.
+        Returns list of ``{"path": str, "filename": str}``. *save_answer* passes
+        a reading the caller already holds through to :meth:`synced_save_names`.
         """
-        return self.probe_save_files(*self.synced_save_names(rom_id))
+        return self.probe_save_files(*self.synced_save_names(rom_id, save_answer=save_answer))
 
     def probe_save_files(self, names: list[str], saves_dir: str | None) -> list[dict[str, str]]:
         """Which of *names* are actually on disk under *saves_dir*.

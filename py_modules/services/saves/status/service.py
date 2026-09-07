@@ -228,7 +228,10 @@ class StatusService:
         # gate performs: no ``info`` means no local probe and no baseline-adopt
         # write, so nothing is looked for and nothing is recorded.
         save_answer = (
-            unestablished_answer(shape=UNESTABLISHED_NOT_ASKED)
+            unestablished_answer(
+                shape=UNESTABLISHED_NOT_ASKED,
+                content_installed=self._rom_info.is_content_installed(rom_id),
+            )
             if savefiles_in_content_dir
             else self._rom_info.save_answer(rom_id)
         )
