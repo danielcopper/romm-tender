@@ -215,7 +215,11 @@ export function useSyncPage(): SyncPageState {
         logError(`Failed to discard the pending preview before refreshing it: ${e}`);
       }
     }
-    setStoredSyncProgress({ running: true, stage: "fetching", message: "Fetching library..." });
+    // The kind is stamped on the optimistic frame as well as claimed by the
+    // backend, so Main's slot names the run from its first paint rather than
+    // reading as "not established" for the round trip. The backend states it
+    // again on every frame it emits and its answer is what stands.
+    setStoredSyncProgress({ running: true, stage: "fetching", message: "Fetching library...", runKind: "preview" });
     try {
       // Reconcile shortcuts the user deleted through Steam's own UI BEFORE the
       // work queue is built: unbind any dead binding so the incremental skip
@@ -283,7 +287,13 @@ export function useSyncPage(): SyncPageState {
     setStatus(null);
     setCancellingRunId(null);
     setBusy(true);
-    setStoredSyncProgress({ running: true, stage: "applying", message: "Applying changes...", etaSeconds });
+    setStoredSyncProgress({
+      running: true,
+      stage: "applying",
+      message: "Applying changes...",
+      etaSeconds,
+      runKind: "apply",
+    });
     try {
       const result = await syncApplyDelta(previewId);
       if (!result.success) {
@@ -393,7 +403,7 @@ export function useSyncPage(): SyncPageState {
     setStatus(null);
     resetSyncCancel();
     setCancellingRunId(null);
-    setStoredSyncProgress({ running: true, stage: "fetching", message: "Fetching library..." });
+    setStoredSyncProgress({ running: true, stage: "fetching", message: "Fetching library...", runKind: "apply" });
     try {
       await reconcileStaleShortcuts();
       const result = await startSync();

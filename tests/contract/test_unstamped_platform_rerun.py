@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 
 from domain.sync_run import SyncRun
+from domain.sync_run_kind import SyncRunKind
 from domain.sync_state import SyncState
 
 _ONE_DAY_SEC = 86400
@@ -62,7 +63,7 @@ def _seed_library(harness) -> None:
 
 
 async def _run_sync(harness, run_id: str) -> None:
-    assert harness.plugin._sync_service._box.try_begin_run(run_id) is True
+    assert harness.plugin._sync_service._box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
     await _orchestrator(harness)._do_sync_per_unit()
 
 

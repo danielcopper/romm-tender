@@ -123,27 +123,6 @@ export function onRunUnitsChange(fn: () => void): () => void {
   };
 }
 
-/** The run the rows belong to, `""` before any plan has been seeded.
- *
- * Exported because a plan is what tells an APPLY run from a PREVIEW run, and
- * nothing else in the frame stream does: `sync_plan` is emitted by the per-unit
- * apply pipeline and by nothing else, while `sync_preview` narrates the same
- * work queue through frames of exactly the same shape
- * (`services/library/sync_orchestrator.py`). A reader that needs only the KIND
- * of the run in flight compares this against the frame's own run id rather than
- * reading a stage sequence the two share frame for frame. It answers the last
- * run's id once that run has ended, for the same reason the rows do — which is
- * why the comparison is against the run in flight and never a bare truthiness
- * test. */
-export function getRunPlanRunId(): string {
-  return _runId ?? "";
-}
-
-/** Subscribe a component to {@link getRunPlanRunId}. */
-export function useRunPlanRunId(): string {
-  return useSyncExternalStore(onRunUnitsChange, getRunPlanRunId);
-}
-
 /** Subscribe a component to the run's units. Renders what the run has filled in
  *  so far immediately — the store outlives the page, so a page opened mid-run
  *  shows the units behind the running one rather than starting from nothing. */

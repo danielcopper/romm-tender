@@ -13,6 +13,7 @@ asserting the response shape and the downstream effect on run B's terminal
 
 from __future__ import annotations
 
+from domain.sync_run_kind import SyncRunKind
 from domain.sync_state import SyncState
 
 
@@ -150,7 +151,7 @@ async def test_apply_rejected_while_run_in_flight_emits_single_complete(harness)
     preview_id = preview["preview_id"]
 
     # A run is now in flight (the legitimate apply already running).
-    assert box.try_begin_run("active-run") is True
+    assert box.try_begin_run("active-run", kind=SyncRunKind.APPLY) is True
 
     # A second apply lands mid-run — rejected, the staged delta survives.
     rejected = await harness.plugin.sync_apply_delta(preview_id)

@@ -35,6 +35,7 @@ from adapters.persistence import (
     PersistenceAdapter,
 )
 from domain.sync_diff import BIND_ROM_ID_KEY
+from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
 from domain.sync_state import SyncState
 from domain.work_unit import WorkUnit
@@ -130,7 +131,7 @@ def _stash_abandoned_and_wind_down(plugin, *, run_id, unit_id, chunk_index, pend
     the ``abandoned_chunk`` stash rather than the (dead) active-unit path.
     """
     box = plugin._sync_service._box
-    box.try_begin_run(run_id)
+    box.try_begin_run(run_id, kind=SyncRunKind.APPLY)
     box.active_unit_id = unit_id
     box.active_chunk_index = chunk_index
     box.pending_sync = dict(pending)
@@ -644,7 +645,7 @@ class TestSyncApplyDelta:
         """
         self._setup_pending_delta(plugin, "pv-1")
         box = plugin._sync_service._box
-        assert box.try_begin_run("active-run") is True
+        assert box.try_begin_run("active-run", kind=SyncRunKind.APPLY) is True
 
         result = await plugin.sync_apply_delta("pv-1")
 
@@ -816,7 +817,7 @@ class TestGetPendingPreview:
         self._preview_setup(plugin, fake_romm_api)
         await plugin.sync_preview()
         box = plugin._sync_service._box
-        assert box.try_begin_run("run-1") is True
+        assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
 
         assert await plugin.get_pending_preview() == {"success": True, "preview": None}
         assert box.pending_delta is not None
@@ -826,7 +827,7 @@ class TestGetPendingPreview:
         self._preview_setup(plugin, fake_romm_api)
         fresh = await plugin.sync_preview()
         box = plugin._sync_service._box
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         assert await plugin.get_pending_preview() == {"success": True, "preview": None}
 
         box.finish_run("run-1")
@@ -1041,7 +1042,7 @@ class TestGetSyncStatus:
             "totalSteps": 2,
         }
         plugin._sync_service._sync_progress = snapshot
-        plugin._sync_service._box.try_begin_run("run-live")
+        plugin._sync_service._box.try_begin_run("run-live", kind=SyncRunKind.APPLY)
 
         status = plugin._sync_service.get_sync_status()
 
@@ -1058,7 +1059,7 @@ class TestGetSyncStatus:
         is still winding down. It reads ``inFlight`` instead.
         """
         box = plugin._sync_service._box
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         box.request_cancel("run-1")
         plugin._sync_service._sync_progress = {
             "running": False,
@@ -1080,7 +1081,7 @@ class TestGetSyncStatus:
         mount believing a run is live with nothing on the page to escape it.
         """
         box = plugin._sync_service._box
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         box.finish_run("run-1")
 
         status = plugin._sync_service.get_sync_status()
@@ -1125,6 +1126,169 @@ class TestGetSyncStatus:
         )
 
         assert plugin._sync_service.get_sync_status()["subStage"] == ""
+
+
+class TestRunKindOnTheWire:
+    """The run's KIND is stated on every frame, never inferred from the stream.
+
+    A preview run and an apply run emit the same stages over the same work
+    queue, so nothing in the stream tells them apart and no absence is evidence
+    either — a plan's absence conflates "this is a preview" with "nobody has
+    said yet". The kind is therefore claimed with the run slot and read off the
+    box wherever a frame is built: ``emit_progress``, the CANCELLED terminal and
+    the per-unit ERROR terminal.
+    """
+
+    def _frames(self):
+        import decky
+
+        return [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_progress"]
+
+    def test_start_sync_claims_the_slot_as_an_apply_run(self, plugin):
+        plugin.loop = asyncio.get_event_loop()
+        plugin._sync_service._orchestrator._do_sync_per_unit = AsyncMock()
+
+        assert plugin._sync_service.start_sync()["success"] is True
+
+        assert plugin._sync_service._box.run_kind is SyncRunKind.APPLY
+
+    @pytest.mark.asyncio
+    async def test_apply_delta_claims_the_slot_as_an_apply_run(self, plugin):
+        plugin.loop = asyncio.get_event_loop()
+        plugin._sync_service._orchestrator._do_sync_per_unit = AsyncMock()
+        plugin._sync_service._box.stage_preview(
+            preview_id="p1",
+            created_at=plugin._sync_service._orchestrator._clock.time(),
+            answer={"success": True, "preview_id": "p1"},
+        )
+
+        assert (await plugin._sync_service.sync_apply_delta("p1"))["success"] is True
+
+        assert plugin._sync_service._box.run_kind is SyncRunKind.APPLY
+
+    @pytest.mark.asyncio
+    async def test_every_preview_frame_says_preview_including_the_terminal(self, plugin, fake_romm_api):
+        import decky
+
+        plugin.loop = asyncio.get_event_loop()
+        decky.emit.reset_mock()
+        _use_fake_romm(plugin, fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="N64",
+            slug="n64",
+            roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}],
+        )
+        plugin.settings["enabled_platforms"] = {"1": True}
+
+        assert (await plugin.sync_preview())["success"] is True
+
+        frames = self._frames()
+        assert len(frames) > 1, "a preview emits a discovering frame and one per unit"
+        assert {f["runKind"] for f in frames} == {"preview"}
+        # The terminal frame carries it too — it is the one a panel that arrived
+        # late is most likely to be reading.
+        assert frames[-1]["stage"] == "done"
+        assert frames[-1]["runKind"] == "preview"
+
+    @pytest.mark.asyncio
+    async def test_every_apply_frame_says_apply(self, plugin, fake_romm_api):
+        import decky
+
+        plugin.loop = asyncio.get_event_loop()
+        _use_fake_romm(plugin, fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="N64",
+            slug="n64",
+            roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}],
+        )
+        plugin.settings["enabled_platforms"] = {"1": True}
+        plugin._sync_service._cover_preparer._download_artwork = AsyncMock(return_value={})
+        plugin._sync_service._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
+        assert plugin._sync_service._box.try_begin_run("run-apply", kind=SyncRunKind.APPLY) is True
+        decky.emit.reset_mock()
+
+        await plugin._sync_service._orchestrator._do_sync_per_unit()
+
+        frames = self._frames()
+        assert frames, "an apply run narrates its units"
+        assert {f["runKind"] for f in frames} == {"apply"}
+
+    @pytest.mark.asyncio
+    async def test_the_snapshot_a_remounted_qam_re_seeds_from_carries_it(self, plugin):
+        """The case an inference cannot reach: the frontend reloaded mid-run.
+
+        Its store starts empty, so the only thing that can tell it what the run
+        it is watching is doing is the snapshot ``get_sync_status`` hands back.
+        """
+        assert plugin._sync_service._box.try_begin_run("run-live", kind=SyncRunKind.PREVIEW) is True
+        await plugin._sync_service._orchestrator.emit_progress(
+            SyncStage.FETCHING, message="Fetching N64", step=1, total_steps=2
+        )
+
+        assert plugin._sync_service.get_sync_status()["runKind"] == "preview"
+
+    @pytest.mark.asyncio
+    async def test_the_cancelled_terminal_carries_it(self, plugin):
+        import decky
+
+        assert plugin._sync_service._box.try_begin_run("run-cancel", kind=SyncRunKind.PREVIEW) is True
+        decky.emit.reset_mock()
+
+        await plugin._sync_service._orchestrator._finish_sync("Sync cancelled")
+
+        frames = self._frames()
+        assert frames[-1]["stage"] == "cancelled"
+        assert frames[-1]["runKind"] == "preview"
+
+    @pytest.mark.asyncio
+    async def test_the_per_unit_error_terminal_carries_it(self, plugin, fake_romm_api):
+        import decky
+
+        plugin.loop = asyncio.get_event_loop()
+        _use_fake_romm(plugin, fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="N64",
+            slug="n64",
+            roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}],
+        )
+        plugin.settings["enabled_platforms"] = {"1": True}
+        # Blow up inside the unit loop, after the plan — the ERROR frame that
+        # path builds is a dict literal of its own, not an ``emit_progress``.
+        plugin._sync_service._orchestrator._sync_one_unit = AsyncMock(side_effect=RuntimeError("boom"))
+        assert plugin._sync_service._box.try_begin_run("run-err", kind=SyncRunKind.APPLY) is True
+        decky.emit.reset_mock()
+
+        await plugin._sync_service._orchestrator._do_sync_per_unit()
+
+        frames = self._frames()
+        assert frames[-1]["stage"] == "error"
+        assert frames[-1]["runKind"] == "apply"
+
+    @pytest.mark.asyncio
+    async def test_a_finished_run_leaves_no_kind_behind(self, plugin, fake_romm_api):
+        """The idle snapshot states no kind, so a later mount reads "not
+        established" rather than the previous run's answer."""
+        plugin.loop = asyncio.get_event_loop()
+        _use_fake_romm(plugin, fake_romm_api)
+        _seed_platform(
+            fake_romm_api,
+            platform_id=1,
+            name="N64",
+            slug="n64",
+            roms=[{"id": 1, "name": "Game A", "fs_name": "a.z64"}],
+        )
+        plugin.settings["enabled_platforms"] = {"1": True}
+
+        assert (await plugin.sync_preview())["success"] is True
+
+        assert plugin._sync_service._box.run_kind is None
+        assert plugin._sync_service.get_sync_status()["runKind"] == ""
 
 
 class TestSyncPreviewErrorHandling:
@@ -2935,7 +3099,7 @@ class TestReportUnitResults:
         duplicate) records the mapping but commits nothing — the active-unit
         branch signals no event and never double-commits (#1052)."""
         box = plugin._sync_service._box
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         box.active_unit_id = 1
         box.active_chunk_index = 0
         box.unit_complete_event = None
@@ -3076,7 +3240,7 @@ class TestRealOrchestratorLateAckRecovery:
         dispatcher._sleeper = _ClockAdvancingSleeper(dispatcher._clock, 999.0)
 
         # Real run start (claims the slot + stamps current_sync_id).
-        assert plugin._sync_service._box.try_begin_run("run-headline") is True
+        assert plugin._sync_service._box.try_begin_run("run-headline", kind=SyncRunKind.APPLY) is True
         plugin._sync_service._box.sync_last_heartbeat = orch._clock.monotonic()
 
         await orch._do_sync_per_unit()
@@ -3136,7 +3300,7 @@ class TestRealOrchestratorLateAckRecovery:
         dispatcher = plugin._sync_service._chunk_dispatcher
         dispatcher._sleeper = _ClockAdvancingSleeper(dispatcher._clock, 999.0)
 
-        assert plugin._sync_service._box.try_begin_run("run-1") is True
+        assert plugin._sync_service._box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
         plugin._sync_service._box.sync_last_heartbeat = orch._clock.monotonic()
         await orch._do_sync_per_unit()
 
@@ -3144,7 +3308,7 @@ class TestRealOrchestratorLateAckRecovery:
         assert box.abandoned_chunk is not None
 
         # A fresh run starts before any late ack — the stale stash is dropped.
-        assert box.try_begin_run("run-2") is True
+        assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is True
         assert box.abandoned_chunk is None
 
         # A late ack for the old run now finds nothing and is ignored.

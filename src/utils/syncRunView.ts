@@ -44,7 +44,7 @@ import {
   resetEta,
 } from "./syncEta";
 import { getSyncProgress, onSyncProgressChange, withinUnitFraction } from "./syncProgress";
-import type { SyncProgress, SyncStage } from "../types";
+import type { SyncProgress, SyncRunKind, SyncStage } from "../types";
 
 const TERMINAL_STAGES: ReadonlySet<SyncStage> = new Set<SyncStage>(["done", "cancelled", "error"]);
 
@@ -130,6 +130,11 @@ export interface SyncRunView {
    *  that ended a run locally without ending it in the store (#1019). */
   running: boolean;
   stage: SyncProgress["stage"];
+  /** What the run is doing, as the backend stated it — `null` where no run has
+   *  established one, which a reader words as neither of the two answers rather
+   *  than picking one. Passed through rather than derived: no sequence of frames
+   *  is evidence of the kind (`src/types/sync.ts`). */
+  runKind: SyncRunKind | null;
   stageLabel: string;
   /** The running unit's 1-based index, `0` before the run reaches one. */
   step: number;
@@ -368,6 +373,7 @@ export function useSyncRunView(options: SyncRunViewOptions = {}): SyncRunView {
   return {
     running: progress?.running ?? false,
     stage: progress?.stage,
+    runKind: progress?.runKind ? progress.runKind : null,
     stageLabel: stageLabel(progress?.stage),
     step,
     totalSteps: progress?.totalSteps ?? 0,

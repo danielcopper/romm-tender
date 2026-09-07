@@ -89,6 +89,27 @@ describe("useSyncRunView", () => {
     });
   });
 
+  describe("the run's kind", () => {
+    it("passes the backend's word through, and answers null where none was stated", () => {
+      const { result, unmount } = renderHook(() => useSyncRunView());
+      try {
+        act(() => {
+          setSyncProgress({ running: true, stage: "fetching", step: 1, totalSteps: 2, runId: "r", runKind: "apply" });
+        });
+        expect(result.current.runKind).toBe("apply");
+
+        // The idle default carries an empty string, which is "not established"
+        // and never one of the two answers.
+        act(() => {
+          setSyncProgress({ running: true, stage: "fetching", step: 1, totalSteps: 2, runId: "r", runKind: "" });
+        });
+        expect(result.current.runKind).toBeNull();
+      } finally {
+        unmount();
+      }
+    });
+  });
+
   describe("the fine-detail line", () => {
     it("keeps the fine-detail row mounted across a unit boundary, and drops it when the run ends", () => {
       const { result, unmount } = renderHook(() => useSyncRunView());

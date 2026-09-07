@@ -13,6 +13,7 @@ from __future__ import annotations
 from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 
+from domain.sync_run_kind import SyncRunKind
 from domain.sync_state import SyncState
 from services.library._state import LibrarySyncStateBox
 
@@ -33,7 +34,7 @@ class SyncLifecycleMachine(RuleBasedStateMachine):
     @rule()
     def begin(self) -> None:
         run_id = self._fresh_id()
-        ok = self.box.try_begin_run(run_id)
+        ok = self.box.try_begin_run(run_id, kind=SyncRunKind.APPLY)
         if self.expected_owner is None:
             # The slot was free — the run is admitted and becomes the owner.
             assert ok is True

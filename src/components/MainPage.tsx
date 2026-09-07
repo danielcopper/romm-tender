@@ -25,7 +25,6 @@ import { formatTimeAgo } from "../utils/formatters";
 import { pluralize } from "../utils/pluralize";
 import { getSyncProgress, setSyncProgress as setStoredSyncProgress } from "../utils/syncProgress";
 import { useSyncRunView } from "../utils/syncRunView";
-import { useRunPlanRunId } from "../utils/runUnitsStore";
 import { useDownloads } from "../utils/downloadStore";
 import { usePendingPreview, getPendingPreviewSnapshot, refreshPendingPreview } from "../utils/pendingPreviewStore";
 import { previewSecondsLeft } from "../utils/previewState";
@@ -44,7 +43,7 @@ import { DownloadProgressRow } from "./DownloadProgressRow";
 import { MigrationBlockedPage } from "./MigrationBlockedPage";
 import { SettingsResetBanner } from "./SettingsResetBanner";
 import { PlaytimeScopeBanner } from "./PlaytimeScopeBanner";
-import type { SyncPreview, SyncProgress, SyncStats, Page } from "../types";
+import type { SyncPreview, SyncProgress, SyncRunKind, SyncStats, Page } from "../types";
 import { detach } from "../utils/detach";
 import { wrapText } from "../utils/textStyles";
 
@@ -223,6 +222,18 @@ interface StatusSlot {
   bar: boolean;
 }
 
+/** The two words for a run in flight, one per kind the backend states. */
+const RUN_KIND_LABEL: Record<SyncRunKind, string> = {
+  preview: "Checking for changes",
+  apply: "Syncing",
+};
+
+/** What the slot calls a run whose kind nothing has established — neither of the
+ *  two real answers. Reachable only if a frame arrives without the key, which
+ *  both halves of this shipping together make unreachable in practice; the
+ *  wording exists so the mapping cannot invent one of the two to fill the hole. */
+const RUN_KIND_UNKNOWN_LABEL = "Sync in progress";
+
 export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   // Both facts are owned by `utils/syncStatsStore.ts`: seven refresh sites in
   // this file ask for them, and the store is what keeps an older answer from
@@ -305,14 +316,6 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
     onTerminalWording: (message, stage) => showTransientStatus(message, terminalStatusTone(stage)),
   });
   const syncing = run.running;
-  // The run's KIND, which the slot below says in two words. A plan is the only
-  // thing that tells the two apart: `sync_plan` belongs to the apply pipeline
-  // and a preview emits none, while both narrate the same work queue through
-  // frames of exactly the same shape. Compared against the run in flight rather
-  // than read as a bare presence — the rows and their run id outlive the run
-  // that filled them.
-  const planRunId = useRunPlanRunId();
-  const applyRunInFlight = run.runId !== "" && planRunId === run.runId;
 
   useEffect(() => {
     refreshMigrationState()
@@ -409,14 +412,16 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
         const sameRun = backendProgress.runId && stored.runId ? backendProgress.runId === stored.runId : true;
         const isSameLiveRun = backendProgress.running && stored.running && sameRun;
         // Same live run: spread the store (keeping its fine fields + etaSeconds)
-        // and overlay the backend's authoritative running/stage/runId. The
-        // conditional spreads keep the optional stage/runId out when the backend
-        // omits them (exactOptionalPropertyTypes). One exception: "applying" is
-        // frontend-authoritative (the backend never emits it — its last frame is
-        // the fetch anchor), so a stored applying stage survives the seed; taking
-        // the backend's stale "fetching" would drop the coarse-bar interpolation
-        // and flip the label until the next per-item update. Otherwise replace
-        // wholesale.
+        // and overlay the backend's authoritative running/stage/runId/runKind.
+        // The conditional spreads keep the optional three out when the backend
+        // omits them (exactOptionalPropertyTypes). `runKind` is overlaid for the
+        // same reason `runId` is: the backend states it, and the frame this
+        // merges over can be an optimistic start written before the run was
+        // claimed. One exception: "applying" is frontend-authoritative (the
+        // backend never emits it — its last frame is the fetch anchor), so a
+        // stored applying stage survives the seed; taking the backend's stale
+        // "fetching" would drop the coarse-bar interpolation and flip the label
+        // until the next per-item update. Otherwise replace wholesale.
         const backendStage = stored.stage === "applying" ? undefined : backendProgress.stage;
         const progress: SyncProgress = isSameLiveRun
           ? {
@@ -424,6 +429,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
               running: backendProgress.running,
               ...(backendStage !== undefined ? { stage: backendStage } : {}),
               ...(backendProgress.runId !== undefined ? { runId: backendProgress.runId } : {}),
+              ...(backendProgress.runKind !== undefined ? { runKind: backendProgress.runKind } : {}),
             }
           : backendProgress;
         setStoredSyncProgress(progress);
@@ -522,7 +528,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   let slot: StatusSlot | null = null;
   if (syncing) {
     slot = {
-      label: applyRunInFlight ? "Syncing" : "Checking for changes",
+      label: run.runKind === null ? RUN_KIND_UNKNOWN_LABEL : RUN_KIND_LABEL[run.runKind],
       value: run.totalSteps ? `${run.step} of ${run.totalSteps}` : "",
       bar: true,
     };

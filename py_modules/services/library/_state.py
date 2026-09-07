@@ -35,6 +35,8 @@ if TYPE_CHECKING:
     import asyncio
     from collections.abc import Mapping
 
+    from domain.sync_run_kind import SyncRunKind
+
 
 PREVIEW_MAX_AGE_SECONDS = 1800  # 30 minutes — preview snapshots stale beyond this
 
@@ -49,6 +51,10 @@ def _default_progress() -> dict[str, Any]:
         "step": 0,
         "totalSteps": 0,
         "runId": "",
+        # No run owns the slot, so there is no kind to state. The frontend reads
+        # the empty string as "not established" and renders neither of the two
+        # real answers — see :class:`domain.sync_run_kind.SyncRunKind`.
+        "runKind": "",
     }
 
 
@@ -113,6 +119,11 @@ class LibrarySyncStateBox:
 
     sync_state: SyncState = SyncState.IDLE
     current_sync_id: str | None = None
+    # What the run in flight is doing, claimed with the slot and cleared with it.
+    # ``None`` exactly while no run owns the slot. Held here rather than threaded
+    # through every ``emit_progress`` call site so that EVERY frame carries it —
+    # the three places a frame is built all read it from here.
+    run_kind: SyncRunKind | None = None
     sync_last_heartbeat: float = 0.0
     # The latest progress frame, which ``get_sync_status`` hands a remounting
     # QAM so it can recover a live run without waiting for the next event. It
@@ -274,18 +285,23 @@ class LibrarySyncStateBox:
     # writes ``sync_state`` without awaiting in between is a true atomic
     # compare-and-swap — nothing else can observe or change the pair mid-update.
 
-    def try_begin_run(self, run_id: str) -> bool:
+    def try_begin_run(self, run_id: str, *, kind: SyncRunKind) -> bool:
         """Claim the single in-flight run slot for ``run_id`` (compare-and-swap).
 
         Returns ``False`` with no state change when a run is already in flight
         (the admission guard a rapid second Sync/Apply hits); otherwise
-        transitions IDLE → RUNNING, stamps ``current_sync_id``, drops any
-        abandoned-chunk stash left by a prior run, and returns ``True``.
+        transitions IDLE → RUNNING, stamps ``current_sync_id`` and *kind*, drops
+        any abandoned-chunk stash left by a prior run, and returns ``True``.
+
+        *kind* is keyword-only and has no default: it is known at every entry
+        point and a frame that cannot say which kind of run it belongs to is
+        exactly what this exists to prevent.
         """
         if self.sync_state is not SyncState.IDLE:
             return False
         self.sync_state = SyncState.RUNNING
         self.current_sync_id = run_id
+        self.run_kind = kind
         # Bounded stash lifetime: a heartbeat-timed-out chunk whose late ack
         # never arrived is dropped when the next run starts, so stale abandoned
         # data can never outlive one run (#1367).
@@ -323,6 +339,9 @@ class LibrarySyncStateBox:
             return False
         self.sync_state = SyncState.IDLE
         self.current_sync_id = None
+        # Cleared with the slot; the ordering note below is what makes that safe
+        # for the frames a run builds as well as for the snapshot.
+        self.run_kind = None
         # Ordering: every run emits or SCHEDULES its terminal frame before
         # reaching the ``finally: finish_run(run_id)`` that lands here, so this
         # drops a snapshot the frontend has already been sent as an event — never
@@ -335,6 +354,14 @@ class LibrarySyncStateBox:
         # ``running: False`` reaches the panel mid-run from this line.
         self.sync_progress = _default_progress()
         return True
+
+    def run_kind_value(self) -> str:
+        """The wire value of the run in flight's kind, ``""`` when none owns the slot.
+
+        The single place the absent case is spelled, so the three frame builders
+        cannot each pick their own stand-in for it.
+        """
+        return self.run_kind.value if self.run_kind is not None else ""
 
     def is_in_flight(self) -> bool:
         """True while a run is not IDLE (running or cancelling)."""

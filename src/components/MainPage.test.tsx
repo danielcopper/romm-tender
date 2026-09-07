@@ -55,7 +55,6 @@ import { setDownloads } from "../utils/downloadStore";
 import { resetConnectionProbeForTests } from "../utils/connectionProbe";
 import { resetSyncStatsStoreForTests } from "../utils/syncStatsStore";
 import { resetPendingPreviewStoreForTests, adoptPreview, clearPendingPreview } from "../utils/pendingPreviewStore";
-import { resetRunUnitsStoreForTests, seedRunUnits } from "../utils/runUnitsStore";
 import { showModal } from "@decky/ui";
 import * as syncManager from "../utils/syncManager";
 import * as connectionState from "../utils/connectionState";
@@ -331,10 +330,6 @@ describe("MainPage", () => {
     // of the store — so a card one test leaves standing would render over the
     // next test's idle page.
     resetPendingPreviewStoreForTests();
-    // The run's plan outlives the panel too, and the slot reads it to tell an
-    // apply run from a preview run — so one test's plan would name the next
-    // test's run.
-    resetRunUnitsStoreForTests();
     setSyncProgress({
       running: false,
       stage: "",
@@ -1958,28 +1953,88 @@ describe("MainPage", () => {
     });
 
     it("states a preview run coarsely — two words, the counter and the bar", async () => {
-      setSyncProgress({ running: true, stage: "fetching", step: 3, totalSteps: 16, message: "x", runId: "run-p" });
+      setSyncProgress({
+        running: true,
+        stage: "fetching",
+        step: 3,
+        totalSteps: 16,
+        message: "x",
+        runId: "run-p",
+        runKind: "preview",
+      });
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
 
-      // A preview emits no plan, which is what tells it from an apply run.
+      // The kind is the backend's word, carried on the frame — the stage would
+      // say the same thing for an apply run's fetch phase.
       expect(slotLabel(container)).toBe("Checking for changes");
       expect(slotValue(container)).toBe("3 of 16");
       expect(container.querySelector('[data-testid="progress"]')).not.toBeNull();
     });
 
-    it("states an apply run as Syncing, on the plan only that run's frames name", async () => {
-      seedRunUnits([{ type: "platform", id: 1, name: "SNES", rom_count: 10, slug: "snes" }], "run-a");
-      setSyncProgress({ running: true, stage: "applying", step: 1, totalSteps: 1, message: "x", runId: "run-a" });
+    it("states an apply run as Syncing, on the same fetching stage a preview uses", async () => {
+      // Same stage, same counters, same shape — only the kind differs, which is
+      // the whole reason it is on the wire.
+      setSyncProgress({
+        running: true,
+        stage: "fetching",
+        step: 3,
+        totalSteps: 16,
+        message: "x",
+        runId: "run-a",
+        runKind: "apply",
+      });
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
 
       expect(slotLabel(container)).toBe("Syncing");
     });
 
-    it("does not read the PREVIOUS run's plan as this run's — a preview after an apply still checks", async () => {
-      seedRunUnits([{ type: "platform", id: 1, name: "SNES", rom_count: 10, slug: "snes" }], "run-a");
+    it("claims neither where no kind was established", async () => {
+      // Unreachable while both halves ship together, and deliberately not
+      // guessed: an answer nothing established is never rendered as one of the
+      // two real ones.
       setSyncProgress({ running: true, stage: "fetching", step: 1, totalSteps: 4, message: "x", runId: "run-b" });
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+
+      expect(slotLabel(container)).toBe("Sync in progress");
+      expect(slotValue(container)).toBe("1 of 4");
+    });
+
+    it("takes the kind from the backend's snapshot when the QAM reloaded mid-run", async () => {
+      // The case no inference can reach: the store starts empty after a reload,
+      // so the mount's get_sync_status answer is the only thing that can say
+      // what the run in flight is doing.
+      vi.mocked(backend.getSyncStatus).mockResolvedValue({
+        running: true,
+        stage: "fetching",
+        step: 2,
+        totalSteps: 9,
+        message: "Fetching N64",
+        runId: "run-live",
+        runKind: "apply",
+      });
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+
+      expect(slotLabel(container)).toBe("Syncing");
+      expect(slotValue(container)).toBe("2 of 9");
+    });
+
+    it("lets the backend's kind overlay an optimistic start that carried none", async () => {
+      // The start window: a frame written before the backend claimed the run is
+      // merged with the snapshot, and the kind is the backend's to state.
+      setSyncProgress({ running: true, stage: "fetching", message: "Fetching library..." });
+      vi.mocked(backend.getSyncStatus).mockResolvedValue({
+        running: true,
+        stage: "fetching",
+        step: 1,
+        totalSteps: 3,
+        message: "Fetching N64",
+        runId: "run-live",
+        runKind: "preview",
+      });
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
 
@@ -2892,7 +2947,7 @@ describe("MainPage", () => {
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
       await act(async () => {
-        setSyncProgress({ running: true, stage: "fetching", message: "Fetching library..." });
+        setSyncProgress({ running: true, stage: "fetching", message: "Fetching library...", runKind: "preview" });
         await Promise.resolve();
       });
       expect(buttonByExactText(container, "Cancel Sync")).not.toBeNull();
@@ -3079,7 +3134,14 @@ describe("MainPage", () => {
      *  one yet, and will not until a reconcile and a round trip later. Main is
      *  showing a run it did not start, which is every run now. */
     function optimisticStart(): SyncProgress {
-      return { running: true, stage: "fetching", current: 0, total: 0, message: "Fetching library..." };
+      return {
+        running: true,
+        stage: "fetching",
+        current: 0,
+        total: 0,
+        message: "Fetching library...",
+        runKind: "preview",
+      };
     }
 
     /** The frame a previous preview run left behind. It used to be what
@@ -3338,7 +3400,13 @@ describe("MainPage", () => {
 
       it("by a run the backend confirms, on a fresh mount", async () => {
         vi.mocked(backend.getSyncStats).mockResolvedValue(statsWithEveryStartControl());
-        setSyncProgress({ running: true, stage: "fetching", message: "Fetching library...", runId: "run-live" });
+        setSyncProgress({
+          running: true,
+          stage: "fetching",
+          message: "Fetching library...",
+          runId: "run-live",
+          runKind: "preview",
+        });
         vi.mocked(backend.getSyncStatus).mockResolvedValue({
           running: true,
           stage: "fetching",
@@ -3346,6 +3414,7 @@ describe("MainPage", () => {
           total: 0,
           message: "Fetching Game Boy...",
           runId: "run-live",
+          runKind: "preview",
         });
 
         const { container } = render(<MainPage onNavigate={vi.fn()} />);

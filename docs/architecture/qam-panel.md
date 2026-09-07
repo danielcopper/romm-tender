@@ -369,14 +369,16 @@ the Sync page, exactly as the menu's Sync entry does. It exists on two occasions
 | a preview is pending | **Changes ready**, and its counts — "13 new · 4 updated"      | no  |
 
 Coarse means coarse: two words, a counter and a bar. The stage caption, the fine-detail line, the estimate and the
-per-unit table all stay on the Sync page — Main says what is, the page shows what is happening. Both numbers come from
-`useSyncRunView`, which the Sync page reads too, so one derivation of a run serves both pages rather than each keeping
-its own. The two words come from whether the run in flight has a **plan**: `sync_plan` is emitted by the apply pipeline
-and by nothing else, while a preview narrates the same work queue through frames of identical shape, so the plan's run
-id (`runUnitsStore`) compared against the frame's is the only thing that tells them apart. An apply run reads "Checking
-for changes" for the moment between its start and its plan landing, and a plugin reload mid-run leaves it there for the
-rest of that run — the same blind spot the Sync page's unit list already has, and a coarse label is the cheapest place
-to carry it.
+per-unit table all stay on the Sync page — Main says what is, the page shows what is happening. **All three come from
+the frame, and the two words are stated on it rather than derived from it**: a preview run and an apply run narrate the
+same work queue through frames of identical shape, so neither the stage nor the presence of a plan is evidence of the
+kind — the stage alternates fetch/apply inside one apply run, and a plan's absence conflates "this is a preview" with
+"nobody has established the kind yet". So the backend claims the kind with the run slot
+(`LibrarySyncStateBox.try_begin_run`) and every frame of that run carries it as `runKind`: the live event, both terminal
+frames, and the `get_sync_status` snapshot a remounted QAM re-seeds from — which is what makes a QAM reloaded mid-run
+right rather than guessing. Where no kind is stated the slot says neither of the two, wording it "Sync in progress"; the
+numbers beside it still come from `useSyncRunView`, which the Sync page reads too, so one derivation of a run serves
+both pages.
 
 A pending preview's counts drop their zero parts, and a preview whose only work is covers or a re-stamp — nothing new,
 updated or removed — says "ready to review" rather than a row of zeros. An expired preview counts as none; the backend
@@ -418,7 +420,7 @@ bound to the run id the plan carried, advanced to `running` and then `done` by t
 unit's apply created and updated. The binding is what keeps a later run off an earlier run's rows — a preview emits a
 frame per unit over the same queue and no plan at all, so the step index alone would walk them a second time. The store
 outlives every page, so a page opened mid-run can show the units already worked through rather than only the current
-one. Main renders none of those rows; it reads only the run id they are bound to, for the two words above.
+one. Main reads none of it — its slot is the frame and nothing else.
 
 ## Sync
 

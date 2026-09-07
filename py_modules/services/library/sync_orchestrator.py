@@ -52,6 +52,7 @@ from domain.sync_diff import (
     compute_platform_collection_diff,
     platform_breakdown,
 )
+from domain.sync_run_kind import SyncRunKind
 from domain.sync_stage import SyncStage
 from domain.sync_state import SyncCancelled
 from lib.errors import classify_error
@@ -202,7 +203,7 @@ class SyncOrchestrator:
     def start_sync(self):
         box = self._sync_state
         run_id = self._uuid_gen.uuid4()
-        if not box.try_begin_run(run_id):
+        if not box.try_begin_run(run_id, kind=SyncRunKind.APPLY):
             return {"success": False, "reason": "sync_in_progress", "message": "Sync already in progress"}
         box.sync_last_heartbeat = self._clock.monotonic()
         self._loop.create_task(self._do_sync_per_unit())
@@ -254,7 +255,7 @@ class SyncOrchestrator:
         """
         box = self._sync_state
         run_id = self._uuid_gen.uuid4()
-        if not box.try_begin_run(run_id):
+        if not box.try_begin_run(run_id, kind=SyncRunKind.PREVIEW):
             return {"success": False, "reason": "sync_in_progress", "message": "Sync already in progress"}
         box.sync_last_heartbeat = self._clock.monotonic()
         try:
@@ -521,7 +522,7 @@ class SyncOrchestrator:
         # staged delta, so the still-valid preview survives for the legitimate
         # apply (#1202). Claim the run slot BEFORE discarding the preview.
         run_id = self._uuid_gen.uuid4()
-        if not box.try_begin_run(run_id):
+        if not box.try_begin_run(run_id, kind=SyncRunKind.APPLY):
             return {"success": False, "reason": "sync_in_progress", "message": "Sync already in progress"}
         box.discard_preview()
         box.sync_last_heartbeat = self._clock.monotonic()
@@ -563,10 +564,14 @@ class SyncOrchestrator:
         for every other frame. It rides the payload as the camelCase
         ``subStage`` key, matching the other multi-word snapshot keys
         (``totalSteps`` / ``runId``); the Python parameter stays snake_case.
-        The snapshot is written to the box first so :meth:`get_sync_status`
-        always returns the latest state even if the event never reaches a
-        freshly remounted QAM — ``subStage`` therefore rides both the event
-        and the remount re-seed.
+        ``runKind`` rides the same way and takes no parameter at all: it is
+        claimed with the run slot and read off the box here, so every frame of a
+        run carries it without a call site being able to forget one. The
+        snapshot is written to the box first so :meth:`get_sync_status` always
+        returns the latest state even if the event never reaches a freshly
+        remounted QAM — both keys therefore ride the event AND the remount
+        re-seed, which is what lets a QAM reloaded mid-run learn the kind of the
+        run it is watching rather than waiting for the next event.
         """
         self._sync_state.sync_progress = {
             "running": running,
@@ -578,6 +583,7 @@ class SyncOrchestrator:
             "totalSteps": total_steps,
             "subStage": sub_stage,
             "runId": str(self._sync_state.current_sync_id or ""),
+            "runKind": self._sync_state.run_kind_value(),
         }
         await self._emit("sync_progress", self._sync_state.sync_progress)
 
@@ -627,6 +633,7 @@ class SyncOrchestrator:
             "step": box.sync_progress.get("step", 0),
             "totalSteps": box.sync_progress.get("totalSteps", 0),
             "runId": str(box.current_sync_id or ""),
+            "runKind": box.run_kind_value(),
         }
         await self._emit("sync_progress", box.sync_progress)
         self._logger.info(message)
@@ -854,6 +861,7 @@ class SyncOrchestrator:
                 "step": 0,
                 "totalSteps": 0,
                 "runId": str(box.current_sync_id or ""),
+                "runKind": box.run_kind_value(),
             }
             self._loop.create_task(self._emit("sync_progress", box.sync_progress))
             # The captured ``run_id``, for the reason given where it is taken.

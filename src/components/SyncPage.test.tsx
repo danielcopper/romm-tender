@@ -1810,6 +1810,41 @@ describe("SyncPage", () => {
       expect(vi.mocked(backend.syncPreview)).not.toHaveBeenCalled();
     });
 
+    it("names the kind of run it started on the frame it writes", async () => {
+      // The backend states the kind on every frame it emits, but the first
+      // frame of a run is this page's own optimistic one — so it says which
+      // kind it just started, and Main's slot is right from its first paint
+      // instead of reading "not established" for a round trip.
+      let finish: (p: SyncPreview) => void = () => {};
+      vi.mocked(backend.syncPreview).mockReturnValue(
+        new Promise<SyncPreview>((res) => {
+          finish = res;
+        }),
+      );
+      await renderAndStartPreview();
+
+      expect(getSyncProgress().runKind).toBe("preview");
+
+      await act(async () => {
+        finish(preview());
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    });
+
+    it("names an apply run's kind on its own frame too", async () => {
+      adoptPreview(preview());
+      const { container } = await renderPage();
+
+      await act(async () => {
+        fireEvent.click(buttonByExactText(container, "Apply Sync")!);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(getSyncProgress().runKind).toBe("apply");
+    });
+
     it("shows the run while it works it out", async () => {
       let finish: (p: SyncPreview) => void = () => {};
       vi.mocked(backend.syncPreview).mockReturnValue(
