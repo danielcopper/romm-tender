@@ -567,8 +567,8 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
       {settingsReset.pending && <SettingsResetBanner backedUpTo={settingsReset.backedUpTo} />}
       {playtimeScope.pending && <PlaytimeScopeBanner />}
       {/* Untitled status block (Connection / Last sync / Library) leads the
-          panel — the following PanelSection titles provide the block breaks, so
-          no "Status" title is needed. */}
+          panel — the hairline each block ends with is what separates them, so a
+          "Status" title would cost a row and buy nothing. */}
       <PanelSection>
         {retrodeckBanner && (
           <PanelSectionRow>
