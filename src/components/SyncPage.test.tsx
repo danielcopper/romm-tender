@@ -1055,7 +1055,17 @@ describe("SyncPage", () => {
 
       /** Every `scrollTo` the render provoked, with the element it was called
        *  on — spied on the prototype because the scroll happens in a mount
-       *  effect, before a test could reach the element to spy on it. */
+       *  effect, before a test could reach the element to spy on it.
+       *
+       *  Read through {@link scrollsOn} rather than whole. The page performs a
+       *  second kind of scroll that has nothing to do with this pane: a
+       *  `ScrollRegion` reveals its own top when entry focus lands in it
+       *  (`revealEdge`), and the frame places that focus on a timer. Asserting
+       *  over every scroll therefore asserted more than these cases mean, and
+       *  raced the frame — about one full-suite run in four came back with a
+       *  stray `{ focusable, 0 }` ahead of the pane's own. The timers are frozen
+       *  below so that chain cannot fire here at all; reading per region is what
+       *  keeps the cases honest about which scroll each one is about. */
       function recordScrolls(): Array<{ testId: string | null; top: number }> {
         const calls: Array<{ testId: string | null; top: number }> = [];
         vi.spyOn(HTMLElement.prototype, "scrollTo").mockImplementation(function (
@@ -1068,6 +1078,13 @@ describe("SyncPage", () => {
           });
         });
         return calls;
+      }
+
+      /** The offsets one element was scrolled to, in order — `testId` `null` for
+       *  an element carrying none, which is every ancestor of the region and so
+       *  the shape a pane scrolling the wrong thing would leave. */
+      function scrollsOn(calls: Array<{ testId: string | null; top: number }>, testId: string | null): number[] {
+        return calls.filter((call) => call.testId === testId).map((call) => call.top);
       }
 
       async function renderRunning(): Promise<HTMLElement> {
@@ -1089,7 +1106,17 @@ describe("SyncPage", () => {
         return container;
       }
 
+      // The pane centres the running row synchronously, in its own layout
+      // effect; everything the frame does to focus and to reveal a region's edge
+      // is behind a timer. Freezing them — and never advancing — leaves the
+      // pane's own scroll the only one these cases can see, which is the only
+      // one they are about.
+      beforeEach(() => {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      });
+
       afterEach(() => {
+        vi.useRealTimers();
         vi.restoreAllMocks();
       });
 
@@ -1111,7 +1138,10 @@ describe("SyncPage", () => {
 
         // 700 down a 500-tall region, half the row's own 20 px, less half the
         // region: the row's middle lands on the region's middle.
-        expect(calls).toEqual([{ testId: "run-units", top: 460 }]);
+        expect(scrollsOn(calls, "run-units")).toEqual([460]);
+        // ...and only that region: an untagged element is an ancestor of it, so
+        // a pane that scrolled the column instead of the list shows up here.
+        expect(scrollsOn(calls, null)).toEqual([]);
       });
 
       it("stops at the top rather than scrolling past the start of the list", async () => {
@@ -1129,7 +1159,7 @@ describe("SyncPage", () => {
         // The only row is the running one, and it sits at the region's own top:
         // centring it would ask for a negative offset.
         expect(container.querySelector('[data-testid="run-units"]')).not.toBeNull();
-        expect(calls).toEqual([{ testId: "run-units", top: 0 }]);
+        expect(scrollsOn(calls, "run-units")).toEqual([0]);
       });
 
       it("scrolls nothing while every row fits", async () => {
@@ -1137,7 +1167,7 @@ describe("SyncPage", () => {
         const calls = recordScrolls();
         await renderRunning();
 
-        expect(calls).toEqual([]);
+        expect(scrollsOn(calls, "run-units")).toEqual([]);
       });
     });
 
