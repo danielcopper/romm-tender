@@ -267,15 +267,14 @@ Format: **invariant** — tier — enforced by.
   `src/utils/syncRunView.test.ts` and the slot's three labels in `src/components/MainPage.test.tsx`. **Nothing joins the
   six places it passes through**: `LibrarySyncStateBox` holds it with the slot, three separate frame builders carry it
   (`emit_progress`, `_finish_sync`'s CANCELLED terminal, and the per-unit ERROR dict literal in `sync_orchestrator.py`),
-  `SyncProgress.runKind` and `useSyncRunView` pass it through, and `MainPage` maps it. So a fourth frame builder that
-  omits the key, or a reader that spends the absent case on one of the two answers — a `runKind ?? "preview"`, a
-  `=== "preview"` where the neutral branch was — goes green: each test above pins one half and none of them pins the
-  seam. The failure is silent and worst exactly where the frontend cannot help itself: after a plugin reload mid-run the
-  store starts empty, the snapshot is the only thing that can say what the run is doing, and Main then tells the reader
-  a real apply run is merely checking for changes. Why the kind cannot be derived at all — the two runs emit identical
-  stage sequences over the same work queue, and a plan's absence conflates "this is a preview" with "nobody has said
-  yet" — is stated at `domain/sync_run_kind.py` and in `docs/architecture/qam-panel.md`'s Main section; do not restate
-  it here
+  `SyncProgress.runKind` and `useSyncRunView` pass it through, and `MainPage` maps it. **Nothing mechanical stands
+  behind the seam between them**: a fourth frame builder that omits the key, or a reader that spends the absent case on
+  one of the two answers — a `runKind ?? "preview"`, a `=== "preview"` where the neutral branch was — goes green,
+  because each test above pins one half and none of them pins the join. The failure is silent and worst exactly where
+  the frontend cannot help itself: after a plugin reload mid-run the store starts empty, the snapshot is the only thing
+  that can say what the run is doing, and Main then tells the reader a real apply run is merely checking for changes.
+  Why the kind cannot be derived at all is stated at `domain/sync_run_kind.py` and in `docs/architecture/qam-panel.md`'s
+  Main section; do not restate it here
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py` pins the adapter's degradation (a
   raising resolver, a missing installation, an answer with no root all come back with `resolved` clear, never as an
