@@ -39,8 +39,10 @@ def live_save_answer(rom_info: RomInfoService, rom_id: int) -> SaveAnswer | None
     changes a core's options in the emulator's own quick menu between one launch
     and the next sync, and a granularity read before that change would have the
     plugin carry a shared card as though it belonged to one game. Within a
-    single operation the caller hands this same reading down to the sync rather
-    than taking a second: live is a property of operations, not of layers.
+    single operation the caller hands this same reading to both consumers that
+    would otherwise take their own — the matrix, and the negotiate session's
+    inventory on a confirmed ROM — rather than taking a second: live is a
+    property of operations, not of layers.
     """
     if rom_info.get_rom_save_info(rom_id) is None:
         return None

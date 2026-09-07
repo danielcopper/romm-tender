@@ -658,7 +658,7 @@ class SyncEngine:
         # hash the same files (#1457). Reentrant with the bulk-sweep scope.
         with self._save_file_store.hash_memo_scope():
             if session_id is None and save_state.slot_confirmed and save_state.active_slot:
-                own_session_id = await self._open_negotiate_session(rom_id, device_id)
+                own_session_id = await self._open_negotiate_session(rom_id, device_id, save_answer)
 
             uploaded = 0
             downloaded = 0
@@ -688,7 +688,9 @@ class SyncEngine:
                     session_counts[1] += len(errors)
             return uploaded, downloaded, errors, conflicts
 
-    async def _open_negotiate_session(self, rom_id: int, device_id: str | None) -> int | None:
+    async def _open_negotiate_session(
+        self, rom_id: int, device_id: str | None, save_answer: SaveAnswer | None = None
+    ) -> int | None:
         """Open a transport-only negotiate session for a confirmed ROM; ``None`` on failure.
 
         POSTs the ROM-scoped inventory to ``negotiate`` and keeps only the
@@ -700,9 +702,16 @@ class SyncEngine:
         re-raised so the run aborts with a visible policy reason (#1489). An
         unclosed session lingers harmlessly until this device's next
         ``negotiate`` cancels it, so a missed close is harmless.
+
+        *save_answer* is the reading the run already took, handed on so the
+        inventory does not take a second one. Without it a confirmed ROM — which
+        is every ROM once the setup wizard has run — costs two live readings of
+        the machine per sync rather than one.
         """
         try:
-            inventory = await self._loop.run_in_executor(None, self._build_inventory, rom_id)
+            inventory = await self._loop.run_in_executor(
+                None, functools.partial(self._build_inventory, rom_id, save_answer=save_answer)
+            )
             response = await self._loop.run_in_executor(
                 None,
                 lambda: self._retry.with_retry(lambda: self._romm_api.negotiate_sync(device_id or "", inventory)),

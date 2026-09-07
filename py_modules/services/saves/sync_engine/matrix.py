@@ -917,9 +917,11 @@ class MatrixExecutor:
 
         *save_answer* is the live reading a caller already took for THIS sync —
         the entry points take one to decide whether to refuse at all, and
-        handing it down is what keeps one operation to one reading of the
-        machine instead of two. It is never carried between operations: absent
-        it (the whole-library sweep), this takes its own.
+        handing it down is what keeps a single-ROM sync to one reading of the
+        machine rather than one per layer. It is never carried between
+        operations: absent it (the whole-library sweep), this takes its own, on
+        top of the one that ROM's row already cost the sweep's device-wide
+        negotiate inventory.
 
         Drives :meth:`iter_matrix_outcomes` and dispatches each emitted
         outcome through :meth:`_dispatch_sync_action`. Returns
