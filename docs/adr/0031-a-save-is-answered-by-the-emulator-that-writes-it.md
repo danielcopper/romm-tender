@@ -7,8 +7,9 @@ reading through the vendored [emu-atlas](https://github.com/danielcopper/emu-atl
 [ADR-0030](0030-the-emulator-catalogue-is-read-by-the-vendored-resolver.md):** that cut made the resolver the reader of
 ES-DE's catalogue, which is what lets this one ask a catalogue **entry** where its emulator writes saves instead of
 mapping plugin labels onto resolver entries through a bridge. **Does not touch
-[ADR-0017](0017-newest-wins-matrix-is-the-only-decision.md)** — which files are synced changes; how a file's sync is
-decided does not. Tracked under [#1858](https://github.com/danielcopper/decky-romm-sync/issues/1858), cut 4 of
+[ADR-0017](0017-client-baseline-detection-authoritative-negotiate-is-transport.md)** — which files are synced changes;
+how a file's sync is decided does not. Tracked under
+[#1858](https://github.com/danielcopper/decky-romm-sync/issues/1858), cut 4 of
 [#1660](https://github.com/danielcopper/decky-romm-sync/issues/1660).
 
 ## Context
