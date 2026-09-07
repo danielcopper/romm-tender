@@ -220,6 +220,19 @@ class TestOneSyncTakesOneReadingOfTheMachine:
         assert len(reader.calls) == 1
 
     @pytest.mark.asyncio
+    async def test_a_status_read_asks_once_too(self, tmp_path):
+        # The page opens on every game the user looks at, and it threads the
+        # answer's names into the matrix rather than asking for them again.
+        svc, _store, _server = _service(tmp_path, _syncable())
+        _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True})
+        reader = cast("FakeSaveLocationReader", svc._rom_info._save_locations)
+        reader.calls.clear()
+
+        await svc.get_save_status(42)
+
+        assert len(reader.calls) == 1
+
+    @pytest.mark.asyncio
     async def test_the_next_sync_asks_again(self, tmp_path):
         # The other half: nothing is remembered between operations.
         svc, _store, _server = _service(tmp_path, _syncable())
