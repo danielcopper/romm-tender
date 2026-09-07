@@ -346,7 +346,7 @@ py_modules/
     downloads.py                     # DownloadService — ROM downloads, ZIP/M3U, fcntl queue
     firmware/                        # FirmwareService façade — listing, demand, status, downloads, deletion
     session_lifecycle.py             # SessionLifecycleService — post-exit orchestration
-    migration.py                     # MigrationService — RetroDECK path + save-sort migration
+    migration/                       # MigrationService — RetroDECK home migration; SaveSortMigrator — save-sort migration
     steamgrid.py                     # SteamGridService — SteamGridDB artwork
     artwork.py                       # ArtworkService — cover art staging/cleanup
     game_detail.py / playtime.py / achievements.py / settings.py / cores.py

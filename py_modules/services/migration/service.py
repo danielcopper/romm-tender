@@ -47,18 +47,17 @@ if TYPE_CHECKING:
         UnitOfWorkFactory,
     )
 
-# kv_config keys for the cross-run change-detection markers MigrationService
-# diffs (ADR-0003 Bucket 2): the last-seen RetroDECK home and RetroArch
-# save-sort observation, each with a ``_previous`` companion that exists only
-# while a migration is awaiting user confirmation. ``_HOPS`` holds the JSON
-# array of *additional* pending homes (oldest→newest) accumulated when the
-# user changes the RetroDECK home again before migrating (#1042); it is absent
-# in the common single-hop case and deleted wherever ``_PREVIOUS`` is.
+# kv_config keys for the cross-run home-change markers this module diffs
+# (ADR-0003 Bucket 2): the last-seen RetroDECK home, with a ``_previous``
+# companion that exists only while a migration is awaiting user confirmation.
+# ``_HOPS`` holds the JSON array of *additional* pending homes (oldest→newest)
+# accumulated when the user changes the RetroDECK home again before migrating
+# (#1042); it is absent in the common single-hop case and deleted wherever
+# ``_PREVIOUS`` is. The save-sort keys live with the half that reads them,
+# in ``save_sort.py`` — one key, one definition.
 _KV_RETRODECK_HOME = "retrodeck_home_path"
 _KV_RETRODECK_HOME_PREVIOUS = "retrodeck_home_path_previous"
 _KV_RETRODECK_HOME_HOPS = "retrodeck_home_path_hops"
-_KV_SAVE_SORT = "save_sort_settings"
-_KV_SAVE_SORT_PREVIOUS = "save_sort_settings_previous"
 
 
 @dataclass(frozen=True)
@@ -754,7 +753,7 @@ class MigrationService:
         return await self._loop.run_in_executor(None, self._get_migration_status_io, pending, new_home)
 
     # ---------------------------------------------------------------------------
-    # Save sort change detection and migration
+    # Both migrations at once
     # ---------------------------------------------------------------------------
 
     async def refresh_state(self) -> dict[str, Any]:

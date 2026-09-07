@@ -116,7 +116,7 @@ class FileMover:
         """Build the result dict from migration counts and errors.
 
         ``missing`` (records whose file was found at no known location — see
-        ``_migrate_single_item``) is surfaced additively in both the message
+        :meth:`migrate_single_item`) is surfaced additively in both the message
         and the ``missing_count`` field so a chained migration reports lost
         files honestly instead of a bare "No files to migrate" success; it does
         not, on its own, make the migration a failure (only ``errors`` do).

@@ -1017,10 +1017,10 @@ ever removed, the resolver would need to be made hash-aware.
 
 ### Relationship to `retrodeck_path_migration`
 
-The RetroDECK **path** migration — `_migrate_retrodeck_files_io` in `migration.py`, triggered when the RetroDECK home
-directory moves between the internal SSD and an SD card — uses a different conflict-resolution approach: a user-driven
-bulk strategy modal (overwrite / skip / cancel). That is intentional. ROMs and BIOS files are not progress files, and
-`mtime`-based resolution is not semantically meaningful for them. See
+The RetroDECK **path** migration — `_migrate_retrodeck_files_io` in `migration/service.py`, triggered when the RetroDECK
+home directory moves between the internal SSD and an SD card — uses a different conflict-resolution approach: a
+user-driven bulk strategy modal (overwrite / skip / cancel). That is intentional. ROMs and BIOS files are not progress
+files, and `mtime`-based resolution is not semantically meaningful for them. See
 [RetroDECK Path Migration](../user-guide/retrodeck-path-migration.md) for the user-facing side.
 
 ### Supported systems

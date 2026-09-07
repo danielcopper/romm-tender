@@ -58,7 +58,8 @@ WonderSwan, Atari Lynx, Virtual Boy, and more.
 **Sega CD depends on your game file.** A raw `.bin` dump saves per game and syncs; a `.chd`, `.cue` or `.iso` disc image
 puts the save on a shared BRAM card that all your Sega CD games write to, which cannot be carried per game. Amiga is the
 same story with different answers: a `.chd` CD32 image saves per game, while an `.adf` floppy writes into the disk image
-itself and an `.hdf` hard-disk image cannot be established at all.
+itself, a `.lha` names a `WHDSaves` folder whose contents the core does not list, and an `.hdf` hard-disk image cannot
+be established at all.
 
 3DO and Neo Geo are named right and still not found: those emulators keep saves in a per-emulator subfolder that the
 plugin does not yet look in.

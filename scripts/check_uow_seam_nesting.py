@@ -208,7 +208,7 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # RomInfoService.save_answer (services/saves/rom_info.py) — the saves
         # package's own wrapper around that seam, listed because it is what the
         # peers in services/saves/ actually call. The seam itself is reached
-        # directly from two modules only (rom_info.py and migration.py), so
+        # directly from two modules only (rom_info.py and migration/save_sort.py), so
         # without this entry the rule would be enforced in those two files and
         # green everywhere else it is reached from.
         "save_answer",

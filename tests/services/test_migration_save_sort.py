@@ -143,7 +143,7 @@ class TestDetectSaveSortChange:
         """First run (stored=None) stores current settings, no event emitted."""
         svc, uow = _make_service(tmp_path, sort_settings=(True, False))
         mock_loop = MagicMock()
-        svc._loop = mock_loop
+        svc._save_sort._loop = mock_loop
 
         layout = svc.detect_save_sort_change()
 
@@ -166,7 +166,7 @@ class TestDetectSaveSortChange:
             state_overrides={"save_sort_settings": {"sort_by_content": True, "sort_by_core": False}},
         )
         mock_loop = MagicMock()
-        svc._loop = mock_loop
+        svc._save_sort._loop = mock_loop
         set_count_before = uow.kv_config.set_count
 
         layout = svc.detect_save_sort_change()
@@ -188,7 +188,7 @@ class TestDetectSaveSortChangeContentDir:
         """ContentDir → no kv_config write at all, returns ContentDir()."""
         svc, uow = _make_service(tmp_path, save_layout=ContentDir())
         mock_loop = MagicMock()
-        svc._loop = mock_loop
+        svc._save_sort._loop = mock_loop
         set_count_before = uow.kv_config.set_count
 
         layout = svc.detect_save_sort_change()
@@ -232,16 +232,18 @@ class TestDetectSaveSortChangeContentDir:
     def test_change_emits_event(self, tmp_path):
         """Settings changed — emits event, stores old + new."""
         old = {"sort_by_content": True, "sort_by_core": False}
-        # AsyncMock returns a coroutine when called — required because
-        # detect_save_sort_change schedules the emit coroutine via
-        # asyncio.run_coroutine_threadsafe, which validates that its
-        # first arg is an actual coroutine (#238 review finding 1).
+        # AsyncMock so ``_emit(...)`` returns a real coroutine, which the
+        # stub below closes. The real ``run_coroutine_threadsafe`` — which
+        # would reject a non-coroutine — is replaced on this path, so what
+        # the pairing buys is a clean run rather than a validated argument:
+        # a coroutine that is neither awaited nor closed raises a
+        # RuntimeWarning, and warnings are defects here.
         svc, uow = _make_service(
             tmp_path,
             sort_settings=(False, True),
             state_overrides={"save_sort_settings": old},
         )
-        svc._emit = AsyncMock()
+        svc._save_sort._emit = AsyncMock()
 
         # Stub run_coroutine_threadsafe at the module level so we can
         # observe scheduling without needing a running event loop. The
@@ -303,7 +305,7 @@ class TestCollectSaveSortingItems:
             installed_roms=installed_roms,
             state_overrides={"save_sort_settings": {"sort_by_content": False, "sort_by_core": False}},
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         old_settings: SaveSortSettings = {"sort_by_content": True, "sort_by_core": False}
         new_settings: SaveSortSettings = {"sort_by_content": False, "sort_by_core": False}
@@ -336,7 +338,7 @@ class TestCollectSaveSortingItems:
             }
         }
         svc, uow = _make_service(tmp_path, installed_roms=installed_roms)
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         # Same settings -> same dir
         same_settings: SaveSortSettings = {"sort_by_content": True, "sort_by_core": False}
@@ -365,7 +367,7 @@ class TestCollectSaveSortingItems:
             }
         }
         svc, uow = _make_service(tmp_path, installed_roms=installed_roms)
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         old_settings: SaveSortSettings = {"sort_by_content": True, "sort_by_core": False}
         new_settings: SaveSortSettings = {"sort_by_content": False, "sort_by_core": False}
@@ -420,7 +422,7 @@ class TestSaveSortMigrationStatus:
                 "save_sort_settings": new_settings,
             },
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         result = await svc.get_save_sort_migration_status()
 
@@ -465,7 +467,7 @@ class TestASortMoveNeverStrandsAFile:
                 "save_sort_settings": new_settings,
             },
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
         cast("FakeSaveLocationReader", svc._save_locations).refuse("atari2600")
         return svc, saves_path, old_save_dir
 
@@ -540,7 +542,7 @@ class TestMigrateSaveSortFiles:
                 "save_sort_settings": new_settings,
             },
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         result = await svc.migrate_save_sort_files()
 
@@ -597,7 +599,7 @@ class TestMigrateSaveSortFiles:
                 "save_sort_settings": new_settings,
             },
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         result = await svc.migrate_save_sort_files()
 
@@ -650,7 +652,7 @@ class TestMigrateSaveSortFiles:
                 "save_sort_settings": new_settings,
             },
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         result = await svc.migrate_save_sort_files()
 
@@ -697,7 +699,7 @@ class TestMigrateSaveSortFiles:
             },
             migration_file_store=fake,
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         result = await svc.migrate_save_sort_files()
 
@@ -749,7 +751,7 @@ class TestMigrateSaveSortFiles:
             },
             migration_file_store=fake,
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         result = await svc.migrate_save_sort_files()
 
@@ -798,7 +800,7 @@ class TestMigrateSaveSortFiles:
             },
             migration_file_store=fake,
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         result = await svc.migrate_save_sort_files()
 
@@ -828,7 +830,7 @@ class TestMigrateSaveSortFiles:
                 "save_sort_settings": new_settings,
             },
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         result = await svc.migrate_save_sort_files()
 
@@ -960,7 +962,7 @@ class TestSortByCoreMigrationEndToEnd:
             active_core=active_core,
             get_core_name=get_core_name,
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
         with uow:
             installs = list(uow.rom_installs.iter_all())
 
@@ -1019,7 +1021,7 @@ class TestSortByCoreMigrationEndToEnd:
             active_core=active_core,
             get_core_name=get_core_name,
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
         with uow:
             installs = list(uow.rom_installs.iter_all())
 
@@ -1075,7 +1077,7 @@ class TestSortByCoreMigrationEndToEnd:
             active_core=active_core,
             get_core_name=get_core_name,
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
         with uow:
             installs = list(uow.rom_installs.iter_all())
 

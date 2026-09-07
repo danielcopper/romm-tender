@@ -373,7 +373,7 @@ in the question-to-source mapping table, walk each call site with these question
    fall back to a documented behavior (SaveService's choice — continuous critical path, acceptable to degrade). **Silent
    fallback with no diagnostic is never acceptable** — that is what produced #232.
 4. **Does the same call pattern appear elsewhere?** If you are fixing one consumer, grep the whole codebase for the same
-   function name and audit every call site. A `resolve_retroarch_corename` helper exists on both `MigrationService`
+   function name and audit every call site. A `resolve_retroarch_corename` helper exists on both `SaveSortMigrator`
    (`services/migration/save_sort.py`) and the saves `RomInfoService` (`services/saves/rom_info.py`) — future save-path
    consumers should follow the same pattern or reuse a helper rather than inlining the two-step resolution.
 5. **Is the new consumer covered by regression tests?** Every consumer should have unit tests for: the happy path, the
