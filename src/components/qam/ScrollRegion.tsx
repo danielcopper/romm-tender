@@ -40,6 +40,15 @@ import { offsetWithinScroller } from "../../utils/scrollHelpers";
 export interface ScrollRegionProps {
   /** Merged over the region's own bounds — the caller places it, not sizes it. */
   style?: CSSProperties;
+  /**
+   * Marks the scrolling element itself, so a caller that has to move the scroll
+   * — rather than let focus move it — can find it from a ref it already holds.
+   * A ref is not offered instead: Steam's scroll panel is reached through a
+   * webpack probe and nothing establishes that it forwards one, while an
+   * attribute lands on the element either way (the panel spreads what it does
+   * not destructure onto the base `Focusable`).
+   */
+  testId?: string;
   children?: ReactNode;
 }
 
@@ -143,23 +152,30 @@ function revealEdge(event: FocusEvent<HTMLElement>): void {
   if (isLast) revealBottom(region, focused);
 }
 
-export const ScrollRegion: FC<ScrollRegionProps> = ({ style, children }) =>
-  // Focusable, not a div, when the probe misses: it is the very base panel
-  // Steam's scroll panel renders, so the region keeps the same place in the
-  // focus tree and takes focus no more than the panel does. That branch has no
-  // Steam class behind it, which makes it the one place the overflow is ours.
-  //
-  // `onFocus` reaches the DOM on both branches, and on the panel branch by the
-  // same route `ListDetail`'s row handlers already take: the panel spreads
-  // whatever it does not destructure into the base panel `Focusable` renders,
-  // and that is the element the attribute lands on. React delivers it through
-  // `focusin`, so it fires for focus landing anywhere inside the region.
-  ScrollPanel ? (
-    <ScrollPanel style={{ ...BOUNDS, ...style }} onFocus={revealEdge}>
-      {children}
-    </ScrollPanel>
-  ) : (
-    <Focusable style={{ ...BOUNDS, overflow: "auto", ...style }} onFocus={revealEdge}>
-      {children}
-    </Focusable>
+export const ScrollRegion: FC<ScrollRegionProps> = ({ style, testId, children }) => {
+  // Spread only when named: Steam's panel puts what it does not destructure onto
+  // the element it renders, and a `data-testid` of `undefined` passed that way
+  // would clear an attribute the caller never asked to touch.
+  const marker = testId === undefined ? {} : { "data-testid": testId };
+  return (
+    // Focusable, not a div, when the probe misses: it is the very base panel
+    // Steam's scroll panel renders, so the region keeps the same place in the
+    // focus tree and takes focus no more than the panel does. That branch has no
+    // Steam class behind it, which makes it the one place the overflow is ours.
+    //
+    // `onFocus` reaches the DOM on both branches, and on the panel branch by the
+    // same route `ListDetail`'s row handlers already take: the panel spreads
+    // whatever it does not destructure into the base panel `Focusable` renders,
+    // and that is the element the attribute lands on. React delivers it through
+    // `focusin`, so it fires for focus landing anywhere inside the region.
+    ScrollPanel ? (
+      <ScrollPanel style={{ ...BOUNDS, ...style }} onFocus={revealEdge} {...marker}>
+        {children}
+      </ScrollPanel>
+    ) : (
+      <Focusable style={{ ...BOUNDS, overflow: "auto", ...style }} onFocus={revealEdge} {...marker}>
+        {children}
+      </Focusable>
+    )
   );
+};

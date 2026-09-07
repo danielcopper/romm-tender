@@ -46,8 +46,9 @@
  * call sites: a new caller re-reading because something changed takes the twin,
  * whatever it was that changed.
  *
- * Read by `components/MainPage.tsx` through {@link useSyncStats} and
- * {@link useSessionBudget}; nothing else consumes either fact.
+ * Read through {@link useSyncStats} and {@link useSessionBudget} by
+ * `components/MainPage.tsx` and by the Sync page's `useSyncPage`, which is also
+ * the one reader of {@link useSyncStatsFailed}.
  */
 
 import { useSyncExternalStore } from "react";
@@ -78,6 +79,12 @@ interface ReadLane<T> {
    *  Never rejects — a failure is logged where it happens, so a joiner cannot
    *  inherit an unhandled rejection from a caller it never met. */
   open: Promise<void> | null;
+  /** The newest read this lane has seen the outcome of did not answer. Set by a
+   *  failure no later answer has already superseded, cleared by every applied
+   *  answer. It is what tells a reader of the lane's `null` apart: a fact not
+   *  read YET is an answer still coming, and a fact whose read FAILED is one
+   *  that is not. */
+  failed: boolean;
   /** Prefix of the log line a failed read writes. */
   failureLabel: string;
 }
@@ -88,6 +95,7 @@ const _stats: ReadLane<SyncStats> = {
   issued: 0,
   applied: 0,
   open: null,
+  failed: false,
   failureLabel: "Failed to load sync stats",
 };
 
@@ -97,6 +105,7 @@ const _budget: ReadLane<SessionBudgetStatus> = {
   issued: 0,
   applied: 0,
   open: null,
+  failed: false,
   failureLabel: "Failed to load session budget status",
 };
 
@@ -105,6 +114,15 @@ function applyAnswer<T>(lane: ReadLane<T>, seq: number, value: T): void {
   if (seq <= lane.applied) return;
   lane.applied = seq;
   lane.value = value;
+  lane.failed = false;
+  notify();
+}
+
+/** Record that a read did not answer, unless a later-issued one already has —
+ *  an older failure says nothing about a fact that has since been read. */
+function recordFailure<T>(lane: ReadLane<T>, seq: number): void {
+  if (seq <= lane.applied) return;
+  lane.failed = true;
   notify();
 }
 
@@ -116,7 +134,10 @@ function issueRead<T>(lane: ReadLane<T>): Promise<void> {
     .read()
     .then(
       (value) => applyAnswer(lane, seq, value),
-      (e) => logError(`${lane.failureLabel}: ${e}`),
+      (e) => {
+        logError(`${lane.failureLabel}: ${e}`);
+        recordFailure(lane, seq);
+      },
     )
     .finally(() => {
       // Identity-checked: a read superseded by a later one must not clear the
@@ -142,6 +163,11 @@ export function getSessionBudgetSnapshot(): SessionBudgetStatus | null {
   return _budget.value;
 }
 
+/** Whether the newest stats read this lane has seen the outcome of failed. */
+export function getSyncStatsFailedSnapshot(): boolean {
+  return _stats.failed;
+}
+
 export function onSyncStatsStoreChange(fn: () => void): () => void {
   _listeners.add(fn);
   return () => {
@@ -154,6 +180,18 @@ export function onSyncStatsStoreChange(fn: () => void): () => void {
  *  longer blanks the display while a fresh read is in flight. */
 export function useSyncStats(): SyncStats | null {
   return useSyncExternalStore(onSyncStatsStoreChange, getSyncStatsSnapshot);
+}
+
+/**
+ * Subscribe a component to whether the stats read failed.
+ *
+ * Separate from {@link useSyncStats} because it answers a different question
+ * about the same `null`: no stats read yet, or none coming. A control whose
+ * meaning depends on the stats reads both — waiting on an answer that is on its
+ * way is not the same state as standing over one that never arrived.
+ */
+export function useSyncStatsFailed(): boolean {
+  return useSyncExternalStore(onSyncStatsStoreChange, getSyncStatsFailedSnapshot);
 }
 
 /** Subscribe a component to the session-budget reading. */
@@ -218,4 +256,5 @@ function resetLane<T>(lane: ReadLane<T>): void {
   lane.issued = 0;
   lane.applied = 0;
   lane.open = null;
+  lane.failed = false;
 }

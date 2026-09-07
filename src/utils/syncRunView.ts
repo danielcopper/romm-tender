@@ -49,8 +49,10 @@ import type { SyncProgress, SyncStage } from "../types";
 const TERMINAL_STAGES: ReadonlySet<SyncStage> = new Set<SyncStage>(["done", "cancelled", "error"]);
 
 /** Whether a stage stops the run — the three the backend pairs with
- *  `running: false`, and the only frames that may end a watch. */
-function isTerminalStage(stage: SyncProgress["stage"]): boolean {
+ *  `running: false`, and the only frames that may end a watch. Exported because
+ *  a page that passes no callbacks still has to tell a run's end from its own
+ *  optimistic frame being retracted, and both are `running: false`. */
+export function isTerminalStage(stage: SyncProgress["stage"]): boolean {
   return !!stage && TERMINAL_STAGES.has(stage);
 }
 

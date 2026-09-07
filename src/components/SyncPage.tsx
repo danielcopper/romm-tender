@@ -1,0 +1,95 @@
+/**
+ * The Sync page: the preview as a table, the run as a plan of units, and
+ * everything that is neither in a column of its own on the right.
+ *
+ * Wide and untabbed, so it owns its regions: two `Columns`, each scrolling
+ * independently inside the frame's measured height. The left column shows
+ * exactly one of three things, and the order they are decided in is the order of
+ * authority — **a run in flight owns the page**, because the progress rows are
+ * the true state of the machine at that moment; a preview held while one runs is
+ * not dropped, the store keeps it and the table comes back when the run ends.
+ *
+ * The session-budget card sits above whichever of the three is showing, and only
+ * while no run is in flight: a paused `last_attempt` survives into the resume
+ * that clears it, so the card would otherwise stand over the very run it is
+ * asking for.
+ *
+ * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Sync.
+ */
+
+import type { FC } from "react";
+import { DialogButton } from "@decky/ui";
+import { SessionBudgetBanner } from "./SessionBudgetBanner";
+import { ButtonRow, FLAT_BUTTON, Muted, SectionTitle } from "./qam/pane";
+import { Columns } from "./qam/Columns";
+import { WidePage } from "./qam/WidePage";
+import { PreviewPanel } from "./sync/PreviewPanel";
+import { RunPanel } from "./sync/RunPanel";
+import { SyncControls } from "./sync/SyncControls";
+import { useSyncPage, type SyncPageState } from "./sync/useSyncPage";
+
+/** The width the controls column is drawn at, and the reason the run rows are
+ *  set small: what is left of the panel's 806 px is the table's. */
+const CONTROLS_WIDTH = "270px";
+
+export const SyncPage: FC<{ onBack: () => void }> = ({ onBack }) => {
+  const state = useSyncPage();
+  return (
+    <WidePage title="Sync" onBack={onBack} ownRegions>
+      <Columns
+        columns={[
+          { id: "run", content: <SyncMainColumn state={state} /> },
+          { id: "controls", width: CONTROLS_WIDTH, content: <SyncControls state={state} /> },
+        ]}
+      />
+    </WidePage>
+  );
+};
+
+const SyncMainColumn: FC<{ state: SyncPageState }> = ({ state }) => {
+  let body;
+  if (state.run.running) {
+    body = <RunPanel state={state} />;
+  } else if (state.preview !== null) {
+    body = <PreviewPanel state={state} preview={state.preview} />;
+  } else {
+    body = <IdlePanel state={state} />;
+  }
+  return (
+    <>
+      {!state.run.running && (
+        <SessionBudgetBanner
+          lastAttemptStatus={state.stats?.last_attempt?.status}
+          syncButton={state.primaryAction}
+          rssKb={state.budget?.rss_kb ?? null}
+          resumeReady={state.budget?.resume_ready ?? null}
+          runDoneItems={state.budget?.run_done_items ?? null}
+          runTotalItems={state.budget?.run_total_items ?? null}
+        />
+      )}
+      {body}
+    </>
+  );
+};
+
+/** Nothing pending and nothing running: one line saying so, and the button that
+ *  changes it. The button's name is the resume question's answer, so it says the
+ *  same thing Main's does — and the session-budget card above it quotes this one
+ *  when it asks for a restart. */
+const IdlePanel: FC<{ state: SyncPageState }> = ({ state }) => (
+  <>
+    <SectionTitle title="Preview" />
+    <Muted>
+      {state.skipPreview
+        ? "Nothing is waiting to be applied. Skip preview is on, so this starts the run straight away."
+        : "Nothing is waiting to be applied. Working one out compares your library against RomM and adds nothing to Steam."}
+    </Muted>
+    <ButtonRow padding="4px 16px">
+      <DialogButton style={FLAT_BUTTON} disabled={state.busy} onClick={state.startPreview}>
+        {state.resume.label}
+      </DialogButton>
+    </ButtonRow>
+    {state.resume.scopeText !== null && <Muted>{state.resume.scopeText}</Muted>}
+    {state.status !== null && <Muted>{state.status}</Muted>}
+  </>
+);

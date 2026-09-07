@@ -6,6 +6,7 @@ import { FaGamepad } from "react-icons/fa";
 import { MainPage } from "./components/MainPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { LibraryPage } from "./components/LibraryPage";
+import { SyncPage } from "./components/SyncPage";
 import { DangerZone } from "./components/DangerZone";
 import { DownloadQueue } from "./components/DownloadQueue";
 import { OWNS_ENTRY_FOCUS_ATTR } from "./components/qam/WidePage";
@@ -138,6 +139,9 @@ const QAMPanel: FC = () => {
 
   let content: ReactNode;
   switch (page) {
+    case "sync":
+      content = <SyncPage onBack={() => setPage("main")} />;
+      break;
     case "settings":
       content = <SettingsPage onBack={() => setPage("main")} />;
       break;

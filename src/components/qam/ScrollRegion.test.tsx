@@ -119,6 +119,28 @@ describe("ScrollRegion", () => {
     expect(region.style.overflow).toBe("auto");
   });
 
+  it("marks the scrolling element itself when the caller names it", async () => {
+    // A caller that has to MOVE the scroll — rather than let focus move it —
+    // finds the region by this attribute, so it has to land on the element that
+    // carries the bounds. Asserted on the panel branch, which is the one the
+    // device takes; the fallback's `Focusable` is stubbed here with a fixed
+    // marker of its own, so the same assertion there would measure the stub.
+    const ScrollRegion = await loadScrollRegion(StubScrollPanel);
+
+    render(<ScrollRegion testId="unit-list" />);
+
+    expectBounds(screen.getByTestId("unit-list"));
+  });
+
+  it("leaves the panel's own marker alone when the caller names none", async () => {
+    // Steam's panel puts what it does not destructure onto the element it
+    // renders, so passing an undefined attribute through would clear one the
+    // caller never asked to touch.
+    const ScrollRegion = await loadScrollRegion(StubScrollPanel);
+    render(<ScrollRegion />);
+    expect(screen.getByTestId("scroll-panel")).toBeInTheDocument();
+  });
+
   it("lets the caller place the region without losing its bounds", async () => {
     const ScrollRegion = await loadScrollRegion(StubScrollPanel);
 

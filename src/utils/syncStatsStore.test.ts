@@ -13,6 +13,7 @@ import { getSessionBudgetStatus, getSyncStats } from "../api/backend";
 import type { SessionBudgetStatus, SyncStats } from "../types";
 import {
   getSessionBudgetSnapshot,
+  getSyncStatsFailedSnapshot,
   getSyncStatsSnapshot,
   onSyncStatsStoreChange,
   refreshSessionBudget,
@@ -144,6 +145,63 @@ describe("syncStatsStore", () => {
       const { logError } = await import("../api/backend");
       expect(vi.mocked(logError)).toHaveBeenCalledWith(expect.stringContaining("Failed to load sync stats"));
       expect(getSyncStatsSnapshot()?.roms).toBe(42);
+    });
+  });
+
+  // A `null` snapshot is two states, and a reader that treats one as the other
+  // gets it wrong in a way nothing else can correct: a control derived from the
+  // stats read a failed read as "there is nothing here" and went dead for the
+  // life of the page (#1814).
+  describe("telling a read that has not answered from one that failed", () => {
+    it("starts out with nothing failed, because nothing has been read", () => {
+      expect(getSyncStatsFailedSnapshot()).toBe(false);
+    });
+
+    it("records a read that did not answer", async () => {
+      vi.mocked(getSyncStats).mockRejectedValueOnce(new Error("boom"));
+      await refreshSyncStats();
+      expect(getSyncStatsSnapshot()).toBeNull();
+      expect(getSyncStatsFailedSnapshot()).toBe(true);
+    });
+
+    it("clears it again the moment an answer lands", async () => {
+      vi.mocked(getSyncStats).mockRejectedValueOnce(new Error("boom"));
+      await refreshSyncStats();
+      expect(getSyncStatsFailedSnapshot()).toBe(true);
+
+      vi.mocked(getSyncStats).mockResolvedValueOnce(stats({ roms: 42 }));
+      await refreshSyncStats();
+      expect(getSyncStatsFailedSnapshot()).toBe(false);
+    });
+
+    it("ignores a failure an already-applied later read has overtaken", async () => {
+      // The mirror of the issue-ordering rule above: an older read that fails
+      // says nothing about a fact a newer one has already answered.
+      const older = deferred<SyncStats>();
+      const newer = deferred<SyncStats>();
+      vi.mocked(getSyncStats).mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+
+      const first = refreshSyncStats();
+      const second = refreshSyncStatsAfterChange();
+
+      newer.resolve(stats({ roms: 42 }));
+      await second;
+
+      older.reject(new Error("boom"));
+      await first;
+      expect(getSyncStatsFailedSnapshot()).toBe(false);
+      expect(getSyncStatsSnapshot()?.roms).toBe(42);
+    });
+
+    it("notifies subscribers, so a control derived from it re-renders", async () => {
+      const seen: boolean[] = [];
+      const unsubscribe = onSyncStatsStoreChange(() => seen.push(getSyncStatsFailedSnapshot()));
+
+      vi.mocked(getSyncStats).mockRejectedValueOnce(new Error("boom"));
+      await refreshSyncStats();
+      unsubscribe();
+
+      expect(seen).toEqual([true]);
     });
   });
 
