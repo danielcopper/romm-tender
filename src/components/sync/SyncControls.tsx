@@ -37,7 +37,7 @@ const RUN_STATUS_COLOR: Record<SyncRunRecord["status"], string | undefined> = {
  * is about now, and re-deriving it per render is what keeps it true across a
  * page that stays open.
  */
-export function formatRunStart(iso: string): string {
+function formatRunStart(iso: string): string {
   const started = new Date(iso);
   if (Number.isNaN(started.getTime())) return iso;
   const time = started.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
@@ -66,7 +66,7 @@ export function formatRunStart(iso: string): string {
  * list recorded nothing about its coverage, where a run with an empty one
  * recorded that it completed nothing.
  */
-export function formatRunCoverage(run: SyncRunRecord): string {
+function formatRunCoverage(run: SyncRunRecord): string {
   const platforms = run.platforms_completed;
   if (platforms === null) {
     return run.platforms_planned > 0 ? `${pluralize(run.platforms_planned, "platform")} planned` : "nothing recorded";
