@@ -52,10 +52,28 @@ def newest_server_saves_by_target(
     target, so a target's carried save is deterministic rather than
     server-list-order dependent (#1058). Keyed by the canonical target filename.
     Shared by the slot-switch state sync and the setup wizard's legacy migration.
+
+    A target the answer does not carry is dropped: both callers hand the result
+    straight to a download, so a server-side name this emulator never writes
+    would land on disk over whatever occupies that path. The Saturn case is
+    concrete — a slot holding a ``.smpc`` uploaded before the configuration role
+    was understood would be written over the settings the user chose on this
+    device. The filter is skipped for an EMPTY *known_names*, which means no
+    answer was available rather than an answer naming nothing; filtering on it
+    would drop every target and turn a slot switch into a silent no-op.
     """
+    carried = frozenset(known_names)
     newest: dict[str, dict[str, Any]] = {}
     for ss in server_saves:
         target = local_save_target(ss, rom_name, known_names=known_names)
+        if carried and target not in carried:
+            _logger.debug(
+                "newest_server_saves_by_target(%r): server save %r is not a file this emulator's answer carries "
+                "— leaving it on the server",
+                rom_name,
+                target,
+            )
+            continue
         current = newest.get(target)
         if current is None or (parse_iso_to_epoch(ss.get("updated_at")) or 0.0) > (
             parse_iso_to_epoch(current.get("updated_at")) or 0.0

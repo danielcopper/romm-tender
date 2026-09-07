@@ -193,6 +193,24 @@ class TestOneSyncTakesOneReadingOfTheMachine:
 
     @pytest.mark.asyncio
     async def test_a_single_rom_sync_asks_the_resolver_once(self, tmp_path):
+        # A CONFIRMED slot, which is every ROM once the setup wizard has run and
+        # so the path users are actually on. It is also the expensive one: a
+        # confirmed ROM additionally opens a negotiate session, whose inventory
+        # walks this ROM's save files and would take a reading of its own.
+        svc, _store, _server = _service(tmp_path, _syncable())
+        _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True})
+        reader = cast("FakeSaveLocationReader", svc._rom_info._save_locations)
+        reader.calls.clear()
+
+        await svc.sync_rom_saves(42)
+
+        assert len(reader.calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_an_unconfirmed_rom_also_asks_once(self, tmp_path):
+        # The other branch of the same entry point: no negotiate session, so
+        # only the gate's own reading. Pinned so a change that reduces one path
+        # cannot quietly add a reading to the other.
         svc, _store, _server = _service(tmp_path, _syncable())
         reader = cast("FakeSaveLocationReader", svc._rom_info._save_locations)
         reader.calls.clear()
@@ -205,6 +223,7 @@ class TestOneSyncTakesOneReadingOfTheMachine:
     async def test_the_next_sync_asks_again(self, tmp_path):
         # The other half: nothing is remembered between operations.
         svc, _store, _server = _service(tmp_path, _syncable())
+        _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True})
         reader = cast("FakeSaveLocationReader", svc._rom_info._save_locations)
         reader.calls.clear()
 
@@ -296,6 +315,50 @@ class TestAFileTheAnswerDoesNotCarryIsLeftAlone:
 
         assert result["errors"] == []
         assert "rally.bkr" in _saved_files(svc)
+
+
+class TestASlotSwitchLeavesAnUncarriedFileAlone:
+    """The same rule on the slot-switch path, which downloads its own targets.
+
+    A switch does not run the newest-wins matrix — it takes every server save in
+    the destination slot and writes it to the canonical local path. So the guard
+    that keeps a configuration file off the sync path does not cover it, and
+    switching a Saturn game to a slot holding a ``.smpc`` uploaded before the
+    role rule existed wrote that file over the settings chosen on this device.
+    Recoverable — the download path quarantines first — but a restore the user
+    has to know to perform, over a file no emulator asked us to carry.
+    """
+
+    def _saturn_switching(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path, system="saturn", file_name="rally.cue")
+        _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True}, platform_slug="sega-saturn")
+        _create_save(tmp_path, system="saturn", rom_name="rally", ext=".smpc", content=b"local-settings")
+        for extension in ("smpc", "bkr"):
+            seeded = fake.seed_foreign_save(
+                42, slot="desktop", filename=f"rally.{extension}", content=f"server-{extension}".encode()
+            )
+            fake.saves[seeded["id"]]["file_extension"] = extension
+        return svc, fake
+
+    @pytest.mark.asyncio
+    async def test_the_configuration_file_is_not_downloaded_over_the_local_one(self, tmp_path):
+        svc, _fake = self._saturn_switching(tmp_path)
+
+        result = await svc.switch_slot(42, "desktop")
+
+        assert result["success"] is True
+        assert (tmp_path / "saves" / "saturn" / "rally.smpc").read_bytes() == b"local-settings"
+
+    @pytest.mark.asyncio
+    async def test_the_progress_file_in_the_new_slot_still_arrives(self, tmp_path):
+        # The control: the filter drops one target, it does not empty the switch.
+        svc, _fake = self._saturn_switching(tmp_path)
+
+        await svc.switch_slot(42, "desktop")
+
+        assert (tmp_path / "saves" / "saturn" / "rally.bkr").read_bytes() == b"server-bkr"
 
 
 class TestTheRefusalIsASkipAndNotAFailure:
