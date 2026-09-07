@@ -2052,13 +2052,24 @@ describe("MainPage", () => {
       expect(buttonByExactText(container, "Cancel Sync")).toBeNull();
     });
 
-    it("invites a review rather than a row of zeros when the work is covers or a re-stamp", async () => {
+    it("names cover work rather than showing a row of zeros", async () => {
       adoptPreview(previewSummary({ new_count: 0, changed_count: 0, cover_refresh_count: 7 }));
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
 
-      expect(slotValue(container)).toBe("ready to review");
+      expect(slotValue(container)).toBe("cover work only");
       expect(container.textContent).not.toContain("0 new");
+    });
+
+    it("does not call a re-stamp cover work — it invites a review instead", async () => {
+      // The other zero-count previews: a platform re-stamp, a collection
+      // membership that moved, an empty delta. Each still has something for
+      // Apply to do, and none of it is cover work — the page says which.
+      adoptPreview(previewSummary({ new_count: 0, changed_count: 0, restamp_platform_count: 2 }));
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+
+      expect(slotValue(container)).toBe("ready to review");
     });
 
     it("opens the Sync page when pressed, on both of its occasions", async () => {

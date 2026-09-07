@@ -163,9 +163,11 @@ function formatLibraryLine(stats: SyncStats): string {
  * counts, in the same three words the page's own table column headings use.
  *
  * A zero part is dropped rather than shown, and a preview with none of the three
- * — cover work or a re-stamp, both of which still have something to apply — says
- * so as a plain invitation instead of a row of zeros. The page behind the slot
- * states all of it; this is the part that fits on Main.
+ * names the work it does hold instead of showing a row of zeros. Cover work is
+ * the one such preview that can be named in two words, so it is; the others a
+ * zero-count preview can be — a platform re-stamp, a collection membership that
+ * moved, or a delta that is genuinely empty — are not cover work and must not be
+ * called it, so they keep the plain invitation and the page states which it is.
  */
 function previewCountsLine(preview: SyncPreview): string {
   const s = preview.summary;
@@ -173,7 +175,8 @@ function previewCountsLine(preview: SyncPreview): string {
   if (s.new_count > 0) parts.push(`${s.new_count} new`);
   if (s.changed_count > 0) parts.push(`${s.changed_count} updated`);
   if (s.remove_count > 0) parts.push(`${s.remove_count} removed`);
-  return parts.length > 0 ? parts.join(" · ") : "ready to review";
+  if (parts.length > 0) return parts.join(" · ");
+  return (s.cover_refresh_count ?? 0) > 0 ? "cover work only" : "ready to review";
 }
 
 /**

@@ -155,6 +155,45 @@ describe("useSyncRunView", () => {
         unmount();
       }
     });
+
+    it("keeps the prior line when a boundary anchor carries no message of its own", () => {
+      // The carry REPLACES, never removes: an anchor with an empty message says
+      // nothing about the next unit, so blanking the line on it would leave the
+      // row mounted and empty for the rest of that unit's fetch.
+      const { result, unmount } = renderHook(() => useSyncRunView());
+      try {
+        act(() => {
+          setSyncProgress({
+            running: true,
+            stage: "applying",
+            step: 1,
+            totalSteps: 2,
+            current: 40,
+            total: 200,
+            message: "PSX: 40/200",
+            runId: "run-1",
+          });
+        });
+        expect(result.current.fineDetailText).toBe("PSX: 40/200");
+
+        act(() => {
+          setSyncProgress({
+            running: true,
+            stage: "fetching",
+            step: 2,
+            totalSteps: 2,
+            current: 0,
+            total: 0,
+            message: "",
+            runId: "run-1",
+          });
+        });
+        expect(result.current.hasFineDetail).toBe(true);
+        expect(result.current.fineDetailText).toBe("PSX: 40/200");
+      } finally {
+        unmount();
+      }
+    });
   });
 
   describe("the estimate", () => {

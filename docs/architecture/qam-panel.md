@@ -380,9 +380,11 @@ right rather than guessing. Where no kind is stated the slot says neither of the
 numbers beside it still come from `useSyncRunView`, which the Sync page reads too, so one derivation of a run serves
 both pages.
 
-A pending preview's counts drop their zero parts, and a preview whose only work is covers or a re-stamp — nothing new,
-updated or removed — says "ready to review" rather than a row of zeros. An expired preview counts as none; the backend
-drops one past its 30-minute TTL (`PREVIEW_MAX_AGE_SECONDS`). What ticks for that is a single timer aimed at the
+A pending preview's counts drop their zero parts, and one with none of the three names the work it does hold rather than
+showing a row of zeros: **cover work only** where the delta is cover refreshes, and the plain **ready to review** for
+the other zero-count previews — a platform re-stamp, a collection membership that moved, a genuinely empty delta —
+because none of those is cover work and the page is where it is said which. An expired preview counts as none; the
+backend drops one past its 30-minute TTL (`PREVIEW_MAX_AGE_SECONDS`). What ticks for that is a single timer aimed at the
 deadline, not a per-second interval: nothing on Main counts a preview down, so the only moment the clock changes
 anything here is the one the slot disappears at. **Main never discards a preview**, and since it can no longer start one
 either, it holds none of the paths that answer the preview question — the invariant register's pending-preview entry
