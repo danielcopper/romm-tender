@@ -1,0 +1,479 @@
+<title>Tender Sync Layouts</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --bg: #eef0f3; --surface: #ffffff; --ink: #1b2027; --muted: #5b6470; --line: #d5d9df;
+    --line-strong: #b9c0c9; --mark: #c4731a; --mark-ink: #ffffff; --chip: #e3e7ec;
+    --chip-on: #1b2027; --chip-on-ink: #ffffff; --rec: #2b6a3e; --rec-bg: #e6f2ea; --no: #b3401e;
+    --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    --font-mock: "Motiva Sans", "Noto Sans", "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151a; --surface: #1a1e25; --ink: #e4e8ee; --muted: #9aa3ae; --line: #2a3038;
+      --line-strong: #3a424c; --mark: #d98a2e; --mark-ink: #12151a; --chip: #262c35;
+      --chip-on: #e4e8ee; --chip-on-ink: #12151a; --rec: #8fd3a5; --rec-bg: #1c2f23; --no: #e0865f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151a; --surface: #1a1e25; --ink: #e4e8ee; --muted: #9aa3ae; --line: #2a3038;
+    --line-strong: #3a424c; --mark: #d98a2e; --mark-ink: #12151a; --chip: #262c35;
+    --chip-on: #e4e8ee; --chip-on-ink: #12151a; --rec: #8fd3a5; --rec-bg: #1c2f23; --no: #e0865f;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font-ui); }
+  button { font: inherit; color: inherit; }
+  button:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+
+  .top { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; padding: 18px 28px;
+         border-bottom: 1px solid var(--line); background: var(--surface); position: sticky; top: 0; z-index: 5; }
+  .top h1 { margin: 0; font-size: 17px; font-weight: 600; }
+  .top h1 small { font-family: var(--font-mono); font-weight: 400; color: var(--muted); margin-left: 10px; font-size: 12px; }
+  .switch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .switch .lab { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; }
+  .chip { border: 1px solid var(--line-strong); background: var(--chip); border-radius: 3px; padding: 4px 10px; font-size: 13px; cursor: pointer; }
+  .chip[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-ink); border-color: var(--chip-on); }
+  .chip .rec { font-family: var(--font-mono); font-size: 10px; margin-left: 6px; color: var(--rec); letter-spacing: .06em; }
+  .chip[aria-pressed="true"] .rec { color: inherit; opacity: .75; }
+
+  main { padding: 26px 28px 80px; max-width: 1180px; }
+  h2 { margin: 0 0 4px; font-size: 22px; font-weight: 600; text-wrap: balance; }
+  .sub { margin: 0 0 18px; color: var(--muted); max-width: 74ch; }
+  h3 { margin: 0 0 8px; font-size: 13px; font-family: var(--font-mono); letter-spacing: .06em;
+       text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  h4 { margin: 26px 0 6px; font-size: 15px; font-weight: 600; }
+
+  .stage { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 4px; background: #0e1116; }
+  .caption { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 8px 0 26px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .variant { display: none; }
+  .variant.on { display: block; }
+
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px 36px; margin-bottom: 26px; }
+  .notes ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .notes ol > li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; max-width: 62ch; }
+  .notes ol > li p { margin: 0; }
+  .notes ul { margin: 0; padding-left: 18px; max-width: 62ch; display: grid; gap: 6px; }
+  .mk { width: 20px; height: 20px; border-radius: 50%; background: var(--mark); color: var(--mark-ink);
+        font: 600 11px/20px var(--font-mono); text-align: center; margin-top: 2px; }
+  .recbox { border-left: 3px solid var(--rec); background: var(--rec-bg); padding: 10px 14px; border-radius: 0 3px 3px 0; max-width: 66ch; margin-bottom: 26px; }
+  .recbox b { color: var(--rec); font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em;
+              text-transform: uppercase; display: block; margin-bottom: 4px; font-weight: 500; }
+
+  .facts { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 16px 20px; margin-bottom: 26px; max-width: 900px; }
+  .facts dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 20px; }
+  .facts dt { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .facts dd { margin: 0; }
+
+  .cmpwrap { overflow-x: auto; margin-bottom: 26px; }
+  .cmp { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); font-size: 14px; min-width: 720px; }
+  .cmp th, .cmp td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .cmp th { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  .cmp td.y { color: var(--rec); } .cmp td.n { color: var(--no); }
+
+  /* ---------- the Steam mock ---------- */
+  .deck { position: absolute; top: 0; left: 0; transform-origin: 0 0; overflow: hidden;
+          background: radial-gradient(900px 520px at 24% 20%, #262c39, #0e1116 70%);
+          --p: #23262e; --p2: #1a1d23; --t: #dcdedf; --mu: #8b929a; --ln: rgba(255,255,255,.07);
+          --ln2: rgba(255,255,255,.14); --blue: #1a9fff; --ok: #59bf40; --warn: #f0a030; --dng: #e8686a;
+          --fill: rgba(255,255,255,.08); --fill2: rgba(255,255,255,.14);
+          font-family: var(--font-mock); color: var(--t); font-size: 14px; line-height: 1.35; }
+  .deck::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 80px; background: #0b0d11; }
+  .deck::after { content: "95 %   13:28"; position: absolute; top: 28px; right: 24px; font: 600 15px/1 var(--font-mock); color: #dcdedf; }
+  .bgtile { position: absolute; border-radius: 6px; background: rgba(255,255,255,.035); }
+  .qam { position: absolute; top: 80px; right: 0; bottom: 0; width: 854px; display: flex; box-shadow: -12px 0 40px rgba(0,0,0,.45); }
+  .rail { width: 48px; background: var(--p2); display: flex; flex-direction: column; align-items: center; padding-top: 14px; gap: 16px; flex: none; }
+  .rail i { width: 18px; height: 18px; border: 2px solid #5a6270; border-radius: 4px; display: block; }
+  .rail i.c { border-radius: 50%; }
+  .rail i.on { border-color: #fff; background: rgba(255,255,255,.15); }
+  .content { flex: 1; min-width: 0; background: var(--p); display: flex; flex-direction: column; overflow: hidden; }
+  .dtitle { height: 34px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 600; font-size: 15px; border-bottom: 1px solid var(--ln); color: #fff; }
+  .dtitle .ar { color: var(--mu); font-size: 18px; line-height: 1; }
+  .phead { display: flex; align-items: center; gap: 12px; padding: 7px 16px 3px; flex: none; }
+  .back { background: var(--fill); padding: 4px 10px; border-radius: 2px; font-size: 13px; color: #fff; }
+  .ptitle { font-size: 17px; font-weight: 600; color: #fff; }
+
+  .cols { display: grid; gap: 16px; padding: 8px 16px 10px; flex: 1; min-height: 0; }
+  .cols.ab { grid-template-columns: minmax(0, 1fr) 270px; }
+  .cols.one { grid-template-columns: minmax(0, 1fr); }
+  .cols.ld { grid-template-columns: 264px minmax(0, 1fr); }
+  .list, .pane { overflow: hidden; min-height: 0; position: relative; }
+  .fade { position: absolute; left: 0; right: 0; bottom: 0; height: 26px; background: linear-gradient(transparent, var(--p)); pointer-events: none; }
+  .grp { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--mu); padding: 6px 0 3px; }
+  .lrow { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-bottom: 1px solid var(--ln); }
+  .lrow .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lrow .ct { font-size: 11px; font-variant-numeric: tabular-nums; flex: none; color: var(--mu); }
+  .lrow.sel { background: var(--fill2); outline: 2px solid #fff; outline-offset: -2px; border-radius: 2px; }
+  .sec-t { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--mu); padding: 10px 0 3px; display: flex; align-items: center; gap: 8px; }
+  .sec-t:first-child { padding-top: 2px; }
+  .sec-t .sp { margin-left: auto; letter-spacing: 0; text-transform: none; font-size: 12px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--ln); }
+  .row .val { color: var(--mu); font-variant-numeric: tabular-nums; text-align: right; display: flex; align-items: center; gap: 8px; flex: none; }
+  .row .val.t { color: var(--t); }
+  .desc { font-size: 12px; color: var(--mu); margin-top: 1px; }
+  .tg { width: 34px; height: 18px; border-radius: 9px; background: rgba(255,255,255,.22); position: relative; flex: none; }
+  .tg::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+  .tg.on { background: var(--blue); }
+  .tg.on::after { left: 18px; }
+  .btn { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--fill); padding: 6px 10px; border-radius: 2px; font-weight: 500; margin-top: 6px; color: #fff; font-size: 13px; }
+  .btn.dng { color: var(--dng); }
+  .btn.dis { color: var(--mu); }
+  .btn.foc { outline: 2px solid #fff; outline-offset: -2px; background: var(--fill2); }
+  .btn .ar { color: var(--mu); }
+  .btns { display: flex; gap: 6px; margin-top: 6px; }
+  .btns .btn { flex: 1; justify-content: center; margin: 0; }
+  .btn.sm { padding: 3px 8px; font-size: 12px; margin: 0; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tbl th { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--mu); text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--ln2); font-weight: 500; }
+  .tbl td { padding: 5px 6px; border-bottom: 1px solid var(--ln); vertical-align: middle; font-variant-numeric: tabular-nums; }
+  .tbl td.n, .tbl th.n { text-align: right; }
+  .tbl tr.sel td { background: var(--fill2); }
+  .tbl tr.sel td:first-child { box-shadow: inset 3px 0 0 #fff; }
+  .tbl tr.tot td { border-top: 1px solid var(--ln2); border-bottom: 0; }
+  .tbl.compact td { padding: 2px 6px; font-size: 12px; line-height: 1.25; }
+  .tbl.compact th { padding: 3px 6px; }
+  .tbl.compact .bar { height: 4px; margin: 3px 0 0; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .mu { color: var(--mu); } .dngt { color: var(--dng); }
+  .m { display: inline-block; width: 17px; height: 17px; border-radius: 50%; background: #c4731a; color: #fff;
+      font: 600 10px/17px var(--font-mono); text-align: center; vertical-align: middle; margin-left: 6px; flex: none; }
+  .notice { background: rgba(240,160,48,.10); border-left: 2px solid var(--warn); padding: 6px 10px; border-radius: 0 2px 2px 0; }
+  .notice .t { font-weight: 600; color: #fff; }
+  .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); margin: 8px 0 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 38%; background: var(--blue); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+</style>
+
+<header class="top">
+  <h1>Tender Sync Layouts <small>#1814 · panel 854 px wide, 454 px tall on the Deck</small></h1>
+  <div class="switch">
+    <span class="lab">Layout</span>
+    <button class="chip" data-v="a" aria-pressed="true">A · table and controls <span class="rec">REC</span></button>
+    <button class="chip" data-v="b" aria-pressed="false">B · one column</button>
+    <button class="chip" data-v="c" aria-pressed="false">C · list and detail</button>
+  </div>
+</header>
+
+<main>
+  <div class="facts">
+    <dl>
+      <dt>The page</dt><dd>Sync is a wide page reached from Main's Sync button and its <strong>Last sync</strong> row. It holds the preview as a table, the controls that end a preview (Apply, Refresh, Cancel), Skip preview, Force Full Sync, Steam memory now and the last run's delta, the session-budget card with Restart Steam now and Resume, and the last runs. All three layouts hold the same things; they differ in where each sits and what is visible without scrolling.</dd>
+      <dt>Width</dt><dd>The panel is <strong>854 px</strong> and the content <strong>806 px</strong>, the same on every display. On the Deck that is the whole screen. Nothing here needs to be responsive in width.</dd>
+      <dt>Height</dt><dd>The scarce axis. On the Deck the panel is <strong>454 px</strong> and the body about <strong>300 px</strong> after the title bar, Back and the page title; Sync has no tab row, so it gets 40 px more than Library. Every layout is drawn at the Deck's height, the worst case.</dd>
+      <dt>Data</dt><dd>The preview answer carries one row per platform with a change (<em>New · Updated · Removed</em>, and whether the platform is in the run), the added and removed collection names, and the totals. The run history answers the ten newest runs with start, end, status, planned counts, completed platforms and collections, and an error text. Skip preview is a saved setting. <strong>The example numbers on the boards are invented.</strong></dd>
+      <dt>Frame</dt><dd>A wide page without tabs owns its scroll regions (<code>ownRegions</code>) and lays them out with <code>Columns</code>; a page with one column takes the frame's own region. Every row a reader must reach is a focus stop, and a region scrolls only by moving focus; a region reveals its top and its end when focus reaches its first or last stop.</dd>
+    </dl>
+  </div>
+
+  <!-- ============ A ============ -->
+  <section class="variant on" id="v-a">
+    <h2>A · Table and controls</h2>
+    <p class="sub">The preview takes the left column, everything that is not the preview stands in a 270 px column on the right. This is the layout the prototype drew and the design record describes.</p>
+
+    <div class="stage" data-w="854" data-h="534"><div class="deck">
+      <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
+      <div class="qam">
+        <div class="rail"><i></i><i class="c"></i><i></i><i class="c"></i><i></i><i class="on"></i></div>
+        <div class="content">
+          <div class="dtitle"><span class="ar">‹</span> Tender</div>
+          <div class="phead"><span class="back">‹ Back</span><span class="ptitle">Sync</span></div>
+          <div class="cols ab">
+            <div class="pane">
+              <div class="sec-t">Preview <span class="m">1</span><span class="sp">computed 09:41 · expires in 4:12</span></div>
+              <table class="tbl">
+                <thead><tr><th>Platform</th><th class="n">New</th><th class="n">Updated</th><th class="n">Removed</th></tr></thead>
+                <tbody>
+                  <tr class="sel"><td>PlayStation</td><td class="n">4</td><td class="n">1</td><td class="n mu">0</td></tr>
+                  <tr><td>SNES</td><td class="n">8</td><td class="n">2</td><td class="n mu">0</td></tr>
+                  <tr><td>Game Boy Advance</td><td class="n mu">0</td><td class="n mu">0</td><td class="n">2</td></tr>
+                  <tr><td>Sega Saturn <span class="mu">· no longer synced</span></td><td class="n mu">0</td><td class="n mu">0</td><td class="n">3</td></tr>
+                  <tr><td>Collections <span class="mu">· Favorites added, Beat 'em ups removed</span></td><td class="n">1</td><td class="n mu">0</td><td class="n">1</td></tr>
+                  <tr class="tot"><td><strong>Total</strong></td><td class="n"><strong>13</strong></td><td class="n"><strong>3</strong></td><td class="n"><strong>6</strong></td></tr>
+                </tbody>
+              </table>
+              <div class="row"><div>Estimated duration</div><div class="val t">about 2 min</div></div>
+              <div class="desc" style="padding-top:6px">Progress is saved every ~200 games. Keep the Deck awake for runs over 10 min.</div>
+              <div class="btns" style="margin-top:10px"><div class="btn foc">Apply Sync</div><div class="btn">Refresh <span class="m">2</span></div><div class="btn">Cancel</div></div>
+            </div>
+            <div class="pane">
+              <div class="sec-t">Options <span class="m">3</span></div>
+              <div class="row"><div>Skip preview<div class="desc">Apply without asking</div></div><div class="val"><span class="tg"></span></div></div>
+              <div class="btn dng">Force Full Sync</div>
+              <div class="desc" style="padding-top:4px">Forgets what was synced and rebuilds everything.</div>
+              <div class="sec-t">Steam memory <span class="m">4</span></div>
+              <div class="row"><div>Now</div><div class="val ok">1.2 GB</div></div>
+              <div class="row"><div>Last run</div><div class="val t">+0.3 GB</div></div>
+              <div class="sec-t">Last runs <span class="m">5</span></div>
+              <div class="row"><div>Today 09:41<div class="desc">14 platforms · 3 collections</div></div><div class="val ok">completed</div></div>
+              <div class="row"><div>Yesterday 21:03<div class="desc">6 of 14 platforms</div></div><div class="val warn">paused</div></div>
+              <div class="row"><div>Aug 30 18:20<div class="desc">14 platforms · 3 collections</div></div><div class="val ok">completed</div></div>
+              <div class="fade"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="caption"><span>Left column flexible, 520 px · right column 270 px</span><span>Two regions, each scrolls on its own</span><span>Entry focus: the first table row</span></div>
+
+    <div class="notes">
+      <div><h3>Notes</h3>
+        <ol>
+          <li><span class="mk">1</span><p><strong>The preview is the page.</strong> One row per platform with a change, the collections row built from the added and removed names, a total row. A platform that has left the run but still has shortcuts to remove is marked, not hidden. Every row is a focus stop, so the reader can walk the table and the region scrolls with them.</p></li>
+          <li><span class="mk">2</span><p><strong>Three ways to end a preview.</strong> Apply, Refresh and Cancel sit under the table. Refresh is new: it discards the pending preview on both sides and computes another. These three replace Main's two buttons and Main's second-press discard.</p></li>
+          <li><span class="mk">3</span><p><strong>Options.</strong> Skip preview is a saved setting now, read back on every mount. Force Full Sync is red and last in its group, with its one-line explanation; whether it gets a confirmation is an open decision, today it has none.</p></li>
+          <li><span class="mk">4</span><p><strong>Steam memory.</strong> The same reading Main's status row shows, plus the last run's delta. When the last run paused on the budget, the session-budget card with Restart Steam now and Resume takes the top of the left column and the preview moves under it.</p></li>
+          <li><span class="mk">5</span><p><strong>Last runs.</strong> Ten at most, newest first; each row is a focus stop with the start time, what the run covered and how it ended. A run that did not finish says so in the status word, not in a count.</p></li>
+        </ol>
+      </div>
+      <div><h3>What it costs</h3>
+        <ul>
+          <li>The right column is 270 px: a run row gets one line of description and long platform lists are counted, not listed.</li>
+          <li>The table has 520 px for a name and three numbers, which is enough; a fourth column would not fit beside a long platform name.</li>
+          <li>The import choice (#1364, later) goes under the table and pushes Apply down; on the Deck the buttons are then a scroll away while a choice is offered.</li>
+          <li>Two regions means two focus columns; moving from Apply to Force Full Sync is a right press, not a down press.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h4>A, while a run is in flight — the run view</h4>
+    <p class="sub">With Skip preview on, or after Apply, a run is in flight and there is no preview to show. The left column becomes the run view: the whole run as one bar, and under it every unit of the plan with its own state, the running one with its own bar.</p>
+    <div class="stage" data-w="854" data-h="534"><div class="deck">
+      <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
+      <div class="qam">
+        <div class="rail"><i></i><i class="c"></i><i></i><i class="c"></i><i></i><i class="on"></i></div>
+        <div class="content">
+          <div class="dtitle"><span class="ar">‹</span> Tender</div>
+          <div class="phead"><span class="back">‹ Back</span><span class="ptitle">Sync</span></div>
+          <div class="cols ab">
+            <div class="pane">
+              <div class="sec-t">Sync running <span class="m">6</span><span class="sp">unit 3 of 14 · about 4 min left</span></div>
+              <div class="bar" style="margin-top:4px"><i style="width:31%"></i></div>
+              <table class="tbl compact" style="margin-top:6px">
+                <thead><tr><th>Unit</th><th>Status</th><th class="n">Result</th></tr></thead>
+                <tbody>
+                  <tr><td>PlayStation</td><td class="ok">done</td><td class="n">4 added · 1 updated</td></tr>
+                  <tr><td>Nintendo 64</td><td class="mu">skipped, unchanged since last run</td><td class="n mu">—</td></tr>
+                  <tr class="sel"><td>SNES</td><td>applying shortcuts <span class="m">7</span><div class="bar" style="margin:4px 0 0"><i style="width:15%"></i></div></td><td class="n">120 of 800</td></tr>
+                  <tr><td>Game Boy Advance</td><td class="mu">waiting</td><td class="n mu">2 to remove</td></tr>
+                  <tr><td>Sega Saturn</td><td class="mu">waiting</td><td class="n mu">3 to remove</td></tr>
+                  <tr><td>Game Boy</td><td class="mu">waiting</td><td class="n mu">212 ROMs</td></tr>
+                  <tr><td>Collections <span class="mu">· 3</span></td><td class="mu">waiting</td><td class="n mu">last</td></tr>
+                </tbody>
+              </table>
+              <div class="btns" style="margin-top:8px"><div class="btn foc">Cancel Sync</div></div>
+              <div class="fade"></div>
+            </div>
+            <div class="pane">
+              <div class="sec-t">Options</div>
+              <div class="row"><div>Skip preview<div class="desc">Apply without asking</div></div><div class="val"><span class="tg on"></span></div></div>
+              <div class="btn dis">Force Full Sync</div>
+              <div class="desc" style="padding-top:4px">Not while a run is in flight.</div>
+              <div class="sec-t">Steam memory</div>
+              <div class="row"><div>Now</div><div class="val warn">1.8 GB</div></div>
+              <div class="row"><div>Last run</div><div class="val t">+0.3 GB</div></div>
+              <div class="sec-t">Last runs</div>
+              <div class="row"><div>Today 13:26<div class="desc">3 of 14 platforms so far</div></div><div class="val">running</div></div>
+              <div class="row"><div>Today 09:41<div class="desc">14 platforms · 3 collections</div></div><div class="val ok">completed</div></div>
+              <div class="fade"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="caption"><span>One bar for the run, one row per planned unit, one bar for the running unit</span><span>Main keeps its compact bar; both read the same numbers</span><span>Every unit row is a focus stop</span></div>
+    <div class="notes">
+      <div><h3>Notes</h3>
+        <ol start="6">
+          <li><span class="mk">6</span><p><strong>Two levels, from data the frontend already has.</strong> The plan event lists every unit up front with its ROM count and whether the fetch is expected to skip it; each progress frame names the running unit, its stage (fetching, covers, applying) and its item counter; the apply loop knows what each unit produced. Done units keep their result, the running unit gets its own bar, waiting units show what is planned for them. The rows are flatter and set smaller than the preview's rows on purpose: a plan of fourteen platforms and three collections has to fit the column without eating the height the total bar and Cancel need. The total bar and the estimate are the ones Main shows, read through one shared hook rather than a second copy of Main's derivation.</p></li>
+          <li><span class="mk">7</span><p><strong>What each stage says.</strong> <em>fetching</em> counts ROM pages, <em>covers</em> counts downloads, <em>applying</em> counts shortcuts written, in the same row and the same bar. A pause on the session budget or a cancel leaves the table standing with the last state of every row, which is what the reader wants to see when deciding whether to resume.</p></li>
+        </ol>
+      </div>
+      <div><h3>What it costs</h3>
+        <ul>
+          <li>The numbers come from Main's progress derivation, which lives inside the Main component today; a shared hook has to be lifted out of it before both pages can read it, and Main's progress tests move with it.</li>
+          <li>Per-unit results are counted on the frontend as the apply loop runs; a page opened mid-run sees results only for units finished after it opened, unless the loop records them in a module store.</li>
+          <li>Fourteen platforms and three collections fill the column; the region scrolls, and the running row stays where it is rather than being kept in view.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ B ============ -->
+  <section class="variant" id="v-b">
+    <h2>B · One column</h2>
+    <p class="sub">Everything in one column, in reading order: the table with the whole width, the buttons, then history and options side by side under them. The frame's own region scrolls the page as one.</p>
+
+    <div class="stage" data-w="854" data-h="534"><div class="deck">
+      <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
+      <div class="qam">
+        <div class="rail"><i></i><i class="c"></i><i></i><i class="c"></i><i></i><i class="on"></i></div>
+        <div class="content">
+          <div class="dtitle"><span class="ar">‹</span> Tender</div>
+          <div class="phead"><span class="back">‹ Back</span><span class="ptitle">Sync</span></div>
+          <div class="cols one">
+            <div class="pane">
+              <div class="sec-t">Preview <span class="m">1</span><span class="sp">computed 09:41 · expires in 4:12</span></div>
+              <table class="tbl">
+                <thead><tr><th>Platform</th><th>In this run</th><th class="n">New</th><th class="n">Updated</th><th class="n">Removed</th></tr></thead>
+                <tbody>
+                  <tr class="sel"><td>PlayStation</td><td class="mu">yes</td><td class="n">4</td><td class="n">1</td><td class="n mu">0</td></tr>
+                  <tr><td>SNES</td><td class="mu">yes</td><td class="n">8</td><td class="n">2</td><td class="n mu">0</td></tr>
+                  <tr><td>Game Boy Advance</td><td class="mu">yes</td><td class="n mu">0</td><td class="n mu">0</td><td class="n">2</td></tr>
+                  <tr><td>Sega Saturn</td><td class="warn">no longer</td><td class="n mu">0</td><td class="n mu">0</td><td class="n">3</td></tr>
+                  <tr><td>Collections <span class="mu">· Favorites added, Beat 'em ups removed</span></td><td class="mu">3</td><td class="n">1</td><td class="n mu">0</td><td class="n">1</td></tr>
+                  <tr class="tot"><td><strong>Total</strong></td><td></td><td class="n"><strong>13</strong></td><td class="n"><strong>3</strong></td><td class="n"><strong>6</strong></td></tr>
+                </tbody>
+              </table>
+              <div class="row"><div>Estimated duration <span class="desc" style="display:inline;margin-left:8px">Progress is saved every ~200 games.</span></div><div class="val t">about 2 min</div></div>
+              <div class="btns" style="margin-top:10px"><div class="btn foc">Apply Sync</div><div class="btn">Refresh</div><div class="btn">Cancel</div><div class="btn dng" style="flex:0 0 auto;padding:6px 14px">Force Full Sync <span class="m">2</span></div></div>
+              <div class="two" style="margin-top:6px">
+                <div>
+                  <div class="sec-t">Last runs <span class="m">3</span></div>
+                  <div class="row"><div>Today 09:41<div class="desc">14 platforms · 3 collections</div></div><div class="val ok">completed</div></div>
+                  <div class="row"><div>Yesterday 21:03<div class="desc">6 of 14 platforms</div></div><div class="val warn">paused</div></div>
+                </div>
+                <div>
+                  <div class="sec-t">Options</div>
+                  <div class="row"><div>Skip preview<div class="desc">Apply without asking</div></div><div class="val"><span class="tg"></span></div></div>
+                  <div class="row"><div>Steam memory now</div><div class="val ok">1.2 GB</div></div>
+                </div>
+              </div>
+              <div class="fade"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="caption"><span>One region, 806 px wide</span><span>Below the fold on the Deck: history, options, Steam memory</span><span>Entry focus: the first table row</span></div>
+
+    <div class="notes">
+      <div><h3>Notes</h3>
+        <ol>
+          <li><span class="mk">1</span><p><strong>The table gets the whole width.</strong> Room for a fourth column, drawn here as <em>In this run</em>, the flag the breakdown already carries, and for the collection names inside the row instead of a hint.</p></li>
+          <li><span class="mk">2</span><p><strong>One button row.</strong> Apply, Refresh, Cancel, and Force Full Sync at the right end of the same row, red. Four buttons on one row read as one group, which they are not: three end a preview, one forgets the past.</p></li>
+          <li><span class="mk">3</span><p><strong>History and options under the fold.</strong> Side by side to halve their height, still below the Deck's fold on any preview with more than three platform rows.</p></li>
+        </ol>
+      </div>
+      <div><h3>What it costs</h3>
+        <ul>
+          <li>Height is spent twice: the table first, then everything else. On the Deck the last runs are one or two scrolls away, and the paused card would push the table down.</li>
+          <li>One region scrolls as one piece; reaching Skip preview means walking the whole table's rows first, because a region scrolls only by moving focus.</li>
+          <li>Row order is reading order, so the primary and the peripheral share one column and one focus lane.</li>
+          <li>Uses the frame's own region, no <code>Columns</code>; the simplest to build.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ C ============ -->
+  <section class="variant" id="v-c">
+    <h2>C · List and detail</h2>
+    <p class="sub">The page shaped like Settings and Data Management will be: four entries on the left, the focused one on the right. The preview is one entry among four.</p>
+
+    <div class="stage" data-w="854" data-h="534"><div class="deck">
+      <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
+      <div class="qam">
+        <div class="rail"><i></i><i class="c"></i><i></i><i class="c"></i><i></i><i class="on"></i></div>
+        <div class="content">
+          <div class="dtitle"><span class="ar">‹</span> Tender</div>
+          <div class="phead"><span class="back">‹ Back</span><span class="ptitle">Sync</span></div>
+          <div class="cols ld">
+            <div class="list">
+              <div class="lrow sel"><span class="nm">Preview</span><span class="ct">13 new · 3 updated · 6 removed</span></div>
+              <div class="lrow"><span class="nm">Last runs</span><span class="ct">10</span></div>
+              <div class="lrow"><span class="nm">Options</span><span class="ct">skip preview off</span></div>
+              <div class="lrow"><span class="nm">Steam memory</span><span class="ct ok">1.2 GB</span></div>
+            </div>
+            <div class="pane">
+              <div class="sec-t">Preview <span class="m">1</span><span class="sp">computed 09:41 · expires in 4:12</span></div>
+              <table class="tbl">
+                <thead><tr><th>Platform</th><th class="n">New</th><th class="n">Updated</th><th class="n">Removed</th></tr></thead>
+                <tbody>
+                  <tr><td>PlayStation</td><td class="n">4</td><td class="n">1</td><td class="n mu">0</td></tr>
+                  <tr><td>SNES</td><td class="n">8</td><td class="n">2</td><td class="n mu">0</td></tr>
+                  <tr><td>Game Boy Advance</td><td class="n mu">0</td><td class="n mu">0</td><td class="n">2</td></tr>
+                  <tr><td>Sega Saturn <span class="mu">· no longer synced</span></td><td class="n mu">0</td><td class="n mu">0</td><td class="n">3</td></tr>
+                  <tr><td>Collections</td><td class="n">1</td><td class="n mu">0</td><td class="n">1</td></tr>
+                  <tr class="tot"><td><strong>Total</strong></td><td class="n"><strong>13</strong></td><td class="n"><strong>3</strong></td><td class="n"><strong>6</strong></td></tr>
+                </tbody>
+              </table>
+              <div class="row"><div>Estimated duration</div><div class="val t">about 2 min</div></div>
+              <div class="btns" style="margin-top:10px"><div class="btn">Apply Sync <span class="m">2</span></div><div class="btn">Refresh</div><div class="btn">Cancel</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="caption"><span>List 264 px · detail 526 px</span><span>Focus selects: moving down the list swaps the detail</span><span>Entry focus: the Preview row</span></div>
+
+    <div class="notes">
+      <div><h3>Notes</h3>
+        <ol>
+          <li><span class="mk">1</span><p><strong>One shape for three pages.</strong> Settings and Data Management are list and detail; Sync would be too, and each list row can carry a summary, so the totals, the run count and the memory reading are visible without opening anything.</p></li>
+          <li><span class="mk">2</span><p><strong>Apply lives in the detail.</strong> Entry focus is the Preview row; the reader moves right into the table and down to Apply. Two presses more than A before the first action.</p></li>
+        </ol>
+      </div>
+      <div><h3>What it costs</h3>
+        <ul>
+          <li>A page with one primary object hides it behind a list: the preview is what the reader came for, and three of the four entries are read once a month.</li>
+          <li>The paused card has no natural home; it would have to sit above the list or inside the Preview detail, where it competes with the table.</li>
+          <li>Focus selects, so glancing at Last runs mid-decision swaps the table out; the preview comes back on the way up, at its top.</li>
+          <li>Reuses <code>ListDetail</code> as it stands, with <code>selectOnActivate</code> for the label rows.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="cmpwrap">
+  <table class="cmp">
+    <thead><tr><th>&nbsp;</th><th>A · table and controls</th><th>B · one column</th><th>C · list and detail</th></tr></thead>
+    <tbody>
+      <tr><td>Visible without scrolling (Deck)</td><td class="y">the whole preview and its buttons, plus options, memory and three runs</td><td>the whole preview and its buttons; nothing else</td><td class="y">the whole preview and its buttons, plus the four summaries</td></tr>
+      <tr><td>Width for the table</td><td>520 px, name and three numbers</td><td class="y">806 px, room for a fourth column</td><td>526 px, name and three numbers</td></tr>
+      <tr><td>Last runs</td><td class="y">three visible, the rest a scroll away in their own region</td><td class="n">below the fold, behind every table row</td><td>one press away, then the whole detail</td></tr>
+      <tr><td>The paused card</td><td class="y">top of the left column, preview under it</td><td class="n">pushes the table down</td><td class="n">no natural home</td></tr>
+      <tr><td>Room for the import choice (#1364)</td><td>under the table, pushes Apply down</td><td class="y">under the table, whole width</td><td>under the table</td></tr>
+      <tr><td>Frame pieces</td><td><code>ownRegions</code> + <code>Columns</code></td><td class="y">the frame's own region only</td><td><code>ListDetail</code> with <code>selectOnActivate</code></td></tr>
+      <tr><td>Matches the design record</td><td class="y">yes, it is the prototype's page</td><td class="n">no</td><td class="n">no, the record makes Sync two columns</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="recbox"><b>Recommendation</b>
+    <strong>A.</strong> The preview is the page's one job and A gives it a column of its own with its three buttons in view; everything peripheral fits a 270 px column beside it, so the Deck shows the whole page at rest. B has the best table and the worst fold: on the Deck it is a table with its buttons and nothing else. C is right for Settings and Data Management, where five peers share a page, and wrong here, where one object matters and three do not. A is also the page the design record already describes, so the doc changes are additions, not reversals.
+  </div>
+</main>
+
+<script>
+  (function () {
+    var KEY = "tender-sync-layouts";
+    var state = { v: "a" };
+    try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
+
+    function fit() {
+      document.querySelectorAll(".variant.on .stage").forEach(function (s) {
+        var w = s.clientWidth; if (!w) return;
+        var dw = Number(s.dataset.w), dh = Number(s.dataset.h);
+        var sc = Math.min(1, w / dw);
+        var deck = s.querySelector(".deck");
+        deck.style.width = dw + "px";
+        deck.style.height = dh + "px";
+        deck.style.transform = "scale(" + sc + ")";
+        s.style.height = Math.round(dh * sc) + "px";
+      });
+    }
+    function apply() {
+      document.querySelectorAll(".variant").forEach(function (el) { el.classList.toggle("on", el.id === "v-" + state.v); });
+      document.querySelectorAll(".chip[data-v]").forEach(function (c) { c.setAttribute("aria-pressed", String(c.dataset.v === state.v)); });
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+      fit();
+    }
+    document.querySelectorAll(".chip[data-v]").forEach(function (c) {
+      c.addEventListener("click", function () { state.v = c.dataset.v; apply(); window.scrollTo({ top: 0 }); });
+    });
+    if ("ResizeObserver" in window) new ResizeObserver(fit).observe(document.body);
+    window.addEventListener("resize", fit);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+    apply();
+  })();
+</script>
