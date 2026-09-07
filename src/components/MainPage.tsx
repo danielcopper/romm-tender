@@ -195,9 +195,9 @@ function previewCountsLine(preview: SyncPreview): string {
 }
 
 /**
- * Thin horizontal rule dividing the panel's blocks (status | sync | menu).
- * The panel carries no section headings — these rules are the only block
- * boundaries.
+ * Thin horizontal rule dividing the panel's blocks (status | downloads | menu).
+ * Those three carry no section title, so a rule is the only thing marking where
+ * one ends and the next begins. (The two notice sections above them are titled.)
  */
 const BlockSeparator: FC = () => (
   <PanelSectionRow>
@@ -240,7 +240,7 @@ interface StatusSlot {
   bar: boolean;
 }
 
-/** The two words for a run in flight, one per kind the backend states. */
+/** The short label for a run in flight, one per kind the backend states. */
 const RUN_KIND_LABEL: Record<SyncRunKind, string> = {
   preview: "Checking for changes",
   apply: "Syncing",
@@ -567,7 +567,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
       {settingsReset.pending && <SettingsResetBanner backedUpTo={settingsReset.backedUpTo} />}
       {playtimeScope.pending && <PlaytimeScopeBanner />}
       {/* Untitled status block (Connection / Last sync / Library) leads the
-          panel — the hairline each block ends with is what separates them, so a
+          panel — a hairline is what separates one block from the next, so a
           "Status" title would cost a row and buy nothing. */}
       <PanelSection>
         {retrodeckBanner && (

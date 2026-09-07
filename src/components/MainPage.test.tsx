@@ -1952,7 +1952,7 @@ describe("MainPage", () => {
       expect(fieldLabels(container)).toContain("Last sync");
     });
 
-    it("states a preview run coarsely — two words, the counter and the bar", async () => {
+    it("states a preview run coarsely — a short label, the counter and the bar", async () => {
       setSyncProgress({
         running: true,
         stage: "fetching",

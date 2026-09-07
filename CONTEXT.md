@@ -518,14 +518,16 @@ beside it the run's step counter or the preview's counts, which can be a phrase 
 the Sync page, exactly as the menu's Sync entry does. The status rows above it state and do nothing, and the slot is the
 single exception; it is not the panel's only door besides the menu, but it and a notice's own button are there only
 while their condition is, which is what leaves the menu the navigation that is always in the same place. _Avoid_: status
-card, banner (a **notice** is a card, this is a row), button.
+card, banner (a **notice** names a condition that needs the user; this states what the Sync page is doing), button.
 
 ### Notice / home
 
-A **notice** is a card on Main naming a condition that needs the user (settings were reset, the RetroArch input driver
-is wrong, a sync paused on the session budget). They do not all sit at the top: three lead the panel above the status
-rows, and three more sit inside the status block, below the conditional slot — `docs/architecture/qam-panel.md`'s Main
-section has the order. The **home** of a condition is the one page where it is acted on. A notice names the condition
-and jumps to its home; the action exists only there, never on the notice. A condition with no home in the plugin stays a
-notice without a jump, with Dismiss where there is a sensible end to it. _Avoid_: banner (component names only),
-warning, alert.
+A **notice** is Main's standing statement of a condition that needs the user (settings were reset, the RetroArch input
+driver is wrong, a sync paused on the session budget). Most are cards and the input-driver one is a row; the shape is
+not what makes it a notice. They do not all sit at the top: three lead the panel above the status rows, and three more
+sit inside the status block, below the conditional slot — `docs/architecture/qam-panel.md`'s Main section has the order.
+The **home** of a condition is the one page where it is acted on. A notice names the condition and jumps to its home;
+the action exists only there, never on the notice — with one exception today, the RetroArch input driver, whose **Fix**
+still applies in place behind a confirmation until Settings (#1816) gives it a home. A condition with no home in the
+plugin stays a notice without a jump, with Dismiss where there is a sensible end to it. _Avoid_: banner (component names
+only), warning, alert.

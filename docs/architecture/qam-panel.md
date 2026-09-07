@@ -345,12 +345,12 @@ as they are.
 
 Narrow, in this order: the settings-reset and playtime-scope notices, each a titled section of its own above everything
 else; the status block — the RetroDECK warning, then Connection, Last sync, Library, then the conditional slot and,
-while a run is going, Cancel Sync, and under all of those the three notices that carry a button (the RetroArch input
-driver, the save-file sorting, a run paused on the session budget); the download summary (up to two rows, an overflow
-count, a completed count, View All); the menu — Sync, Library, Settings, Data Management. **Those last three blocks
-carry no section title at all** — what separates them is the hairline each one ends with (`BlockSeparator`), which costs
-one pixel of height where a heading would cost a whole row. The layout study it was chosen from is
-[main-layouts.html](../assets/main-layouts.html).
+while a run is going, Cancel Sync, then the transient line a just-ended run leaves behind (and a cancel whose call
+failed), and under all of those the three notices that carry a button (the RetroArch input driver, the save-file
+sorting, a run paused on the session budget); the download summary (up to two rows, an overflow count, a completed
+count, View All); the menu — Sync, Library, Settings, Data Management. **Those last three blocks carry no section title
+at all** — what separates one from the next is a hairline (`BlockSeparator`), which costs one pixel of height where a
+heading would cost a whole row. The layout study it was chosen from is [main-layouts.html](../assets/main-layouts.html).
 
 **The menu is the navigation that is always there — complete, and always in the same place. The status rows state and do
 nothing. The single exception is one conditional slot that exists only while the Sync page has something to report; a
