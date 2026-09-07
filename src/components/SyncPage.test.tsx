@@ -1106,11 +1106,11 @@ describe("SyncPage", () => {
         return container;
       }
 
-      // The pane centres the running row synchronously, in its own layout
-      // effect; everything the frame does to focus and to reveal a region's edge
-      // is behind a timer. Freezing them — and never advancing — leaves the
-      // pane's own scroll the only one these cases can see, which is the only
-      // one they are about.
+      // The pane centres the running row in its own effect, which `act()`
+      // flushes; everything the frame does to focus and to reveal a region's
+      // edge is behind a timer. Freezing them — and never advancing — leaves
+      // the pane's own scroll the only one these cases can see, which is the
+      // only one they are about.
       beforeEach(() => {
         vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
       });

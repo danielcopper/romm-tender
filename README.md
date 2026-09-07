@@ -122,7 +122,8 @@ Also needs **Developer mode**.
 1. Open the Quick Access Menu and select **Tender**
 2. In **Settings**, enter your RomM server URL and credentials, then hit **Test Connection**
 3. In **Platforms**, enable the platforms you want to sync
-4. Hit **Sync Library** — your ROMs appear as non-steam shortcuts
+4. Open **Sync** and hit **Sync Library** — look over the changes it works out, then **Apply Sync**, and your ROMs
+   appear as non-steam shortcuts
 
 See the [User Guide](https://danielcopper.github.io/romm-tender/user-guide/syncing-your-library/) for syncing details,
 [save sync](https://danielcopper.github.io/romm-tender/user-guide/save-sync/), and

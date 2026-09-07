@@ -265,16 +265,18 @@ Format: **invariant** — tier — enforced by.
   an apply run, both terminal frames, and the `get_sync_status` snapshot) and
   `tests/services/library/test_state.py::TestRunKind` (claimed with the run slot, cleared with it); the frontend half by
   `src/utils/syncRunView.test.ts` and the slot's three labels in `src/components/MainPage.test.tsx`. **Nothing joins the
-  six places it passes through**: `LibrarySyncStateBox` holds it with the slot, three separate frame builders carry it
-  (`emit_progress`, `_finish_sync`'s CANCELLED terminal, and the per-unit ERROR dict literal in `sync_orchestrator.py`),
-  `SyncProgress.runKind` and `useSyncRunView` pass it through, and `MainPage` maps it. **Nothing mechanical stands
-  behind the seam between them**: a fourth frame builder that omits the key, or a reader that spends the absent case on
-  one of the two answers — a `runKind ?? "preview"`, a `=== "preview"` where the neutral branch was — goes green,
-  because each test above pins one half and none of them pins the join. The failure is silent and worst exactly where
-  the frontend cannot help itself: after a plugin reload mid-run the store starts empty, the snapshot is the only thing
-  that can say what the run is doing, and Main then tells the reader a real apply run is merely checking for changes.
-  Why the kind cannot be derived at all is stated at `domain/sync_run_kind.py` and in `docs/architecture/qam-panel.md`'s
-  Main section; do not restate it here
+  ten places it passes through**: `LibrarySyncStateBox` holds it with the slot, three separate backend frame builders
+  carry it (`emit_progress`, `_finish_sync`'s CANCELLED terminal, and the per-unit ERROR dict literal in
+  `sync_orchestrator.py`), three frontend start paths stamp it themselves on the optimistic frame they show before the
+  first real one arrives (`useSyncPage`'s `computePreview` as `preview`, its `applyPreview` and `startRunDirectly` as
+  `apply`), `SyncProgress.runKind` and `useSyncRunView` pass it through, and `MainPage` maps it. **Nothing mechanical
+  stands behind the seam between them**: a fourth frame builder that omits the key, a fourth start path that stamps the
+  kind it is not, or a reader that spends the absent case on one of the two answers — a `runKind ?? "preview"`, a
+  `=== "preview"` where the neutral branch was — goes green, because each test above pins one half and none of them pins
+  the join. The failure is silent and worst exactly where the frontend cannot help itself: after a plugin reload mid-run
+  the store starts empty, the snapshot is the only thing that can say what the run is doing, and Main then tells the
+  reader a real apply run is merely checking for changes. Why the kind cannot be derived at all is stated at
+  `domain/sync_run_kind.py` and in `docs/architecture/qam-panel.md`'s Main section; do not restate it here
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py` pins the adapter's degradation (a
   raising resolver, a missing installation, an answer with no root all come back with `resolved` clear, never as an
@@ -562,11 +564,12 @@ Format: **invariant** — tier — enforced by.
   rule by discarding server-side alone. A fifth path is not an answer at all and is held to the same rule: a successful
   **Force Full Sync** (`forceFullSync`) discards the state the preview was computed against, so it clears the store and
   tells the backend too — a preview left standing there offers an Apply that would skip exactly what the clear armed a
-  re-fetch for. Main holds none of them, and holds none of them for a stronger reason than a division of labour: it has
-  no sync action at all, only a slot that opens the page. So the answer is given once, where the change table is.
-  Nothing mechanical can tell: an answer path is a page handler, and neither the store nor the backend can know that a
-  call it never received was an answer. Forget the store and a table stands over a decision already made; forget the
-  backend and the terminal-stage re-ask fetches it back a round trip later
+  re-fetch for. Main holds none of them, and holds none of them for a stronger reason than a division of labour: it
+  starts no run and computes no preview, so it never holds one to answer for — its slot opens the page, and its Cancel
+  ends a run rather than answering a preview. So the answer is given once, where the change table is. Nothing mechanical
+  can tell: an answer path is a page handler, and neither the store nor the backend can know that a call it never
+  received was an answer. Forget the store and a table stands over a decision already made; forget the backend and the
+  terminal-stage re-ask fetches it back a round trip later
 - **A prune run's claim reservation and its refusal of every conflicting callable happen in one atomic gate hold (the
   preview rebuild does not), and frontend-owned Steam work holds a heartbeated, generation-tombstoned lease through
   every continuation's final write** — test + prompt-only — prune service/gate race tests + contract callable-entry

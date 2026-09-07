@@ -73,9 +73,9 @@ const SyncMainColumn: FC<{ state: SyncPageState }> = ({ state }) => {
 };
 
 /** Nothing pending and nothing running: one line saying so, and the button that
- *  changes it. The button's name is the resume question's answer, so it says the
- *  same thing Main's does — and the session-budget card above it quotes this one
- *  when it asks for a restart. */
+ *  changes it. The button's name is the resume question's answer, and it is the
+ *  only button that asks it — the session-budget card above it quotes this one
+ *  when it asks for a restart rather than deriving the name again. */
 const IdlePanel: FC<{ state: SyncPageState }> = ({ state }) => (
   <>
     <SectionTitle title="Preview" />

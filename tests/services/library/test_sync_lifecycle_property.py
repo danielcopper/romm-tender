@@ -3,9 +3,10 @@
 Hypothesis drives random interleavings of the three lifecycle verbs
 (``try_begin_run`` / ``request_cancel`` / ``finish_run``) against a reference
 model and asserts the safety invariants directly: only one run is ever in
-flight, a non-owner ``finish_run`` never disturbs the active run, and
-``current_sync_id`` is ``None`` iff the box is IDLE. A counterexample here is
-exactly the #1202 class of bug — a stale terminal nulling a fresh run.
+flight, a non-owner ``finish_run`` never disturbs the active run, and both
+``current_sync_id`` and ``run_kind`` are ``None`` iff the box is IDLE. A
+counterexample here is exactly the #1202 class of bug — a stale terminal
+nulling a fresh run.
 """
 
 from __future__ import annotations
@@ -31,10 +32,10 @@ class SyncLifecycleMachine(RuleBasedStateMachine):
         self._counter += 1
         return f"run-{self._counter}"
 
-    @rule()
-    def begin(self) -> None:
+    @rule(kind=st.sampled_from(list(SyncRunKind)))
+    def begin(self, kind: SyncRunKind) -> None:
         run_id = self._fresh_id()
-        ok = self.box.try_begin_run(run_id, kind=SyncRunKind.APPLY)
+        ok = self.box.try_begin_run(run_id, kind=kind)
         if self.expected_owner is None:
             # The slot was free — the run is admitted and becomes the owner.
             assert ok is True
@@ -77,6 +78,14 @@ class SyncLifecycleMachine(RuleBasedStateMachine):
     def id_none_iff_idle(self) -> None:
         is_idle = self.box.sync_state is SyncState.IDLE
         assert (self.box.current_sync_id is None) == is_idle
+
+    @invariant()
+    def kind_none_iff_idle(self) -> None:
+        # The kind is claimed with the slot and cleared with it, so a frame
+        # builder reading it off the box can never state one for a run that is
+        # not in flight, nor leave it unstated for one that is.
+        is_idle = self.box.sync_state is SyncState.IDLE
+        assert (self.box.run_kind is None) == is_idle
 
     @invariant()
     def at_most_one_in_flight(self) -> None:

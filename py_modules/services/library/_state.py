@@ -121,8 +121,10 @@ class LibrarySyncStateBox:
     current_sync_id: str | None = None
     # What the run in flight is doing, claimed with the slot and cleared with it.
     # ``None`` exactly while no run owns the slot. Held here rather than threaded
-    # through every ``emit_progress`` call site so that EVERY frame carries it —
-    # the three places a frame is built all read it from here.
+    # through every ``emit_progress`` call site so that EVERY frame of a run
+    # carries it — the three places such a frame is built all read it from here.
+    # ``_default_progress`` is the fourth builder and reads nothing: no run owns
+    # the slot when it runs, so it states the absence directly.
     run_kind: SyncRunKind | None = None
     sync_last_heartbeat: float = 0.0
     # The latest progress frame, which ``get_sync_status`` hands a remounting

@@ -34,7 +34,7 @@ without restating it. The width mechanism's decision record is
 | `src/utils/syncRunView.ts`                                    | `useSyncRunView` — the run in flight as a page renders it: stage label, coarse bar, position within the running unit, fine-detail line, estimate, and the run's end |
 | `src/utils/runUnitsStore.ts`                                  | The run's work queue, one row per unit: the plan's riders, how far the run has got, and what each unit's apply produced                                             |
 | `src/utils/previewState.ts`                                   | What a page asks of a pending preview: has it anything to apply, and how long is it still accepted (the half Main reads)                                            |
-| `src/utils/syncResume.ts`                                     | Whether the next sync continues a run or starts one over: the sync button's name on both pages, and the name the session-budget card quotes                         |
+| `src/utils/syncResume.ts`                                     | Whether the next sync continues a run or starts one over: the Sync page's start button's name, and the name the session-budget card quotes                          |
 | `src/utils/` module stores                                    | State that must outlive a page: sync progress, pending preview, downloads, prune, the game-detail caches                                                            |
 
 ## Two widths
@@ -178,22 +178,24 @@ does not say it owns its regions. A tabbed body gets none from the frame, and ne
 `Page` is `"main" | "sync" | "library" | "settings" | "data" | "downloads"`. **System is gone** — its core picker and
 BIOS files are in Library › Platforms, and the value, the router branch and the menu entry left with it.
 
-The Sync page opens from the menu, and from the conditional slot while there is something in it; Downloads opens from
-**View All** in the download summary, which is shown only while the queue is not empty. Every page but Main opens with a
-**Back** chip, which returns to Main. The chip shares its line with the page title — one row, not the three a full-width
-button plus a title line used to cost, which on the Deck's body is most of what a detail pane has to spend. Back is also
-on **B**, and the binding lives in the panel's router (`src/index.tsx`) rather than on a page: one `Focusable` with
-`onCancelButton` wraps the mounted content **only while `page` is not `main`**, so every sub-page — wide and narrow —
-answers B from wherever focus sits, and Main answers nothing, so Decky's own B still leaves the plugin. That condition
-is what makes taking B safe: the escape route is never removed, it is exactly as far away as the user walked in, and the
-last press is never swallowed. Steam already prints "B ZURÜCK" in its footer legend, which this makes true rather than
-misleading, so no legend entry of ours is needed. The chip stays as the discoverable half and as the mouse path, and it
-carries **Steam's own B glyph** — drawn for the controller in the user's hands, so it is ○ on a PlayStation pad and the
-swapped face button under a Nintendo layout. `@decky/ui` does not re-export that component, so
-`src/utils/deckyUiInternals.ts` reaches it by a module probe and types it as possibly absent; the chip falls back to its
-chevron the day the probe misses. The button number it passes is Steam's own action-button enum (`A=0, B=1, X=2, Y=3`),
-**not** `@decky/ui`'s `GamepadButton`, where 1 is A — the two disagree on every value, and the wrong one draws the wrong
-glyph without failing.
+The Sync page opens from the menu, from the conditional slot while there is something in it, and from **Open Sync** on
+the paused-run notice; Downloads opens from **View All** in the download summary, which is shown only while the queue is
+not empty. A notice can carry a door of its own — **Go to Settings** on the save-sorting notice is the other one — but a
+notice and the slot are both there only while their condition is, so the menu is the navigation a reader can go looking
+for. Every page but Main opens with a **Back** chip, which returns to Main. The chip shares its line with the page title
+— one row, not the three a full-width button plus a title line used to cost, which on the Deck's body is most of what a
+detail pane has to spend. Back is also on **B**, and the binding lives in the panel's router (`src/index.tsx`) rather
+than on a page: one `Focusable` with `onCancelButton` wraps the mounted content **only while `page` is not `main`**, so
+every sub-page — wide and narrow — answers B from wherever focus sits, and Main answers nothing, so Decky's own B still
+leaves the plugin. That condition is what makes taking B safe: the escape route is never removed, it is exactly as far
+away as the user walked in, and the last press is never swallowed. Steam already prints "B ZURÜCK" in its footer legend,
+which this makes true rather than misleading, so no legend entry of ours is needed. The chip stays as the discoverable
+half and as the mouse path, and it carries **Steam's own B glyph** — drawn for the controller in the user's hands, so it
+is ○ on a PlayStation pad and the swapped face button under a Nintendo layout. `@decky/ui` does not re-export that
+component, so `src/utils/deckyUiInternals.ts` reaches it by a module probe and types it as possibly absent; the chip
+falls back to its chevron the day the probe misses. The button number it passes is Steam's own action-button enum
+(`A=0, B=1, X=2, Y=3`), **not** `@decky/ui`'s `GamepadButton`, where 1 is A — the two disagree on every value, and the
+wrong one draws the wrong glyph without failing.
 
 **A tabbed wide page has to get out of the way for that to work.** Steam's tabbed page renders its content pane as
 `onCancelButton: !cancelSkipTabHeader && <focus the tab row>` (`chunk~2dcc5aaf7.js`), so without the flag the first B
@@ -347,9 +349,10 @@ going, Cancel Sync; the download summary (up to two rows, an overflow count, a c
 Sync, Library, Settings, Data Management. The layout study it was chosen from is
 [main-layouts.html](../assets/main-layouts.html).
 
-**The menu is the only navigation surface — complete, and always in the same place. The status rows state and do
-nothing. The single exception is one conditional slot that exists only while the Sync page has something to report.**
-That is the whole rule, and everything below is what it costs and what it buys.
+**The menu is the navigation that is always there — complete, and always in the same place. The status rows state and do
+nothing. The single exception is one conditional slot that exists only while the Sync page has something to report; a
+notice can carry a door too, and it comes and goes with its condition exactly as the slot does.** That is the whole
+rule, and everything below is what it costs and what it buys.
 
 **The three status rows act on nothing.** Connection, Last sync and Library are `Field`s that carry no activate handler,
 and they stay `focusable` all the same — a region scrolls only by moving focus, so a row nobody can focus is a row
@@ -360,25 +363,26 @@ ever, that attempt is the only line, so the row never reads a bare "Never" after
 Reporting a run and offering to continue it are different questions: an errored run is reported here and is not
 resumable, which `syncResumeState` decides for the button that offers it, on the Sync page.
 
-**The conditional slot** sits under the three rows and is the only pressable part of the Status block; pressing it opens
-the Sync page, exactly as the menu's Sync entry does. It exists on two occasions and no others:
+**The conditional slot** sits under the three rows and is the one status row that can be pressed; pressing it opens the
+Sync page, exactly as the menu's Sync entry does. It is not the only pressable thing in the block — Cancel Sync joins it
+while a run is going, and the notices that carry a button sit below both — but it is the only one that is part of the
+status. It exists on two occasions and no others:
 
 | Occasion             | It says                                                       | Bar |
 | -------------------- | ------------------------------------------------------------- | --- |
 | a run is in flight   | **Checking for changes** or **Syncing**, and the step counter | yes |
 | a preview is pending | **Changes ready**, and its counts — "13 new · 4 updated"      | no  |
 
-Coarse means coarse: two words, a counter and a bar. The stage caption, the fine-detail line, the estimate and the
+Coarse means coarse: a short label, a counter and a bar. The stage caption, the fine-detail line, the estimate and the
 per-unit table all stay on the Sync page — Main says what is, the page shows what is happening. **All three come from
-the frame, and the two words are stated on it rather than derived from it**: a preview run and an apply run narrate the
-same work queue through frames of identical shape, so neither the stage nor the presence of a plan is evidence of the
-kind — the stage alternates fetch/apply inside one apply run, and a plan's absence conflates "this is a preview" with
-"nobody has established the kind yet". So the backend claims the kind with the run slot
-(`LibrarySyncStateBox.try_begin_run`) and every frame of that run carries it as `runKind`: the live event, both terminal
-frames, and the `get_sync_status` snapshot a remounted QAM re-seeds from — which is what makes a QAM reloaded mid-run
-right rather than guessing. Where no kind is stated the slot says neither of the two, wording it "Sync in progress"; the
-numbers beside it still come from `useSyncRunView`, which the Sync page reads too, so one derivation of a run serves
-both pages.
+the frame, and the label is stated on it rather than derived from it**: a preview run and an apply run narrate the same
+work queue through frames of identical shape, so neither the stage nor the presence of a plan is evidence of the kind —
+the stage alternates fetch/apply inside one apply run, and a plan's absence conflates "this is a preview" with "nobody
+has established the kind yet". So the backend claims the kind with the run slot (`LibrarySyncStateBox.try_begin_run`)
+and every frame of that run carries it as `runKind`: the live event, both terminal frames, and the `get_sync_status`
+snapshot a remounted QAM re-seeds from — which is what makes a QAM reloaded mid-run right rather than guessing. Where no
+kind is stated the slot says neither of the two, wording it "Sync in progress"; the numbers beside it still come from
+`useSyncRunView`, which the Sync page reads too, so one derivation of a run serves both pages.
 
 A pending preview's counts drop their zero parts, and one with none of the three names the work it does hold rather than
 showing a row of zeros — there being one line to spend, and that being the case where the counts cannot spend it. Two of
@@ -477,8 +481,8 @@ register, held in one place (`paneTable.tsx`) so that stays a decision rather th
 
 The bar and the counter come from `useSyncRunView`, the rows from `runUnitsStore`. A run with **no rows** — a preview,
 which seeds none, or a run whose plan was lost to a plugin reload — shows the frame's own fine-detail line in their
-place ("Fetching Game Boy Advance (page 12/62)") — `useSyncRunView`'s own `fineDetailText`, the same line Main renders;
-the page says the per-unit detail is unavailable only where there is neither a row nor a detail line.
+place ("Fetching Game Boy Advance (page 12/62)") — `useSyncRunView`'s own `fineDetailText`, which no other surface
+renders; the page says the per-unit detail is unavailable only where there is neither a row nor a detail line.
 
 **Every row of both tables is a focus stop** — a `Focusable` with an activate handler — because a region scrolls only by
 moving focus, so an unreachable row is an unscrollable one.
@@ -504,9 +508,10 @@ memory** — the reading now and the last run's delta, saying "unavailable" and 
 ended.
 
 **Working out a preview is this page's call, and only this page's.** Nothing computes one on open — not this page's own
-mount and not Main, which has no sync action at all — so a preview happens because the reader pressed the button that
-asks for one, right here. Everything the call can answer — the run while it works, the table when it lands, and a
-refusal — is therefore reported where the reader is looking.
+mount and not Main, which starts no run and computes nothing; its one sync control is the Cancel that ends a run already
+going — so a preview happens because the reader pressed the button that asks for one, right here. Everything the call
+can answer — the run while it works, the table when it lands, and a refusal — is therefore reported where the reader is
+looking.
 
 What the backend holds for it: the preview answer carries library-wide totals (`SyncPreviewSummary`: new, changed,
 unchanged and removed counts, the platform and collection counts, and more), the names of new and changed games, and the
@@ -525,7 +530,7 @@ answers the ten newest `sync_runs` rows of any status, newest first, each verbat
 started, finished, status, planned counts, completed platforms and collections, error) — a field a run never recorded
 stays null, and the status is what says why. Skip preview is a user-intent setting in `settings.json` written by its
 owner (`adapters/persistence.py`) and reported by `get_settings`. No backend sync path consults it: the choice between
-asking for a preview and starting the run is made on the frontend, by this page's own start button and by Main's.
+asking for a preview and starting the run is made on the frontend, by this page's own start button.
 
 ## Library
 
@@ -858,7 +863,7 @@ menu entry.
 
 | Action                             | Today                  | Target                                       |
 | ---------------------------------- | ---------------------- | -------------------------------------------- |
-| Start a sync                       | Sync                   | Sync; Main has no sync action at all         |
+| Start a sync                       | Sync                   | Sync; Main starts none, but keeps Cancel     |
 | Review and apply a preview         | Sync, as a table       | Sync, as a table                             |
 | Force Full Sync, Skip preview      | Sync                   | Sync                                         |
 | Restart Steam now (session budget) | Sync                   | Sync; Main shows the notice                  |
@@ -909,11 +914,13 @@ store screenshots (#830) are taken after.
   ratio (dropped — the row is dot, name, toggle) and the core picker's full-width button (now an icon in the header
   line). The study is a record of a choice, not a description of the page.
 - The layout study Main's navigation was chosen from: [main-layouts.html](../assets/main-layouts.html) — four layouts at
-  the panel's real 348 px (status as the card, the menu as the card, menu first, and the chosen one), each drawn quiet,
-  mid-run and with a preview waiting. The last is what shipped: the menu complete and always in the same place, the
-  status rows inert, and one conditional slot for the two things that have to announce themselves. Its middle pair
-  weighs keeping **Cancel Sync** on Main against dropping it, and Cancel stayed. Like the studies below it is a record
-  of a choice, not a description of the page.
+  the panel's real 348 px (status as the card, the menu as the card, menu first, and the chosen one), each drawn quiet
+  and with a preview waiting; a closing **Heute** section shows Main as it stood when the study was drawn, and its own
+  mid-run board is captioned as the same in every draft. The last layout is what shipped: the menu complete and always
+  in the same place, the status rows inert, and one conditional slot for the two things that have to announce
+  themselves. It is the only one of the four drawn mid-run, and it is drawn so twice: that middle pair weighs keeping
+  **Cancel Sync** on Main against dropping it, and Cancel stayed. Like the studies below it is a record of a choice, not
+  a description of the page.
 - The layout study the Sync page was chosen from: [sync-layouts.html](../assets/sync-layouts.html) — three layouts at
   the Deck's real size (a table beside a controls column, one column, list and detail), each with what it costs. The
   first is what shipped, and its second board settled the run view: one bar for the whole run, one row per planned unit,

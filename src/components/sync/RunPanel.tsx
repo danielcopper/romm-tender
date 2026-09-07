@@ -3,11 +3,14 @@
  * bar, and under it every unit of the plan with its own state.
  *
  * Two levels from facts the frontend already holds. The bar, the stage caption,
- * the step counter and the estimate are `useSyncRunView`'s — the same derivation
- * Main's compact progress reads, so the two pages cannot disagree about the run
- * they are both showing. The rows are `runUnitsStore`'s, seeded from the plan
- * and advanced by the run's own frames, which is what lets a page opened mid-run
- * show the units already worked through rather than only the current one.
+ * the step counter and the estimate are `useSyncRunView`'s — the same
+ * derivation Main's slot takes its bar and counter from, so the two surfaces
+ * cannot disagree about the run they are both showing. The caption, the
+ * fine-detail line and the estimate are read here and nowhere else: Main leaves
+ * them to the page with room for them. The rows are `runUnitsStore`'s, seeded
+ * from the plan and advanced by the run's own frames, which is what lets a page
+ * opened mid-run show the units already worked through rather than only the
+ * current one.
  *
  * The unit list scrolls on its own, inside what is left of the column under the
  * bar and above Cancel: a plan of fourteen platforms and three collections is

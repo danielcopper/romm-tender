@@ -71,7 +71,11 @@ be re-fetched. Work out a fresh preview, or start the run. And if the plugin cou
 synced, the button stays pressable and says so rather than going quiet: not being able to check is not the same as there
 being nothing to clear.
 
-![Tender QAM panel with connection status and the menu](../assets/screenshot-qam.jpg)
+![Tender QAM panel showing connection status, a Sync Library button with Skip Preview and Force Full Sync, and a menu of
+Library, Settings and Data Management](../assets/screenshot-qam.jpg)
+
+_This screenshot predates the current layout: syncing now has a page of its own, reached from the panel's **Sync** menu
+entry, and the buttons above sit on that page rather than on the panel's first screen._
 
 <!-- Screenshot: Sync in progress with progress bar -->
 
@@ -101,8 +105,7 @@ get the progress for the comparison that is still running, then its table the mo
 watching or not. The Sync page says how long it has left — "expires in 26 min" beside the heading, counting down. If you
 leave it past the half hour it says "expired"; the change table stays readable, **Apply Sync** greys out, and
 **Refresh** is what moves you on. Nothing you were shown is discarded behind your back. Once it has expired the main
-page's **Changes ready** row disappears, and this page's **Sync Library** works out a fresh preview in place of the old
-one.
+page's **Changes ready** row disappears, and **Refresh** works out a fresh preview in place of the old one.
 
 That starting estimate is **skip-aware**: when the run is planned, the plugin already knows which platforms haven't
 changed since their last sync and expects to skip them wholesale, so they don't inflate the number — an incremental

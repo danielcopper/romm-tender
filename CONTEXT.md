@@ -513,10 +513,12 @@ run's own work queue, one unit per platform or collection), diff.
 ### Conditional slot
 
 The one row under Main's status rows that can be pressed, present only while the Sync page has something to report — a
-run in flight, or a preview waiting to be answered — and absent otherwise. It states coarsely (two words and a number)
-and opens the Sync page, exactly as the menu's Sync entry does, which is what keeps the menu the panel's only navigation
-surface: the status rows above it state and do nothing, and the slot is the single exception. _Avoid_: status card,
-banner (a **notice** is the card above the status block), button.
+run in flight, or a preview waiting to be answered — and absent otherwise. It states coarsely — a short label, and
+beside it the run's step counter or the preview's counts, which can be a phrase carrying no number at all — and opens
+the Sync page, exactly as the menu's Sync entry does. The status rows above it state and do nothing, and the slot is the
+single exception; it is not the panel's only door besides the menu, but it and a notice's own button are there only
+while their condition is, which is what leaves the menu the navigation that is always in the same place. _Avoid_: status
+card, banner (a **notice** is the card above the status block), button.
 
 ### Notice / home
 

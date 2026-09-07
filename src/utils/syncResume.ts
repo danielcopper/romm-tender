@@ -25,9 +25,10 @@ export interface SyncResumeState {
  * unit the user recognises: games whose shortcut the next run can pass over.
  *
  * It states what is already done, never what is left, and carries no total: the
- * remainder needs the server's library, and this line renders on every panel
- * mount. "already synced" is a claim about these games only — the clause that
- * follows is what keeps it from reading as a claim that the library is complete.
+ * remainder needs the server's library, while this line is drawn from stats the
+ * panel already holds, every time the Sync page offers a resume. "already
+ * synced" is a claim about these games only — the clause that follows is what
+ * keeps it from reading as a claim that the library is complete.
  *
  * Omitted entirely when the count is zero, which a resume on a surviving
  * completion stamp alone can be. Honest silence beats "0 games".

@@ -253,7 +253,7 @@ const RUN_KIND_LABEL: Record<SyncRunKind, string> = {
 const RUN_KIND_UNKNOWN_LABEL = "Sync in progress";
 
 export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
-  // Both facts are owned by `utils/syncStatsStore.ts`: seven refresh sites in
+  // The stats are owned by `utils/syncStatsStore.ts`: three refresh sites in
   // this file ask for them, and the store is what keeps an older answer from
   // landing last and overwriting a newer one. What stays here is the SCHEDULE —
   // the mount burst, the terminal-stage re-read and the poll interval below
@@ -624,11 +624,11 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
         )}
         {slot && (
           <PanelSectionRow>
-            {/* The one pressable part of the status block, and the only place on
-                Main a sync can be reached from other than the menu. The bar rides
-                the field's description so the row and the bar are one focus stop
-                — Steam scrolls a region by moving focus, and a bar of its own
-                would be an unreachable row between two stops. */}
+            {/* The one status row that can be pressed; it opens the Sync page,
+                exactly as the menu's Sync entry does. The bar rides the field's
+                description so the row and the bar are one focus stop — Steam
+                scrolls a region by moving focus, and a bar of its own would be
+                an unreachable row between two stops. */}
             <Field
               label={<span data-testid="sync-slot-label">{slot.label}</span>}
               focusable={true}
