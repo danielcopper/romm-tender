@@ -40,6 +40,7 @@ if TYPE_CHECKING:
         RetroDeckPaths,
         SaveFileStore,
         SaveLocationReader,
+        SystemResolver,
         UnitOfWorkFactory,
     )
 
@@ -53,7 +54,11 @@ class RomInfoServiceConfig:
     holds the save-sort markers), the Protocol-typed filesystem adapter, the
     RetroDECK runtime-path accessor, the per-ROM active-core resolver, the
     save-location reader that answers what a game's save consists of, the
-    RetroArch core-name provider, and the standard-library logger.
+    platform-slug-to-system resolver (which, with ``roms.fs_name``, builds the
+    path a ROM the library knows but has not installed WOULD occupy — a save
+    answer turns on the content file's extension, so omitting the path asks a
+    different question), the RetroArch core-name provider, and the
+    standard-library logger.
     """
 
     uow_factory: UnitOfWorkFactory
@@ -61,6 +66,7 @@ class RomInfoServiceConfig:
     retrodeck_paths: RetroDeckPaths
     active_core: ActiveCoreReader
     save_locations: SaveLocationReader
+    resolve_system: SystemResolver
     get_core_name: CoreNameProviderFn
     logger: logging.Logger
 
@@ -75,6 +81,7 @@ class RomInfoService:
         self._retrodeck_paths = config.retrodeck_paths
         self._active_core = config.active_core
         self._save_locations = config.save_locations
+        self._resolve_system = config.resolve_system
         self._get_core_name = config.get_core_name
         self._logger = config.logger
 
@@ -205,20 +212,58 @@ class RomInfoService:
         """What this ROM's save consists of and whether it may be synced at all.
 
         Read live off the machine on every call, through the emulator this ROM
-        would launch with. An uninstalled ROM, or one whose emulator does not
-        resolve, answers ``unestablished`` — the refusing state — so a caller
-        that forgets to check the state still cannot be told to sync something
-        that is not there.
+        would launch with, and always against the ROM's own content path — the
+        answer turns on the content file's EXTENSION, so it is a property of the
+        ROM and never of its platform. On this machine PUAE answers
+        ``save-inside-content`` for an Amiga ``.adf`` and states nothing at all
+        for an ``.hdf``, and Genesis Plus GX answers a shared ``scd_*.brm`` for a
+        Sega CD ``.chd`` and a per-game ``.srm`` for a ``.bin``. Asking without
+        the real path would answer a different question and look like an answer
+        to this one.
+
+        An installed ROM is asked about its ``file_path``; a ROM the library
+        knows but has not installed is asked about the path it WOULD occupy,
+        built from ``roms.fs_name``. Where no path can be formed at all — no
+        row, no name, no platform — the answer is ``unestablished``, which is a
+        refusal and never a guess.
         """
         info = self.get_rom_save_info(rom_id)
-        return unestablished_answer() if not info else self._answer_for(rom_id, info)
+        if info:
+            return self._installed_answer(rom_id, info)
+        return self._uninstalled_answer(rom_id)
 
-    def _answer_for(self, rom_id: int, info: dict[str, Any]) -> SaveAnswer:
-        """Ask the resolver about *rom_id*, given save info already read for it."""
+    def _uninstalled_answer(self, rom_id: int) -> SaveAnswer:
+        """The answer for a ROM the library holds but the disk does not.
+
+        Its ``fs_name`` carries the extension the answer turns on, so the
+        question can still be put — about the path the ROM would occupy once
+        installed. Nothing is probed for either way: :meth:`synced_save_names`
+        pairs an uninstalled ROM with no directory, because a state is a
+        statement about an emulator and a probe needs a file.
+        """
+        with self._uow_factory() as uow:
+            rom = uow.roms.get(int(rom_id))
+        if rom is None or not rom.fs_name or not rom.platform_slug:
+            return unestablished_answer()
+        system = self._resolve_system(rom.platform_slug)
+        return self._ask_resolver(rom_id, system, os.path.join(self._retrodeck_paths.roms_path(), system, rom.fs_name))
+
+    def _installed_answer(self, rom_id: int, info: dict[str, Any]) -> SaveAnswer:
+        """The answer for an installed ROM, asked about the file on disk.
+
+        The system is the NORMALIZED one the install record carries, never the
+        raw RomM ``platform_slug`` beside it (ADR-0010): the slug names no
+        system any emulator declares, so asking with it answers about nothing.
+        The single place that decides, so the leak has one site to guard.
+        """
+        return self._ask_resolver(rom_id, info["system"], info["file_path"])
+
+    def _ask_resolver(self, rom_id: int, system: str, content_path: str) -> SaveAnswer:
+        """Put the question to the emulator this ROM would launch with."""
         emulator = self._active_core.active_emulator_for_rom(int(rom_id))
         return self._save_locations.resolve_save_answer(
-            system=info["system"],
-            content_path=info["file_path"],
+            system=system,
+            content_path=content_path,
             emulator_label=emulator.label if emulator is not None else None,
         )
 
@@ -238,7 +283,7 @@ class RomInfoService:
         info = self.get_rom_save_info(rom_id)
         if not info:
             return ([], None)
-        answer = self._answer_for(rom_id, info)
+        answer = self._installed_answer(rom_id, info)
         return (list(answer.synced_names), info["saves_dir"] if answer.syncable else None)
 
     def find_save_files(self, rom_id: int) -> list[dict[str, str]]:

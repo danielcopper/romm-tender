@@ -197,6 +197,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         retrodeck_paths=cfg.callbacks.retrodeck_paths,
         active_core=active_core_resolver,
         save_locations=cfg.adapters.save_locations,
+        resolve_system=cfg.adapters.http_adapter.resolve_system,
         hostname_provider=cfg.runtime.hostname_provider,
         machine_id_provider=cfg.runtime.machine_id_provider,
         log_debug=cfg.callbacks.log_debug,

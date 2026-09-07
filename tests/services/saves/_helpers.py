@@ -61,6 +61,10 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
         ),
         "active_core": FakeActiveCoreResolver(default=(None, None)),
         "save_locations": FakeSaveLocationReader(),
+        # These tests seed a ROM's system directly, so slug and system are the
+        # same string here; the real mapping is the RomM adapter's and is
+        # tested there.
+        "resolve_system": lambda platform_slug, platform_fs_slug=None: platform_slug,
         "hostname_provider": FakeHostnameReader(),
         "machine_id_provider": FakeMachineIdReader(),
         "log_debug": lambda _msg: None,

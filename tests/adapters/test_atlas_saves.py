@@ -523,25 +523,46 @@ class TestTheVocabularyIsTheResolversOwn:
 
 _PLATFORM_MAP = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "defaults", "config.json")
 
-# The systems the deleted per-system extension table held an entry for, plus the
-# three whose measured answer is what motivated deleting it. Each maps to the
-# file set the resolver states TODAY, so a future emu-atlas bump that changes one
-# is loud instead of silently changing what this plugin syncs. An empty tuple
-# means the answer refuses — which of the four refusals it is lives in the state
-# assertions above, not here.
-_PINNED: dict[str, tuple[str, ...]] = {
-    "nds": ("Game Title.dsv",),
-    "saturn": ("Game Title.bkr", "Game Title.bcr"),
-    "ngp": ("Game Title.flash",),
-    "ngpc": ("Game Title.flash",),
-    "pokemini": ("Game Title.eep",),
-    "segacd": ("Game Title.srm",),
-    "amiga": (),
-    "amigacd32": (),
-    "3do": ("Game Title.0.srm",),
-    "gba": ("Game Title.srm",),
-    "gb": ("Game Title.srm", "Game Title.rtc"),
-    "ps2": (),
+# What each system answers TODAY, so an emu-atlas bump that changes one is loud
+# instead of silently changing what this plugin syncs. The key carries the
+# CONTENT EXTENSION the answer was measured with, because the answer turns on it
+# — the same system answers differently for a disc image and for a raw dump, and
+# a pin that did not say which one it asked with would be pinning nothing. Each
+# entry is ``(state, synced names)``.
+#
+# The rows that differ by extension are the point of the exercise, not noise:
+# PUAE puts an Amiga .adf's save inside the disk image, states a directory it
+# cannot name the contents of for a .lha, and establishes nothing for an .hdf;
+# Genesis Plus GX keeps a Sega CD .chd on a shared BRAM card and a .bin in a
+# per-game .srm.
+_PINNED: dict[tuple[str, str], tuple[str, tuple[str, ...]]] = {
+    ("amiga", ".adf"): (SAVE_STATE_INSIDE_CONTENT, ()),
+    ("amiga", ".lha"): (SAVE_STATE_UNESTABLISHED, ()),
+    ("amiga", ".hdf"): (SAVE_STATE_UNESTABLISHED, ()),
+    ("amigacd32", ".chd"): (SAVE_STATE_PER_GAME_FILES, ("Game Title.nvr",)),
+    ("amigacd32", ".bin"): (SAVE_STATE_UNESTABLISHED, ()),
+    ("segacd", ".chd"): (SAVE_STATE_SHARED, ()),
+    ("segacd", ".bin"): (SAVE_STATE_PER_GAME_FILES, ("Game Title.srm",)),
+    ("megacd", ".chd"): (SAVE_STATE_SHARED, ()),
+    ("megacd", ".bin"): (SAVE_STATE_PER_GAME_FILES, ("Game Title.srm",)),
+    ("nds", ".nds"): (SAVE_STATE_PER_GAME_FILES, ("Game Title.dsv",)),
+    ("saturn", ".chd"): (SAVE_STATE_PER_GAME_FILES, ("Game Title.bkr", "Game Title.bcr")),
+    ("ngp", ".ngp"): (SAVE_STATE_PER_GAME_FILES, ("Game Title.flash",)),
+    ("ngpc", ".ngc"): (SAVE_STATE_PER_GAME_FILES, ("Game Title.flash",)),
+    ("pokemini", ".min"): (SAVE_STATE_PER_GAME_FILES, ("Game Title.eep",)),
+    ("3do", ".chd"): (SAVE_STATE_PER_GAME_FILES, ("Game Title.0.srm",)),
+    ("gba", ".gba"): (SAVE_STATE_PER_GAME_FILES, ("Game Title.srm",)),
+    ("gb", ".gb"): (SAVE_STATE_PER_GAME_FILES, ("Game Title.srm", "Game Title.rtc")),
+    ("ps2", ".chd"): (SAVE_STATE_SHARED, ()),
+}
+
+# The two shapes of "not established" the rows above reach, kept apart here too:
+# a .lha states a directory whose names PUAE does not list, an .hdf states
+# nothing at all.
+_PINNED_SHAPES: dict[tuple[str, str], str] = {
+    ("amiga", ".lha"): UNESTABLISHED_DIRECTORY_KNOWN,
+    ("amiga", ".hdf"): UNESTABLISHED_NOTHING,
+    ("amigacd32", ".bin"): UNESTABLISHED_NOTHING,
 }
 
 # No ES-DE system declares either of these, so the catalogue offers no entry to
@@ -567,24 +588,47 @@ class TestTheRealMachineAnswers:
     answers ``core-unqueryable``.
     """
 
-    def _answer(self, machine: Any, system: str, traces: list[str]):
+    def _answer(self, machine: Any, system: str, extension: str, traces: list[str]):
         from adapters.atlas_catalogue import _declared_order
         from domain.emulator_commands import classify_command, select_default_option
 
-        entries = _declared_order(machine.emulators_for(system).entries)
+        content_path = f"/tmp/Games/{system}/Game Title{extension}"
+        entries = _declared_order(machine.emulators_for(system, content_path=content_path).entries)
         default = select_default_option([classify_command(entry.label, entry.command) for entry in entries])
         adapter = AtlasSaveLocationAdapter(choose_installation=lambda: machine, log_debug=traces.append)
         return adapter.resolve_save_answer(
             system=system,
-            content_path=f"/tmp/Games/{system}/Game Title.bin",
+            content_path=content_path,
             emulator_label=default.label if default is not None else None,
         )
 
-    @pytest.mark.parametrize("system", sorted(_PINNED))
-    def test_each_system_still_answers_what_it_answered(self, machine, traces, system: str):
-        answer = self._answer(machine, system, traces)
+    @pytest.mark.parametrize(("system", "extension"), sorted(_PINNED), ids=lambda value: value.lstrip("."))
+    def test_each_system_still_answers_what_it_answered(self, machine, traces, system: str, extension: str):
+        state, names = _PINNED[(system, extension)]
 
-        assert answer.synced_names == _PINNED[system]
+        answer = self._answer(machine, system, extension, traces)
+
+        assert (answer.state, answer.synced_names) == (state, names)
+
+    @pytest.mark.parametrize(("system", "extension"), sorted(_PINNED_SHAPES), ids=lambda value: value.lstrip("."))
+    def test_the_two_shapes_of_not_established_are_pinned_per_extension(
+        self, machine, traces, system: str, extension: str
+    ):
+        answer = self._answer(machine, system, extension, traces)
+
+        assert answer.unestablished == _PINNED_SHAPES[(system, extension)]
+
+    def test_one_system_answers_three_different_states_by_extension(self, machine, traces):
+        """The whole reason a pin names its extension: Amiga is three answers.
+
+        A table keyed by system could state only one of them, which is how the
+        retired one came to search forever for a ``.nvr`` no core writes.
+        """
+        states = {ext: self._answer(machine, "amiga", ext, traces).state for ext in (".adf", ".lha", ".hdf")}
+
+        assert states[".adf"] == SAVE_STATE_INSIDE_CONTENT
+        assert states[".lha"] == SAVE_STATE_UNESTABLISHED
+        assert len({states[".adf"], states[".lha"]}) == 2
 
     def test_the_platform_map_produces_only_systems_the_resolver_knows(self, machine, traces):
         with open(_PLATFORM_MAP, encoding="utf-8") as handle:
@@ -596,7 +640,7 @@ class TestTheRealMachineAnswers:
 
     def test_a_configuration_file_the_machine_states_is_still_excluded(self, machine, traces):
         # The Saturn ``.smpc`` on a real reading, not a constructed one.
-        answer = self._answer(machine, "saturn", traces)
+        answer = self._answer(machine, "saturn", ".chd", traces)
 
         names = [component.name for component in answer.components]
         if "Game Title.smpc" not in names:

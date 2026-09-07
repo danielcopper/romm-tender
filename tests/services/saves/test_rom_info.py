@@ -1,15 +1,28 @@
 """Tests for RomInfoService — per-ROM save path resolution and local save discovery."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, cast
+
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
+
+if TYPE_CHECKING:
+    from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from tests.services.saves._helpers import (
     _create_save,
     _install_rom,
     _seed_install,
+    _seed_rom,
     _set_sort_settings,
     _set_sort_settings_previous,
     make_service,
 )
+
+
+def _asked(svc) -> list[tuple[str, str, str | None]]:
+    """Every question the save-location seam was put, as the fake recorded them."""
+    return cast("FakeSaveLocationReader", svc._rom_info._save_locations).calls
 
 
 class TestFindSaveFiles:
@@ -81,17 +94,19 @@ class TestFindSaveFiles:
 
         assert result == []
 
-    def test_probes_system_extensions_when_slug_differs_from_system(self, tmp_path):
-        """find_save_files keys save extensions by the normalized system, not the raw RomM slug (#899).
+    def test_the_save_question_is_keyed_by_the_system_not_the_romm_slug(self, tmp_path):
+        """The save answer is asked for the normalized system, never the raw RomM slug (#899).
 
-        Regression for the call-site leak: ``get_save_extensions`` was called
-        with the raw RomM ``platform_slug`` (``sega-saturn``), which has no
-        override and falls back to defaults — so a Saturn backup-RAM ``.bkr``
-        save was never probed. The fix keys the lookup by the normalized
-        ``system`` (``saturn``), whose override includes ``.bkr``. Reverting the
-        rom_info.py change (passing ``platform_slug`` again) makes this fail:
-        ``sega-saturn`` is not in ``_PLATFORM_OVERRIDES`` so ``.bkr`` is not in
-        the probed extension list and the save is missed.
+        ADR-0010's regression: the save file set used to be looked up with the
+        raw ``platform_slug`` (``sega-saturn``), which had no entry, so a Saturn
+        backup-RAM ``.bkr`` was never probed for. The lookup is now a live
+        question to the resolver, and the same leak is possible — asking it about
+        ``sega-saturn`` would get an answer about a system no emulator declares.
+
+        Pinned two ways, because either alone is weak: the seam records the
+        system it was asked with, and the file the answer names is found. Passing
+        the slug fails the first assertion outright, and the second with it,
+        since the fake keys its Saturn answer by system.
         """
         svc, _ = make_service(tmp_path)
         _seed_install(
@@ -109,7 +124,49 @@ class TestFindSaveFiles:
 
         result = svc._rom_info.find_save_files(70)
 
+        assert [system for system, _content, _label in _asked(svc)] == ["saturn"]
         assert [f["filename"] for f in result] == ["Panzer Dragoon.bkr"]
+
+    def test_an_uninstalled_rom_is_still_asked_about_the_path_it_would_occupy(self, tmp_path):
+        """A library row carries ``fs_name``, so the extension the answer turns on is known.
+
+        Omitting the content path would ask a different question and return an
+        answer that looks like this ROM's. Nothing is probed for either way — an
+        uninstalled ROM pairs its names with no directory.
+        """
+        svc, _ = make_service(tmp_path)
+        _seed_rom(svc, 80, platform_slug="amiga", fs_name="Turrican.adf")
+
+        answer = svc._rom_info.save_answer(80)
+
+        assert _asked(svc) == [("amiga", str(tmp_path / "retrodeck" / "roms" / "amiga" / "Turrican.adf"), None)]
+        assert answer.state == "per_game_files"
+        assert svc._rom_info.synced_save_names(80) == ([], None)
+
+    def test_a_rom_the_library_does_not_hold_asks_nothing_and_refuses(self, tmp_path):
+        # No row, so no name and no extension: there is no question to put, and
+        # a guess is exactly what the retired extension table was.
+        svc, _ = make_service(tmp_path)
+
+        answer = svc._rom_info.save_answer(999)
+
+        assert _asked(svc) == []
+        assert answer.state == "unestablished"
+        assert answer.syncable is False
+
+    def test_the_question_carries_the_roms_own_content_path(self, tmp_path):
+        """The answer turns on the content file's extension, so the real path goes out.
+
+        PUAE answers ``save-inside-content`` for an Amiga ``.adf`` and nothing at
+        all for an ``.hdf``; a synthetic stem would ask about neither.
+        """
+        svc, _ = make_service(tmp_path)
+        content = str(tmp_path / "retrodeck" / "roms" / "amiga" / "Turrican.adf")
+        _seed_install(svc, 71, file_path=content, system="amiga", platform_slug="commodore-amiga")
+
+        svc._rom_info.save_answer(71)
+
+        assert _asked(svc) == [("amiga", content, None)]
 
 
 class TestGetRomSaveInfo:

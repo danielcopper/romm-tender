@@ -97,6 +97,7 @@ class SaveService:
                 retrodeck_paths=config.retrodeck_paths,
                 active_core=config.active_core,
                 save_locations=config.save_locations,
+                resolve_system=config.resolve_system,
                 get_core_name=config.get_core_name,
                 logger=config.logger,
             ),
@@ -606,6 +607,14 @@ class SaveService:
         button disables at zero rather than disappearing, so a platform whose
         shortcuts are gone and whose saves remain still offers the one action
         that can reach them.
+
+        **The walk is per INSTALLED ROM and each one asks the save resolver**,
+        which reads the machine — roughly 170 ms warm on the reference device.
+        Four installed games on a platform is well under a second; fifty is
+        several. The answer is deliberately not cached: this count exists so the
+        number the button offers equals the number the delete removes, and
+        caching one side of that pair breaks the guarantee the sentence above
+        makes. A cached answer on a destructive path is worse than a slow one.
         """
         return await self._loop.run_in_executor(None, self._count_platform_saves_io, platform_slug)
 
