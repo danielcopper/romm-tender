@@ -573,7 +573,7 @@ Format: **invariant** — tier — enforced by.
   `scd_*.brm` for a Sega CD `.chd` and a per-game `.srm` for a `.bin`. Within `RomInfoService` the system and the path
   are decided in exactly two places — `_installed_answer` for a ROM on disk and `_uninstalled_answer` for one the
   library only knows about — so ADR-0010's slug leak has two sites to guard there rather than one per caller. A
-  **third** site exists outside it: `services/migration.py` asks the resolver directly for each ROM the save-sort walk
+  **third** site exists outside it: `services/migration/save_sort.py` asks the resolver directly for each ROM its walk
   sees, taking both the system and the path off the install record, which is the source ADR-0010 says to use — so it
   cannot leak the slug, and it is a site the same rule has to hold at. A synthetic stem passed anywhere else answers a
   different question in a shape that looks like an answer to this one, and nothing would say so. It is also why every

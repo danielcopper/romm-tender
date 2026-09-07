@@ -228,6 +228,9 @@ async def _set_event_loop(plugin):
     loop = asyncio.get_event_loop()
     plugin.loop = loop
     plugin._migration_service._loop = loop
+    # The save-sort half took its own copy of the loop at construction, so
+    # setting the service's alone would leave it scheduling on the wrong one.
+    plugin._migration_service._save_sort._loop = loop
 
 
 class _RecordingLoop:
@@ -1639,7 +1642,7 @@ class TestResolveSaveSortConflict:
         errors: list[str] = []
         state_updates: list[str] = []
 
-        plugin._migration_service._resolve_save_sort_conflict(
+        plugin._migration_service._save_sort._resolve_save_sort_conflict(
             label="gba/game.srm",
             old_path=old_path,
             new_path=new_path,
@@ -1684,7 +1687,9 @@ class TestDetectSaveSortChangeThreadSafety:
 
         with plugin._uow as uow:
             uow.kv_config.set("save_sort_settings", json.dumps({"sort_by_content": True, "sort_by_core": False}))
-        plugin._migration_service._get_save_layout = lambda: InSaveDir(sort_by_content=True, sort_by_core=True)
+        plugin._migration_service._save_sort._get_save_layout = lambda: InSaveDir(
+            sort_by_content=True, sort_by_core=True
+        )
 
         # Use an ``asyncio.Queue``-backed emitter so the test can await the
         # emission from the loop thread regardless of which thread scheduled
@@ -1695,7 +1700,7 @@ class TestDetectSaveSortChangeThreadSafety:
         async def fake_emit(event_name: str, payload: dict[str, Any]) -> None:
             await emit_queue.put((event_name, payload))
 
-        plugin._migration_service._emit = fake_emit
+        plugin._migration_service._save_sort._emit = fake_emit
 
         # Run detect_save_sort_change on a worker thread.
         await loop.run_in_executor(None, plugin._migration_service.detect_save_sort_change)
@@ -1801,7 +1806,7 @@ class TestMigrationFailureInjection:
         counts: dict[str, int] = {}
         errors: list[str] = []
         state_updates: list[str] = []
-        service._resolve_save_sort_conflict(
+        service._save_sort._resolve_save_sort_conflict(
             label="gba/game.srm",
             old_path=old_path,
             new_path=new_path,
@@ -1834,7 +1839,7 @@ class TestMigrationFailureInjection:
         counts: dict[str, int] = {}
         errors: list[str] = []
         state_updates: list[str] = []
-        service._resolve_save_sort_conflict(
+        service._save_sort._resolve_save_sort_conflict(
             label="gba/game.srm",
             old_path=old_path,
             new_path=new_path,

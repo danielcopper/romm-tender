@@ -272,7 +272,7 @@ class RomInfoService:
         system any emulator declares, so asking with it answers about nothing.
         One of the two places in THIS service that decide a system and a path —
         :meth:`_uninstalled_answer` is the other — so the leak has two sites to
-        guard here rather than one per caller. ``services/migration.py`` decides
+        guard here rather than one per caller. ``services/migration/save_sort.py`` decides
         its own, off the install record, and is the third site the rule holds at.
         """
         return self._ask_resolver(rom_id, info["system"], info["file_path"], installed=True)

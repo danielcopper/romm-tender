@@ -253,7 +253,7 @@ class TestDetectSaveSortChangeContentDir:
             scheduled.append(coro)
             return MagicMock()
 
-        import services.migration as migration_module
+        import services.migration.save_sort as migration_module
 
         original = migration_module.asyncio.run_coroutine_threadsafe
         migration_module.asyncio.run_coroutine_threadsafe = fake_schedule  # type: ignore[assignment]
@@ -309,7 +309,7 @@ class TestCollectSaveSortingItems:
         new_settings: SaveSortSettings = {"sort_by_content": False, "sort_by_core": False}
         with uow:
             installs = list(uow.rom_installs.iter_all())
-        items = svc._collect_save_sorting_items(old_settings, new_settings, installs)
+        items = svc._save_sort._collect_save_sorting_items(old_settings, new_settings, installs)
 
         assert len(items) == 1
         label, old_path, _new_path, _, kind = items[0]
@@ -342,7 +342,7 @@ class TestCollectSaveSortingItems:
         same_settings: SaveSortSettings = {"sort_by_content": True, "sort_by_core": False}
         with uow:
             installs = list(uow.rom_installs.iter_all())
-        items = svc._collect_save_sorting_items(same_settings, same_settings, installs)
+        items = svc._save_sort._collect_save_sorting_items(same_settings, same_settings, installs)
 
         assert items == []
 
@@ -371,7 +371,7 @@ class TestCollectSaveSortingItems:
         new_settings: SaveSortSettings = {"sort_by_content": False, "sort_by_core": False}
         with uow:
             installs = list(uow.rom_installs.iter_all())
-        items = svc._collect_save_sorting_items(old_settings, new_settings, installs)
+        items = svc._save_sort._collect_save_sorting_items(old_settings, new_settings, installs)
 
         assert items == []
 
@@ -870,7 +870,7 @@ class TestResolveRetroArchCorename:
             return "Snes9x"
 
         svc, _ = _make_service(tmp_path, active_core=active_core, get_core_name=get_core_name)
-        assert svc._resolve_retroarch_corename(1) == ("Snes9x", "snes9x_libretro")
+        assert svc._save_sort._resolve_retroarch_corename(1) == ("Snes9x", "snes9x_libretro")
 
     def test_active_core_returns_none_returns_none(self, tmp_path):
         """Resolver cannot resolve the active core — method returns (None, None)."""
@@ -882,7 +882,7 @@ class TestResolveRetroArchCorename:
             raise AssertionError("get_core_name called despite unresolved core")
 
         svc, _ = _make_service(tmp_path, active_core=active_core, get_core_name=get_core_name)
-        assert svc._resolve_retroarch_corename(1) == (None, None)
+        assert svc._save_sort._resolve_retroarch_corename(1) == (None, None)
 
     def test_core_name_returns_none_returns_none_no_label_fallback(self, tmp_path):
         """The resolver gives us a core_so but the .info lookup fails — method
@@ -895,7 +895,7 @@ class TestResolveRetroArchCorename:
             return None
 
         svc, _ = _make_service(tmp_path, active_core=active_core, get_core_name=get_core_name)
-        assert svc._resolve_retroarch_corename(1) == (None, "oddcore_libretro")
+        assert svc._save_sort._resolve_retroarch_corename(1) == (None, "oddcore_libretro")
 
     def test_core_name_returns_empty_string_returns_none(self, tmp_path):
         """.info has ``corename = ""`` — adapter already coerces to None,
@@ -907,7 +907,7 @@ class TestResolveRetroArchCorename:
             return ""
 
         svc, _ = _make_service(tmp_path, active_core=active_core, get_core_name=get_core_name)
-        assert svc._resolve_retroarch_corename(1) == (None, "blank_libretro")
+        assert svc._save_sort._resolve_retroarch_corename(1) == (None, "blank_libretro")
 
 
 class TestSortByCoreMigrationEndToEnd:
@@ -964,7 +964,7 @@ class TestSortByCoreMigrationEndToEnd:
         with uow:
             installs = list(uow.rom_installs.iter_all())
 
-        items = svc._collect_save_sorting_items(old_settings, new_settings, installs)
+        items = svc._save_sort._collect_save_sorting_items(old_settings, new_settings, installs)
 
         # One item produced, destination path contains "Snes9x" (not "Snes9x - Current")
         assert len(items) == 1
@@ -1023,7 +1023,7 @@ class TestSortByCoreMigrationEndToEnd:
         with uow:
             installs = list(uow.rom_installs.iter_all())
 
-        items = svc._collect_save_sorting_items(old_settings, new_settings, installs)
+        items = svc._save_sort._collect_save_sorting_items(old_settings, new_settings, installs)
 
         # The destination subdir flips on the per-game override (old_path carries
         # the source ROM name so each item is attributable to its ROM).
@@ -1080,7 +1080,7 @@ class TestSortByCoreMigrationEndToEnd:
             installs = list(uow.rom_installs.iter_all())
 
         with caplog.at_level(logging.WARNING):
-            items = svc._collect_save_sorting_items(old_settings, new_settings, installs)
+            items = svc._save_sort._collect_save_sorting_items(old_settings, new_settings, installs)
 
         assert items == []
         assert any("unable to resolve RetroArch corename" in rec.getMessage() for rec in caplog.records), (

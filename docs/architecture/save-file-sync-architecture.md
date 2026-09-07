@@ -981,7 +981,7 @@ explicitly clicks the migrate button in Settings.
 
 ### Newest-wins conflict resolution
 
-Implemented in `_resolve_save_sort_conflict` in `py_modules/services/migration.py`.
+Implemented in `_resolve_save_sort_conflict` in `py_modules/services/migration/save_sort.py`.
 
 **The scenario**: the user enables `sort_savefiles_enable` mid-game and saves in-game. RetroArch writes fresh progress
 to the new layout — e.g. `saves/gba/mGBA/Example Quest.srm`. The old file at the original layout — e.g.
