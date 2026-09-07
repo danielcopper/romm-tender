@@ -30,7 +30,10 @@ export const SAVE_SHAPE_UNSUPPORTED_REASON = "save_shape_unsupported";
 
 /** Every `reason` slug that means "sync did not run, and that is fine". A slug
  *  outside this set is a real failure and surfaces the fallback-launch confirm,
- *  so a new benign skip that forgets to join it nags the user on every launch. */
+ *  so a new benign skip that forgets to join it nags the user on every launch.
+ *  The backend holds the same set in `domain/save_answer.py`; its
+ *  `TestTheBenignSkipListsAgreeAcrossTheWire` parses THIS array and fails if the
+ *  two disagree, so a slug added on either side alone is caught. */
 export const BENIGN_SYNC_SKIP_REASONS: readonly string[] = [
   SAVEFILES_IN_CONTENT_DIR_REASON,
   SAVE_SHAPE_UNSUPPORTED_REASON,

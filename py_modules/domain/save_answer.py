@@ -99,7 +99,10 @@ SAVE_SHAPE_UNSUPPORTED_REASON = "save_shape_unsupported"
 # raises no toast. A reason outside this set IS a failure. Kept here, beside the
 # state that produces the second one, so every consumer routes on one list
 # rather than growing its own equality test — which is exactly how the
-# post-exit toast came to fire for half the mapped systems.
+# post-exit toast came to fire for half the mapped systems. The frontend keeps
+# its own copy in ``src/types/saves.ts`` because the wire carries slugs and not
+# this set; ``TestTheBenignSkipListsAgreeAcrossTheWire`` reads that file and
+# fails if the two ever disagree.
 BENIGN_SYNC_SKIP_REASONS: frozenset[str] = frozenset(
     {
         SAVE_SYNC_CONTENT_DIR_REASON,

@@ -9,9 +9,13 @@ a download lands as.
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 
 from domain.save_answer import (
+    BENIGN_SYNC_SKIP_REASONS,
     SAVE_SHAPE_UNSUPPORTED_REASON,
     SAVE_STATE_HOLE,
     SAVE_STATE_INSIDE_CONTENT,
@@ -28,6 +32,7 @@ from domain.save_answer import (
     unestablished_answer,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 _DIR = "/saves/gba"
 
 
@@ -232,3 +237,39 @@ class TestTheRefusalIsReportedNeutrally:
 
     def test_an_answer_with_no_emulator_still_reads_as_a_sentence(self):
         assert save_shape_message(unestablished_answer()).endswith(".")
+
+
+class TestTheBenignSkipListsAgreeAcrossTheWire:
+    """The backend's benign-skip set and the frontend's are the same set.
+
+    Two lists, one rule, and nothing joining them: the launch path treats a
+    reason outside its list as a real failure and raises the fallback-launch
+    confirm, so a slug added on the backend alone nags the user on every launch
+    of an affected game. The frontend suite cannot see the backend's list and
+    the backend suite does not read TypeScript, which is why the check lives
+    here and reads the other side's source directly.
+    """
+
+    def _frontend_slugs(self) -> set[str]:
+        source = (_REPO_ROOT / "src" / "types" / "saves.ts").read_text(encoding="utf-8")
+        block = re.search(
+            r"BENIGN_SYNC_SKIP_REASONS:\s*readonly\s+string\[\]\s*=\s*\[(.*?)\]",
+            source,
+            re.DOTALL,
+        )
+        assert block is not None, "BENIGN_SYNC_SKIP_REASONS is not declared as an array literal any more"
+        names = [name.strip() for name in block.group(1).split(",") if name.strip()]
+        slugs = set()
+        for name in names:
+            value = re.search(rf'export const {re.escape(name)} = "([^"]+)"', source)
+            assert value is not None, f"{name} is listed but never assigned a literal slug"
+            slugs.add(value.group(1))
+        return slugs
+
+    def test_both_sides_carry_the_same_slugs(self):
+        assert self._frontend_slugs() == set(BENIGN_SYNC_SKIP_REASONS)
+
+    def test_the_reader_finds_the_slugs_it_is_looking_for(self):
+        # Non-vacuous: an empty parse would make the test above pass only when
+        # the backend set were empty too, so pin that it actually read them.
+        assert self._frontend_slugs() == {"savefiles_in_content_dir", "save_shape_unsupported"}
