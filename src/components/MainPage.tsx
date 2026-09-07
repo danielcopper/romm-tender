@@ -6,7 +6,6 @@ import {
   Field,
   Focusable,
   ProgressBar,
-  ToggleField,
   Spinner,
   DialogButton,
   ConfirmModal,
@@ -18,10 +17,6 @@ import {
   getSettings,
   fixRetroarchInputDriver,
   startSync,
-  syncPreview,
-  syncApplyDelta,
-  syncCancelPreview,
-  clearSyncCache,
   refreshMigrationState,
   getSyncStatus,
   getRetroDeckStatus,
@@ -29,17 +24,13 @@ import {
 } from "../api/backend";
 import { formatTimeAgo } from "../utils/formatters";
 import { pluralize } from "../utils/pluralize";
-import { formatDuration, formatTimeRemaining, previewApplySeconds } from "../utils/syncEstimate";
 import { getSyncProgress, setSyncProgress as setStoredSyncProgress } from "../utils/syncProgress";
 import { useSyncRunView } from "../utils/syncRunView";
 import { useDownloads } from "../utils/downloadStore";
-import {
-  usePendingPreview,
-  getPendingPreviewSnapshot,
-  adoptPreview,
-  clearPendingPreview,
-  refreshPendingPreview,
-} from "../utils/pendingPreviewStore";
+import { usePendingPreview, getPendingPreviewSnapshot, refreshPendingPreview } from "../utils/pendingPreviewStore";
+import { previewSecondsLeft } from "../utils/previewState";
+import { requestPreviewOnOpen } from "../utils/previewRequest";
+import { syncResumeState } from "../utils/syncResume";
 import {
   refreshSessionBudget,
   refreshSessionBudgetAfterChange,
@@ -52,7 +43,7 @@ import { setMigrationStatus, useMigrationStatus } from "../utils/migrationStore"
 import { useSettingsResetState } from "../utils/settingsResetStore";
 import { fetchPlaytimeScopeState, usePlaytimeScopeState } from "../utils/playtimeScopeStore";
 import { setSaveSortMigrationStatus, useSaveSortMigrationState } from "../utils/saveSortMigrationStore";
-import { reconcileStaleShortcuts, requestSyncCancel, isCancelRequested, resetSyncCancel } from "../utils/syncManager";
+import { reconcileStaleShortcuts, requestSyncCancel, resetSyncCancel } from "../utils/syncManager";
 import { useConnectionProbe } from "../utils/connectionProbe";
 import type { BackendFailed, ConnectionFailure } from "../utils/connectionProbe";
 import { retroDeckBanner, type RetroDeckBanner } from "../utils/retrodeckHealth";
@@ -62,8 +53,8 @@ import { DownloadProgressRow } from "./DownloadProgressRow";
 import { MigrationBlockedPage } from "./MigrationBlockedPage";
 import { SettingsResetBanner } from "./SettingsResetBanner";
 import { PlaytimeScopeBanner } from "./PlaytimeScopeBanner";
-import { SessionBudgetBanner, formatGb, formatSignedGb, memoryLevelColor } from "./SessionBudgetBanner";
-import type { SyncProgress, SyncStats, SyncPreview, SyncPreviewSummary, Page } from "../types";
+import { formatGb, formatSignedGb, memoryLevelColor } from "./SessionBudgetBanner";
+import type { SyncProgress, SyncStats, Page } from "../types";
 import { detach } from "../utils/detach";
 import { wrapText } from "../utils/textStyles";
 
@@ -93,17 +84,6 @@ function connectionFailureLabel(failure: ConnectionFailure | null | undefined): 
     default:
       return "Not connected";
   }
-}
-
-/** Counted segments — ``[[count, word], …]`` → ``"353 new / 800 updated"``: every
- *  segment spells its word out, zero counts dropped, joined with `` / ``. Empty
- *  when every count is zero. The old ``+``/``~``/``−`` sigils were a legend the
- *  panel never carried — on-device they read as noise, not as counts. */
-function countedSegments(pairs: [number, string][]): string {
-  return pairs
-    .filter(([n]) => n > 0)
-    .map(([n, word]) => `${n} ${word}`)
-    .join(" / ");
 }
 
 export const ConnectionIndicator: FC<{
@@ -192,132 +172,6 @@ function lastSyncValue(stats: SyncStats): ReactNode {
 }
 
 /**
- * The preview's change categories — e.g.
- * ``["Games: 353 new / 800 updated / 1200 removed", "Platforms: 2 new", "Collections: 2 new"]``.
- * Every segment spells out what happens to those games ("updated" = the shortcut
- * exists and gets rewritten, not recreated); a zero segment is omitted and a
- * wholly-unchanged category is dropped. Empty when nothing differs.
- */
-function previewChangeSegments(s: SyncPreviewSummary): string[] {
-  const categories: string[] = [];
-  const games = countedSegments([
-    [s.new_count, "new"],
-    [s.changed_count, "updated"],
-    [s.remove_count, "removed"],
-  ]);
-  if (games) categories.push(`Games: ${games}`);
-  const p = s.platform_collection_diff;
-  if (p?.has_changes) {
-    const platforms = countedSegments([
-      [p.added_count, "new"],
-      [p.removed_count, "removed"],
-    ]);
-    if (platforms) categories.push(`Platforms: ${platforms}`);
-  }
-  const d = s.collection_diff;
-  if (d?.has_changes) {
-    const collections = countedSegments([
-      [d.added.length, "new"],
-      [d.removed.length, "removed"],
-    ]);
-    if (collections) categories.push(`Collections: ${collections}`);
-  }
-  return categories;
-}
-
-/**
- * True when every platform this run spans is being re-fetched AND re-applied —
- * the derived "Force Full Sync" signal (#1318). After Force Full Sync every
- * platform loses its completion stamp, so ``restamp_platform_count`` (unstamped
- * enabled platforms) equals ``sync_platform_count`` (platforms in the work
- * queue); and the recorded launch options are cleared, so the whole library
- * counts as ``changed`` (``changed_count > 0``). Both ride the preview summary,
- * so no new backend flag is needed. The ``changed_count`` leg is what separates
- * a force from a first-ever sync — a fresh install is all-unstamped too, but its
- * delta is pure ``new_count`` (nothing to "re-fetch"), so the odd wording is
- * suppressed there. A partial resume (only some platforms unstamped) reads
- * unequal; an absent count (older backend) is 0; both return false.
- */
-function isFullResync(s: SyncPreviewSummary): boolean {
-  const platforms = s.sync_platform_count ?? 0;
-  return platforms > 0 && (s.restamp_platform_count ?? 0) === platforms && s.changed_count > 0;
-}
-
-/**
- * The change line — categories joined with `` · ``, each category unbreakable.
- * A category is a nowrap span, so a line break can only land on a `` · ``
- * separator: "Platforms: 2 new" never splits across two lines the way plain
- * text wrapping split it at the narrow QAM width. An empty shortcut delta with
- * pending cover work (#1386) names that work — the preview still proceeds to
- * Apply so the cover refreshes actually run; only a fully-empty preview falls
- * back to the unchanged message. When the delta is non-empty AND every platform
- * is being re-fetched (Force Full Sync, #1318), a context line above the
- * segments names the full re-sync so "Games: N updated" isn't read as a normal
- * incremental delta.
- */
-const PreviewChanges: FC<{ summary: SyncPreviewSummary }> = ({ summary }) => {
-  const segments = previewChangeSegments(summary);
-  if (segments.length === 0) {
-    const covers = summary.cover_refresh_count ?? 0;
-    if (covers > 0) return <>No shortcut changes — {pluralize(covers, "cover update")}.</>;
-    // An unstamped platform is complete but carries no completion stamp (#1416) —
-    // a late-ack recovery, a pre-stamp-era install, or a zero-ROM platform: the
-    // delta is empty, but the apply must still run once to re-stamp it and heal
-    // the lingering "interrupted" status.
-    if ((summary.restamp_platform_count ?? 0) > 0) return <>No changes — finishing a previous sync.</>;
-    return <>Everything is up to date.</>;
-  }
-  return (
-    <>
-      {isFullResync(summary) && (
-        <div data-testid="sync-full-resync" style={{ marginBottom: "2px", opacity: 0.8 }}>
-          Full re-sync — all platforms re-fetched.
-        </div>
-      )}
-      {segments.map((segment, i) => (
-        <span key={segment}>
-          {i > 0 ? " · " : ""}
-          <span style={{ whiteSpace: "nowrap" }}>{segment}</span>
-        </span>
-      ))}
-    </>
-  );
-};
-
-/**
- * Informational scope line for the preview — "N platforms · M collections" — the
- * count of enabled platforms/collections the run spans, shown independent of the
- * change diffs (#29). Each part is omitted when its count is 0, so a
- * collections-only run reads "3 collections" and a platforms-only run "5
- * platforms". Empty when both counts are 0 (an older backend that omits them) —
- * the caller then shows the estimate alone rather than a misleading "0 platforms".
- */
-function formatSyncScope(s: SyncPreviewSummary): string {
-  const platforms = s.sync_platform_count ?? 0;
-  const collections = s.sync_collection_count ?? 0;
-  const parts: string[] = [];
-  if (platforms > 0) parts.push(pluralize(platforms, "platform"));
-  if (collections > 0) parts.push(pluralize(collections, "collection"));
-  return parts.join(" · ");
-}
-
-/**
- * The line under "Resume Sync" — how much of a resume there is, counted in the
- * unit the user recognises: games whose shortcut the next run can pass over.
- *
- * It states what is already done, never what is left, and carries no total: the
- * remainder needs the server's library, and this line renders on every panel
- * mount. "already synced" is a claim about these games only — the clause that
- * follows is what keeps it from reading as a claim that the library is complete.
- *
- * Omitted entirely when the count is zero, which a resume on a surviving
- * completion stamp alone can be. Honest silence beats "0 games".
- */
-function formatResumeScope(resumableGames: number): string {
-  return `${pluralize(resumableGames, "game")} already synced — a resume continues from there.`;
-}
-
-/**
  * The Library row's one-line summary — "N games · M platforms · K collections" —
  * each part correctly singular/plural, zero parts omitted. Games is always
  * present (the row renders only when ``roms > 0``).
@@ -330,52 +184,18 @@ function formatLibraryLine(stats: SyncStats): string {
   return parts.join(" · ");
 }
 
-/** Preview apply-time (seconds) at/above which the hint appends the sleep-pause
- *  caveat. Below ~10 minutes a sync finishes fast enough that the sleep/resume
- *  note is noise rather than useful guidance; 10 min = 600 s. */
-const LONG_SYNC_HINT_THRESHOLD_SEC = 600;
-
 /**
- * Whether *preview* has anything for Apply Sync to do — the condition the card's
- * Apply button, its coverage/estimate lines and its expiry countdown all hang
- * off. A preview with nothing to apply is still a card ("Everything is up to
- * date."), just one with no work and therefore no deadline worth showing.
- */
-function previewHasChanges(preview: SyncPreview): boolean {
-  const s = preview.summary;
-  return (
-    s.new_count + s.changed_count + s.remove_count > 0 ||
-    !!(s.collection_diff?.added.length || s.collection_diff?.removed.length) ||
-    !!s.platform_collection_diff?.has_changes ||
-    // Cover-only work (#1386): the refresh pass runs inside the apply, so an
-    // empty shortcut delta with pending cover updates must still offer Apply —
-    // the old "no changes" short-circuit stranded changed covers forever.
-    (s.cover_refresh_count ?? 0) > 0 ||
-    // Unstamped platforms (#1416): a late-ack-recovered platform needs a
-    // 0-delta apply run to re-stamp itself and heal the lingering
-    // "interrupted" status, so offer Apply even when every change count is zero.
-    (s.restamp_platform_count ?? 0) > 0
-  );
-}
-
-/**
- * Seconds left before the backend stops accepting *preview*, measured against
- * *nowMs*, or `null` when the preview carries no deadline (an older backend) —
- * the card then shows no countdown at all. Never negative: past the deadline it
- * is 0, which the card reads as expired.
+ * What the Sync button says while a preview is waiting to be reviewed.
  *
- * `nowMs` is passed in rather than read here: the value ticks from an interval
- * into state, so render stays pure.
+ * The count is what makes the label worth pressing — "Review changes" alone says
+ * nothing about whether there is anything in it — but a preview whose delta is
+ * pure updates, removals or cover work has no new games to name, and "0 new"
+ * would read as "nothing to do" over a run that has plenty. The page behind the
+ * button states all of it; this is the part that fits on Main.
  */
-function previewSecondsLeft(preview: SyncPreview, nowMs: number): number | null {
-  if (preview.expires_at === undefined) return null;
-  return Math.max(0, preview.expires_at - nowMs / 1000);
+function reviewLabel(newCount: number): string {
+  return newCount > 0 ? `Review changes · ${newCount} new` : "Review changes";
 }
-
-/** How often the preview card's expiry countdown re-reads the clock. The readout
- *  itself is minute-coarse; the second-level cadence is what makes the switch to
- *  the expired notice land promptly rather than up to a minute late. */
-const PREVIEW_COUNTDOWN_TICK_MS = 1000;
 
 /**
  * Thin horizontal rule dividing the panel's blocks (status | sync | menu).
@@ -437,15 +257,13 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   // mid-run unmounts that instance while the run carries on
   // (`utils/pendingPreviewStore.ts` states the whole rule).
   const preview = usePendingPreview();
-  // Clock mirror for the preview card's expiry countdown, written from the
-  // interval below and from the handlers through which a preview can reach this
-  // instance — never read during render, same rule as the live-ETA row. `null`
-  // only until the first of those runs: nothing resets it afterwards, because
-  // the reset would have to live in the countdown effect and a setState there is
-  // a lint error (react-hooks/set-state-in-effect). That costs nothing, since it
-  // is read only through `previewSecondsLeft` — only while a preview is up — and
-  // the interval refreshes it every second from then on.
+  // Clock mirror for the preview deadline, stamped by the handlers a preview can
+  // reach this instance through and once more by the timer below when the
+  // deadline passes — never read during render.
   const [previewNowMs, setPreviewNowMs] = useState<number | null>(null);
+  // The persisted Skip-preview intent, whose control is on the Sync page. Main
+  // only READS it — the router unmounts the page it leaves, so every return from
+  // the Sync page re-runs the mount read below and the value is never stale.
   const [skipPreview, setSkipPreview] = useState(false);
   const [retroarchWarning, setRetroarchWarning] = useState<{ warning: boolean; current?: string } | null>(null);
   const [retrodeckBanner, setRetrodeckBanner] = useState<RetroDeckBanner | null>(null);
@@ -479,7 +297,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
       // drain state (#1202, RC-B).
       setCancelling(false);
       showTransientStatus(progress.message || "Sync finished", terminalStatusTone(progress.stage));
-      // A preview run that just ended may have staged a card this panel never
+      // A preview run that just ended may have staged a snapshot this panel never
       // received: `sync_preview` answers the instance that pressed Sync, and that
       // instance is gone whenever the user left the page mid-run. Ask for it —
       // unless the store already has it, which is the same run answering through
@@ -519,6 +337,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
         if (s.retroarch_input_check) {
           setRetroarchWarning(s.retroarch_input_check);
         }
+        setSkipPreview(s.skip_preview ?? false);
       })
       .catch((e) => logError(`Failed to load settings: ${e}`));
 
@@ -529,9 +348,10 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
       .then((s) => setRetrodeckBanner(retroDeckBanner(s.status, s)))
       .catch((e) => logError(`Failed to query RetroDECK status: ${e}`));
 
-    // The backend holds a computed preview for 30 minutes, but this panel's card
-    // dies with the render — leaving the main page for a submenu used to strand a
-    // preview that was still perfectly appliable. Ask for it back on every mount.
+    // The backend holds a computed preview for 30 minutes, but this panel's copy
+    // of it dies with the render — leaving the main page for a submenu used to
+    // strand a preview that was still perfectly appliable. Ask for it back on
+    // every mount.
     // The store decides whether the answer still stands: it loses to anything the
     // user answered while it was open, and its own failure is logged there.
     // Stamping the countdown's clock is this side's job — an impure read, so it
@@ -625,28 +445,31 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
     };
   }, []);
 
-  // A run in flight owns the panel. A preview held while one is going is not
-  // dropped — the store keeps it and the card comes back the moment the run
-  // ends — but it must not render over the progress rows, which are the true
-  // state of the machine at that moment. The two only ever overlap for the
-  // instant between a preview being staged and its run's terminal frame.
-  const previewCard = syncing ? null : preview;
-  // Drive the card's expiry countdown. The deadline is absolute, so the only
-  // thing that has to tick is the current time — mirrored into state here rather
-  // than read in render, which must stay pure. The first value is stamped by the
-  // handlers a preview can reach this instance through (the Sync press, the mount
-  // read, the terminal frame); this only keeps it moving, and is torn down when
-  // the card goes away (dismissed, applied, hidden by a run, or the panel
-  // unmounting). The condition is the countdown row's own: a preview without a
-  // deadline (older backend) and one with nothing to apply both show no
-  // countdown, and a tick that nothing on screen can consume is a wasted
-  // re-render of the whole page every second.
-  const previewCountdownDeadline = previewCard && previewHasChanges(previewCard) ? previewCard.expires_at : undefined;
+  // Whether a preview is worth offering a review of. A run in flight owns the
+  // panel, so one held while a run is going does not show — the store keeps it
+  // and the button comes back the moment the run ends. **Main never DISCARDS
+  // one**: a preview ends only on the Sync page, through Apply, Cancel or
+  // Refresh.
+  const pendingPreview = syncing ? null : preview;
+  // An expired preview counts as none — the backend drops one past its TTL, so
+  // the button would otherwise offer a review of something it will refuse.
+  //
+  // What ticks is a single timer aimed at the deadline rather than a per-second
+  // interval: nothing on Main counts a preview down (the countdown belongs to
+  // the Sync page), so the only moment the clock changes anything here is the
+  // one the label flips at. The clock itself is stamped by the handlers a
+  // preview can reach this instance through — the mount read and the terminal
+  // frame — and never read in render, which must stay pure.
+  const previewExpired =
+    pendingPreview !== null && previewNowMs !== null && previewSecondsLeft(pendingPreview, previewNowMs) === 0;
+  const previewDeadline = pendingPreview?.expires_at;
   useEffect(() => {
-    if (previewCountdownDeadline === undefined) return;
-    const id = setInterval(() => setPreviewNowMs(Date.now()), PREVIEW_COUNTDOWN_TICK_MS);
-    return () => clearInterval(id);
-  }, [previewCountdownDeadline]);
+    if (previewDeadline === undefined) return;
+    const untilExpiry = previewDeadline * 1000 - Date.now();
+    if (untilExpiry <= 0) return;
+    const timer = setTimeout(() => setPreviewNowMs(Date.now()), untilExpiry);
+    return () => clearTimeout(timer);
+  }, [previewDeadline]);
 
   // Poll the live renderer-heap reading while it can still change: during a sync (so
   // the "Steam memory" row tracks the climbing RSS mid-apply) AND while the last run
@@ -683,139 +506,60 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
     setStoredSyncProgress({ running: false, stage: "" });
   };
 
+  /**
+   * The Sync button's press, in its two working states.
+   *
+   * **The preview is not computed here.** The press starts one and opens the
+   * Sync page, and that page is what issues the call — so the progress, the
+   * answer and, above all, a refusal are reported where the reader now is. This
+   * instance is unmounted a moment later, and a `@migration_blocked` refusal or
+   * a server that went away in between would land on nobody.
+   *
+   * With Skip preview on there is no preview to open a page for: the run starts
+   * here and Main shows it, exactly as it does today.
+   */
   const handleSync = async () => {
-    // Clear any stale cancel flag from a prior run BEFORE this sync starts, so a
-    // fresh sync never begins pre-cancelled (#1198). Run identity for a Cancel
-    // click comes from the backend-fed sync_progress store now (#1202).
+    // Clear any stale cancel flag BEFORE this sync starts, so a fresh sync never
+    // begins pre-cancelled (#1198). Run identity for a Cancel click comes from
+    // the backend-fed sync_progress store (#1202).
     resetSyncCancel();
-    // Optimistically disable the button and show the in-progress UI before
-    // the backend's first sync_progress event lands — writing running:true
-    // into the MODULE store (the single source of truth the subscription
-    // reads), not a shadowing local state.
     setCancelling(false);
     setStatus(null);
-    // Pressing Sync answers the preview question too: the backend discards the
-    // staged snapshot the moment this run's own preview fails, and this answer
-    // outranks any pending-preview read still open, which would otherwise put the
-    // card the user just replaced back on screen.
-    clearPendingPreview();
+    if (!skipPreview) {
+      requestPreviewOnOpen();
+      onNavigate("sync");
+      return;
+    }
+    // Optimistically disable the button and show the in-progress UI before the
+    // backend's first sync_progress event lands — writing running:true into the
+    // MODULE store (the single source of truth the subscription reads), not a
+    // shadowing local state.
     setStoredSyncProgress({ running: true, stage: "fetching", message: "Fetching library..." });
     try {
       // Reconcile shortcuts the user deleted via Steam's own UI BEFORE the work
-      // queue is built (both sync paths fetch through it): unbind any dead
-      // binding so the incremental skip re-fetches the platform and recreates
-      // the missing shortcut (#1046). Best-effort — never blocks the sync.
+      // queue is built: unbind any dead binding so the incremental skip
+      // re-fetches the platform and recreates the missing shortcut (#1046).
+      // Best-effort — never blocks the sync.
       await reconcileStaleShortcuts();
       // Skip Preview takes the per-unit pipeline (start_sync) — incremental
-      // shortcut delivery, per-unit crash safety, no upfront full library
-      // fetch. The legacy preview/apply path remains for users who want to
-      // review changes before they apply.
-      if (skipPreview) {
-        const startResult = await startSync();
-        if (!startResult.success) {
-          abortOptimisticSync(startResult.message);
-        }
-        // On success the store subscription drives the UI from here.
-        return;
+      // shortcut delivery, per-unit crash safety, no upfront full library fetch.
+      const startResult = await startSync();
+      if (!startResult.success) {
+        abortOptimisticSync(startResult.message);
       }
-      const result = await syncPreview();
-      if (!result.success) {
-        abortOptimisticSync(result.message || "Preview failed");
-        return;
-      }
-      // RC-CANCEL-PREVIEW (#1202): a Cancel can land in the sub-second window
-      // while syncPreview() is in flight. The backend returns a cancelled
-      // result for a preview cancelled mid-loop, but a preview that finished
-      // just before the cancel still resolves success — re-check the flag
-      // before showing the phantom "Apply Sync". On a cancel, clear the flag
-      // (so the next sync doesn't start pre-cancelled) and abort to idle.
-      if (isCancelRequested()) {
-        resetSyncCancel();
-        // The backend staged this snapshot before the cancel reached it, and a
-        // cancel that lands after the preview is computed never travels far
-        // enough to discard it. Say so explicitly: otherwise the terminal frame's
-        // re-ask fetches it a round trip later and puts up the card the user just
-        // cancelled, which reads as the plugin ignoring the press. Best-effort —
-        // a failed discard leaves a snapshot the user can only meet again by
-        // coming back to the page, and must not turn a cancel into an error.
-        detach(syncCancelPreview());
-        abortOptimisticSync("Sync cancelled");
-        return;
-      }
-      // Stamp the clock the card's expiry countdown reads from — an impure read,
-      // so it belongs here rather than in render or in the interval's effect body.
-      setPreviewNowMs(Date.now());
-      adoptPreview(result);
-      // The preview run is over — retract the optimistic running:true rather than
-      // waiting for the backend's own terminal frame for it. That frame can be
-      // dropped or raced (the reason index.tsx also drives teardown from
-      // sync_complete), and a dropped one would leave every reader of the store
-      // waiting on a run that has already answered.
-      setStoredSyncProgress({ running: false, stage: "" });
+      // On success the store subscription drives the UI from here.
     } catch {
       abortOptimisticSync("Failed to start sync");
     }
   };
 
-  const handleApply = async () => {
-    if (!preview) return;
-    // A press that beat the countdown's tick to the expired state. The backend
-    // would refuse this apply, so don't spend the user's press on a failure they
-    // could not have avoided — re-read the clock instead, which flips the card to
-    // its expired form and takes the button with it.
-    if (previewSecondsLeft(preview, Date.now()) === 0) {
-      setPreviewNowMs(Date.now());
-      return;
-    }
-    const previewId = preview.preview_id;
-    // Seed the apply ETA from the walk cost (shared with the preview row via
-    // previewApplySeconds) so the number the user approved is the run's seed. It
-    // lands in the optimistic store write below, so the sync_plan listener sees an
-    // etaSeconds already present and leaves its cruder total_roms bound off.
-    const etaSeconds = previewApplySeconds(preview.summary);
-    // Clear any stale cancel flag before the apply run starts (#1198). A Cancel
-    // in the apply window reads "" from the sync_progress store until the
-    // backend stamps the run id, which the backend treats as an unconditional
-    // cancel (#1202).
-    resetSyncCancel();
-    clearPendingPreview();
-    // The preview's own "Preview ready" line is still armed for its 15s lifetime,
-    // hidden only by the preview it belongs to; clearing the preview without it
-    // would carry a finished run's status into this one's progress rows.
-    setStatus(null);
-    setCancelling(false);
-    setStoredSyncProgress({ running: true, stage: "applying", message: "Applying changes...", etaSeconds });
-    try {
-      const result = await syncApplyDelta(previewId);
-      if (!result.success) {
-        abortOptimisticSync(result.message);
-      }
-      // On success the store subscription drives the UI from here.
-    } catch {
-      abortOptimisticSync("Failed to apply sync");
-    }
-  };
-
-  const handleDismiss = async () => {
-    // The user has answered the preview question: whatever a read still open is
-    // about to hand back is a snapshot the backend is being told to discard.
-    clearPendingPreview();
-    setStatus(null);
-    try {
-      await syncCancelPreview();
-    } catch {
-      // ignore
-    }
-  };
-
   const handleCancel = async () => {
     // No preview branch here. This handler is wired to one button — "Cancel
-    // Sync", in the body a run in flight owns — and that body renders only where
-    // `previewCard` is null, so a preview cannot be what the press is about. The
-    // card's own Cancel calls `handleDismiss` directly. A branch reading the
-    // STORE's preview would fire exactly where the store holds one while a run is
-    // going, dismissing the card and leaving the run untouched with no other way
-    // out of the syncing body.
+    // Sync", in the body a run in flight owns — so a preview cannot be what the
+    // press is about; ending one is the Sync page's business entirely. A branch
+    // reading the STORE's preview would fire exactly where the store holds one
+    // while a run is going, discarding it and leaving the run untouched with no
+    // other way out of the syncing body.
     //
     // RC-B (#1202): do NOT re-arm the Sync button here. The backend drains
     // RUNNING → CANCELLING → IDLE asynchronously; flipping back to enabled now
@@ -853,47 +597,10 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   // started — both gate the Sync buttons off.
   const connectionUnavailable = connected === false || connected === "backend_failed";
 
-  // ``last_attempt`` is non-null exactly when the newest terminal run did NOT
-  // complete. "errored" stays "Sync Library": an errored run often fails before
-  // applying anything (e.g. a config error), so "resume" isn't the right mental
-  // model. A completed sync clears last_attempt on the stats refresh, flipping the
-  // label back.
-  //
-  // An incomplete attempt alone is not enough, and the half that used to stand in
-  // for "progress survives" was measuring the wrong thing: it asked whether
-  // SHORTCUTS exist, and Force Full Sync does not delete shortcuts — it deletes
-  // the completion stamps and the recorded launch commands. So the offer survived
-  // a clear that had just discarded everything it offered to continue (#1789).
-  //
-  // What a resume actually rests on is skip authority, of which this plugin keeps
-  // two kinds and clears both together in that one place: a completion stamp
-  // (whole platform or collection skipped at fetch time) or a recorded launch
-  // command (one game skipped at apply time). Either is a real resume — a run
-  // cancelled inside its first platform has written shortcuts and recorded their
-  // commands without reaching a stamp, and the next run genuinely does less work.
-  const incompleteAttempt =
-    stats?.last_attempt?.status === "interrupted" ||
-    stats?.last_attempt?.status === "cancelled" ||
-    stats?.last_attempt?.status === "paused";
-  // ``incompleteAttempt`` being true narrows ``stats`` non-null (it dereferenced
-  // stats.last_attempt), and ``roms`` is a required number — no ``?.``/``??`` needed.
-  const resumableGames = stats?.resumable_games ?? 0;
-  const skipAuthoritySurvives = resumableGames > 0 || (stats?.has_completion_stamp ?? false);
-  // ``roms > 0`` is LOAD-BEARING, not a belt-and-braces restatement of the two
-  // branches. ``has_completion_stamp`` is a global "any stamp anywhere", while the
-  // removal path is surgical: it deletes only the platform slugs its removed rows
-  // name, and only the collection stamps whose member set intersects those rows. A
-  // stamp naming nothing the ``roms`` table still holds therefore outlives a
-  // remove-all. Prune is the reachable path — it deletes ``roms`` rows and never
-  // touches ``platform_sync_state`` (services/prune/registry.py ``delete_rows``),
-  // so a platform whose games RomM dropped keeps its stamp with no rows left to
-  // name it; the next remove-all cannot see that slug to invalidate it. Without
-  // this conjunct that state offers "Resume Sync" over zero shortcuts. It is also
-  // the rule in its own right: a run that stopped before a single shortcut was
-  // written starts from the beginning and must read "Sync Library".
-  const canResume = incompleteAttempt && stats.roms > 0 && skipAuthoritySurvives;
-  const syncButtonLabel = canResume ? "Resume Sync" : "Sync Library";
-  const resumeScopeText = canResume && resumableGames > 0 ? formatResumeScope(resumableGames) : null;
+  // What the sync button is called and whether pressing it continues a run.
+  // Derived in `utils/syncResume.ts` because the Sync page names its own start
+  // button — and the session-budget card there — from the same answer.
+  const resume = syncResumeState(stats);
 
   if (versionError) {
     return <VersionErrorCard message={versionError} compact />;
@@ -904,143 +611,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   }
 
   let syncBody: ReactNode;
-  if (previewCard) {
-    const hasChanges = previewHasChanges(previewCard);
-    // Walk cost, shared with the handleApply seed (previewApplySeconds) so the
-    // approved number equals the run's seed. Delta-only pricing here read "2 min"
-    // for a resume whose apply walked ~3100 items.
-    const applySeconds = previewApplySeconds(previewCard.summary);
-    const estimateText = formatDuration(applySeconds);
-    // Coverage and duration each own a line — at the QAM width they wrapped as
-    // one row anyway, and the break landed mid-phrase. An older backend that
-    // omits the scope counts leaves scopeText empty; the duration line then
-    // stands alone.
-    const scopeText = formatSyncScope(previewCard.summary);
-    // Time left before the backend stops accepting this preview. `null` when the
-    // backend sent no deadline (older backend) — no countdown, no expiry, the
-    // card behaves exactly as it did before. At zero the card STAYS: nothing is
-    // allowed to disappear or move on its own, so the countdown is replaced by
-    // the expired notice, Apply goes away, and only Dismiss remains.
-    const secondsLeft = previewNowMs === null ? null : previewSecondsLeft(previewCard, previewNowMs);
-    const expired = secondsLeft === 0;
-    // The sleep-pause caveat is only worth the extra line for a genuinely long run.
-    const hintText =
-      "Progress is saved about every 200 games — cancelling is safe." +
-      (applySeconds >= LONG_SYNC_HINT_THRESHOLD_SEC ? " Long syncs pause during sleep; keep the Deck powered." : "");
-    syncBody = (
-      <>
-        {/* One block: WHAT changes, then what the run covers and how long — the
-            coverage/estimate and the progress-is-saved hint describe the run the
-            Apply button would start, so with an empty delta only "Everything is
-            up to date." + Dismiss stand alone. */}
-        <PanelSectionRow>
-          <Field
-            label="Changes"
-            description={
-              <>
-                <div data-testid="sync-changes">
-                  <PreviewChanges summary={previewCard.summary} />
-                </div>
-                {hasChanges && scopeText && (
-                  <div data-testid="sync-scope" style={{ marginTop: "4px" }}>
-                    Syncing {scopeText}
-                  </div>
-                )}
-                {hasChanges && (
-                  <div data-testid="sync-estimate" style={{ marginTop: scopeText ? undefined : "4px" }}>
-                    Estimated duration: {estimateText}
-                  </div>
-                )}
-              </>
-            }
-            focusable={true}
-            bottomSeparator="none"
-          />
-        </PanelSectionRow>
-        {hasChanges && (
-          <PanelSectionRow>
-            <Focusable>
-              <div style={{ fontSize: "12px", color: "rgba(255, 255, 255, 0.6)", padding: "4px 0" }}>{hintText}</div>
-            </Focusable>
-          </PanelSectionRow>
-        )}
-        {previewCard.pause_likely ? (
-          <PanelSectionRow>
-            <Focusable>
-              <div
-                data-testid="budget-advisory"
-                style={{
-                  fontSize: "12px",
-                  color: "#7fbcff",
-                  borderLeft: "3px solid rgba(61, 157, 246, 0.6)",
-                  paddingLeft: "8px",
-                  margin: "4px 0",
-                  lineHeight: 1.4,
-                }}
-              >
-                Will likely pause partway to protect Steam&apos;s memory — normal for large syncs. Restart Steam when
-                prompted, then Resume Sync.
-              </div>
-            </Focusable>
-          </PanelSectionRow>
-        ) : null}
-        {hasChanges && secondsLeft !== null && (
-          <PanelSectionRow>
-            <Focusable>
-              <div
-                data-testid="preview-expiry"
-                style={{
-                  fontSize: "12px",
-                  color: expired ? "#e5b93c" : "rgba(255, 255, 255, 0.6)",
-                  padding: "4px 0",
-                }}
-              >
-                {expired ? "Expired — run the preview again" : `Expires in ${formatTimeRemaining(secondsLeft)}`}
-              </div>
-            </Focusable>
-          </PanelSectionRow>
-        )}
-        {hasChanges && !expired ? (
-          <>
-            <PanelSectionRow>
-              <ButtonItem
-                layout="below"
-                bottomSeparator="none"
-                onClick={() => {
-                  detach(handleApply());
-                }}
-              >
-                Apply Sync
-              </ButtonItem>
-            </PanelSectionRow>
-            <PanelSectionRow>
-              <ButtonItem
-                layout="below"
-                bottomSeparator="none"
-                onClick={() => {
-                  detach(handleDismiss());
-                }}
-              >
-                Cancel
-              </ButtonItem>
-            </PanelSectionRow>
-          </>
-        ) : (
-          <PanelSectionRow>
-            <ButtonItem
-              layout="below"
-              bottomSeparator="none"
-              onClick={() => {
-                detach(handleDismiss());
-              }}
-            >
-              Dismiss
-            </ButtonItem>
-          </PanelSectionRow>
-        )}
-      </>
-    );
-  } else if (syncing) {
+  if (syncing) {
     const stepText = run.totalSteps ? `${run.step}/${run.totalSteps}` : "";
     syncBody = (
       <>
@@ -1138,78 +709,33 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
     );
   } else {
     // The idle body. A run in flight renders the branch above instead, so nothing
-    // here needs an "already syncing" guard — the buttons only ever exist while
-    // there is no run to collide with, and the connection is all that can gate them.
+    // here needs an "already syncing" guard — the button only ever exists while
+    // there is no run to collide with, and the connection is all that can gate it.
+    //
+    // One button, four states (docs/architecture/qam-panel.md, section Main).
+    // Two of them are here: a pending preview is a review the Sync page holds,
+    // and everything else starts one. The other two are the branch above (a run
+    // in flight) and the resume, which is this same press under another name.
     syncBody = (
       <>
-        {/* Persistent session-budget banner (#1383): blue while the last run was
-            paused (restart Steam, then press the sync button), or yellow when the
-            live heap is high after a completed run. Only in the idle state, so it
-            clears the moment a resume/new sync starts. It is HANDED the sync
-            button rather than working the name out from the same inputs — the
-            banner named it from a paused ``last_attempt`` alone, which survives a
-            Force Full Sync that the resume itself does not (#1789). */}
-        <SessionBudgetBanner
-          lastAttemptStatus={stats?.last_attempt?.status}
-          syncButton={{ label: syncButtonLabel, resumes: canResume }}
-          rssKb={budgetStatus?.rss_kb ?? null}
-          resumeReady={budgetStatus?.resume_ready ?? null}
-          restartDisabled={connectionUnavailable}
-          runDoneItems={budgetStatus?.run_done_items ?? null}
-          runTotalItems={budgetStatus?.run_total_items ?? null}
-        />
-        <PanelSectionRow>
-          <ButtonItem
-            layout="below"
-            bottomSeparator="none"
-            onClick={() => {
-              detach(handleSync());
-            }}
-            disabled={connectionUnavailable}
-            description={resumeScopeText ?? undefined}
-          >
-            {syncButtonLabel}
-          </ButtonItem>
-        </PanelSectionRow>
-        <PanelSectionRow>
-          <ToggleField label="Skip Preview" checked={skipPreview} onChange={setSkipPreview} bottomSeparator="none" />
-        </PanelSectionRow>
-        {/* Visible whenever ANY terminal run is recorded — a completed run OR a
-            cancelled/interrupted/errored attempt. A resume (last_attempt set,
-            last_sync null) is exactly when the user may want a forced fresh
-            start, so gating on last_sync alone would hide the button in a
-            resume situation. Still hidden on a pristine install (neither
-            recorded). Pressing it clears the per-platform stamps + recorded
-            launch options (arming a full re-fetch + re-apply) but PRESERVES the
-            run history (#1318), so the Last-sync line and this button both stay
-            put; the button is idempotent — pressing it again just re-clears the
-            already-cleared stamps. The stats refresh below keeps the display
-            truthful rather than blanking it to "Never". */}
-        {(stats?.last_sync || stats?.last_attempt) && (
+        {pendingPreview && !previewExpired ? (
+          <PanelSectionRow>
+            <ButtonItem layout="below" bottomSeparator="none" onClick={() => onNavigate("sync")}>
+              {reviewLabel(pendingPreview.summary.new_count)}
+            </ButtonItem>
+          </PanelSectionRow>
+        ) : (
           <PanelSectionRow>
             <ButtonItem
               layout="below"
               bottomSeparator="none"
-              description="Clear cached sync data to re-fetch all platforms"
               onClick={() => {
-                detach(
-                  (async () => {
-                    try {
-                      const result = await clearSyncCache();
-                      showTransientStatus(result.message);
-                    } catch {
-                      showTransientStatus("Failed to clear sync cache");
-                    }
-                    // The clear just CHANGED the stats, so this re-read must
-                    // not join one issued before it — see
-                    // refreshSyncStatsAfterChange.
-                    detach(refreshSyncStatsAfterChange());
-                  })(),
-                );
+                detach(handleSync());
               }}
               disabled={connectionUnavailable}
+              description={resume.scopeText ?? undefined}
             >
-              Force Full Sync
+              {resume.label}
             </ButtonItem>
           </PanelSectionRow>
         )}
@@ -1252,7 +778,16 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
         {stats && (
           <>
             <PanelSectionRow>
-              <Field label="Last sync" focusable={true} bottomSeparator="none" childrenContainerWidth="max">
+              {/* A stop that ACTS: the run this line reports, the history it
+                  belongs to and the preview that would change it are all on the
+                  Sync page, so the row is the second way in beside the button. */}
+              <Field
+                label="Last sync"
+                focusable={true}
+                onActivate={() => onNavigate("sync")}
+                bottomSeparator="none"
+                childrenContainerWidth="max"
+              >
                 {lastSyncValue(stats)}
               </Field>
             </PanelSectionRow>
@@ -1367,6 +902,37 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
             </PanelSectionRow>
           </>
         )}
+        {/* A notice, not the card: Restart Steam now and the resume live on the
+            Sync page, and a condition's action exists only at its home. */}
+        {lastRunPaused && (
+          <>
+            <PanelSectionRow>
+              <Focusable>
+                <div
+                  data-testid="sync-paused-notice"
+                  style={{
+                    padding: "8px 12px",
+                    backgroundColor: "rgba(61, 157, 246, 0.15)",
+                    borderLeft: "3px solid #3d9df6",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                  }}
+                >
+                  <div style={{ fontWeight: "bold", color: "#3d9df6", marginBottom: "4px" }}>Sync paused</div>
+                  <div style={{ color: "rgba(255, 255, 255, 0.7)" }}>
+                    The last run stopped at a safe point to protect Steam&apos;s memory. Restarting Steam and resuming
+                    it are on the Sync page.
+                  </div>
+                </div>
+              </Focusable>
+            </PanelSectionRow>
+            <PanelSectionRow>
+              <ButtonItem layout="below" bottomSeparator="none" onClick={() => onNavigate("sync")}>
+                Open Sync
+              </ButtonItem>
+            </PanelSectionRow>
+          </>
+        )}
         <BlockSeparator />
       </PanelSection>
 
@@ -1378,7 +944,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
             is set by a path that has already ended its run — but a status OUTLIVES
             the run that set it (15s), so the two paths that start a run clear it
             rather than let it ride into the next one. */}
-        {status?.text && !previewCard && (
+        {status?.text && (
           <PanelSectionRow>
             <Field
               label={
@@ -1440,6 +1006,11 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
       )}
 
       <PanelSection>
+        <PanelSectionRow>
+          <ButtonItem layout="below" bottomSeparator="none" onClick={() => onNavigate("sync")}>
+            Sync
+          </ButtonItem>
+        </PanelSectionRow>
         <PanelSectionRow>
           <ButtonItem layout="below" bottomSeparator="none" onClick={() => onNavigate("library")}>
             Library

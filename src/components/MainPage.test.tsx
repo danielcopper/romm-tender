@@ -54,11 +54,12 @@ import {
 } from "../utils/syncProgress";
 import { beginEtaRun, resetEta, liveEtaSeconds } from "../utils/syncEta";
 import * as syncEta from "../utils/syncEta";
-import { NEW_ITEM_SEC, UPDATED_ITEM_SEC, COVER_DOWNLOAD_SEC, FETCH_ALLOWANCE_SEC } from "../utils/syncEstimate";
+import { NEW_ITEM_SEC } from "../utils/syncEstimate";
 import { setDownloads } from "../utils/downloadStore";
 import { resetConnectionProbeForTests } from "../utils/connectionProbe";
 import { resetSyncStatsStoreForTests } from "../utils/syncStatsStore";
-import { resetPendingPreviewStoreForTests, adoptPreview } from "../utils/pendingPreviewStore";
+import { resetPendingPreviewStoreForTests, adoptPreview, clearPendingPreview } from "../utils/pendingPreviewStore";
+import { resetPreviewRequestForTests, takePreviewRequest } from "../utils/previewRequest";
 import { showModal } from "@decky/ui";
 import * as syncManager from "../utils/syncManager";
 import * as connectionState from "../utils/connectionState";
@@ -68,7 +69,6 @@ import type {
   SyncStats,
   SyncStatusAnswer,
   SyncPreview,
-  SyncPreviewSummary,
   SessionBudgetStatus,
   DownloadItem,
   PluginSettings,
@@ -188,10 +188,14 @@ vi.mock("@decky/ui", async () => {
         ce("button", { onClick, disabled }, children as never),
         description == null ? null : ce("span", { "data-testid": "button-desc" }, description as never),
       ),
-    Field: (p: AnyProps & { label?: unknown; description?: unknown }) =>
+    // `onActivate` is what makes a focusable Field a stop that ACTS — the Last
+    // sync row. Steam fires it from A and from a click, so the stub surfaces it
+    // as a click handler, plus a marker attribute so its ABSENCE is assertable
+    // (a dropped prop would make that assertion vacuous).
+    Field: (p: AnyProps & { label?: unknown; description?: unknown; onActivate?: () => void }) =>
       ce(
         "div",
-        { "data-testid": "field" },
+        { "data-testid": "field", "data-activate": p.onActivate ? "true" : undefined, onClick: p.onActivate },
         ce("span", { "data-testid": "field-label" }, p.label as never),
         ce("span", { "data-testid": "field-desc" }, p.description as never),
         p.children as never,
@@ -270,6 +274,12 @@ function defaultSettings(): PluginSettings {
   };
 }
 
+/** Settings with the persisted Skip-preview intent on — what makes Main's Sync
+ *  button start the run itself instead of opening the Sync page for a preview. */
+function settingsSkippingPreview(): PluginSettings {
+  return { ...defaultSettings(), skip_preview: true };
+}
+
 function defaultStats(): SyncStats {
   return {
     last_sync: null,
@@ -321,6 +331,9 @@ describe("MainPage", () => {
     // of the store — so a card one test leaves standing would render over the
     // next test's idle page.
     resetPendingPreviewStoreForTests();
+    // The request Main leaves for the Sync page outlives the panel too, so one
+    // test's unanswered press would otherwise be taken by the next one.
+    resetPreviewRequestForTests();
     setSyncProgress({
       running: false,
       stage: "",
@@ -1054,459 +1067,77 @@ describe("MainPage", () => {
     });
   });
 
-  describe("formatPreviewDescription (via Preview description)", () => {
-    function previewWithSummary(s: Partial<SyncPreviewSummary>): SyncPreview {
+  describe("paused-run notice (#1383, #1814)", () => {
+    // The card with Restart Steam now and the resume lives on the Sync page —
+    // its home. What Main keeps is the notice naming the condition and the jump,
+    // plus the two reads that make the notice go away again.
+    function pausedStats(status: string | undefined, finishedAt = "2026-07-11T17:48:00"): SyncStats {
       return {
-        success: true,
-        summary: {
-          new_count: 0,
-          changed_count: 0,
-          unchanged_count: 0,
-          remove_count: 0,
-          disabled_platform_remove_count: 0,
-          ...s,
-        },
-        new_names: [],
-        changed_names: [],
-        preview_id: "p1",
-      };
-    }
-
-    async function renderPreview(s: Partial<SyncPreviewSummary>): Promise<HTMLElement> {
-      vi.mocked(backend.syncPreview).mockResolvedValue(previewWithSummary(s));
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      const sync = buttonByExactText(container, "Sync Library");
-      await act(async () => {
-        fireEvent.click(sync!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      return container;
-    }
-
-    it("renders 'Everything is up to date.' when no diffs", async () => {
-      const c = await renderPreview({});
-      const descs = Array.from(c.querySelectorAll('[data-testid="field-desc"]')).map((n) => n.textContent);
-      expect(descs).toContain("Everything is up to date.");
-    });
-
-    it("renders the Games category in signed notation (added / updated / removed)", async () => {
-      const c = await renderPreview({
-        new_count: 3,
-        changed_count: 1,
-        remove_count: 2,
-      });
-      const descs = Array.from(c.querySelectorAll('[data-testid="field-desc"]')).map((n) => n.textContent);
-      // Every segment spells its word out; " / "-separated; " · " between categories.
-      expect(descs.some((d) => d.includes("Games: 3 new / 1 updated / 2 removed"))).toBe(true);
-    });
-
-    it("renders the Platforms category from platform_collection_diff", async () => {
-      const c = await renderPreview({
-        platform_collection_diff: {
-          has_changes: true,
-          added_count: 2,
-          removed_count: 1,
-        },
-      });
-      const descs = Array.from(c.querySelectorAll('[data-testid="field-desc"]')).map((n) => n.textContent);
-      expect(descs.some((d) => d.includes("Platforms: 2 new / 1 removed"))).toBe(true);
-    });
-
-    it("renders the Collections category from collection_diff", async () => {
-      const c = await renderPreview({
-        collection_diff: {
-          has_changes: true,
-          added: ["A", "B"],
-          removed: ["C"],
-        },
-      });
-      const descs = Array.from(c.querySelectorAll('[data-testid="field-desc"]')).map((n) => n.textContent);
-      expect(descs.some((d) => d.includes("Collections: 2 new / 1 removed"))).toBe(true);
-    });
-
-    it("joins multiple categories with ' · ' and omits zero segments", async () => {
-      const c = await renderPreview({
-        new_count: 1001,
-        changed_count: 50,
-        remove_count: 1200,
-        platform_collection_diff: { has_changes: true, added_count: 1, removed_count: 0 },
-        collection_diff: { has_changes: true, added: ["A", "B"], removed: [] },
-      });
-      // Zero segments (platform removed, collection removed) drop out entirely.
-      // Words, not sigils — "+"/"~"/"−" were a legend the panel never carried. The
-      // delta line has its own node since the coverage line shares the Changes block.
-      expect(c.querySelector('[data-testid="sync-changes"]')?.textContent).toBe(
-        "Games: 1001 new / 50 updated / 1200 removed · Platforms: 1 new · Collections: 2 new",
-      );
-    });
-
-    it("omits zero segments within a category (0 removed → not rendered)", async () => {
-      const c = await renderPreview({
-        new_count: 1,
-        changed_count: 0,
-        remove_count: 0,
-      });
-      // Should render "Games: 1 new" — no updated or removed segments.
-      expect(c.querySelector('[data-testid="sync-changes"]')?.textContent).toBe("Games: 1 new");
-    });
-
-    it("names cover-only work when the shortcut delta is empty (#1386 flow gap)", async () => {
-      const c = await renderPreview({ cover_refresh_count: 3 });
-      expect(c.querySelector('[data-testid="sync-changes"]')?.textContent).toBe(
-        "No shortcut changes — 3 cover updates.",
-      );
-    });
-
-    it("singularizes a single cover update", async () => {
-      const c = await renderPreview({ cover_refresh_count: 1 });
-      expect(c.querySelector('[data-testid="sync-changes"]')?.textContent).toBe(
-        "No shortcut changes — 1 cover update.",
-      );
-    });
-
-    it("keeps 'Everything is up to date.' when covers are explicitly zero (regression pin)", async () => {
-      const c = await renderPreview({ cover_refresh_count: 0 });
-      const descs = Array.from(c.querySelectorAll('[data-testid="field-desc"]')).map((n) => n.textContent);
-      expect(descs).toContain("Everything is up to date.");
-    });
-
-    it("names the re-stamp work when an unstamped platform has an empty delta (#1416)", async () => {
-      const c = await renderPreview({ restamp_platform_count: 1 });
-      expect(c.querySelector('[data-testid="sync-changes"]')?.textContent).toBe(
-        "No changes — finishing a previous sync.",
-      );
-    });
-
-    it("keeps 'Everything is up to date.' when restamp is explicitly zero (regression pin)", async () => {
-      const c = await renderPreview({ restamp_platform_count: 0 });
-      const descs = Array.from(c.querySelectorAll('[data-testid="field-desc"]')).map((n) => n.textContent);
-      expect(descs).toContain("Everything is up to date.");
-    });
-
-    it("shows the Full re-sync line when every platform is re-fetched with changed games (#1318)", async () => {
-      // Force Full Sync: all platforms unstamped AND the whole library counts as
-      // changed (recorded launch options cleared) — changed_count > 0 admits the line.
-      const c = await renderPreview({
-        changed_count: 2843,
-        restamp_platform_count: 5,
-        sync_platform_count: 5,
-      });
-      expect(c.querySelector('[data-testid="sync-full-resync"]')?.textContent).toBe(
-        "Full re-sync — all platforms re-fetched.",
-      );
-      // The normal change line still renders below the context line.
-      expect(c.querySelector('[data-testid="sync-changes"]')?.textContent).toContain("Games: 2843 updated");
-    });
-
-    it("hides the Full re-sync line on a first-ever sync (all-unstamped but pure new games, #1318)", async () => {
-      // A fresh install is all-unstamped too (restamp === sync), but its delta is
-      // pure new_count — nothing to "re-fetch". The changed_count > 0 leg keeps
-      // the Force-only wording off so the odd copy never shows on a first sync.
-      const c = await renderPreview({
-        new_count: 3000,
-        changed_count: 0,
-        restamp_platform_count: 5,
-        sync_platform_count: 5,
-      });
-      expect(c.querySelector('[data-testid="sync-full-resync"]')).toBeNull();
-      expect(c.querySelector('[data-testid="sync-changes"]')?.textContent).toBe("Games: 3000 new");
-    });
-
-    it("hides the Full re-sync line when only some platforms are unstamped (partial resume)", async () => {
-      const c = await renderPreview({
-        changed_count: 10,
-        restamp_platform_count: 2,
-        sync_platform_count: 5,
-      });
-      expect(c.querySelector('[data-testid="sync-full-resync"]')).toBeNull();
-      expect(c.querySelector('[data-testid="sync-changes"]')?.textContent).toBe("Games: 10 updated");
-    });
-
-    it("hides the Full re-sync line when sync_platform_count is 0 (0 === 0 must not trigger)", async () => {
-      // An all-collections run, or an older backend that omits the counts: the
-      // equality holds at 0 but the `> 0` guard keeps the line off.
-      const c = await renderPreview({
-        new_count: 3,
-        restamp_platform_count: 0,
-        sync_platform_count: 0,
-      });
-      expect(c.querySelector('[data-testid="sync-full-resync"]')).toBeNull();
-    });
-
-    it("keeps the restamp-only empty-delta message with no Full re-sync line (#1318 / #1416)", async () => {
-      // Empty segments + every platform unstamped: the empty-delta branch owns
-      // the copy, and the Full re-sync line (a NON-empty-delta context line)
-      // stays off — the two never collide.
-      const c = await renderPreview({
-        restamp_platform_count: 3,
-        sync_platform_count: 3,
-      });
-      expect(c.querySelector('[data-testid="sync-full-resync"]')).toBeNull();
-      expect(c.querySelector('[data-testid="sync-changes"]')?.textContent).toBe(
-        "No changes — finishing a previous sync.",
-      );
-    });
-  });
-
-  describe("session-budget advisory (#1383)", () => {
-    async function renderPreviewWithPause(pauseLikely: boolean | undefined): Promise<HTMLElement> {
-      const preview: SyncPreview = {
-        success: true,
-        summary: {
-          new_count: 2000,
-          changed_count: 0,
-          unchanged_count: 0,
-          remove_count: 0,
-          disabled_platform_remove_count: 0,
-        },
-        new_names: [],
-        changed_names: [],
-        preview_id: "p-budget",
-      };
-      // Omit pause_likely entirely when undefined (exactOptionalPropertyTypes)
-      // to model an older backend / unavailable reading that never sends the key.
-      if (pauseLikely !== undefined) preview.pause_likely = pauseLikely;
-      vi.mocked(backend.syncPreview).mockResolvedValue(preview);
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      const sync = buttonByExactText(container, "Sync Library");
-      await act(async () => {
-        fireEvent.click(sync!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      return container;
-    }
-
-    it("shows the BLUE (info) pause advisory when pause_likely is true", async () => {
-      const c = await renderPreviewWithPause(true);
-      const advisory = c.querySelector('[data-testid="budget-advisory"]') as HTMLElement | null;
-      expect(advisory).not.toBeNull();
-      expect(advisory?.textContent).toContain("Will likely pause partway to protect Steam");
-      expect(advisory?.textContent).toContain("Restart Steam when prompted, then Resume Sync.");
-      // Recolored from amber to blue — it announces normal, planned behavior (#1383).
-      expect(advisory?.style.color).toBe("#7fbcff");
-    });
-
-    it("hides the advisory when pause_likely is false", async () => {
-      const c = await renderPreviewWithPause(false);
-      expect(c.querySelector('[data-testid="budget-advisory"]')).toBeNull();
-    });
-
-    it("hides the advisory when pause_likely is absent (older backend / unavailable reading)", async () => {
-      const c = await renderPreviewWithPause(undefined);
-      expect(c.querySelector('[data-testid="budget-advisory"]')).toBeNull();
-    });
-  });
-
-  describe("preview scope line (#29)", () => {
-    async function renderPreviewScope(platforms: number, collections: number): Promise<HTMLElement> {
-      vi.mocked(backend.syncPreview).mockResolvedValue({
-        success: true,
-        summary: {
-          // One new item: the scope/hint rows describe the run Apply would
-          // start, so they only render when the delta is non-empty.
-          new_count: 1,
-          changed_count: 0,
-          unchanged_count: 0,
-          remove_count: 0,
-          disabled_platform_remove_count: 0,
-          sync_platform_count: platforms,
-          sync_collection_count: collections,
-        },
-        new_names: [],
-        changed_names: [],
-        preview_id: "p-scope",
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      return container;
-    }
-
-    // Coverage and duration each own a label-less line under the "Changes"
-    // block ("Scope" and "Preview" as competing labels read as duplicate info).
-    // These summaries have one new item, so the estimate is essentially the flat
-    // fixed-overhead allowance (45s) and reads "< 1 min".
-    it("reads 'Syncing N platforms · M collections' with both counts", async () => {
-      const c = await renderPreviewScope(3, 2);
-      expect(c.querySelector('[data-testid="sync-scope"]')?.textContent).toBe("Syncing 3 platforms · 2 collections");
-      expect(c.querySelector('[data-testid="sync-estimate"]')?.textContent).toBe("Estimated duration: < 1 min");
-    });
-
-    it("omits the collections part when the run syncs none, and singularizes", async () => {
-      const c = await renderPreviewScope(1, 0);
-      expect(c.querySelector('[data-testid="sync-scope"]')?.textContent).toBe("Syncing 1 platform");
-    });
-
-    it("omits the platforms part on a collections-only run (LOW-6)", async () => {
-      const c = await renderPreviewScope(0, 3);
-      expect(c.querySelector('[data-testid="sync-scope"]')?.textContent).toBe("Syncing 3 collections");
-    });
-
-    it("shows the duration alone when the backend omits both scope counts (empty scope)", async () => {
-      const c = await renderPreviewScope(0, 0);
-      expect(c.querySelector('[data-testid="sync-scope"]')).toBeNull();
-      expect(c.querySelector('[data-testid="sync-estimate"]')?.textContent).toBe("Estimated duration: < 1 min");
-    });
-
-    it("hides the scope line and the progress hint on an empty delta (nothing to apply)", async () => {
-      // Scope/estimate and "Progress is saved…" describe the run Apply would
-      // start; with 'Everything is up to date.' + Dismiss there is no run.
-      vi.mocked(backend.syncPreview).mockResolvedValue({
-        success: true,
-        summary: {
-          new_count: 0,
-          changed_count: 0,
-          unchanged_count: 0,
-          remove_count: 0,
-          disabled_platform_remove_count: 0,
-          sync_platform_count: 5,
-          sync_collection_count: 0,
-        },
-        new_names: [],
-        changed_names: [],
-        preview_id: "p-empty",
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      const descs = Array.from(container.querySelectorAll('[data-testid="field-desc"]')).map((n) => n.textContent);
-      expect(descs).toContain("Everything is up to date.");
-      expect(container.querySelector('[data-testid="sync-scope"]')).toBeNull();
-      expect(container.querySelector('[data-testid="sync-estimate"]')).toBeNull();
-      expect(container.textContent).not.toContain("Progress is saved");
-      expect(buttonByExactText(container, "Dismiss")).not.toBeNull();
-    });
-  });
-
-  describe("persistent session-budget banners (#1383)", () => {
-    async function renderIdle(
-      lastAttemptStatus: string | undefined,
-      rssKb: number | null,
-      resumeReady: boolean | null = null,
-      counts: { done: number | null; total: number | null } = { done: null, total: null },
-      resumableGames = 30,
-    ): Promise<HTMLElement> {
-      vi.mocked(backend.getSyncStats).mockResolvedValue({
         ...defaultStats(),
         roms: 42,
-        // Surviving progress by default, so the paused banner describes the resume
-        // situation it was written for. Pass 0 for the post-Force-Full-Sync state,
-        // where the run is still paused but the button beside it is not a resume.
-        resumable_games: resumableGames,
-        has_completion_stamp: false,
-        last_attempt: lastAttemptStatus
-          ? { finished_at: "2026-07-11T17:48:00", status: lastAttemptStatus as "paused" }
-          : null,
-      });
-      vi.mocked(backend.getSessionBudgetStatus).mockResolvedValue({
+        resumable_games: 30,
+        last_attempt: status ? { finished_at: finishedAt, status: status as "paused" } : null,
+      };
+    }
+
+    function budget(rssKb: number | null): SessionBudgetStatus {
+      return {
         success: true,
         rss_kb: rssKb,
         warn_kb: 1_800_000,
         ceiling_kb: 2_200_000,
         cliff_kb: 2_450_000,
         memory_delta_kb: null,
-        resume_ready: resumeReady,
-        run_done_items: counts.done,
-        run_total_items: counts.total,
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      return container;
-    }
-
-    it("shows the blue paused banner with the live number after a paused run", async () => {
-      const c = await renderIdle("paused", 2_299_000);
-      const banner = c.querySelector('[data-testid="budget-paused-banner"]');
-      expect(banner).not.toBeNull();
-      expect(banner?.textContent).toContain("Steam memory is full (2.3 GB). Restart Steam, then Resume Sync.");
-    });
-
-    it("degrades the paused banner to text-only when the reading is unavailable", async () => {
-      const c = await renderIdle("paused", null);
-      const banner = c.querySelector('[data-testid="budget-paused-banner"]');
-      expect(banner).not.toBeNull();
-      expect(banner?.textContent).toContain("Resume Sync");
-      expect(banner?.textContent).not.toContain("GB");
-    });
-
-    it("points the paused banner at the plain sync button once a force-clear left nothing to resume", async () => {
-      // The panel-level half of #1789: the banner is handed the button rather than
-      // deciding its name from the paused status, which survives the clear that the
-      // resume does not. Without the wiring the panel says "Sync Library" on the
-      // button and "Resume Sync" in the banner directly above it.
-      const c = await renderIdle("paused", 2_299_000, false, { done: 1200, total: 2001 }, 0);
-      const banner = c.querySelector('[data-testid="budget-paused-banner"]');
-      expect(banner?.textContent).toContain("Steam memory is full (2.3 GB). Restart Steam, then Sync Library.");
-      expect(banner?.textContent).not.toContain("Resume Sync");
-      expect(buttonByExactText(c, "Sync Library")).not.toBeNull();
-    });
-
-    it("shows the yellow high-heap banner after a completed run with a high live heap", async () => {
-      const c = await renderIdle(undefined, 1_900_000);
-      const banner = c.querySelector('[data-testid="budget-high-heap-banner"]');
-      expect(banner).not.toBeNull();
-      expect(banner?.textContent).toContain("Steam memory is high: 1.9 GB of 2.4 GB");
-      expect(c.querySelector('[data-testid="budget-paused-banner"]')).toBeNull();
-    });
-
-    it("feeds the backend's run progress into the paused banner", async () => {
-      const c = await renderIdle("paused", 2_299_000, false, { done: 1200, total: 2001 });
-      expect(c.querySelector('[data-testid="budget-paused-banner"]')?.textContent).toContain(
-        "1200 of 2001 games done.",
-      );
-    });
-
-    it("omits the progress sentence when the backend doesn't know the counts (post-reload)", async () => {
-      const c = await renderIdle("paused", 2_299_000, false, { done: null, total: null });
-      expect(c.querySelector('[data-testid="budget-paused-banner"]')?.textContent).not.toContain("games done");
-    });
-
-    it("shows no banner when idle with a low live heap and no paused attempt", async () => {
-      const c = await renderIdle(undefined, 440_000);
-      expect(c.querySelector('[data-testid="budget-paused-banner"]')).toBeNull();
-      expect(c.querySelector('[data-testid="budget-high-heap-banner"]')).toBeNull();
-    });
-
-    it("flips the paused banner to 'memory is free' once resume_ready is true (#38)", async () => {
-      const c = await renderIdle("paused", 500_000, true);
-      const banner = c.querySelector('[data-testid="budget-paused-banner"]');
-      expect(banner?.textContent).toContain("Steam memory is free again (0.5 GB)");
-      expect(banner?.textContent).not.toContain("Restart Steam, then Resume Sync");
-    });
-
-    it("flips the last-attempt line + hides the paused banner when a newer terminal supersedes it (#39)", async () => {
-      // A paused run is showing.
-      vi.mocked(backend.getSyncStats).mockResolvedValue({
-        ...defaultStats(),
-        roms: 42,
-        last_attempt: { finished_at: "2026-07-11T14:41:00", status: "paused" },
-      });
-      vi.mocked(backend.getSessionBudgetStatus).mockResolvedValue({
-        success: true,
-        rss_kb: 500_000,
-        warn_kb: 1_800_000,
-        ceiling_kb: 2_200_000,
-        cliff_kb: 2_450_000,
-        memory_delta_kb: null,
-        resume_ready: true,
+        resume_ready: null,
         run_done_items: null,
         run_total_items: null,
-      });
+      };
+    }
+
+    const notice = (c: HTMLElement) => c.querySelector('[data-testid="sync-paused-notice"]');
+
+    it("names the condition and offers the jump, without the card that acts on it", async () => {
+      vi.mocked(backend.getSyncStats).mockResolvedValue(pausedStats("paused"));
+      vi.mocked(backend.getSessionBudgetStatus).mockResolvedValue(budget(2_299_000));
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
-      expect(container.querySelector('[data-testid="budget-paused-banner"]')).not.toBeNull();
+
+      expect(notice(container)?.textContent).toContain("Sync paused");
+      expect(buttonByExactText(container, "Open Sync")).not.toBeNull();
+      // The action exists only at its home: neither the card nor its button.
+      expect(container.querySelector('[data-testid="budget-paused-banner"]')).toBeNull();
+      expect(buttonByExactText(container, "Restart Steam now")).toBeNull();
+    });
+
+    it("shows nothing when the last run did not pause", async () => {
+      vi.mocked(backend.getSyncStats).mockResolvedValue(pausedStats(undefined));
+      vi.mocked(backend.getSessionBudgetStatus).mockResolvedValue(budget(1_900_000));
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+
+      // A high heap after a completed run is the Sync page's business now — Main
+      // carries only the paused condition, which is the one with a home.
+      expect(notice(container)).toBeNull();
+      expect(container.querySelector('[data-testid="budget-high-heap-banner"]')).toBeNull();
+    });
+
+    it("Open Sync goes to the page that holds the restart and the resume", async () => {
+      const onNavigate = vi.fn();
+      vi.mocked(backend.getSyncStats).mockResolvedValue(pausedStats("paused"));
+      vi.mocked(backend.getSessionBudgetStatus).mockResolvedValue(budget(2_299_000));
+      const { container } = render(<MainPage onNavigate={onNavigate} />);
+      await flushAsync();
+
+      fireEvent.click(buttonByExactText(container, "Open Sync")!);
+      expect(onNavigate).toHaveBeenCalledWith("sync");
+    });
+
+    it("flips the last-attempt line + drops the notice when a newer terminal supersedes it (#39)", async () => {
+      vi.mocked(backend.getSyncStats).mockResolvedValue(pausedStats("paused", "2026-07-11T14:41:00"));
+      vi.mocked(backend.getSessionBudgetStatus).mockResolvedValue(budget(500_000));
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(notice(container)).not.toBeNull();
       expect(container.textContent).toContain("(paused)");
 
       // The resume the user pressed is under way — the terminal frame below ends
@@ -1514,9 +1145,6 @@ describe("MainPage", () => {
       await act(async () => {
         setSyncProgress({ running: true, stage: "applying", message: "Working" });
       });
-
-      // A newer cancelled attempt supersedes the paused run; the stats refetch on the
-      // terminal event returns it.
       vi.mocked(backend.getSyncStats).mockResolvedValue({
         ...defaultStats(),
         roms: 42,
@@ -1527,38 +1155,23 @@ describe("MainPage", () => {
       });
       await flushAsync();
 
-      expect(container.querySelector('[data-testid="budget-paused-banner"]')).toBeNull();
+      expect(notice(container)).toBeNull();
       expect(container.textContent).toContain("(cancelled)");
       expect(container.textContent).not.toContain("(paused)");
     });
 
     it("recovers via the paused-poll stats backstop if the terminal refetch was missed (#39)", async () => {
       // Belt-and-braces on top of the backend emit-last fix: even if no terminal
-      // event reached this mount, the paused poll re-reads stats and flips once the
-      // newer terminal appears in the data.
+      // event reached this mount, the paused poll re-reads the stats and flips
+      // once the newer terminal appears in the data.
       vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
       try {
-        vi.mocked(backend.getSyncStats).mockResolvedValue({
-          ...defaultStats(),
-          roms: 42,
-          last_attempt: { finished_at: "2026-07-11T14:41:00", status: "paused" },
-        });
-        vi.mocked(backend.getSessionBudgetStatus).mockResolvedValue({
-          success: true,
-          rss_kb: 500_000,
-          warn_kb: 1_800_000,
-          ceiling_kb: 2_200_000,
-          cliff_kb: 2_450_000,
-          memory_delta_kb: 0,
-          resume_ready: true,
-          run_done_items: null,
-          run_total_items: null,
-        });
+        vi.mocked(backend.getSyncStats).mockResolvedValue(pausedStats("paused", "2026-07-11T14:41:00"));
+        vi.mocked(backend.getSessionBudgetStatus).mockResolvedValue(budget(500_000));
         const { container } = render(<MainPage onNavigate={vi.fn()} />);
         await flushAsync();
-        expect(container.querySelector('[data-testid="budget-paused-banner"]')).not.toBeNull();
+        expect(notice(container)).not.toBeNull();
 
-        // A newer cancelled attempt now appears in the data (no terminal event fired).
         vi.mocked(backend.getSyncStats).mockResolvedValue({
           ...defaultStats(),
           roms: 42,
@@ -1567,60 +1180,31 @@ describe("MainPage", () => {
         await act(async () => {
           await vi.advanceTimersByTimeAsync(10_000); // one paused-poll tick
         });
-        expect(container.querySelector('[data-testid="budget-paused-banner"]')).toBeNull();
+
+        expect(notice(container)).toBeNull();
         expect(container.textContent).toContain("(cancelled)");
       } finally {
         vi.useRealTimers();
       }
     });
 
-    it("polls while paused and flips the banner when a Steam restart frees memory (#38)", async () => {
+    it("polls the live reading while paused, so the memory row follows a Steam restart (#38)", async () => {
       vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
       try {
-        vi.mocked(backend.getSyncStats).mockResolvedValue({
-          ...defaultStats(),
-          roms: 42,
-          resumable_games: 30,
-          last_attempt: { finished_at: "2026-07-11T17:48:00", status: "paused" },
-        });
-        // Before the restart: high RSS, resume would re-pause. After (poll tick):
-        // fresh baseline, resume_ready true.
+        vi.mocked(backend.getSyncStats).mockResolvedValue(pausedStats("paused"));
         vi.mocked(backend.getSessionBudgetStatus)
-          .mockResolvedValueOnce({
-            success: true,
-            rss_kb: 2_199_000,
-            warn_kb: 1_800_000,
-            ceiling_kb: 2_200_000,
-            cliff_kb: 2_450_000,
-            memory_delta_kb: null,
-            resume_ready: false,
-            run_done_items: null,
-            run_total_items: null,
-          })
-          .mockResolvedValue({
-            success: true,
-            rss_kb: 500_000,
-            warn_kb: 1_800_000,
-            ceiling_kb: 2_200_000,
-            cliff_kb: 2_450_000,
-            memory_delta_kb: null,
-            resume_ready: true,
-            run_done_items: null,
-            run_total_items: null,
-          });
-
+          .mockResolvedValueOnce(budget(2_199_000))
+          .mockResolvedValue(budget(500_000));
         const { container } = render(<MainPage onNavigate={vi.fn()} />);
         await flushAsync();
-        const bannerText = () => container.querySelector('[data-testid="budget-paused-banner"]')?.textContent ?? "";
-        expect(bannerText()).toContain("Restart Steam, then Resume Sync");
-        expect(buttonByExactText(container, "Restart Steam now")).not.toBeNull();
+        const memory = () => container.querySelector('[data-testid="steam-memory-value"]')?.textContent;
+        expect(memory()).toBe("2.2 GB");
 
-        // The paused poll runs at 10s — advance one tick → re-fetch → the banner flips.
+        // The paused poll runs at 10s — one tick re-reads and the row follows.
         await act(async () => {
           await vi.advanceTimersByTimeAsync(10_000);
         });
-        expect(bannerText()).toContain("Steam memory is free again (0.5 GB)");
-        expect(buttonByExactText(container, "Restart Steam now")).toBeNull();
+        expect(memory()).toBe("0.5 GB");
       } finally {
         vi.useRealTimers();
       }
@@ -2270,6 +1854,7 @@ describe("MainPage", () => {
 
     it("clears the carry when the run ends — no stale line on the done state nor the next run's start", async () => {
       // Run A applies with fine detail (row mounted).
+      vi.mocked(backend.getSettings).mockResolvedValue(settingsSkippingPreview());
       vi.mocked(backend.getSyncStatus).mockResolvedValue({
         running: true,
         stage: "applying",
@@ -2289,14 +1874,11 @@ describe("MainPage", () => {
       await flushAsync();
       expect(fineRow(container)).toBeNull();
 
-      // Run B starts via Skip Preview → the optimistic coarse fetch anchor carries
-      // no fine detail. Because the prior run's carry was cleared, the fine row is
-      // absent — no stale "GBA: 50/50" leaks into the new run's start. (Without the
-      // reset, hasFineDetail would fall back to the carried line and show it here.)
-      const toggle = container.querySelector('[data-testid="toggle-input"]') as HTMLInputElement | null;
-      expect(toggle).not.toBeNull();
-      fireEvent.click(toggle!);
-      await flushAsync();
+      // Run B starts straight away (the persisted Skip-preview intent, seeded
+      // below) → the optimistic coarse fetch anchor carries no fine detail.
+      // Because the prior run's carry was cleared, the fine row is absent — no
+      // stale "GBA: 50/50" leaks into the new run's start. (Without the reset,
+      // hasFineDetail would fall back to the carried line and show it here.)
       await act(async () => {
         fireEvent.click(buttonByExactText(container, "Sync Library")!);
         await Promise.resolve();
@@ -2623,129 +2205,13 @@ describe("MainPage", () => {
     });
   });
 
-  describe("always-on sync estimate (#1025 UX)", () => {
-    // ``coverRefreshCount`` is left OFF the summary when zero, so the default
-    // fixtures keep exercising the absent-field (older backend) path.
-    function previewWithCounts(newCount: number, changedCount: number, coverRefreshCount = 0): SyncPreview {
-      return {
-        success: true,
-        summary: {
-          new_count: newCount,
-          changed_count: changedCount,
-          unchanged_count: 0,
-          remove_count: 0,
-          disabled_platform_remove_count: 0,
-          ...(coverRefreshCount > 0 ? { cover_refresh_count: coverRefreshCount } : {}),
-        },
-        new_names: [],
-        changed_names: [],
-        preview_id: "p1",
-      };
-    }
-
-    async function renderPreviewWithCounts(
-      newCount: number,
-      changedCount: number,
-      coverRefreshCount = 0,
-    ): Promise<HTMLElement> {
-      vi.mocked(backend.syncPreview).mockResolvedValue(previewWithCounts(newCount, changedCount, coverRefreshCount));
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      const sync = buttonByExactText(container, "Sync Library");
-      await act(async () => {
-        fireEvent.click(sync!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      return container;
-    }
-
-    // Applying-state readout — the separate "Estimated time" Field (sync-scope's
-    // sibling only while a run is in flight).
+  describe("in-flight sync estimate (#1025 UX)", () => {
+    // The PREVIEW's estimate — and the apply seed taken from it — moved to the
+    // Sync page with the preview itself (src/components/SyncPage.test.tsx). What
+    // Main still shows is the run's own readout.
     function estimateText(container: HTMLElement): string | undefined {
       return container.querySelector('[data-testid="estimate-time"]')?.textContent ?? undefined;
     }
-
-    // Preview-state readout — the estimate owns its own line under the "Changes"
-    // block, below the coverage line.
-    function estimateLine(container: HTMLElement): string | undefined {
-      return container.querySelector('[data-testid="sync-estimate"]')?.textContent ?? undefined;
-    }
-
-    it("renders an estimate on its own line for a small preview", async () => {
-      // 3 new * (0.36s walk + 0.15s cover) + 45s allowance = 46.53s → "< 1 min".
-      // A handful of creates really is dominated by the run's fixed overhead.
-      const c = await renderPreviewWithCounts(3, 0);
-      expect(estimateLine(c)).toBe("Estimated duration: < 1 min");
-    });
-
-    it("renders an estimate on its own line for a large preview", async () => {
-      // 1000 new * (0.36s walk + 0.15s cover) + 45s = 555s → ~9 min.
-      const c = await renderPreviewWithCounts(1000, 0);
-      expect(estimateLine(c)).toBe("Estimated duration: 9 min");
-    });
-
-    it("prices updated items into the preview estimate", async () => {
-      // 100 updated * 0.13s + 45s = 58s → "< 1 min". Updates carry no cover
-      // download — the apply loop applies artwork only to created shortcuts.
-      const c = await renderPreviewWithCounts(0, 100);
-      expect(estimateLine(c)).toBe("Estimated duration: < 1 min");
-    });
-
-    it("prices cover refreshes, so a cover-only preview no longer reads the flat allowance (#1511)", async () => {
-      // No shortcut delta at all, 400 covers changed server-side: 400 * 0.15s +
-      // 45s = 105s → ~2 min. Under the old model this read a flat 90s ("2 min")
-      // whether one cover or four thousand had changed.
-      const c = await renderPreviewWithCounts(0, 0, 400);
-      expect(estimateLine(c)).toBe("Estimated duration: 2 min");
-    });
-
-    it("shows the compact info copy alongside the preview estimate (short sync → no sleep caveat)", async () => {
-      // ~2 min preview (< 10 min threshold): the always-shown line only.
-      const c = await renderPreviewWithCounts(1, 0);
-      expect(c.textContent).toContain("Progress is saved about every 200 games — cancelling is safe.");
-      expect(c.textContent).not.toContain("Long syncs pause during sleep");
-    });
-
-    it("appends the sleep-pause caveat only when the estimate is ≥ 10 min", async () => {
-      // 1200 new * (0.36s walk + 0.15s cover) + 45s = 657s ≥ 600s (10 min) → the
-      // caveat sentence appears. Pricing cover downloads separately is what keeps
-      // this fixture above the threshold after the walk rate came down (#1511).
-      const c = await renderPreviewWithCounts(1200, 0);
-      expect(c.textContent).toContain("Progress is saved about every 200 games — cancelling is safe.");
-      expect(c.textContent).toContain("Long syncs pause during sleep; keep the Deck powered.");
-    });
-
-    it("prices the preview row from the DELTA (new + changed) — unchanged items are skipped, not walked", async () => {
-      // Resume-shaped: 153 real creates and ~3000 content-unchanged items. The
-      // delta-restricted apply (#1383) skips the unchanged entirely (no Set* walk,
-      // no confirm poll), so they cost nothing and no longer inflate the estimate:
-      // 153*(NEW_ITEM_SEC + COVER_DOWNLOAD_SEC) + 45s allowance = 123s → ~2 min.
-      // The 3000 unchanged priced the old walk model at ~13 min; that overshoot is gone.
-      vi.mocked(backend.syncPreview).mockResolvedValue({
-        success: true,
-        summary: {
-          new_count: 153,
-          changed_count: 0,
-          unchanged_count: 3000,
-          remove_count: 0,
-          disabled_platform_remove_count: 0,
-        },
-        new_names: [],
-        changed_names: [],
-        preview_id: "p-resume",
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(estimateLine(container)).toBe("Estimated duration: 2 min");
-      // The 3000 unchanged items must NOT be priced — the walk-model overshoot is gone.
-      expect(estimateLine(container)).not.toBe("Estimated duration: 13 min");
-    });
 
     it("renders 'up to X min' while applying when etaSeconds is set", async () => {
       vi.mocked(backend.getSyncStatus).mockResolvedValue({
@@ -2772,68 +2238,6 @@ describe("MainPage", () => {
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
       expect(container.querySelector('[data-testid="estimate-time"]')).toBeNull();
-    });
-
-    async function applyPreviewSummary(summary: Partial<SyncPreviewSummary>): Promise<HTMLElement> {
-      vi.mocked(backend.syncPreview).mockResolvedValue({
-        success: true,
-        summary: {
-          new_count: 0,
-          changed_count: 0,
-          unchanged_count: 0,
-          remove_count: 0,
-          disabled_platform_remove_count: 0,
-          ...summary,
-        },
-        new_names: [],
-        changed_names: [],
-        preview_id: "p-eta",
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      // Sync → preview with changes → Apply Sync appears.
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      // Apply → the optimistic store write carries the walk-cost seed.
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Apply Sync")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      return container;
-    }
-
-    it("handleApply seeds the apply ETA from the DELTA (new + changed), unchanged priced at zero", async () => {
-      // The delta apply touches only new + changed — creates at the new rate plus
-      // their cover download, changed at the bare update rate — and skips unchanged
-      // entirely (#1383). new=100, changed=200, unchanged=600 → 36 + 26 + 15 + 45 =
-      // 122s; the 600 unchanged add nothing.
-      const container = await applyPreviewSummary({ new_count: 100, changed_count: 200, unchanged_count: 600 });
-      expect(getSyncProgress().etaSeconds).toBeCloseTo(
-        100 * NEW_ITEM_SEC + 200 * UPDATED_ITEM_SEC + 100 * COVER_DOWNLOAD_SEC + FETCH_ALLOWANCE_SEC,
-      );
-      // Surfaced as the "up to ~X" upper bound (122s → ~2 min) until the live
-      // countdown takes over.
-      expect(container.querySelector('[data-testid="estimate-time"]')?.textContent).toBe("up to 2 min");
-    });
-
-    it("prices a resume-shaped preview (few creates, many unchanged) by its DELTA — unchanged skipped", async () => {
-      // The #1382-M3 fix: a resume with ~90 real creates and ~3000 content-unchanged
-      // items now SKIPS the 3000 (delta-restricted apply), so the seed prices only
-      // the 90 creates: 90*(NEW_ITEM_SEC + COVER_DOWNLOAD_SEC) + 45s allowance =
-      // 90.9s → ~2 min. The old walk model priced the 3000 unchanged at ~12 min;
-      // that overshoot is gone, and the small delta is the true, fast cost.
-      const container = await applyPreviewSummary({ new_count: 90, changed_count: 0, unchanged_count: 3000 });
-      expect(getSyncProgress().etaSeconds).toBeCloseTo(
-        90 * NEW_ITEM_SEC + 90 * COVER_DOWNLOAD_SEC + FETCH_ALLOWANCE_SEC,
-      );
-      const text = container.querySelector('[data-testid="estimate-time"]')?.textContent;
-      expect(text).toBe("up to 2 min");
-      // The 3000 unchanged items must NOT be priced — the walk-model overshoot is gone.
-      expect(text).not.toBe("up to 12 min");
     });
   });
 
@@ -3093,34 +2497,15 @@ describe("MainPage", () => {
         throw new Error("earlier listener boom");
       });
       try {
-        vi.mocked(backend.syncPreview).mockResolvedValue({
-          success: true,
-          summary: {
-            new_count: 5,
-            changed_count: 0,
-            unchanged_count: 0,
-            remove_count: 0,
-            disabled_platform_remove_count: 0,
-          },
-          new_names: ["a", "b"],
-          changed_names: [],
-          preview_id: "p-freeze",
-        });
         const { container } = render(<MainPage onNavigate={vi.fn()} />);
         await flushAsync();
 
-        // Sync → preview with changes → Apply Sync appears.
+        // The optimistic "Applying" frame an apply writes — the frame the frozen
+        // instance was stuck on. Written straight into the store, because the
+        // apply itself is the Sync page's press now and this test is about the
+        // store's notify loop, not about who pressed what.
         await act(async () => {
-          fireEvent.click(buttonByExactText(container, "Sync Library")!);
-          await Promise.resolve();
-          await Promise.resolve();
-        });
-        // Apply → handleApply sets syncing + the optimistic "Applying" frame (the
-        // frame the frozen instance was stuck on).
-        await act(async () => {
-          fireEvent.click(buttonByExactText(container, "Apply Sync")!);
-          await Promise.resolve();
-          await Promise.resolve();
+          setSyncProgress({ running: true, stage: "applying", message: "Applying changes...", etaSeconds: 1000 });
         });
         expect(container.querySelector('[data-testid="sync-stage"]')?.textContent).toContain("Applying shortcuts");
 
@@ -3269,6 +2654,133 @@ describe("MainPage", () => {
     });
   });
 
+  describe("the Sync button's four states (#1814)", () => {
+    function previewSummary(newCount: number): SyncPreview {
+      return {
+        success: true,
+        summary: {
+          new_count: newCount,
+          changed_count: 3,
+          unchanged_count: 0,
+          remove_count: 0,
+          disabled_platform_remove_count: 0,
+        },
+        new_names: [],
+        changed_names: [],
+        preview_id: "p-state",
+      };
+    }
+
+    it("no preview: Sync Library, which opens the page it will be shown on", async () => {
+      const onNavigate = vi.fn();
+      const { container } = render(<MainPage onNavigate={onNavigate} />);
+      await flushAsync();
+
+      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
+      await act(async () => {
+        fireEvent.click(buttonByExactText(container, "Sync Library")!);
+        await Promise.resolve();
+      });
+      expect(onNavigate).toHaveBeenCalledWith("sync");
+    });
+
+    it("a preview pending: Review changes with the new count, and NOTHING is recomputed", async () => {
+      const onNavigate = vi.fn();
+      adoptPreview(previewSummary(2));
+      const { container } = render(<MainPage onNavigate={onNavigate} />);
+      await flushAsync();
+
+      const review = buttonByExactText(container, "Review changes · 2 new");
+      expect(review).not.toBeNull();
+      await act(async () => {
+        fireEvent.click(review!);
+        await Promise.resolve();
+      });
+
+      expect(onNavigate).toHaveBeenCalledWith("sync");
+      expect(vi.mocked(backend.syncPreview)).not.toHaveBeenCalled();
+      expect(takePreviewRequest()).toBe(false);
+    });
+
+    it("a preview with no new games still reads Review changes rather than '0 new'", async () => {
+      adoptPreview(previewSummary(0));
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+
+      expect(buttonByExactText(container, "Review changes")).not.toBeNull();
+      expect(container.textContent).not.toContain("0 new");
+    });
+
+    it("Main never discards a preview — pressing Review changes leaves it standing on both sides", async () => {
+      adoptPreview(previewSummary(2));
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+
+      await act(async () => {
+        fireEvent.click(buttonByExactText(container, "Review changes · 2 new")!);
+        await Promise.resolve();
+      });
+
+      expect(vi.mocked(backend.syncCancelPreview)).not.toHaveBeenCalled();
+      expect(buttonByExactText(container, "Review changes · 2 new")).not.toBeNull();
+    });
+
+    it("a run in flight: progress and Cancel Sync, and no offer to start or review", async () => {
+      adoptPreview(previewSummary(2));
+      setSyncProgress({ running: true, stage: "applying", message: "GBA: 1/2", runId: "run-live" });
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.querySelector('[data-testid="sync-stage"]')).not.toBeNull();
+      expect(buttonByExactText(container, "Cancel Sync")).not.toBeNull();
+      expect(buttonByExactText(container, "Review changes · 2 new")).toBeNull();
+      expect(buttonByExactText(container, "Sync Library")).toBeNull();
+    });
+  });
+
+  describe("what moved off Main to the Sync page (#1814)", () => {
+    it("holds neither Skip Preview nor Force Full Sync any more", async () => {
+      // Both had a recorded run as their condition, so the state that used to
+      // show them is exactly what this renders.
+      vi.mocked(backend.getSyncStats).mockResolvedValue({
+        ...defaultStats(),
+        roms: 42,
+        last_sync: "2026-07-11T17:48:00",
+      });
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+
+      expect(buttonByExactText(container, "Force Full Sync")).toBeNull();
+      expect(container.textContent).not.toContain("Skip Preview");
+      expect(container.querySelector('[data-testid="toggle-input"]')).toBeNull();
+    });
+
+    it("shows no preview card — the change table is the Sync page's", async () => {
+      adoptPreview({
+        success: true,
+        summary: {
+          new_count: 2,
+          changed_count: 0,
+          unchanged_count: 0,
+          remove_count: 0,
+          disabled_platform_remove_count: 0,
+        },
+        new_names: [],
+        changed_names: [],
+        preview_id: "p-no-card",
+        pause_likely: true,
+      });
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.querySelector('[data-testid="sync-changes"]')).toBeNull();
+      expect(container.querySelector('[data-testid="sync-estimate"]')).toBeNull();
+      expect(container.querySelector('[data-testid="preview-expiry"]')).toBeNull();
+      expect(container.querySelector('[data-testid="budget-advisory"]')).toBeNull();
+      expect(buttonByExactText(container, "Apply Sync")).toBeNull();
+    });
+  });
+
   describe("sync button label (resume vs fresh)", () => {
     /** A resume situation: shortcuts on disk, and games the next run can pass
      *  over. Recorded launch commands are the ordinary carrier — every stopped
@@ -3390,446 +2902,88 @@ describe("MainPage", () => {
     });
   });
 
-  describe("Force Full Sync button visibility", () => {
-    it("shows Force Full Sync with only an interrupted last_attempt (no completed run)", async () => {
-      // The resume situation — where a forced fresh start is most likely wanted.
-      vi.mocked(backend.getSyncStats).mockResolvedValue({
-        ...defaultStats(),
-        last_sync: null,
-        last_attempt: { finished_at: "2026-06-01T17:48:00", status: "interrupted" },
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      expect(buttonByExactText(container, "Force Full Sync")).not.toBeNull();
-    });
+  describe("handleSync", () => {
+    // Working out a preview — the refusals, the cancel race, the reconcile
+    // before it — moved to the page that issues the call
+    // (src/components/SyncPage.test.tsx). What is left here is the press: it
+    // either starts the run itself, or hands the preview to that page.
 
-    it("hides Force Full Sync on a pristine install (no last_sync and no last_attempt)", async () => {
-      // defaultStats(): last_sync null, no last_attempt → nothing to clear.
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      expect(buttonByExactText(container, "Force Full Sync")).toBeNull();
-    });
-
-    it("keeps the Force button after a force-clear while the label drops back to 'Sync Library'", async () => {
-      // Two things a force-clear does, deliberately opposite, and they are easy to
-      // merge into one. The run HISTORY is preserved (#1318) so the Last-sync line
-      // and this button both stay put — the button is idempotent, pressing it
-      // again just re-clears what is already cleared. The SHORTCUTS survive too.
-      // What goes is both kinds of skip authority, which is what the resume offer
-      // reads, so the label must NOT survive the clear: the next run is a full one
-      // either way, and continuing to offer a resume promises progress that has
-      // just been discarded (#1789).
-      vi.mocked(backend.getSyncStats)
-        .mockResolvedValueOnce({
-          ...defaultStats(),
-          roms: 42,
-          last_sync: null,
-          last_attempt: { finished_at: "2026-06-01T17:48:00", status: "interrupted" },
-          resumable_games: 30,
-          has_completion_stamp: true,
-        })
-        .mockResolvedValue({
-          ...defaultStats(),
-          roms: 42,
-          last_sync: null,
-          last_attempt: { finished_at: "2026-06-01T17:48:00", status: "interrupted" },
-          resumable_games: 0,
-          has_completion_stamp: false,
-        });
-      vi.mocked(backend.clearSyncCache).mockResolvedValue({ success: true, message: "Cleared" });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      // Resume situation: label reads "Resume Sync", Force button shown.
-      expect(buttonByExactText(container, "Resume Sync")).not.toBeNull();
-      expect(buttonByExactText(container, "Force Full Sync")).not.toBeNull();
-
-      // Press Force Full Sync → clearSyncCache succeeds → the stats refresh reads
-      // the preserved history with both skip authorities gone.
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Force Full Sync")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      await flushAsync();
-
-      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
-      expect(buttonByExactText(container, "Resume Sync")).toBeNull();
-      expect(buttonByExactText(container, "Force Full Sync")).not.toBeNull();
-    });
-  });
-
-  // ===========================================================================
-  // F. Sync flow — handleSync (preview gate)
-  // ===========================================================================
-  describe("handleSync (preview gate)", () => {
-    it("with skipPreview=false: syncPreview success populates the preview UI with Apply/Cancel buttons", async () => {
-      vi.mocked(backend.syncPreview).mockResolvedValue({
-        success: true,
-        summary: {
-          new_count: 5,
-          changed_count: 0,
-          unchanged_count: 0,
-          remove_count: 0,
-          disabled_platform_remove_count: 0,
-        },
-        new_names: ["a", "b"],
-        changed_names: [],
-        preview_id: "preview-1",
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-
-      const sync = buttonByExactText(container, "Sync Library");
-      await act(async () => {
-        fireEvent.click(sync!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(buttonByExactText(container, "Apply Sync")).not.toBeNull();
-      expect(buttonByExactText(container, "Cancel")).not.toBeNull();
-    });
-
-    it("with skipPreview=false and zero changes: shows Dismiss button (no Apply)", async () => {
-      // Default syncPreview returns all zeros.
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(buttonByExactText(container, "Dismiss")).not.toBeNull();
-      expect(buttonByExactText(container, "Apply Sync")).toBeNull();
-    });
-
-    it("collection enabled but zero add/remove delta: Dismiss only, no Apply, 'up to date' (#1147)", async () => {
-      // collection_diff.has_changes is True whenever any collection is enabled
-      // (the backend pins it via an `or current` term so first-sync still
-      // applies), yet an empty added/removed delta means there is nothing to
-      // apply. The gate must key off the real add/remove delta so the button
-      // matches the "Everything is up to date." description.
-      vi.mocked(backend.syncPreview).mockResolvedValue({
-        success: true,
-        summary: {
-          new_count: 0,
-          changed_count: 0,
-          unchanged_count: 0,
-          remove_count: 0,
-          disabled_platform_remove_count: 0,
-          collection_diff: { has_changes: true, added: [], removed: [] },
-        },
-        new_names: [],
-        changed_names: [],
-        preview_id: "preview-1147",
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(buttonByExactText(container, "Dismiss")).not.toBeNull();
-      expect(buttonByExactText(container, "Apply Sync")).toBeNull();
-      const descs = Array.from(container.querySelectorAll('[data-testid="field-desc"]')).map((n) => n.textContent);
-      expect(descs).toContain("Everything is up to date.");
-    });
-
-    it("cover-only preview proceeds to Apply with the cover wording (#1386 flow gap)", async () => {
-      // Empty shortcut delta but pending cover refreshes: the flow must offer
-      // the same Apply/Cancel confirm as a non-empty preview — the cover
-      // refresh pass only runs inside the apply, so a "no changes" dead end
-      // strands the stale tiles forever (hardware-reproduced).
-      vi.mocked(backend.syncPreview).mockResolvedValue({
-        success: true,
-        summary: {
-          new_count: 0,
-          changed_count: 0,
-          unchanged_count: 4,
-          remove_count: 0,
-          disabled_platform_remove_count: 0,
-          cover_refresh_count: 2,
-        },
-        new_names: [],
-        changed_names: [],
-        preview_id: "preview-covers",
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(buttonByExactText(container, "Apply Sync")).not.toBeNull();
-      expect(buttonByExactText(container, "Cancel")).not.toBeNull();
-      expect(buttonByExactText(container, "Dismiss")).toBeNull();
-      expect(container.querySelector('[data-testid="sync-changes"]')?.textContent).toBe(
-        "No shortcut changes — 2 cover updates.",
-      );
-      // Same interaction shape as a non-empty preview: the run description rows render.
-      expect(container.querySelector('[data-testid="sync-estimate"]')).not.toBeNull();
-      expect(container.textContent).toContain("Progress is saved");
-      // Apply drives the same delta callable the shortcut path uses.
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Apply Sync")!);
-        await Promise.resolve();
-      });
-      expect(vi.mocked(backend.syncApplyDelta)).toHaveBeenCalledWith("preview-covers");
-    });
-
-    it("unstamped-platform preview proceeds to Apply with the re-stamp wording (#1416)", async () => {
-      // Empty shortcut delta but a platform lacking a completion stamp: the
-      // apply must still run once to re-stamp it and heal the lingering
-      // "interrupted" status, so the flow offers Apply/Cancel rather than the
-      // "no changes" dead end.
-      vi.mocked(backend.syncPreview).mockResolvedValue({
-        success: true,
-        summary: {
-          new_count: 0,
-          changed_count: 0,
-          unchanged_count: 4,
-          remove_count: 0,
-          disabled_platform_remove_count: 0,
-          cover_refresh_count: 0,
-          restamp_platform_count: 1,
-        },
-        new_names: [],
-        changed_names: [],
-        preview_id: "preview-restamp",
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(buttonByExactText(container, "Apply Sync")).not.toBeNull();
-      expect(buttonByExactText(container, "Cancel")).not.toBeNull();
-      expect(buttonByExactText(container, "Dismiss")).toBeNull();
-      expect(container.querySelector('[data-testid="sync-changes"]')?.textContent).toBe(
-        "No changes — finishing a previous sync.",
-      );
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Apply Sync")!);
-        await Promise.resolve();
-      });
-      expect(vi.mocked(backend.syncApplyDelta)).toHaveBeenCalledWith("preview-restamp");
-    });
-
-    it("zero changes with explicit zero covers keeps the exact Dismiss-only shape (regression pin)", async () => {
-      vi.mocked(backend.syncPreview).mockResolvedValue({
-        success: true,
-        summary: {
-          new_count: 0,
-          changed_count: 0,
-          unchanged_count: 4,
-          remove_count: 0,
-          disabled_platform_remove_count: 0,
-          cover_refresh_count: 0,
-          sync_platform_count: 5,
-        },
-        new_names: [],
-        changed_names: [],
-        preview_id: "preview-zero-covers",
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      // Byte-identical to today's empty-delta preview: unchanged message,
-      // Dismiss only, and none of the run-description rows.
-      const descs = Array.from(container.querySelectorAll('[data-testid="field-desc"]')).map((n) => n.textContent);
-      expect(descs).toContain("Everything is up to date.");
-      expect(buttonByExactText(container, "Dismiss")).not.toBeNull();
-      expect(buttonByExactText(container, "Apply Sync")).toBeNull();
-      expect(container.querySelector('[data-testid="sync-scope"]')).toBeNull();
-      expect(container.querySelector('[data-testid="sync-estimate"]')).toBeNull();
-      expect(container.textContent).not.toContain("Progress is saved");
-    });
-
-    it("syncPreview success=false surfaces result.message into status field", async () => {
-      vi.mocked(backend.syncPreview).mockResolvedValue({
-        success: false,
-        message: "preview broke",
-        summary: {
-          new_count: 0,
-          changed_count: 0,
-          unchanged_count: 0,
-          remove_count: 0,
-          disabled_platform_remove_count: 0,
-        },
-        new_names: [],
-        changed_names: [],
-        preview_id: "",
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(fieldLabels(container)).toContain("preview broke");
-    });
-
-    it("syncPreview success=false with empty message falls back to 'Preview failed'", async () => {
-      vi.mocked(backend.syncPreview).mockResolvedValue({
-        success: false,
-        message: "",
-        summary: {
-          new_count: 0,
-          changed_count: 0,
-          unchanged_count: 0,
-          remove_count: 0,
-          disabled_platform_remove_count: 0,
-        },
-        new_names: [],
-        changed_names: [],
-        preview_id: "",
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(fieldLabels(container)).toContain("Preview failed");
-    });
-
-    it("syncPreview rejection surfaces 'Failed to start sync' status", async () => {
-      vi.mocked(backend.syncPreview).mockRejectedValue(new Error("net"));
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(fieldLabels(container)).toContain("Failed to start sync");
-    });
-
-    it("aborts to idle (no phantom 'Apply Sync') when a cancel landed during syncPreview (#1202 RC-CANCEL-PREVIEW)", async () => {
-      // syncPreview resolves SUCCESS with changes (normally → Apply Sync), but a
-      // Cancel landed in-flight so isCancelRequested() is true at the
-      // post-resolve re-check. The preview must NOT show; the UI returns to idle
-      // and the stale flag is cleared so the next sync isn't pre-cancelled.
-      vi.mocked(syncManager.isCancelRequested).mockReturnValue(true);
-      vi.mocked(backend.syncPreview).mockResolvedValue({
-        success: true,
-        summary: {
-          new_count: 5,
-          changed_count: 0,
-          unchanged_count: 0,
-          remove_count: 0,
-          disabled_platform_remove_count: 0,
-        },
-        new_names: ["a", "b"],
-        changed_names: [],
-        preview_id: "preview-cancel",
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      // No phantom preview — Apply Sync absent, back to idle (Sync Library back).
-      expect(buttonByExactText(container, "Apply Sync")).toBeNull();
-      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
-      // Non-vacuous: the abort surfaced the "Sync cancelled" status — only the
-      // RC-CANCEL-PREVIEW branch produces idle + that status after a SUCCESS
-      // preview, and the stale cancel flag was cleared for the next run.
-      expect(fieldLabels(container)).toContain("Sync cancelled");
-      expect(vi.mocked(syncManager.resetSyncCancel)).toHaveBeenCalled();
-    });
-
-    it("with skipPreview=true: startSync success bypasses preview entirely", async () => {
-      vi.mocked(backend.startSync).mockResolvedValue({ success: true, message: "" });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-
-      // Toggle Skip Preview ON.
-      const toggle = container.querySelector('[data-testid="toggle-input"]') as HTMLInputElement | null;
-      expect(toggle).not.toBeNull();
-      fireEvent.click(toggle!);
+    it("with skip preview off: asks the Sync page for a preview and opens it, computing none itself", async () => {
+      const onNavigate = vi.fn();
+      const { container } = render(<MainPage onNavigate={onNavigate} />);
       await flushAsync();
 
       await act(async () => {
         fireEvent.click(buttonByExactText(container, "Sync Library")!);
         await Promise.resolve();
-        await Promise.resolve();
       });
-      expect(vi.mocked(backend.startSync)).toHaveBeenCalled();
+
+      expect(onNavigate).toHaveBeenCalledWith("sync");
+      expect(takePreviewRequest()).toBe(true);
+      // Nothing is computed here: a refusal would be reported to an instance the
+      // navigation is about to unmount.
       expect(vi.mocked(backend.syncPreview)).not.toHaveBeenCalled();
-      // Preview did not appear — Cancel Sync (in-flight) replaces Sync Library.
-      expect(buttonByExactText(container, "Apply Sync")).toBeNull();
+      expect(getSyncProgress().running).toBe(false);
     });
 
-    it("reconciles stale shortcuts BEFORE startSync (skipPreview path) (#1046)", async () => {
-      const order: string[] = [];
-      vi.mocked(syncManager.reconcileStaleShortcuts).mockImplementation(async () => {
-        order.push("reconcile");
-      });
-      vi.mocked(backend.startSync).mockImplementation(async () => {
-        order.push("startSync");
-        return { success: true, message: "" };
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+    it("with skip preview on: starts the run and stays, showing it as it does today", async () => {
+      const onNavigate = vi.fn();
+      vi.mocked(backend.getSettings).mockResolvedValue(settingsSkippingPreview());
+      const { container } = render(<MainPage onNavigate={onNavigate} />);
       await flushAsync();
-      const toggle = container.querySelector('[data-testid="toggle-input"]') as HTMLInputElement | null;
-      fireEvent.click(toggle!);
-      await flushAsync();
+
       await act(async () => {
         fireEvent.click(buttonByExactText(container, "Sync Library")!);
         await Promise.resolve();
         await Promise.resolve();
       });
-      // Reconcile must unbind dead bindings before the work queue is built.
-      expect(order).toEqual(["reconcile", "startSync"]);
+
+      expect(vi.mocked(backend.startSync)).toHaveBeenCalled();
+      expect(onNavigate).not.toHaveBeenCalled();
+      expect(takePreviewRequest()).toBe(false);
+      expect(buttonByExactText(container, "Cancel Sync")).not.toBeNull();
     });
 
-    it("awaits reconcile to COMPLETION before startSync so the delta classify trusts a reconciled registry (#1383)", async () => {
+    it("reconciles stale shortcuts BEFORE startSync, and awaits it to completion (#1046, #1383)", async () => {
+      // The delta classify has to run against a reconciled registry, so the
+      // reconcile is awaited rather than merely started.
       const order: string[] = [];
-      // The delta-restricted apply classifies against the bound registry and skips
-      // content-unchanged shortcuts. A shortcut the user deleted in Steam leaves a
-      // dead binding that would be skipped forever unless reconcile unbinds it
-      // FIRST — so reconcile must COMPLETE before the backend fetch/classify starts.
-      // The marker is pushed after internal awaits, so a non-awaited reconcile would
-      // let startSync run first and fail this ordering (proving completion, not just
-      // start-order).
-      vi.mocked(syncManager.reconcileStaleShortcuts).mockImplementation(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
-        order.push("reconcile-done");
-      });
+      let finishReconcile: () => void = () => {};
+      vi.mocked(syncManager.reconcileStaleShortcuts).mockImplementation(
+        () =>
+          new Promise<void>((res) => {
+            order.push("reconcile:start");
+            finishReconcile = () => {
+              order.push("reconcile:done");
+              res();
+            };
+          }),
+      );
       vi.mocked(backend.startSync).mockImplementation(async () => {
         order.push("startSync");
         return { success: true, message: "" };
       });
+      vi.mocked(backend.getSettings).mockResolvedValue(settingsSkippingPreview());
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
-      const toggle = container.querySelector('[data-testid="toggle-input"]') as HTMLInputElement | null;
-      fireEvent.click(toggle!);
-      await flushAsync();
+
       await act(async () => {
         fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await flushAsync();
+        await Promise.resolve();
       });
-      expect(order).toEqual(["reconcile-done", "startSync"]);
+      expect(order).toEqual(["reconcile:start"]);
+
+      await act(async () => {
+        finishReconcile();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(order).toEqual(["reconcile:start", "reconcile:done", "startSync"]);
     });
 
     it("resets the stale cancel flag BEFORE reconcile/startSync (#1198/#1202)", async () => {
       const order: string[] = [];
-      vi.mocked(syncManager.resetSyncCancel).mockImplementation(() => {
-        order.push("resetSyncCancel");
-      });
+      vi.mocked(syncManager.resetSyncCancel).mockImplementation(() => order.push("reset"));
       vi.mocked(syncManager.reconcileStaleShortcuts).mockImplementation(async () => {
         order.push("reconcile");
       });
@@ -3837,133 +2991,58 @@ describe("MainPage", () => {
         order.push("startSync");
         return { success: true, message: "" };
       });
+      vi.mocked(backend.getSettings).mockResolvedValue(settingsSkippingPreview());
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
-      const toggle = container.querySelector('[data-testid="toggle-input"]') as HTMLInputElement | null;
-      fireEvent.click(toggle!);
-      await flushAsync();
+
       await act(async () => {
         fireEvent.click(buttonByExactText(container, "Sync Library")!);
         await Promise.resolve();
         await Promise.resolve();
       });
-      // The stale cancel flag must be cleared before the run starts, so a fresh
-      // sync never begins pre-cancelled.
-      expect(order).toEqual(["resetSyncCancel", "reconcile", "startSync"]);
+
+      expect(order).toEqual(["reset", "reconcile", "startSync"]);
     });
 
-    it("reconciles stale shortcuts BEFORE syncPreview (preview path) (#1046)", async () => {
-      const order: string[] = [];
-      vi.mocked(syncManager.reconcileStaleShortcuts).mockImplementation(async () => {
-        order.push("reconcile");
-      });
-      vi.mocked(backend.syncPreview).mockImplementation(async () => {
-        order.push("syncPreview");
-        return {
-          success: true,
-          summary: {
-            new_count: 0,
-            changed_count: 0,
-            unchanged_count: 0,
-            remove_count: 0,
-            disabled_platform_remove_count: 0,
-          },
-          new_names: [],
-          changed_names: [],
-          preview_id: "p-order",
-        };
-      });
+    it("with skip preview on: startSync success=false surfaces result.message and returns to idle", async () => {
+      vi.mocked(backend.getSettings).mockResolvedValue(settingsSkippingPreview());
+      vi.mocked(backend.startSync).mockResolvedValue({ success: false, message: "Sync already in progress" });
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
+
       await act(async () => {
         fireEvent.click(buttonByExactText(container, "Sync Library")!);
         await Promise.resolve();
         await Promise.resolve();
       });
-      expect(order).toEqual(["reconcile", "syncPreview"]);
+
+      expect(container.querySelector('[data-testid="sync-status"]')?.textContent).toBe("Sync already in progress");
+      expect(getSyncProgress().running).toBe(false);
+      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
     });
 
-    it("with skipPreview=true: startSync success=false surfaces result.message", async () => {
-      vi.mocked(backend.startSync).mockResolvedValue({
-        success: false,
-        message: "could not start",
-      });
+    it("with skip preview on: a startSync rejection surfaces 'Failed to start sync'", async () => {
+      vi.mocked(backend.getSettings).mockResolvedValue(settingsSkippingPreview());
+      vi.mocked(backend.startSync).mockRejectedValue(new Error("boom"));
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
-      const toggle = container.querySelector('[data-testid="toggle-input"]') as HTMLInputElement | null;
-      fireEvent.click(toggle!);
-      await flushAsync();
+
       await act(async () => {
         fireEvent.click(buttonByExactText(container, "Sync Library")!);
         await Promise.resolve();
         await Promise.resolve();
       });
-      expect(fieldLabels(container)).toContain("could not start");
+
+      expect(container.querySelector('[data-testid="sync-status"]')?.textContent).toBe("Failed to start sync");
+      expect(getSyncProgress().running).toBe(false);
     });
 
     it("the panel's own retraction does not blind it to the run's terminal frame", async () => {
-      // The preview run is ended twice over: by its backend terminal frame and by
-      // the panel retracting the optimistic start once the callable answers. The
-      // two arrive over the same socket in that order, but the panel must not
-      // depend on it — retracting a run is not forgetting which run it was, so a
-      // terminal frame landing after the retraction is still that run's ending.
-      const preview = deferred<SyncPreview>();
-      vi.mocked(backend.syncPreview).mockReturnValue(preview.promise);
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-      });
-      const before = vi.mocked(backend.getSyncStats).mock.calls.length;
-      // The callable answers FIRST — the panel retracts its own optimistic run.
-      await act(async () => {
-        preview.resolve({
-          success: true,
-          summary: {
-            new_count: 0,
-            changed_count: 0,
-            unchanged_count: 0,
-            remove_count: 0,
-            disabled_platform_remove_count: 0,
-          },
-          new_names: [],
-          changed_names: [],
-          preview_id: "p1",
-        });
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      // ...and only then does the preview run's own terminal frame arrive.
-      await act(async () => {
-        setSyncProgress({ running: false, stage: "done", message: "Preview ready" });
-        await Promise.resolve();
-      });
-      // Treated as an ending: the change-driven stats re-read is what an ending
-      // does here (the status line itself is hidden behind the preview it belongs
-      // to), and a swallowed frame would issue none.
-      expect(vi.mocked(backend.getSyncStats).mock.calls.length - before).toBe(1);
-    });
-  });
-
-  // ===========================================================================
-  // G. Sync flow — handleApply (Apply Sync click)
-  // ===========================================================================
-  describe("handleApply", () => {
-    async function openPreviewWithChanges(): Promise<HTMLElement> {
-      vi.mocked(backend.syncPreview).mockResolvedValue({
-        success: true,
-        summary: {
-          new_count: 2,
-          changed_count: 0,
-          unchanged_count: 0,
-          remove_count: 0,
-          disabled_platform_remove_count: 0,
-        },
-        new_names: ["a", "b"],
-        changed_names: [],
-        preview_id: "preview-X",
-      });
+      // The optimistic start carries no run id, so the retraction that follows a
+      // refused start must not be taken for the run ending — the next real run's
+      // terminal frame still has to announce itself.
+      vi.mocked(backend.getSettings).mockResolvedValue(settingsSkippingPreview());
+      vi.mocked(backend.startSync).mockResolvedValue({ success: false, message: "Refused" });
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
       await act(async () => {
@@ -3971,73 +3050,25 @@ describe("MainPage", () => {
         await Promise.resolve();
         await Promise.resolve();
       });
-      return container;
-    }
-
-    it("clicking Apply Sync calls syncApplyDelta(preview_id)", async () => {
-      vi.mocked(backend.syncApplyDelta).mockResolvedValue({ success: true, message: "" });
-      const container = await openPreviewWithChanges();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Apply Sync")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(vi.mocked(backend.syncApplyDelta)).toHaveBeenCalledWith("preview-X");
-    });
-
-    it("syncApplyDelta success=false surfaces result.message", async () => {
-      vi.mocked(backend.syncApplyDelta).mockResolvedValue({
-        success: false,
-        message: "apply error",
-      });
-      const container = await openPreviewWithChanges();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Apply Sync")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(fieldLabels(container)).toContain("apply error");
-    });
-
-    it("syncApplyDelta rejection surfaces 'Failed to apply sync'", async () => {
-      vi.mocked(backend.syncApplyDelta).mockRejectedValue(new Error("nope"));
-      const container = await openPreviewWithChanges();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Apply Sync")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(fieldLabels(container)).toContain("Failed to apply sync");
-    });
-
-    it("the preview's own status line does not ride into the apply run", async () => {
-      // The preview run ends with a terminal frame of its own, which arms the
-      // "Preview ready" line for 15s — invisible only while the preview it belongs
-      // to is on screen. Apply replaces that screen with the run's progress rows.
-      vi.mocked(backend.syncApplyDelta).mockResolvedValue({ success: true, message: "" });
-      const container = await openPreviewWithChanges();
-      await act(async () => {
-        setSyncProgress({ running: false, stage: "done", message: "Preview ready" });
-        await Promise.resolve();
-      });
+      expect(container.querySelector('[data-testid="sync-status"]')?.textContent).toBe("Refused");
 
       await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Apply Sync")!);
-        await Promise.resolve();
+        setSyncProgress({ running: true, stage: "applying", message: "Working", runId: "run-real" });
+      });
+      await act(async () => {
+        setSyncProgress({ running: false, stage: "done", message: "Sync complete: 4 games", runId: "run-real" });
         await Promise.resolve();
       });
 
-      expect(buttonByExactText(container, "Cancel Sync")).not.toBeNull();
-      expect(fieldLabels(container)).not.toContain("Preview ready");
+      expect(container.querySelector('[data-testid="sync-status"]')?.textContent).toBe("Sync complete: 4 games");
     });
   });
 
-  // ===========================================================================
-  // G2. A preview outlives the panel that computed it
-  // ===========================================================================
   describe("pending preview restored on mount", () => {
-    /** A preview with a real delta, so the card offers Apply Sync. */
-    function heldPreview(overrides: Partial<SyncPreview> = {}): SyncPreview {
+    // The card, its countdown and its Apply moved to the Sync page with the
+    // preview (src/components/SyncPage.test.tsx). What Main reads the store for
+    // is its BUTTON: a preview still worth reviewing is a review, not a start.
+    function previewWithChanges(id: string, expiresAt?: number): SyncPreview {
       return {
         success: true,
         summary: {
@@ -4049,32 +3080,21 @@ describe("MainPage", () => {
         },
         new_names: ["a", "b"],
         changed_names: [],
-        preview_id: "preview-held",
-        ...overrides,
+        preview_id: id,
+        ...(expiresAt === undefined ? {} : { expires_at: expiresAt }),
       };
     }
 
-    function changesText(container: HTMLElement): string {
-      return container.querySelector('[data-testid="sync-changes"]')?.textContent ?? "";
-    }
-
-    function expiryText(container: HTMLElement): string | null {
-      return container.querySelector('[data-testid="preview-expiry"]')?.textContent ?? null;
-    }
-
-    it("shows the card again on mount and applies the preview the backend still holds", async () => {
-      vi.mocked(backend.getPendingPreview).mockResolvedValue({ success: true, preview: heldPreview() });
-      vi.mocked(backend.syncApplyDelta).mockResolvedValue({ success: true, message: "" });
+    it("reads the held preview back and offers a review of it", async () => {
+      vi.mocked(backend.getPendingPreview).mockResolvedValue({
+        success: true,
+        preview: previewWithChanges("still-held"),
+      });
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
 
-      expect(changesText(container)).toContain("Games: 2 new");
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Apply Sync")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(vi.mocked(backend.syncApplyDelta)).toHaveBeenCalledWith("preview-held");
+      expect(buttonByExactText(container, "Review changes · 2 new")).not.toBeNull();
+      expect(buttonByExactText(container, "Sync Library")).toBeNull();
     });
 
     it("nothing pending leaves the idle page untouched", async () => {
@@ -4083,369 +3103,97 @@ describe("MainPage", () => {
       await flushAsync();
 
       expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
-      expect(buttonByExactText(container, "Apply Sync")).toBeNull();
     });
 
     it("logs the failure when getPendingPreview rejects, and the idle page stands", async () => {
+      const logSpy = vi.spyOn(backend, "logError");
       vi.mocked(backend.getPendingPreview).mockRejectedValue(new Error("boom"));
-      const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
 
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to query pending preview"));
       expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
-      logSpy.mockRestore();
     });
 
-    it("loses to a preview the user produced while the read was in flight", async () => {
-      // The answer describes the world as it was when the read was issued; the
-      // preview the user is looking at was computed after it.
-      const held = deferred<{ success: boolean; preview: SyncPreview | null }>();
-      vi.mocked(backend.getPendingPreview).mockReturnValue(held.promise);
-      vi.mocked(backend.syncPreview).mockResolvedValue(heldPreview({ preview_id: "preview-fresh" }));
-      vi.mocked(backend.syncApplyDelta).mockResolvedValue({ success: true, message: "" });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-
-      await act(async () => {
-        held.resolve({ success: true, preview: heldPreview({ preview_id: "preview-held" }) });
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Apply Sync")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(vi.mocked(backend.syncApplyDelta)).toHaveBeenCalledWith("preview-fresh");
-    });
-
-    it("waits for a run that started while the read was in flight, then shows", async () => {
-      const held = deferred<{ success: boolean; preview: SyncPreview | null }>();
-      vi.mocked(backend.getPendingPreview).mockReturnValue(held.promise);
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-
-      await act(async () => {
-        setSyncProgress({ running: true, stage: "fetching", message: "Fetching library...", runId: "run-live" });
-        await Promise.resolve();
-      });
-      await act(async () => {
-        held.resolve({ success: true, preview: heldPreview() });
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-
-      // The run owns the panel — no card over its progress rows.
-      expect(buttonByExactText(container, "Apply Sync")).toBeNull();
-      expect(buttonByExactText(container, "Cancel Sync")).not.toBeNull();
-
-      // But it is held, not dropped: the card is there the moment the run ends.
-      await act(async () => {
-        setSyncProgress({
-          running: false,
-          stage: "done",
-          current: 0,
-          total: 0,
-          message: "Sync complete",
-          runId: "run-live",
-        });
-        await Promise.resolve();
-      });
-      expect(buttonByExactText(container, "Apply Sync")).not.toBeNull();
-    });
-
-    it("counts down the time left and advances as the clock runs", async () => {
-      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+    it("an expired preview counts as none, and the timer that says so fires at the deadline", async () => {
+      // `Date` is faked alongside the timer: the deadline is absolute wall-clock
+      // seconds, so advancing the timer without advancing the clock would fire
+      // the callback into a world where the preview is still good.
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
       try {
-        vi.setSystemTime(0);
+        const expiresAt = Math.floor(Date.now() / 1000) + 120;
         vi.mocked(backend.getPendingPreview).mockResolvedValue({
           success: true,
-          preview: heldPreview({ expires_at: 1800 }),
+          preview: previewWithChanges("about-to-expire", expiresAt),
         });
         const { container } = render(<MainPage onNavigate={vi.fn()} />);
-        await flushAsync();
-
-        expect(expiryText(container)).toBe("Expires in 30 min");
         await act(async () => {
-          await vi.advanceTimersByTimeAsync(60_000);
-        });
-        expect(expiryText(container)).toBe("Expires in 29 min");
-        // Floored, so the readout never promises more time than remains.
-        await act(async () => {
-          await vi.advanceTimersByTimeAsync(1000);
-        });
-        expect(expiryText(container)).toBe("Expires in 28 min");
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
-    it("at zero the card stays, says it expired, and drops Apply Sync for Dismiss", async () => {
-      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
-      try {
-        vi.setSystemTime(0);
-        // A five-second deadline: the same expiry the 30-minute one reaches,
-        // without ticking the interval 1800 times to get there.
-        vi.mocked(backend.getPendingPreview).mockResolvedValue({
-          success: true,
-          preview: heldPreview({ expires_at: 5 }),
-        });
-        const { container } = render(<MainPage onNavigate={vi.fn()} />);
-        await flushAsync();
-        expect(expiryText(container)).toBe("Expires in < 1 min");
-
-        await act(async () => {
-          await vi.advanceTimersByTimeAsync(6000);
-        });
-
-        expect(expiryText(container)).toBe("Expired — run the preview again");
-        // Nothing disappeared or moved on its own: the change list is still there
-        // and only the user's Dismiss takes the card away.
-        expect(changesText(container)).toContain("Games: 2 new");
-        expect(buttonByExactText(container, "Apply Sync")).toBeNull();
-        expect(buttonByExactText(container, "Dismiss")).not.toBeNull();
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
-    it("an expired preview cannot be applied by a press that beat the tick", async () => {
-      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
-      try {
-        vi.setSystemTime(0);
-        vi.mocked(backend.getPendingPreview).mockResolvedValue({
-          success: true,
-          preview: heldPreview({ expires_at: 5 }),
-        });
-        const { container } = render(<MainPage onNavigate={vi.fn()} />);
-        await flushAsync();
-        const apply = buttonByExactText(container, "Apply Sync")!;
-
-        // The clock passes the deadline without the interval having ticked, so
-        // the button the user presses is one the render still believes in.
-        vi.setSystemTime(6000);
-        await act(async () => {
-          fireEvent.click(apply);
+          await Promise.resolve();
           await Promise.resolve();
           await Promise.resolve();
         });
-
-        expect(vi.mocked(backend.syncApplyDelta)).not.toHaveBeenCalled();
-        expect(expiryText(container)).toBe("Expired — run the preview again");
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
-    it("shows no countdown at all when the backend sends no deadline", async () => {
-      vi.mocked(backend.getPendingPreview).mockResolvedValue({ success: true, preview: heldPreview() });
-      vi.mocked(backend.syncApplyDelta).mockResolvedValue({ success: true, message: "" });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-
-      expect(expiryText(container)).toBeNull();
-      expect(buttonByExactText(container, "Apply Sync")).not.toBeNull();
-    });
-
-    it("loses to a preview the user dismissed while the read was in flight", async () => {
-      // A dismissal told the backend to discard the snapshot, so restoring it
-      // would put back a card whose Apply can only answer stale_preview.
-      const held = deferred<{ success: boolean; preview: SyncPreview | null }>();
-      vi.mocked(backend.getPendingPreview).mockReturnValue(held.promise);
-      vi.mocked(backend.syncPreview).mockResolvedValue(heldPreview({ preview_id: "preview-fresh" }));
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Cancel")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(vi.mocked(backend.syncCancelPreview)).toHaveBeenCalled();
-
-      await act(async () => {
-        held.resolve({ success: true, preview: heldPreview({ preview_id: "preview-held" }) });
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-
-      // Back to the idle page — no card came back.
-      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
-      expect(buttonByExactText(container, "Apply Sync")).toBeNull();
-      expect(changesText(container)).toBe("");
-    });
-
-    it("loses to a preview the user superseded with a Sync press whose own preview failed", async () => {
-      // The Sync press answers the preview question too: the backend discards
-      // the staged snapshot when this run's preview fails, and the retracted
-      // running flag leaves the late answer nothing else to notice that by — so
-      // restoring it would put back a card whose Apply can only answer
-      // stale_preview.
-      const held = deferred<{ success: boolean; preview: SyncPreview | null }>();
-      vi.mocked(backend.getPendingPreview).mockReturnValue(held.promise);
-      vi.mocked(backend.syncPreview).mockResolvedValue(
-        heldPreview({ success: false, message: "Cannot reach RomM server" }),
-      );
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      // The failed preview retracted the optimistic run, so the panel is idle
-      // again — the state the late answer arrives into.
-      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
-
-      await act(async () => {
-        held.resolve({ success: true, preview: heldPreview({ preview_id: "preview-held" }) });
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-
-      expect(buttonByExactText(container, "Apply Sync")).toBeNull();
-      expect(changesText(container)).toBe("");
-    });
-
-    it("shows no countdown on a preview with nothing to apply, and arms no timer for it", async () => {
-      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
-      try {
-        vi.setSystemTime(0);
-        const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
-        vi.mocked(backend.getPendingPreview).mockResolvedValue({
-          success: true,
-          preview: heldPreview({
-            summary: {
-              new_count: 0,
-              changed_count: 0,
-              unchanged_count: 4,
-              remove_count: 0,
-              disabled_platform_remove_count: 0,
-            },
-            new_names: [],
-            expires_at: 1800,
-          }),
-        });
-        const { container } = render(<MainPage onNavigate={vi.fn()} />);
-        await flushAsync();
-
-        // Nothing to apply, so there is no deadline worth counting down to —
-        // only the Dismiss the empty card already had.
-        expect(changesText(container)).toContain("Everything is up to date.");
-        expect(expiryText(container)).toBeNull();
-        expect(buttonByExactText(container, "Dismiss")).not.toBeNull();
-        // And nothing ticks for it: the panel's only 1 Hz timer is the
-        // countdown's, so an armed one would re-render the whole page every
-        // second with nothing on screen that could change.
-        expect(setIntervalSpy.mock.calls.filter((call) => call[1] === 1000)).toEqual([]);
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
-    it("tears the countdown timer down when the preview goes away, and on unmount", async () => {
-      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
-      try {
-        vi.setSystemTime(0);
-        const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
-        const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
-        vi.mocked(backend.getPendingPreview).mockResolvedValue({
-          success: true,
-          preview: heldPreview({ expires_at: 1800 }),
-        });
-        const { container, unmount } = render(<MainPage onNavigate={vi.fn()} />);
-        await flushAsync();
-        expect(expiryText(container)).toBe("Expires in 30 min");
-
-        // The panel's only 1 Hz timer is the countdown's.
-        const armed = setIntervalSpy.mock.calls.findIndex((call) => call[1] === 1000);
-        expect(armed).toBeGreaterThanOrEqual(0);
-        const countdownTimer = setIntervalSpy.mock.results[armed]?.value;
+        expect(buttonByExactText(container, "Review changes · 2 new")).not.toBeNull();
 
         await act(async () => {
-          fireEvent.click(buttonByExactText(container, "Cancel")!);
-          await Promise.resolve();
-          await Promise.resolve();
+          await vi.advanceTimersByTimeAsync(120_000);
         });
-        expect(clearIntervalSpy).toHaveBeenCalledWith(countdownTimer);
 
-        // …and a card still on screen at unmount leaves nothing ticking either.
-        clearIntervalSpy.mockClear();
-        vi.mocked(backend.getPendingPreview).mockResolvedValue({
-          success: true,
-          preview: heldPreview({ expires_at: 1800 }),
-        });
-        const second = render(<MainPage onNavigate={vi.fn()} />);
-        await flushAsync();
-        expect(expiryText(second.container)).toBe("Expires in 30 min");
-
-        second.unmount();
-        unmount();
-        expect(clearIntervalSpy).toHaveBeenCalled();
-        expect(vi.getTimerCount()).toBe(0);
+        // The preview is NOT discarded — only Main's offer to review it goes.
+        expect(buttonByExactText(container, "Review changes · 2 new")).toBeNull();
+        expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
+        expect(vi.mocked(backend.syncCancelPreview)).not.toHaveBeenCalled();
       } finally {
         vi.useRealTimers();
       }
     });
-  });
 
-  // ===========================================================================
-  // H. Sync flow — handleDismiss (Cancel/Dismiss inside preview)
-  // ===========================================================================
-  describe("handleDismiss", () => {
-    it("Dismiss in zero-change preview calls syncCancelPreview and returns to default UI", async () => {
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      // Zero-change preview → Dismiss visible
-      const dismiss = buttonByExactText(container, "Dismiss");
-      expect(dismiss).not.toBeNull();
-      await act(async () => {
-        fireEvent.click(dismiss!);
-        await Promise.resolve();
-      });
-      expect(vi.mocked(backend.syncCancelPreview)).toHaveBeenCalled();
-      // Back to default — Sync Library button visible again
-      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
+    it("a preview the backend sent no deadline for never stops being reviewable", async () => {
+      // An older backend sends no `expires_at`. There is nothing to count down
+      // to, so the offer stands however long the panel is left open — the same
+      // behaviour the card had before deadlines existed.
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      try {
+        vi.mocked(backend.getPendingPreview).mockResolvedValue({
+          success: true,
+          preview: previewWithChanges("no-deadline"),
+        });
+        const { container } = render(<MainPage onNavigate={vi.fn()} />);
+        await act(async () => {
+          await Promise.resolve();
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        expect(buttonByExactText(container, "Review changes · 2 new")).not.toBeNull();
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(60 * 60_000);
+        });
+
+        expect(buttonByExactText(container, "Review changes · 2 new")).not.toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
-    it("syncCancelPreview rejection is silently swallowed (no crash, returns to default UI)", async () => {
-      vi.mocked(backend.syncCancelPreview).mockRejectedValue(new Error("net"));
+    it("loses to a preview the user answered on the Sync page while the read was in flight", async () => {
+      // The ordering rule the store owns, seen from Main: a read issued before
+      // the answer cannot put the offer back after it.
+      const read = deferred<{ success: boolean; preview: SyncPreview | null }>();
+      vi.mocked(backend.getPendingPreview).mockReturnValue(read.promise);
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
+
+      act(() => clearPendingPreview());
       await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
+        read.resolve({ success: true, preview: previewWithChanges("stale-read") });
         await Promise.resolve();
       });
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Dismiss")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      // Component still rendered normally + back to default UI.
+
+      expect(buttonByExactText(container, "Review changes · 2 new")).toBeNull();
       expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
     });
   });
 
-  // ===========================================================================
-  // I. Sync flow — handleCancel (in-flight Cancel Sync click)
-  // ===========================================================================
   describe("handleCancel", () => {
     it("clicking 'Cancel Sync' requests cancel, cancels the active run, and disarms to 'Cancelling…' (#1202)", async () => {
       // Pre-arm an in-flight sync via the backend-authoritative mount query. The
@@ -4643,103 +3391,10 @@ describe("MainPage", () => {
       expect(buttonByExactText(container, "Sync Library")).toBeNull();
       expect(buttonByExactText(container, "Cancel Sync")).not.toBeNull();
     });
-
-    it("when a preview is showing: clicking Cancel (non-zero preview) routes through handleDismiss", async () => {
-      vi.mocked(backend.syncPreview).mockResolvedValue({
-        success: true,
-        summary: {
-          new_count: 1,
-          changed_count: 0,
-          unchanged_count: 0,
-          remove_count: 0,
-          disabled_platform_remove_count: 0,
-        },
-        new_names: ["x"],
-        changed_names: [],
-        preview_id: "p3",
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      // Now click the Cancel button (under Apply Sync).
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Cancel")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(vi.mocked(backend.syncCancelPreview)).toHaveBeenCalled();
-      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
-    });
   });
 
   // ===========================================================================
   // J. handleClearCache — Force Full Sync flow
-  // ===========================================================================
-  describe("handleClearCache (Force Full Sync)", () => {
-    it("renders the Force Full Sync button when stats.last_sync is set", async () => {
-      vi.mocked(backend.getSyncStats).mockResolvedValue({
-        ...defaultStats(),
-        last_sync: new Date(Date.now() - 30_000).toISOString(),
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      expect(buttonByExactText(container, "Force Full Sync")).not.toBeNull();
-    });
-
-    it("hides the Force Full Sync button when stats.last_sync is null", async () => {
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      expect(buttonByExactText(container, "Force Full Sync")).toBeNull();
-    });
-
-    it("clicking Force Full Sync calls clearSyncCache and surfaces result.message", async () => {
-      vi.mocked(backend.getSyncStats).mockResolvedValue({
-        ...defaultStats(),
-        last_sync: new Date(Date.now() - 30_000).toISOString(),
-      });
-      vi.mocked(backend.clearSyncCache).mockResolvedValue({
-        success: true,
-        message: "Cache cleared",
-      });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Force Full Sync")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(vi.mocked(backend.clearSyncCache)).toHaveBeenCalled();
-      expect(fieldLabels(container)).toContain("Cache cleared");
-    });
-
-    it("clearSyncCache rejection surfaces 'Failed to clear sync cache' (neutral, not green)", async () => {
-      // Non-vacuous catch coverage: the rejection routes through the catch's
-      // showTransientStatus, so both the message AND its neutral tone (no green
-      // override — the clear failed) must be observable on the status element.
-      vi.mocked(backend.getSyncStats).mockResolvedValue({
-        ...defaultStats(),
-        last_sync: new Date(Date.now() - 30_000).toISOString(),
-      });
-      vi.mocked(backend.clearSyncCache).mockRejectedValue(new Error("io"));
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Force Full Sync")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      const el = container.querySelector('[data-testid="sync-status"]') as HTMLElement | null;
-      expect(el?.textContent).toBe("Failed to clear sync cache");
-      expect(el?.style.color).toBe(""); // neutral tone — no success green
-    });
-  });
-
-  // ===========================================================================
-  // K. Fix Retroarch input driver flow
   // ===========================================================================
   describe("handleFixInputDriver (via ConfirmModal onOK)", () => {
     async function renderWithWarning(): Promise<HTMLElement> {
@@ -4823,6 +3478,31 @@ describe("MainPage", () => {
   // L. Navigation buttons
   // ===========================================================================
   describe("navigation", () => {
+    it("clicking Sync invokes onNavigate('sync')", async () => {
+      const onNavigate = vi.fn();
+      const { container } = render(<MainPage onNavigate={onNavigate} />);
+      await flushAsync();
+      fireEvent.click(buttonByExactText(container, "Sync")!);
+      expect(onNavigate).toHaveBeenCalledWith("sync");
+    });
+
+    it("the Last sync row is a stop that ACTS, and it opens the Sync page", async () => {
+      // A focusable row with no handler is a place the reader can land and do
+      // nothing. The run this line reports, the history it belongs to and the
+      // preview that would change it are all one page away.
+      const onNavigate = vi.fn();
+      vi.mocked(backend.getSyncStats).mockResolvedValue({ ...defaultStats(), last_sync: "2026-07-11T17:48:00" });
+      const { container } = render(<MainPage onNavigate={onNavigate} />);
+      await flushAsync();
+
+      const row = Array.from(container.querySelectorAll('[data-testid="field"]')).find(
+        (f) => f.querySelector('[data-testid="field-label"]')?.textContent === "Last sync",
+      );
+      expect(row?.getAttribute("data-activate")).toBe("true");
+      fireEvent.click(row!);
+      expect(onNavigate).toHaveBeenCalledWith("sync");
+    });
+
     it("clicking Library invokes onNavigate('library')", async () => {
       const onNavigate = vi.fn();
       const { container } = render(<MainPage onNavigate={onNavigate} />);
@@ -5218,9 +3898,10 @@ describe("MainPage", () => {
       // "nothing running" must not be allowed to collapse the syncing UI.
       const status = deferred<SyncProgress>();
       vi.mocked(backend.getSyncStatus).mockReturnValue(status.promise);
-      // Hold the preview open so the run stays optimistic: no result lands to end
+      // Hold the start open so the run stays optimistic: no result lands to end
       // it, leaving the click's running:true as the only thing that could.
-      vi.mocked(backend.syncPreview).mockReturnValue(new Promise<SyncPreview>(() => {}));
+      vi.mocked(backend.getSettings).mockResolvedValue(settingsSkippingPreview());
+      vi.mocked(backend.startSync).mockReturnValue(new Promise<{ success: boolean; message: string }>(() => {}));
 
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
@@ -5254,10 +3935,8 @@ describe("MainPage", () => {
             resolveStart = res;
           }),
       );
+      vi.mocked(backend.getSettings).mockResolvedValue(settingsSkippingPreview());
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      const toggle = container.querySelector('[data-testid="toggle-input"]') as HTMLInputElement | null;
-      fireEvent.click(toggle!);
       await flushAsync();
 
       await act(async () => {
@@ -5371,24 +4050,6 @@ describe("MainPage", () => {
   // ===========================================================================
   // O. Skip Preview toggle
   // ===========================================================================
-  describe("Skip Preview toggle", () => {
-    it("flipping the toggle ON updates the checkbox state", async () => {
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      const toggle = container.querySelector('[data-testid="toggle-input"]') as HTMLInputElement | null;
-      expect(toggle).not.toBeNull();
-      expect(toggle!.checked).toBe(false);
-      fireEvent.click(toggle!);
-      await flushAsync();
-      // Re-query — the toggle is re-rendered.
-      const updated = container.querySelector('[data-testid="toggle-input"]') as HTMLInputElement | null;
-      expect(updated!.checked).toBe(true);
-    });
-  });
-
-  // ===========================================================================
-  // P. RetroDECK config-health banner
-  // ===========================================================================
   describe("RetroDECK config-health banner", () => {
     it("shows the unreadable banner when status is 'unreadable'", async () => {
       vi.mocked(backend.getRetroDeckStatus).mockResolvedValue({
@@ -5458,9 +4119,9 @@ describe("MainPage", () => {
   // The preview survives leaving the main page
   // ===========================================================================
   describe("the preview survives leaving the main page", () => {
-    /** What handleSync writes into the module store the moment Sync Library is
-     *  pressed: running, and carrying no run id — the backend has not stamped
-     *  one yet, and will not until a reconcile and a round trip later. */
+    /** What the skip-preview press writes into the module store the moment Sync
+     *  Library is pressed: running, and carrying no run id — the backend has not
+     *  stamped one yet, and will not until a reconcile and a round trip later. */
     function optimisticStart(): SyncProgress {
       return { running: true, stage: "fetching", current: 0, total: 0, message: "Fetching library..." };
     }
@@ -5468,11 +4129,8 @@ describe("MainPage", () => {
     /** The frame a previous preview run left behind. It used to be what
      *  `get_sync_status` answered with until the NEXT run overwrote it, so a
      *  panel remounting during the start window read it as the state of the run
-     *  it was actually watching. The backend now resets the snapshot when a run
-     *  finishes; this is the same answer arriving from an older backend, or from
-     *  a run whose reset this read raced. `inFlight: false` is truthful here and
-     *  is the point: during the start window the backend genuinely has no run,
-     *  because `sync_preview` has not claimed the slot yet. */
+     *  it was actually watching. `inFlight: false` is truthful here and is the
+     *  point: during the start window the backend genuinely has no run. */
     function lingeringDoneSnapshot(): SyncStatusAnswer {
       return {
         running: false,
@@ -5485,11 +4143,10 @@ describe("MainPage", () => {
       };
     }
 
-    /** Stats that let EVERY start control render, so an assertion that none of
-     *  them is on screen is carried by four absences rather than one. Without a
-     *  recorded attempt "Force Full Sync" is hidden anyway, and without an
-     *  incomplete one plus bound shortcuts plus surviving progress the sync button
-     *  reads "Sync Library" rather than "Resume Sync". */
+    /** Stats that make the sync button read "Resume Sync" — an incomplete
+     *  attempt, bound shortcuts, and surviving progress — so an assertion that
+     *  nothing offers to start a run is carried by a label that would otherwise
+     *  be there. */
     function statsWithEveryStartControl(): SyncStats {
       return {
         last_sync: null,
@@ -5518,35 +4175,24 @@ describe("MainPage", () => {
       };
     }
 
-    function cardChangesText(container: HTMLElement): string {
-      return container.querySelector('[data-testid="sync-changes"]')?.textContent ?? "";
-    }
-
     /**
-     * Every control on the idle body that offers to START a run. The sync button
-     * (labelled "Sync Library" or "Resume Sync") and "Force Full Sync" are
-     * ButtonItems; "Skip Preview" is a ToggleField, which the `@decky/ui` stub
-     * renders as a plain field, so it is matched by its label text rather than by
-     * role. `statsWithEveryStartControl` is what lets all four appear at once —
-     * `rendersEveryStartControl` below pins that the helper really sees them, so
-     * an empty result means absence rather than a query that cannot match.
+     * Every control on the idle body that offers to START a run. Main's is now
+     * one button, labelled "Sync Library" or "Resume Sync"; Skip preview and
+     * Force Full Sync moved to the Sync page, so the set they used to widen is
+     * gone rather than merely unchecked here. `rendersEveryStartControl` below
+     * pins that the query really matches, so an empty result means absence
+     * rather than a selector that can never hit.
      */
     function startControls(container: HTMLElement): string[] {
-      const buttons = ["Sync Library", "Resume Sync", "Force Full Sync"].filter(
-        (label) => buttonByExactText(container, label) !== null,
-      );
-      const skipPreview = container.textContent.includes("Skip Preview") ? ["Skip Preview"] : [];
-      return [...buttons, ...skipPreview];
+      return ["Sync Library", "Resume Sync"].filter((label) => buttonByExactText(container, label) !== null);
     }
 
-    it("the helper sees every start control when the idle body offers them", async () => {
-      // Guards the assertions below: an empty `startControls` has to mean the
-      // page is not offering a run, not that three of the four can never match.
+    it("the helper sees the start control when the idle body offers it", async () => {
       vi.mocked(backend.getSyncStats).mockResolvedValue(statsWithEveryStartControl());
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
 
-      expect(startControls(container)).toEqual(["Resume Sync", "Force Full Sync", "Skip Preview"]);
+      expect(startControls(container)).toEqual(["Resume Sync"]);
     });
 
     it("a remount mid-start keeps the in-progress view", async () => {
@@ -5557,44 +4203,18 @@ describe("MainPage", () => {
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       // First paint is right — the seed reads the module store.
       expect(container.querySelector('[data-testid="sync-stage"]')).not.toBeNull();
-
       await flushAsync();
-
-      // ...and the snapshot, which describes a run that is not the one the store
-      // is tracking, may not retract it.
-      expect(startControls(container)).toEqual([]);
+      // And the lingering snapshot did not retract it.
       expect(container.querySelector('[data-testid="sync-stage"]')).not.toBeNull();
+      expect(getSyncProgress().running).toBe(true);
     });
 
     it("a remount mid-start does not announce the previous run's terminal frame", async () => {
       setSyncProgress(optimisticStart());
       vi.mocked(backend.getSyncStatus).mockResolvedValue(lingeringDoneSnapshot());
-
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
-
-      expect(container.querySelector('[data-testid="sync-status"]')?.textContent ?? null).not.toBe("Preview ready");
-    });
-
-    it("a snapshot that names the very run the store is tracking still ends it", async () => {
-      // The retraction is refused only where the answer cannot be shown to be
-      // about this run. One that names it is the panel's correction path — a run
-      // whose terminal frame the panel missed while it was away.
-      setSyncProgress({ running: true, stage: "fetching", message: "Fetching library...", runId: "run-live" });
-      vi.mocked(backend.getSyncStatus).mockResolvedValue({
-        running: false,
-        stage: "done",
-        current: 0,
-        total: 0,
-        message: "Sync complete: 4 games",
-        runId: "run-live",
-      });
-
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-
-      expect(container.querySelector('[data-testid="sync-stage"]')).toBeNull();
-      expect(container.querySelector('[data-testid="sync-status"]')?.textContent).toBe("Sync complete: 4 games");
+      expect(container.querySelector('[data-testid="sync-status"]')).toBeNull();
     });
 
     it("recovers when a run's terminal frame was lost and the backend says nothing is running", async () => {
@@ -5602,7 +4222,7 @@ describe("MainPage", () => {
       // frame for a run that has really ended — its terminal frame never
       // arrived — and the reset means the backend's own frame no longer names
       // that run either. `inFlight: false` is the only thing left that can say
-      // so, and it has to be enough: no start control lives outside the idle
+      // so, and it has to be enough: the start control lives outside the syncing
       // body, "Cancel Sync" for an unknown run is answered "No sync in progress"
       // with no terminal to follow, and DangerZone gates four more actions on the
       // same flag — so a panel that cannot leave this state is stuck until a
@@ -5631,37 +4251,15 @@ describe("MainPage", () => {
       await flushAsync();
 
       expect(container.querySelector('[data-testid="sync-stage"]')).toBeNull();
-      expect(startControls(container)).toEqual(["Resume Sync", "Force Full Sync", "Skip Preview"]);
+      expect(startControls(container)).toEqual(["Resume Sync"]);
       expect(getSyncProgress().running).toBe(false);
     });
 
-    it("a cancel that lands after the preview was staged discards it server-side", async () => {
-      // RC-CANCEL-PREVIEW (#1202): the backend staged the snapshot just before
-      // the cancel reached it, so the run answers success and only the local flag
-      // knows the user pressed Cancel. Without telling the backend, the staged
-      // snapshot survives — and the terminal-stage re-ask would fetch it a round
-      // trip later and put up the card the user just cancelled.
-      vi.mocked(syncManager.isCancelRequested).mockReturnValue(true);
-      vi.mocked(backend.syncPreview).mockResolvedValue(previewWithChanges("staged-then-cancelled"));
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-
-      await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-
-      expect(vi.mocked(backend.syncCancelPreview)).toHaveBeenCalled();
-      expect(buttonByExactText(container, "Apply Sync")).toBeNull();
-      expect(container.querySelector('[data-testid="sync-status"]')?.textContent).toBe("Sync cancelled");
-    });
-
     it("Cancel Sync cancels the run, even while the store is holding a preview", async () => {
-      // A run in flight hides the card but does not drop it, so the store can
-      // hold a preview while the syncing body is up. That body's only button is
-      // Cancel Sync, and it must cancel the RUN — dismissing the preview instead
-      // would leave the run going with nothing left on screen to stop it.
+      // A run in flight hides the review but does not drop the preview, so the
+      // store can hold one while the syncing body is up. That body's only button
+      // is Cancel Sync, and it must cancel the RUN — discarding the preview
+      // instead would leave the run going with nothing left to stop it.
       adoptPreview(previewWithChanges("held-under-a-run"));
       setSyncProgress({ running: true, stage: "applying", message: "GBA: 1/2", runId: "run-live" });
       vi.mocked(backend.getSyncStatus).mockResolvedValue({
@@ -5675,7 +4273,7 @@ describe("MainPage", () => {
       });
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
-      expect(buttonByExactText(container, "Apply Sync")).toBeNull();
+      expect(buttonByExactText(container, "Review changes · 2 new")).toBeNull();
 
       await act(async () => {
         fireEvent.click(buttonByExactText(container, "Cancel Sync")!);
@@ -5687,71 +4285,10 @@ describe("MainPage", () => {
       expect(vi.mocked(backend.syncCancelPreview)).not.toHaveBeenCalled();
     });
 
-    it("a preview that finishes while the panel is back on screen puts its card up", async () => {
-      // Instance 1 starts the preview, then the user leaves the main page. The
-      // `sync_preview` promise stays with the instance that is about to die.
-      const previewCall = deferred<SyncPreview>();
-      vi.mocked(backend.syncPreview).mockReturnValue(previewCall.promise);
-      const first = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      await act(async () => {
-        fireEvent.click(buttonByExactText(first.container, "Sync Library")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(getSyncProgress().running).toBe(true);
-      first.unmount();
-
-      // The user comes back while the run is still going. The backend withholds
-      // a staged preview while a run is in flight, so this mount read gets
-      // nothing — and there is nothing staged yet anyway.
-      vi.mocked(backend.getPendingPreview).mockResolvedValue({ success: true, preview: null });
-      vi.mocked(backend.getSyncStatus).mockResolvedValue({
-        running: true,
-        stage: "fetching",
-        current: 0,
-        total: 0,
-        message: "Fetching Game Boy...",
-        runId: "run-live",
-      });
-      const second = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      expect(second.container.querySelector('[data-testid="sync-stage"]')).not.toBeNull();
-
-      // The preview finishes HERE, and its answer goes to the dead instance.
-      await act(async () => {
-        previewCall.resolve(previewWithChanges("preview-finished-offscreen"));
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      // ...followed by the backend's own terminal frame for the run.
-      await act(async () => {
-        setSyncProgress({
-          running: false,
-          stage: "done",
-          current: 0,
-          total: 0,
-          message: "Preview ready",
-          runId: "run-live",
-        });
-        await Promise.resolve();
-      });
-
-      // The card is on screen for the instance that is actually mounted.
-      expect(buttonByExactText(second.container, "Apply Sync")).not.toBeNull();
-      expect(startControls(second.container)).toEqual([]);
-      await act(async () => {
-        fireEvent.click(buttonByExactText(second.container, "Apply Sync")!);
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      expect(vi.mocked(backend.syncApplyDelta)).toHaveBeenCalledWith("preview-finished-offscreen");
-    });
-
     it("asks the backend when a preview run ends having staged something this panel never saw", async () => {
-      // The other order: the run ends for a panel holding nothing — the answer to
-      // `sync_preview` was lost with the instance that asked for it (a QAM close,
-      // a reload). The terminal frame is the cue to go and ask.
+      // The answer to `sync_preview` was lost with the instance that asked for it
+      // (a QAM close, a reload, a navigation to the Sync page). The terminal
+      // frame is the cue to go and ask.
       vi.mocked(backend.getPendingPreview).mockResolvedValue({ success: true, preview: null });
       setSyncProgress({ running: true, stage: "fetching", message: "Fetching library...", runId: "run-live" });
       vi.mocked(backend.getSyncStatus).mockResolvedValue({
@@ -5782,8 +4319,7 @@ describe("MainPage", () => {
         await Promise.resolve();
       });
 
-      expect(buttonByExactText(container, "Apply Sync")).not.toBeNull();
-      expect(cardChangesText(container)).toContain("Games: 2 new");
+      expect(buttonByExactText(container, "Review changes · 2 new")).not.toBeNull();
     });
 
     it("does not re-ask when the store already holds the run's preview", async () => {
@@ -5806,14 +4342,14 @@ describe("MainPage", () => {
       });
 
       expect(vi.mocked(backend.getPendingPreview)).not.toHaveBeenCalled();
-      expect(buttonByExactText(container, "Apply Sync")).not.toBeNull();
+      expect(buttonByExactText(container, "Review changes · 2 new")).not.toBeNull();
     });
 
     // -------------------------------------------------------------------------
     // The rule, directly: neither a running preview nor a preview result may
     // leave the panel offering to start another one.
     // -------------------------------------------------------------------------
-    describe("the controls that start a preview never appear over one", () => {
+    describe("the control that starts a run never appears over a preview", () => {
       it("not while a preview run is in flight, on a fresh mount", async () => {
         // The mount lands in the start window, where the backend has not yet
         // reported the run the store already knows about — the device case that
@@ -5859,19 +4395,19 @@ describe("MainPage", () => {
         await flushAsync();
 
         expect(startControls(container)).toEqual([]);
-        expect(buttonByExactText(container, "Apply Sync")).not.toBeNull();
+        expect(buttonByExactText(container, "Review changes · 2 new")).not.toBeNull();
       });
 
       it("not while a preview result stands that the panel adopted before this mount", async () => {
-        // Nothing to fetch and nothing in flight: the card is on screen at first
-        // paint because the store, not the instance, is holding it.
+        // Nothing to fetch and nothing in flight: the review is offered at first
+        // paint because the store, not the instance, is holding the preview.
         vi.mocked(backend.getSyncStats).mockResolvedValue(statsWithEveryStartControl());
         adoptPreview(previewWithChanges("held-across-mounts"));
         vi.mocked(backend.getPendingPreview).mockResolvedValue({ success: true, preview: null });
 
         const { container } = render(<MainPage onNavigate={vi.fn()} />);
         expect(startControls(container)).toEqual([]);
-        expect(buttonByExactText(container, "Apply Sync")).not.toBeNull();
+        expect(buttonByExactText(container, "Review changes · 2 new")).not.toBeNull();
         await flushAsync();
         expect(startControls(container)).toEqual([]);
       });
