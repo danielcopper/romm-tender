@@ -125,7 +125,7 @@ function lastAttemptLine(attempt: NonNullable<SyncStats["last_attempt"]>): strin
  *  the field: the default children column is too narrow and wrapped the attempt
  *  line mid-text. With no completed run ever, the cancelled/crashed attempt is
  *  surfaced as line 1 so it never reads a bare "Never" after thousands of games
- *  synced (#1367); otherwise "Never".
+ *  synced (#1318); otherwise "Never".
  *
  *  An errored run is reported here like any other, which is a different question
  *  from whether it can be continued — ``syncResumeState`` refuses that one, and

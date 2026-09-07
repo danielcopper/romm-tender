@@ -356,7 +356,7 @@ and they stay `focusable` all the same — a region scrolls only by moving focus
 nobody can scroll to, and entry focus would otherwise land below them and take the status off the top of the panel.
 **Last sync** states the newest completed run's age, and where a newer run did not complete it states that run's
 _outcome_ and age too — "cancelled 12m ago", "interrupted 3h ago" — on a second, quieter line. With no completed run
-ever, that attempt is the only line, so the row never reads a bare "Never" after thousands of games synced (#1367).
+ever, that attempt is the only line, so the row never reads a bare "Never" after thousands of games synced (#1318).
 Reporting a run and offering to continue it are different questions: an errored run is reported here and is not
 resumable, which `syncResumeState` decides for the button that offers it, on the Sync page.
 

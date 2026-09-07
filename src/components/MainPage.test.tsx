@@ -1001,7 +1001,7 @@ describe("MainPage", () => {
       expect(lastSyncText(container)).toContain("4d ago");
     });
 
-    it("states the outcome and the age when only last_attempt is set (never completed) (#1367)", async () => {
+    it("states the outcome and the age when only last_attempt is set (never completed) (#1318)", async () => {
       // A cancelled/crashed run with no completed run ever — must NOT read "Never".
       vi.mocked(backend.getSyncStats).mockResolvedValue({
         ...defaultStats(),
