@@ -16,21 +16,23 @@ without restating it. The width mechanism's decision record is
 
 ## Where the code lives
 
-| Module                                                        | Responsibility                                                                                                                             |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/index.tsx` (`QAMPanel`)                                  | The router: one `Page` value, one mounted page, a module-level `currentPage` that survives a QAM remount                                   |
-| `src/types/navigation.ts`                                     | The `Page` union — every page the router can land on                                                                                       |
-| `src/components/MainPage.tsx`                                 | Main                                                                                                                                       |
-| `src/components/LibraryPage.tsx`                              | Library — the frame, the two tabs and their state                                                                                          |
-| `src/components/SettingsPage.tsx`, `src/components/settings/` | Settings and its sections                                                                                                                  |
-| `src/components/DangerZone.tsx`, `RemovedGamesCleanup.tsx`    | Data Management                                                                                                                            |
-| `src/components/DownloadQueue.tsx`                            | Downloads                                                                                                                                  |
-| `src/components/library/`                                     | The Library page's tabs: `usePlatformsPage` (its reads and actions), `PlatformsTab`, `PlatformDetail`                                      |
-| `src/utils/deckyUiInternals.ts`                               | Honest typing for `@decky/ui` values that come from a webpack probe: the frame's class names, `Tabs`, `ScrollPanel`, the controller glyph  |
-| `src/utils/qamExpansion.ts`                                   | The panel's width: the expand and hide messages, the injected `max-width` rule, and the four paths that clear both                         |
-| `src/components/qam/`                                         | The wide-page frame: `WidePage` (the Back/title line, tabs, measured height, entry focus), `ScrollRegion`, `Columns`, `ListDetail`, `pane` |
-| `src/utils/entryFocus.ts`                                     | Which stop a page opens on, and the `.focus()` + `gpfocus` pair that places it — the frame's and the router's one implementation           |
-| `src/utils/` module stores                                    | State that must outlive a page: sync progress, pending preview, downloads, prune, the game-detail caches                                   |
+| Module                                                        | Responsibility                                                                                                                                                      |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/index.tsx` (`QAMPanel`)                                  | The router: one `Page` value, one mounted page, a module-level `currentPage` that survives a QAM remount                                                            |
+| `src/types/navigation.ts`                                     | The `Page` union — every page the router can land on                                                                                                                |
+| `src/components/MainPage.tsx`                                 | Main                                                                                                                                                                |
+| `src/components/LibraryPage.tsx`                              | Library — the frame, the two tabs and their state                                                                                                                   |
+| `src/components/SettingsPage.tsx`, `src/components/settings/` | Settings and its sections                                                                                                                                           |
+| `src/components/DangerZone.tsx`, `RemovedGamesCleanup.tsx`    | Data Management                                                                                                                                                     |
+| `src/components/DownloadQueue.tsx`                            | Downloads                                                                                                                                                           |
+| `src/components/library/`                                     | The Library page's tabs: `usePlatformsPage` (its reads and actions), `PlatformsTab`, `PlatformDetail`                                                               |
+| `src/utils/deckyUiInternals.ts`                               | Honest typing for `@decky/ui` values that come from a webpack probe: the frame's class names, `Tabs`, `ScrollPanel`, the controller glyph                           |
+| `src/utils/qamExpansion.ts`                                   | The panel's width: the expand and hide messages, the injected `max-width` rule, and the four paths that clear both                                                  |
+| `src/components/qam/`                                         | The wide-page frame: `WidePage` (the Back/title line, tabs, measured height, entry focus), `ScrollRegion`, `Columns`, `ListDetail`, `pane`                          |
+| `src/utils/entryFocus.ts`                                     | Which stop a page opens on, and the `.focus()` + `gpfocus` pair that places it — the frame's and the router's one implementation                                    |
+| `src/utils/syncRunView.ts`                                    | `useSyncRunView` — the run in flight as a page renders it: stage label, coarse bar, position within the running unit, fine-detail line, estimate, and the run's end |
+| `src/utils/runUnitsStore.ts`                                  | The run's work queue, one row per unit: the plan's riders, how far the run has got, and what each unit's apply produced                                             |
+| `src/utils/` module stores                                    | State that must outlive a page: sync progress, pending preview, downloads, prune, the game-detail caches                                                            |
 
 ## Two widths
 
@@ -342,6 +344,22 @@ the invariant register's pending-preview entry names the Sync page's three paths
 fourth path — a cancel that lands just after a preview was staged and is discharged server-side alone — is unchanged.
 With **Skip preview** on, the button starts the run directly and Main shows progress as today. The last run's one-line
 result stays on Main for a moment after a run, as today; the run itself is on the Sync page's list.
+
+While a run is in flight Main shows the stage caption and step counter, the bar, the fine-detail line, the estimate and
+Cancel. Those numbers come from `useSyncRunView`, and the Sync page will read the same hook, so one derivation of a run
+serves both pages rather than each keeping its own. What stays Main's is what belongs to Main. Two of those are the
+run's end, which the hook hands back as callbacks: the once-per-run announcement, with the two re-reads it provokes and
+the ask for a preview the run may have staged, and the correction that follows when the run's own terminal frame arrives
+with better wording. Only the page that owns those side effects passes any, or a second page reading the same run would
+announce the end a second time. The rest never leaves Main's own handlers — the "Cancelling…" drain, the transient
+status line, and the optimistic start those handlers retract.
+
+Alongside the hook, `runUnitsStore.ts` holds one run's work queue per unit: a row per unit, seeded from the plan and
+bound to the run id the plan carried, advanced to `running` and then `done` by that run's frames, and carrying what the
+unit's apply created and updated. The binding is what keeps a later run off an earlier run's rows — a preview emits a
+frame per unit over the same queue and no plan at all, so the step index alone would walk them a second time. The store
+outlives every page, so a page opened mid-run can show the units already worked through rather than only the current
+one. Main renders none of it.
 
 ## Sync
 

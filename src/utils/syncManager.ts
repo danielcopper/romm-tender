@@ -16,6 +16,7 @@ import {
 } from "./steamShortcuts";
 import { updateSyncProgress } from "./syncProgress";
 import { recordSyncCreated } from "./syncDeltaStore";
+import { recordUnitCreated, recordUnitUpdated } from "./runUnitsStore";
 import { observeUnitTotal } from "./syncEta";
 import { registerRomMAppId } from "../patches/gameDetailPatch";
 import { pacedForEach } from "./pacedOps";
@@ -286,6 +287,7 @@ async function processCoverRefreshes(data: SyncApplyUnitData): Promise<void> {
       message: `${data.unit_name}: covers ${done}/${total}`,
       step: data.unit_index + 1,
       totalSteps: data.total_units,
+      runId: data.run_id,
       coverRefresh: true,
     });
   };
@@ -344,10 +346,19 @@ async function processUnitShortcuts(
           message: `${data.unit_name}: ${unitCurrent}/${data.unit_total}`,
           step: data.unit_index + 1,
           totalSteps: data.total_units,
+          runId: data.run_id,
         });
         const { appId, created } = await resolveShortcutAppId(item, existing, data.run_id, liveAppIds);
         if (appId) {
           romIdToAppId[String(item.rom_id)] = appId;
+          // What this unit produced, against the unit itself. The run-wide delta
+          // (``recordSyncCreated``, inside the resolve above) counts creates
+          // across the whole run for the terminal toast and knows nothing about
+          // units; a page showing the run's work queue needs the split per unit,
+          // and the apply events it is derived from are gone by the time such a
+          // page opens.
+          if (created) recordUnitCreated(data.unit_index);
+          else recordUnitUpdated(data.unit_index);
           // Register the appId as RomM-owned the moment the mapping exists — the
           // earliest point the game-detail patch and launch interceptor can gate
           // on it. Registering only at sync_complete leaves a newly created
@@ -483,6 +494,12 @@ export function initUnitSyncManager(): ReturnType<typeof addEventListener> {
         message: `${data.unit_name}: ${data.chunk_offset}/${data.unit_total}`,
         step: data.unit_index + 1,
         totalSteps: data.total_units,
+        // Stamped from the chunk, never inherited. These are merges, so an
+        // unstamped frame would carry whatever run the store happened to hold —
+        // today always this run's, by event ordering rather than by
+        // construction. The per-unit rows refuse a frame that names another run,
+        // so what is ordering today would be a dropped frame tomorrow.
+        runId: data.run_id,
         // Clear any cover-refresh marker a prior unit left in the store so this
         // unit's shortcut phase feeds the ETA again (#1456).
         coverRefresh: false,

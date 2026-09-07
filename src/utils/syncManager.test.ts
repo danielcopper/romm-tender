@@ -13,7 +13,8 @@ import { act } from "@testing-library/react";
 import * as backend from "../api/backend";
 import { emitDeckyEvent } from "../test-utils/decky-api-mock";
 import { resetSyncDelta, getSyncDelta } from "./syncDeltaStore";
-import { getSyncProgress, onSyncProgressChange } from "./syncProgress";
+import { getSyncProgress, onSyncProgressChange, setSyncProgress } from "./syncProgress";
+import * as syncProgress from "./syncProgress";
 import type { SyncApplyUnitData, SyncProgress } from "../types";
 
 const setLaunchOptionsConfirmed = vi.fn().mockResolvedValue(true);
@@ -478,6 +479,59 @@ describe("syncManager — records created shortcuts into the per-run delta store
 
     expect(addShortcut).toHaveBeenCalledTimes(1);
     expect(getSyncDelta()).toEqual({ added: 0, removed: 0 });
+  });
+});
+
+describe("syncManager — every frame it writes names the chunk's run", () => {
+  beforeEach(() => {
+    setLaunchOptionsConfirmed.mockClear();
+    setLaunchOptionsConfirmed.mockResolvedValue(true);
+    addShortcut.mockReset();
+    getExistingRomMShortcuts.mockReset();
+    getExistingRomMShortcuts.mockResolvedValue(new Map<number, number>([[42, 5042]]));
+    vi.mocked(backend.getArtworkBase64).mockResolvedValue({ base64: null });
+    vi.stubGlobal("SteamClient", {
+      Apps: {
+        AddShortcut: vi.fn(),
+        SetShortcutName: vi.fn(),
+        SetShortcutExe: vi.fn(),
+        SetShortcutStartDir: vi.fn(),
+        SetAppLaunchOptions: vi.fn(),
+        SetCustomArtworkForApp: vi.fn().mockResolvedValue(undefined),
+        RemoveShortcut: vi.fn(),
+      },
+    });
+  });
+
+  it("stamps the chunk's run id on the seed, the per-item and the cover-refresh frames", async () => {
+    // Asserted on the CALLS, not on the store the calls leave behind: these are
+    // merges, so the seed's stamp alone would carry the right run id into every
+    // later frame's state and a missing stamp would be invisible there. That is
+    // the whole defect — the id would then be inherited by event ordering, and
+    // the per-unit rows refuse a frame naming another run.
+    setSyncProgress({ running: false, stage: "done", message: "Sync complete", runId: "run-previous" });
+    const update = vi.spyOn(syncProgress, "updateSyncProgress");
+    try {
+      initUnitSyncManager();
+      await act(async () => {
+        emitDeckyEvent<[SyncApplyUnitData]>("sync_apply_unit", {
+          ...unit("", "run-now"),
+          cover_refreshes: [{ rom_id: 7, app_id: 5007 }],
+        });
+        await flush(200);
+      });
+
+      // The three writes: the chunk seed, one per item, and the cover counter.
+      expect(update.mock.calls.length).toBeGreaterThanOrEqual(3);
+      for (const [frame] of update.mock.calls) {
+        expect(frame).toMatchObject({ runId: "run-now" });
+      }
+      // Non-vacuous about the cover write specifically, which only a chunk
+      // carrying cover_refreshes reaches.
+      expect(update.mock.calls.some(([frame]) => frame.coverRefresh === true)).toBe(true);
+    } finally {
+      update.mockRestore();
+    }
   });
 });
 

@@ -56,6 +56,7 @@ import {
 import { setMigrationStatus } from "./utils/migrationStore";
 import { fetchSettingsResetState } from "./utils/settingsResetStore";
 import { resetSyncDelta, recordSyncRemoved, getSyncDelta } from "./utils/syncDeltaStore";
+import { attachRunUnitsMirror, seedRunUnits } from "./utils/runUnitsStore";
 import { setSaveSortMigrationStatus } from "./utils/saveSortMigrationStore";
 import { setVersionError, setServerRetryProgress } from "./utils/connectionState";
 import { initSessionManager, destroySessionManager } from "./utils/sessionManager";
@@ -662,16 +663,25 @@ export default definePlugin(() => {
   >("sync_complete", onSyncComplete);
 
   const syncApplyUnitListener = initUnitSyncManager();
+  // Mirror the run's frames into its per-unit rows for as long as the plugin is
+  // loaded, so a run that spans a page change keeps filling them in.
+  const detachRunUnitsMirror = attachRunUnitsMirror();
 
   // Per-unit pipeline: planning + stale + collections events.
-  // ``sync_plan`` arrives once per run with the full work queue (info only
-  // for now — future PR adds a per-platform progress view).
+  // ``sync_plan`` arrives once per run with the full work queue: the per-run
+  // resets below and the run's per-unit rows both key off it.
   const syncPlanListener = addEventListener<[SyncPlanData]>("sync_plan", (data: SyncPlanData) => {
     syncContinuationController.abort();
     syncContinuationController = new AbortController();
     // sync_plan fires once per run, before any unit — reset the per-run delta
     // so the terminal toast counts only this run's created/removed shortcuts.
     resetSyncDelta();
+    // The run's work queue, held where a page opened mid-run can still read it:
+    // this event is the only place the frontend is told what the run will work
+    // through, and it arrives whether or not a QAM page is mounted. Its run id
+    // binds the rows, so a later run's frames — a preview's included — cannot
+    // walk them.
+    seedRunUnits(data.units, data.run_id);
     // Clear the per-run cancel flag once per run, before any unit. Doing it
     // here (not only in the per-unit handler) keeps the flag fresh even on a
     // skip-only run, where no unit handler ever fires (#1198). Run identity for
@@ -1038,6 +1048,7 @@ export default definePlugin(() => {
       removeEventListener("sync_stale", syncStaleListener);
       removeEventListener("sync_collections", syncCollectionsListener);
       removeEventListener("sync_progress", syncProgressListener);
+      detachRunUnitsMirror();
       removeEventListener("download_progress", downloadProgressListener);
       removeEventListener("download_complete", downloadCompleteListener);
       removeEventListener("download_failed", downloadFailedListener);

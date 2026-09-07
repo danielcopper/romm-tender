@@ -8,9 +8,11 @@
  *   - MainPage on handleSync click (optimistic running:true)
  *
  * Read by:
- *   - MainPage.tsx, which subscribes via onSyncProgressChange and re-renders
- *     on every notify (no setInterval polling), and reads ``runId`` to scope a
- *     Cancel click to the active run (#1202).
+ *   - utils/syncRunView.ts, whose hook subscribes via onSyncProgressChange and
+ *     re-renders its page on every notify (no setInterval polling)
+ *   - utils/runUnitsStore.ts, whose mirror advances the run's per-unit rows
+ *   - MainPage.tsx, which reads ``runId`` to scope a Cancel click to the active
+ *     run (#1202).
  *
  * The ``runId`` field is fed straight from the backend ``sync_progress`` payload
  * (the persistent listener in index.tsx passes the whole event through), so it
