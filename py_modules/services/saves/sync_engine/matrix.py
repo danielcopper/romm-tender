@@ -944,8 +944,9 @@ class MatrixExecutor:
         system = info["system"]
         # One live reading of the machine for the whole run: the names group the
         # server's saves onto their canonical targets AND say which files to
-        # probe for, and asking twice would double the cost of every ROM in a
-        # whole-library sweep.
+        # probe for. Asking here as well as above would add a third reading to
+        # every ROM in a whole-library sweep, which already pays two — one for
+        # the device-wide negotiate inventory and one here.
         answer = save_answer if save_answer is not None else self._rom_info.save_answer(rom_id)
         save_names = answer.synced_names
         answer_dir = info["saves_dir"] if answer.syncable else None

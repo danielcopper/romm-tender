@@ -71,10 +71,11 @@ convention and are expected to behave identically, but haven't been observed one
 
 Per-game saves for these systems fit the sync model and are planned for a future release:
 
-| System      | Notes                                                                                                  |
-| ----------- | ------------------------------------------------------------------------------------------------------ |
-| PlayStation | Memory-card saves. The cores write them per game, but under a name the plugin doesn't probe yet.       |
-| 3DO         | The Opera core writes per-game NVRAM into its own `opera/per_game/` subfolder, under a versioned name. |
+| System      | Notes                                                                                                       |
+| ----------- | ----------------------------------------------------------------------------------------------------------- |
+| PlayStation | Memory-card saves. The cores write them per game, but under a name the plugin doesn't probe yet.            |
+| 3DO         | The Opera core writes per-game NVRAM into its own `opera/per_game/` subfolder, under a versioned name.      |
+| Neo Geo     | FinalBurn Neo writes a per-game save into its own `fbneo/` subfolder, which the plugin doesn't look in yet. |
 
 !!! warning "3DO was listed as syncing here before — it wasn't"
 
@@ -93,15 +94,16 @@ outside the per-game save folder, or haven't been pinned down yet. A shared card
 other games' saves, so it doesn't fit per-game sync today. We're looking at safe ways to handle these in a future
 release.
 
-| System         | Why it doesn't sync today                                                                                                                                                                                          |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Dreamcast      | Flycast ships with **Per-Game VMUs off**, so every game shares `vmu_save_A1.bin` and its siblings in RetroDECK's system folder. The core _can_ write per-game VMUs; the names it uses then aren't pinned down yet. |
-| PlayStation 2  | The LRPS2 core ships with **shared memory cards on** (`Mcd001.ps2` / `Mcd002.ps2`). With that option off it writes one `<game>.ps2` card per game — which would fit per-game sync.                                 |
-| GameCube / Wii | The Dolphin core appears to keep saves under its own subtree rather than the per-game save folder. Not confirmed on-device yet.                                                                                    |
-| Neo Geo CD     | Ships writing one shared save. The core has a per-content mode; which one wins when loading isn't confirmed.                                                                                                       |
-| Nintendo 3DS   | The Azahar core appears to use its own save subtree. Not confirmed on-device yet.                                                                                                                                  |
-| PSP            | Where the PPSSPP core keeps its saves, and whether they are per game, hasn't been established.                                                                                                                     |
-| Arcade (MAME)  | NVRAM is stored separately by the emulator, not as a file named after your ROM.                                                                                                                                    |
+| System         | Why it doesn't sync today                                                                                                                                                                                               |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dreamcast      | Flycast ships with **Per-Game VMUs off**, so every game shares `vmu_save_A1.bin` and its siblings in RetroDECK's system folder. The core _can_ write per-game VMUs; the names it uses then aren't pinned down yet.      |
+| PlayStation 2  | The LRPS2 core ships with **shared memory cards on** (`Mcd001.ps2` / `Mcd002.ps2`). With that option off it writes one `<game>.ps2` card per game — which would fit per-game sync.                                      |
+| GameCube / Wii | The Dolphin core appears to keep saves under its own subtree rather than the per-game save folder. Not confirmed on-device yet.                                                                                         |
+| Neo Geo CD     | Ships writing one shared save. The core has a per-content mode; which one wins when loading isn't confirmed.                                                                                                            |
+| Nintendo 3DS   | The Azahar core appears to use its own save subtree. Not confirmed on-device yet.                                                                                                                                       |
+| PSP            | Where the PPSSPP core keeps its saves, and whether they are per game, hasn't been established.                                                                                                                          |
+| Arcade (MAME)  | NVRAM is stored separately by the emulator, not as a file named after your ROM.                                                                                                                                         |
+| Amiga          | PUAE keeps an `.adf` floppy's save inside the disk image itself, so there is no separate file to carry. A `.lha` names a `WHDSaves` folder whose contents the core does not list, and an `.hdf` is not answered at all. |
 
 ## No save data ⚪
 
@@ -116,7 +118,7 @@ states still work locally). See the full table for specifics.
 
     | Platform | Status | Notes |
     | --- | --- | --- |
-    | `amiga` | ❌ | An `.adf` floppy keeps the save inside the disk image; an `.hdf` or `.lha` is not answered |
+    | `amiga` | ❌ | An `.adf` floppy keeps the save inside the disk image; a `.lha` names a folder whose contents the core does not list; an `.hdf` is not answered |
     | `amstradcpc` | ❌ | Not synced |
     | `apple2` | ❌ | Saves are stored separately by the emulator (MAME) |
     | `apple2gs` | ❌ | Saves are stored separately by the emulator (MAME) |
@@ -192,7 +194,7 @@ states still work locally). See the full table for specifics.
     | `mark3` | ✅ | Synced |
     | `mastersystem` | ✅ | Synced |
     | `megacd` | ✅ | A raw `.bin` dump saves per game; a disc image uses a shared BRAM card |
-    | `megacdjp` | ✅ | Synced |
+    | `megacdjp` | ✅ | A raw `.bin` dump saves per game; a disc image uses a shared BRAM card |
     | `megadrive` | ✅ | Synced |
     | `megadrivejp` | ✅ | Synced |
     | `megaduck` | ✅ | Synced |

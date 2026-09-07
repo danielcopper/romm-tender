@@ -114,12 +114,15 @@ a user will be told that their PS2 saves live on a shared card rather than being
 emulator (Apple II, Apple IIGS, Macintosh, PS Vita, Xbox) there is no entry to ask, so the answer refuses. Those
 platforms found nothing under the old extension list either; what changes is that the plugin now says so.
 
-**Four things a user with existing saves can notice.** Saturn syncs one file fewer — the `.smpc` console-settings file
+**Three things a user with existing saves can notice.** Saturn syncs one file fewer — the `.smpc` console-settings file
 is no longer carried, which is the configuration rule working as intended. The post-exit failure toast stops appearing
-for every refusing system, because a refusal is a benign skip rather than an error. A server-side file this emulator's
-answer does not name — a `.smpc` uploaded before the role rule existed, or a legacy `.sav` from the guessed-extension
-era — is no longer pulled down over the local file, on the sync path and on the slot-switch path alike. And a save that
-is left where it is stays on the server: nothing here deletes it.
+for every refusing system, because a refusal is a benign skip rather than an error. And a server-side file this
+emulator's answer does not name — a `.smpc` uploaded before the role rule existed, or a legacy `.sav` from the
+guessed-extension era — is no longer pulled down over the local file: not by a sync, not by a slot switch, and not by
+the setup wizard's legacy adoption, which builds its download targets through the same filter.
+
+None of the three removes anything from the server. A file the plugin stops carrying stays where it is, in the library
+and on disk; deciding what to do with one is a later question than this cut.
 
 **A live reading costs time.** About 170 ms per ROM warm. Single-ROM paths absorb it beside their network round-trip;
 the per-platform loops behind the save-count and save-delete buttons pay it per ROM, so a fifty-game platform count

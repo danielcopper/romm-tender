@@ -704,9 +704,9 @@ class SyncEngine:
         ``negotiate`` cancels it, so a missed close is harmless.
 
         *save_answer* is the reading the run already took, handed on so the
-        inventory does not take a second one. Without it a confirmed ROM — which
-        is every ROM once the setup wizard has run — costs two live readings of
-        the machine per sync rather than one.
+        inventory does not take a second one. Without it a ROM whose slot the
+        user has confirmed costs two live readings of the machine per sync
+        rather than one.
         """
         try:
             inventory = await self._loop.run_in_executor(

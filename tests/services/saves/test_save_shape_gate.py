@@ -193,10 +193,10 @@ class TestOneSyncTakesOneReadingOfTheMachine:
 
     @pytest.mark.asyncio
     async def test_a_single_rom_sync_asks_the_resolver_once(self, tmp_path):
-        # A CONFIRMED slot, which is every ROM once the setup wizard has run and
-        # so the path users are actually on. It is also the expensive one: a
-        # confirmed ROM additionally opens a negotiate session, whose inventory
-        # walks this ROM's save files and would take a reading of its own.
+        # A CONFIRMED slot: the expensive branch, because a confirmed ROM also
+        # opens a negotiate session whose inventory walks this ROM's save files
+        # and would take a reading of its own. The unconfirmed branch is pinned
+        # by the next test, so neither path is measured by accident.
         svc, _store, _server = _service(tmp_path, _syncable())
         _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True})
         reader = cast("FakeSaveLocationReader", svc._rom_info._save_locations)
