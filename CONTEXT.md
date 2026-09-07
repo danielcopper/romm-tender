@@ -379,9 +379,15 @@ It replaced a per-system extension table the plugin maintained by hand.
 An answer is about one **ROM** and one **emulator**, never a platform (see
 [Save scope](#save-scope-per-rom-and-per-emulator-never-per-platform)), and it names the files, their directory, their
 roles, the holes left in any name, and the resolver's caveat codes. A file whose role is the emulator's
-**configuration** rather than the player's **progress** — Saturn's `.smpc`, MAME's per-game `.cfg` — is named on the
-answer and never synced; a directory move still carries it, because splitting one save across two directories breaks the
-game.
+**configuration** rather than the player's **progress** — Saturn's `.smpc` — is named on the answer and **not carried**;
+a directory move still moves it, because splitting one save across two directories breaks the game. Each named file
+carries a `carried` flag, named for the RULE and not for the file: it says save sync carries this name, which is a
+different claim from "this file is in sync".
+
+**An answer is not always about a file that exists.** A ROM the library holds but has not installed is asked about the
+path it WOULD occupy, because `roms.fs_name` carries the extension the answer turns on; every name in such an answer is
+a prediction. `content_installed` says which it is, and a surface that renders the names without reading it tells a user
+their uninstalled game already has save files.
 
 ### Save state: per-game files / shared / inside the content / hole / not established
 

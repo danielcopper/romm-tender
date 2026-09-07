@@ -56,7 +56,9 @@ class FakeSaveLocationReader:
         """Seed *system* with the answer a question nobody could put produces."""
         self._by_system[system] = unestablished_answer()
 
-    def resolve_save_answer(self, *, system: str, content_path: str, emulator_label: str | None) -> SaveAnswer:
+    def resolve_save_answer(
+        self, *, system: str, content_path: str, emulator_label: str | None, content_installed: bool = True
+    ) -> SaveAnswer:
         self.calls.append((system, content_path, emulator_label))
         seeded = self._by_system.get(system)
         if seeded is not None:
@@ -77,4 +79,5 @@ class FakeSaveLocationReader:
                 for ext, role in parts
             ),
             caveats=(),
+            content_installed=content_installed,
         )

@@ -135,12 +135,19 @@ class TestFindSaveFiles:
         uninstalled ROM pairs its names with no directory.
         """
         svc, _ = make_service(tmp_path)
-        _seed_rom(svc, 80, platform_slug="amiga", fs_name="Turrican.adf")
+        # The slug DIFFERS from its system, so a site that passes the raw RomM
+        # slug fails here rather than hiding behind an identity map — the same
+        # ADR-0010 leak the installed site guards, on the other path.
+        _seed_rom(svc, 80, platform_slug="commodore-amiga", fs_name="Turrican.adf")
 
         answer = svc._rom_info.save_answer(80)
 
         assert _asked(svc) == [("amiga", str(tmp_path / "retrodeck" / "roms" / "amiga" / "Turrican.adf"), None)]
         assert answer.state == "per_game_files"
+        # ...and the answer says its names are a prediction, so a page can word
+        # them as "would use" rather than rendering save files for a game the
+        # user has not installed.
+        assert answer.content_installed is False
         assert svc._rom_info.synced_save_names(80) == ([], None)
 
     def test_a_rom_the_library_does_not_hold_asks_nothing_and_refuses(self, tmp_path):
@@ -164,9 +171,10 @@ class TestFindSaveFiles:
         content = str(tmp_path / "retrodeck" / "roms" / "amiga" / "Turrican.adf")
         _seed_install(svc, 71, file_path=content, system="amiga", platform_slug="commodore-amiga")
 
-        svc._rom_info.save_answer(71)
+        answer = svc._rom_info.save_answer(71)
 
         assert _asked(svc) == [("amiga", content, None)]
+        assert answer.content_installed is True
 
 
 class TestGetRomSaveInfo:

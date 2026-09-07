@@ -31,6 +31,11 @@ from services.saves import SaveService, SaveServiceConfig
 _GAVEL = GavelNativeAdapter()
 
 
+# RomM slugs whose normalized system is a different string. Anything else is
+# its own system here, which keeps the bulk of these tests reading plainly.
+_TEST_SYSTEMS = {"sega-saturn": "saturn", "commodore-amiga": "amiga"}
+
+
 async def _noop_emit(_event: str, /, *_args: object) -> None:
     """Default emitter for SaveService tests — drops all events."""
 
@@ -61,10 +66,10 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
         ),
         "active_core": FakeActiveCoreResolver(default=(None, None)),
         "save_locations": FakeSaveLocationReader(),
-        # These tests seed a ROM's system directly, so slug and system are the
-        # same string here; the real mapping is the RomM adapter's and is
-        # tested there.
-        "resolve_system": lambda platform_slug, platform_fs_slug=None: platform_slug,
+        # A slug that DIFFERS from its system for the two the tests use, so a
+        # site that leaks the raw RomM slug is caught rather than hidden behind
+        # an identity map. The real mapping is the RomM adapter's own.
+        "resolve_system": lambda platform_slug, platform_fs_slug=None: _TEST_SYSTEMS.get(platform_slug, platform_slug),
         "hostname_provider": FakeHostnameReader(),
         "machine_id_provider": FakeMachineIdReader(),
         "log_debug": lambda _msg: None,

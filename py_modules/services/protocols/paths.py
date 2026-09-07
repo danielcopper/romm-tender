@@ -184,7 +184,9 @@ class SaveLocationReader(Protocol):
     only by whatever attribute a consumer happens to bind it to.
     """
 
-    def resolve_save_answer(self, *, system: str, content_path: str, emulator_label: str | None) -> SaveAnswer: ...
+    def resolve_save_answer(
+        self, *, system: str, content_path: str, emulator_label: str | None, content_installed: bool
+    ) -> SaveAnswer: ...
 
 
 class SandboxLauncherFn(Protocol):

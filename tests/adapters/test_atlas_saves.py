@@ -156,7 +156,9 @@ def _adapter(installation: Any, traces: list[str]) -> AtlasSaveLocationAdapter:
 def _ask(answer: Any, traces: list[str], *, label: str = "mGBA", emulator: str | None = "mGBA"):
     entry = _Entry(label, answer)
     adapter = _adapter(_Installation((entry,)), traces)
-    return adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label=emulator)
+    return adapter.resolve_save_answer(
+        system="gba", content_path=_CONTENT, emulator_label=emulator, content_installed=True
+    )
 
 
 class TestTheFiveStates:
@@ -349,7 +351,9 @@ class TestEveryWayTheQuestionCannotBePut:
         installation = _Installation((entry,))
         adapter = _adapter(installation, traces)
 
-        answer = adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label=None)
+        answer = adapter.resolve_save_answer(
+            system="gba", content_path=_CONTENT, emulator_label=None, content_installed=True
+        )
 
         self._assert_refused(answer, UNESTABLISHED_NOT_ASKED)
         assert installation.asked == []
@@ -359,7 +363,9 @@ class TestEveryWayTheQuestionCannotBePut:
         adapter = _adapter(None, traces)
 
         self._assert_refused(
-            adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label="mGBA"),
+            adapter.resolve_save_answer(
+                system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
+            ),
             UNESTABLISHED_NOT_ASKED,
         )
         assert any("no emulator installation detected" in line for line in traces)
@@ -388,7 +394,9 @@ class TestEveryWayTheQuestionCannotBePut:
         adapter = _adapter(_Installation((), raises=RuntimeError("packaged data")), traces)
 
         self._assert_refused(
-            adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label="mGBA"),
+            adapter.resolve_save_answer(
+                system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
+            ),
             UNESTABLISHED_NOT_ASKED,
         )
 
@@ -399,7 +407,9 @@ class TestEveryWayTheQuestionCannotBePut:
         adapter = AtlasSaveLocationAdapter(choose_installation=boom, log_debug=traces.append)
 
         self._assert_refused(
-            adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label="mGBA"),
+            adapter.resolve_save_answer(
+                system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
+            ),
             UNESTABLISHED_NOT_ASKED,
         )
 
@@ -412,7 +422,9 @@ class TestHowTheQuestionIsPut:
         others = (_Entry("Beetle Saturn", _placement(files=("wrong.srm",))), wanted)
         adapter = _adapter(_Installation(others), traces)
 
-        answer = adapter.resolve_save_answer(system="saturn", content_path=_CONTENT, emulator_label="Kronos")
+        answer = adapter.resolve_save_answer(
+            system="saturn", content_path=_CONTENT, emulator_label="Kronos", content_installed=True
+        )
 
         assert answer.emulator == "Kronos"
         assert answer.synced_names == ("Game Title.bkr",)
@@ -422,7 +434,7 @@ class TestHowTheQuestionIsPut:
         installation = _Installation((entry,))
         adapter = _adapter(installation, traces)
 
-        adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label="mGBA")
+        adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True)
 
         assert installation.asked == [("gba", _CONTENT)]
         assert entry.asked == [_CONTENT]
@@ -434,7 +446,9 @@ class TestHowTheQuestionIsPut:
         adapter = _adapter(_Installation((entry,)), traces)
 
         for _ in range(3):
-            adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label="mGBA")
+            adapter.resolve_save_answer(
+                system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
+            )
 
         assert entry.asked == [_CONTENT, _CONTENT, _CONTENT]
 
@@ -447,7 +461,9 @@ class TestHowTheQuestionIsPut:
 
         adapter = AtlasSaveLocationAdapter(choose_installation=choose, log_debug=traces.append)
         for _ in range(2):
-            adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label="mGBA")
+            adapter.resolve_save_answer(
+                system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
+            )
 
         assert len(chooses) == 2
 
@@ -464,9 +480,45 @@ class TestHowTheQuestionIsPut:
 
         adapter = AtlasSaveLocationAdapter(choose_installation=choose, log_debug=traces.append)
         for _ in range(3):
-            adapter.resolve_save_answer(system="gba", content_path=_CONTENT, emulator_label="mGBA")
+            adapter.resolve_save_answer(
+                system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=True
+            )
 
         assert len(chooses) == 1
+
+
+class TestTheAnswerSaysWhetherItsSubjectIsOnDisk:
+    """``content_installed`` describes the question, not the answer.
+
+    A ROM the library holds but has not installed is asked about the path it
+    WOULD occupy, so every name that comes back is a prediction. Without the
+    flag a page renders three save files for a game that is not there.
+    """
+
+    def test_the_callers_word_rides_onto_a_real_answer(self, traces):
+        entry = _Entry("mGBA", _placement())
+        adapter = _adapter(_Installation((entry,)), traces)
+
+        answer = adapter.resolve_save_answer(
+            system="gba", content_path=_CONTENT, emulator_label="mGBA", content_installed=False
+        )
+
+        assert answer.state == SAVE_STATE_PER_GAME_FILES
+        assert answer.content_installed is False
+
+    def test_it_rides_onto_a_refusal_too(self, traces):
+        # An installed game whose entry declines is installed all the same, so
+        # the flag must not collapse into "nothing was established".
+        declined = Unresolved(code="standalone-unsupported", message="not yet", data={})
+        entry = _Entry("Ryubing (Standalone)", declined)
+        adapter = _adapter(_Installation((entry,)), traces)
+
+        answer = adapter.resolve_save_answer(
+            system="switch", content_path=_CONTENT, emulator_label="Ryubing (Standalone)", content_installed=True
+        )
+
+        assert answer.state == SAVE_STATE_UNESTABLISHED
+        assert answer.content_installed is True
 
 
 class TestWhatTheAnswerCarries:
@@ -616,6 +668,7 @@ class TestTheRealMachineAnswers:
             system=system,
             content_path=content_path,
             emulator_label=default.label if default is not None else None,
+            content_installed=True,
         )
 
     @pytest.mark.parametrize(("system", "extension"), sorted(_PINNED), ids=lambda value: value.lstrip("."))

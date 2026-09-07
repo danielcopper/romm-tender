@@ -1045,6 +1045,8 @@ class MigrationService:
             system=system,
             content_path=file_path,
             emulator_label=emulator.label if emulator is not None else None,
+            # Every ROM this walk sees carries an install record.
+            content_installed=True,
         )
         rom_name = os.path.splitext(os.path.basename(file_path))[0]
         names = self._sort_migration_names(answer, old_dir, rom_name)

@@ -120,6 +120,7 @@ async def test_get_save_status_carries_the_save_resolution(harness):
     assert set(resolution.keys()) == {
         "state",
         "unestablished",
+        "content_installed",
         "emulator",
         "directory",
         "backing_directory",
@@ -129,13 +130,16 @@ async def test_get_save_status_carries_the_save_resolution(harness):
         "files",
     }
     assert resolution["state"] == "per_game_files"
+    # The game is on disk, so the names describe files rather than predicting
+    # the ones an install would create.
+    assert resolution["content_installed"] is True
     # Not a refusing state, so the discriminator the next cut words two ways is
     # absent rather than defaulted to one of them.
     assert resolution["unestablished"] is None
     assert isinstance(resolution["needs"], list)
     assert isinstance(resolution["caveats"], list)
     assert [entry["name"] for entry in resolution["files"]] == ["game.srm", "game.rtc", "game.sav"]
-    assert all(entry["synced"] is True for entry in resolution["files"])
+    assert all(entry["carried"] is True for entry in resolution["files"])
 
 
 async def test_a_configuration_file_is_named_on_the_wire_and_flagged_unsynced(harness):
@@ -152,8 +156,23 @@ async def test_a_configuration_file_is_named_on_the_wire_and_flagged_unsynced(ha
 
     by_name = {entry["name"]: entry for entry in files}
     assert by_name["rally.smpc"]["role"] == "settings"
-    assert by_name["rally.smpc"]["synced"] is False
-    assert by_name["rally.bkr"]["synced"] is True
+    assert by_name["rally.smpc"]["carried"] is False
+    assert by_name["rally.bkr"]["carried"] is True
+
+
+async def test_an_uninstalled_rom_says_its_answer_is_about_a_game_that_is_not_there(harness):
+    """The names are a prediction, and the payload says so.
+
+    Without this a page renders three save files for a game the user has not
+    installed, beside an empty file list and "No saves".
+    """
+    enable_save_sync(harness)
+    seed_rom(harness, 42, platform_slug="gba")
+
+    resolution = (await harness.plugin.get_save_status(42))["save_resolution"]
+
+    assert resolution["content_installed"] is False
+    assert resolution["state"] == "per_game_files"
 
 
 async def test_a_refusing_state_names_the_emulator_and_syncs_nothing(harness):
@@ -174,6 +193,7 @@ async def test_a_refusing_state_names_the_emulator_and_syncs_nothing(harness):
             needs=(),
             components=(),
             caveats=(),
+            content_installed=True,
         ),
     )
 

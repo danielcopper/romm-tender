@@ -248,7 +248,8 @@ class RomInfoService:
             # any emulator.
             return unestablished_answer(shape=UNESTABLISHED_NOT_ASKED)
         system = self._resolve_system(rom.platform_slug)
-        return self._ask_resolver(rom_id, system, os.path.join(self._retrodeck_paths.roms_path(), system, rom.fs_name))
+        content_path = os.path.join(self._retrodeck_paths.roms_path(), system, rom.fs_name)
+        return self._ask_resolver(rom_id, system, content_path, installed=False)
 
     def _installed_answer(self, rom_id: int, info: dict[str, Any]) -> SaveAnswer:
         """The answer for an installed ROM, asked about the file on disk.
@@ -260,15 +261,21 @@ class RomInfoService:
         :meth:`_uninstalled_answer` is the other — so the leak has two sites to
         guard rather than one per caller.
         """
-        return self._ask_resolver(rom_id, info["system"], info["file_path"])
+        return self._ask_resolver(rom_id, info["system"], info["file_path"], installed=True)
 
-    def _ask_resolver(self, rom_id: int, system: str, content_path: str) -> SaveAnswer:
-        """Put the question to the emulator this ROM would launch with."""
+    def _ask_resolver(self, rom_id: int, system: str, content_path: str, *, installed: bool) -> SaveAnswer:
+        """Put the question to the emulator this ROM would launch with.
+
+        *installed* says whether *content_path* is a file on disk or the path
+        the ROM would occupy, and rides onto the answer so a surface never
+        renders a prediction as an observation.
+        """
         emulator = self._active_core.active_emulator_for_rom(int(rom_id))
         return self._save_locations.resolve_save_answer(
             system=system,
             content_path=content_path,
             emulator_label=emulator.label if emulator is not None else None,
+            content_installed=installed,
         )
 
     def synced_save_names(self, rom_id: int) -> tuple[list[str], str | None]:

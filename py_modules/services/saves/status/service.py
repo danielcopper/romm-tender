@@ -477,15 +477,24 @@ def _save_resolution_payload(answer: SaveAnswer) -> dict[str, Any]:
     """Project one :class:`SaveAnswer` onto the wire.
 
     Every file the answer names is carried, configuration included, each with
-    its own ``synced`` flag — a page has to be able to say "this file exists and
-    we deliberately leave it alone" rather than simply not showing it.
-    ``unestablished`` is carried beside ``state`` because the two shapes of that
-    state are different sentences to a reader: nobody has established what this
-    emulator writes, versus the directory is known and the names in it are not.
+    its own ``carried`` flag — a page has to be able to say "this file exists
+    and we deliberately leave it alone" rather than simply not showing it. The
+    flag is named for the RULE and not for the file: it says save sync carries
+    this name, which is a different claim from "this file is in sync", and a
+    field called ``synced`` invited the second reading for a file that may not
+    exist at all.
+
+    ``content_installed`` is why that matters. For a ROM the library holds but
+    has not installed, every name here is a prediction about the path the game
+    WOULD occupy — the answer is real, the files are not — so a surface must
+    say "would use" rather than "uses". ``unestablished`` is carried beside
+    ``state`` for the same reason: its three shapes are three different
+    sentences to a reader.
     """
     return {
         "state": answer.state,
         "unestablished": answer.unestablished,
+        "content_installed": answer.content_installed,
         "emulator": answer.emulator,
         "directory": answer.directory,
         "backing_directory": answer.backing_directory,
@@ -497,7 +506,7 @@ def _save_resolution_payload(answer: SaveAnswer) -> dict[str, Any]:
                 "name": component.name,
                 "role": component.role,
                 "granularity": component.granularity,
-                "synced": answer.syncable and component.is_progress,
+                "carried": answer.syncable and component.is_progress,
             }
             for component in answer.components
         ],

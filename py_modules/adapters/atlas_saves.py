@@ -73,7 +73,9 @@ class AtlasSaveLocationAdapter:
         self._log_debug = log_debug
         self._installation: Any = None
 
-    def resolve_save_answer(self, *, system: str, content_path: str, emulator_label: str | None) -> SaveAnswer:
+    def resolve_save_answer(
+        self, *, system: str, content_path: str, emulator_label: str | None, content_installed: bool
+    ) -> SaveAnswer:
         """What *emulator_label* saves for the game at *content_path*, and whether it may be synced.
 
         *emulator_label* is the emulator the plugin resolved for this ROM;
@@ -82,26 +84,34 @@ class AtlasSaveLocationAdapter:
         ``not_asked`` — the question never reached the resolver, so none of them
         is a statement about the emulator. An entry that declines and a resolver
         that raises WERE asked, so both are ``nothing_established``.
+
+        *content_installed* is the caller's own statement about *content_path*:
+        ``False`` where it is the path a ROM WOULD occupy rather than a file on
+        disk. This adapter cannot tell — it hands the path to the resolver
+        either way — so it carries the caller's word onto the answer, where a
+        surface can say "would use" instead of "uses".
         """
         if emulator_label is None:
             self._log_debug(f"[saves] {system}: no emulator resolved for this ROM; nothing to ask")
-            return unestablished_answer(shape=UNESTABLISHED_NOT_ASKED)
+            return unestablished_answer(shape=UNESTABLISHED_NOT_ASKED, content_installed=content_installed)
 
         entry = self._entry(system, content_path, emulator_label)
         if entry is None:
             # No installation, an unreadable catalogue, or no entry under that
             # label: the question never reached the resolver, so this says
             # nothing about the emulator itself.
-            return unestablished_answer(emulator=emulator_label, shape=UNESTABLISHED_NOT_ASKED)
+            return unestablished_answer(
+                emulator=emulator_label, shape=UNESTABLISHED_NOT_ASKED, content_installed=content_installed
+            )
 
         subject = f"savefile_location({system!r}, {emulator_label!r})"
         placement = self._ask(lambda: entry.savefile_location(content_path=content_path), subject)
         if placement is None or isinstance(placement, Unresolved):
             if isinstance(placement, Unresolved):
                 self._log_debug(f"[saves] {subject}: declined with code={placement.code!r}")
-            return unestablished_answer(emulator=emulator_label)
+            return unestablished_answer(emulator=emulator_label, content_installed=content_installed)
 
-        answer = _translate(placement, emulator_label)
+        answer = _translate(placement, emulator_label, content_installed)
         self._log_debug(
             f"[saves] {subject}: state={answer.state} shape={answer.unestablished} "
             f"granularity={answer.granularity} files={len(answer.components)} "
@@ -156,7 +166,7 @@ class AtlasSaveLocationAdapter:
             return None
 
 
-def _translate(placement: Any, emulator_label: str) -> SaveAnswer:
+def _translate(placement: Any, emulator_label: str, content_installed: bool) -> SaveAnswer:
     """Restate one resolved placement in the plugin's own save vocabulary."""
     file_set = placement.file_set
     granularity = placement.granularity
@@ -178,4 +188,5 @@ def _translate(placement: Any, emulator_label: str) -> SaveAnswer:
             for group in file_set.groups
         ),
         caveats=tuple(caveat.code for caveat in placement.caveats),
+        content_installed=content_installed,
     )

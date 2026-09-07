@@ -116,9 +116,10 @@ the user chose there. On a stock RetroDECK the only one that reaches this rule i
 file: MAME states a per-game `.cfg` as well, but its answer is not-established, so the sync refuses that ROM before any
 role is consulted.
 
-Such a file is still named on the wire, flagged `synced: false`, so a page can say "this file exists and we deliberately
-leave it alone" rather than simply not showing it. A **directory move** — the save-sort migration — does carry it,
-because splitting one save across two directories breaks the game as surely as leaving the battery file behind.
+Such a file is still named on the wire, flagged `carried: false`, so a page can say "this file exists and we
+deliberately leave it alone" rather than simply not showing it. A **directory move** — the save-sort migration — does
+carry it, because splitting one save across two directories breaks the game as surely as leaving the battery file
+behind.
 
 ## How RomM stores saves
 

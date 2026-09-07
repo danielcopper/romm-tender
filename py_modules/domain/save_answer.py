@@ -156,6 +156,15 @@ class SaveAnswer:
     holes a name could not be completed from, ``granularity`` is how this
     emulator groups save data, and ``caveats`` carries the resolver's stable
     codes verbatim for the log and for a later rendering.
+
+    ``content_installed`` says whether the CONTENT PATH the question was put
+    about is a file on disk. It is ``False`` for a ROM the library holds but has
+    not installed — the question was about the path the ROM WOULD occupy, so
+    every name in the answer is a prediction — and ``False`` where there was no
+    path at all. It describes the question, not the answer: an installed game
+    whose emulator establishes nothing is still installed. A surface that
+    renders the names without reading it tells a user their uninstalled game
+    already has three save files.
     """
 
     state: SaveState
@@ -167,6 +176,7 @@ class SaveAnswer:
     needs: tuple[str, ...]
     components: tuple[SaveComponent, ...]
     caveats: tuple[str, ...]
+    content_installed: bool
 
     @property
     def syncable(self) -> bool:
@@ -252,6 +262,7 @@ def unestablished_answer(
     emulator: str | None = None,
     caveats: tuple[str, ...] = (),
     shape: UnestablishedShape = UNESTABLISHED_NOTHING,
+    content_installed: bool = False,
 ) -> SaveAnswer:
     """The answer for a question that could not be put, or was put and refused.
 
@@ -261,6 +272,11 @@ def unestablished_answer(
     saves written to the content directory. :data:`UNESTABLISHED_NOTHING` where
     it was asked and could establish nothing, including where it declined or
     raised.
+
+    *content_installed* still describes the PATH the question was about, not
+    whether anything came back: an installed game whose entry declines is
+    installed all the same. It defaults to ``False`` for the callers that had no
+    path at all.
     """
     return SaveAnswer(
         state=SAVE_STATE_UNESTABLISHED,
@@ -272,6 +288,7 @@ def unestablished_answer(
         needs=(),
         components=(),
         caveats=caveats,
+        content_installed=content_installed,
     )
 
 
@@ -286,6 +303,7 @@ def build_save_answer(
     files: tuple[str, ...],
     groups: tuple[SaveGroup, ...],
     caveats: tuple[str, ...],
+    content_installed: bool,
 ) -> SaveAnswer:
     """Classify one resolved savefile placement into a :class:`SaveAnswer`.
 
@@ -313,6 +331,7 @@ def build_save_answer(
         needs=needs,
         components=components,
         caveats=caveats,
+        content_installed=content_installed,
     )
 
 

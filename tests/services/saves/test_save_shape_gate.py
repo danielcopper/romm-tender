@@ -46,6 +46,7 @@ def _refusing(state: str, **overrides: Any) -> SaveAnswer:
         "needs": ("save_id",) if state == "hole" else (),
         "components": (),
         "caveats": (),
+        "content_installed": True,
     }
     kwargs.update(overrides)
     return SaveAnswer(**kwargs)
@@ -62,6 +63,7 @@ def _syncable() -> SaveAnswer:
         needs=(),
         components=(SaveComponent(name="pokemon.srm", directory="/saves/gba", role="battery", granularity=None),),
         caveats=(),
+        content_installed=True,
     )
 
 

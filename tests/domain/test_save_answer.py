@@ -42,6 +42,7 @@ def _answer(**overrides):
         "files": ("Game.srm",),
         "groups": (),
         "caveats": (),
+        "content_installed": True,
     }
     kwargs.update(overrides)
     return build_save_answer(**kwargs)
