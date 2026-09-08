@@ -1,4 +1,4 @@
-# decky-romm-sync — Decky Loader Plugin
+# Tender — Decky Loader Plugin
 
 ## What This Is
 

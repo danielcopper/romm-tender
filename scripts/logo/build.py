@@ -182,7 +182,9 @@ INSTALL = {
     "lockup-animated.gif": ("assets/lockup-animated.gif",),
     "lockup-animated-dark.gif": ("assets/lockup-animated-dark.gif",),
 }
-# The Decky store pulls this one straight off the default branch by URL.
+# A 1024px square of the bare mark. Nothing renders it — no page, no manifest —
+# it is the copy to hand out wherever a link preview or a listing wants one
+# square image.
 STORE_IMAGE = ("logo-1024.png", "assets/store_image.png")
 
 

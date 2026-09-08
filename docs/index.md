@@ -14,8 +14,7 @@ library into Steam as Non-Steam shortcuts. Games launch through [RetroDECK](http
 
     The feature set isn't complete yet. Save sync covers standard cartridge saves; the memory-card systems —
     PlayStation, PS2, Dreamcast, GameCube, PSP, 3DS — don't sync their saves yet
-    ([support matrix](user-guide/save-sync-support-matrix.md)). The Decky Store listing comes with v1.0; until then
-    it's a manual install.
+    ([support matrix](user-guide/save-sync-support-matrix.md)).
 
 !!! info "How this is built"
 

@@ -69,7 +69,7 @@ body:
     attributes:
       label: Log excerpt
       description: |
-        Plugin logs live at `~/homebrew/logs/decky-romm-sync/`. Set log level to "debug" in plugin settings for full output. Decky Loader logs are in `~/homebrew/services/PluginLoader/`.
+        Plugin logs live at `~/homebrew/logs/romm-tender/` or `~/homebrew/logs/decky-romm-sync/` — older installs use the second name; if both are there, take the one with recent files. Set log level to "debug" in plugin settings for full output. Decky Loader's own log goes to the journal: `journalctl -u plugin_loader`.
       render: text
     validations:
       required: false

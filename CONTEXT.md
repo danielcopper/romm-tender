@@ -1,4 +1,4 @@
-# CONTEXT.md — decky-romm-sync domain glossary
+# CONTEXT.md — Tender domain glossary
 
 This file is a glossary. It defines the canonical meaning of project-specific terms so that conversations, issues, PRs,
 and code stay aligned. It is _not_ a spec or design doc — implementation docs live in `docs/architecture/`, and
@@ -77,7 +77,7 @@ longer held the save-sync toggles or `device_name` (those moved to `settings.jso
 
 ### Cutover
 
-The hard cut from JSON state files to SQLite ([#784](https://github.com/danielcopper/decky-romm-sync/issues/784)) has
+The hard cut from JSON state files to SQLite ([#784](https://github.com/danielcopper/romm-tender/issues/784)) has
 landed. "Hard" means **SQLite started empty** — the JSON state was not migrated into it, and the JSON-era domain classes
 (`SaveSyncState`, `PluginState`) and `domain/save_state.py` were deleted in the same wave. Bucket-1 config
 (`settings.json`) and the change-detection markers were unaffected; only the relational save/library/playtime state was
@@ -157,9 +157,8 @@ Single-file vs multi-file is **read from `rom_dir` presence** — never re-deriv
 stored as a separate boolean ([ADR-0008](docs/adr/0008-rom-install-launch-file-and-rom-dir.md)). Migration moves
 `rom_dir` whole when set, else the file; uninstall removes `rom_dir` whole when set, else the file. A future per-file
 `RomFile[]` model — one row per physical file, each tagged with a RomM `category` (`game` / `dlc` / `update` / `mod` /
-…) — is the planned shape for the multi-file features in
-[#140](https://github.com/danielcopper/decky-romm-sync/issues/140) /
-[#129](https://github.com/danielcopper/decky-romm-sync/issues/129); it is an additive 1:N child of `rom_installs`
+…) — is the planned shape for the multi-file features in [#140](https://github.com/danielcopper/romm-tender/issues/140)
+/ [#129](https://github.com/danielcopper/romm-tender/issues/129); it is an additive 1:N child of `rom_installs`
 (deferred until those land), and `file_path` + `rom_dir` are its forward-compatible projection.
 
 ### Launchable install / no launch target
@@ -168,7 +167,7 @@ A downloaded ROM whose recorded **launch file** is something the system cannot a
 is still sealed inside the package), a bare disc track `.bin`. `detect_launch_file` ends in "largest file by size", so a
 download none of its format rules recognise still yields a `file_path`; `RomInstall.launchable` records whether that
 path is a real launch target, decided once at download-complete against the system's live ES-DE accept-list
-([#1652](https://github.com/danielcopper/decky-romm-sync/issues/1652)).
+([#1652](https://github.com/danielcopper/romm-tender/issues/1652)).
 
 "No launch target" is a statement about the **launch command**, never about the download. The files stay on disk, the
 install row is written, and uninstall works normally — installing the package by hand in the emulator is the documented

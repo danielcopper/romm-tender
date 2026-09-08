@@ -26,10 +26,11 @@ look at a change before it lands.
 | `lockup.svg`, `lockup.png` (900px)                        | `assets/` — the banner at rest, light ground        |
 | `lockup-dark.svg`, `lockup-dark.png`                      | `assets/` — the banner at rest, dark ground         |
 | `lockup-animated.gif`, `lockup-animated-dark.gif` (600px) | `assets/` — the README banner                       |
-| `store_image.png` (1024px)                                | `assets/` — the Decky store pulls this one by URL   |
+| `store_image.png` (1024px)                                | `assets/` — the square mark, for previews and links |
 
-Everything ships twice except the lockup, which lands once: it is the README's banner, and the docs site draws its own
-header from the bare mark.
+Everything ships twice except the lockup and `store_image.png`, which land once. The lockup is the README's banner, and
+the docs site draws its own header from the bare mark; nothing renders `store_image.png` at all, so `assets/` is the
+only place it needs to be.
 
 Each lockup ships in two variants because one cannot serve both grounds: the mark's ink falls to roughly 1.3:1 against
 GitHub's dark canvas, so the dark variant sets the wordmark in the disc's blue instead. The README chooses between them
