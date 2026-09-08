@@ -30,7 +30,7 @@ from services.migration.save_sort import SaveSortMigrator
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
 
     from domain.save_layout import SaveLayout
     from services.protocols import (
@@ -493,10 +493,8 @@ class MigrationService:
         Scans ``<home>/saves`` for each pending home (#1042) and deduplicates by
         relative path, newest mtime winning — the same save can exist under
         several homes if the user played while a change was pending, and only
-        the freshest copy should survive. Hidden directories (those whose name
-        begins with ``.``) and the files they contain are skipped: the RomM
-        plugin's ``.romm-backup`` sidecars and any ad-hoc user dotdirs must not
-        be migrated.
+        the freshest copy should survive. Which files a scan is willing to see
+        at all is :meth:`_migratable_saves`'s contract, not this one's.
         """
         new_saves = self._retrodeck_paths.saves_path()
         # rel path -> (source path, mtime); newest mtime wins across homes.
@@ -505,26 +503,36 @@ class MigrationService:
             old_saves = os.path.join(home, "saves")
             if not self._migration_file_store.is_dir(old_saves):
                 continue
-            for dirpath, _dirs, filenames in self._migration_file_store.walk_files(old_saves):
-                rel_dir = os.path.relpath(dirpath, old_saves)
-                # Skip any descendant of a hidden directory by inspecting the
-                # relative-path segments. ``rel_dir == "."`` for the saves
-                # root itself, which is never hidden.
-                if rel_dir != "." and any(part.startswith(".") for part in rel_dir.split(os.sep)):
-                    continue
-                for fname in filenames:
-                    if fname.startswith("."):
-                        continue
-                    old_file = os.path.join(dirpath, fname)
-                    rel = os.path.relpath(old_file, old_saves)
-                    mtime = self._safe_mtime(old_file)
-                    existing = best.get(rel)
-                    if existing is None or mtime >= existing[1]:
-                        best[rel] = (old_file, mtime)
+            for rel, old_file in self._migratable_saves(old_saves):
+                mtime = self._safe_mtime(old_file)
+                existing = best.get(rel)
+                if existing is None or mtime >= existing[1]:
+                    best[rel] = (old_file, mtime)
         return [
             (rel, old_file, os.path.join(new_saves, rel), lambda: None, "save")
             for rel, (old_file, _mtime) in best.items()
         ]
+
+    def _migratable_saves(self, old_saves: str) -> Iterator[tuple[str, str]]:
+        """Yield ``(path relative to old_saves, absolute path)`` for each file a migration may move.
+
+        Hidden directories (those whose name begins with ``.``) and the files
+        they contain are skipped, as is any hidden file: the RomM plugin's
+        ``.romm-backup`` sidecars and any ad-hoc user dotdirs must not be
+        migrated.
+        """
+        for dirpath, _dirs, filenames in self._migration_file_store.walk_files(old_saves):
+            rel_dir = os.path.relpath(dirpath, old_saves)
+            # Skip any descendant of a hidden directory by inspecting the
+            # relative-path segments. ``rel_dir == "."`` for the saves
+            # root itself, which is never hidden.
+            if rel_dir != "." and any(part.startswith(".") for part in rel_dir.split(os.sep)):
+                continue
+            for fname in filenames:
+                if fname.startswith("."):
+                    continue
+                old_file = os.path.join(dirpath, fname)
+                yield os.path.relpath(old_file, old_saves), old_file
 
     def _safe_mtime(self, path: str) -> float:
         """Return *path*'s mtime, or ``0.0`` when it cannot be read.
