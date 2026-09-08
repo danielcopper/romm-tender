@@ -3,7 +3,7 @@
 The resolver's own decisions are upstream's and are not re-tested here. What is
 under test is the host's half: which paths this plugin hands over, which it
 refuses, and that the answer says where a probe's interpreter came from — the
-one place the grant's absence is ever visible.
+one place a missing grant is ever named as the cause of the caveats it leaves.
 
 Every case reads the answer back through the resolver's own
 :func:`_vendor.atlas.core_probe_interpreter` rather than a stand-in, because the
@@ -27,16 +27,23 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(autouse=True)
-def _forget_the_grant() -> Iterator[None]:
-    """Clear the registration after every test in this file.
+def _restore_the_grant() -> Iterator[None]:
+    """Put the registration back the way this file found it, after every test.
 
     The slot lives in the vendored package for the life of the process, so a
     grant left standing here would silently change what every later test in the
     session probes with — including the suites that drive the real resolver over
-    whatever RetroDECK the machine has.
+    whatever RetroDECK the machine has. Restoring rather than clearing makes
+    that cut both ways: in an ordering where an earlier tier registered an
+    interpreter of its own, a clear would discard it just as silently.
+
+    Only a *registered* path is put back. ``core_probe_interpreter()`` also
+    answers with the one atlas derives from the running program, and handing
+    that back would turn a reading into a registration.
     """
+    before = core_probe_interpreter()
     yield
-    register_core_probe_interpreter(None)
+    register_core_probe_interpreter(before.path if before is not None and before.registered else None)
 
 
 @pytest.fixture

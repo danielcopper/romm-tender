@@ -377,11 +377,16 @@ def bootstrap(
     machine_id_provider = MachineIdAdapter()
     debug_logger = SettingsAwareDebugLogger(settings=settings, logger=logger)
     # Without this grant the resolver probes no core here — Decky Loader's
-    # frozen runtime is no interpreter to spawn — so every core answers unknown
-    # and a save answer establishes nothing. That fails nothing and no test
-    # notices, which is why the answer is logged rather than discarded. Granted
-    # before the first atlas adapter: any question one of them puts can probe.
-    logger.info(grant_core_probe_interpreter())
+    # frozen runtime is no interpreter to spawn — so every core it is asked
+    # about answers unknown and a libretro save answer usually establishes
+    # nothing. That fails nothing and no test notices, which is why the answer
+    # is logged rather than discarded. Granted before the first atlas adapter:
+    # any question one of them puts can probe. The call stands on its own line
+    # because it is the grant, not the diagnostic: nested inside the log it
+    # would leave with a demoted or deleted log line, and everything would stay
+    # green.
+    core_probe_report = grant_core_probe_interpreter()
+    logger.info(core_probe_report)
     # Built after the debug logger because the resolver never logs on its own:
     # its caveats are the whole degradation channel and reach the log through
     # this seam or not at all. That holds for both firmware questions and for
