@@ -24,19 +24,26 @@ questions to every detected installation at once and answers each labelled with
 the handle it came from, so a machine carrying two arrangements gives two true
 answers instead of a silently chosen winner.
 
-One thing here is the host's to grant rather than atlas's to require. The zstd
-codec that opens an AppImage is discovered, never depended on:
-:func:`atlas.register_zstd_provider` hands over the module a host already has,
-which is what a host that vendors it under its own root needs, and
-:func:`atlas.zstd_provider` says which provider a zstd image would go through
-here and whether a host handed it over (:class:`atlas.ZstdProvider`). All three
-are re-exported here from ``atlas.squashfs``; none adds a dependency.
+Two things here are the host's to grant rather than atlas's to require, and
+both follow the same shape: atlas discovers what it can, states plainly when it
+found nothing, and takes what a host hands over ahead of anything it found. The
+zstd codec that opens an AppImage is one — :func:`atlas.register_zstd_provider`
+hands over the module a host already has, which is what a host that vendors it
+under its own root needs, and :func:`atlas.zstd_provider` says which provider a
+zstd image would go through here (:class:`atlas.ZstdProvider`). The interpreter
+the core probe runs under is the other — a frozen host has no interpreter to
+offer as ``sys.executable``, so :func:`atlas.register_core_probe_interpreter`
+names a real one and :func:`atlas.core_probe_interpreter` says which one a
+probe would run under, or that none would and every core comes back unknown
+(:class:`atlas.CoreProbeInterpreter`). Neither grant is a dependency, and where
+one is missing the answers it would have carried state the limit in a caveat
+instead of hiding it.
 
 **What this namespace is.** Everything below is the consumer API: the two entry
 points, the handles they answer with, every answer type, the vocabularies those
-answers speak, the serializers that turn an answer into plain data, and the one
-capability a host grants rather than atlas requiring it. If you are writing a
-client, you never need to import from a submodule.
+answers speak, the serializers that turn an answer into plain data, and the two
+capabilities a host grants rather than atlas requiring them. If you are writing
+a client, you never need to import from a submodule.
 
 **What it deliberately is not.** The machine seam, the config and catalogue
 parsers, the packaged-data loaders and the module-level resolver functions are
@@ -57,16 +64,24 @@ from __future__ import annotations
 # tests/test_version.py holds it equal to pyproject — CI's package job holds
 # dist-info to pyproject in a clean venv — so drift is a red test, not a
 # silent fork.
-__version__ = "0.13.0"  # x-release-please-version
+__version__ = "0.14.0"  # x-release-please-version
 
 # --- The two entry points, and the aggregate over them -----------------------
 from .detect import detect
 from .every_installation import EveryInstallation, InstallationAnswer, every_installation
 
-# --- The one capability a host grants, rather than atlas requiring it --------
+# --- The capabilities a host grants, rather than atlas requiring them --------
 # The zstd codec an AppImage read may need is discovered, never imported as a
 # dependency; a host whose own packaging holds it hands the module over here.
 from .squashfs import ZstdProvider, register_zstd_provider, zstd_provider
+
+# The interpreter the core probe runs under is the running one only where the
+# running program is plainly an interpreter; a frozen host names a real one here.
+from .machine import (
+    CoreProbeInterpreter,
+    core_probe_interpreter,
+    register_core_probe_interpreter,
+)
 
 # --- The vocabulary those questions take -------------------------------------
 # ES-DE's system names, and the two ways to check a name against them. A
@@ -501,10 +516,14 @@ __all__ = [
     # Entry points
     "detect",
     "every_installation",
-    # The one capability a host grants: which zstd provider opens an AppImage
+    # The two capabilities a host grants: which zstd provider opens an
+    # AppImage, and which interpreter the core probe runs under
     "register_zstd_provider",
     "zstd_provider",
     "ZstdProvider",
+    "register_core_probe_interpreter",
+    "core_probe_interpreter",
+    "CoreProbeInterpreter",
     # The vocabulary the questions take, and how to check a name against it
     "from_esde_system",
     "known_systems",

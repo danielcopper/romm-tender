@@ -80,7 +80,7 @@ import sys
 import zipfile
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Callable, Iterable, Literal, Mapping, Protocol
+from typing import Callable, Iterable, Literal, Mapping, NamedTuple, Protocol
 
 from . import lha, ps2_bios, squashfs, whdload
 
@@ -778,11 +778,12 @@ class Machine(Protocol):
     read; a caller that would otherwise report "nothing is there" must look at
     that before believing an empty ``matches``. ``readlink`` returns the link target
     when the path itself is a symlink, else ``None``. ``query_core`` returns
-    the core's self-reported info, or ``None`` when the core cannot be loaded —
-    the caller treats that as *unknown*, never as a guess. ``file_size`` and
-    ``file_digest`` answer for regular files only and return ``None`` whenever
-    the answer cannot be determined (missing, unreadable, not a regular file,
-    or an algorithm outside :data:`DIGEST_ALGORITHMS`).
+    the core's self-reported info, or ``None`` whenever that info cannot be
+    had — the core would not load, or nothing here could load it in the first
+    place; the caller treats either as *unknown*, never as a guess.
+    ``file_size`` and ``file_digest`` answer for regular files only and return
+    ``None`` whenever the answer cannot be determined (missing, unreadable, not
+    a regular file, or an algorithm outside :data:`DIGEST_ALGORITHMS`).
     """
 
     def read_text(self, path: str) -> ReadResult: ...
@@ -809,14 +810,26 @@ class Machine(Protocol):
 
 
 class RealMachine:
-    """The production machine: the real filesystem plus a real core prober.
+    """The production machine: the real filesystem, plus a core prober where one is possible.
 
-    ``query_core`` runs the probe in a subprocess (``atlas._core_probe``) so a
-    crashing core costs one answer, not the host process, and memoizes per
-    ``(path, mtime, size)`` — a cached live read, not shipped data: the cache
-    invalidates the moment the ``.so`` changes. The child is pointed back at
-    this package (:func:`_probe_environment`) and answers with whatever it
-    printed before it stopped (:func:`_parse_probe_output`).
+    ``query_core`` runs the probe in a subprocess (``atlas._core_probe``) — so
+    a crashing core costs one answer, not the host process — wherever an
+    interpreter to run it under could be named
+    (:func:`core_probe_interpreter`), and memoizes per ``(path, mtime, size)``:
+    a cached live read, not shipped data, keyed on the file's metadata rather
+    than its content — a rebuild moves the mtime and is read again, while a
+    replacement preserving mtime and size (``cp -p``, a timestamp-normalising
+    deploy) keeps the key. A probe that timed out without printing a usable
+    line is remembered too, so a hanging core costs its timeout once per
+    machine rather than once per question. That memory reaches exactly as far
+    as this object and no further, which is the part a consumer has to act on:
+    :func:`atlas.detect` builds a fresh machine whenever it is handed none, so
+    a caller that re-detects per question pays the timeout every time, while
+    one that keeps its installations, or passes its own machine, pays it once.
+    Where no interpreter can be named nothing is launched at all and every core
+    answers *unknown*. The child is pointed back at this package
+    (:func:`_probe_environment`) and answers with whatever it printed before it
+    stopped (:func:`_parse_probe_output`).
     """
 
     def __init__(self) -> None:
@@ -1057,18 +1070,34 @@ class RealMachine:
         key = (so_path, st.st_mtime_ns, st.st_size)
         if key in self._core_cache:
             return self._core_cache[key]
-        info = self._probe(so_path)
-        # Only successes are memoized: a failure can be transient (missing
-        # host library installed later) even while the .so is unchanged.
-        if info is not None:
+        info, timed_out = self._probe(so_path)
+        # An answer is memoized, and so is the absence of one after a timeout —
+        # whatever the hung core managed to print, no usable line came out of
+        # it, or info would be that answer. A core that hung once hangs again,
+        # and that retry is the only empty answer costing the caller the whole
+        # _CORE_PROBE_TIMEOUT_SECONDS. Every other empty answer is asked again,
+        # because it can be transient (missing host library installed later)
+        # even while the .so is unchanged. The memory is this object's and goes
+        # no further: a caller that builds a machine per question re-probes.
+        if info is not None or timed_out:
             self._core_cache[key] = info
         return info
 
     @staticmethod
-    def _probe(so_path: str) -> CoreInfo | None:
+    def _probe(so_path: str) -> _ProbeResult:
+        interpreter = core_probe_interpreter()
+        if interpreter is None:
+            # No interpreter to run the probe under, so nothing is launched at
+            # all. The alternative — spawning ``sys.executable`` and hoping —
+            # starts the *host* again wherever that executable is a frozen
+            # application, and ``capture_output`` would swallow the evidence.
+            # Unknown is the honest answer, and the caller already handles it.
+            # Nothing ran, so nothing timed out: the next question asks again,
+            # and it is free — an interpreter may be registered by then.
+            return _ProbeResult(None, timed_out=False)
         try:
             proc = subprocess.run(
-                [sys.executable, "-m", "atlas._core_probe", so_path],
+                [interpreter.path, "-m", "atlas._core_probe", so_path],
                 capture_output=True,
                 timeout=_CORE_PROBE_TIMEOUT_SECONDS,
                 env=_probe_environment(),
@@ -1076,11 +1105,33 @@ class RealMachine:
         except subprocess.TimeoutExpired as expired:
             # A core that hangs in the option-capture phase printed its base
             # answer before it hung; the exception carries what was captured.
-            return _parse_probe_output(expired.stdout)
+            return _ProbeResult(_parse_probe_output(expired.stdout), timed_out=True)
         except OSError:
             # The probe never ran — nothing was read, nothing can be said.
-            return None
-        return _parse_probe_output(proc.stdout)
+            return _ProbeResult(None, timed_out=False)
+        return _ProbeResult(_parse_probe_output(proc.stdout), timed_out=False)
+
+
+class _ProbeResult(NamedTuple):
+    """What one probe read, and whether the process had to be killed to end it.
+
+    Two facts, because ``query_core`` decides on both. What was read is the
+    answer; how the run ended is what tells an empty answer that will stay
+    empty from one that may not. A probe that timed out and printed no usable
+    line would hang the same way next time, so ``query_core`` remembers that
+    nothing and pays ``_CORE_PROBE_TIMEOUT_SECONDS`` once per ``.so`` for the
+    life of that :class:`RealMachine`; every other empty answer is asked again,
+    because the host library that was missing can be installed while the
+    ``.so`` never changes.
+
+    The ending is carried here rather than folded into the answer because
+    :func:`_parse_probe_output` reads bytes and nothing else — a timeout that
+    printed a usable line still answers with it, and is remembered as the
+    success it is.
+    """
+
+    info: CoreInfo | None
+    timed_out: bool
 
 
 def _parse_probe_output(stdout: bytes | None) -> CoreInfo | None:
@@ -1142,6 +1193,169 @@ def _probe_environment() -> dict[str, str] | None:
     inherited = env.get("PYTHONPATH")
     env["PYTHONPATH"] = f"{package_root}{os.pathsep}{inherited}" if inherited else package_root
     return env
+
+
+# The interpreter a host handed over, or None. Process-global because the
+# question is the process's: one running program, one answer to "is there an
+# interpreter here the core probe could run under".
+_registered_interpreter: str | None = None
+
+
+def _is_spawnable_interpreter_path(handed_over: object) -> bool:
+    """The one shape both stages accept: an absolute ``str`` the OS can be handed.
+
+    One rule, applied to the path a host registered and to the one derived from
+    the running program alike, so neither stage can put into the spawn what the
+    other would have refused. Each requirement is about the spawn:
+
+    - a ``str``, because that is what this seam stores and reports back:
+      ``CoreProbeInterpreter.path`` is a ``str``. A ``Path`` is refused for
+      that reason and no other — it passes :func:`os.path.isabs`, and
+      ``subprocess`` would run it perfectly well;
+    - **absolute**, because ``subprocess`` resolves a bare name through
+      ``PATH`` and a relative one against the process's working directory.
+      Either is a lookup atlas performs nowhere, and a host reaching this seam
+      may be a service running as root. The empty string is not absolute, so
+      it is refused here rather than by a check of its own;
+    - **something the operating system can actually be handed.** ``_probe``
+      degrades an ``OSError`` to *unknown*, so a path the spawn refuses with a
+      ``ValueError`` instead would escape ``query_core`` into the resolver.
+      The requirement is stated that way round rather than as a list of bad
+      spellings, because the list is not closed — but it takes two checks,
+      because the two known spellings fail at different layers: a lone
+      surrogate fails :func:`os.fsencode`, the same encoding ``subprocess``
+      performs, while a NUL byte encodes cleanly and ``subprocess`` rejects it
+      itself. A surrogate-escaped byte (``\\udcff``) is neither of those: it is
+      what a real filesystem hands back for a name that is not valid text, it
+      encodes, and it degrades like any other path that does not run.
+
+    Typed ``object`` on purpose: the annotation on the registration below is a
+    promise the caller makes, and this check is there for the caller who does
+    not keep it.
+    """
+    if not isinstance(handed_over, str) or not os.path.isabs(handed_over):
+        return False
+    if "\x00" in handed_over:
+        return False
+    try:
+        os.fsencode(handed_over)
+    except ValueError:
+        return False
+    return True
+
+
+def register_core_probe_interpreter(path: str | None) -> None:
+    """Name the Python interpreter the core probe runs under — or ``None`` to forget it.
+
+    ``query_core`` answers what only the core binary can answer, by loading it
+    in a child process; that child is a Python interpreter running
+    ``atlas._core_probe``. A frozen host (PyInstaller, cx_Freeze, py2exe) has
+    no interpreter to offer as ``sys.executable`` — there that path is the
+    *application*, whose bootloader ignores ``-m atlas._core_probe`` and starts
+    the application a second time — so a host that knows where a real
+    interpreter lives says so here, and atlas launches that one instead. The
+    environment the child receives points it back at this package (see
+    :func:`_probe_environment`), so a foreign interpreter is not a poorer
+    answer: it is the same answer.
+
+    The path must be absolute, and it must be one the operating system can
+    actually be handed — :func:`_is_spawnable_interpreter_path` carries the
+    reasoning for every requirement, and the derived stage applies the same
+    rule. Anything that is not ``None`` and does not pass it is refused with
+    :class:`TypeError` here at the registration, where the caller can still see
+    what it handed over.
+
+    Whether the file exists is deliberately **not** checked: that is the
+    machine's business at probe time, and a path that does not run yields the
+    same honest *unknown* every other probe failure yields. That promise is
+    what the shape rule protects: a path the operating system cannot be handed
+    at all makes the spawn raise a ``ValueError``, which would escape rather
+    than degrade. Such a path is named here, where the caller can still see it,
+    instead of turning into a statement about the machine.
+
+    Registering ``None`` clears the registration and the running program
+    decides again. The last registration wins; there is one slot, not a chain.
+    """
+    global _registered_interpreter
+    if path is not None and not _is_spawnable_interpreter_path(path):
+        raise TypeError(
+            "a core probe interpreter must be an absolute path, spelled as a str the "
+            f"operating system can be handed; {path!r} is not"
+        )
+    _registered_interpreter = path
+
+
+class CoreProbeInterpreter(NamedTuple):
+    """Which interpreter a core probe runs under here, and how it got here.
+
+    ``registered`` is the route, not a guess from the path: a host may hand
+    over the very interpreter that is running atlas, and then ``path`` equals
+    ``sys.executable`` while the answer still came from the host.
+    """
+
+    path: str
+    registered: bool
+
+
+def _running_python_interpreter() -> str | None:
+    """``sys.executable``, but only where the running program is plainly an interpreter.
+
+    Launching ``sys.executable -m atlas._core_probe`` is a probe only where
+    that executable *is* an interpreter. In a frozen build it is the
+    application: the bootloader ignores the module arguments and starts the
+    application again, so asking atlas where a save lives would restart the
+    host that asked — and ``capture_output`` would hide it.
+
+    ``sys.executable`` also has to survive the same shape check the registered
+    path does (:func:`_is_spawnable_interpreter_path`), and that is not
+    theoretical: ``PYTHONEXECUTABLE=python3`` makes it a bare name, which the
+    spawn would resolve through ``PATH``, and ``PYTHONEXECUTABLE=dir/python3``
+    makes it relative, which the spawn would resolve against the working
+    directory. Refusing a lookup in one stage and performing it in the other
+    would be the same defect wearing a different hat, so both stages apply the
+    one rule. Do not take the check out of either of them.
+
+    So the test narrows on purpose. The two markers freezers set
+    (``sys.frozen``, ``sys._MEIPASS``) disqualify; a ``sys.executable`` the
+    shape rule refuses disqualifies; and the basename is the belt for an
+    embedded host that sets neither marker. It is a rule of thumb, and
+    the two directions it can be wrong in are not symmetrical: every way it is
+    too narrow costs a probe and nothing else — a PyPy or otherwise-named
+    interpreter loses probing here and hands over its own path through
+    :func:`register_core_probe_interpreter` — while the name check is what
+    keeps the too-wide direction rare, since a host that embeds an interpreter,
+    sets neither marker and is itself named ``python…`` would pass and be
+    launched. Do not widen this into a search — a ``PATH``-resolved ``python3``
+    is an assumption about the machine, and atlas makes none.
+    """
+    if getattr(sys, "frozen", False) or hasattr(sys, "_MEIPASS"):
+        return None
+    executable = sys.executable
+    if not _is_spawnable_interpreter_path(executable):
+        return None
+    if not os.path.basename(executable).startswith("python"):
+        return None
+    return executable
+
+
+def core_probe_interpreter() -> CoreProbeInterpreter | None:
+    """Which interpreter a core probe would run under here — ``None`` where none would.
+
+    ``None`` is the state in which ``query_core`` starts no process at all and
+    answers *unknown* for every core, which the resolver reports as
+    ``core-unqueryable``; this function is the diagnosis channel for a host
+    that sees that code everywhere. It says what a probe would run, not that
+    any core was probed.
+
+    The slot is read once into a local. Read twice, a registration cleared
+    between the two reads would build an answer whose ``path`` is missing while
+    ``registered`` still says ``True``.
+    """
+    registered = _registered_interpreter
+    if registered is not None:
+        return CoreProbeInterpreter(registered, True)
+    running = _running_python_interpreter()
+    return None if running is None else CoreProbeInterpreter(running, False)
 
 
 def _parse_core_options(raw: object) -> dict[str, CoreOption] | None:

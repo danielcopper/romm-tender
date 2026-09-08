@@ -155,9 +155,15 @@ def _provider_name(provider: Any) -> str:
 
 
 def _resolved_zstd() -> tuple[ZstdProvider, Any] | None:
-    """The provider that answers here, with the codec object — ``None`` where none does."""
-    if _registered_provider is not None:
-        return ZstdProvider(_provider_name(_registered_provider), True), _registered_provider
+    """The provider that answers here, with the codec object — ``None`` where none does.
+
+    The registration is read once into a local. Read twice, a registration
+    cleared between the two reads would pair a provider's name with a codec
+    that is already gone.
+    """
+    registered = _registered_provider
+    if registered is not None:
+        return ZstdProvider(_provider_name(registered), True), registered
     for name in _ZSTD_PROVIDERS:
         try:
             return ZstdProvider(name, False), importlib.import_module(name)
