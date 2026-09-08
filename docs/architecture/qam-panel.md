@@ -482,7 +482,11 @@ nothing to apply, or where the preview has expired; past the deadline the table 
 sit above the table**, under the section title, and the reading is "here is what you can do — and here is why". That is
 also the only place a controller can reach them from: every row of the table is a focus stop and a region scrolls only
 by moving focus, so a button row under a fifteen-platform table is fifteen stick presses from where the column opens,
-which is where the frame puts entry focus — on Apply Sync.
+which is where the frame puts entry focus — on Apply Sync, or on Refresh where Apply is dead. **The expired sentence
+travels with the row**, directly above it, and it is the only line that does: it explains the title's amber "expired"
+and names the button to press instead, so it is a caption on the buttons rather than on the evidence, and under the
+table it would have put a dead Apply a whole library ahead of its own reason. The three lines listed above as sitting
+under the table stay there — each describes the run the table is about.
 
 **While a run is in flight the column is the run view**: the whole run as one bar under the stage caption, with the step
 counter and the estimate on the section title beside it, and under all of it every unit of the plan — Unit, Status,

@@ -9,6 +9,13 @@
  * column, which is where a reader opening the page starts. Entry focus lands on
  * Apply Sync, or on Refresh where Apply is dead.
  *
+ * The expired notice travels with the button row, above it, and is the only line
+ * that does: it explains the header's amber "expired" and names the button to
+ * press instead, so it is a caption on the buttons rather than on the evidence.
+ * Under the table it would have put a dead Apply a whole library ahead of its
+ * own reason. Everything else under there — the scope and estimate, the hint,
+ * the pause advisory — describes the run the table is about and stays with it.
+ *
  * The table is the page. One row per platform the backend reports a change for,
  * one for the RomM collections, one for the Steam collections kept per platform,
  * and one total — and the total comes from the summary's own counts rather than
@@ -198,6 +205,7 @@ export const PreviewPanel: FC<{ state: SyncPageState; preview: SyncPreview }> = 
           optional under `exactOptionalPropertyTypes`. */}
       <SectionTitle title="Preview" {...deadlineNote(expired, secondsLeft)} />
       {isFullResync(summary) && <Muted>Full re-sync — all platforms re-fetched.</Muted>}
+      {expired && <Muted>This preview is too old to apply. Refresh works out a fresh one.</Muted>}
       <ButtonRow padding="4px 16px 8px">
         <DialogButton style={FLAT_BUTTON} disabled={state.busy || expired || !hasChanges} onClick={state.applyPreview}>
           Apply Sync
@@ -267,7 +275,6 @@ export const PreviewPanel: FC<{ state: SyncPageState; preview: SyncPreview }> = 
           prompted, then resume.
         </div>
       )}
-      {expired && <Muted>This preview is too old to apply. Refresh works out a fresh one.</Muted>}
       {state.status !== null && <Muted>{state.status}</Muted>}
     </>
   );

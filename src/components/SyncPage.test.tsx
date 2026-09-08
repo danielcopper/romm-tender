@@ -854,6 +854,16 @@ describe("SyncPage", () => {
         expect(buttonByExactText(container, "Refresh")?.disabled).toBe(false);
         // Nothing disappeared on its own: the change table is still readable.
         expect(container.textContent).toContain("Total");
+        // And the sentence sits ABOVE the buttons it explains, not under the
+        // table: it names Refresh, so leaving it below the evidence would put a
+        // dead Apply a whole library ahead of its own reason.
+        const notice = Array.from(container.querySelectorAll<HTMLElement>("div")).find(
+          (node) => node.textContent === "This preview is too old to apply. Refresh works out a fresh one.",
+        );
+        expect(notice).toBeDefined();
+        expect(notice!.compareDocumentPosition(buttonByExactText(container, "Refresh")!)).toBe(
+          Node.DOCUMENT_POSITION_FOLLOWING,
+        );
       } finally {
         vi.useRealTimers();
       }
