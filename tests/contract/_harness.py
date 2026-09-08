@@ -86,6 +86,7 @@ _BOUND_SERVICE_ATTRS = {
     "_prune_service": "prune_service",
     "_connection_service": "connection_service",
     "_startup_healing_service": "startup_healing_service",
+    "_legacy_install_service": "legacy_install_service",
     "_launch_gate_service": "launch_gate_service",
     "_session_lifecycle_service": "session_lifecycle_service",
     "_game_process_service": "game_process_service",

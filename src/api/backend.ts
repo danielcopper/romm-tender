@@ -1104,6 +1104,18 @@ export const getSettingsResetNotice = callable<[], { pending: boolean; backed_up
 // persists, so the QAM banner + game-detail cards stay down across reloads.
 export const dismissSettingsResetNotice = callable<[], { success: boolean }>("dismiss_settings_reset_notice");
 
+// The pre-rename install standing beside this one. Releases before 0.31.0 unpack
+// into a `decky-romm-sync` plugin folder and this one does not; a user who
+// updated across that boundary has both, and a shortcut launches through a
+// launcher inside the folder it was written from. `pending` means it is there and is not the
+// folder we run from; `legacy_data_present` means that older install still has a
+// database. Two directory questions and nothing else — whether THIS install has
+// anything to show is `get_sync_stats`'s `roms`, which MainPage already reads and
+// joins with this. Read live, so there is no marker and no dismiss callable.
+export const getLegacyInstallNotice = callable<[], { pending: boolean; legacy_data_present: boolean }>(
+  "get_legacy_install_notice",
+);
+
 // Durable "re-sign-in for cross-device playtime" notice. The backend persists a
 // flag when a playtime reconcile is rejected because the Client API Token lacks
 // the `roms.user.read` scope; pending:true means the user should sign in again

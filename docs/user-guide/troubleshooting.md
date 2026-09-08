@@ -35,6 +35,16 @@ answers with its own message instead — "Server unreachable", "Sign-in rejected
 
 ## Games Won't Launch
 
+### "RomM Sync" is still installed
+
+**Symptom**: Decky lists two plugins — an older **RomM Sync** and **Tender** — and Tender's QAM panel shows a warning
+card about it. Tender may also look brand new, with no server configured and no synced games.
+
+**Fix**: Nothing to fix, and one thing to avoid: **do not remove "RomM Sync"**. Every Steam shortcut launches through a
+file in that older plugin's folder, so removing it stops all of your games from starting, and Tender cannot put the file
+back. Leave both installed until a version ships that moves everything across. See
+[Updating from a release before 0.31.0](getting-started.md#updating-from-a-release-before-0310).
+
 ### BIOS files missing
 
 **Symptom**: A game for a system that requires BIOS files (PlayStation, Saturn, Dreamcast, etc.) fails to launch or

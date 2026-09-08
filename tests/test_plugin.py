@@ -822,6 +822,13 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # user's explicit QAM ack must both work regardless of a pending migration.
     "get_settings_reset_notice",
     "dismiss_settings_reset_notice",
+    # Pre-rename-install notice — a read of two directory names under Decky's own
+    # plugin home (one under plugins/, one under data/), unrelated to RetroDECK
+    # state. The migration-blocked page
+    # renders the card itself, so the callable has to answer while a migration is
+    # pending; that the card actually gets there is pinned in
+    # src/components/MigrationBlockedPage.test.tsx, not by this whitelist entry.
+    "get_legacy_install_notice",
     # Read-only RetroDECK path-resolution health probe (for the frontend banner).
     "get_retrodeck_status",
     # Cancel / pause operations — must remain callable mid-operation when
@@ -1108,6 +1115,7 @@ class TestMainStartupOrdering:
             "prune_service": MagicMock(shutdown=AsyncMock()),
             "connection_service": connection_service,
             "startup_healing_service": startup_healing_service,
+            "legacy_install_service": MagicMock(),
             "launch_gate_service": MagicMock(),
             "session_lifecycle_service": MagicMock(),
             "game_process_service": MagicMock(),

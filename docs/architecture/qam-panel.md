@@ -352,25 +352,49 @@ plugin stays a card without a jump, with Dismiss where the condition has a sensi
 | Settings were reset                         | text, backup path, Dismiss          | none — the card is the whole of it                    |
 | Cross-device playtime needs a fresh sign-in | text, **Open Connections**, Dismiss | Settings › Connections, where the accounts are        |
 | RetroDECK paths missing or unreadable       | warning card, no action             | none — the fix is outside the plugin                  |
+| "RomM Sync" is still installed              | warning card, no action             | none — a future version does the move                 |
 | RetroArch `input_driver` is wrong           | text, **Open Controller**           | Settings › Controller, which holds the Fix button     |
 | Save-file sorting changed                   | text, **Open Save Sync**            | Settings › Save Sync, which holds Migrate and Dismiss |
 | Sync paused on the session budget           | text, **Open Sync**                 | Sync, which holds Restart Steam now and Resume        |
 
 Today the `input_driver` fix has a button on Main and another in Settings, the save-sort card exists on both pages, the
 session-budget card with **Restart Steam now** sits on Main, and the playtime notice has Dismiss but no jump. The two
-full-page states — a version error and a pending RetroDECK migration — are not notices; they replace the page and stay
-as they are.
+full-page states — a version error and a pending RetroDECK migration — are not notices; they replace the page, and
+exactly one condition is carried inside them (below).
+
+Four of the seven conditions above carry no Dismiss anywhere — RetroDECK paths, `"RomM Sync"` still installed, the
+`input_driver` fix and the session budget — so the absence is ordinary. What is particular to
+`"RomM Sync" is still installed` is the reason: the condition ends when a future version moves the older install's data
+across and removes its folder, so a Dismiss would only hide a warning that is still true. Its backend read
+(`get_legacy_install_notice`) is computed live on every call with no persisted marker for the same reason, and asks only
+about two directories: the card's optional second sentence — "this version starts empty" — needs a fact the panel
+already holds, the `roms` count from `get_sync_stats`, so `LegacyInstallNotice`
+(`src/components/LegacyInstallBanner.tsx`) joins the two frontend stores rather than having the backend read a library.
+That keeps the half that prevents the irreversible removal independent of any database read.
+
+**It is also the one condition both full-page states carry inside their own content**, and the only one they carry at
+all. That is not a card stacked on top of them — each renders it below the explanation it exists to give, after its own
+actions where it has any, and Main's two early returns are unchanged: the page is still replaced. What earns the
+exception is the path this warning exists for — the user updates across the folder rename, opens a Tender whose library
+looks empty, enters a server below the minimum, and is told the plugin cannot work, which is when they tidy the older
+plugin out of Decky while every one of their games is still launching through it. Nothing else earns it: the test is an
+irreversible action the user is most likely to take _because_ the plugin looks broken. Of the two, the version-error
+card is also what the game detail page shows for the same condition — out of scope here — so the warning reaches that
+page too. The condition itself lives in `LegacyInstallNotice` and not at the three call sites, which would drift apart.
+See [Updating from a release before 0.31.0](../user-guide/getting-started.md#updating-from-a-release-before-0310) for
+what the user is being told and why removing the older plugin stops their games from starting.
 
 ## Main
 
-Narrow, in this order: the settings-reset and playtime-scope notices, each a titled section of its own above everything
-else; the status block — the RetroDECK warning, then Connection, Last sync, Library, then the conditional slot and,
-while a run is going, Cancel Sync, then the transient line a just-ended run leaves behind (and a cancel whose call
-failed), and under all of those the three notices that carry a button (the RetroArch input driver, the save-file
-sorting, a run paused on the session budget); the download summary (up to two rows, an overflow count, a completed
-count, View All); the menu — Sync, Library, Settings, Data Management. **Those last three blocks carry no section title
-at all** — what separates one from the next is a hairline (`BlockSeparator`), which costs one pixel of height where a
-heading would cost a whole row. The layout study it was chosen from is [main-layouts.html](../assets/main-layouts.html).
+Narrow, in this order: the `"RomM Sync"` warning, an untitled section carrying its heading inside the card, and then the
+settings-reset and playtime-scope notices, each a titled section of its own, all three above everything else; the status
+block — the RetroDECK warning, then Connection, Last sync, Library, then the conditional slot and, while a run is going,
+Cancel Sync, then the transient line a just-ended run leaves behind (and a cancel whose call failed), and under all of
+those the three notices that carry a button (the RetroArch input driver, the save-file sorting, a run paused on the
+session budget); the download summary (up to two rows, an overflow count, a completed count, View All); the menu — Sync,
+Library, Settings, Data Management. **Those last three blocks carry no section title at all** — what separates one from
+the next is a hairline (`BlockSeparator`), which costs one pixel of height where a heading would cost a whole row. The
+layout study it was chosen from is [main-layouts.html](../assets/main-layouts.html).
 
 **The menu is the navigation that is always there — complete, and always in the same place. The status rows state and do
 nothing. The single exception is one conditional slot that exists only while the Sync page has something to report; a

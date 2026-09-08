@@ -126,6 +126,7 @@ modules =
     services.game_detail
     services.game_process
     services.launch_gate
+    services.legacy_install
     services.library
     services.metadata
     services.migration
