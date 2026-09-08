@@ -1671,7 +1671,7 @@ class TestGetSyncStatsResumeInputs:
         Before the clear the panel holds an incomplete attempt, recorded games AND
         a stamp — a genuine resume. Afterwards the attempt is still there (it feeds
         the "Last sync" display, #1318) while both authorities are gone, which is
-        what drops the button back to "Sync Library".
+        what takes the resume offer away.
         """
         from domain.sync_run import SyncRun
 
@@ -2243,16 +2243,16 @@ class TestFinalizePerUnitRun:
             romm_collection_app_ids={},
             total_games=2,
             cancelled=True,
-            interrupt_reason="Sync paused: restart Steam, then Resume Sync.",
+            interrupt_reason="Sync paused: restart Steam, then sync again.",
             restart_recommended=False,
         )
 
         complete = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_complete"]
-        assert complete[-1]["interrupt_reason"] == "Sync paused: restart Steam, then Resume Sync."
+        assert complete[-1]["interrupt_reason"] == "Sync paused: restart Steam, then sync again."
         # A budget pause sets run_paused + interrupt_reason, never run_interrupted —
         # the payload must not read as a heartbeat interrupt (#1384).
         assert "interrupted" not in complete[-1]
-        assert plugin._sync_service._sync_progress["message"] == "Sync paused: restart Steam, then Resume Sync."
+        assert plugin._sync_service._sync_progress["message"] == "Sync paused: restart Steam, then sync again."
 
     @pytest.mark.asyncio
     async def test_emit_sync_complete_frame_total_falls_back_to_bound_count(self, plugin):

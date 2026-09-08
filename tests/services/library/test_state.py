@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 
+from domain.sync_run_kind import SyncRunKind
 from domain.sync_state import SyncState
 from services.library._state import (
     PREVIEW_MAX_AGE_SECONDS,
@@ -28,24 +29,66 @@ from services.library._state import (
 class TestTryBeginRun:
     def test_claims_slot_from_idle(self):
         box = LibrarySyncStateBox()
-        assert box.try_begin_run("run-1") is True
+        assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
         assert box.sync_state is SyncState.RUNNING
         assert box.current_sync_id == "run-1"
 
     def test_rejected_when_running_leaves_state_unchanged(self):
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-1")
-        assert box.try_begin_run("run-2") is False
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
+        assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is False
         # The incumbent run still owns the slot — no clobber.
         assert box.sync_state is SyncState.RUNNING
         assert box.current_sync_id == "run-1"
 
     def test_rejected_when_cancelling(self):
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         box.request_cancel()
-        assert box.try_begin_run("run-2") is False
+        assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is False
         assert box.current_sync_id == "run-1"
+
+
+class TestRunKind:
+    """The kind is claimed with the slot and cleared with it.
+
+    Held on the box rather than threaded through ``emit_progress`` so that every
+    frame of a run carries it — the three places a frame is built all read it
+    from here, and a call site cannot forget one.
+    """
+
+    def test_the_claim_stamps_the_kind(self):
+        box = LibrarySyncStateBox()
+        assert box.try_begin_run("run-1", kind=SyncRunKind.PREVIEW) is True
+        assert box.run_kind is SyncRunKind.PREVIEW
+        assert box.run_kind_value() == "preview"
+
+    def test_a_refused_claim_leaves_the_incumbent_kind(self):
+        box = LibrarySyncStateBox()
+        box.try_begin_run("run-1", kind=SyncRunKind.PREVIEW)
+        assert box.try_begin_run("run-2", kind=SyncRunKind.APPLY) is False
+        assert box.run_kind is SyncRunKind.PREVIEW
+
+    def test_finishing_the_run_clears_it(self):
+        box = LibrarySyncStateBox()
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
+        assert box.finish_run("run-1") is True
+        assert box.run_kind is None
+
+    def test_a_foreign_finish_leaves_it(self):
+        # The compare-and-reset refuses the whole reset, the kind with it.
+        box = LibrarySyncStateBox()
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
+        assert box.finish_run("run-other") is False
+        assert box.run_kind is SyncRunKind.APPLY
+
+    def test_no_run_states_no_kind(self):
+        # Never one of the two real answers: an idle box has established
+        # neither, and the empty string is how the frame says so.
+        box = LibrarySyncStateBox()
+        assert box.run_kind is None
+        assert box.run_kind_value() == ""
+        assert _default_progress()["runKind"] == ""
 
 
 class TestRequestCancel:
@@ -56,26 +99,26 @@ class TestRequestCancel:
 
     def test_stale_when_run_id_mismatch(self):
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         assert box.request_cancel("run-2") == "stale"
         # A stale cancel must NOT flip the active run.
         assert box.sync_state is SyncState.RUNNING
 
     def test_cancelling_when_run_id_matches(self):
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         assert box.request_cancel("run-1") == "cancelling"
         assert box.sync_state is SyncState.CANCELLING
 
     def test_falsy_run_id_cancels_unconditionally(self):
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         assert box.request_cancel() == "cancelling"
         assert box.sync_state is SyncState.CANCELLING
 
     def test_empty_string_run_id_cancels_unconditionally(self):
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         assert box.request_cancel("") == "cancelling"
         assert box.sync_state is SyncState.CANCELLING
 
@@ -83,14 +126,14 @@ class TestRequestCancel:
 class TestFinishRun:
     def test_owner_resets_to_idle(self):
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         assert box.finish_run("run-1") is True
         assert box.sync_state is SyncState.IDLE
         assert box.current_sync_id is None
 
     def test_owner_resets_from_cancelling(self):
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         box.request_cancel("run-1")
         assert box.finish_run("run-1") is True
         assert box.sync_state is SyncState.IDLE
@@ -98,7 +141,7 @@ class TestFinishRun:
 
     def test_foreign_run_id_is_noop(self):
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         # A late terminal from a different run must not null the active run.
         assert box.finish_run("run-OLD") is False
         assert box.sync_state is SyncState.RUNNING
@@ -106,7 +149,7 @@ class TestFinishRun:
 
     def test_repeat_finish_run_is_safe(self):
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         assert box.finish_run("run-1") is True
         # A doubled terminal for the same run is a no-op once the slot is freed.
         assert box.finish_run("run-1") is False
@@ -116,9 +159,9 @@ class TestFinishRun:
     def test_finish_run_does_not_null_a_fresh_run(self):
         """The #1202 race: run A's late terminal lands after run B started."""
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-A")
+        box.try_begin_run("run-A", kind=SyncRunKind.APPLY)
         box.finish_run("run-A")
-        box.try_begin_run("run-B")
+        box.try_begin_run("run-B", kind=SyncRunKind.APPLY)
         # Run A's doubled/late terminal must leave run B intact.
         assert box.finish_run("run-A") is False
         assert box.sync_state is SyncState.RUNNING
@@ -133,7 +176,7 @@ class TestFinishRun:
         state of whatever run it was actually watching.
         """
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         box.sync_progress = {"running": False, "stage": "done", "message": "Preview ready", "runId": "run-1"}
 
         assert box.finish_run("run-1") is True
@@ -147,7 +190,7 @@ class TestFinishRun:
         """The reset is the owner's alone — a late terminal from a previous run
         must not blank the frame a remounting panel needs for the live one."""
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-B")
+        box.try_begin_run("run-B", kind=SyncRunKind.APPLY)
         live = {"running": True, "stage": "fetching", "message": "Fetching GBA...", "runId": "run-B"}
         box.sync_progress = live
 
@@ -159,14 +202,14 @@ class TestFinishRun:
         """A heartbeat-timed-out chunk whose late ack never arrived is dropped
         when the next run starts — bounded stash lifetime (#1367)."""
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-A")
+        box.try_begin_run("run-A", kind=SyncRunKind.APPLY)
         box.active_unit_id = 1
         box.active_chunk_index = 0
         box.stash_abandoned_chunk([{"id": 1}])
         box.finish_run("run-A")
         assert box.abandoned_chunk is not None
 
-        assert box.try_begin_run("run-B") is True
+        assert box.try_begin_run("run-B", kind=SyncRunKind.APPLY) is True
         # The stale abandon never survives into the next run.
         assert box.abandoned_chunk is None
 
@@ -174,7 +217,7 @@ class TestFinishRun:
         """Run teardown must NOT drop the stash — the whole point is that a late
         ack arriving AFTER the run wound down can still recover it (#1367)."""
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         box.active_unit_id = 1
         box.active_chunk_index = 0
         box.stash_abandoned_chunk([{"id": 1}])
@@ -239,7 +282,7 @@ class TestAbandonedChunkStash:
     def _armed_box(self) -> LibrarySyncStateBox:
         """A box mid-apply on run-1 / unit 5 / chunk 2, ready to be abandoned."""
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         box.active_unit_id = 5
         box.active_chunk_index = 2
         box.unit_complete_event = asyncio.Event()
@@ -367,7 +410,7 @@ class TestPreviewSnapshot:
         """A panel remounting mid-run must show the run, not a card that would
         render over its progress rows — but the snapshot is only withheld."""
         box = self._staged_box()
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
 
         assert box.read_restorable_preview(self._CREATED_AT) is None
         # Withheld, NOT discarded.
@@ -379,7 +422,7 @@ class TestPreviewSnapshot:
 
     def test_restorable_read_hands_the_snapshot_back_once_the_run_ends(self):
         box = self._staged_box()
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         box.read_restorable_preview(self._CREATED_AT)
 
         box.finish_run("run-1")
@@ -399,7 +442,7 @@ class TestPreviewSnapshot:
         run-blind: an overlapping apply is refused by the run-slot claim with
         its own reason, never rewritten into a staleness verdict."""
         box = self._staged_box()
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
 
         assert box.read_fresh_preview(self._CREATED_AT) is not None
 
@@ -445,12 +488,12 @@ class TestIsInFlight:
 
     def test_running_in_flight(self):
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         assert box.is_in_flight() is True
 
     def test_cancelling_in_flight(self):
         box = LibrarySyncStateBox()
-        box.try_begin_run("run-1")
+        box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
         box.request_cancel("run-1")
         assert box.is_in_flight() is True
         assert box.is_cancelling() is True

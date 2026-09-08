@@ -20,6 +20,7 @@ pin ``reason``, not ``error_code``.
 
 from __future__ import annotations
 
+from domain.sync_run_kind import SyncRunKind
 from lib.errors import RommConnectionError
 
 from ._seed import seed_platform_stamp, seed_rom, seed_sync_run
@@ -32,7 +33,10 @@ async def test_get_sync_status_idle_shape(harness):
 
     ``inFlight`` is the run-lifecycle state carried alongside the frame, and the
     frontend reads it as evidence rather than inferring "no run" from a frame
-    that may be a leftover — so it belongs in the pinned wire shape.
+    that may be a leftover — so it belongs in the pinned wire shape. ``runKind``
+    is empty for the same reason ``stage`` and ``runId`` are: no run owns the
+    slot, so there is no kind, and the frontend renders neither of the two real
+    answers rather than picking one.
     """
     result = await harness.plugin.get_sync_status()
     assert result == {
@@ -44,6 +48,7 @@ async def test_get_sync_status_idle_shape(harness):
         "step": 0,
         "totalSteps": 0,
         "runId": "",
+        "runKind": "",
         "inFlight": False,
     }
     assert result["running"] is False
@@ -579,7 +584,7 @@ async def test_report_unit_results_late_ack_binds_orphan(harness):
     # ``pending_sync`` holds the emitted representative. Both stay live on the
     # box across the abandon window so the late ack can drive the chunk's commit
     # (ADR-0021). The stash carries the chunk's rows + identity.
-    box.try_begin_run("run-1")
+    box.try_begin_run("run-1", kind=SyncRunKind.APPLY)
     box.active_unit_id = 1
     box.active_chunk_index = 0
     box.pending_sync = {42: _entry}

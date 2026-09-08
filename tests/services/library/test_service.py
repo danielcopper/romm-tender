@@ -8,6 +8,7 @@ from fakes.fake_settings_persister import FakeSettingsPersister
 
 from domain.rom import Rom
 from domain.sync_diff import classify_roms
+from domain.sync_run_kind import SyncRunKind
 from services.library._state import CollectionMembership
 
 # conftest.py patches decky before this import
@@ -871,18 +872,18 @@ class TestIsSyncInFlight:
         assert plugin._sync_service.is_sync_in_flight() is False
 
     def test_true_while_running(self, plugin):
-        assert plugin._sync_service._box.try_begin_run("run-1") is True
+        assert plugin._sync_service._box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
         assert plugin._sync_service.is_sync_in_flight() is True
 
     def test_true_while_cancelling(self, plugin):
         box = plugin._sync_service._box
-        assert box.try_begin_run("run-1") is True
+        assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
         assert box.request_cancel("run-1") == "cancelling"
         assert plugin._sync_service.is_sync_in_flight() is True
 
     def test_false_again_after_finish_run(self, plugin):
         box = plugin._sync_service._box
-        assert box.try_begin_run("run-1") is True
+        assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
         assert box.finish_run("run-1") is True
         assert plugin._sync_service.is_sync_in_flight() is False
 

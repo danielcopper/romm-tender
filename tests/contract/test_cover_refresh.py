@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 
 from domain.rom import Rom
+from domain.sync_run_kind import SyncRunKind
 from domain.sync_state import SyncState
 from lib.errors import RommNotFoundError
 
@@ -105,7 +106,7 @@ def _download_cover_from_url_urls(harness):
 
 async def _run_sync(harness, run_id: str) -> None:
     box = _box(harness)
-    assert box.try_begin_run(run_id) is True
+    assert box.try_begin_run(run_id, kind=SyncRunKind.APPLY) is True
     await _orchestrator(harness)._do_sync_per_unit()
 
 

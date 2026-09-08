@@ -255,10 +255,48 @@ Format: **invariant** — tier — enforced by.
   through an aliased callable, slips past it; its own scope tests pin the producers and the root it reaches, so a
   narrowing fails rather than shrinking the rule in silence. Frame producers are not confined to `services/library/`:
   `services/artwork.py` emits through an injected `emit_progress`). The QAM panel derives "a run is in flight" from
-  `running` and keys the run's end — the status line, the live-ETA teardown, the two change-driven re-reads — on the
-  stage, so a stopping frame with a non-terminal stage would collapse the in-progress rows while ending nothing. The
-  panel cannot defend against it: a bare `running: false` is exactly what its own retraction of an optimistic start
-  looks like
+  `running` and keys the run's end — the status line, the live-ETA teardown, Main's stats re-read and the Sync page's
+  three — on the stage, so a stopping frame with a non-terminal stage would collapse the in-progress rows while ending
+  nothing. The panel cannot defend against it: a bare `running: false` is exactly what the Sync page's own retraction of
+  an optimistic start looks like. Since #1814 the frontend's frame store reads the same discrimination for a rule of its
+  own — a run whose stopping frame carried a terminal stage AND a run id can never be put back in flight, which is what
+  stops the apply loop's next item from resurrecting a run that has already ended — so a stopping frame emitted without
+  a terminal stage would record no ending there either, and the freeze that rule removes comes back
+- **The KIND of run a `sync_progress` frame belongs to is stated on it (`runKind`), never inferred from it — and a frame
+  that states none is rendered as neither of the two answers** — test + prompt-only — the backend half is pinned end to
+  end by `tests/services/library/test_sync_orchestrator.py::TestRunKindOnTheWire` (every frame of a preview run and of
+  an apply run, both terminal frames, and the `get_sync_status` snapshot) and
+  `tests/services/library/test_state.py::TestRunKind` (claimed with the run slot, cleared with it); the frontend half by
+  `src/utils/syncRunView.test.ts` and the slot's three labels in `src/components/MainPage.test.tsx`. **Nothing joins the
+  eleven sites it passes through**, counted one per site at the granularity this list names them: `LibrarySyncStateBox`
+  holds it with the slot, three separate backend frame builders carry it (`emit_progress`, `_finish_sync`'s CANCELLED
+  terminal, and the per-unit ERROR dict literal in `sync_orchestrator.py`), three frontend start paths stamp it
+  themselves on the optimistic frame they show before the first real one arrives (`useSyncPage`'s `computePreview` as
+  `preview`, its `applyPreview` and `startRunDirectly` as `apply`), `SyncProgress.runKind` and `useSyncRunView` pass it
+  through, and `MainPage` both seeds it from the `get_sync_status` snapshot onto the store at mount and maps it to the
+  slot's label. **Nothing mechanical stands behind the seam between them**: a fourth frame builder that omits the key, a
+  fourth start path that stamps the kind it is not, or a reader that spends the absent case on one of the two answers —
+  a `runKind ?? "preview"`, a `=== "preview"` where the neutral branch was — goes green, because each test above pins
+  one half and none of them pins the join. The failure is silent and worst exactly where the frontend cannot help
+  itself: after a plugin reload mid-run the store starts empty, the snapshot is the only thing that can say what the run
+  is doing, and Main then tells the reader a real apply run is merely checking for changes. Why the kind cannot be
+  derived at all is stated at `domain/sync_run_kind.py` and in `docs/architecture/qam-panel.md`'s Main section; do not
+  restate it here
+- **A press that starts a run clears the previous run's per-unit rows — unless that press is a RESUME, the one start
+  they are still true for** — test + prompt-only — `src/components/SyncPage.test.tsx`'s "a previous run's rows at the
+  next press" pins all three start paths in both directions, and `src/utils/runUnitsStore.test.ts` pins the clear
+  itself. **The rule spans three modules and nothing joins them.** `utils/runUnitsStore.ts` holds the rows and offers
+  `clearRunUnits`; `useSyncPage` decides, at each of the three presses that write an optimistic frame (`computePreview`,
+  `applyPreview`, `startRunDirectly` — the same three the entry above names); and `index.tsx`'s `sync_plan` listener is
+  the only OTHER thing that ever replaces the rows, which is what makes the press the moment that matters. The plan
+  arrives after `build_work_queue()` on the two apply paths and never at all on the preview path, so a fourth start path
+  that forgets the clear leaves the previous run's `done` rows — with its apply results, and with the unit it died in
+  dressed as running by this run's frames — standing over the new run for the length of a work-queue build, or for the
+  whole of it. The store's own guards cannot help: they REFUSE a foreign frame, and refusing is not clearing. The
+  discriminator can be nothing but the frontend's `syncResumeState(stats).canResume` at the press, because a resume is a
+  new run with a new id and the backend has no resume concept at all — no frame, kind or id tells the two apart. Both
+  directions fail in silence: forget the clear and another run's rows read as this run's progress, clear on a resume and
+  the one start whose rows are true loses them
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py` pins the adapter's degradation (a
   raising resolver, a missing installation, an answer with no root all come back with `resolved` clear, never as an
@@ -540,12 +578,18 @@ Format: **invariant** — tier — enforced by.
   already applied — slow, plausible-looking, and silent (#1052 / #1367)
 - **Every path on which the user answers the preview question leaves a live snapshot on neither side — the
   pending-preview store (`src/utils/pendingPreviewStore.ts`) and the backend's `pending_delta`** — prompt-only — three
-  paths clear the store and tell the backend (`handleDismiss`, `handleApply`, a fresh `handleSync` press); the fourth is
+  paths clear the store and tell the backend, and all three are the Sync page's: Apply (`applyPreview`), Cancel
+  (`cancelPreview`) and Refresh (`computePreview(true)`, which discards before asking for the next one). The fourth is
   the cancel that lands just after a preview was staged, which never adopted it into the store and so discharges the
-  rule by discarding server-side alone. Nothing mechanical can tell: an answer path is a `MainPage` handler, and neither
-  the store nor the backend can know that a call it never received was an answer. Forget the store and a card stands
-  over a decision already made; forget the backend and the terminal-stage re-ask fetches that card back a round trip
-  later
+  rule by discarding server-side alone. A fifth path is not an answer at all and is held to the same rule: a successful
+  **Force Full Sync** (`forceFullSync`) discards the state the preview was computed against, so it clears the store and
+  tells the backend too — a preview left standing there offers an Apply that would skip exactly what the clear armed a
+  re-fetch for. Main holds none of them, and holds none of them for a stronger reason than a division of labour: it
+  starts no run and computes no preview, so it never holds one to answer for — its slot opens the page, and its Cancel
+  ends a run rather than answering a preview. So the answer is given once, where the change table is. Nothing mechanical
+  can tell: an answer path is a page handler, and neither the store nor the backend can know that a call it never
+  received was an answer. Forget the store and a table stands over a decision already made; forget the backend and the
+  terminal-stage re-ask fetches it back a round trip later
 - **A prune run's claim reservation and its refusal of every conflicting callable happen in one atomic gate hold (the
   preview rebuild does not), and frontend-owned Steam work holds a heartbeated, generation-tombstoned lease through
   every continuation's final write** — test + prompt-only — prune service/gate race tests + contract callable-entry
@@ -607,7 +651,13 @@ Format: **invariant** — tier — enforced by.
   last (`revealEdge`, over `revealTop` and `revealBottom`). Both halves are pinned by
   `src/components/qam/ScrollRegion.test.tsx` over mocked geometry, so what is tested is the DECISION and not the scroll:
   whether the panel and the reader agree about which element is topmost or last stays device-only, like the rest of this
-  entry. Detail: `docs/architecture/qam-panel.md`, "Building blocks"
+  entry. **Reachable is not near, and the same mechanism decides where a page puts its controls**: focus moves one row
+  at a time, so a button under a list of N focusable rows is N presses from the top of the column — sixteen, measured on
+  the device for the Cancel that stops a sixteen-unit run. That is why the Sync page's two button rows sit ABOVE their
+  tables, which is the reading the layout wants anyway: what you can do, then why. Nothing checks that half either, and
+  the suite is blind to it for the same reason — a page whose only control is a library's length below the point it
+  opens at renders exactly like one whose control is a press away. Detail: `docs/architecture/qam-panel.md`, "Building
+  blocks"
 
 When a change applies a guard / sanitize / backup / grouping pattern, sweep for sibling sites of the same pattern — the
 register is what that sweep checks against.

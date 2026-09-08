@@ -12,6 +12,8 @@ Driven through the real callables over the real wired plugin.
 
 from __future__ import annotations
 
+from domain.sync_run_kind import SyncRunKind
+
 
 def _seed_one_platform(harness):
     harness.romm.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 1}]
@@ -70,7 +72,7 @@ async def test_withheld_while_a_run_is_in_flight_then_handed_back(harness):
     _seed_one_platform(harness)
     fresh = await harness.plugin.sync_preview()
     box = harness.plugin._sync_service._box
-    assert box.try_begin_run("run-1") is True
+    assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
 
     assert await harness.plugin.get_pending_preview() == {"success": True, "preview": None}
     assert box.pending_delta is not None

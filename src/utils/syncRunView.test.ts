@@ -1,12 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { useSyncRunView } from "./syncRunView";
-import { setSyncProgress, updateSyncProgress, FETCH_SHARE, COVERS_SHARE, APPLY_SHARE } from "./syncProgress";
-import { beginEtaRun, resetEta } from "./syncEta";
+import {
+  resetSyncProgressStoreForTests,
+  setSyncProgress,
+  updateSyncProgress,
+  FETCH_SHARE,
+  COVERS_SHARE,
+  APPLY_SHARE,
+} from "./syncProgress";
+import { beginEtaRun, liveEtaSeconds, resetEta } from "./syncEta";
 import { attachRunUnitsMirror, recordUnitCreated, resetRunUnitsStoreForTests, seedRunUnits } from "./runUnitsStore";
-import type { SyncPlanUnit, SyncProgress } from "../types";
-
-const IDLE: SyncProgress = { running: false, stage: "", current: 0, total: 0, message: "", runId: "" };
+import type { SyncPlanUnit } from "../types";
 
 function planUnit(name: string): SyncPlanUnit {
   return { type: "platform", id: name, name, slug: name.toLowerCase(), rom_count: 10 };
@@ -18,7 +23,9 @@ describe("useSyncRunView", () => {
   beforeEach(() => {
     resetEta();
     resetRunUnitsStoreForTests();
-    setSyncProgress(IDLE);
+    // Not an idle frame but the whole store: these cases reuse one run id, and a
+    // run this store has seen END can never be put back in flight.
+    resetSyncProgressStoreForTests();
     detachMirror = attachRunUnitsMirror();
   });
 
@@ -89,6 +96,27 @@ describe("useSyncRunView", () => {
     });
   });
 
+  describe("the run's kind", () => {
+    it("passes the backend's word through, and answers null where none was stated", () => {
+      const { result, unmount } = renderHook(() => useSyncRunView());
+      try {
+        act(() => {
+          setSyncProgress({ running: true, stage: "fetching", step: 1, totalSteps: 2, runId: "r", runKind: "apply" });
+        });
+        expect(result.current.runKind).toBe("apply");
+
+        // The idle default carries an empty string, which is "not established"
+        // and never one of the two answers.
+        act(() => {
+          setSyncProgress({ running: true, stage: "fetching", step: 1, totalSteps: 2, runId: "r", runKind: "" });
+        });
+        expect(result.current.runKind).toBeNull();
+      } finally {
+        unmount();
+      }
+    });
+  });
+
   describe("the fine-detail line", () => {
     it("keeps the fine-detail row mounted across a unit boundary, and drops it when the run ends", () => {
       const { result, unmount } = renderHook(() => useSyncRunView());
@@ -130,6 +158,45 @@ describe("useSyncRunView", () => {
         });
         expect(result.current.hasFineDetail).toBe(false);
         expect(result.current.fineDetailText).toBe("");
+      } finally {
+        unmount();
+      }
+    });
+
+    it("keeps the prior line when a boundary anchor carries no message of its own", () => {
+      // The carry REPLACES, never removes: an anchor with an empty message says
+      // nothing about the next unit, so blanking the line on it would leave the
+      // row mounted and empty for the rest of that unit's fetch.
+      const { result, unmount } = renderHook(() => useSyncRunView());
+      try {
+        act(() => {
+          setSyncProgress({
+            running: true,
+            stage: "applying",
+            step: 1,
+            totalSteps: 2,
+            current: 40,
+            total: 200,
+            message: "PSX: 40/200",
+            runId: "run-1",
+          });
+        });
+        expect(result.current.fineDetailText).toBe("PSX: 40/200");
+
+        act(() => {
+          setSyncProgress({
+            running: true,
+            stage: "fetching",
+            step: 2,
+            totalSteps: 2,
+            current: 0,
+            total: 0,
+            message: "",
+            runId: "run-1",
+          });
+        });
+        expect(result.current.hasFineDetail).toBe(true);
+        expect(result.current.fineDetailText).toBe("PSX: 40/200");
       } finally {
         unmount();
       }
@@ -200,6 +267,100 @@ describe("useSyncRunView", () => {
             updateSyncProgress({ current: 700, message: "X: 700/54700" });
           });
           expect(result.current.etaText).toBe("9 min left");
+        } finally {
+          unmount();
+        }
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("is not measured from fetch frames, whose counters count pages and not items", () => {
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+      try {
+        vi.setSystemTime(0);
+        beginEtaRun("run-1", [54700], 54700);
+        setSyncProgress({
+          running: true,
+          stage: "fetching",
+          step: 1,
+          totalSteps: 1,
+          current: 5,
+          total: 62,
+          message: "Fetching (page 5/62)",
+          runId: "run-1",
+          etaSeconds: 600,
+        });
+
+        const { result, unmount } = renderHook(() => useSyncRunView());
+        try {
+          // A page-counter jump spanning the readiness window. Sampled as apply
+          // progress it would read as a rate; the stage is what refuses it.
+          vi.setSystemTime(8000);
+          act(() => {
+            updateSyncProgress({ current: 60, message: "Fetching (page 60/62)" });
+          });
+          expect(result.current.etaText).toBe("up to 10 min");
+        } finally {
+          unmount();
+        }
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("holds the countdown across a gap that re-arms the estimator, rather than blinking back to the seed", () => {
+      // The estimator's readiness gate re-arms after every inter-unit fetch gap,
+      // and a run's tail is small units that each apply in under five seconds and
+      // never re-arm it. What holds the readout is the sticky deadline: a null
+      // measurement keeps the last good one rather than falling to the seed.
+      vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+      try {
+        vi.setSystemTime(0);
+        beginEtaRun("run-1", [54700], 54700);
+        setSyncProgress({
+          running: true,
+          stage: "applying",
+          step: 1,
+          totalSteps: 1,
+          current: 100,
+          total: 54700,
+          message: "X: 100/54700",
+          runId: "run-1",
+          etaSeconds: 600,
+        });
+
+        const { result, unmount } = renderHook(() => useSyncRunView());
+        try {
+          // The t=0 sample the estimator measures the first span against.
+          act(() => {
+            updateSyncProgress({ current: 100 });
+          });
+          vi.setSystemTime(6000);
+          act(() => {
+            updateSyncProgress({ current: 700, message: "X: 700/54700" });
+          });
+          expect(result.current.etaText).toBe("9 min left");
+
+          // A fetch gap, then two applying frames close enough together that the
+          // window ages down to a span under the readiness threshold.
+          vi.setSystemTime(30000);
+          act(() => {
+            updateSyncProgress({ stage: "fetching", current: 20, total: 62, message: "Fetching (page 20/62)" });
+          });
+          vi.setSystemTime(33000);
+          act(() => {
+            updateSyncProgress({ stage: "applying", current: 800, total: 54700, message: "X: 800/54700" });
+          });
+          vi.setSystemTime(37000);
+          act(() => {
+            updateSyncProgress({ current: 900, message: "X: 900/54700" });
+          });
+
+          // Precondition: the estimator really has re-armed to null.
+          expect(liveEtaSeconds()).toBeNull();
+          expect(result.current.etaText).toContain("left");
+          expect(result.current.etaText).not.toContain("up to");
         } finally {
           unmount();
         }

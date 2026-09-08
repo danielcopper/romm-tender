@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import {
   attachRunUnitsMirror,
+  clearRunUnits,
   getRunUnitsSnapshot,
   onRunUnitsChange,
   recordUnitCreated,
@@ -10,7 +11,7 @@ import {
   seedRunUnits,
   useRunUnits,
 } from "./runUnitsStore";
-import { setSyncProgress } from "./syncProgress";
+import { resetSyncProgressStoreForTests, setSyncProgress } from "./syncProgress";
 import type { SyncPlanUnit } from "../types";
 
 const RUN_ID = "run-1";
@@ -54,7 +55,9 @@ describe("runUnitsStore", () => {
 
   beforeEach(() => {
     resetRunUnitsStoreForTests();
-    setSyncProgress({ running: false, stage: "", current: 0, total: 0, message: "", runId: "" });
+    // The whole store, not just an idle frame: these cases reuse one run id, and
+    // a run this store has seen END can never be put back in flight.
+    resetSyncProgressStoreForTests();
     detachMirror = attachRunUnitsMirror();
   });
 
@@ -236,6 +239,54 @@ describe("runUnitsStore", () => {
       });
 
       expect(getRunUnitsSnapshot().map((u) => u.state)).toEqual(["done", "running", "waiting"]);
+    });
+  });
+
+  describe("clearing the rows at a run boundary", () => {
+    it("empties them, results and all, and tells its subscribers", () => {
+      seedThree();
+      frame(2, "SNES");
+      recordUnitCreated(0);
+      let notified = 0;
+      const unsubscribe = onRunUnitsChange(() => {
+        notified++;
+      });
+      try {
+        clearRunUnits();
+
+        expect(getRunUnitsSnapshot()).toEqual([]);
+        // The page watching the rows has to hear them empty: a clear that only
+        // dropped them would leave the last render standing.
+        expect(notified).toBe(1);
+      } finally {
+        unsubscribe();
+      }
+    });
+
+    it("leaves nothing a frame can walk — only a plan fills the rows again", () => {
+      seedThree();
+      frame(2, "SNES");
+
+      clearRunUnits();
+      frame(3, "Game Boy");
+      expect(getRunUnitsSnapshot()).toEqual([]);
+
+      seedRunUnits([planUnit("Mega Drive")], "run-2");
+      expect(getRunUnitsSnapshot().map((u) => [u.name, u.state])).toEqual([["Mega Drive", "waiting"]]);
+    });
+
+    it("keeps its subscribers, because a run boundary is not a teardown", () => {
+      let notified = 0;
+      const unsubscribe = onRunUnitsChange(() => {
+        notified++;
+      });
+      try {
+        clearRunUnits();
+        seedThree();
+        expect(notified).toBe(2);
+      } finally {
+        unsubscribe();
+      }
     });
   });
 

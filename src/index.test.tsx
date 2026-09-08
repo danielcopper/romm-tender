@@ -112,19 +112,25 @@ vi.mock("./api/backend", async () => {
   };
 });
 
-// Main stands in for whichever page the router has mounted. `ownsEntryFocus`
-// makes it carry the marker a page sets when it places entry focus itself,
-// which is the one thing the router's focus effect branches on.
+// Main stands in for whichever page the router has mounted. The two flags carry
+// the two things a page can say to the router's focus effect: `ownsEntryFocus`
+// is the marker of a page that places its own, and `declaresEntryStop` wraps the
+// SECOND button in the declaration a page makes when its first stop is not where
+// it wants to open. React drops an attribute whose value is undefined, so each
+// renders only in its own case.
 let mainPageOwnsEntryFocus = false;
+let mainPageDeclaresEntryStop = false;
 vi.mock("./components/MainPage", () => ({
   MainPage: ({ onNavigate }: { onNavigate: (page: string) => void }) =>
-    // React drops an attribute whose value is undefined, so this renders the
-    // marker only in the owns-focus case.
     createElement(
       "div",
       { "data-romm-owns-entry-focus": mainPageOwnsEntryFocus ? "" : undefined },
       createElement("button", null, "first button"),
-      createElement("button", { onClick: () => onNavigate("downloads") }, "go to downloads"),
+      createElement(
+        "div",
+        { "data-romm-entry-stop": mainPageDeclaresEntryStop ? "" : undefined },
+        createElement("button", { onClick: () => onNavigate("downloads") }, "go to downloads"),
+      ),
     ),
 }));
 vi.mock("./components/DownloadQueue", () => ({
@@ -1745,7 +1751,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
         total_games: 53,
         cancelled: true,
         interrupt_reason:
-          "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then Resume Sync.",
+          "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then sync again to continue.",
       });
     });
     await flush();
@@ -1753,7 +1759,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     // The distinct reason wins over the generic "Sync cancelled — …" wording, and
     // the reason's trailing period is stripped so the parenthetical reads cleanly.
     expect(lastToastBody()).toBe(
-      "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then Resume Sync (2 added so far).",
+      "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then sync again to continue (2 added so far).",
     );
     // The pause toast gets a longer duration so the guidance isn't truncated away
     // before it is read (#1383).
@@ -1791,13 +1797,13 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
         total_games: 53,
         cancelled: true,
         interrupt_reason:
-          "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then Resume Sync.",
+          "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then sync again to continue.",
       });
     });
     await flush();
 
     expect(lastToastBody()).toBe(
-      "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then Resume Sync.",
+      "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then sync again to continue.",
     );
     plugin.onDismount();
   });
@@ -2073,6 +2079,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
 describe("index.tsx — where entry focus lands on a page swap", () => {
   beforeEach(() => {
     mainPageOwnsEntryFocus = false;
+    mainPageDeclaresEntryStop = false;
   });
 
   it("focuses the mounted page's first button", async () => {
@@ -2090,6 +2097,30 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
 
       expect(btn).toHaveFocus();
       expect(btn).toHaveClass("gpfocus");
+      plugin.onDismount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("opens a page inside the area it declared rather than at its first stop", async () => {
+    vi.useFakeTimers();
+    try {
+      mainPageDeclaresEntryStop = true;
+      const plugin = pluginFactory();
+      render(plugin.content);
+
+      // The router still does the placing — the page only says where. Main is
+      // the one page that says anything: its status rows act on nothing, so
+      // opening on the first of them spends the reader's first press on a move.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+      const declared = screen.getByRole("button", { name: "go to downloads" });
+
+      expect(declared).toHaveFocus();
+      expect(declared).toHaveClass("gpfocus");
+      expect(screen.getByRole("button", { name: "first button" })).not.toHaveFocus();
       plugin.onDismount();
     } finally {
       vi.useRealTimers();

@@ -6,6 +6,7 @@ import { FaGamepad } from "react-icons/fa";
 import { MainPage } from "./components/MainPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { LibraryPage } from "./components/LibraryPage";
+import { SyncPage } from "./components/SyncPage";
 import { DangerZone } from "./components/DangerZone";
 import { DownloadQueue } from "./components/DownloadQueue";
 import { OWNS_ENTRY_FOCUS_ATTR } from "./components/qam/WidePage";
@@ -61,7 +62,7 @@ import { setSaveSortMigrationStatus } from "./utils/saveSortMigrationStore";
 import { setVersionError, setServerRetryProgress } from "./utils/connectionState";
 import { initSessionManager, destroySessionManager } from "./utils/sessionManager";
 import { findOutermostScrollParent } from "./utils/scrollHelpers";
-import { ENTRY_FOCUS_DELAY_MS, firstPageButton, placeEntryFocus } from "./utils/entryFocus";
+import { ENTRY_FOCUS_DELAY_MS, pageEntryStop, placeEntryFocus } from "./utils/entryFocus";
 import { collapseQamOnDismount } from "./utils/qamExpansion";
 import { detach } from "./utils/detach";
 import type {
@@ -116,20 +117,27 @@ const QAMPanel: FC = () => {
     });
     // Steam's gamepad nav retains a focus pointer across page swaps and
     // resolves it on the next input — landing on a button at the old page's
-    // position. Force focus to the page's first stop so navigation starts at
-    // the top.
+    // position. Force focus to where the page opens: the area it declared, or
+    // its first stop where it declared none.
+    //
+    // `el` is the plugin's own content and nothing above it: Decky renders its
+    // panel title and the back arrow beside it OUTSIDE this div — measured in
+    // the running QAM, that title sits 34 px above the box Decky wraps a
+    // plugin's content in (`WidePage`'s `ancestorOverhang`). So the search
+    // cannot reach Decky's own chrome, and the first stop it finds is a row of
+    // the page.
     //
     // A page carrying the marker places entry focus itself, and this focus
-    // would undo it: the first button of a wide page is the Back row, which
-    // sits above the body — and above the tabs of a tabbed one, therefore
-    // outside Steam's tabbed page, whose tab row draws the L1/R1 glyphs only
-    // while gamepad focus is within it (`chunk~2dcc5aaf7.js`, the tab row's
+    // would undo it: the first stop of a wide page is the Back chip, which sits
+    // above the body — and above the tabs of a tabbed one, therefore outside
+    // Steam's tabbed page, whose tab row draws the L1/R1 glyphs only while
+    // gamepad focus is within it (`chunk~2dcc5aaf7.js`, the tab row's
     // `showGlyphs`). Landing here would leave such a page with no visible way
     // to switch tabs.
     const ownsFocus = el.querySelector(`[${OWNS_ENTRY_FOCUS_ATTR}]`) !== null;
     const focusTimer = ownsFocus
       ? undefined
-      : setTimeout(() => placeEntryFocus(el, firstPageButton), ENTRY_FOCUS_DELAY_MS);
+      : setTimeout(() => placeEntryFocus(el, pageEntryStop), ENTRY_FOCUS_DELAY_MS);
     return () => {
       cancelAnimationFrame(rafHandle);
       clearTimeout(focusTimer);
@@ -138,6 +146,9 @@ const QAMPanel: FC = () => {
 
   let content: ReactNode;
   switch (page) {
+    case "sync":
+      content = <SyncPage onBack={() => setPage("main")} />;
+      break;
     case "settings":
       content = <SettingsPage onBack={() => setPage("main")} />;
       break;
@@ -188,7 +199,10 @@ function buildSyncCompleteToast(
     // A session-budget pause carries its own resume-friendly guidance — show it
     // verbatim, appending the delta so the user sees what did get saved. Strip
     // the reason's trailing period so the parenthetical reads as one sentence:
-    // "…then Resume Sync (2 added so far)." not "…Resume Sync. (2 added so far.)".
+    // "…then sync again to continue (2 added so far)." not "…to continue. (2
+    // added so far.)". The reason names an action rather than a button, because
+    // nothing that composes it here or writes it there knows what the Sync page's
+    // button currently says (`services/library/session_budget.py`).
     const body = summary ? `${data.interrupt_reason.replace(/\.$/, "")} (${summary} so far).` : data.interrupt_reason;
     // A session-budget pause needs the full guidance readable — persistent QAM
     // banners carry the numbers, but the toast is the immediate cue, so give it a

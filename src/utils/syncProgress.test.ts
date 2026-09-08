@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import {
+  resetSyncProgressStoreForTests,
   setSyncProgress,
   updateSyncProgress,
   onSyncProgressChange,
@@ -167,5 +168,146 @@ describe("withinUnitFraction sub-slice model (#1407)", () => {
       previous = value;
     }
     expect(previous).toBeCloseTo(1, 10);
+  });
+});
+
+// The freeze the device showed (#1814): a run ends while the frontend's own
+// apply loop is still working, and the loop's next item writes the finished run
+// back into the store. That write is the last thing ever put there, so the page
+// stands on a run that is over — "Applying shortcuts", a Cancel stuck on
+// "Cancelling…" — until it is left and reopened. The writers are many and the
+// store is where they meet, so the rule is the store's.
+//
+// Every frame below is copied from a real writer: the apply loop's per-item
+// write and the cover-refresh line (`utils/syncManager.ts`), the `sync_complete`
+// merge (`index.tsx`), the backend's own terminal frame, and the Sync page's
+// optimistic start and its retraction (`components/sync/useSyncPage.ts`).
+describe("a run that has ended stays ended", () => {
+  beforeEach(() => {
+    resetSyncProgressStoreForTests();
+  });
+
+  /** The apply loop's per-item write, verbatim in shape. */
+  const applyItem = (runId: string, current: number) =>
+    updateSyncProgress({
+      running: true,
+      stage: "applying",
+      current,
+      total: 40,
+      message: `Apple I: ${current}/40`,
+      step: 1,
+      totalSteps: 16,
+      runId,
+    });
+
+  it("refuses the apply loop's next item after the run has been cancelled", () => {
+    setSyncProgress({ running: true, stage: "applying", current: 0, total: 40, message: "", runId: "run-1" });
+    // Both terminal signals, in the order the backend sends them.
+    updateSyncProgress({ running: false, stage: "cancelled" });
+    setSyncProgress({ running: false, stage: "cancelled", message: "Sync cancelled", runId: "run-1" });
+
+    // Four seconds later, the item the loop was already inside completes.
+    applyItem("run-1", 1);
+
+    const frame = getSyncProgress();
+    expect(frame.running).toBe(false);
+    expect(frame.stage).toBe("cancelled");
+    expect(frame.message).toBe("Sync cancelled");
+  });
+
+  it("refuses every later one too, so the page cannot be walked back into the run", () => {
+    setSyncProgress({ running: true, stage: "applying", current: 0, total: 40, message: "", runId: "run-1" });
+    setSyncProgress({ running: false, stage: "done", message: "Sync complete: 40 games", runId: "run-1" });
+
+    applyItem("run-1", 1);
+    applyItem("run-1", 2);
+    applyItem("run-1", 3);
+
+    expect(getSyncProgress().running).toBe(false);
+    expect(getSyncProgress().message).toBe("Sync complete: 40 games");
+  });
+
+  it("notifies nobody for a refused write, because nothing changed", () => {
+    setSyncProgress({ running: true, stage: "applying", runId: "run-1" });
+    setSyncProgress({ running: false, stage: "done", message: "Sync complete", runId: "run-1" });
+    const heard = vi.fn();
+    const unsub = onSyncProgressChange(heard);
+    try {
+      applyItem("run-1", 1);
+      expect(heard).not.toHaveBeenCalled();
+    } finally {
+      unsub();
+    }
+  });
+
+  it("refuses the cover-refresh line, which runs on for an ending nobody cancelled", () => {
+    // A heartbeat timeout, a budget pause or a backend error ends the run
+    // without the frontend's cancel flag ever being set, so that loop runs to
+    // completion writing over the terminal.
+    setSyncProgress({ running: true, stage: "applying", runId: "run-1" });
+    setSyncProgress({ running: false, stage: "error", message: "Sync failed", runId: "run-1" });
+
+    updateSyncProgress({
+      running: true,
+      stage: "applying",
+      message: "Apple I: covers 3/9",
+      step: 1,
+      totalSteps: 16,
+      runId: "run-1",
+      coverRefresh: true,
+    });
+
+    expect(getSyncProgress().running).toBe(false);
+    expect(getSyncProgress().message).toBe("Sync failed");
+  });
+
+  it("lets the next run start: an optimistic frame names no run at all", () => {
+    setSyncProgress({ running: true, stage: "applying", runId: "run-1" });
+    setSyncProgress({ running: false, stage: "done", message: "Sync complete", runId: "run-1" });
+
+    // What the Sync page writes at the press, before the backend has stamped an
+    // id on anything.
+    setSyncProgress({ running: true, stage: "fetching", message: "Fetching library...", runKind: "preview" });
+
+    expect(getSyncProgress().running).toBe(true);
+    expect(getSyncProgress().message).toBe("Fetching library...");
+  });
+
+  it("records nothing for a run that ended before it was ever named", () => {
+    // `sync_complete` merges its terminal stage over whatever frame stands, and
+    // the frame standing can be the page's own optimistic start, which carries
+    // no id because the backend had not stamped one. Recording THAT would make
+    // every later optimistic start a resurrection of it, and the panel could
+    // never show a run beginning again.
+    setSyncProgress({ running: true, stage: "fetching", message: "Fetching library..." });
+    updateSyncProgress({ running: false, stage: "cancelled" });
+
+    setSyncProgress({ running: true, stage: "fetching", message: "Fetching library...", runKind: "apply" });
+
+    expect(getSyncProgress().running).toBe(true);
+    expect(getSyncProgress().runKind).toBe("apply");
+  });
+
+  it("lets a different run through", () => {
+    setSyncProgress({ running: true, stage: "applying", runId: "run-1" });
+    setSyncProgress({ running: false, stage: "done", message: "Sync complete", runId: "run-1" });
+
+    applyItem("run-2", 1);
+
+    expect(getSyncProgress().running).toBe(true);
+    expect(getSyncProgress().runId).toBe("run-2");
+  });
+
+  it("ends no run on a stop that carries no terminal stage", () => {
+    // The Sync page retracting the optimistic frame it wrote itself: a preview
+    // answered, so the frame goes — but no run ended, and the run whose id the
+    // frame still carries must be able to go on.
+    setSyncProgress({ running: true, stage: "fetching", message: "Fetching library...", runId: "run-1" });
+    updateSyncProgress({ running: false, stage: "" });
+
+    applyItem("run-1", 1);
+
+    expect(getSyncProgress().running).toBe(true);
+    expect(getSyncProgress().stage).toBe("applying");
   });
 });

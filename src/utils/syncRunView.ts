@@ -43,16 +43,8 @@ import {
   observeApplyProgress,
   resetEta,
 } from "./syncEta";
-import { getSyncProgress, onSyncProgressChange, withinUnitFraction } from "./syncProgress";
-import type { SyncProgress, SyncStage } from "../types";
-
-const TERMINAL_STAGES: ReadonlySet<SyncStage> = new Set<SyncStage>(["done", "cancelled", "error"]);
-
-/** Whether a stage stops the run — the three the backend pairs with
- *  `running: false`, and the only frames that may end a watch. */
-function isTerminalStage(stage: SyncProgress["stage"]): boolean {
-  return !!stage && TERMINAL_STAGES.has(stage);
-}
+import { getSyncProgress, isTerminalStage, onSyncProgressChange, withinUnitFraction } from "./syncProgress";
+import type { SyncProgress, SyncRunKind, SyncStage } from "../types";
 
 const STAGE_LABELS: Record<SyncStage, string> = {
   discovering: "Discovering platforms",
@@ -128,6 +120,11 @@ export interface SyncRunView {
    *  that ended a run locally without ending it in the store (#1019). */
   running: boolean;
   stage: SyncProgress["stage"];
+  /** What the run is doing, as the backend stated it — `null` where no run has
+   *  established one, which a reader words as neither of the two answers rather
+   *  than picking one. Passed through rather than derived: no sequence of frames
+   *  is evidence of the kind (`src/types/sync.ts`). */
+  runKind: SyncRunKind | null;
   stageLabel: string;
   /** The running unit's 1-based index, `0` before the run reaches one. */
   step: number;
@@ -247,7 +244,12 @@ export function useSyncRunView(options: SyncRunViewOptions = {}): SyncRunView {
       // The local mirror must update FIRST and unconditionally — it is what
       // drives the re-render. Everything after it is derived work (terminal
       // teardown, estimator feeding, ETA state) that must never be able to break
-      // the re-render chain (on-device freeze, cause not yet reproduced in tests).
+      // the re-render chain. The on-device freeze this ordering was written
+      // against has since been reproduced (`utils/syncProgress.test.ts`) and was
+      // not this chain breaking: the apply loop wrote a run that had already
+      // ended back into the store, and the store now refuses that. What the
+      // ordering still buys is its own point — a throwing consumer must not cost
+      // the page the frame it threw on.
       const frame = getSyncProgress();
       setProgress(frame);
       // Run bookkeeping, taken before the refs move on and outside the try below so
@@ -366,6 +368,7 @@ export function useSyncRunView(options: SyncRunViewOptions = {}): SyncRunView {
   return {
     running: progress?.running ?? false,
     stage: progress?.stage,
+    runKind: progress?.runKind ? progress.runKind : null,
     stageLabel: stageLabel(progress?.stage),
     step,
     totalSteps: progress?.totalSteps ?? 0,

@@ -65,6 +65,13 @@ export interface CollectionSyncSetting {
 
 export type SyncStage = "discovering" | "fetching" | "applying" | "finalizing" | "done" | "cancelled" | "error";
 
+/**
+ * What the run in flight is DOING — the backend states it rather than letting a
+ * page infer it, because a preview run and an apply run narrate the same work
+ * queue through frames of identical shape (`domain/sync_run_kind.py`).
+ */
+export type SyncRunKind = "preview" | "apply";
+
 export interface SyncProgress {
   running: boolean;
   stage?: SyncStage | "";
@@ -107,6 +114,18 @@ export interface SyncProgress {
    * separate run id (#1202).
    */
   runId?: string;
+  /**
+   * What the in-flight run is doing, claimed with the backend's run slot and
+   * carried on every frame of that run — the live event, the terminal frames and
+   * the ``get_sync_status`` snapshot a remounted QAM re-seeds from, which is
+   * what lets a QAM reloaded mid-run learn the kind at all.
+   *
+   * ``""`` (the idle default) or absent means **not established**, never one of
+   * the two answers: a reader renders neither claim there. The frontend also
+   * stamps it on the optimistic frame it writes when it starts a run, so the
+   * first paint is already right rather than reading as unknown for a round trip.
+   */
+  runKind?: SyncRunKind | "";
   /**
    * Frontend-computed upper-bound apply duration (seconds) for the in-flight
    * run, derived once from the ``sync_plan`` payload's ``total_roms`` — an

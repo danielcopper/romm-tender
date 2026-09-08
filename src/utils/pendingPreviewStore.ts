@@ -6,12 +6,12 @@
  * **Why this fact is not component state, when panel rendering state normally
  * is.** The preview outlives the panel instance that asked for it. `sync_preview`
  * is an awaited callable, so its answer is delivered to the closure of whichever
- * `MainPage` pressed Sync — and leaving the main page unmounts that instance
- * while the run keeps going. A `setPreview` in that closure then lands on a dead
- * component, and the instance actually on screen shows the idle Sync buttons
+ * page pressed the button — and navigating away unmounts that instance while the
+ * run keeps going. A `setPreview` in that closure then lands on a dead
+ * component, and the instance actually on screen shows the idle start button
  * over a preview the backend is holding, inviting a second run on top of the
  * first. Storing the answer where the backend's own lifetime can reach it — a
- * module store, outliving every mount — is what makes the card survive.
+ * module store, outliving every mount — is what makes the answer survive.
  *
  * **This is not a second source of truth.** The backend owns the preview; this
  * store holds its answer verbatim and is only ever filled from it. Nothing here

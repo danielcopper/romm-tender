@@ -889,10 +889,10 @@ class SyncReporter:
 
         What the preserved history does **not** carry is a resumable run. This
         clear takes away BOTH kinds of skip authority — every completion stamp and
-        every recorded launch command — and the panel's "Resume Sync" offer reads
-        those, never the history, so the sync button falls back to "Sync Library"
-        here. That the two are cleared together is what makes the offer's rule
-        hold; see :meth:`_read_sync_stats_io` (#1789).
+        every recorded launch command — and the panel's resume offer reads those,
+        never the history, so there is nothing left to continue here. That the two
+        are cleared together is what makes the offer's rule hold; see
+        :meth:`_read_sync_stats_io` (#1789).
         """
         with self._uow_factory() as uow:
             uow.platform_sync_state.clear()
@@ -931,7 +931,7 @@ class SyncReporter:
         it is newer than that (see :meth:`_last_attempt`); the ROM count is the
         bound-shortcut count in ``roms``.
 
-        The last two are what makes the panel's "Resume Sync" offer honest, and
+        The last two are what makes the panel's resume offer honest, and
         they are two facts rather than one because this plugin keeps **two** kinds
         of durable progress. A **completion stamp** makes the next run pass over a
         whole platform or collection at fetch time; a **recorded launch command**

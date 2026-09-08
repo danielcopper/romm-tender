@@ -484,12 +484,12 @@ sync (no Force Full Sync). Same-name-**within-one-label** still unions.
 
 What the plugin's Quick Access Menu panel shows at one time, chosen by the panel's router (`Page` in
 `src/types/navigation.ts`). Exactly one page is mounted at a time; navigating to another unmounts it. **Main** is the
-page the panel opens on: notices, status, the Sync button, the download summary and the menu. A **wide page** is a page
-that widens the panel from 348 px to 854 px for as long as it is mounted — the full screen width on the Deck, whose Big
-Picture viewport is 854 CSS px across. The width belongs to the page, not to a view inside it, and it collapses again
-when the page unmounts, the QAM tab changes, the panel closes or the plugin is dismounted. Every page is one or the
-other, and the page table in `docs/architecture/qam-panel.md` is where each page's width is decided. _Avoid_: sub-page,
-screen, route (a **route** is a Steam page outside the QAM, such as the game detail page).
+page the panel opens on: notices, status, the conditional slot, the download summary and the menu. A **wide page** is a
+page that widens the panel from 348 px to 854 px for as long as it is mounted — the full screen width on the Deck, whose
+Big Picture viewport is 854 CSS px across. The width belongs to the page, not to a view inside it, and it collapses
+again when the page unmounts, the QAM tab changes, the panel closes or the plugin is dismounted. Every page is one or
+the other, and the page table in `docs/architecture/qam-panel.md` is where each page's width is decided. _Avoid_:
+sub-page, screen, route (a **route** is a Steam page outside the QAM, such as the game detail page).
 
 ### List and detail
 
@@ -497,10 +497,37 @@ The layout of a wide page whose entries each carry a detail: the list on the lef
 right. **Focus selects** — moving through the list changes the detail at once; A operates the control in the row (a sync
 toggle), never the selection. The two regions scroll independently. _Avoid_: master/detail, sidebar.
 
+### Preview
+
+The answer to "what would a sync change" — the delta the backend computes without applying it, holds for **30 minutes**,
+and hands over as a `SyncPreview`: the library-wide counts, the per-platform split, the added and removed collection
+names, and the id an apply names it by. It is a **held** thing, not a screen: the backend stages one snapshot at a time
+and the frontend keeps whatever it was handed in a module store, so it outlives the panel that asked for it. A preview
+ends exactly three ways the reader chooses, all of them on the Sync page — **applied**, **cancelled**, or **refreshed**
+(discarded and replaced by a fresh one) — and it expires on its own if none of them happens. A fourth ending is the
+page's own: a successful **Force Full Sync** discards the state the preview was worked out against, so the preview goes
+with it, discarded on both sides exactly as Cancel discards one. An expired preview is still shown, so nothing the
+reader was told disappears behind them; what goes is the offer to apply it. _Avoid_: dry run, plan (a **plan** is the
+run's own work queue, one unit per platform or collection), diff.
+
+### Conditional slot
+
+The one row under Main's status rows that can be pressed, present only while the Sync page has something to report — a
+run in flight, or a preview waiting to be answered — and absent otherwise. It states coarsely — a short label, and
+beside it the run's step counter or the preview's counts, which can be a phrase carrying no number at all — and opens
+the Sync page, exactly as the menu's Sync entry does. The status rows above it state and do nothing, and the slot is the
+single exception; it is not the panel's only door besides the menu, but it and a notice's own button are there only
+while their condition is, which is what leaves the menu the navigation that is always in the same place. _Avoid_: status
+card, banner (a **notice** names a condition that needs the user; this states what the Sync page is doing), button.
+
 ### Notice / home
 
-A **notice** is a card at the top of Main naming a condition that needs the user (settings were reset, the RetroArch
-input driver is wrong, a sync paused on the session budget). The **home** of a condition is the one page where it is
-acted on. A notice names the condition and jumps to its home; the action exists only there, never on the notice. A
-condition with no home in the plugin stays a notice without a jump, with Dismiss where there is a sensible end to it.
-_Avoid_: banner (component names only), warning, alert.
+A **notice** is Main's standing statement of a condition that needs the user (settings were reset, the RetroArch input
+driver is wrong, a sync paused on the session budget). Most are cards and the input-driver one is a row; the shape is
+not what makes it a notice. They do not all sit at the top: three lead the panel above the status rows, and three more
+sit inside the status block, below the conditional slot — `docs/architecture/qam-panel.md`'s Main section has the order.
+The **home** of a condition is the one page where it is acted on. A notice names the condition and jumps to its home;
+the action exists only there, never on the notice — with one exception today, the RetroArch input driver, whose **Fix**
+still applies in place behind a confirmation until Settings (#1816) gives it a home. A condition with no home in the
+plugin stays a notice without a jump, with Dismiss where there is a sensible end to it. _Avoid_: banner (component names
+only), warning, alert.

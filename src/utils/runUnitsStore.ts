@@ -12,14 +12,16 @@
  * run, so a store that starts empty after a reload stays empty for the rest of
  * the run and refuses every frame that follows.
  *
- * **Three writers.** {@link seedRunUnits} takes the plan (`sync_plan`, once per
- * run, before any unit); {@link recordUnitCreated} / {@link recordUnitUpdated}
- * take the apply loop's per-item outcome; and {@link attachRunUnitsMirror}
- * subscribes to the sync-progress store. It mirrors that store rather than the
- * backend's `sync_progress` event because three writers feed it — the backend
- * listener in `index.tsx`, the apply loop's per-item updates, and Main's own
- * writes (its re-seed from `get_sync_status` on mount, its optimistic start and
- * that start's retraction) — and the store is the one place all three meet.
+ * **Four writers.** {@link seedRunUnits} takes the plan (`sync_plan`, once per
+ * run, before any unit); {@link clearRunUnits} empties the rows at a press that
+ * starts a run they say nothing about; {@link recordUnitCreated} /
+ * {@link recordUnitUpdated} take the apply loop's per-item outcome; and
+ * {@link attachRunUnitsMirror} subscribes to the sync-progress store. It mirrors
+ * that store rather than the backend's `sync_progress` event because three
+ * writers feed it — the backend listener in `index.tsx`, the apply loop's
+ * per-item updates, and Main's own writes (its re-seed from `get_sync_status` on
+ * mount, its optimistic start and that start's retraction) — and the store is
+ * the one place all three meet.
  *
  * **The rows belong to ONE run, by its id.** A row is seeded with the run id the
  * plan carried, and a frame moves nothing unless it names that same run. Nothing
@@ -148,6 +150,31 @@ export function seedRunUnits(units: readonly SyncPlanUnit[], runId: string): voi
     created: 0,
     updated: 0,
   }));
+  notify();
+}
+
+/**
+ * Empty the rows, so nothing of the previous run stands over the next one.
+ *
+ * Called by the Sync page at each press that starts a run — the start button,
+ * Apply Sync and Refresh (`components/sync/useSyncPage.ts`) — and skipped where
+ * that press CONTINUES the run the rows belong to, which is the one start they
+ * are still true for: they are the progress it resumes from.
+ *
+ * {@link seedRunUnits} is the only other thing that ever discards rows and it
+ * arrives with the plan, so from the press until the plan lands the rows on
+ * screen are the previous run's, down to the apply results of the unit it died
+ * in — and on the preview path there is no plan at all, so without this they
+ * would stand for the whole run.
+ *
+ * The listeners survive: this is a run boundary, not a teardown, and the page
+ * watching the rows has to hear them empty. Until the next plan the store holds
+ * no run, so every frame is refused and the run view falls back to the frame's
+ * own fine-detail line.
+ */
+export function clearRunUnits(): void {
+  _units = [];
+  _runId = null;
   notify();
 }
 
