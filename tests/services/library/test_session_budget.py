@@ -349,3 +349,36 @@ class TestClipCoverRefreshes:
         assert budget.clip_cover_refreshes(
             refreshes, rss_kb=rss, creates=0, updates=0, limit_kb=EFFECTIVE_CEILING_KB
         ) == [{"rom_id": 1, "app_id": 10}, {"rom_id": 2, "app_id": 20}]
+
+
+class TestPauseGuidanceNamesNoControl:
+    """``SYNC_PAUSED_BUDGET`` is the one backend sentence the panel shows to the
+    reader verbatim — as the pause toast, through ``buildSyncCompleteToast`` in
+    ``src/index.tsx`` — and it may not name a button.
+
+    Nothing on this side can know what the Sync page's start button says: the name
+    turns on the frontend's Skip-preview setting and on a resume question read from
+    the stats, so a name written here is a guess that goes stale in silence. It
+    said "Resume Sync" until the button stopped saying that for most readers, and
+    the toast then told them to press something that was not on screen.
+
+    **What this can see is the names the panel puts on that button today**, read
+    off ``src/utils/syncResume.ts`` and ``useSyncPage.ts`` and repeated here
+    because no import crosses the two languages — a fifth label added there passes
+    green here. What it cannot see at all is whether the sentence names an ACTION,
+    which is the half a reader has to judge; the constant's own comment carries it.
+    """
+
+    def test_the_paused_reason_names_no_button_the_panel_renders(self):
+        from services.library.session_budget import SYNC_PAUSED_BUDGET
+
+        for label in ("Check for changes", "Resume Sync", "Sync Library", "Apply Sync"):
+            assert label not in SYNC_PAUSED_BUDGET
+
+    def test_the_paused_reason_ends_in_a_period_the_toast_seam_can_strip(self):
+        # The panel strips ONE trailing period before appending the run's delta —
+        # "…to continue (2 added so far)." — and shows the reason unchanged when
+        # there is no delta. Without the period that second form ends mid-air.
+        from services.library.session_budget import SYNC_PAUSED_BUDGET
+
+        assert SYNC_PAUSED_BUDGET.endswith(".")

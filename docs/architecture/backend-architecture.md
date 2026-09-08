@@ -514,20 +514,23 @@ creates, each priced create + cover) and can never be projected past it; a resum
 re-pauses cleanly rather than driving a chunk into the cliff. On a pause it sets `run_paused` + a distinct
 `interrupt_reason` and requests cancel — the loop returns cleanly with prior chunks committed and the terminal write
 records the new terminal status **`paused`** (migration 014, its own status distinct from a crash's `interrupted`; both
-resumable, but the split lets the UI say "(paused)"). Completed platforms keep their `PlatformSyncState` stamps, so
-Resume Sync redoes only the remainder. Every step is **fail-open**: an unavailable RSS reading (no `steamwebhelper`,
-unreadable `/proc`) skips the gate — and short-circuits further GC attempts — for the rest of the run (logged once), a
-seam error is caught locally, and a failed GC only makes the reading less precise; measurement never blocks a sync. The
-same seams feed the UI surfaces: `sync_preview` returns `pause_likely` (a `predict_run_crosses` prognosis pricing only
-new creates + changed updates, never fully-unchanged items, so an unchanged re-sync never warns), a clean run's
-`sync_complete` carries `restart_recommended` (`post_run_advisory`, RSS > ~1.8 GB, read GC-first), and the
-`get_session_budget_status` callable returns a live RSS reading (no GC) plus the three fixed threshold lines (`warn_kb`
-≈1.8 GB, `ceiling_kb` ≈2.2 GB, `cliff_kb` ≈2.45 GB) for the persistent QAM banners (a blue "paused" banner, a yellow
-high-heap banner) and the always-on "Steam memory" status row. The row's value text is traffic-light coloured against
-those three thresholds — green / yellow (`warn_kb`) / red (`ceiling_kb`) — so the frontend holds no threshold magic
-numbers, and while a sync runs (or a paused banner is showing) the row polls the callable (~5 s during a sync, ~10 s
-while paused) so the number tracks the climbing RSS and the blue paused banner notices once a Steam restart frees
-memory. That notice is driven by `resume_ready` on the callable (`domain.session_budget.resume_would_proceed`:
+resumable, but the split lets the UI say "(paused)"). That reason is the one backend sentence the panel shows the reader
+verbatim (as the pause toast), so it **names an action and never a control**: nothing on this side can know what the
+Sync page's start button currently says, since that turns on the frontend's Skip-preview setting and on a resume
+question read from the stats. Completed platforms keep their `PlatformSyncState` stamps, so a resume redoes only the
+remainder. Every step is **fail-open**: an unavailable RSS reading (no `steamwebhelper`, unreadable `/proc`) skips the
+gate — and short-circuits further GC attempts — for the rest of the run (logged once), a seam error is caught locally,
+and a failed GC only makes the reading less precise; measurement never blocks a sync. The same seams feed the UI
+surfaces: `sync_preview` returns `pause_likely` (a `predict_run_crosses` prognosis pricing only new creates + changed
+updates, never fully-unchanged items, so an unchanged re-sync never warns), a clean run's `sync_complete` carries
+`restart_recommended` (`post_run_advisory`, RSS > ~1.8 GB, read GC-first), and the `get_session_budget_status` callable
+returns a live RSS reading (no GC) plus the three fixed threshold lines (`warn_kb` ≈1.8 GB, `ceiling_kb` ≈2.2 GB,
+`cliff_kb` ≈2.45 GB) for the persistent QAM banners (a blue "paused" banner, a yellow high-heap banner) and the
+always-on "Steam memory" status row. The row's value text is traffic-light coloured against those three thresholds —
+green / yellow (`warn_kb`) / red (`ceiling_kb`) — so the frontend holds no threshold magic numbers, and while a sync
+runs (or a paused banner is showing) the row polls the callable (~5 s during a sync, ~10 s while paused) so the number
+tracks the climbing RSS and the blue paused banner notices once a Steam restart frees memory. That notice is driven by
+`resume_ready` on the callable (`domain.session_budget.resume_would_proceed`:
 `rss + RESUME_HEADROOM_CHUNKS × FULL_CHUNK_WORST_KB < ceiling` — room for TWO worst-case chunks, ≈1.2 GB bar, because a
 one-chunk bar sits exactly on the pause point where Steam's own small frees flicker the verdict; `None` when RSS is
 unreadable) — when it flips `true` the blue banner announces memory is free and hides the restart button. The callable
@@ -767,12 +770,12 @@ which is the entire full-re-fetch + full-re-apply arm — the stamps are the fet
 `sync_runs` history is deliberately **preserved** (#1318): it feeds no skip gate and is the source of the "Last sync"
 display, so deleting it forced nothing and only blanked the panel to "Never" right after a reset.
 
-That preservation is also why the panel's **"Resume Sync" offer is derived from the surviving skip authority, not from
-the run history** (#1789). The history says only that a run ended without completing, and after a Force Full Sync it
-says that while everything it implied is gone — so a history-derived offer promised to continue progress that had just
-been discarded. The condition it replaced measured the wrong thing in the same way: it paired the incomplete attempt
-with "bound shortcuts exist", but Force Full Sync does not delete shortcuts, it deletes the stamps and the recorded
-launch options.
+That preservation is also why the panel's **resume offer is derived from the surviving skip authority, not from the run
+history** (#1789). The history says only that a run ended without completing, and after a Force Full Sync it says that
+while everything it implied is gone — so a history-derived offer promised to continue progress that had just been
+discarded. The condition it replaced measured the wrong thing in the same way: it paired the incomplete attempt with
+"bound shortcuts exist", but Force Full Sync does not delete shortcuts, it deletes the stamps and the recorded launch
+options.
 
 A resume rests on **skip authority**, and this plugin keeps two kinds, cleared together by that one reset: a
 **completion stamp** (whole platform or collection skipped at fetch time, ADR-0023) or a **recorded

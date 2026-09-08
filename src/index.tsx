@@ -199,7 +199,10 @@ function buildSyncCompleteToast(
     // A session-budget pause carries its own resume-friendly guidance — show it
     // verbatim, appending the delta so the user sees what did get saved. Strip
     // the reason's trailing period so the parenthetical reads as one sentence:
-    // "…then Resume Sync (2 added so far)." not "…Resume Sync. (2 added so far.)".
+    // "…then sync again to continue (2 added so far)." not "…to continue. (2
+    // added so far.)". The reason names an action rather than a button, because
+    // nothing that composes it here or writes it there knows what the Sync page's
+    // button currently says (`services/library/session_budget.py`).
     const body = summary ? `${data.interrupt_reason.replace(/\.$/, "")} (${summary} so far).` : data.interrupt_reason;
     // A session-budget pause needs the full guidance readable — persistent QAM
     // banners carry the numbers, but the toast is the immediate cue, so give it a

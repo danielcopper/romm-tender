@@ -52,9 +52,21 @@ if TYPE_CHECKING:
 # Terminal reason when the run paused itself at a chunk boundary because the
 # renderer's RSS is near Steam's per-session heap budget (the session-budget gate,
 # #1383). Distinct from the heartbeat-timeout reason so the UI shows resume-friendly
-# guidance ("restart Steam, then Resume Sync") rather than a crash message. Stored
-# in ``sync_runs.error`` and surfaced in the ``sync_complete`` payload.
-SYNC_PAUSED_BUDGET = "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then Resume Sync."
+# guidance rather than a crash message. Stored in ``sync_runs.error`` and surfaced
+# in the ``sync_complete`` payload, which the panel shows verbatim as a toast.
+#
+# **It names an ACTION and never a control.** Nothing here can know what the
+# panel's start button currently says — the name depends on the frontend's
+# Skip-preview setting and on a resume question read from the stats — so a button
+# name written here is a guess that goes stale silently. This sentence said
+# "then Resume Sync" until the button stopped saying that for most readers, and
+# the toast then instructed them to press something that was not on screen. The
+# banner had the same defect and was fixed by taking the label from the panel
+# (#1789, ``src/components/SessionBudgetBanner.tsx``); a toast has no panel to ask,
+# so it says what to DO instead.
+SYNC_PAUSED_BUDGET = (
+    "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then sync again to continue."
+)
 
 # Worst-case per-item cost of a created shortcut when the apply also pushes its
 # cover through Steam's artwork API: the shortcut's permanent create cost plus the
@@ -280,10 +292,12 @@ class SessionBudgetMonitor:
         "last run: ±X GB" without a live sync — and ``resume_ready`` — whether the
         live reading is low enough that resuming a paused run would apply at least one
         full chunk without re-pausing (the gate's own predictive condition), so the
-        paused banner can flip to "memory is free, press Resume Sync" once a Steam
-        restart drops RSS. Fail-open: ``rss_kb`` is ``None`` when the reading is
-        unavailable (no ``steamwebhelper`` / unreadable ``/proc``) or any seam raises
-        — the banner then drops the number but keeps its guidance text;
+        paused banner can flip from its restart guidance to "memory is free, press
+        <the panel's start button>" once a Steam restart drops RSS — the banner
+        fills that name in from the panel and this side never spells one.
+        Fail-open: ``rss_kb`` is ``None`` when the reading is unavailable (no
+        ``steamwebhelper`` / unreadable ``/proc``) or any seam raises — the banner
+        then drops the number but keeps its guidance text;
         ``memory_delta_kb`` is ``None`` until a clean run has measured both endpoints,
         and ``resume_ready`` is ``None`` when RSS is unreadable (undecidable).
 

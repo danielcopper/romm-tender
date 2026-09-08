@@ -172,12 +172,13 @@ A few things worth knowing for a large library:
   memory — normal for large syncs"). When a pause happens, the **main page** shows a short "Sync paused" notice with an
   **Open Sync** button, and the **Sync page** shows the full **blue card** — "Steam memory is full (2.3 GB). 1200 of
   2001 games done. Restart Steam, then Check for changes." — that stays until you resume, and a toast carries the same
-  guidance. The card reports how far the run got, so you can see how much is left before you resume. Restarting Steam
-  frees the memory and the resume finishes the job. Once you've restarted, the card notices on its own — it changes to
-  "Steam memory is free again (0.4 GB). 1200 of 2001 games done. Press Check for changes to continue." and drops the
-  restart button, so you know a resume will actually work now rather than pausing again. Nothing is lost, and you are
-  never forced out of what you were doing. After a big run finishes with memory still high, a **yellow card** on the
-  Sync page recommends a Steam restart before your next large sync; it clears itself once you restart.
+  guidance when the pause happens. The card reports how far the run got, so you can see how much is left before you
+  resume. Restarting Steam frees the memory and the resume finishes the job. Once you've restarted, the card notices on
+  its own — it changes to "Steam memory is free again (0.4 GB). 1200 of 2001 games done. Press Check for changes to
+  continue." and drops the restart button, so you know a resume will actually work now rather than pausing again.
+  Nothing is lost, and you are never forced out of what you were doing. After a big run finishes with memory still high,
+  a **yellow card** on the Sync page recommends a Steam restart before your next large sync; it clears itself once you
+  restart.
   - **The card names whichever button is actually there.** That is why the quotes above say "Check for changes": it is
     what the button reads with **Skip preview** off, which is the default. Switch Skip preview on and the same card
     reads "Restart Steam, then Resume Sync." — it always names the button standing under it. If you press **Force Full
@@ -234,7 +235,7 @@ complete the job.
   Full Sync** clears the plugin's record of what it has already synced and re-fetches every platform and collection from
   RomM on the next run — and that run also rewrites every shortcut instead of skipping the ones that look correct, so it
   repairs anything that drifted on the Steam side (a manually edited or broken shortcut). Reach for it if you suspect a
-  platform is out of sync or want a clean rebuild; a normal Sync (or Resume Sync) is enough for everyday updates. It is
+  platform is out of sync or want a clean rebuild; a normal sync — or a resume — is enough for everyday updates. It is
   greyed out until you have run at least one sync, and while a sync is running.
   - **Your "Last sync" line is left alone.** Force Full Sync only re-arms the next run — it does **not** wipe your sync
     history, so the **Last sync** line keeps showing when your library last synced (or the last attempt) instead of

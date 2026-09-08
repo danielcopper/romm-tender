@@ -1751,7 +1751,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
         total_games: 53,
         cancelled: true,
         interrupt_reason:
-          "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then Resume Sync.",
+          "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then sync again to continue.",
       });
     });
     await flush();
@@ -1759,7 +1759,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     // The distinct reason wins over the generic "Sync cancelled — …" wording, and
     // the reason's trailing period is stripped so the parenthetical reads cleanly.
     expect(lastToastBody()).toBe(
-      "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then Resume Sync (2 added so far).",
+      "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then sync again to continue (2 added so far).",
     );
     // The pause toast gets a longer duration so the guidance isn't truncated away
     // before it is read (#1383).
@@ -1797,13 +1797,13 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
         total_games: 53,
         cancelled: true,
         interrupt_reason:
-          "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then Resume Sync.",
+          "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then sync again to continue.",
       });
     });
     await flush();
 
     expect(lastToastBody()).toBe(
-      "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then Resume Sync.",
+      "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then sync again to continue.",
     );
     plugin.onDismount();
   });
