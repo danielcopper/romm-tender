@@ -11,7 +11,7 @@ Only the latest release receives security fixes.
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in decky-romm-sync, please report it responsibly:
+If you discover a security vulnerability in Tender, please report it responsibly:
 
 1. **Do NOT open a public GitHub issue.**
 2. Use [GitHub Security Advisories](https://github.com/danielcopper/romm-tender/security/advisories/new) to report

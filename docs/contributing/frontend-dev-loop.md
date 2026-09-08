@@ -16,9 +16,10 @@ Three pieces line up:
   events on exactly two files per plugin: `dist/index.js` and `main.py`. On a match it reloads the plugin in place —
   backend subprocess restart plus a cache-busted frontend re-import (the plugin unmounts cleanly first, so router
   patches are removed and re-applied).
-- **The watcher is gated on a `debug` flag.** Hot reload only applies to plugins carrying `"debug"` in the `flags` array
-  of `plugin.json`. `mise run deploy` injects the flag into the **deployed** `plugin.json` only — it is never committed
-  to the repo copy, because the Decky plugin store rejects plugins that ship it.
+- **Reloading is gated on a `debug` flag.** The watcher itself runs on every device, but it only re-loads plugins
+  carrying `"debug"` in the `flags` array of `plugin.json`. `mise run deploy` injects the flag into the **deployed**
+  `plugin.json` only — it is never committed to the repo copy, because a release that shipped it would make every user's
+  device restart the plugin whenever its `dist/index.js` or `main.py` changed.
 
 ## One-time setup
 

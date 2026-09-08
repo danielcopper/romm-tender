@@ -122,11 +122,14 @@ rsync -a --delete py_modules/ "$DEST/py_modules/"
 cp -f main.py plugin.json package.json "$DEST/"
 # Every local deploy is a dev deploy — release zips are packaged in CI
 # (release.yml builds with the Decky CLI straight from the repo checkout), so
-# this deployed copy never feeds a release. Injecting "debug" into the DEPLOYED
-# plugin.json turns on decky-loader's built-in hot-reload watcher for this
-# plugin (the watcher only acts on debug-flagged plugins). Never commit the
-# flag to the repo plugin.json — the Decky plugin store rejects plugins that
-# ship it. Idempotent: re-deploys don't duplicate the flag.
+# this deployed copy never feeds a release. decky-loader's file watcher runs on
+# every device — LIVE_RELOAD defaults to on and the shipped unit file sets no
+# value — but Loader.import_plugin re-loads only plugins carrying "debug" in
+# flags, and skips every other one. Injecting the flag into the DEPLOYED
+# plugin.json is what opts this plugin in. Never commit it to the repo
+# plugin.json: a release that shipped it would have every user's device restart
+# the plugin's backend and re-import its frontend whenever its dist/index.js
+# or main.py changed. Idempotent: re-deploys don't duplicate the flag.
 python3 - "$DEST/plugin.json" <<'PYEOF'
 import json
 import sys

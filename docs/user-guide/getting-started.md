@@ -27,28 +27,34 @@ Before installing the plugin, you need:
 
 ## Installation
 
-### From Decky's "Install Plugin From URL"
+**Not on the Decky store.** The store doesn't accept plugins whose code is written with AI assistance, and Tender's is —
+see [How this is built](../index.md). Install it from the URL below.
+
+### From Decky's "Install Plugin from URL"
 
 1. Open the Quick Access Menu (QAM) in Gaming Mode by pressing the **...** button
 2. Go to the Decky Loader tab (the plug icon) and open settings (gear icon)
-3. Under **General → Other**, enable **Developer Mode** — a new **Developer** tab appears in the sidebar
-4. Open the **Developer** tab and select **Install Plugin From URL**
+3. Under **General → Other**, enable **Developer mode** — a new **Developer** tab appears in the sidebar
+4. Open the **Developer** tab and select **Install Plugin from URL**
 5. Enter the direct URL to the release zip
 
-   This one always points at the newest release, so it needs no version number:
+   This one always points at the newest release, so it needs no version number — and pasting it again later is how you
+   update:
 
    ```text
-   https://github.com/danielcopper/romm-tender/releases/latest/download/tender.zip
+   https://github.com/danielcopper/romm-tender/releases/latest/download/Tender.zip
    ```
 
    To pin a specific version instead, name its tag:
 
    ```text
-   https://github.com/danielcopper/romm-tender/releases/download/tender-v{VERSION}/tender.zip
+   https://github.com/danielcopper/romm-tender/releases/download/tender-v{VERSION}/Tender.zip
    ```
 
-   Releases published before the rename use the older `decky-romm-sync-v{VERSION}/decky-romm-sync.zip` form; their links
-   keep working unchanged.
+   Every release from `tender-v0.31.0` on carries this asset — `tender-v0.31.0` itself published it as `tender.zip`, and
+   GitHub matches release-asset names case-insensitively, so the URL above still finds it. Most of the
+   `decky-romm-sync-v{VERSION}` releases before it published `decky-romm-sync.zip`; name that tag and that file for
+   those. Four have no asset at all: the three earliest and `v0.2.0`.
 
 6. Decky downloads and installs the plugin automatically — no restart needed
 
@@ -61,7 +67,7 @@ Any direct URL to the zip file works (GitHub releases, a self-hosted mirror, etc
 
 ### Manual installation (alternative)
 
-1. Download `tender.zip` from the [releases page](https://github.com/danielcopper/romm-tender/releases)
+1. Download the plugin's `.zip` asset from the [releases page](https://github.com/danielcopper/romm-tender/releases)
 2. Extract the zip to `~/homebrew/plugins/` on your device (via SSH, file manager, or USB)
 3. Restart Decky Loader — either reboot, or run `sudo systemctl restart plugin_loader` via SSH
 4. The plugin appears in your QAM under the Decky tab

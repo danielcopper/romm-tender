@@ -147,8 +147,19 @@ jobs:
           # names its output after the package. Renaming therefore means copying
           # — into RUNNER_TEMP, because /tmp/output belongs to the container that
           # produced the zip and is not writable here.
+          # The name must be exactly "Tender.zip", for the update path rather than
+          # the install. decky_loader's installFromURL takes the plugin name from
+          # the URL's last path segment, and PluginBrowser._install spends it on
+          # its "was this already installed?" lookup — find_plugin_folder(), an
+          # exact match against each installed plugin.json's "name", "Tender" here.
+          # A lower-cased name misses, so the previous copy is never uninstalled:
+          # the new zip unpacks over it, stale files survive, and "Tender" is
+          # appended to Decky's pluginOrder again. The install itself still
+          # succeeds — Install-from-URL sends no version, so the backend's default
+          # of "dev" applies, and on that path _install re-reads the name out of
+          # the zip's own plugin.json before unpacking.
           BUILT_ZIP=$(ls /tmp/output/*.zip | head -1)
-          DEST="$RUNNER_TEMP/tender.zip"
+          DEST="$RUNNER_TEMP/Tender.zip"
           cp "$BUILT_ZIP" "$DEST"
           gh release upload "$TAG" \
             "$DEST" \

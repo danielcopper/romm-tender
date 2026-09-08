@@ -33,7 +33,7 @@ _Named after the railway car behind a steam locomotive, or the boat that shuttle
 > **Pre-1.0 (v0.x).** The feature set isn't complete yet. Save sync covers standard cartridge saves; the memory-card
 > systems — PlayStation, PS2, Dreamcast, GameCube, PSP, 3DS — don't sync their saves yet, and the
 > [support matrix](https://danielcopper.github.io/romm-tender/user-guide/save-sync-support-matrix/) has the per-system
-> detail. The [Decky Store](https://plugins.deckbrew.xyz/) listing comes with v1.0; until then it's a manual install.
+> detail.
 
 ---
 
@@ -85,26 +85,32 @@ _Named after the railway car behind a steam locomotive, or the boat that shuttle
 
 ## Installation
 
-<details>
-<summary><b>From the Decky Store</b> — not available yet</summary>
+**Not on the Decky store.** The store doesn't accept plugins whose code is written with AI assistance, and Tender's is —
+see _How this is built_ above. Install it from the URL below.
 
-> ⚠️ **Not available yet.** The plugin will be submitted to the [Decky Store](https://plugins.deckbrew.xyz/) with the
-> **v1.0** release. Until then, use the manual install below.
+```text
+https://github.com/danielcopper/romm-tender/releases/latest/download/Tender.zip
+```
 
-Once published, install it straight from Decky's built-in store — open the Quick Access Menu → **Decky** → store icon,
-search for **Tender**, and install. No Developer Mode required.
+<details open>
+<summary><b>Install from URL</b> — the recommended way</summary>
+
+Needs **Developer mode** in Decky Loader (Decky tab → gear icon → **General → Other** → toggle **Developer mode**).
+
+1. Decky settings → **Developer** tab → **Install Plugin from URL**
+2. Paste the URL above and install
+
+That URL always resolves to the newest release, so pasting it again is also how you update.
 
 </details>
 
-<details open>
-<summary><b>From ZIP or URL</b> — the current method</summary>
+<details>
+<summary><b>Install from ZIP</b></summary>
 
-This is the current method while v1.0 is in progress. It requires **Developer Mode** in Decky Loader (Decky settings →
-gear icon → toggle **Developer Mode**).
+Also needs **Developer mode**.
 
-1. Download the latest `tender.zip` from the [releases page](https://github.com/danielcopper/romm-tender/releases)
-2. In Decky settings → **Developer** tab → **Install Plugin from ZIP** (or **from URL** with the
-   [latest release link](https://github.com/danielcopper/romm-tender/releases/latest/download/tender.zip))
+1. Download the plugin's `.zip` asset from the [releases page](https://github.com/danielcopper/romm-tender/releases)
+2. Decky settings → **Developer** tab → **Install Plugin from ZIP File**
 
 </details>
 
