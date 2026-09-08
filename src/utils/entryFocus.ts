@@ -5,7 +5,7 @@
  * Steam's gamepad navigation keeps a focus pointer across a page swap and
  * resolves it on the next input — onto whatever sits at the old page's
  * position — so a newly mounted page has to claim focus itself. Two callers do,
- * on the same delay and by different rules: the wide-page frame for its own body
+ * on the same delay and by the same rule: the wide-page frame for its own body
  * (`src/components/qam/WidePage.tsx`), and the panel's router for the narrow
  * pages that place none of their own (`src/index.tsx`).
  */
@@ -36,14 +36,18 @@ export const FOCUS_STOPS = FOCUS_STOP_SHAPES.join(", ");
 const ENTRY_STOPS = FOCUS_STOP_SHAPES.map((shape) => `${shape}:not([disabled])`).join(", ");
 
 /**
- * The stop a wide page's body opens on: the first enabled thing in document
- * order that can take focus and contains no focus stop of its own.
+ * The stop a page opens on: the first enabled thing in document order that can
+ * take focus and contains no focus stop of its own.
  *
- * Document order, never "the first button", because a page's first button is not
- * its first row. On a list-and-detail page whose list rows carry no control of
- * their own, the first button in the body is in the DETAIL pane, so a
- * button-first rule opens the page somewhere inside the detail and moves as the
- * detail's content changes.
+ * One rule for both widths. Document order, never "the first button", because a
+ * page's first button is not its first row, and it is not that on either width.
+ * On a wide list-and-detail page whose list rows carry no control of their own,
+ * the first button in the body is in the DETAIL pane, so a button-first rule
+ * opens the page somewhere inside the detail and moves as the detail's content
+ * changes. On a narrow page the same rule fails from the other end: Main's
+ * status rows state rather than act, so its first button is the menu at the very
+ * bottom of the panel and a button-first rule opens the page with the status it
+ * leads with already scrolled off the top.
  *
  * Innermost, because a container `Focusable` carries `tabindex="0"` of its own
  * and precedes in document order every row it wraps: taking the first match
@@ -62,16 +66,6 @@ const ENTRY_STOPS = FOCUS_STOP_SHAPES.map((shape) => `${shape}:not([disabled])`)
 export function firstBodyStop(root: ParentNode): HTMLElement | null {
   const stops = [...root.querySelectorAll<HTMLElement>(ENTRY_STOPS)];
   return stops.find((stop) => stop.querySelector(FOCUS_STOPS) === null) ?? null;
-}
-
-/**
- * The stop a narrow page opens on: its first enabled button.
- *
- * A narrow page is one column of Steam's own full-width rows, where the first
- * button IS the first row, so nothing is bought by walking the focus tree.
- */
-export function firstPageButton(root: ParentNode): HTMLElement | null {
-  return root.querySelector<HTMLElement>("button:not([disabled])");
 }
 
 /**

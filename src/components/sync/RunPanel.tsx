@@ -12,8 +12,16 @@
  * opened mid-run show the units already worked through rather than only the
  * current one.
  *
+ * Cancel Sync sits directly under the bar, above the list. That is the ORDER of
+ * the column and not a compromise: the bar, the stage and the button that stops
+ * the run are one thing, and the unit table under them is evidence rather than a
+ * control. It is also the only place a controller can reach it from — a region
+ * scrolls by moving focus and the stick walks the rows one at a time, so a
+ * button under a sixteen-unit plan is sixteen presses away, which is what a
+ * device round measured before it moved up here.
+ *
  * The unit list scrolls on its own, inside what is left of the column under the
- * bar and above Cancel: a plan of fourteen platforms and three collections is
+ * bar and the button: a plan of fourteen platforms and three collections is
  * taller than the Deck's column, and without a region of its own the running
  * unit walks out of sight below the fold. The running row is scrolled to the
  * middle of that region as the run reaches it, because nothing moves focus
@@ -139,6 +147,11 @@ export const RunPanel: FC<{ state: SyncPageState }> = ({ state }) => {
           {...(run.coarseFraction !== undefined ? { nProgress: run.coarseFraction } : {})}
         />
       </PaneRow>
+      <ButtonRow padding="6px 16px 4px">
+        <DialogButton style={FLAT_BUTTON} disabled={state.cancelling} onClick={state.cancelRun}>
+          {state.cancelling ? "Cancelling…" : "Cancel Sync"}
+        </DialogButton>
+      </ButtonRow>
       {state.units.length === 0 ? (
         // The plan arrives once per run, so a store that started empty after a
         // plugin reload stays empty for the rest of it. The frames still carry
@@ -153,11 +166,6 @@ export const RunPanel: FC<{ state: SyncPageState }> = ({ state }) => {
           ))}
         </ScrollRegion>
       )}
-      <ButtonRow padding="6px 16px 4px">
-        <DialogButton style={FLAT_BUTTON} disabled={state.cancelling} onClick={state.cancelRun}>
-          {state.cancelling ? "Cancelling…" : "Cancel Sync"}
-        </DialogButton>
-      </ButtonRow>
       {state.status !== null && <Muted>{state.status}</Muted>}
     </div>
   );

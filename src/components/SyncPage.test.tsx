@@ -37,6 +37,7 @@ import { attachRunUnitsMirror, resetRunUnitsStoreForTests, seedRunUnits } from "
 import { resetSyncStatsStoreForTests } from "../utils/syncStatsStore";
 import { NEW_ITEM_SEC, UPDATED_ITEM_SEC, COVER_DOWNLOAD_SEC, FETCH_ALLOWANCE_SEC } from "../utils/syncEstimate";
 import { PREVIEW_COUNTDOWN_TICK_MS } from "../utils/previewState";
+import { ENTRY_FOCUS_DELAY_MS } from "../utils/entryFocus";
 import type {
   PluginSettings,
   SessionBudgetStatus,
@@ -87,15 +88,19 @@ vi.mock("@decky/ui", async () => {
     // `onActivate` is what makes a `Focusable` a focus STOP rather than a
     // container that passes focus to its children, and it is the only half of
     // reachability a test can see: happy-dom has no nav tree. Surfaced as a
-    // marker attribute so its absence is assertable too. The style rides along
-    // because a table row's own register — its padding and type size — is set
-    // on the `Focusable` the row IS.
+    // marker attribute so its absence is assertable too, and as the
+    // `tabindex="0"` Steam renders for it — which is the shape the rule that
+    // places entry focus reads, so without it every table row is invisible to
+    // that rule and a case about where the page opens proves nothing. The style
+    // rides along because a table row's own register — its padding and type
+    // size — is set on the `Focusable` the row IS.
     Focusable: (p: AnyProps & { onActivate?: () => void; onFocus?: (e: unknown) => void; style?: unknown }) =>
       ce(
         "div",
         {
           "data-testid": (p["data-testid"] as string | undefined) ?? "focusable",
           "data-activate": p.onActivate ? "true" : undefined,
+          tabIndex: p.onActivate ? 0 : undefined,
           onFocus: p.onFocus,
           style: p.style,
         },
@@ -619,6 +624,58 @@ describe("SyncPage", () => {
   });
 
   // ===========================================================================
+  // Where the column opens, and what that costs the buttons under it.
+  // ===========================================================================
+  describe("where the column opens", () => {
+    // The frame places entry focus behind a timer, so a case about where the
+    // page opens has to be able to fire it. Only the timeout is faked: the
+    // deadline countdown runs on an interval and the page's own awaits are
+    // promises, both of which have to keep working.
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /** The row of the preview table carrying *label* in its first cell — a focus
+     *  stop, and therefore a candidate the entry-focus rule would take if it
+     *  came first. */
+    function tableRow(container: HTMLElement, label: string): HTMLElement {
+      const row = Array.from(container.querySelectorAll<HTMLElement>('[data-activate="true"]')).find((node) =>
+        node.textContent.startsWith(label),
+      );
+      expect(row).toBeDefined();
+      return row!;
+    }
+
+    it("puts the three buttons above the change table", async () => {
+      adoptPreview(preview());
+      const { container } = await renderPage();
+
+      // Every row of the table is a focus stop, so the buttons under one were
+      // as many stick presses away as the reader's library has platforms.
+      const apply = buttonByExactText(container, "Apply Sync")!;
+      expect(apply.compareDocumentPosition(tableRow(container, "Total"))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+
+    it("opens on Apply Sync rather than on the first row of the table", async () => {
+      adoptPreview(preview());
+      await renderPage();
+
+      // The frame's own placement, not a re-run of its rule here: the timer is
+      // what puts focus in the body, and its 50 ms is why nothing before this
+      // point has it.
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+
+      expect(document.activeElement?.textContent).toBe("Apply Sync");
+    });
+  });
+
+  // ===========================================================================
   // The three ways a preview ends. Each has to end it on BOTH sides.
   // ===========================================================================
   describe("the three ways a preview ends", () => {
@@ -1120,15 +1177,20 @@ describe("SyncPage", () => {
         vi.restoreAllMocks();
       });
 
-      it("gives the unit list a region of its own, with Cancel Sync outside it", async () => {
+      it("gives the unit list a region of its own, with Cancel Sync above it", async () => {
         const container = await renderRunning();
 
         const region = container.querySelector('[data-testid="run-units"]');
         expect(region).not.toBeNull();
         expect(region?.querySelector(`[data-testid="${RUNNING_ROW}"]`)).not.toBeNull();
-        // Cancel stays under the region rather than scrolling away with the rows.
+        // Outside the region, so it never scrolls away with the rows — and
+        // ABOVE it, because the stick walks a region's rows one at a time and a
+        // button under a sixteen-unit plan is sixteen presses from the top of
+        // the column.
         expect(region?.textContent).not.toContain("Cancel Sync");
-        expect(buttonByExactText(container, "Cancel Sync")).not.toBeNull();
+        const cancel = buttonByExactText(container, "Cancel Sync");
+        expect(cancel).not.toBeNull();
+        expect(cancel!.compareDocumentPosition(region!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
       });
 
       it("scrolls that region — and only that region — to put the running row in the middle", async () => {

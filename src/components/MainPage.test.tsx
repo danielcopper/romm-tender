@@ -58,6 +58,7 @@ import { resetPendingPreviewStoreForTests, adoptPreview, clearPendingPreview } f
 import { showModal } from "@decky/ui";
 import * as syncManager from "../utils/syncManager";
 import * as connectionState from "../utils/connectionState";
+import { firstBodyStop, placeEntryFocus } from "../utils/entryFocus";
 import type {
   MigrationStatus,
   SaveSortMigrationStatus,
@@ -187,10 +188,18 @@ vi.mock("@decky/ui", async () => {
     // sync row. Steam fires it from A and from a click, so the stub surfaces it
     // as a click handler, plus a marker attribute so its ABSENCE is assertable
     // (a dropped prop would make that assertion vacuous).
-    Field: (p: AnyProps & { label?: unknown; description?: unknown; onActivate?: () => void }) =>
+    // `focusable` renders `tabindex="0"`, which is what makes a row carrying no
+    // control of its own a stop at all — the three status rows are exactly that,
+    // and the rule that places entry focus reads the DOM for those stops.
+    Field: (p: AnyProps & { label?: unknown; description?: unknown; onActivate?: () => void; focusable?: boolean }) =>
       ce(
         "div",
-        { "data-testid": "field", "data-activate": p.onActivate ? "true" : undefined, onClick: p.onActivate },
+        {
+          "data-testid": "field",
+          "data-activate": p.onActivate ? "true" : undefined,
+          onClick: p.onActivate,
+          tabIndex: p.focusable ? 0 : undefined,
+        },
         ce("span", { "data-testid": "field-label" }, p.label as never),
         ce("span", { "data-testid": "field-desc" }, p.description as never),
         p.children as never,
@@ -484,6 +493,25 @@ describe("MainPage", () => {
       // between the status block and the menu.
       expect(container.querySelectorAll('[data-testid="panel-title"]')).toHaveLength(0);
       expect(container.querySelectorAll('[data-testid="block-separator"]')).toHaveLength(1);
+    });
+
+    it("opens on Connection — the first status row — and not on the menu below it", async () => {
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+
+      // The router's rule, run over exactly what it is handed: the plugin's own
+      // content, with Decky's panel title and back arrow outside it.
+      expect(placeEntryFocus(container, firstBodyStop)).toBe(true);
+
+      const focused = document.activeElement as HTMLElement | null;
+      expect(focused?.querySelector('[data-testid="field-label"]')?.textContent).toBe("Connection");
+      // Non-vacuous: Main's status rows act on nothing, so its first BUTTON is
+      // below every one of them — the menu at the bottom of the panel. That is
+      // where a button-first rule opened it, with the whole status block
+      // scrolled off the top.
+      const firstButton = container.querySelector("button");
+      expect(firstButton).not.toBeNull();
+      expect(focused?.compareDocumentPosition(firstButton!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     });
   });
 

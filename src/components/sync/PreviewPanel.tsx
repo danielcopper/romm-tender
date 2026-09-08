@@ -1,6 +1,13 @@
 /**
- * The Sync page's left column while a preview is pending: what the run would
- * change, as a table, and the three buttons that end the preview.
+ * The Sync page's left column while a preview is pending: the three buttons that
+ * end the preview, and under them what the run would change, as a table.
+ *
+ * The buttons come first — "here is what you can do, and here is why" — because
+ * the table is as long as the reader's library is wide and every row of it is a
+ * focus stop. A region scrolls only by moving focus, so a button row under a
+ * table of fifteen platforms is fifteen stick presses from the top of the
+ * column, which is where a reader opening the page starts. Entry focus lands on
+ * Apply Sync, or on Refresh where Apply is dead.
  *
  * The table is the page. One row per platform the backend reports a change for,
  * one for the RomM collections, one for the Steam collections kept per platform,
@@ -191,6 +198,17 @@ export const PreviewPanel: FC<{ state: SyncPageState; preview: SyncPreview }> = 
           optional under `exactOptionalPropertyTypes`. */}
       <SectionTitle title="Preview" {...deadlineNote(expired, secondsLeft)} />
       {isFullResync(summary) && <Muted>Full re-sync — all platforms re-fetched.</Muted>}
+      <ButtonRow padding="4px 16px 8px">
+        <DialogButton style={FLAT_BUTTON} disabled={state.busy || expired || !hasChanges} onClick={state.applyPreview}>
+          Apply Sync
+        </DialogButton>
+        <DialogButton style={FLAT_BUTTON} disabled={state.busy} onClick={state.refreshPreview}>
+          Refresh
+        </DialogButton>
+        <DialogButton style={FLAT_BUTTON} disabled={state.busy} onClick={state.cancelPreview}>
+          Cancel
+        </DialogButton>
+      </ButtonRow>
       {showTable ? (
         <>
           <TableHeader columns={PREVIEW_COLUMNS} cells={["Platform", "New", "Updated", "Removed"]} numericFrom={1} />
@@ -250,17 +268,6 @@ export const PreviewPanel: FC<{ state: SyncPageState; preview: SyncPreview }> = 
         </div>
       )}
       {expired && <Muted>This preview is too old to apply. Refresh works out a fresh one.</Muted>}
-      <ButtonRow padding="6px 16px 4px">
-        <DialogButton style={FLAT_BUTTON} disabled={state.busy || expired || !hasChanges} onClick={state.applyPreview}>
-          Apply Sync
-        </DialogButton>
-        <DialogButton style={FLAT_BUTTON} disabled={state.busy} onClick={state.refreshPreview}>
-          Refresh
-        </DialogButton>
-        <DialogButton style={FLAT_BUTTON} disabled={state.busy} onClick={state.cancelPreview}>
-          Cancel
-        </DialogButton>
-      </ButtonRow>
       {state.status !== null && <Muted>{state.status}</Muted>}
     </>
   );

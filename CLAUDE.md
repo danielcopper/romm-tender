@@ -633,7 +633,13 @@ Format: **invariant** — tier — enforced by.
   last (`revealEdge`, over `revealTop` and `revealBottom`). Both halves are pinned by
   `src/components/qam/ScrollRegion.test.tsx` over mocked geometry, so what is tested is the DECISION and not the scroll:
   whether the panel and the reader agree about which element is topmost or last stays device-only, like the rest of this
-  entry. Detail: `docs/architecture/qam-panel.md`, "Building blocks"
+  entry. **Reachable is not near, and the same mechanism decides where a page puts its controls**: focus moves one row
+  at a time, so a button under a list of N focusable rows is N presses from the top of the column — sixteen, measured on
+  the device for the Cancel that stops a sixteen-unit run. That is why the Sync page's two button rows sit ABOVE their
+  tables, which is the reading the layout wants anyway: what you can do, then why. Nothing checks that half either, and
+  the suite is blind to it for the same reason — a page whose only control is a library's length below the point it
+  opens at renders exactly like one whose control is a press away. Detail: `docs/architecture/qam-panel.md`, "Building
+  blocks"
 
 When a change applies a guard / sanitize / backup / grouping pattern, sweep for sibling sites of the same pattern — the
 register is what that sweep checks against.

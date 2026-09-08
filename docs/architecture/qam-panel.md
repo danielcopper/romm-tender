@@ -217,19 +217,19 @@ Entry focus lands in the content — the active tab's, so the list of a list-and
 follow, because Steam draws them only while gamepad focus is within the tabbed page. Back stays reachable by moving up.
 
 **Entry focus belongs to the frame, on every wide page.** `WidePage` marks its root as placing its own, so the panel's
-router leaves the page alone rather than focusing its first button, which is the Back chip above the body. Where Steam's
-tabbed page renders, its `autoFocusContents` does the placing; everywhere else — an untabbed page, and a tabbed one
-whose `Tabs` probe missed — the frame focuses the first stop inside the body itself, on the same 50 ms delay the router
-uses, because Steam's navigation resolves a focus pointer it retained across the page swap after the mount.
+router leaves the page alone rather than placing focus of its own, which would land on the Back chip above the body.
+Where Steam's tabbed page renders, its `autoFocusContents` does the placing; everywhere else — an untabbed page, and a
+tabbed one whose `Tabs` probe missed — the frame focuses the first stop inside the body itself, on the same 50 ms delay
+the router uses, because Steam's navigation resolves a focus pointer it retained across the page swap after the mount.
 
-**The stop it picks is the first enabled focus stop in document order that contains no focus stop at all.** Document
-order rather than "the first button", because a page's first button is not its first row: on a list-and-detail page
-whose list rows carry no control, the first button in the body is in the DETAIL pane, so a button-first rule would open
-the page inside the detail and move as the detail's content changed. Innermost, because a container `Focusable` carries
-`tabindex="0"` of its own and precedes every row it wraps, so the first match would be the container and the reader
-would start a step away from the row. Enabled, because a page opening on a dead control says nothing about where the
-reader is — the reveal rules in `ScrollRegion` read the same shapes and do NOT skip a disabled control, since focus
-still lands on one.
+**The stop it picks is the first enabled focus stop in document order that contains no focus stop at all** — one rule,
+both widths. Document order rather than "the first button", because a page's first button is not its first row, and it
+is not that on either width: on a wide list-and-detail page whose list rows carry no control, the first button in the
+body is in the DETAIL pane, so a button-first rule would open the page inside the detail and move as the detail's
+content changed. Innermost, because a container `Focusable` carries `tabindex="0"` of its own and precedes every row it
+wraps, so the first match would be the container and the reader would start a step away from the row. Enabled, because a
+page opening on a dead control says nothing about where the reader is — the reveal rules in `ScrollRegion` read the same
+shapes and do NOT skip a disabled control, since focus still lands on one.
 
 **The two halves read different selectors, and the difference is load-bearing.** A candidate has to be enabled, but a
 container is skipped for holding a stop of ANY kind: a button row whose every button is disabled is still a container
@@ -237,9 +237,17 @@ Steam does not stop on, so treating it as the innermost candidate would put the 
 next real row. The test cannot tell that row from one carrying an activate handler, so it skips both; a row whose only
 inner stop is disabled is stepped over, which no body's first column produces today. Where that leaves no candidate — no
 enabled stop that is free of stops inside it — nothing is placed and the page keeps whatever Steam's retained pointer
-resolves to. The narrow pages the router still covers keep a button-first rule — their first button, now skipped past a
-disabled one — because a narrow page is one column of Steam's own full-width rows and there the first button IS the
-first row. Both finders, the shared set of shapes and the `.focus()` + `gpfocus` pair are `src/utils/entryFocus.ts`.
+resolves to.
+
+**The narrow pages the router covers take the same rule, and used to have a button-first one of their own.** Its
+argument was that a narrow page is one column of Steam's own full-width rows, where the first button IS the first row —
+true of Main only while Main had a Sync button near the top. Its status rows state and act on nothing, so once that
+button left, Main's first button was the menu at the very bottom of the panel. Under the shared rule Main opens on
+**Connection**, its first status row. Settings, Data Management and Downloads are unmoved: each leads with its Back row,
+so the first stop and the first button are the same element. Whatever the rule, the root it searches is the plugin's own
+content and nothing above it — Decky renders its panel title and the back arrow beside it outside that box, 34 px above
+it (`WidePage`'s `ancestorOverhang` measures the gap) — so neither rule could reach Decky's own chrome. The finder, the
+shared set of shapes and the `.focus()` + `gpfocus` pair are `src/utils/entryFocus.ts`.
 
 **A tab's content is the page's business, not the frame's.** The frame wraps an untabbed body in a `ScrollRegion` and a
 tabbed one in nothing: Steam's tabbed page already wraps each tab's content in this same plain scroll panel, so a region
@@ -470,17 +478,24 @@ under the table, later.
 **Three buttons end a preview**, and each ends it on both sides: **Apply Sync**, **Refresh** (discard, then work out
 another — the third path, new here) and **Cancel**. They are the three the reader chooses between; a fourth ending is
 the page's own, and it is Force Full Sync, below. Apply is rendered and disabled rather than hidden where there is
-nothing to apply, or where the preview has expired; past the deadline the table stays and Refresh is what moves.
+nothing to apply, or where the preview has expired; past the deadline the table stays and Refresh is what moves. **They
+sit above the table**, under the section title, and the reading is "here is what you can do — and here is why". That is
+also the only place a controller can reach them from: every row of the table is a focus stop and a region scrolls only
+by moving focus, so a button row under a fifteen-platform table is fifteen stick presses from where the column opens,
+which is where the frame puts entry focus — on Apply Sync.
 
 **While a run is in flight the column is the run view**: the whole run as one bar under the stage caption, with the step
 counter and the estimate on the section title beside it, and under all of it every unit of the plan — Unit, Status,
 Result. Done rows show what their apply produced, the running row shows its stage with its own bar from
 `withinUnitFraction`, waiting rows show what the plan holds for them (an expected skip is worded as the prediction it
-is, never as the run's verdict). **The unit list is a scrolling region of its own**, taking what is left of the column
-under the bar and above Cancel: a plan of seventeen units is taller than the Deck's column, and without it the running
-unit walks out of sight below the fold. Nothing moves focus during a run, so the page scrolls that region itself and
-puts the running row in the middle of it, clamped to the list's own ends. Both tables' rows are set in one flat, small
-register, held in one place (`paneTable.tsx`) so that stays a decision rather than a drift.
+is, never as the run's verdict). **Cancel Sync sits directly under the bar**, above the list — the bar, the stage and
+the button that stops the run are one thing, and the table under them is evidence rather than a control; it is also the
+only place sixteen units of plan do not stand between the reader and it, exactly as with the preview's three. **The unit
+list is a scrolling region of its own**, taking what is left of the column under the bar and that button: a plan of
+seventeen units is taller than the Deck's column, and without it the running unit walks out of sight below the fold.
+Nothing moves focus during a run, so the page scrolls that region itself and puts the running row in the middle of it,
+clamped to the list's own ends. Both tables' rows are set in one flat, small register, held in one place
+(`paneTable.tsx`) so that stays a decision rather than a drift.
 
 The bar and the counter come from `useSyncRunView`, the rows from `runUnitsStore`. A run with **no rows** — a preview,
 which seeds none, or a run whose plan was lost to a plugin reload — shows the frame's own fine-detail line in their
@@ -927,9 +942,11 @@ store screenshots (#830) are taken after.
 - The layout study the Sync page was chosen from: [sync-layouts.html](../assets/sync-layouts.html) — three layouts at
   the Deck's real size (a table beside a controls column, one column, list and detail), each with what it costs. The
   first is what shipped, and its second board settled the run view: one bar for the whole run, one row per planned unit,
-  one bar for the unit being worked. **Superseded on one point**: its note 3 leaves the Force Full Sync confirmation an
+  one bar for the unit being worked. **Superseded on two points**: its note 3 leaves the Force Full Sync confirmation an
   open decision and shows the button with none — the shipped page puts it behind a `ConfirmModal` that states what it
-  forgets. Like the Platforms study, it is a record of a choice rather than a description of the page.
+  forgets; and it draws both of the left column's button rows under their tables, where the shipped page puts them
+  above, because on a controller a button is reached by walking focus onto it one table row at a time. Like the
+  Platforms study, it is a record of a choice rather than a description of the page.
 - The static prototype the decisions were made on: [qam-prototype.html](../assets/qam-prototype.html), a single
   self-contained page kept in `docs/assets/`. Every page at device size with numbered notes; its example data is
   invented, and it reflects the decisions as of this page's first version. Redrawn to the Deck's real 854 × 534 CSS px —

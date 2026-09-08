@@ -45,19 +45,24 @@ than hidden, so a removal never appears without saying where it comes from. Unde
 how long it should take, and the note about progress being saved. If your server is too old to send the per-platform
 split, the page says so and shows the totals on their own rather than inventing a breakdown.
 
-**Three buttons end a preview.** **Apply Sync** starts the run. **Refresh** throws the preview away and works out a
-fresh one against whatever your server holds now. **Cancel** throws it away and leaves it at that. The only other thing
-that discards it is **Force Full Sync**, described below. While a preview is waiting the main page shows a **Changes
-ready** row with its counts, and pressing that row opens this page with that preview rather than starting over.
+**Three buttons end a preview**, and they sit above the table. **Apply Sync** starts the run. **Refresh** throws the
+preview away and works out a fresh one against whatever your server holds now. **Cancel** throws it away and leaves it
+at that. They are above the table rather than below it because the table can be as long as your library is wide, and
+with a controller you reach a button by walking onto it one row at a time — under a table of fifteen platforms that is
+fifteen presses. Apply Sync is also where the page opens, so it is the first thing under your thumb. The only other
+thing that discards it is **Force Full Sync**, described below. While a preview is waiting the main page shows a
+**Changes ready** row with its counts, and pressing that row opens this page with that preview rather than starting
+over.
 
 **While a sync runs**, the left of the page becomes the run itself: one bar for the whole run, and under it every
 platform and collection the run plans to touch. A finished one shows what it added and updated, the one being worked
 shows what it is doing and how far in it is, and the rest show what is waiting for them. That list scrolls on its own,
 and the platform being worked is kept in the middle of it, so a run over sixteen platforms does not walk out of sight.
-**Cancel Sync** stays put underneath it. While the plugin is working out a preview there are no rows to show yet, so the
-line names what it is fetching instead. If you reload the plugin mid-run the plan is gone for the rest of that run: the
-bar, the counter and that line stand, and only if there is no line either does the page tell you the per-platform detail
-is not available for the run.
+**Cancel Sync** sits just under the bar, above that list, so stopping a run is never more than a press or two away
+however many platforms it covers. While the plugin is working out a preview there are no rows to show yet, so the line
+names what it is fetching instead. If you reload the plugin mid-run the plan is gone for the rest of that run: the bar,
+the counter and that line stand, and only if there is no line either does the page tell you the per-platform detail is
+not available for the run.
 
 **On the right** are **Skip preview** (now remembered between sessions), **Force Full Sync** behind a confirmation,
 Steam's memory now and how much the last run added to it, and your last ten sync runs with when each started, what it

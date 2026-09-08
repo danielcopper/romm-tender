@@ -165,10 +165,15 @@ vi.mock("@decky/ui", () => {
         createElement("button", { onClick, disabled }, children as never),
         description == null ? null : createElement("span", { "data-testid": "button-desc" }, description as never),
       ),
-    Field: (p: AnyProps & { label?: unknown; description?: unknown }) =>
+    // `focusable` renders `tabindex="0"` on the row, which is what makes a Field
+    // that carries no control of its own a focus stop — Main's status rows are
+    // exactly that. Modelled here because the entry-focus rule reads the DOM for
+    // its stops (`utils/entryFocus.ts`), and a mock that dropped the attribute
+    // would make every such rule land on the first BUTTON instead and pass.
+    Field: (p: AnyProps & { label?: unknown; description?: unknown; focusable?: boolean }) =>
       createElement(
         "div",
-        { "data-testid": "field" },
+        { "data-testid": "field", tabIndex: p.focusable ? 0 : undefined },
         createElement("span", { "data-testid": "field-label" }, p.label as never),
         createElement("span", { "data-testid": "field-desc" }, p.description as never),
         p.children as never,
@@ -180,10 +185,14 @@ vi.mock("@decky/ui", () => {
     // and OK (A), because that is how Steam delivers them — one gamepad stream,
     // dispatched to the handler the button maps to — so a test drives them the
     // same way.
-    // onActivate is also surfaced as data-activate, because it is what makes a
-    // Focusable a focus stop rather than a container: a test asserting that a
-    // row with no control of its own is reachable has nothing else to look at,
-    // and happy-dom has no nav tree to ask.
+    // onActivate is also surfaced as data-activate AND as `tabindex="0"`,
+    // because it is what makes a Focusable a focus stop rather than a container:
+    // a test asserting that a row with no control of its own is reachable has
+    // nothing else to look at, and happy-dom has no nav tree to ask. The
+    // tabindex is the same fact read by the rule that places entry focus
+    // (`utils/entryFocus.ts`), which walks the DOM for its stops — without it
+    // every such rule would step over the rows and land on the first button,
+    // which is the device defect the attribute lets a test see.
     // onFocus is forwarded because a Focusable is how the list-and-detail layout
     // learns that focus moved to a row — dropping it would make focus-selects
     // vacuously untestable. Other FooterLegend-only props (flow-children,
@@ -213,7 +222,7 @@ vi.mock("@decky/ui", () => {
           "data-activate": onActivate ? "true" : undefined,
           style,
           role,
-          tabIndex,
+          tabIndex: tabIndex ?? (onActivate ? 0 : undefined),
           onFocus,
           "aria-label": ariaLabel,
           ref: (el: HTMLDivElement | null) => {

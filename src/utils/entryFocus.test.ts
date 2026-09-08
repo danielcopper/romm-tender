@@ -1,6 +1,6 @@
 /**
- * entryFocus tests — which stop each of the two rules picks, and what placing
- * focus on it leaves behind.
+ * entryFocus tests — which stop the rule picks, and what placing focus on it
+ * leaves behind.
  *
  * happy-dom has no gamepad and no nav tree, so what is pinned is the CHOICE of
  * element and the two marks Steam's own navigation leaves on it; that the reader
@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, afterEach } from "vitest";
-import { firstBodyStop, firstPageButton, placeEntryFocus } from "./entryFocus";
+import { firstBodyStop, placeEntryFocus } from "./entryFocus";
 
 function page(html: string): HTMLElement {
   const root = document.createElement("div");
@@ -83,27 +83,19 @@ describe("firstBodyStop", () => {
 
     expect(firstBodyStop(root)).toBeNull();
   });
-});
 
-describe("firstPageButton", () => {
-  it("takes the first enabled button, ignoring the focus tree around it", () => {
-    // A narrow page is one column of Steam's own full-width rows, so its first
-    // button is its first row and nothing is bought by walking inwards.
-    const root = page(`<div tabindex="0" id="wrapper"></div><button id="first">first</button><button>second</button>`);
+  it("takes a stating row over the first button below it", () => {
+    // The shape of a narrow page: Main's status rows act on nothing and stay
+    // focusable all the same, so its first BUTTON is the menu at the bottom of
+    // the panel. A button-first rule opens the page with the status it leads
+    // with already scrolled off the top.
+    const root = page(`
+      <div tabindex="0" id="connection">Connection</div>
+      <div tabindex="0" id="last-sync">Last sync</div>
+      <button id="menu-sync">Sync</button>
+    `);
 
-    expect(firstPageButton(root)?.id).toBe("first");
-  });
-
-  it("skips a disabled button", () => {
-    const root = page(`<button id="dead" disabled>dead</button><button id="live">live</button>`);
-
-    expect(firstPageButton(root)?.id).toBe("live");
-  });
-
-  it("answers nothing for a page with no button", () => {
-    const root = page(`<div tabindex="0">a row nobody wrote a button for</div>`);
-
-    expect(firstPageButton(root)).toBeNull();
+    expect(firstBodyStop(root)?.id).toBe("connection");
   });
 });
 
@@ -111,7 +103,7 @@ describe("placeEntryFocus", () => {
   it("focuses the stop its finder picks and marks it the way Steam does", () => {
     const root = page(`<button id="btn">go</button>`);
 
-    expect(placeEntryFocus(root, firstPageButton)).toBe(true);
+    expect(placeEntryFocus(root, firstBodyStop)).toBe(true);
     // `.focus()` alone moves DOM focus and leaves the element undrawn: the class
     // is what Steam's own navigation adds, and what the focus ring keys on.
     expect(root.querySelector("#btn")).toHaveFocus();
