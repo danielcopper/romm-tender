@@ -14,12 +14,19 @@
  * that clears it, so the card would otherwise stand over the very run it is
  * asking for.
  *
+ * **A swap that takes the reader's focus with it hands it to the body that
+ * replaces it**, and a swap that does not leaves focus alone —
+ * `useEntryFocusOnBodySwap`, one rule for both directions, scoped to the body
+ * rather than to the column so that the card above it is never what the column
+ * lands on.
+ *
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Sync.
  */
 
-import type { FC } from "react";
+import { useRef, type CSSProperties, type FC, type ReactNode } from "react";
 import { DialogButton } from "@decky/ui";
 import { SessionBudgetBanner } from "./SessionBudgetBanner";
+import { useEntryFocusOnBodySwap } from "../utils/entryFocus";
 import { ButtonRow, FLAT_BUTTON, Muted, SectionTitle } from "./qam/pane";
 import { Columns } from "./qam/Columns";
 import { WidePage } from "./qam/WidePage";
@@ -46,15 +53,33 @@ export const SyncPage: FC<{ onBack: () => void }> = ({ onBack }) => {
   );
 };
 
+/**
+ * The box the three bodies swap inside — a handle for the focus rule and
+ * nothing else, so it generates no box of its own: the run body fills the
+ * column with `height: 100%`, and a wrapper with a height of its own would
+ * either take that reference away or stand at full height under the idle line.
+ */
+const BODY_BOX: CSSProperties = { display: "contents" };
+
 const SyncMainColumn: FC<{ state: SyncPageState }> = ({ state }) => {
-  let body;
+  const bodyBox = useRef<HTMLDivElement | null>(null);
+  let body: ReactNode;
+  let bodyKind: "run" | "preview" | "idle";
   if (state.run.running) {
     body = <RunPanel state={state} />;
+    bodyKind = "run";
   } else if (state.preview !== null) {
     body = <PreviewPanel state={state} preview={state.preview} />;
+    bodyKind = "preview";
   } else {
     body = <IdlePanel state={state} />;
+    bodyKind = "idle";
   }
+  // Focus follows the body it was standing in, and only that one: the button
+  // that ends a preview and the button that stops a run each unmount with the
+  // body they belong to, while a reader in the controls column chose where they
+  // are.
+  useEntryFocusOnBodySwap(bodyBox, bodyKind);
   return (
     <>
       {!state.run.running && (
@@ -67,7 +92,9 @@ const SyncMainColumn: FC<{ state: SyncPageState }> = ({ state }) => {
           runTotalItems={state.budget?.run_total_items ?? null}
         />
       )}
-      {body}
+      <div ref={bodyBox} style={BODY_BOX}>
+        {body}
+      </div>
     </>
   );
 };

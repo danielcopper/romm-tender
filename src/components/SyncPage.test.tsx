@@ -729,6 +729,92 @@ describe("SyncPage", () => {
 
       expect(document.activeElement).toBe(elsewhere);
     });
+
+    it("a run ending hands focus back to the table that was held while it went", async () => {
+      // The one case where the column falls back to the preview rather than to
+      // the idle line: a preview held in the store while a run owned the page.
+      adoptPreview(preview());
+      setSyncProgress({ running: true, stage: "applying", step: 1, totalSteps: 3, message: "GBA: 1/2" });
+      const { container } = await renderPage();
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+      // A page opened mid-run opens on Cancel Sync — the frame's own placement,
+      // and where the reader is standing when the run ends under them.
+      expect(document.activeElement?.textContent).toBe("Cancel Sync");
+
+      await act(async () => {
+        setSyncProgress({ running: false, stage: "done", message: "Sync complete" });
+        await Promise.resolve();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+
+      expect(buttonByExactText(container, "Cancel Sync")).toBeNull();
+      expect(document.activeElement?.textContent).toBe("Apply Sync");
+    });
+
+    it("and where nothing was held, to the button on the idle body", async () => {
+      setSyncProgress({ running: true, stage: "applying", step: 1, totalSteps: 3, message: "GBA: 1/2" });
+      const { container } = await renderPage();
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+      expect(document.activeElement?.textContent).toBe("Cancel Sync");
+
+      await act(async () => {
+        setSyncProgress({ running: false, stage: "done", message: "Sync complete" });
+        await Promise.resolve();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+
+      expect(container.textContent).toContain("Nothing is waiting to be applied.");
+      expect(document.activeElement?.textContent).toBe("Sync Library");
+    });
+
+    it("but a swap the reader was not standing in moves nothing", async () => {
+      // Force Full Sync ends the pending preview from the controls column, so
+      // the body changes while the reader is standing on a button of their own
+      // choosing — the case the condition is for.
+      adoptPreview(preview());
+      const { container } = await renderPage();
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+      expect(document.activeElement?.textContent).toBe("Apply Sync");
+
+      // The reader crosses to the controls column. Steam's own move fires the
+      // focus events the page reads, so this is the walk and not a shortcut
+      // around it.
+      const crossedTo = buttonByExactText(container, "Force Full Sync")!;
+      crossedTo.focus();
+      fireEvent.click(crossedTo);
+      await act(async () => {
+        lastConfirmModalProps<{ onOK?: () => void }>()?.onOK?.();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+
+      // The preview went, and the idle body's own button is standing right
+      // there for the rule to have taken — so what keeps focus where it is, is
+      // the condition rather than there being nowhere to move it to.
+      //
+      // What the identity assertion can and cannot carry: the clear also
+      // disables the button under the reader, and happy-dom leaves focus on a
+      // disabled control where a browser may drop it. So "still on Force Full
+      // Sync" is this environment's answer; what holds in both is the half
+      // being tested — focus was not pulled into the body — because the rule
+      // reads the note the body kept rather than who holds focus now.
+      expect(buttonByExactText(container, "Apply Sync")).toBeNull();
+      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
+      expect(document.activeElement).toBe(crossedTo);
+    });
   });
 
   // ===========================================================================

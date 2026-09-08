@@ -30,7 +30,7 @@ without restating it. The width mechanism's decision record is
 | `src/utils/deckyUiInternals.ts`                               | Honest typing for `@decky/ui` values that come from a webpack probe: the frame's class names, `Tabs`, `ScrollPanel`, the controller glyph                           |
 | `src/utils/qamExpansion.ts`                                   | The panel's width: the expand and hide messages, the injected `max-width` rule, and the four paths that clear both                                                  |
 | `src/components/qam/`                                         | The wide-page frame: `WidePage` (the Back/title line, tabs, measured height, entry focus), `ScrollRegion`, `Columns`, `ListDetail`, `pane`                          |
-| `src/utils/entryFocus.ts`                                     | Which stop a body opens on, the declaration a page makes when that stop is not it, and the `.focus()` + `gpfocus` pair that places it                               |
+| `src/utils/entryFocus.ts`                                     | Which stop a body opens on, a page's declaration when that stop is not it, the rule for a body that swaps under the reader, and the `.focus()` + `gpfocus` pair     |
 | `src/utils/syncRunView.ts`                                    | `useSyncRunView` — the run in flight as a page renders it: stage label, coarse bar, position within the running unit, fine-detail line, estimate, and the run's end |
 | `src/utils/runUnitsStore.ts`                                  | The run's work queue, one row per unit: the plan's riders, how far the run has got, and what each unit's apply produced                                             |
 | `src/utils/previewState.ts`                                   | What a page asks of a pending preview: has it anything to apply, and how long is it still accepted (the half Main reads)                                            |
@@ -222,6 +222,8 @@ router leaves the page alone rather than placing focus of its own, which would l
 Where Steam's tabbed page renders, its `autoFocusContents` does the placing; everywhere else — an untabbed page, and a
 tabbed one whose `Tabs` probe missed — the frame focuses the first stop inside the body itself, on the same 50 ms delay
 the router uses, because Steam's navigation resolves a focus pointer it retained across the page swap after the mount.
+Opening a page is the frame's moment and its only one: a page whose body changes while it stays open answers for that
+swap itself, by the same rule and under a condition of its own — the Sync page's left column is the one that does.
 
 **The stop it picks is the first enabled focus stop in document order that contains no focus stop at all** — one rule,
 both widths. Document order rather than "the first button", because a page's first button is not its first row, and it
@@ -472,6 +474,19 @@ preview. Then the line saying nothing is waiting, with the button that changes i
 whichever it is, and only while no run is going: a paused `last_attempt` survives into the resume that clears it, so the
 card would otherwise stand over the very run it is asking for.
 
+**A swap that takes the reader's focus with it hands focus to the body that replaces it; a swap that does not leaves
+focus alone.** Both halves are one rule (`useEntryFocusOnBodySwap` in `utils/entryFocus.ts`), and it runs in both
+directions: Apply Sync removes the button the reader is standing on, so focus lands on Cancel Sync, and the run ending
+removes Cancel Sync, so focus lands on the start button of the idle body — or on Apply Sync where a preview was held
+while the run went. Where it lands is the frame's own rule (`firstBodyStop`, on the same 50 ms delay), applied to the
+body rather than to the column, so the session-budget card above it is never what the column lands on. **The other half
+is the point**: a reader who has crossed to Options, Steam memory or the run list chose where they are standing, and a
+body changing behind them must not yank them out of it — which is what Force Full Sync does, ending the pending preview
+from the controls column. So the question the rule asks is whether the element that was standing in the BODY has gone
+with it, held as a note while focus moves through the body; it never asks who holds focus after the swap, because a swap
+is not the only thing that can take focus in one commit — Force Full Sync goes dead in the same one that ends the
+preview. **The mount is not a swap**: a page opened mid-run is opened by the frame, on the same stop.
+
 **The preview is a table.** One row per platform the backend reports a change for (Platform, New, Updated, Removed), one
 for the RomM collections built from the added and removed names, one for the Steam collections the sync keeps per
 platform wherever `platform_collection_diff` reports a change, and a total row. The total comes from the summary's own
@@ -518,13 +533,10 @@ Nothing moves focus during a run, so the page scrolls that region itself and put
 clamped to the list's own ends. Both tables' rows are set in one flat, small register, held in one place
 (`paneTable.tsx`) so that stays a decision rather than a drift.
 
-**Focus lands on Cancel Sync when this body takes the column.** The button that got the reader here — Apply Sync, or the
-start button on the idle body — unmounts with the body it was in, and Steam keeps a focus pointer across the swap and
-resolves it onto whatever now sits at that position, so the pane claims focus itself. It does so by the frame's own
-entry-focus rule (`utils/entryFocus.ts`, on the frame's own 50 ms delay) applied to its own pane, and what that rule
-picks is the first stop holding no stop of its own: every unit row below is a stop too, so what puts it on the button is
-the button being first — the same ordering the column is laid out for. On the mount ALONE, which is the swap: a run
-re-renders per frame and none of those is a moment to move the reader.
+**Focus lands on Cancel Sync when this body takes the column**, by the swap rule above: what it picks is the first stop
+holding no stop of its own, and every unit row below is a stop too, so what puts it on the button is the button being
+first — the same ordering the column is laid out for. On the swap ALONE: a run re-renders per frame and none of those is
+a moment to move the reader.
 
 The bar and the counter come from `useSyncRunView`, the rows from `runUnitsStore`. A run with **no rows** — a preview,
 which seeds none, a run whose plan was lost to a plugin reload, or the window between a press that cleared the rows and

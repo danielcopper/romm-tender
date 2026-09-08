@@ -6,14 +6,17 @@
  * resolves it on the next input — onto whatever sits at the old page's
  * position — so a newly mounted body has to claim focus itself. Three callers
  * do, on the same delay: the wide-page frame for its own body
- * (`src/components/qam/WidePage.tsx`), the Sync page's run view for the body it
- * swaps in mid-page (`src/components/sync/RunPanel.tsx`), and the panel's router
- * for the pages that place none of their own (`src/index.tsx`).
+ * (`src/components/qam/WidePage.tsx`), the panel's router for the pages that
+ * place none of their own (`src/index.tsx`), and
+ * {@link useEntryFocusOnBodySwap} for a page whose body changes under the reader
+ * while the page stays open — the Sync page's left column.
  *
- * The first two take {@link firstBodyStop} as it stands. The router takes
- * {@link pageEntryStop}, which lets the page it has just mounted name the area
- * focus belongs in and otherwise answers exactly the same thing.
+ * The frame and the swap take {@link firstBodyStop} as it stands. The router
+ * takes {@link pageEntryStop}, which lets the page it has just mounted name the
+ * area focus belongs in and otherwise answers exactly the same thing.
  */
+
+import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 
 /**
  * Every shape Steam gives a focus stop, measured in the running QAM rather than
@@ -132,4 +135,85 @@ export function placeEntryFocus(root: ParentNode, findStop: (root: ParentNode) =
   stop.focus();
   stop.classList.add("gpfocus");
   return true;
+}
+
+/**
+ * Follow a body that swaps under the reader — `body` holds whichever one is
+ * showing and `bodyKind` names it — but only where the swap took the reader's
+ * focus with it.
+ *
+ * The swap unmounts the control the reader was standing on, and Steam resolves
+ * its retained pointer onto whatever now sits at that position, so their next
+ * press goes somewhere nobody chose. The incoming body therefore claims focus
+ * the way a newly mounted one does: {@link firstBodyStop} inside it, on
+ * {@link ENTRY_FOCUS_DELAY_MS}.
+ *
+ * **Only where the swap took it.** A reader standing anywhere else — another
+ * column, the frame's Back row — put themselves there, and a body changing
+ * behind them is no reason to move them. So the question is asked of the
+ * element that was standing in THIS body, held here as focus moves through it:
+ * the swap disconnects it, and a reader who had walked out of the body left
+ * nothing behind to disconnect.
+ *
+ * **Which element holds focus after the swap cannot answer that**, which is why
+ * this keeps a note of its own. A swap is not the only thing that can take
+ * focus in one commit — Force Full Sync ends the pending preview and goes dead
+ * in the same one, and that is exactly the case that must be left alone —
+ * whereas what stood in the body is a fact this page owns rather than a reading
+ * of what the browser did with a control elsewhere.
+ *
+ * Focus leaving for somewhere real is the reader choosing; focus landing on
+ * nothing (`relatedTarget` null) is what a removal leaves behind, so the note
+ * survives it and is spent by the swap it belongs to.
+ *
+ * The note is read in the commit that swapped the body, before anything can
+ * move focus into what replaced it — hence a layout effect.
+ *
+ * **Nothing here is asked of a module global**, neither the document nor the
+ * window: every question goes to a node this page holds — `root.contains`, the
+ * event's own target, `isConnected`. Plugin code runs in the SharedJSContext
+ * window while these nodes belong to the QAM view's own document, so a
+ * `document.activeElement` read here would answer about the wrong document, and
+ * no test in this repo could see it: happy-dom has one realm.
+ *
+ * **The mount is not a swap**, and nothing is placed on it: the frame opens the
+ * page (`WidePage`), and a body placing focus there would be a second placement
+ * racing the frame's own for the same element.
+ */
+export function useEntryFocusOnBodySwap(body: RefObject<HTMLElement | null>, bodyKind: string): void {
+  const stoodOn = useRef<Element | null>(null);
+  const shown = useRef(bodyKind);
+
+  useEffect(() => {
+    const root = body.current;
+    if (root === null) return;
+    const took = (event: FocusEvent) => {
+      stoodOn.current = event.target as Element | null;
+    };
+    const left = (event: FocusEvent) => {
+      const next = event.relatedTarget as Node | null;
+      if (next !== null && !root.contains(next)) stoodOn.current = null;
+    };
+    root.addEventListener("focusin", took);
+    root.addEventListener("focusout", left);
+    return () => {
+      root.removeEventListener("focusin", took);
+      root.removeEventListener("focusout", left);
+    };
+  }, [body]);
+
+  useLayoutEffect(() => {
+    const root = body.current;
+    const previous = shown.current;
+    shown.current = bodyKind;
+    if (root === null || previous === bodyKind) return;
+    // Spent by the swap it was taken for, whichever way it answers: the
+    // placement below puts a fresh one there, and a note that outlived its own
+    // swap would answer a later one for a reader who has moved on.
+    const stop = stoodOn.current;
+    stoodOn.current = null;
+    if (stop === null || stop.isConnected) return;
+    const timer = setTimeout(() => placeEntryFocus(root, firstBodyStop), ENTRY_FOCUS_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [body, bodyKind]);
 }
