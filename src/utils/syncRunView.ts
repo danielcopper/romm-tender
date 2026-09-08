@@ -43,18 +43,8 @@ import {
   observeApplyProgress,
   resetEta,
 } from "./syncEta";
-import { getSyncProgress, onSyncProgressChange, withinUnitFraction } from "./syncProgress";
+import { getSyncProgress, isTerminalStage, onSyncProgressChange, withinUnitFraction } from "./syncProgress";
 import type { SyncProgress, SyncRunKind, SyncStage } from "../types";
-
-const TERMINAL_STAGES: ReadonlySet<SyncStage> = new Set<SyncStage>(["done", "cancelled", "error"]);
-
-/** Whether a stage stops the run — the three the backend pairs with
- *  `running: false`, and the only frames that may end a watch. Exported because
- *  a page that passes no callbacks still has to tell a run's end from its own
- *  optimistic frame being retracted, and both are `running: false`. */
-export function isTerminalStage(stage: SyncProgress["stage"]): boolean {
-  return !!stage && TERMINAL_STAGES.has(stage);
-}
 
 const STAGE_LABELS: Record<SyncStage, string> = {
   discovering: "Discovering platforms",
@@ -254,7 +244,12 @@ export function useSyncRunView(options: SyncRunViewOptions = {}): SyncRunView {
       // The local mirror must update FIRST and unconditionally — it is what
       // drives the re-render. Everything after it is derived work (terminal
       // teardown, estimator feeding, ETA state) that must never be able to break
-      // the re-render chain (on-device freeze, cause not yet reproduced in tests).
+      // the re-render chain. The on-device freeze this ordering was written
+      // against has since been reproduced (`utils/syncProgress.test.ts`) and was
+      // not this chain breaking: the apply loop wrote a run that had already
+      // ended back into the store, and the store now refuses that. What the
+      // ordering still buys is its own point — a throwing consumer must not cost
+      // the page the frame it threw on.
       const frame = getSyncProgress();
       setProgress(frame);
       // Run bookkeeping, taken before the refs move on and outside the try below so

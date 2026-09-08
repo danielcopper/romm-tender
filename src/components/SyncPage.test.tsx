@@ -30,7 +30,7 @@ import { SyncPage } from "./SyncPage";
 import * as backend from "../api/backend";
 import { showModal } from "@decky/ui";
 import * as syncManager from "../utils/syncManager";
-import { getSyncProgress, setSyncProgress } from "../utils/syncProgress";
+import { getSyncProgress, resetSyncProgressStoreForTests, setSyncProgress } from "../utils/syncProgress";
 import { resetEta } from "../utils/syncEta";
 import { adoptPreview, resetPendingPreviewStoreForTests } from "../utils/pendingPreviewStore";
 import { attachRunUnitsMirror, resetRunUnitsStoreForTests, seedRunUnits } from "../utils/runUnitsStore";
@@ -264,7 +264,7 @@ async function renderPage() {
 async function renderAndStartPreview() {
   const result = await renderPage();
   await act(async () => {
-    fireEvent.click(buttonByExactText(result.container, "Sync Library")!);
+    fireEvent.click(buttonByExactText(result.container, "Check for changes")!);
     await Promise.resolve();
     await Promise.resolve();
   });
@@ -278,7 +278,10 @@ describe("SyncPage", () => {
     resetSyncStatsStoreForTests();
     resetPendingPreviewStoreForTests();
     resetRunUnitsStoreForTests();
-    setSyncProgress({ running: false, stage: "", current: 0, total: 0, message: "" });
+    // The whole sync-progress store, not just an idle frame: these cases reuse
+    // one run id, and a run this store has seen END can never be put back in
+    // flight.
+    resetSyncProgressStoreForTests();
 
     vi.mocked(syncManager.isCancelRequested).mockReturnValue(false);
     vi.mocked(syncManager.reconcileStaleShortcuts).mockResolvedValue(undefined);
@@ -303,8 +306,52 @@ describe("SyncPage", () => {
     it("nothing pending: says so, and offers the button that changes it", async () => {
       const { container } = await renderPage();
       expect(container.textContent).toContain("Nothing is waiting to be applied.");
-      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
+      expect(buttonByExactText(container, "Check for changes")).not.toBeNull();
       expect(container.querySelector('[data-testid="progress"]')).toBeNull();
+    });
+
+    it("the idle line says what the press does, and the button says it too", async () => {
+      const { container } = await renderPage();
+      expect(container.textContent).toContain(
+        "Nothing is waiting to be applied. Start a preview to see what would change.",
+      );
+      expect(buttonByExactText(container, "Check for changes")).not.toBeNull();
+    });
+
+    it("with Skip preview on, both name the run — and the line QUOTES the button", async () => {
+      // The line must never name a button that is not on screen, which is why it
+      // takes the label rather than spelling one: with a resume waiting the
+      // button reads "Resume Sync", and so must the sentence.
+      vi.mocked(backend.getSettings).mockResolvedValue({ ...defaultSettings(), skip_preview: true });
+      vi.mocked(backend.getSyncStats).mockResolvedValue({
+        ...defaultStats(),
+        last_sync: null,
+        resumable_games: 353,
+        last_attempt: { finished_at: "2026-07-11T18:02:00", status: "cancelled" },
+      });
+      const { container } = await renderPage();
+
+      expect(buttonByExactText(container, "Resume Sync")).not.toBeNull();
+      expect(container.textContent).toContain(
+        "Nothing is waiting to be applied. Skip preview is on, so Resume Sync applies changes without showing them first.",
+      );
+      // The resume is not lost to a button that stops naming it: the scope line
+      // under it is where that survives.
+      expect(container.textContent).toContain("353 games already synced — a resume continues from there.");
+    });
+
+    it("keeps the resume in the scope line where the button only offers a preview", async () => {
+      vi.mocked(backend.getSyncStats).mockResolvedValue({
+        ...defaultStats(),
+        last_sync: null,
+        resumable_games: 353,
+        last_attempt: { finished_at: "2026-07-11T18:02:00", status: "cancelled" },
+      });
+      const { container } = await renderPage();
+
+      expect(buttonByExactText(container, "Check for changes")).not.toBeNull();
+      expect(buttonByExactText(container, "Resume Sync")).toBeNull();
+      expect(container.textContent).toContain("353 games already synced — a resume continues from there.");
     });
 
     it("a preview pending: the table, and the three buttons that end it", async () => {
@@ -313,7 +360,7 @@ describe("SyncPage", () => {
       expect(buttonByExactText(container, "Apply Sync")).not.toBeNull();
       expect(buttonByExactText(container, "Refresh")).not.toBeNull();
       expect(buttonByExactText(container, "Cancel")).not.toBeNull();
-      expect(buttonByExactText(container, "Sync Library")).toBeNull();
+      expect(buttonByExactText(container, "Check for changes")).toBeNull();
     });
 
     it("a run in flight owns the column, even while the store still holds a preview", async () => {
@@ -326,7 +373,7 @@ describe("SyncPage", () => {
 
       expect(buttonByExactText(container, "Cancel Sync")).not.toBeNull();
       expect(buttonByExactText(container, "Apply Sync")).toBeNull();
-      expect(buttonByExactText(container, "Sync Library")).toBeNull();
+      expect(buttonByExactText(container, "Check for changes")).toBeNull();
     });
 
     it("switches back to the table the moment the run stops", async () => {
@@ -772,6 +819,131 @@ describe("SyncPage", () => {
       });
 
       expect(container.textContent).toContain("Nothing is waiting to be applied.");
+      expect(document.activeElement?.textContent).toBe("Check for changes");
+    });
+
+    it("a preview arriving in two commits still hands focus to the table", async () => {
+      // The preview path swaps the body TWICE, not once: the backend's own
+      // "Preview ready" frame stops the run before the `sync_preview` callable
+      // answers, so the column goes run → idle → preview in two commits
+      // milliseconds apart. Both land inside the placement delay, so the second
+      // cancels the placement the first scheduled — and the reader was left with
+      // no focus at all (#1814, measured on the device).
+      let answer: (p: SyncPreview) => void = () => {};
+      vi.mocked(backend.syncPreview).mockReturnValue(
+        new Promise<SyncPreview>((resolve) => {
+          answer = resolve;
+        }),
+      );
+      const { container } = await renderPage();
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+      // Where the press comes from, and the note the swaps are answered from.
+      expect(document.activeElement?.textContent).toBe("Check for changes");
+
+      await act(async () => {
+        fireEvent.click(buttonByExactText(container, "Check for changes")!);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(buttonByExactText(container, "Cancel Sync")).not.toBeNull();
+
+      // Swap two: the run stops with the preview still unadopted, which is the
+      // IDLE body. No timer runs here — that is the whole point.
+      await act(async () => {
+        setSyncProgress({ running: false, stage: "done", message: "Preview ready", runId: "preview-run" });
+        await Promise.resolve();
+      });
+      expect(container.textContent).toContain("Nothing is waiting to be applied.");
+
+      // Swap three: the callable answers and the table takes the column.
+      await act(async () => {
+        answer(preview());
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+
+      expect(document.activeElement?.textContent).toBe("Apply Sync");
+    });
+
+    it("keeps the note where a swap has nothing to place it on, so the body after it still gets focus", async () => {
+      // The same path with the backend's frame more than the delay ahead of the
+      // callable, which is what puts the idle body's own placement on screen.
+      // That placement lands on nothing: the body's one button is disabled while
+      // the call is open. The note was taken for a swap still unanswered, so it
+      // has to survive an attempt that placed nothing.
+      let answer: (p: SyncPreview) => void = () => {};
+      vi.mocked(backend.syncPreview).mockReturnValue(
+        new Promise<SyncPreview>((resolve) => {
+          answer = resolve;
+        }),
+      );
+      const { container } = await renderPage();
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+
+      await act(async () => {
+        fireEvent.click(buttonByExactText(container, "Check for changes")!);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await act(async () => {
+        setSyncProgress({ running: false, stage: "done", message: "Preview ready", runId: "preview-run" });
+        await Promise.resolve();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+      expect(buttonByExactText(container, "Check for changes")?.disabled).toBe(true);
+      expect(document.activeElement).toBe(document.body);
+
+      await act(async () => {
+        answer(preview());
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+
+      expect(document.activeElement?.textContent).toBe("Apply Sync");
+    });
+
+    it("hands focus on a second time, because a placement leaves the note where it landed", async () => {
+      // Two swaps in a row with a placement between them: the run the press
+      // started, then the run ending. The second can only be answered if the
+      // first placement re-armed the note on the stop it landed on, which is why
+      // the note is cleared BEFORE `.focus()` rather than after it.
+      vi.mocked(backend.getSettings).mockResolvedValue({ ...defaultSettings(), skip_preview: true });
+      const { container } = await renderPage();
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+      expect(document.activeElement?.textContent).toBe("Sync Library");
+
+      await act(async () => {
+        fireEvent.click(buttonByExactText(container, "Sync Library")!);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+      expect(document.activeElement?.textContent).toBe("Cancel Sync");
+
+      await act(async () => {
+        setSyncProgress({ running: false, stage: "done", message: "Sync complete", runId: "run-1" });
+        await Promise.resolve();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+
       expect(document.activeElement?.textContent).toBe("Sync Library");
     });
 
@@ -812,7 +984,7 @@ describe("SyncPage", () => {
       // being tested — focus was not pulled into the body — because the rule
       // reads the note the body kept rather than who holds focus now.
       expect(buttonByExactText(container, "Apply Sync")).toBeNull();
-      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
+      expect(buttonByExactText(container, "Check for changes")).not.toBeNull();
       expect(document.activeElement).toBe(crossedTo);
     });
   });
@@ -893,7 +1065,7 @@ describe("SyncPage", () => {
       });
 
       expect(vi.mocked(backend.syncCancelPreview)).toHaveBeenCalled();
-      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
+      expect(buttonByExactText(container, "Check for changes")).not.toBeNull();
     });
 
     it("Cancel: a failed discard is logged, and the page is right either way", async () => {
@@ -909,7 +1081,7 @@ describe("SyncPage", () => {
       });
 
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to discard the pending preview"));
-      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
+      expect(buttonByExactText(container, "Check for changes")).not.toBeNull();
     });
 
     it("Refresh: discards on both sides, then works out another and adopts it", async () => {
@@ -1467,7 +1639,7 @@ describe("SyncPage", () => {
         await Promise.resolve();
         await Promise.resolve();
       });
-      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
+      expect(buttonByExactText(container, "Check for changes")).not.toBeNull();
 
       vi.mocked(syncManager.isCancelRequested).mockReturnValue(false);
       let finishSecond: (p: SyncPreview) => void = () => {};
@@ -1477,7 +1649,7 @@ describe("SyncPage", () => {
         }),
       );
       await act(async () => {
-        fireEvent.click(buttonByExactText(container, "Sync Library")!);
+        fireEvent.click(buttonByExactText(container, "Check for changes")!);
         await Promise.resolve();
         await Promise.resolve();
       });
@@ -1549,19 +1721,22 @@ describe("SyncPage", () => {
       previewNeverAnswers();
       const { container } = await renderPage();
 
-      await press(container, "Sync Library");
+      await press(container, "Check for changes");
 
       expect(buttonByExactText(container, "Cancel Sync")).not.toBeNull();
       expect(rowTexts(container, "run-unit-")).toEqual([]);
     });
 
     it("a resume keeps them: they are the progress it continues from", async () => {
+      // The button does not say "Resume Sync" here — Skip preview is off, so the
+      // press works out a preview and the button says THAT. The rows key on the
+      // resume question itself, not on the name it happens to put on a button.
       vi.mocked(backend.getSyncStats).mockResolvedValue(resumableStats());
       seedFinishedRun();
       previewNeverAnswers();
       const { container } = await renderPage();
 
-      await press(container, "Resume Sync");
+      await press(container, "Check for changes");
 
       const rows = rowTexts(container, "run-unit-");
       expect(rows).toHaveLength(2);
@@ -1615,7 +1790,7 @@ describe("SyncPage", () => {
       previewNeverAnswers();
       const { container } = await renderPage();
 
-      await press(container, "Sync Library");
+      await press(container, "Check for changes");
 
       expect(rowTexts(container, "run-unit-")).toEqual([]);
     });
@@ -2099,7 +2274,10 @@ describe("SyncPage", () => {
       expect(card?.textContent).toContain("Steam memory is full (2.3 GB)");
       expect(buttonByExactText(container, "Restart Steam now")).not.toBeNull();
       // The preview or the idle state moves UNDER it rather than being replaced.
-      expect(buttonByExactText(container, "Resume Sync")).not.toBeNull();
+      expect(buttonByExactText(container, "Check for changes")).not.toBeNull();
+      // And the card names the button that is on the page under it, whatever
+      // that button currently says — the whole reason it takes the label.
+      expect(card?.textContent).toContain("Restart Steam, then Check for changes.");
     });
 
     it("names the button that is actually on the page — Apply Sync while a preview stands", async () => {
@@ -2159,6 +2337,8 @@ describe("SyncPage", () => {
         });
 
         expect(card()).toContain("Steam memory is free again (0.5 GB)");
+        // Still the button standing under it, whatever that button now says.
+        expect(card()).toContain("Press Check for changes to continue.");
         expect(buttonByExactText(container, "Restart Steam now")).toBeNull();
       } finally {
         vi.useRealTimers();
@@ -2250,7 +2430,7 @@ describe("SyncPage", () => {
 
       expect(container.textContent).toContain("A RetroDECK migration is pending");
       expect(getSyncProgress().running).toBe(false);
-      expect(buttonByExactText(container, "Sync Library")).not.toBeNull();
+      expect(buttonByExactText(container, "Check for changes")).not.toBeNull();
     });
 
     it("falls back to its own words when a refusal carries none", async () => {

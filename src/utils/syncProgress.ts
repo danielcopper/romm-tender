@@ -18,9 +18,28 @@
  * The ``runId`` field is fed straight from the backend ``sync_progress`` payload
  * (the persistent listener in index.tsx passes the whole event through), so it
  * is the single source of run identity frontend-side.
+ *
+ * **A run that has ended stays ended** — the one rule this store enforces on its
+ * writers rather than merely holding what they say. See {@link
+ * _terminatedRunIds}.
  */
 
-import type { SyncProgress } from "../types";
+import type { SyncProgress, SyncStage } from "../types";
+
+const TERMINAL_STAGES: ReadonlySet<SyncStage> = new Set<SyncStage>(["done", "cancelled", "error"]);
+
+/**
+ * Whether a stage stops the run — the three the backend pairs with
+ * ``running: false``, and the only frames that may end a watch.
+ *
+ * It lives here rather than with the run view because the store's own rule below
+ * asks the same question, and a page that passes no run-end callbacks still has
+ * to tell a run's end from its own optimistic frame being retracted: both are
+ * ``running: false``, and only one of them ended anything.
+ */
+export function isTerminalStage(stage: SyncProgress["stage"]): boolean {
+  return !!stage && TERMINAL_STAGES.has(stage);
+}
 
 /**
  * Static sub-slice shares of a running unit's coarse-bar width (#1407). A unit
@@ -73,15 +92,47 @@ export function withinUnitFraction(progress: SyncProgress | null | undefined): n
   return 0;
 }
 
-let _progress: SyncProgress = {
-  running: false,
-  stage: "",
-  current: 0,
-  total: 0,
-  message: "",
-  runId: "",
-};
+/** No run, nothing said about one: what the store holds until something writes. */
+function idleFrame(): SyncProgress {
+  return { running: false, stage: "", current: 0, total: 0, message: "", runId: "" };
+}
+
+let _progress: SyncProgress = idleFrame();
 let _listeners: Array<() => void> = [];
+
+/**
+ * The runs that have ended, by id. A run named here can never be put back in
+ * flight.
+ *
+ * **Why the store carries this rather than the writers.** A run ends while the
+ * frontend's own apply loop is still working: ``pacedForEach`` tests the cancel
+ * flag at the END of an item (``utils/pacedOps.ts``) and the item before it is
+ * entered from a shortcut scan that takes seconds, so at least one item is
+ * always processed after the run is over — and every item writes
+ * ``{running: true, stage: "applying", …, runId}`` (``utils/syncManager.ts``).
+ * That write lands after both of the run's terminal signals, is the LAST thing
+ * ever put in the store, and nothing follows it, so the page renders a run that
+ * ended seconds ago until it is left and reopened (measured on a device, #1814:
+ * four seconds late, the panel frozen on "Applying shortcuts" and its Cancel
+ * stuck on "Cancelling…"). Two more writers have the same shape — the
+ * cover-refresh loop and the chunk-init seed — and the frontend cancel flag they
+ * consult is not even set for an ending that was nobody's cancel: a heartbeat
+ * timeout, a budget pause, a backend error.
+ *
+ * So the rule belongs where the writers meet. Testing the cancel flag more often
+ * would not be this rule: it narrows the window, and the write can always land
+ * one instruction later.
+ *
+ * **What is recorded is a run's own account of its ending**: a stopping frame
+ * carrying a terminal stage AND naming a run. Neither half alone will do. A stop
+ * without a terminal stage is a page retracting the optimistic frame it wrote
+ * itself, which ended no run; an unnamed frame is one the backend has not
+ * stamped an id on yet, and recording ``""`` would make every later optimistic
+ * start — ``running: true`` with no id — a resurrection of it.
+ *
+ * It grows by one short string per run that ends while the plugin is loaded.
+ */
+const _terminatedRunIds = new Set<string>();
 
 /**
  * Notify every subscriber, each inside its own try/catch — a throwing subscriber
@@ -100,18 +151,52 @@ function notify(): void {
   });
 }
 
-export function setSyncProgress(p: SyncProgress): void {
-  _progress = p;
+/**
+ * The one point both writers pass through, and where a terminated run is
+ * refused.
+ *
+ * A refusal drops the frame WHOLE rather than correcting it to
+ * ``running: false``: every field in it describes a run that is over, and the
+ * terminal frame it would have replaced is exactly what the page should be
+ * showing. Nothing is notified, because nothing changed.
+ *
+ * The question is asked of the frame the store would end up holding, not of the
+ * patch — a merge that says nothing about ``running`` inherits it, so it is the
+ * result that either asserts a run is in flight or does not.
+ */
+function commit(next: SyncProgress): void {
+  const runId = next.runId ?? "";
+  const named = runId !== "";
+  if (named && next.running && _terminatedRunIds.has(runId)) return;
+  if (named && !next.running && isTerminalStage(next.stage)) _terminatedRunIds.add(runId);
+  _progress = next;
   notify();
 }
 
+export function setSyncProgress(p: SyncProgress): void {
+  commit(p);
+}
+
 export function updateSyncProgress(p: Partial<SyncProgress>): void {
-  _progress = { ..._progress, ...p };
-  notify();
+  commit({ ..._progress, ...p });
 }
 
 export function getSyncProgress(): SyncProgress {
   return _progress;
+}
+
+/**
+ * Reset the module state between tests. Not for production use.
+ *
+ * The run ids are the half a test cannot reach any other way: a suite that
+ * reuses one run id across cases would have the first case's ending refuse the
+ * next case's start, which is the rule working rather than a rule to work
+ * around. Subscribers are left alone — they are installed and torn down by the
+ * hooks that own them.
+ */
+export function resetSyncProgressStoreForTests(): void {
+  _progress = idleFrame();
+  _terminatedRunIds.clear();
 }
 
 export function onSyncProgressChange(fn: () => void): () => void {

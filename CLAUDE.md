@@ -258,7 +258,10 @@ Format: **invariant** — tier — enforced by.
   `running` and keys the run's end — the status line, the live-ETA teardown, Main's stats re-read and the Sync page's
   three — on the stage, so a stopping frame with a non-terminal stage would collapse the in-progress rows while ending
   nothing. The panel cannot defend against it: a bare `running: false` is exactly what the Sync page's own retraction of
-  an optimistic start looks like
+  an optimistic start looks like. Since #1814 the frontend's frame store reads the same discrimination for a rule of its
+  own — a run whose stopping frame carried a terminal stage AND a run id can never be put back in flight, which is what
+  stops the apply loop's next item from resurrecting a run that has already ended — so a stopping frame emitted without
+  a terminal stage would record no ending there either, and the freeze that rule removes comes back
 - **The KIND of run a `sync_progress` frame belongs to is stated on it (`runKind`), never inferred from it — and a frame
   that states none is rendered as neither of the two answers** — test + prompt-only — the backend half is pinned end to
   end by `tests/services/library/test_sync_orchestrator.py::TestRunKindOnTheWire` (every frame of a preview run and of

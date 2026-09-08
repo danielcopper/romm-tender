@@ -44,15 +44,15 @@ import {
 import { PREVIEW_COUNTDOWN_TICK_MS, previewHasChanges, previewSecondsLeft } from "../../utils/previewState";
 import { clearRunUnits, useRunUnits, type RunUnit } from "../../utils/runUnitsStore";
 import { previewApplySeconds } from "../../utils/syncEstimate";
-import { getSyncProgress, setSyncProgress as setStoredSyncProgress } from "../../utils/syncProgress";
+import { getSyncProgress, isTerminalStage, setSyncProgress as setStoredSyncProgress } from "../../utils/syncProgress";
 import {
   isCancelRequested,
   reconcileStaleShortcuts,
   requestSyncCancel,
   resetSyncCancel,
 } from "../../utils/syncManager";
-import { syncResumeState, type SyncResumeState } from "../../utils/syncResume";
-import { isTerminalStage, useSyncRunView, type SyncRunView } from "../../utils/syncRunView";
+import { startButtonLabel, syncResumeState, type SyncResumeState } from "../../utils/syncResume";
+import { useSyncRunView, type SyncRunView } from "../../utils/syncRunView";
 import {
   getSyncStatsSnapshot,
   refreshSessionBudget,
@@ -97,6 +97,11 @@ export interface SyncPageState {
   statsFailed: boolean;
   budget: SessionBudgetStatus | null;
   resume: SyncResumeState;
+  /** What the button that starts things says right now — what the press does,
+   *  which Skip preview decides. The idle line quotes it rather than spelling a
+   *  name of its own, and so does the session-budget card, through
+   *  {@link primaryAction}. */
+  startLabel: string;
   /**
    * The button the session-budget card should point the reader at — whichever
    * of this page's own is the way forward right now. Named rather than
@@ -156,8 +161,13 @@ function clearRunUnitsUnlessResuming(): void {
 }
 
 /** Which of this page's buttons the session-budget card should name. */
-function primaryActionFor(preview: SyncPreview | null, expired: boolean, resume: SyncResumeState): SyncButton {
-  if (preview === null) return { label: resume.label, resumes: resume.canResume };
+function primaryActionFor(
+  preview: SyncPreview | null,
+  expired: boolean,
+  resume: SyncResumeState,
+  startLabel: string,
+): SyncButton {
+  if (preview === null) return { label: startLabel, resumes: resume.canResume };
   // A preview is up, so the start button is not on screen. Apply is the way on
   // while it is still good; past that, Refresh is the only thing that moves.
   if (!expired && previewHasChanges(preview)) return { label: "Apply Sync", resumes: resume.canResume };
@@ -536,6 +546,7 @@ export function useSyncPage(): SyncPageState {
 
   const secondsLeft = preview === null || nowMs === null ? null : previewSecondsLeft(preview, nowMs);
   const resume = syncResumeState(stats);
+  const startLabel = startButtonLabel(resume, skipPreview);
   const previewExpired = secondsLeft === 0;
   const cancelling = cancellingRunId !== null && running && (cancellingRunId === "" || cancellingRunId === run.runId);
 
@@ -549,7 +560,8 @@ export function useSyncPage(): SyncPageState {
     statsFailed,
     budget,
     resume,
-    primaryAction: primaryActionFor(preview, previewExpired, resume),
+    startLabel,
+    primaryAction: primaryActionFor(preview, previewExpired, resume, startLabel),
     busy,
     cancelling,
     status,

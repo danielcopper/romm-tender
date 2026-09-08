@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { syncResumeState } from "./syncResume";
+import { startButtonLabel, syncResumeState } from "./syncResume";
 import type { SyncStats } from "../types";
 
 /** A resume situation: shortcuts on disk, and games the next run can pass over.
@@ -107,5 +107,30 @@ describe("syncResumeState", () => {
     expect(state.canResume).toBe(false);
     expect(state.label).toBe("Sync Library");
     expect(state.scopeText).toBeNull();
+  });
+});
+
+// The button says what the PRESS does. Skip preview decides which of the two
+// things a press is, and only the one that starts a run has a resume to name.
+describe("startButtonLabel", () => {
+  const fresh = syncResumeState(null);
+  const resumable = syncResumeState(resumeStats());
+
+  it("names the preview when the press only works one out", () => {
+    expect(fresh.canResume).toBe(false);
+    expect(startButtonLabel(fresh, false)).toBe("Check for changes");
+  });
+
+  it("names the preview even where a resume is waiting — the press adds nothing to Steam", () => {
+    expect(resumable.canResume).toBe(true);
+    expect(startButtonLabel(resumable, false)).toBe("Check for changes");
+  });
+
+  it("names the run when Skip preview makes the press start one", () => {
+    expect(startButtonLabel(fresh, true)).toBe("Sync Library");
+  });
+
+  it("and names the resume where that run continues one", () => {
+    expect(startButtonLabel(resumable, true)).toBe("Resume Sync");
   });
 });

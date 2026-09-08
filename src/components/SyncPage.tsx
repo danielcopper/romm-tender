@@ -100,20 +100,24 @@ const SyncMainColumn: FC<{ state: SyncPageState }> = ({ state }) => {
 };
 
 /** Nothing pending and nothing running: one line saying so, and the button that
- *  changes it. The button's name is the resume question's answer, and it is the
- *  only button that asks it — the session-budget card above it quotes this one
- *  when it asks for a restart rather than deriving the name again. */
+ *  changes it. **The button says what the press does** — Skip preview decides
+ *  whether that is working out a preview or starting the run, and only in the
+ *  second case is the name the resume question's answer. The line above it and
+ *  the session-budget card above that both quote the name rather than spelling
+ *  one of their own, so neither can name a button that is not on screen. What a
+ *  name that does not say "resume" leaves unsaid is said under the button, by
+ *  the scope line. */
 const IdlePanel: FC<{ state: SyncPageState }> = ({ state }) => (
   <>
     <SectionTitle title="Preview" />
     <Muted>
       {state.skipPreview
-        ? "Nothing is waiting to be applied. Skip preview is on, so this starts the run straight away."
-        : "Nothing is waiting to be applied. Working one out compares your library against RomM and adds nothing to Steam."}
+        ? `Nothing is waiting to be applied. Skip preview is on, so ${state.startLabel} applies changes without showing them first.`
+        : "Nothing is waiting to be applied. Start a preview to see what would change."}
     </Muted>
     <ButtonRow padding="4px 16px">
       <DialogButton style={FLAT_BUTTON} disabled={state.busy} onClick={state.startPreview}>
-        {state.resume.label}
+        {state.startLabel}
       </DialogButton>
     </ButtonRow>
     {state.resume.scopeText !== null && <Muted>{state.resume.scopeText}</Muted>}

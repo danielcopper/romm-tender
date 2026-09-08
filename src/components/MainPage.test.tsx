@@ -41,6 +41,7 @@ import { MainPage, ConnectionIndicator } from "./MainPage";
 import * as backend from "../api/backend";
 import { useVersionError } from "./VersionErrorCard";
 import {
+  resetSyncProgressStoreForTests,
   setSyncProgress,
   updateSyncProgress,
   onSyncProgressChange,
@@ -339,13 +340,10 @@ describe("MainPage", () => {
     // of the store — so a card one test leaves standing would render over the
     // next test's idle page.
     resetPendingPreviewStoreForTests();
-    setSyncProgress({
-      running: false,
-      stage: "",
-      current: 0,
-      total: 0,
-      message: "",
-    });
+    // The whole sync-progress store, not just an idle frame: these cases reuse
+    // one run id, and a run this store has seen END can never be put back in
+    // flight.
+    resetSyncProgressStoreForTests();
 
     // Re-stub useVersionError (resetAllMocks wiped it).
     vi.mocked(useVersionError).mockReturnValue(null);

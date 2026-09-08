@@ -11,7 +11,7 @@ import {
   seedRunUnits,
   useRunUnits,
 } from "./runUnitsStore";
-import { setSyncProgress } from "./syncProgress";
+import { resetSyncProgressStoreForTests, setSyncProgress } from "./syncProgress";
 import type { SyncPlanUnit } from "../types";
 
 const RUN_ID = "run-1";
@@ -55,7 +55,9 @@ describe("runUnitsStore", () => {
 
   beforeEach(() => {
     resetRunUnitsStoreForTests();
-    setSyncProgress({ running: false, stage: "", current: 0, total: 0, message: "", runId: "" });
+    // The whole store, not just an idle frame: these cases reuse one run id, and
+    // a run this store has seen END can never be put back in flight.
+    resetSyncProgressStoreForTests();
     detachMirror = attachRunUnitsMirror();
   });
 

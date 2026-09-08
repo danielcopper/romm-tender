@@ -169,6 +169,17 @@ export function placeEntryFocus(root: ParentNode, findStop: (root: ParentNode) =
  * The note is read in the commit that swapped the body, before anything can
  * move focus into what replaced it — hence a layout effect.
  *
+ * **A body can swap twice inside the delay, and the placement follows the last
+ * one.** The Sync page's preview path does exactly that: the backend's own
+ * "Preview ready" frame stops the run before the `sync_preview` callable
+ * answers, so the column goes run → idle → preview in two commits milliseconds
+ * apart. Each commit's cleanup cancels the placement the one before it
+ * scheduled, so a note spent by the FIRST of them leaves the last swap nothing
+ * to answer and the reader with no focus at all — which is what the device
+ * showed (#1814). Hence the two halves below: a note is spent by the placement
+ * it causes rather than by a swap that merely observes it, and the timer asks
+ * which body it is landing in when it fires rather than when it was set.
+ *
  * **Nothing here is asked of a module global**, neither the document nor the
  * window: every question goes to a node this page holds — `root.contains`, the
  * event's own target, `isConnected`. Plugin code runs in the SharedJSContext
@@ -203,17 +214,22 @@ export function useEntryFocusOnBodySwap(body: RefObject<HTMLElement | null>, bod
   }, [body]);
 
   useLayoutEffect(() => {
-    const root = body.current;
     const previous = shown.current;
     shown.current = bodyKind;
-    if (root === null || previous === bodyKind) return;
-    // Spent by the swap it was taken for, whichever way it answers: the
-    // placement below puts a fresh one there, and a note that outlived its own
-    // swap would answer a later one for a reader who has moved on.
+    if (body.current === null || previous === bodyKind) return;
     const stop = stoodOn.current;
-    stoodOn.current = null;
     if (stop === null || stop.isConnected) return;
-    const timer = setTimeout(() => placeEntryFocus(root, firstBodyStop), ENTRY_FOCUS_DELAY_MS);
+    const timer = setTimeout(() => {
+      const root = body.current;
+      if (root === null) return;
+      // Spent by the placement it causes, and only then — a swap merely
+      // OBSERVES that focus was taken. Clearing it here rather than after
+      // `placeEntryFocus` is what lets that call's own `focusin` re-arm the note
+      // on the stop it lands on; a body with nothing to land on caused no
+      // placement, so the note goes back and the next swap asks again.
+      stoodOn.current = null;
+      if (!placeEntryFocus(root, firstBodyStop)) stoodOn.current = stop;
+    }, ENTRY_FOCUS_DELAY_MS);
     return () => clearTimeout(timer);
   }, [body, bodyKind]);
 }

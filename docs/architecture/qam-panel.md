@@ -34,7 +34,8 @@ without restating it. The width mechanism's decision record is
 | `src/utils/syncRunView.ts`                                    | `useSyncRunView` — the run in flight as a page renders it: stage label, coarse bar, position within the running unit, fine-detail line, estimate, and the run's end |
 | `src/utils/runUnitsStore.ts`                                  | The run's work queue, one row per unit: the plan's riders, how far the run has got, and what each unit's apply produced                                             |
 | `src/utils/previewState.ts`                                   | What a page asks of a pending preview: has it anything to apply, and how long is it still accepted (the half Main reads)                                            |
-| `src/utils/syncResume.ts`                                     | Whether the next sync continues a run or starts one over: the Sync page's start button's name, and the name the session-budget card quotes                          |
+| `src/utils/syncResume.ts`                                     | Whether the next sync continues a run or starts one over, and what that puts on the Sync page's start button — the name the session-budget card quotes              |
+| `src/utils/syncProgress.ts`                                   | The frame every page reads a run from, and the one rule it enforces on its writers: a run that has ended stays ended                                                |
 | `src/utils/` module stores                                    | State that must outlive a page: sync progress, pending preview, downloads, prune, the game-detail caches                                                            |
 
 ## Two widths
@@ -487,6 +488,28 @@ with it, held as a note while focus moves through the body; it never asks who ho
 is not the only thing that can take focus in one commit — Force Full Sync goes dead in the same one that ends the
 preview. **The mount is not a swap**: a page opened mid-run is opened by the frame, on the same stop.
 
+**A body can swap twice inside the 50 ms, and the placement follows the last one.** Working out a preview does exactly
+that: the backend stops the run with its own "Preview ready" frame before the `sync_preview` callable answers, so the
+column goes run → idle → preview in two commits milliseconds apart, and each cancels the placement the one before it
+scheduled. So the note the rule reads is spent by the placement it causes rather than by a swap that merely observes it,
+and the timer asks which body it is landing in when it fires. Otherwise the first of the two swaps spends the note, the
+second cancels its placement and finds nothing to answer, and the reader is left with no focus at all — which is what
+the device showed (#1814). A placement that lands on nothing puts the note back: the idle body between those two commits
+has one button and it is disabled while the call is open, so that attempt places nothing and the swap it was taken for
+is still unanswered.
+
+**The button says what the press does.** With Skip preview off a press works out a preview and adds nothing to Steam, so
+the button reads **Check for changes** — deliberately the words Main's conditional slot shows while that run is going,
+so the button and the state it produces read as one thing. With it on the press starts the run itself, and only then is
+the name the resume question's answer: **Sync Library**, or **Resume Sync** where an incomplete run left work the next
+one can skip. The line above the button says which of the two the press is — "Nothing is waiting to be applied. Start a
+preview to see what would change.", or "… Skip preview is on, so Resume Sync applies changes without showing them
+first." — and it QUOTES the label rather than spelling a name of its own, exactly as the session-budget card does and
+for the same reason: neither may name a button that is not on screen. **The resume is not lost to a button that stops
+naming it.** The scope line under it still says how much there is — "353 games already synced — a resume continues from
+there." — and what a press keeps or clears is decided by the resume question itself, never by the name that press
+happened to carry.
+
 **The preview is a table.** One row per platform the backend reports a change for (Platform, New, Updated, Removed), one
 for the RomM collections built from the added and removed names, one for the Steam collections the sync keeps per
 platform wherever `platform_collection_diff` reports a change, and a total row. The total comes from the summary's own
@@ -538,6 +561,19 @@ holding no stop of its own, and every unit row below is a stop too, so what puts
 first — the same ordering the column is laid out for. On the swap ALONE: a run re-renders per frame and none of those is
 a moment to move the reader.
 
+**A run that has ended stays ended.** The frames both pages render come from one module store (`utils/syncProgress.ts`),
+and the frontend writes to it as well as the backend: the apply loop stamps a frame per shortcut. That loop cannot stop
+the moment a run does — it tests the cancel flag at the end of an item, and the item it is inside was entered from a
+shortcut scan that takes seconds — so at least one frame is always written after the run is over. On the device that
+frame was the LAST thing in the store, four seconds after a cancel, and the page stood frozen on a run that had ended,
+its Cancel stuck on "Cancelling…", until it was left and reopened (#1814). So the store refuses it: once a stopping
+frame carrying a terminal stage has named a run, nothing can put that run back in flight. Two more writers have the same
+shape — the cover-refresh loop and the chunk seed — and the cancel flag they consult is not even set for an ending
+nobody asked for: a heartbeat timeout, a budget pause, a backend error. What the rule takes as a run's ending is a
+terminal stage AND a run id, because neither half alone is one: a stop without a terminal stage is a page retracting the
+optimistic frame it wrote itself, and a frame naming no run is one the backend has not stamped yet, so recording that
+would make every later optimistic start a resurrection of it.
+
 The bar and the counter come from `useSyncRunView`, the rows from `runUnitsStore`. A run with **no rows** — a preview,
 which seeds none, a run whose plan was lost to a plugin reload, or the window between a press that cleared the rows and
 its plan arriving — shows the frame's own fine-detail line in their place ("Fetching Game Boy Advance (page 12/62)") —
@@ -551,9 +587,10 @@ run's apply results, and the unit it died in dressed as running by the frames of
 those rows are still true for, because they are the progress it continues from. Nothing on the wire tells a resume from
 a fresh start — it is a new run with a new id, and the backend has no resume concept at all; what carries one is the
 per-unit skip gate, a fetch-time decision — so the discriminator is the page's own reading at the press,
-`syncResumeState(stats).canResume`, the same one that names the button the reader pressed. A press landing before the
-stats have answered reads as a fresh start and clears: not knowing is not evidence of a resume, and the cost of being
-wrong that way is the fine-detail line for the pre-plan window rather than another run's units.
+`syncResumeState(stats).canResume`. That is the resume question itself and not the button's name: with Skip preview off
+the button says "Check for changes" over a resume the rows are still true for. A press landing before the stats have
+answered reads as a fresh start and clears: not knowing is not evidence of a resume, and the cost of being wrong that
+way is the fine-detail line for the pre-plan window rather than another run's units.
 
 **Every row of both tables is a focus stop** — a `Focusable` with an activate handler — because a region scrolls only by
 moving focus, so an unreachable row is an unscrollable one.
