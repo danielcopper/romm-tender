@@ -136,9 +136,10 @@ licence, and the update procedure below has to put it back by hand for exactly t
 
 Decky Loader ships a **frozen Python** (a PyInstaller bundle), and nothing in this repo runs it — the venv,
 `mise run test`, basedpyright and the linters are all ordinary CPython. A vendored package's assumptions about the
-standard library, and about its own name, are therefore invisible here and surface at plugin load on a device. Both
-shapes below are emu-atlas's own history and are fixed upstream in the release vendored today — but the first one is
-this plugin's history too, it predates any vendoring at all, and the first atlas release vendored here still carried it.
+standard library, about its own name, and about the program it is running inside are therefore invisible here and
+surface on a device — at plugin load, or the first time a question reaches the assumption. All three shapes below are
+emu-atlas's own history and are fixed upstream in the release vendored today — but the first one is this plugin's
+history too, it predates any vendoring at all, and the first atlas release vendored here still carried it.
 
 - **A frozen build drops the stdlib wrapper and keeps the extension it wraps.** `xml.etree` is Python source over the
   expat extension, and PyInstaller bundles only the modules its analysis reached: on Decky's bundle
@@ -168,6 +169,20 @@ this plugin's history too, it predates any vendoring at all, and the first atlas
   the copy resolves under whatever parent it is given
   ([emu-atlas#327](https://github.com/danielcopper/emu-atlas/issues/327)); `atlas/_data.py` is the single place every
   packaged table is read through.
+- **A package that spawns `sys.executable`, which on a frozen host is not an interpreter but the application.** atlas
+  answers "what does this core save" by loading the core in a child process —
+  `subprocess.run([sys.executable, "-m", "atlas._core_probe", so_path], capture_output=True, timeout=15)` — which is a
+  probe only where `sys.executable` really is a Python. In the plugin process it is `~/homebrew/services/PluginLoader`,
+  and a PyInstaller bootloader ignores the `-m` arguments: the spawn started a **second Decky Loader, as root**, which
+  restarted `steamwebhelper` — the whole Steam UI went down and came back some twelve seconds later — and reloaded every
+  plugin, whereupon the reloaded backend's startup cleanup deleted the in-flight ROM download's `.tmp` file. Reproduced
+  four times from a script on the device. `capture_output=True` is why it left no trace: the second loader's entire
+  output was swallowed, so nothing about any of it reached a log. A device test found it and no gate here would have
+  said a word — under the venv's ordinary CPython that same line is a working probe. **Fixed in 0.14.0, and deliberately
+  only halfway**: atlas now derives an interpreter only where the running program plainly is one, and takes a
+  host-registered path ahead of that, so this host has to name one — which is
+  [`adapters/atlas_host.py`](../adapters/atlas_host.py)'s whole job. Where none is named nothing is spawned and every
+  core comes back unqueryable, which is quiet: the answers get poorer and nothing fails.
 
 Neither artifact can see any of this, and each says less than it looks like it does. The checksum gate says the copy is
 the bytes we pinned; it never imports anything. What says the copy imports is the test suite — most directly

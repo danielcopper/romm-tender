@@ -22,6 +22,7 @@ from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.asyncio_sleeper import AsyncioSleeper
 from adapters.atlas_catalogue import AtlasCatalogueAdapter, first_detected_installation
 from adapters.atlas_firmware import AtlasFirmwareAdapter, AtlasFolderVerdictAdapter
+from adapters.atlas_host import grant_core_probe_interpreter
 from adapters.atlas_saves import AtlasSaveLocationAdapter
 from adapters.cover_art_file_store import CoverArtFileStoreAdapter
 from adapters.debug_logger import SettingsAwareDebugLogger
@@ -375,6 +376,12 @@ def bootstrap(
     hostname_provider = HostnameAdapter()
     machine_id_provider = MachineIdAdapter()
     debug_logger = SettingsAwareDebugLogger(settings=settings, logger=logger)
+    # Without this grant the resolver probes no core here — Decky Loader's
+    # frozen runtime is no interpreter to spawn — so every core answers unknown
+    # and a save answer establishes nothing. That fails nothing and no test
+    # notices, which is why the answer is logged rather than discarded. Granted
+    # before the first atlas adapter: any question one of them puts can probe.
+    logger.info(grant_core_probe_interpreter())
     # Built after the debug logger because the resolver never logs on its own:
     # its caveats are the whole degradation channel and reach the log through
     # this seam or not at all. That holds for both firmware questions and for

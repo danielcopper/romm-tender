@@ -1514,6 +1514,7 @@ Adapters own all I/O and implement the Protocols defined in `services/protocols/
 | `retroarch_config.py`                                                      | `RetroArchConfigAdapter` — reads `retroarch.cfg` save-sort flags                                                                                                                                                                                                                                                         |
 | `retroarch_core_info.py`                                                   | `RetroArchCoreInfoAdapter` — reads RetroArch `.info` files (`corename`, metadata)                                                                                                                                                                                                                                        |
 | `atlas_catalogue.py`                                                       | `AtlasCatalogueAdapter` — the ES-DE emulator catalogue through the vendored emu-atlas resolver (the picker's list, the system-layer default, the libretro active core, the per-system accept-list). Sorts the resolver's effective order back to the declared one, so no gamelist selection moves the default (ADR-0030) |
+| `atlas_host.py`                                                            | `grant_core_probe_interpreter()` — the process-global capabilities this runtime grants the vendored resolver, owned by none of the three atlas seams. Today one: the interpreter its core probe spawns, since the frozen loader is not one. Answers a log line, because `bootstrap/` may not hold a `_vendor` type       |
 | `atlas_saves.py`                                                           | `AtlasSaveLocationAdapter` — where one ROM's save lives and what it consists of, asked of the catalogue entry the plugin resolved for it and always with the ROM's own content path, since the answer turns on the content file's extension (ADR-0031). Caches no answer; holds only the installation handle             |
 | `es_find_rules.py`                                                         | `EsFindRulesAdapter` — ES-DE `es_find_rules.xml`: whether a standalone emulator's binary is installed, and the sandbox component launcher the folder-boot bake execs                                                                                                                                                     |
 | `gavel_native.py`                                                          | `GavelNativeAdapter` — loads the compiled [romm-gavel](https://github.com/danielcopper/romm-gavel) core (`py_modules/native/libgavel-x86_64-linux.so`) via `ctypes`; is itself the `ResolveUploadConflictFn` seam and provides the `ComputeSyncActionFn` seam, the two save-sync decisions (no Python fallback)          |
@@ -1940,6 +1941,13 @@ composes the runtime bundle (event loop, `decky.emit`) and calls `wire_services(
 no plural in-memory state dicts remain. Some services are constructed before others to satisfy ordering constraints
 (e.g. `MigrationService` before `SaveService` so save sync observes fresh save-sort state). Forward references between
 peers are threaded via `LateBinding`.
+
+`bootstrap()` also makes one grant on the way through, before it builds the first atlas adapter:
+`grant_core_probe_interpreter()` (`adapters/atlas_host.py`) hands the vendored resolver an interpreter to run its core
+probe under, and answers with the one a probe would actually start — logged at info, not behind the debug toggle. Decky
+Loader's frozen runtime offers none of its own, so without the grant the resolver spawns nothing, every core comes back
+unqueryable, and a save answer establishes nothing at all. Nothing fails when it is missing, which is why the answer is
+logged: that line is the only place the loss shows.
 
 Per the process-boundary rule, adapter instantiation never happens in `main.py`, and no service wiring happens in
 `bootstrap/`'s caller other than via `wire_services()`. Both modules are governed by the ~1000-LOC decomposition

@@ -129,10 +129,16 @@ locally with `mise run docs`.
   the constructor from the node — `el.ownerDocument.defaultView` — as `WidePage` and `ScrollRegion` do. **The frontend
   suite cannot see this**: happy-dom has one realm, so the wrong global and the right one are the same object and every
   test passes.
-- **A vendored package's stdlib assumptions are invisible to every check here**: nothing in this repo's toolchain runs
-  Decky Loader's frozen Python, so vendoring or bumping anything under `_vendor/` is a device-test trigger, and what it
-  risks is the plugin not loading at all rather than one feature misbehaving —
-  [`.claude/rules/vendored-assets.md`](.claude/rules/vendored-assets.md).
+- **A vendored package's assumptions about the runtime it loads in are invisible to every check here**: nothing in this
+  repo's toolchain runs Decky Loader's frozen Python, so vendoring or bumping anything under `_vendor/` is a device-test
+  trigger, and what it risks is the plugin not loading at all rather than one feature misbehaving —
+  [`.claude/rules/vendored-assets.md`](.claude/rules/vendored-assets.md). One such assumption is answered by a **grant
+  this repo makes and nothing enforces**: `adapters/atlas_host.py` hands the resolver an interpreter for its core probe,
+  because frozen, `sys.executable` is the loader binary rather than a Python. Removing or forgetting the grant fails
+  nothing — atlas simply stops probing, every core answers `core-unqueryable`, a core whose save behaviour it holds on
+  record loses it (`core-generation-unestablished`), and the save answer then establishes nothing and names no file, so
+  every sync path refuses. Green suite, green gate, inert feature: `bootstrap/adapters.py` logs which interpreter a
+  probe would run under because that line is the only place the loss is visible.
 
 ## Current State
 
