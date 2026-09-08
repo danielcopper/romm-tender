@@ -2649,12 +2649,17 @@ describe("MainPage", () => {
   // L. Navigation buttons
   // ===========================================================================
   describe("navigation", () => {
-    it("clicking Sync invokes onNavigate('sync')", async () => {
+    it.each([
+      ["Sync", "sync"],
+      ["Library", "library"],
+      ["Settings", "settings"],
+      ["Data Management", "data"],
+    ] as const)("the %s entry is the way to the %s page", async (label, page) => {
       const onNavigate = vi.fn();
       const { container } = render(<MainPage onNavigate={onNavigate} />);
       await flushAsync();
-      fireEvent.click(buttonByExactText(container, "Sync")!);
-      expect(onNavigate).toHaveBeenCalledWith("sync");
+      fireEvent.click(buttonByExactText(container, label)!);
+      expect(onNavigate).toHaveBeenCalledWith(page);
     });
 
     it("the Last sync row states and does nothing — the menu is the way to the page", async () => {
@@ -2675,34 +2680,10 @@ describe("MainPage", () => {
       expect(onNavigate).not.toHaveBeenCalled();
     });
 
-    it("clicking Library invokes onNavigate('library')", async () => {
-      const onNavigate = vi.fn();
-      const { container } = render(<MainPage onNavigate={onNavigate} />);
-      await flushAsync();
-      fireEvent.click(buttonByExactText(container, "Library")!);
-      expect(onNavigate).toHaveBeenCalledWith("library");
-    });
-
     it("offers no System entry — its core and BIOS controls live in Library", async () => {
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
       expect(buttonByExactText(container, "System")).toBeNull();
-    });
-
-    it("clicking Settings invokes onNavigate('settings')", async () => {
-      const onNavigate = vi.fn();
-      const { container } = render(<MainPage onNavigate={onNavigate} />);
-      await flushAsync();
-      fireEvent.click(buttonByExactText(container, "Settings")!);
-      expect(onNavigate).toHaveBeenCalledWith("settings");
-    });
-
-    it("clicking Data Management invokes onNavigate('data')", async () => {
-      const onNavigate = vi.fn();
-      const { container } = render(<MainPage onNavigate={onNavigate} />);
-      await flushAsync();
-      fireEvent.click(buttonByExactText(container, "Data Management")!);
-      expect(onNavigate).toHaveBeenCalledWith("data");
     });
 
     it("clicking 'Go to Settings' (save-sort migration banner) invokes onNavigate('settings')", async () => {

@@ -253,6 +253,93 @@ const RUN_KIND_LABEL: Record<SyncRunKind, string> = {
  *  wording exists so the mapping cannot invent one of the two to fill the hole. */
 const RUN_KIND_UNKNOWN_LABEL = "Sync in progress";
 
+/** Whether a `get_sync_status` answer may be written over the store at all.
+ *  `storeAtIssue` is the frame the store held when the read was issued;
+ *  `stored`, the frame it holds now. */
+function snapshotHasAuthority(
+  backendProgress: SyncProgress,
+  inFlight: boolean | undefined,
+  stored: SyncProgress,
+  storeAtIssue: SyncProgress,
+): boolean {
+  // An answer reporting nothing in flight has no authority over a write
+  // that landed after the read was issued: a run started in that window
+  // writes the optimistic running:true, and this snapshot was taken before
+  // it existed, so applying it would retract a run that has just started
+  // (#751). The store's own frames then carry the run from here.
+  if (!backendProgress.running && stored !== storeAtIssue) return false;
+  // Retracting a run the store is tracking is a separate question from
+  // reading the frame, and the answer carries both. `inFlight` is the
+  // backend's run-lifecycle state; the frame is the last thing a run said.
+  // Between a run being started and its first frame — a reconcile plus a
+  // round trip — the frame belongs to the PREVIOUS run, so taking it for
+  // this one both retracted the run the panel was showing (an idle page
+  // over a live preview) and handed the run view a terminal stage it
+  // announced as this run's ending.
+  //
+  // A retraction is therefore allowed only where the answer is evidence
+  // about the run the store is tracking, which is one of two things: the
+  // answer NAMES that run (its own ending, e.g. a terminal frame this panel
+  // missed while it was away), or the backend reports the lifecycle
+  // explicitly idle AND the store's run carries a backend-stamped id, so it
+  // is a run the backend has seen and is now telling us is over. That
+  // second clause is what keeps a lost terminal frame from wedging the
+  // panel on a run that is not running: the next mount corrects it.
+  //
+  // What is refused is an idle answer against an optimistic start, which
+  // carries no run id because the backend has not stamped one — there the
+  // backend is not silent about the run, it has not heard of it yet. That
+  // frame is not a wedge: the Sync page handler that wrote it always
+  // retracts it itself (a preview answered, a failure aborted, or a
+  // per-unit run whose frames stamp a real id), even from an instance the
+  // user has already navigated away from.
+  const backendRunIdle = inFlight === false;
+  const namesStoredRun = !!stored.runId && stored.runId === backendProgress.runId;
+  const backendKnowsStoredRun = backendRunIdle && !!stored.runId;
+  if (!backendProgress.running && stored.running && !namesStoredRun && !backendKnowsStoredRun) return false;
+  return true;
+}
+
+/**
+ * The frame the seed writes over the store.
+ *
+ * The backend snapshot is COARSE mid-apply: the fine within-unit counters
+ * (current/total/message) are advanced frontend-side per item and never
+ * round-trip to the backend, and etaSeconds is frontend-computed from sync_plan
+ * (never sent by the backend). A blind replace on remount would wipe the fine
+ * line + ETA until the next chunk boundary. So when the backend reports the SAME
+ * in-flight run the module store already tracks, MERGE: keep the store's fine
+ * fields + etaSeconds, take the backend's authoritative running/stage/runId. Run
+ * identity is compared via runId when both sides carry it; when the backend is
+ * idle or the runs differ, keep the replace behavior (the store holds nothing
+ * worth preserving).
+ */
+function seededFrame(backendProgress: SyncProgress, stored: SyncProgress): SyncProgress {
+  const sameRun = backendProgress.runId && stored.runId ? backendProgress.runId === stored.runId : true;
+  const isSameLiveRun = backendProgress.running && stored.running && sameRun;
+  // Same live run: spread the store (keeping its fine fields + etaSeconds)
+  // and overlay the backend's authoritative running/stage/runId/runKind.
+  // The conditional spreads keep the optional three out when the backend
+  // omits them (exactOptionalPropertyTypes). `runKind` is overlaid for the
+  // same reason `runId` is: the backend states it, and the frame this
+  // merges over can be an optimistic start written before the run was
+  // claimed. One exception: "applying" is frontend-authoritative (the
+  // backend never emits it — its last frame is the fetch anchor), so a
+  // stored applying stage survives the seed; taking the backend's stale
+  // "fetching" would drop the coarse-bar interpolation and flip the label
+  // until the next per-item update. Otherwise replace wholesale.
+  const backendStage = stored.stage === "applying" ? undefined : backendProgress.stage;
+  return isSameLiveRun
+    ? {
+        ...stored,
+        running: backendProgress.running,
+        ...(backendStage !== undefined ? { stage: backendStage } : {}),
+        ...(backendProgress.runId !== undefined ? { runId: backendProgress.runId } : {}),
+        ...(backendProgress.runKind !== undefined ? { runKind: backendProgress.runKind } : {}),
+      }
+    : backendProgress;
+}
+
 export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   // The stats are owned by `utils/syncStatsStore.ts`: three refresh sites in
   // this file ask for them, and the store is what keeps an older answer from
@@ -378,80 +465,12 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
     // Backend is authoritative for in-flight sync state. Seed the module
     // store from get_sync_status() so a QAM close/reopen recovers the live
     // run rather than guessing from the event-fed store alone.
-    //
-    // But the backend snapshot is COARSE mid-apply: the fine within-unit
-    // counters (current/total/message) are advanced frontend-side per item and
-    // never round-trip to the backend, and etaSeconds is frontend-computed from
-    // sync_plan (never sent by the backend). A blind replace on remount would
-    // wipe the fine line + ETA until the next chunk boundary. So when the
-    // backend reports the SAME in-flight run the module store already tracks,
-    // MERGE: keep the store's fine fields + etaSeconds, take the backend's
-    // authoritative running/stage/runId. Run identity is compared via runId when
-    // both sides carry it; when the backend is idle or the runs differ, keep the
-    // replace behavior (the store holds nothing worth preserving).
     const storeAtIssue = getSyncProgress();
     getSyncStatus()
       .then(({ inFlight, ...backendProgress }) => {
         const stored = getSyncProgress();
-        // An answer reporting nothing in flight has no authority over a write
-        // that landed after the read was issued: a run started in that window
-        // writes the optimistic running:true, and this snapshot was taken before
-        // it existed, so applying it would retract a run that has just started
-        // (#751). The store's own frames then carry the run from here.
-        if (!backendProgress.running && stored !== storeAtIssue) return;
-        // Retracting a run the store is tracking is a separate question from
-        // reading the frame, and the answer carries both. `inFlight` is the
-        // backend's run-lifecycle state; the frame is the last thing a run said.
-        // Between a run being started and its first frame — a reconcile plus a
-        // round trip — the frame belongs to the PREVIOUS run, so taking it for
-        // this one both retracted the run the panel was showing (an idle page
-        // over a live preview) and handed the subscriber below a terminal stage
-        // it announced as this run's ending.
-        //
-        // A retraction is therefore allowed only where the answer is evidence
-        // about the run the store is tracking, which is one of two things: the
-        // answer NAMES that run (its own ending, e.g. a terminal frame this panel
-        // missed while it was away), or the backend reports the lifecycle
-        // explicitly idle AND the store's run carries a backend-stamped id, so it
-        // is a run the backend has seen and is now telling us is over. That
-        // second clause is what keeps a lost terminal frame from wedging the
-        // panel on a run that is not running: the next mount corrects it.
-        //
-        // What is refused is an idle answer against an optimistic start, which
-        // carries no run id because the backend has not stamped one — there the
-        // backend is not silent about the run, it has not heard of it yet. That
-        // frame is not a wedge: the Sync page handler that wrote it always
-        // retracts it itself (a preview answered, a failure aborted, or a
-        // per-unit run whose frames stamp a real id), even from an instance the
-        // user has already navigated away from.
-        const backendRunIdle = inFlight === false;
-        const namesStoredRun = !!stored.runId && stored.runId === backendProgress.runId;
-        const backendKnowsStoredRun = backendRunIdle && !!stored.runId;
-        if (!backendProgress.running && stored.running && !namesStoredRun && !backendKnowsStoredRun) return;
-        const sameRun = backendProgress.runId && stored.runId ? backendProgress.runId === stored.runId : true;
-        const isSameLiveRun = backendProgress.running && stored.running && sameRun;
-        // Same live run: spread the store (keeping its fine fields + etaSeconds)
-        // and overlay the backend's authoritative running/stage/runId/runKind.
-        // The conditional spreads keep the optional three out when the backend
-        // omits them (exactOptionalPropertyTypes). `runKind` is overlaid for the
-        // same reason `runId` is: the backend states it, and the frame this
-        // merges over can be an optimistic start written before the run was
-        // claimed. One exception: "applying" is frontend-authoritative (the
-        // backend never emits it — its last frame is the fetch anchor), so a
-        // stored applying stage survives the seed; taking the backend's stale
-        // "fetching" would drop the coarse-bar interpolation and flip the label
-        // until the next per-item update. Otherwise replace wholesale.
-        const backendStage = stored.stage === "applying" ? undefined : backendProgress.stage;
-        const progress: SyncProgress = isSameLiveRun
-          ? {
-              ...stored,
-              running: backendProgress.running,
-              ...(backendStage !== undefined ? { stage: backendStage } : {}),
-              ...(backendProgress.runId !== undefined ? { runId: backendProgress.runId } : {}),
-              ...(backendProgress.runKind !== undefined ? { runKind: backendProgress.runKind } : {}),
-            }
-          : backendProgress;
-        setStoredSyncProgress(progress);
+        if (!snapshotHasAuthority(backendProgress, inFlight, stored, storeAtIssue)) return;
+        setStoredSyncProgress(seededFrame(backendProgress, stored));
       })
       .catch((e) => logError(`Failed to query sync status: ${e}`));
 
