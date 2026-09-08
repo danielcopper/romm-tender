@@ -176,6 +176,7 @@ class Plugin:
         self._prune_service = services["prune_service"]
         self._connection_service = services["connection_service"]
         self._startup_healing_service = services["startup_healing_service"]
+        self._legacy_install_service = services["legacy_install_service"]
         self._launch_gate_service = services["launch_gate_service"]
         self._session_lifecycle_service = services["session_lifecycle_service"]
         self._game_process_service = services["game_process_service"]
@@ -997,3 +998,23 @@ class Plugin:
         Returns ``{"success": True}``.
         """
         return self._settings_service.dismiss_settings_reset_notice()
+
+    async def get_legacy_install_notice(self):
+        """Report the pre-rename install still sitting beside this one.
+
+        Returns ``{"pending": bool, "legacy_data_present": bool}``. ``pending``
+        means the plugin folder releases used before 0.31.0 is on disk and is not
+        the one this plugin runs from — a shortcut launches through a launcher
+        inside the folder it was written from, so the frontend warns against
+        removing it.
+        ``legacy_data_present`` means that older install still has a database;
+        the panel pairs it with the ROM count it already reads to decide whether
+        to add "this version starts empty". False whenever ``pending`` is.
+
+        Two directory questions and nothing else — no database of ours is opened,
+        so the warning cannot be taken down by a library read, and a path error
+        while answering the narrower one degrades it to False rather than
+        failing the call. Computed live on every call and persisted nowhere: the
+        condition ends when the folder does, and a marker would outlive it.
+        """
+        return self._legacy_install_service.get_legacy_install_notice()

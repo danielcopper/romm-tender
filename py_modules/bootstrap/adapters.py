@@ -111,9 +111,12 @@ if TYPE_CHECKING:
         UuidGen,
     )
 
-# Filename of the SQLite database inside the plugin runtime dir. Created by the
-# migration runner at startup; unused until the service cutover (#784).
-_DB_FILENAME = "romm_sync.db"
+# Filename of the SQLite database inside a plugin's runtime dir. Created by the
+# migration runner at startup. Not private: the legacy-install notice asks the
+# same question of the pre-rename install's runtime dir, and a second literal
+# spelling of the name would leave that detection silently answering about a
+# file we no longer write.
+DB_FILENAME = "romm_sync.db"
 
 
 @dataclass(frozen=True)
@@ -285,7 +288,7 @@ def bootstrap(
     # unopenable database is fatal. Log the cause, then re-raise so bootstrap
     # aborts and the plugin stays inert — matching the RomM-minimum-version
     # gate's "inert until the environment is fixed" posture.
-    db_path = os.path.join(runtime_dir, _DB_FILENAME)
+    db_path = os.path.join(runtime_dir, DB_FILENAME)
     try:
         apply_migrations(db_path, MIGRATIONS_DIR, logger=logger)
     except Exception:

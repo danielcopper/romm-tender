@@ -65,6 +65,22 @@ from there.
 Any direct URL to the zip file works (GitHub releases, a self-hosted mirror, etc.) as long as it points to a valid
 `.zip` containing the plugin.
 
+### Updating from a release before 0.31.0
+
+Releases up to 0.30.1 install into a folder named `decky-romm-sync`; from 0.31.0 on the folder is named after the
+renamed repository. Decky treats a differently-named folder as a different plugin, so updating across that boundary
+leaves you with **two** entries: the older one still shown as **RomM Sync**, and the new one as **Tender**.
+
+**Do not remove "RomM Sync" from Decky.** Every Steam shortcut this plugin created launches through a file inside that
+older plugin's folder, so removing it stops all of your games from starting — and nothing in Tender can put the file
+back. Leave it in place. A future version will move everything across and clean it up for you.
+
+While both are installed, Tender's QAM panel shows a warning card saying the same thing — including when the panel is
+showing a server-version error or a pending RetroDECK migration instead of its usual contents, the two states in which
+the older plugin looks most like something to clear away. The new install also starts with its own empty settings and
+library, because Decky gives each plugin folder its own data location — your existing settings and synced library are
+still in the older install, and the move will bring them over.
+
 ### Manual installation (alternative)
 
 1. Download the plugin's `.zip` asset from the [releases page](https://github.com/danielcopper/romm-tender/releases)

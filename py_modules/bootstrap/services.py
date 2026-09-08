@@ -28,6 +28,7 @@ from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.game_detail import GameDetailService, GameDetailServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
 from services.launch_gate import LaunchGateService, LaunchGateServiceConfig
+from services.legacy_install import LegacyInstallService, LegacyInstallServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
 from services.metadata import MetadataService, MetadataServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
@@ -44,6 +45,8 @@ from services.shortcut_removal import ShortcutRemovalService, ShortcutRemovalSer
 from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
 from services.version_switch import VersionSwitchService, VersionSwitchServiceConfig
+
+from .adapters import DB_FILENAME
 
 if TYPE_CHECKING:
     from typing import Any
@@ -472,6 +475,17 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         ),
     )
 
+    legacy_install_service = LegacyInstallService(
+        config=LegacyInstallServiceConfig(
+            plugin_dir=cfg.runtime.plugin_dir,
+            runtime_dir=cfg.runtime.runtime_dir,
+            db_filename=DB_FILENAME,
+            path_exists=cfg.adapters.path_probe,
+            resolve_path=cfg.adapters.resolve_path,
+            logger=cfg.runtime.logger,
+        ),
+    )
+
     launch_gate_service = LaunchGateService(
         config=LaunchGateServiceConfig(
             rom_lookup=sync_service,
@@ -576,6 +590,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         "version_switch_service": version_switch_service,
         "connection_service": connection_service,
         "startup_healing_service": startup_healing_service,
+        "legacy_install_service": legacy_install_service,
         "launch_gate_service": launch_gate_service,
         "session_lifecycle_service": session_lifecycle_service,
         "game_process_service": game_process_service,

@@ -43,6 +43,7 @@ import { WarningCard } from "./WarningCard";
 import { DownloadProgressRow } from "./DownloadProgressRow";
 import { MigrationBlockedPage } from "./MigrationBlockedPage";
 import { SettingsResetBanner } from "./SettingsResetBanner";
+import { LegacyInstallNotice } from "./LegacyInstallBanner";
 import { PlaytimeScopeBanner } from "./PlaytimeScopeBanner";
 import type { SyncPreview, SyncProgress, SyncRunKind, SyncStats, Page } from "../types";
 import { detach } from "../utils/detach";
@@ -584,6 +585,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
 
   return (
     <>
+      <LegacyInstallNotice />
       {settingsReset.pending && <SettingsResetBanner backedUpTo={settingsReset.backedUpTo} />}
       {playtimeScope.pending && <PlaytimeScopeBanner />}
       {/* Untitled status block (Connection / Last sync / Library) leads the

@@ -56,6 +56,7 @@ import {
 } from "./utils/collections";
 import { setMigrationStatus } from "./utils/migrationStore";
 import { fetchSettingsResetState } from "./utils/settingsResetStore";
+import { fetchLegacyInstallState } from "./utils/legacyInstallStore";
 import { resetSyncDelta, recordSyncRemoved, getSyncDelta } from "./utils/syncDeltaStore";
 import { attachRunUnitsMirror, seedRunUnits } from "./utils/runUnitsStore";
 import { setSaveSortMigrationStatus } from "./utils/saveSortMigrationStore";
@@ -496,6 +497,22 @@ export default definePlugin(() => {
         await fetchSettingsResetState();
       } catch (e) {
         logError(`Failed to check settings reset notice: ${e}`);
+      }
+    })(),
+  );
+
+  // Surface the pre-rename install if it is still on disk. The plugin folder
+  // changed name at 0.31.0, so a user who updated across that boundary has two
+  // plugins and the older one owns the launcher the shortcuts written from it
+  // point at.
+  // Read live off the filesystem — no marker, so the notice goes away by itself
+  // once a future version has moved everything across.
+  detach(
+    (async () => {
+      try {
+        await fetchLegacyInstallState();
+      } catch (e) {
+        logError(`Failed to check for a legacy install: ${e}`);
       }
     })(),
   );

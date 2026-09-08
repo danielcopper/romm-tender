@@ -55,6 +55,8 @@ import * as syncEta from "../utils/syncEta";
 import { setDownloads } from "../utils/downloadStore";
 import { resetConnectionProbeForTests } from "../utils/connectionProbe";
 import { resetSyncStatsStoreForTests } from "../utils/syncStatsStore";
+import { setLegacyInstallState } from "../utils/legacyInstallStore";
+import { LEGACY_INSTALL_TITLE } from "./LegacyInstallBanner";
 import { resetPendingPreviewStoreForTests, adoptPreview, clearPendingPreview } from "../utils/pendingPreviewStore";
 import { showModal } from "@decky/ui";
 import * as syncManager from "../utils/syncManager";
@@ -3517,6 +3519,70 @@ describe("MainPage", () => {
         await flushAsync();
         expect(slotLabel(container)).toBe("Changes ready");
       });
+    });
+  });
+
+  describe("MainPage legacy-install notice", () => {
+    // Main renders <LegacyInstallNotice/>, which reads both stores itself — this
+    // is the Main site of the three, driven through the panel's own stats read
+    // so the "a beat later" case below is the real timing and not a staged one.
+    // The other two sites are the full-page states, and this file cannot see
+    // them: both are replaced by testid stubs above. VersionErrorCard.test.tsx
+    // and MigrationBlockedPage.test.tsx carry those.
+    const STRANDED_SENTENCE = "Your library and settings are still in that older install too";
+
+    beforeEach(() => {
+      setLegacyInstallState({ pending: true, legacyDataPresent: true });
+    });
+
+    afterEach(() => {
+      // The store outlives the panel and this hook runs before RTL's cleanup,
+      // so the notify reaches a still-mounted subscriber — act, or React
+      // reports the update as unwrapped and the suite's console guard fails it.
+      act(() => {
+        setLegacyInstallState({ pending: false, legacyDataPresent: false });
+      });
+    });
+
+    it("adds the stranded-data sentence when the older install has data and this one holds no ROMs", async () => {
+      vi.mocked(backend.getSyncStats).mockResolvedValue({ ...defaultStats(), roms: 0 });
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(container.textContent).toContain(LEGACY_INSTALL_TITLE);
+      expect(container.textContent).toContain(STRANDED_SENTENCE);
+    });
+
+    it("drops the stranded-data sentence once this install holds ROMs of its own", async () => {
+      vi.mocked(backend.getSyncStats).mockResolvedValue({ ...defaultStats(), roms: 42 });
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      // The launcher warning is what stops the irreversible removal — it survives
+      // whatever the library reads.
+      expect(container.textContent).toContain(LEGACY_INSTALL_TITLE);
+      expect(container.textContent).not.toContain(STRANDED_SENTENCE);
+    });
+
+    it("withholds the stranded-data sentence until the stats have landed", async () => {
+      vi.mocked(backend.getSyncStats).mockResolvedValue({ ...defaultStats(), roms: 0 });
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+
+      // Asserted at first paint: stats are still null, which is not knowledge
+      // that this install is empty. The launcher warning is already up.
+      expect(container.textContent).toContain(LEGACY_INSTALL_TITLE);
+      expect(container.textContent).not.toContain(STRANDED_SENTENCE);
+
+      // Drain the mount reads inside act, then the sentence is there — the
+      // withholding is a beat, not a permanent silence.
+      await flushAsync();
+      expect(container.textContent).toContain(STRANDED_SENTENCE);
+    });
+
+    it("shows no card at all when no legacy install stands beside this one", async () => {
+      setLegacyInstallState({ pending: false, legacyDataPresent: false });
+      vi.mocked(backend.getSyncStats).mockResolvedValue({ ...defaultStats(), roms: 0 });
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(container.textContent).not.toContain(LEGACY_INSTALL_TITLE);
     });
   });
 });

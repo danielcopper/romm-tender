@@ -2,8 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, renderHook, act } from "@testing-library/react";
 import { createElement, type ComponentProps } from "react";
 import { VersionErrorCard, useVersionError } from "./VersionErrorCard";
+import { LEGACY_INSTALL_TITLE } from "./LegacyInstallBanner";
 import { setVersionError } from "../utils/connectionState";
 import * as connectionState from "../utils/connectionState";
+import { setLegacyInstallState } from "../utils/legacyInstallStore";
 import type { WarningCard } from "./WarningCard";
 
 // Capture the props passed to WarningCard so the FC tests can assert the
@@ -38,6 +40,44 @@ describe("VersionErrorCard component", () => {
   it("forwards compact=true", () => {
     render(<VersionErrorCard message="m" compact />);
     expect(capturedWarningCard[0]?.compact).toBe(true);
+  });
+});
+
+describe("VersionErrorCard legacy-install notice", () => {
+  // This card replaces the page, so it carries the pre-rename install warning
+  // itself — a plugin that says it cannot work is what makes a user tidy the
+  // older install out of Decky, and every one of their games launches through
+  // it. The store is a module singleton; act-wrapped so the notify reaches the
+  // still-mounted subscriber before RTL's cleanup.
+  afterEach(() => {
+    act(() => {
+      setLegacyInstallState({ pending: false, legacyDataPresent: false });
+    });
+  });
+
+  it("carries the warning while the pre-rename install stands beside this one", () => {
+    act(() => {
+      setLegacyInstallState({ pending: true, legacyDataPresent: false });
+    });
+    const { container } = render(<VersionErrorCard message="RomM 4.7.0 too old" compact />);
+    expect(container.textContent).toContain(LEGACY_INSTALL_TITLE);
+  });
+
+  it("keeps the version error first — the warning goes below, never on top of it", () => {
+    act(() => {
+      setLegacyInstallState({ pending: true, legacyDataPresent: false });
+    });
+    const { container, getByTestId } = render(<VersionErrorCard message="RomM 4.7.0 too old" compact />);
+    // Nothing here takes focus, so nothing can scroll this panel: a warning
+    // stacked on top would push the explanation of why the plugin cannot work
+    // out of reach.
+    expect(container.firstElementChild).toBe(getByTestId("warning-card"));
+  });
+
+  it("shows the card alone when no older install stands beside this one", () => {
+    const { container, queryByTestId } = render(<VersionErrorCard message="RomM 4.7.0 too old" compact />);
+    expect(queryByTestId("warning-card")).not.toBeNull();
+    expect(container.textContent).not.toContain(LEGACY_INSTALL_TITLE);
   });
 });
 
