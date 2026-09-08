@@ -30,7 +30,7 @@ without restating it. The width mechanism's decision record is
 | `src/utils/deckyUiInternals.ts`                               | Honest typing for `@decky/ui` values that come from a webpack probe: the frame's class names, `Tabs`, `ScrollPanel`, the controller glyph                           |
 | `src/utils/qamExpansion.ts`                                   | The panel's width: the expand and hide messages, the injected `max-width` rule, and the four paths that clear both                                                  |
 | `src/components/qam/`                                         | The wide-page frame: `WidePage` (the Back/title line, tabs, measured height, entry focus), `ScrollRegion`, `Columns`, `ListDetail`, `pane`                          |
-| `src/utils/entryFocus.ts`                                     | Which stop a page opens on, and the `.focus()` + `gpfocus` pair that places it — the frame's and the router's one implementation                                    |
+| `src/utils/entryFocus.ts`                                     | Which stop a body opens on, the declaration a page makes when that stop is not it, and the `.focus()` + `gpfocus` pair that places it                               |
 | `src/utils/syncRunView.ts`                                    | `useSyncRunView` — the run in flight as a page renders it: stage label, coarse bar, position within the running unit, fine-detail line, estimate, and the run's end |
 | `src/utils/runUnitsStore.ts`                                  | The run's work queue, one row per unit: the plan's riders, how far the run has got, and what each unit's apply produced                                             |
 | `src/utils/previewState.ts`                                   | What a page asks of a pending preview: has it anything to apply, and how long is it still accepted (the half Main reads)                                            |
@@ -202,9 +202,10 @@ wrong one draws the wrong glyph without failing.
 inside a tab is spent moving focus to the tab row and never reaches the router. `WidePage` passes `cancelSkipTabHeader`
 — Steam's own prop, which it uses in its controller-configurator dialogs, and which upstream's `TabsProps` predates;
 `src/utils/deckyUiInternals.ts` types it. After a navigation the router scrolls the panel to the top, and gamepad focus
-is placed on the page's first stop — by the router for a narrow page, and by the frame itself for a wide one, which says
-so on its root so the router leaves it alone (see "Building blocks → Tabs"). The module-level `currentPage` survives a
-QAM remount, so reopening the QAM lands on the page that was open, and a wide page re-expands on mount.
+is placed where the page opens — by the router for a narrow page, at the area the page declared or at its first stop
+where it declared none, and by the frame itself for a wide one, which says so on its root so the router leaves it alone
+(see "Building blocks → Tabs"). The module-level `currentPage` survives a QAM remount, so reopening the QAM lands on the
+page that was open, and a wide page re-expands on mount.
 
 ## Building blocks
 
@@ -239,15 +240,23 @@ inner stop is disabled is stepped over, which no body's first column produces to
 enabled stop that is free of stops inside it — nothing is placed and the page keeps whatever Steam's retained pointer
 resolves to.
 
-**The narrow pages the router covers take the same rule, and used to have a button-first one of their own.** Its
-argument was that a narrow page is one column of Steam's own full-width rows, where the first button IS the first row —
-true of Main only while Main had a Sync button near the top. Its status rows state and act on nothing, so once that
-button left, Main's first button was the menu at the very bottom of the panel. Under the shared rule Main opens on
-**Connection**, its first status row. Settings, Data Management and Downloads are unmoved: each leads with its Back row,
-so the first stop and the first button are the same element. Whatever the rule, the root it searches is the plugin's own
-content and nothing above it — Decky renders its panel title and the back arrow beside it outside that box, 34 px above
-it (`WidePage`'s `ancestorOverhang` measures the gap) — so neither rule could reach Decky's own chrome. The finder, the
-shared set of shapes and the `.focus()` + `gpfocus` pair are `src/utils/entryFocus.ts`.
+**The narrow pages the router covers take the same rule, unless the page names somewhere better.** A page marks the area
+entry focus belongs in (`ENTRY_STOP_ATTR`) and the router picks the stop inside it with the same rule, so what a
+declaration changes is WHERE the rule is applied and never which element it picks. **Main is the only page that declares
+one**, on the menu's **Sync** entry: its three status rows act on nothing, so opening on the first of them — Connection,
+which is where the panel opened before — spends the reader's first press on a move to what they came for. The
+declaration is what makes that stable. Main's first BUTTON is not the menu whenever a notice carrying an action is on
+screen, so a button-first rule would open the panel wherever the day's conditions put one; that rule was tried and
+dropped for the same reason, back when its argument was that a narrow page is one column of Steam's own full-width rows
+where the first button IS the first row — true of Main only while Main had a Sync button near the top.
+
+**Settings, Data Management and Downloads are unmoved**, and declare nothing: each leads with its Back button, which is
+both the first stop and the first button, so the router's default already opens them there. Whatever the rule, the root
+it searches is the plugin's own content and nothing above it — Decky renders its panel title and the back arrow beside
+it outside that box, 34 px above it (`WidePage`'s `ancestorOverhang` measures the gap) — so no rule here could reach
+Decky's own chrome. The declaration, the finder, the shared set of shapes and the `.focus()` + `gpfocus` pair are
+`src/utils/entryFocus.ts`. It is a second attribute rather than a second use of the wide frame's `OWNS_ENTRY_FOCUS_ATTR`
+because the two say opposite things: that one tells the router to place nothing, this one tells it where.
 
 **A tab's content is the page's business, not the frame's.** The frame wraps an untabbed body in a `ScrollRegion` and a
 tabbed one in nothing: Steam's tabbed page already wraps each tab's content in this same plain scroll panel, so a region
@@ -365,14 +374,22 @@ nothing. The single exception is one conditional slot that exists only while the
 notice can carry a door too, and it comes and goes with its condition exactly as the slot does.** That is the whole
 rule, and everything below is what it costs and what it buys.
 
+**The panel opens on the menu's Sync entry**, which Main declares as its entry stop rather than letting the router's
+default land on the first row of the status block — the rows below state and do nothing, so opening on one spends the
+reader's first press. **What that costs is Steam's own scrolling**, and it is a real cost rather than a theoretical one:
+Steam scrolls the focused element into view, so on a Main tall enough to scroll — a notice or two, an active download —
+the panel opens part-way down, with the notices that wanted attention off the top. Main fits today with three status
+rows and a four-entry menu, so nothing scrolls; it is not defended against in code, because a rule that opened somewhere
+else depending on what is on screen is exactly what the declaration replaced. The mechanism is under "Building blocks".
+
 **The three status rows act on nothing.** Connection, Last sync and Library are `Field`s that carry no activate handler,
 and they stay `focusable` all the same — a region scrolls only by moving focus, so a row nobody can focus is a row
-nobody can scroll to, and entry focus would otherwise land below them and take the status off the top of the panel.
-**Last sync** states the newest completed run's age, and where a newer run did not complete it states that run's
-_outcome_ and age too — "cancelled 12m ago", "interrupted 3h ago" — on a second, quieter line. With no completed run
-ever, that attempt is the only line, so the row never reads a bare "Never" after thousands of games synced (#1318).
-Reporting a run and offering to continue it are different questions: an errored run is reported here and is not
-resumable, which `syncResumeState` decides for the button that offers it, on the Sync page.
+nobody can scroll to, and with the panel now opening below them that is the only way back up to them. **Last sync**
+states the newest completed run's age, and where a newer run did not complete it states that run's _outcome_ and age too
+— "cancelled 12m ago", "interrupted 3h ago" — on a second, quieter line. With no completed run ever, that attempt is the
+only line, so the row never reads a bare "Never" after thousands of games synced (#1318). Reporting a run and offering
+to continue it are different questions: an errored run is reported here and is not resumable, which `syncResumeState`
+decides for the button that offers it, on the Sync page.
 
 **The conditional slot** sits under the three rows and is the one status row that can be pressed; pressing it opens the
 Sync page, exactly as the menu's Sync entry does. It is not the only pressable thing in the block — Cancel Sync joins it
@@ -501,10 +518,30 @@ Nothing moves focus during a run, so the page scrolls that region itself and put
 clamped to the list's own ends. Both tables' rows are set in one flat, small register, held in one place
 (`paneTable.tsx`) so that stays a decision rather than a drift.
 
+**Focus lands on Cancel Sync when this body takes the column.** The button that got the reader here — Apply Sync, or the
+start button on the idle body — unmounts with the body it was in, and Steam keeps a focus pointer across the swap and
+resolves it onto whatever now sits at that position, so the pane claims focus itself. It does so by the frame's own
+entry-focus rule (`utils/entryFocus.ts`, on the frame's own 50 ms delay) applied to its own pane, and what that rule
+picks is the first stop holding no stop of its own: every unit row below is a stop too, so what puts it on the button is
+the button being first — the same ordering the column is laid out for. On the mount ALONE, which is the swap: a run
+re-renders per frame and none of those is a moment to move the reader.
+
 The bar and the counter come from `useSyncRunView`, the rows from `runUnitsStore`. A run with **no rows** — a preview,
-which seeds none, or a run whose plan was lost to a plugin reload — shows the frame's own fine-detail line in their
-place ("Fetching Game Boy Advance (page 12/62)") — `useSyncRunView`'s own `fineDetailText`, which no other surface
-renders; the page says the per-unit detail is unavailable only where there is neither a row nor a detail line.
+which seeds none, a run whose plan was lost to a plugin reload, or the window between a press that cleared the rows and
+its plan arriving — shows the frame's own fine-detail line in their place ("Fetching Game Boy Advance (page 12/62)") —
+`useSyncRunView`'s own `fineDetailText`, which no other surface renders; the page says the per-unit detail is
+unavailable only where there is neither a row nor a detail line.
+
+**The rows are cleared at the press that starts a run, and kept at exactly one press.** A plan is the only other thing
+that replaces them and it arrives late — after the work queue is built on the two apply paths, and never at all on the
+preview path — so without a clear the previous run's units stand over the new one: its `done` rows still carrying that
+run's apply results, and the unit it died in dressed as running by the frames of this one. A **resume** is the one start
+those rows are still true for, because they are the progress it continues from. Nothing on the wire tells a resume from
+a fresh start — it is a new run with a new id, and the backend has no resume concept at all; what carries one is the
+per-unit skip gate, a fetch-time decision — so the discriminator is the page's own reading at the press,
+`syncResumeState(stats).canResume`, the same one that names the button the reader pressed. A press landing before the
+stats have answered reads as a fresh start and clears: not knowing is not evidence of a resume, and the cost of being
+wrong that way is the fine-detail line for the pre-plan window rather than another run's units.
 
 **Every row of both tables is a focus stop** — a `Focusable` with an activate handler — because a region scrolls only by
 moving focus, so an unreachable row is an unscrollable one.

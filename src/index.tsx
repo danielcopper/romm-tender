@@ -62,7 +62,7 @@ import { setSaveSortMigrationStatus } from "./utils/saveSortMigrationStore";
 import { setVersionError, setServerRetryProgress } from "./utils/connectionState";
 import { initSessionManager, destroySessionManager } from "./utils/sessionManager";
 import { findOutermostScrollParent } from "./utils/scrollHelpers";
-import { ENTRY_FOCUS_DELAY_MS, firstBodyStop, placeEntryFocus } from "./utils/entryFocus";
+import { ENTRY_FOCUS_DELAY_MS, pageEntryStop, placeEntryFocus } from "./utils/entryFocus";
 import { collapseQamOnDismount } from "./utils/qamExpansion";
 import { detach } from "./utils/detach";
 import type {
@@ -117,8 +117,8 @@ const QAMPanel: FC = () => {
     });
     // Steam's gamepad nav retains a focus pointer across page swaps and
     // resolves it on the next input — landing on a button at the old page's
-    // position. Force focus to the page's first stop so navigation starts at
-    // the top.
+    // position. Force focus to where the page opens: the area it declared, or
+    // its first stop where it declared none.
     //
     // `el` is the plugin's own content and nothing above it: Decky renders its
     // panel title and the back arrow beside it OUTSIDE this div — measured in
@@ -137,7 +137,7 @@ const QAMPanel: FC = () => {
     const ownsFocus = el.querySelector(`[${OWNS_ENTRY_FOCUS_ATTR}]`) !== null;
     const focusTimer = ownsFocus
       ? undefined
-      : setTimeout(() => placeEntryFocus(el, firstBodyStop), ENTRY_FOCUS_DELAY_MS);
+      : setTimeout(() => placeEntryFocus(el, pageEntryStop), ENTRY_FOCUS_DELAY_MS);
     return () => {
       cancelAnimationFrame(rafHandle);
       clearTimeout(focusTimer);

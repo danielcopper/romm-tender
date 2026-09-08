@@ -21,6 +21,7 @@ import {
   getRetroDeckStatus,
   logError,
 } from "../api/backend";
+import { ENTRY_STOP_ATTR } from "../utils/entryFocus";
 import { formatTimeAgo } from "../utils/formatters";
 import { pluralize } from "../utils/pluralize";
 import { getSyncProgress, setSyncProgress as setStoredSyncProgress } from "../utils/syncProgress";
@@ -599,9 +600,10 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
             <PanelSectionRow>
               {/* A stop that STATES, like the two rows around it. It stays
                   focusable with nothing to activate so a reader can walk the
-                  block and Steam can scroll it into view; the way to the Sync
-                  page is the menu, and the conditional slot below while there is
-                  something to report. */}
+                  block and Steam can scroll it into view, which is the only way
+                  back up to it: the panel opens on the menu below, not here. The
+                  way to the Sync page is that menu, and the conditional slot
+                  below while there is something to report. */}
               <Field label="Last sync" focusable={true} bottomSeparator="none" childrenContainerWidth="max">
                 {lastSyncValue(stats)}
               </Field>
@@ -830,9 +832,22 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
 
       <PanelSection>
         <PanelSectionRow>
-          <ButtonItem layout="below" bottomSeparator="none" onClick={() => onNavigate("sync")}>
-            Sync
-          </ButtonItem>
+          {/* Where the panel opens. The three status rows above act on nothing,
+              so opening on the first of them spends the reader's first press on
+              a move to what they came for. The declaration names this area and
+              the router's own rule picks the stop inside it, so nothing here
+              decides which element takes focus.
+
+              A wrapper because the attribute has to sit on an element we
+              render: Steam's `ButtonItem` takes its own props and nothing
+              establishes that it passes an unknown one down to the DOM.
+              `display: contents` keeps the wrapper out of the layout — it
+              carries the attribute and nothing else. */}
+          <div {...{ [ENTRY_STOP_ATTR]: "" }} style={{ display: "contents" }}>
+            <ButtonItem layout="below" bottomSeparator="none" onClick={() => onNavigate("sync")}>
+              Sync
+            </ButtonItem>
+          </div>
         </PanelSectionRow>
         <PanelSectionRow>
           <ButtonItem layout="below" bottomSeparator="none" onClick={() => onNavigate("library")}>

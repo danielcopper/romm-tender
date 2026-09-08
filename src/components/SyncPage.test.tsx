@@ -673,6 +673,62 @@ describe("SyncPage", () => {
 
       expect(document.activeElement?.textContent).toBe("Apply Sync");
     });
+
+    it("Apply Sync hands focus to Cancel Sync, the only control the body it swaps in has", async () => {
+      adoptPreview(preview());
+      const { container } = await renderPage();
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+      // Where the press comes FROM, so what follows is about the swap rather
+      // than about a page that had never placed focus at all.
+      expect(document.activeElement?.textContent).toBe("Apply Sync");
+
+      await act(async () => {
+        fireEvent.click(buttonByExactText(container, "Apply Sync")!);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+
+      expect(document.activeElement?.textContent).toBe("Cancel Sync");
+    });
+
+    it("and then leaves focus where the reader puts it, however many frames follow", async () => {
+      adoptPreview(preview());
+      const { container } = await renderPage();
+      // Spend the frame's own mount placement first: with it still pending it
+      // would land on the run view too, and this case would prove nothing about
+      // the pane's own.
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+      await act(async () => {
+        fireEvent.click(buttonByExactText(container, "Apply Sync")!);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+      expect(document.activeElement?.textContent).toBe("Cancel Sync");
+
+      // The reader walks off the button. Every frame of the run re-renders this
+      // body, and none of them is a moment to take that back.
+      const elsewhere = buttonByExactText(container, "‹ Back")!;
+      elsewhere.focus();
+      await act(async () => {
+        setSyncProgress({ running: true, stage: "applying", step: 1, totalSteps: 3, message: "PSX: 1/10" });
+        await Promise.resolve();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(ENTRY_FOCUS_DELAY_MS);
+      });
+
+      expect(document.activeElement).toBe(elsewhere);
+    });
   });
 
   // ===========================================================================
@@ -1348,6 +1404,134 @@ describe("SyncPage", () => {
         await Promise.resolve();
         await Promise.resolve();
       });
+    });
+  });
+
+  // ===========================================================================
+  // The previous run's rows, and the press that starts the next one.
+  //
+  // Rows are only ever replaced by a plan, and a plan arrives after the work
+  // queue is built on the two apply paths and never at all on the preview path —
+  // so without a clear at the press the previous run's units stand over the new
+  // one, `done` rows carrying that run's apply results. A resume is the one
+  // start they are still true for.
+  // ===========================================================================
+  describe("a previous run's rows at the next press", () => {
+    let detachMirror: (() => void) | null = null;
+
+    afterEach(() => {
+      detachMirror?.();
+      detachMirror = null;
+    });
+
+    /** Rows from a run that has already been and gone, with the results its
+     *  apply produced — what the reader saw standing over a new run's fetch. */
+    function seedFinishedRun(): void {
+      seedRunUnits(
+        [planUnit({ id: 1, name: "PlayStation" }), planUnit({ id: 2, name: "SNES" })],
+        "run-that-already-ended",
+      );
+      detachMirror = attachRunUnitsMirror();
+    }
+
+    /** Stats that offer a resume: the newest run did not complete, and the games
+     *  it did get through are still skip authority for the next one. */
+    function resumableStats(): SyncStats {
+      return {
+        ...defaultStats(),
+        last_attempt: { finished_at: "2026-07-11T18:02:00", status: "cancelled" },
+        resumable_games: 40,
+      };
+    }
+
+    /** A preview call that never answers, so the run view the press put up stays
+     *  on screen to be read. */
+    function previewNeverAnswers(): void {
+      vi.mocked(backend.syncPreview).mockReturnValue(new Promise<SyncPreview>(() => {}));
+    }
+
+    async function press(container: HTMLElement, label: string): Promise<void> {
+      await act(async () => {
+        fireEvent.click(buttonByExactText(container, label)!);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+    }
+
+    it("a fresh sync drops them: the finished run's units are not this run's plan", async () => {
+      seedFinishedRun();
+      previewNeverAnswers();
+      const { container } = await renderPage();
+
+      await press(container, "Sync Library");
+
+      expect(buttonByExactText(container, "Cancel Sync")).not.toBeNull();
+      expect(rowTexts(container, "run-unit-")).toEqual([]);
+    });
+
+    it("a resume keeps them: they are the progress it continues from", async () => {
+      vi.mocked(backend.getSyncStats).mockResolvedValue(resumableStats());
+      seedFinishedRun();
+      previewNeverAnswers();
+      const { container } = await renderPage();
+
+      await press(container, "Resume Sync");
+
+      const rows = rowTexts(container, "run-unit-");
+      expect(rows).toHaveLength(2);
+      expect(rows[0]).toContain("PlayStation");
+      expect(rows[1]).toContain("SNES");
+    });
+
+    it("a start that skips the preview drops them too", async () => {
+      vi.mocked(backend.getSettings).mockResolvedValue({ ...defaultSettings(), skip_preview: true });
+      seedFinishedRun();
+      const { container } = await renderPage();
+
+      await press(container, "Sync Library");
+
+      expect(vi.mocked(backend.startSync)).toHaveBeenCalled();
+      expect(rowTexts(container, "run-unit-")).toEqual([]);
+    });
+
+    it("Apply Sync drops them, because the run it just approved is not the one they describe", async () => {
+      adoptPreview(preview());
+      seedFinishedRun();
+      const { container } = await renderPage();
+
+      await press(container, "Apply Sync");
+
+      expect(buttonByExactText(container, "Cancel Sync")).not.toBeNull();
+      expect(rowTexts(container, "run-unit-")).toEqual([]);
+    });
+
+    it("Apply Sync after a resume's preview keeps them: working one out ends no run", async () => {
+      // A preview opens no run row at all, so the incomplete attempt behind the
+      // resume offer is still the newest terminal run when its Apply is pressed.
+      vi.mocked(backend.getSyncStats).mockResolvedValue(resumableStats());
+      adoptPreview(preview());
+      seedFinishedRun();
+      const { container } = await renderPage();
+
+      await press(container, "Apply Sync");
+
+      const rows = rowTexts(container, "run-unit-");
+      expect(rows).toHaveLength(2);
+      expect(rows[0]).toContain("PlayStation");
+    });
+
+    it("a press before the stats have answered drops them, which is the safe direction", async () => {
+      // Not knowing is not evidence of a resume: the rows go, and a resume
+      // pressed this early shows the frame's own detail line until its plan
+      // lands rather than another run's units.
+      vi.mocked(backend.getSyncStats).mockReturnValue(new Promise<SyncStats>(() => {}));
+      seedFinishedRun();
+      previewNeverAnswers();
+      const { container } = await renderPage();
+
+      await press(container, "Sync Library");
+
+      expect(rowTexts(container, "run-unit-")).toEqual([]);
     });
   });
 

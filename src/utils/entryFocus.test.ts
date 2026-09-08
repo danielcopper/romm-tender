@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, afterEach } from "vitest";
-import { firstBodyStop, placeEntryFocus } from "./entryFocus";
+import { ENTRY_STOP_ATTR, firstBodyStop, pageEntryStop, placeEntryFocus } from "./entryFocus";
 
 function page(html: string): HTMLElement {
   const root = document.createElement("div");
@@ -85,10 +85,10 @@ describe("firstBodyStop", () => {
   });
 
   it("takes a stating row over the first button below it", () => {
-    // The shape of a narrow page: Main's status rows act on nothing and stay
-    // focusable all the same, so its first BUTTON is the menu at the bottom of
-    // the panel. A button-first rule opens the page with the status it leads
-    // with already scrolled off the top.
+    // The shape of a narrow page: a status row acts on nothing and stays
+    // focusable all the same, so the first BUTTON is whatever action is on
+    // screen — here the menu at the bottom of the panel. This rule answers the
+    // first ROW; a page that wants somewhere else declares it (below).
     const root = page(`
       <div tabindex="0" id="connection">Connection</div>
       <div tabindex="0" id="last-sync">Last sync</div>
@@ -96,6 +96,42 @@ describe("firstBodyStop", () => {
     `);
 
     expect(firstBodyStop(root)?.id).toBe("connection");
+  });
+});
+
+describe("pageEntryStop", () => {
+  it("opens inside the area the page declared, not at its first row", () => {
+    // Main's shape: three stating rows, a notice carrying an action, and the
+    // menu under both. Neither "the first row" nor "the first button" answers
+    // Sync — the row rule lands on Connection and a button rule would land on
+    // whichever notice happens to be showing.
+    const root = page(`
+      <div tabindex="0" id="connection">Connection</div>
+      <button id="notice-action">Fix it</button>
+      <div ${ENTRY_STOP_ATTR}><button id="menu-sync">Sync</button></div>
+      <button id="menu-library">Library</button>
+    `);
+
+    expect(pageEntryStop(root)?.id).toBe("menu-sync");
+  });
+
+  it("falls back to the first stop of the body where the page declares nothing", () => {
+    // Every page but Main, and the reason the router keeps one call: Settings,
+    // Data Management and Downloads each lead with their Back row.
+    const root = page(`<button id="back">Back</button><div tabindex="0" id="row">Log level</div>`);
+
+    expect(pageEntryStop(root)?.id).toBe("back");
+  });
+
+  it("falls back where the declared area holds nothing focus can land on", () => {
+    // The declaration is trusted rather than validated, so what a mis-aimed one
+    // costs is the placement it would have had, never a page opening nowhere.
+    const root = page(`
+      <button id="back">Back</button>
+      <div ${ENTRY_STOP_ATTR}><button id="dead" disabled>Sync</button></div>
+    `);
+
+    expect(pageEntryStop(root)?.id).toBe("back");
   });
 });
 

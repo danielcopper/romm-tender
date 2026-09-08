@@ -4,10 +4,15 @@
  *
  * Steam's gamepad navigation keeps a focus pointer across a page swap and
  * resolves it on the next input — onto whatever sits at the old page's
- * position — so a newly mounted page has to claim focus itself. Two callers do,
- * on the same delay and by the same rule: the wide-page frame for its own body
- * (`src/components/qam/WidePage.tsx`), and the panel's router for the narrow
- * pages that place none of their own (`src/index.tsx`).
+ * position — so a newly mounted body has to claim focus itself. Three callers
+ * do, on the same delay: the wide-page frame for its own body
+ * (`src/components/qam/WidePage.tsx`), the Sync page's run view for the body it
+ * swaps in mid-page (`src/components/sync/RunPanel.tsx`), and the panel's router
+ * for the pages that place none of their own (`src/index.tsx`).
+ *
+ * The first two take {@link firstBodyStop} as it stands. The router takes
+ * {@link pageEntryStop}, which lets the page it has just mounted name the area
+ * focus belongs in and otherwise answers exactly the same thing.
  */
 
 /**
@@ -44,10 +49,12 @@ const ENTRY_STOPS = FOCUS_STOP_SHAPES.map((shape) => `${shape}:not([disabled])`)
  * On a wide list-and-detail page whose list rows carry no control of their own,
  * the first button in the body is in the DETAIL pane, so a button-first rule
  * opens the page somewhere inside the detail and moves as the detail's content
- * changes. On a narrow page the same rule fails from the other end: Main's
- * status rows state rather than act, so its first button is the menu at the very
- * bottom of the panel and a button-first rule opens the page with the status it
- * leads with already scrolled off the top.
+ * changes. On a narrow page the same rule fails from the other end: a status row
+ * states rather than acts and stays focusable all the same, so the first BUTTON
+ * is whatever action happens to be on screen — a notice's own button, or the
+ * menu at the very bottom of the panel — so where the page opened would depend
+ * on which condition was showing. A page wanting somewhere other than its first
+ * row says so ({@link ENTRY_STOP_ATTR}) rather than being guessed at.
  *
  * Innermost, because a container `Focusable` carries `tabindex="0"` of its own
  * and precedes in document order every row it wraps: taking the first match
@@ -69,10 +76,47 @@ export function firstBodyStop(root: ParentNode): HTMLElement | null {
 }
 
 /**
+ * Marks the part of a page entry focus belongs in — a declaration, read by the
+ * panel's router (`src/index.tsx`) and by nothing else.
+ *
+ * It is the other half of `WidePage`'s `OWNS_ENTRY_FOCUS_ATTR` rather than a
+ * second spelling of it, which is why it is a second attribute: that one tells
+ * the router to place NOTHING, because the page places its own; this one tells
+ * it WHERE. Carrying both would ask the router to honour a declaration it has
+ * already been told to stay out of, and no page carries both.
+ *
+ * It names an AREA, not the stop: {@link firstBodyStop} still picks the element
+ * inside it, so one rule decides which node takes focus wherever focus is
+ * placed. The area is trusted rather than validated — a declaration around
+ * nothing focusable falls back to the body, which is where the page would have
+ * opened anyway.
+ */
+export const ENTRY_STOP_ATTR = "data-romm-entry-stop";
+
+/**
  * Long enough to land after Steam has finished mounting the page and resolving
  * its own focus pointer. The same 50 ms the scroll helpers use.
  */
 export const ENTRY_FOCUS_DELAY_MS = 50;
+
+/**
+ * The stop the panel's router opens a page on: inside the page's own
+ * declaration where it makes one, and the first stop of the whole body
+ * otherwise.
+ *
+ * Main is the only page that declares one, on the menu's Sync entry — its three
+ * status rows act on nothing, so opening on the first of them spends the
+ * reader's first press moving to what they came for. The cost of that is
+ * Steam's: it scrolls the focused element into view, so on a Main tall enough to
+ * scroll the panel opens part-way down. Stated in
+ * `docs/architecture/qam-panel.md`, section Main, and deliberately not defended
+ * against here — a rule that opened somewhere else depending on what is on
+ * screen is the thing this declaration replaced.
+ */
+export function pageEntryStop(root: ParentNode): HTMLElement | null {
+  const declared = root.querySelector<HTMLElement>(`[${ENTRY_STOP_ATTR}]`);
+  return (declared === null ? null : firstBodyStop(declared)) ?? firstBodyStop(root);
+}
 
 /**
  * Put entry focus on the stop `findStop` picks out of `root`, and answer whether

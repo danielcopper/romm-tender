@@ -42,7 +42,7 @@ import {
   usePendingPreview,
 } from "../../utils/pendingPreviewStore";
 import { PREVIEW_COUNTDOWN_TICK_MS, previewHasChanges, previewSecondsLeft } from "../../utils/previewState";
-import { useRunUnits, type RunUnit } from "../../utils/runUnitsStore";
+import { clearRunUnits, useRunUnits, type RunUnit } from "../../utils/runUnitsStore";
 import { previewApplySeconds } from "../../utils/syncEstimate";
 import { getSyncProgress, setSyncProgress as setStoredSyncProgress } from "../../utils/syncProgress";
 import {
@@ -54,6 +54,7 @@ import {
 import { syncResumeState, type SyncResumeState } from "../../utils/syncResume";
 import { isTerminalStage, useSyncRunView, type SyncRunView } from "../../utils/syncRunView";
 import {
+  getSyncStatsSnapshot,
   refreshSessionBudget,
   refreshSessionBudgetAfterChange,
   refreshSyncStats,
@@ -127,6 +128,31 @@ export interface SyncPageState {
   cancelRun: () => void;
   setSkipPreview: (value: boolean) => void;
   forceFullSync: () => void;
+}
+
+/**
+ * Discard the previous run's per-unit rows, unless the press this is called from
+ * CONTINUES that run.
+ *
+ * The rows are only ever replaced by a plan, and a plan arrives late (after
+ * `build_work_queue()`) on the two apply paths and never at all on the preview
+ * path — so from the press onwards the run view shows another run's units, its
+ * `done` rows carrying that run's apply results and its interrupted unit dressed
+ * as running by the frames of THIS one. A resume is the one start those rows are
+ * still true for: they are the progress it continues from.
+ *
+ * **Nothing on the wire tells the two apart.** A resume is a new run with a new
+ * id and the backend has no resume concept — what carries one is the per-unit
+ * skip gate, a fetch-time decision — so the discriminator is the frontend's own
+ * reading at the press, the same one that names the button the reader pressed.
+ * Read from the store rather than from the render because the three callbacks
+ * that ask are `useCallback(…, [])` and close over nothing. A stats read still
+ * in flight answers `false` and clears, which is the safe direction: a resume
+ * pressed that early shows the frame's fine-detail line for the pre-plan window
+ * instead of its own frozen rows.
+ */
+function clearRunUnitsUnlessResuming(): void {
+  if (!syncResumeState(getSyncStatsSnapshot()).canResume) clearRunUnits();
 }
 
 /** Which of this page's buttons the session-budget card should name. */
@@ -215,6 +241,7 @@ export function useSyncPage(): SyncPageState {
         logError(`Failed to discard the pending preview before refreshing it: ${e}`);
       }
     }
+    clearRunUnitsUnlessResuming();
     // The kind is stamped on the optimistic frame as well as claimed by the
     // backend, so Main's slot names the run from its first paint rather than
     // reading as "not established" for the round trip. The backend states it
@@ -287,6 +314,7 @@ export function useSyncPage(): SyncPageState {
     setStatus(null);
     setCancellingRunId(null);
     setBusy(true);
+    clearRunUnitsUnlessResuming();
     setStoredSyncProgress({
       running: true,
       stage: "applying",
@@ -403,6 +431,7 @@ export function useSyncPage(): SyncPageState {
     setStatus(null);
     resetSyncCancel();
     setCancellingRunId(null);
+    clearRunUnitsUnlessResuming();
     setStoredSyncProgress({ running: true, stage: "fetching", message: "Fetching library...", runKind: "apply" });
     try {
       await reconcileStaleShortcuts();

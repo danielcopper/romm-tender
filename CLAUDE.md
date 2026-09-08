@@ -279,6 +279,21 @@ Format: **invariant** — tier — enforced by.
   is doing, and Main then tells the reader a real apply run is merely checking for changes. Why the kind cannot be
   derived at all is stated at `domain/sync_run_kind.py` and in `docs/architecture/qam-panel.md`'s Main section; do not
   restate it here
+- **A press that starts a run clears the previous run's per-unit rows — unless that press is a RESUME, the one start
+  they are still true for** — test + prompt-only — `src/components/SyncPage.test.tsx`'s "a previous run's rows at the
+  next press" pins all three start paths in both directions, and `src/utils/runUnitsStore.test.ts` pins the clear
+  itself. **The rule spans three modules and nothing joins them.** `utils/runUnitsStore.ts` holds the rows and offers
+  `clearRunUnits`; `useSyncPage` decides, at each of the three presses that write an optimistic frame (`computePreview`,
+  `applyPreview`, `startRunDirectly` — the same three the entry above names); and `index.tsx`'s `sync_plan` listener is
+  the only OTHER thing that ever replaces the rows, which is what makes the press the moment that matters. The plan
+  arrives after `build_work_queue()` on the two apply paths and never at all on the preview path, so a fourth start path
+  that forgets the clear leaves the previous run's `done` rows — with its apply results, and with the unit it died in
+  dressed as running by this run's frames — standing over the new run for the length of a work-queue build, or for the
+  whole of it. The store's own guards cannot help: they REFUSE a foreign frame, and refusing is not clearing. The
+  discriminator can be nothing but the frontend's `syncResumeState(stats).canResume` at the press, because a resume is a
+  new run with a new id and the backend has no resume concept at all — no frame, kind or id tells the two apart. Both
+  directions fail in silence: forget the clear and another run's rows read as this run's progress, clear on a resume and
+  the one start whose rows are true loses them
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py` pins the adapter's degradation (a
   raising resolver, a missing installation, an answer with no root all come back with `resolved` clear, never as an

@@ -18,7 +18,10 @@
  * control. It is also the only place a controller can reach it from — a region
  * scrolls by moving focus and the stick walks the rows one at a time, so a
  * button under a sixteen-unit plan is sixteen presses away, which is what a
- * device round measured before it moved up here.
+ * device round measured before it moved up here. It is where focus lands when
+ * this body takes the column, too: the pane claims it on mount by the frame's
+ * own entry-focus rule, because the button that got the reader here unmounted
+ * with the body it was in.
  *
  * The unit list scrolls on its own, inside what is left of the column under the
  * bar and the button: a plan of fourteen platforms and three collections is
@@ -35,6 +38,7 @@ import { DialogButton, ProgressBar } from "@decky/ui";
 import type { RunUnit } from "../../utils/runUnitsStore";
 import { pluralize } from "../../utils/pluralize";
 import type { SyncProgress, SyncStage } from "../../types";
+import { ENTRY_FOCUS_DELAY_MS, firstBodyStop, placeEntryFocus } from "../../utils/entryFocus";
 import { offsetWithinScroller } from "../../utils/scrollHelpers";
 import { ButtonRow, FLAT_BUTTON, GREEN, MUTED, Muted, SECONDARY_FONT, SectionTitle } from "../qam/pane";
 import { ScrollRegion } from "../qam/ScrollRegion";
@@ -128,6 +132,24 @@ export const RunPanel: FC<{ state: SyncPageState }> = ({ state }) => {
   const pane = useRef<HTMLDivElement | null>(null);
   const running = state.units.find((unit) => unit.state === "running");
   const runningTestId = running ? unitTestId(running) : null;
+  // Claim focus for the body that has just taken the column. The button the
+  // reader pressed to get here — Apply Sync, or the start button on the idle
+  // body — went with the body it was in, and Steam's navigation keeps a focus
+  // pointer across the swap and resolves it onto whatever now sits at that
+  // position, so the reader is left holding nothing. The frame's own rule,
+  // scoped to this pane: the first stop in it that holds no stop of its own,
+  // which is Cancel Sync — every row below it is a stop too, so what puts the
+  // rule on the button is the button being first, the same ordering the pane is
+  // laid out for. On the mount ALONE, which is the swap: a run re-renders per
+  // frame and none of those is a moment to move the reader.
+  useEffect(() => {
+    const root = pane.current;
+    if (root === null) return;
+    // The frame's own delay, for its reason: Steam resolves that retained
+    // pointer after the mount, and a focus placed before it is taken back.
+    const timer = setTimeout(() => placeEntryFocus(root, firstBodyStop), ENTRY_FOCUS_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, []);
   useEffect(() => {
     const root = pane.current;
     if (root === null || runningTestId === null) return;

@@ -58,7 +58,7 @@ import { resetPendingPreviewStoreForTests, adoptPreview, clearPendingPreview } f
 import { showModal } from "@decky/ui";
 import * as syncManager from "../utils/syncManager";
 import * as connectionState from "../utils/connectionState";
-import { firstBodyStop, placeEntryFocus } from "../utils/entryFocus";
+import { firstBodyStop, pageEntryStop, placeEntryFocus } from "../utils/entryFocus";
 import type {
   MigrationStatus,
   SaveSortMigrationStatus,
@@ -495,23 +495,42 @@ describe("MainPage", () => {
       expect(container.querySelectorAll('[data-testid="block-separator"]')).toHaveLength(1);
     });
 
-    it("opens on Connection — the first status row — and not on the menu below it", async () => {
+    // happy-dom has no gamepad and no nav tree, so what these two pin is the
+    // CHOICE of element. That the reader sees the ring on it, and what Steam
+    // scrolls to bring it into view, is the device round's to settle.
+    it("opens on the menu's Sync entry rather than the status row the body starts with", async () => {
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
 
       // The router's rule, run over exactly what it is handed: the plugin's own
       // content, with Decky's panel title and back arrow outside it.
-      expect(placeEntryFocus(container, firstBodyStop)).toBe(true);
+      expect(placeEntryFocus(container, pageEntryStop)).toBe(true);
 
       const focused = document.activeElement as HTMLElement | null;
-      expect(focused?.querySelector('[data-testid="field-label"]')?.textContent).toBe("Connection");
-      // Non-vacuous: Main's status rows act on nothing, so its first BUTTON is
-      // below every one of them — the menu at the bottom of the panel. That is
-      // where a button-first rule opened it, with the whole status block
-      // scrolled off the top.
-      const firstButton = container.querySelector("button");
-      expect(firstButton).not.toBeNull();
-      expect(focused?.compareDocumentPosition(firstButton!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(focused?.tagName).toBe("BUTTON");
+      expect(focused?.textContent).toBe("Sync");
+      // Non-vacuous, and the whole reason the entry is declared rather than
+      // found: the body's own first stop is a status row that acts on nothing,
+      // so opening there spends the reader's first press on a move.
+      expect(firstBodyStop(container)?.querySelector('[data-testid="field-label"]')?.textContent).toBe("Connection");
+    });
+
+    it("opens there with a notice's own button on screen, which no button-first rule could", async () => {
+      // Main's first BUTTON depends on which condition is showing, so a
+      // button-first rule would open the panel on the save-sort notice today
+      // and somewhere else tomorrow.
+      currentSaveSortState = { pending: true, saves_count: 3 };
+      vi.mocked(backend.refreshMigrationState).mockResolvedValue({
+        retrodeck: { pending: false },
+        save_sort: { pending: true, saves_count: 3 },
+      });
+      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+
+      const noticeButton = buttonByExactText(container, "Go to Settings");
+      expect(noticeButton).not.toBeNull();
+      expect(container.querySelector("button")).toBe(noticeButton);
+      expect(pageEntryStop(container)?.textContent).toBe("Sync");
     });
   });
 
