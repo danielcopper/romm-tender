@@ -3,18 +3,24 @@
 The vendored `emu-atlas <https://github.com/danielcopper/emu-atlas>`_ resolver
 discovers what it can, states plainly where it found nothing, and takes what a
 host hands over ahead of anything it found. A grant is **process-global** — one
-running program, one answer — so it belongs to none of the three atlas seams:
-:mod:`adapters.atlas_firmware`, :mod:`adapters.atlas_catalogue` and
-:mod:`adapters.atlas_saves` all read through whatever was granted, and no one of
-them owns it. This module is where those grants are made, once, before the first
-atlas adapter is built.
+running program, one answer — so it belongs to none of the three modules that
+import the resolver: :mod:`adapters.atlas_firmware`,
+:mod:`adapters.atlas_catalogue` and :mod:`adapters.atlas_saves` put their
+questions to whatever was granted, and which of them a given grant actually
+reaches is a property of the grant rather than of the module. The one below is
+read by a single question in :mod:`adapters.atlas_saves` and by nothing else.
 
 One grant today, and the shape is the reason it has a module of its own rather
 than a corner of one of those three: ``py_modules/_vendor/README.md`` names
 ``backports.zstd`` as the next package expected under ``_vendor/``, and the codec
-it carries reaches the resolver through ``register_zstd_provider`` — the same
-process-global slot, granted the same way, at the same point in the wiring. It
-lands here.
+it carries reaches the resolver through ``register_zstd_provider`` — a different
+process-global slot of the same kind (``squashfs._registered_provider`` beside
+``machine._registered_interpreter``), granted the same way, at the same point in
+the wiring, and read by all three of those modules, since each of them reaches a
+detection. It lands here.
+
+This module is where those grants are made, once, before the first atlas adapter
+is built.
 """
 
 from __future__ import annotations
@@ -49,8 +55,10 @@ def grant_core_probe_interpreter() -> str:
     the log at the wiring site — and that site is ``bootstrap/``, which may not
     hold a ``_vendor`` type (only adapters import ``_vendor.*``). It names the
     interpreter a probe would run under and where that came from, including the
-    case where a probe would start nothing at all: this grant is silent when it
-    is missing, so the log line is the only place its absence is visible.
+    case where a probe would start nothing at all: the caveats a missing grant
+    leaves do reach the debug log and the wire, but the log line is the only
+    place their **cause** is named, and "no interpreter" and "the core would not
+    load" are the same caveat everywhere else.
     """
     if _is_spawnable_file(_HOST_INTERPRETER):
         register_core_probe_interpreter(_HOST_INTERPRETER)
@@ -64,8 +72,8 @@ def grant_core_probe_interpreter() -> str:
 def _is_spawnable_file(path: str) -> bool:
     """Is *path* an existing file this process could hand to the operating system?
 
-    ``isfile`` follows symlinks, which ``/usr/bin/python3`` is on every
-    arrangement measured, and the execute bit is the difference between a path
-    that runs and one the spawn refuses.
+    ``isfile`` follows symlinks, which ``/usr/bin/python3`` is on the one
+    machine this was measured on, and the execute bit is the difference between
+    a path that runs and one the spawn refuses.
     """
     return os.path.isfile(path) and os.access(path, os.X_OK)

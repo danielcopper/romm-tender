@@ -42,7 +42,7 @@ reasoning is in [ADR-0031](../adr/0031-a-save-is-answered-by-the-emulator-that-w
 ## The answer is per ROM, never per platform
 
 **The answer turns on the content file's own extension**, so it is a property of the ROM and not of its system. Measured
-on a stock RetroDECK at emu-atlas 0.13.0:
+on a stock RetroDECK at emu-atlas 0.14.0:
 
 | System     | Content | Answer                                              |
 | ---------- | ------- | --------------------------------------------------- |

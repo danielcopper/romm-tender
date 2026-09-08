@@ -131,14 +131,19 @@ locally with `mise run docs`.
   test passes.
 - **A vendored package's assumptions about the runtime it loads in are invisible to every check here**: nothing in this
   repo's toolchain runs Decky Loader's frozen Python, so vendoring or bumping anything under `_vendor/` is a device-test
-  trigger, and what it risks is the plugin not loading at all rather than one feature misbehaving —
-  [`.claude/rules/vendored-assets.md`](.claude/rules/vendored-assets.md). One such assumption is answered by a **grant
-  this repo makes and nothing enforces**: `adapters/atlas_host.py` hands the resolver an interpreter for its core probe,
-  because frozen, `sys.executable` is the loader binary rather than a Python. Removing or forgetting the grant fails
-  nothing — atlas simply stops probing, every core answers `core-unqueryable`, a core whose save behaviour it holds on
-  record loses it (`core-generation-unestablished`), and the save answer then establishes nothing and names no file, so
-  every sync path refuses. Green suite, green gate, inert feature: `bootstrap/adapters.py` logs which interpreter a
-  probe would run under because that line is the only place the loss is visible.
+  trigger, and what it risks is not confined to load — the plugin may fail to come up at all, or a question may reach
+  the assumption later and do its damage then: the spawn shape the grant below answers took the whole Steam UI down at
+  the first save question — [`.claude/rules/vendored-assets.md`](.claude/rules/vendored-assets.md). That assumption is
+  answered by a **grant this repo makes and nothing enforces**: `adapters/atlas_host.py` hands the resolver an
+  interpreter for its core probe, because frozen, `sys.executable` is the loader binary rather than a Python. Removing
+  or forgetting the grant fails nothing — atlas probes no core, so every core it is asked about comes back unknown, and
+  the one question this plugin puts that reaches the probe degrades: a **libretro** entry's save answer, which loses the
+  core's recorded save behaviour (`core-generation-unestablished`, `core-unqueryable`) and then usually establishes
+  nothing and names no file. Usually, not always — an answer that comes from a per-game override still names its files —
+  and a standalone emulator's save answer never probes at all, so what is lost is a subset nothing counts. Green suite,
+  green gate, quietly poorer answers: `bootstrap/adapters.py` logs which interpreter a probe would run under because
+  that line is the only place the **cause** is named — the caveat itself reaches the debug log and the wire, but nothing
+  in it separates "no interpreter" from "the core would not load".
 
 ## Current State
 

@@ -523,9 +523,8 @@ class MigrationService:
         """
         for dirpath, _dirs, filenames in self._migration_file_store.walk_files(old_saves):
             rel_dir = os.path.relpath(dirpath, old_saves)
-            # Skip any descendant of a hidden directory by inspecting the
-            # relative-path segments. ``rel_dir == "."`` for the saves
-            # root itself, which is never hidden.
+            # ``rel_dir == "."`` for the saves root itself, which is never
+            # hidden.
             if rel_dir != "." and any(part.startswith(".") for part in rel_dir.split(os.sep)):
                 continue
             for fname in filenames:
