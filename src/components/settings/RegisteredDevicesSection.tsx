@@ -6,8 +6,10 @@
  * Three facts per row, so three columns with a header row rather than a label
  * and a description carrying all of them — `docs/architecture/qam-panel.md`,
  * "Building blocks → Tables". The device's OS and the head of its id are
- * deliberately not among them: the OS is the same value on every row a Deck
- * will ever show, and the id only separates two devices that share a name.
+ * deliberately not among them: `register_device` passes a hardcoded
+ * `platform="linux"` (`services/saves/sync_engine/devices.py`), so the OS
+ * column would repeat one value down every row this plugin registers, and the
+ * id only separates two devices that share a name.
  *
  * Every device row is a focus stop and the header is not: a wide pane scrolls
  * only by moving focus, so a group with no stop in it is a group nobody can
@@ -23,9 +25,23 @@ import { MUTED, SECONDARY_FONT } from "../qam/pane";
 import { formatRelativeTime } from "./helpers";
 
 // The name is the column with something to say, so it takes what the other two
-// leave. `Client` is sized for "tender v0.32.0" and `Last seen` for the longest
-// thing `formatRelativeTime` answers.
-const TABLE_COLUMNS = "1fr 104px 72px";
+// leave.
+//
+// `Client` is sized for the string THIS plugin registers itself under, which is
+// what every row a Deck shows will carry: `register_device` passes
+// `client="decky-romm-sync"` with the plugin version
+// (`services/saves/sync_engine/devices.py`), so the cell reads
+// `decky-romm-sync v0.32.0` — 23 characters, not the 14 of a shorter name. At
+// the 11px these cells are set in that measures 131px in Noto Sans and 143px in
+// DejaVu Sans; the device renders it in Steam's own Motiva Sans, which is on
+// neither this machine nor any check here, so the track takes the wider of the
+// two plus room for a three-digit minor version. Under-sizing it clips the
+// VERSION, which is the only part of the column that differs between rows.
+//
+// `Last seen` holds `just now` at 44px — the longest thing `formatRelativeTime`
+// answers, the rest being `59m ago`, `23h ago`, `15 Jun`, `unknown` and
+// `never`.
+const TABLE_COLUMNS = "1fr 144px 72px";
 
 /** The three properties that make a cell clip instead of spilling across the
  *  track beside it, plus the floor reset that lets it shrink at all. They belong
