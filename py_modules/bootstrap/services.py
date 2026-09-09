@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from typing import Any
 
     from models.data_location import UserDataLocations
+    from models.shortcut_launcher import ShortcutLauncher
 
     from services.protocols import InstalledRomRemoverFn, SiblingSupersedeFn
 
@@ -69,7 +70,10 @@ class WiringConfig:
     same reason: it is what the start-up migration settled, not a seam
     anything calls, and it is the ONLY place the user's data directory
     is read from — ``runtime.runtime_dir`` is Decky's own directory and
-    answers a different question.
+    answers a different question. ``launcher`` sits beside it for the
+    same reason and is derived from that same data directory: it says
+    where the launcher a Steam shortcut runs through lives, and whether
+    this start got it there.
     """
 
     adapters: AdapterBundle
@@ -78,6 +82,7 @@ class WiringConfig:
     callbacks: CallbackBundle
     min_required_version: tuple[int, ...]
     locations: UserDataLocations
+    launcher: ShortcutLauncher
 
 
 def wire_services(cfg: WiringConfig) -> dict[str, Any]:
@@ -273,6 +278,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
             loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
             plugin_dir=cfg.runtime.plugin_dir,
+            launcher_exe=cfg.launcher.path,
             emit=cfg.runtime.emit,
             clock=cfg.runtime.clock,
             uuid_gen=cfg.runtime.uuid_gen,

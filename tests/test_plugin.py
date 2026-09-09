@@ -138,6 +138,7 @@ def plugin():
             loop=asyncio.get_event_loop(),
             logger=decky.logger,
             plugin_dir=decky.DECKY_PLUGIN_DIR,
+            launcher_exe=f"{decky.DECKY_PLUGIN_RUNTIME_DIR}/bin/rom-launcher",
             emit=decky.emit,
             clock=FakeClock(),
             uuid_gen=FakeUuidGen(),
@@ -829,6 +830,13 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # pending; that the card actually gets there is pinned in
     # src/components/MigrationBlockedPage.test.tsx, not by this whitelist entry.
     "get_legacy_install_notice",
+    # Where the shortcut launcher lives — a read of what the start already
+    # settled, touching neither RetroDECK state nor the disk. It has to answer
+    # while a migration is pending for the same reason as the notice above: the
+    # frontend points the shortcuts at the launcher at plugin load, whatever page
+    # the panel happens to be showing, and a shortcut left naming a file inside
+    # the plugin folder is the condition that card exists to warn about.
+    "get_shortcut_launcher",
     # Where the plugin's OWN data lives — the notice, the two candidates behind
     # it, and the answer. None of the three touches RetroDECK state. The notice
     # reads nothing at all: it hands back what the start already decided. The
@@ -1069,6 +1077,7 @@ class TestMainStartupOrdering:
             StateBundle,
         )
         from models.data_location import UserDataLocations
+        from models.shortcut_launcher import ShortcutLauncher
 
         from main import Plugin
 
@@ -1199,6 +1208,7 @@ class TestMainStartupOrdering:
                 choice_required=False,
                 failure=None,
             ),
+            launcher=ShortcutLauncher(path="/fake/data/bin/rom-launcher", installed=True),
         )
 
         with (

@@ -1996,7 +1996,27 @@ empty new root while the data sits in a source is the one outcome that would be 
 **Two directories, two questions.** `RuntimeBundle.runtime_dir` stays the **Decky-assigned** runtime directory and is
 not where data lives: `LegacyInstallService` asks it about Decky's own layout (is the pre-rename plugin folder still
 beside ours), which is answered by taking its parent. Everything that follows the data reads `WiringConfig.locations`
-instead — the cover cache, the SteamGridDB artwork cache, the prune artifact store, and the persistence adapter.
+instead — the cover cache, the SteamGridDB artwork cache, the prune artifact store, the persistence adapter, and the
+launcher's home below.
+
+### The launcher's home
+
+`<data root>/bin/rom-launcher` is the file every Steam shortcut's `exe` names, and `bootstrap()` puts this release's
+copy there on **every** start, right after the migration above and before anything opens the database
+([ADR-0032](../adr/0032-shortcuts-are-rewritten-in-place.md)). `adapters/launcher_install.py` owns the write;
+`domain/user_data_location.py::launcher_path` owns where it goes, and answers for the shipped copy under the plugin
+folder as well, so the two components that make up `/bin/rom-launcher` have one spelling.
+
+The reason it left the plugin folder is that Decky deletes that folder whole before unpacking an update. The reason it
+is written on every start rather than once is that a launcher installed once would freeze at whatever version the day of
+the move brought. The reason it is written through a staging file that is renamed on — never in place — is that a game
+running right now is executing that file, and bash reads a script as it runs it.
+
+An install that cannot be done is reported, never raised: `ShortcutLauncher.installed` carries whether the file is
+really at `ShortcutLauncher.path`, and the two are separate answers on purpose. The **path** is what a newly built
+shortcut is given whatever happened, because a library split across two launcher paths is a state nothing later could
+tell apart. The **installed** flag is what an existing shortcut may be rewritten on, because pointing one at a launcher
+nothing put there stops its game from starting and no part of this plugin could put it back.
 
 **The choice the plugin will not make.** Two libraries is the one case with no safe automatic answer, so the panel
 raises a notice whose button opens a modal showing both candidates with their path, size and last-changed date. The
@@ -2016,12 +2036,13 @@ only — consumers write `from bootstrap import …` and never deep-import a sub
    and loads + migrates `settings.json` (folding in the one-time legacy `save_sync_state.json` settings) so the settings
    persister binds the live mutable `settings` dict at construction. Returns a typed `BootstrapResult` carrying four
    bundles (`adapters`, `stores`, `callbacks`, `runtime_adapters`), a small `handles` struct for Plugin-only outputs,
-   and `locations` — the two directories the migration settled on. The bundle dataclasses are defined here too — they
-   are the vocabulary the second half consumes.
+   `locations` — the two directories the migration settled on — and `launcher`, where the shortcut launcher lives
+   beneath the data half and whether this start got it there. The bundle dataclasses are defined here too — they are the
+   vocabulary the second half consumes.
 
 2. **`services.py`** — owns `WiringConfig` and `wire_services()`, which takes the four bundles plus
-   `min_required_version` and `locations`, and constructs every service, injecting each one's `*ServiceConfig`. Returns
-   a dict of named service instances.
+   `min_required_version`, `locations` and `launcher`, and constructs every service, injecting each one's
+   `*ServiceConfig`. Returns a dict of named service instances.
 
 The two-phase split exists because adapter instantiation and state loading happen first (`bootstrap()`), then `main.py`
 composes the runtime bundle (event loop, `decky.emit`) and calls `wire_services()`. Services receive the `settings` dict

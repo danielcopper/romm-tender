@@ -5,6 +5,7 @@ import {
   getExistingRomMShortcuts,
   getLiveRomMShortcutAppIds,
   removeShortcutConfirmedOutcome,
+  scanRomMShortcutExes,
   setLaunchOptionsConfirmed,
 } from "./steamShortcuts";
 import type { SyncAddItem } from "../types";
@@ -189,6 +190,41 @@ describe("getLiveRomMShortcutAppIds", () => {
     const result = await getLiveRomMShortcutAppIds();
     expect(result).toEqual([10, 20]);
     expect(mapSpy).not.toHaveBeenCalled();
+  });
+
+  it("carries each of our shortcuts' current exe, which no app overview holds", async () => {
+    const exeByAppId: Record<number, string> = {
+      10: ROM_LAUNCHER,
+      20: "/home/deck/.local/share/romm-tender/bin/rom-launcher",
+      30: "/usr/bin/some-other-game",
+    };
+    const { fn } = makeRegisterForAppDetails((appId) => ({ strShortcutExe: exeByAppId[appId] ?? "" }));
+    vi.stubGlobal("SteamClient", { Apps: { RegisterForAppDetails: fn } });
+    vi.stubGlobal("collectionStore", {
+      deckDesktopApps: {
+        apps: new Map([
+          [10, {}],
+          [20, {}],
+          [30, {}],
+        ]),
+      },
+    });
+
+    const result = await scanRomMShortcutExes();
+
+    expect(result).toEqual(
+      new Map([
+        [10, ROM_LAUNCHER],
+        [20, "/home/deck/.local/share/romm-tender/bin/rom-launcher"],
+      ]),
+    );
+  });
+
+  it("returns null from the exe scan too when the store is unreadable", async () => {
+    vi.stubGlobal("SteamClient", { Apps: { RegisterForAppDetails: vi.fn() } });
+    vi.stubGlobal("collectionStore", undefined);
+
+    await expect(scanRomMShortcutExes()).resolves.toBeNull();
   });
 
   it("returns null when collectionStore is undefined (scan could not run)", async () => {

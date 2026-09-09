@@ -101,8 +101,12 @@ locally with `mise run docs`.
   in the apply loop.
 - **Shortcut appId is assigned, not derived**: Steam assigns it at creation and it is stable for the shortcut's
   lifetime; the plugin records it in `roms.shortcut_app_id` and detects ownership by the exe path. Never re-derive it
-  (the `CRC32(exe + appName)` formula is disproven). `launchOptions`/`startDir` changes are appId-safe; **exe/name**
-  changes require delete + recreate.
+  (the `CRC32(exe + appName)` formula is disproven). `launchOptions`, `startDir` **and `exe`** changes are all
+  appId-safe: all three are `Set*` calls on an existing shortcut, and rewriting the `exe` of every one of a 826-shortcut
+  library kept every appId — verified against a `shortcuts.vdf` backup taken before the rewrite (0 new, 0 lost, names
+  unchanged). The **name** is the one that has never been measured: the sync writes it in place too
+  (`rewriteShortcutIdentity`), and nothing has established what that does to the appId — do not read the exe measurement
+  as covering it.
 - **Frontend API**: `@decky/ui` + `@decky/api` (NOT deprecated `decky-frontend-lib`). Use `callable()` (NOT
   `ServerAPI.callPluginMethod()`).
 - **Decky callables must be async**: Even if the body is synchronous, Decky's callable framework requires `async def`.
@@ -203,15 +207,18 @@ Format: **invariant** — tier — enforced by.
   `scripts/check_settings_owner.py`
 - **Where the user's data lives is read only from `WiringConfig.locations`; `RuntimeBundle.runtime_dir` is the
   Decky-assigned directory and answers Decky's own layout question, nothing else** — prompt-only — the two are different
-  questions and each half of the mix-up is silent. Five call sites read the data root, all in `bootstrap/`: the
-  `db_path` the schema runner and the UoW factory open, `PersistenceAdapter`'s two arguments, `PruneArtifactAdapter`,
-  `SgdbArtworkCacheAdapter`, and `services.py`'s `cover_cache_dir`. One reads `runtime_dir`: `LegacyInstallService`,
-  which asks whether the pre-rename plugin folder still stands beside ours by taking that directory's PARENT. Hand it
-  `locations.data_dir` and it computes `~/.local/share/decky-romm-sync`, a directory Decky never created — the card's
-  second sentence goes quiet and nothing fails, which is exactly the card that keeps a user from removing the install
-  their every shortcut launches through. The other direction is worse and equally quiet: a new consumer of the data root
-  reaching for `runtime_dir` writes into Decky's tree, where the next release's folder name moves it. Nothing mechanical
-  tells the two apart — both are plain `str` fields on structs the composition root hands around
+  questions and each half of the mix-up is silent. Six call sites read the data root, all in `bootstrap/`: the `db_path`
+  the schema runner and the UoW factory open, `PersistenceAdapter`'s two arguments, `PruneArtifactAdapter`,
+  `SgdbArtworkCacheAdapter`, `services.py`'s `cover_cache_dir`, and the launcher's home
+  (`launcher_path(locations.data_dir)`, carried on as `ShortcutLauncher.path` and baked into every shortcut's `exe`) —
+  the one whose mix-up would be visible to the user rather than only to the next start, since a shortcut's `exe` names a
+  directory Decky renames. One reads `runtime_dir`: `LegacyInstallService`, which asks whether the pre-rename plugin
+  folder still stands beside ours by taking that directory's PARENT. Hand it `locations.data_dir` and it computes
+  `~/.local/share/decky-romm-sync`, a directory Decky never created — the card's second sentence goes quiet and nothing
+  fails, which is exactly the card that keeps a user from removing the install their every shortcut launches through.
+  The other direction is worse and equally quiet: a new consumer of the data root reaching for `runtime_dir` writes into
+  Decky's tree, where the next release's folder name moves it. Nothing mechanical tells the two apart — both are plain
+  `str` fields on structs the composition root hands around
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
 - **A library-sync seam is held only by the module owning the job it belongs to: `active_core` / `disc_resolver` by

@@ -85,6 +85,7 @@ def plugin():
             loop=asyncio.get_event_loop(),
             logger=decky.logger,
             plugin_dir=decky.DECKY_PLUGIN_DIR,
+            launcher_exe=f"{decky.DECKY_PLUGIN_RUNTIME_DIR}/bin/rom-launcher",
             emit=decky.emit,
             clock=FakeClock(),
             uuid_gen=FakeUuidGen(),

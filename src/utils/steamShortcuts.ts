@@ -85,23 +85,26 @@ export function setLaunchOptionsConfirmed(appId: number, value: string, timeoutM
 }
 
 /**
- * Scan Steam's live shortcut store and return the appIds of every RomM-owned
- * shortcut — those whose `strShortcutExe` ends with `/bin/rom-launcher` (the
- * live-in-Steam ownership marker), regardless of any backend binding.
+ * Scan Steam's live shortcut store and return every RomM-owned shortcut with the
+ * exe it currently carries — those whose `strShortcutExe` ends with
+ * `/bin/rom-launcher` (the live-in-Steam ownership marker), regardless of any
+ * backend binding.
  *
- * Returns the raw live appId list, or `null` when the scan could **not** run
- * because Steam's shortcut store was unreadable (`collectionStore` /
- * `deckDesktopApps.apps` absent). The `null`-vs-`[]` distinction is
- * load-bearing for reconcile: `[]` means "scan ran, found zero RomM shortcuts"
- * (a real signal — unbind everything), whereas `null` means "could not look"
- * (callers must NOT reconcile against it, or they'd unbind every binding on a
- * transiently-broken store).
+ * Returns `null` when the scan could **not** run because Steam's shortcut store
+ * was unreadable (`collectionStore` / `deckDesktopApps.apps` absent) — see
+ * {@link getLiveRomMShortcutAppIds} for why that is not the same answer as an
+ * empty map.
  *
  * Detection runs in parallel batches (RegisterForAppDetails is ~2s serial per
  * shortcut); a heartbeat every 10s keeps the backend's per-unit timeout from
- * cancelling a long scan over a large library.
+ * cancelling a long scan over a large library. The heartbeat is harmless
+ * outside a run: the backend only stamps a timestamp with it.
+ *
+ * The exe is the one thing an app **overview** cannot answer, which is why this
+ * costs a `RegisterForAppDetails` per shortcut — both ownership and the launcher
+ * path live in the details object alone.
  */
-export async function getLiveRomMShortcutAppIds(): Promise<number[] | null> {
+export async function scanRomMShortcutExes(): Promise<Map<number, string> | null> {
   if (typeof collectionStore === "undefined") return null;
 
   const deckApps = collectionStore.deckDesktopApps?.apps;
@@ -109,7 +112,7 @@ export async function getLiveRomMShortcutAppIds(): Promise<number[] | null> {
 
   const appIds = Array.from(deckApps.keys());
 
-  const ourAppIds: number[] = [];
+  const ours = new Map<number, string>();
   const CONCURRENCY = 10;
   let lastHeartbeat = Date.now();
   for (let i = 0; i < appIds.length; i += CONCURRENCY) {
@@ -118,7 +121,7 @@ export async function getLiveRomMShortcutAppIds(): Promise<number[] | null> {
       batch.map((appId) => getAppDetails(appId).then((details) => ({ appId, exe: details?.strShortcutExe ?? "" }))),
     );
     for (const { appId, exe } of entries) {
-      if (exe.endsWith(ROM_LAUNCHER_SUFFIX)) ourAppIds.push(appId);
+      if (exe.endsWith(ROM_LAUNCHER_SUFFIX)) ours.set(appId, exe);
     }
     if (Date.now() - lastHeartbeat > HEARTBEAT_INTERVAL_MS) {
       syncHeartbeat().catch(() => {});
@@ -126,7 +129,21 @@ export async function getLiveRomMShortcutAppIds(): Promise<number[] | null> {
     }
   }
 
-  return ourAppIds;
+  return ours;
+}
+
+/**
+ * The appIds of every RomM-owned shortcut, off that same one scan.
+ *
+ * Returns the raw live appId list, or `null` when the scan could **not** run.
+ * The `null`-vs-`[]` distinction is load-bearing for reconcile: `[]` means "scan
+ * ran, found zero RomM shortcuts" (a real signal — unbind everything), whereas
+ * `null` means "could not look" (callers must NOT reconcile against it, or
+ * they'd unbind every binding on a transiently-broken store).
+ */
+export async function getLiveRomMShortcutAppIds(): Promise<number[] | null> {
+  const ours = await scanRomMShortcutExes();
+  return ours === null ? null : Array.from(ours.keys());
 }
 
 /**

@@ -11,6 +11,10 @@ from domain.shortcut_data import (
     resolve_emulator_invocation,
 )
 
+# The launcher's home under the user's data root: what the composition root
+# hands the builder now that the launcher no longer lives in the plugin folder.
+_LAUNCHER = "/home/deck/.local/share/romm-tender/bin/rom-launcher"
+
 
 class TestResolveEmulatorInvocation:
     """Tests for resolve_emulator_invocation()."""
@@ -245,7 +249,6 @@ class TestBuildShortcutsData:
     """Tests for build_shortcuts_data()."""
 
     def test_builds_correct_format(self):
-        plugin_dir = "/home/deck/homebrew/plugins/decky-romm-sync"
         roms = [
             {
                 "id": 1,
@@ -259,7 +262,7 @@ class TestBuildShortcutsData:
             },
             {"id": 2, "name": "Game B", "platform_name": "SNES", "platform_slug": "snes"},
         ]
-        result = build_shortcuts_data(roms, plugin_dir, {1: "/roms/n64/gamea.z64"}, {})
+        result = build_shortcuts_data(roms, _LAUNCHER, {1: "/roms/n64/gamea.z64"}, {})
         assert len(result) == 2
         assert result[0]["rom_id"] == 1
         assert result[0]["name"] == "Game A"
@@ -270,23 +273,23 @@ class TestBuildShortcutsData:
         assert result[0]["sgdb_id"] == 200
         assert result[0]["ra_id"] == 300
         assert result[0]["cover_path"] == ""
-        assert result[0]["exe"] == os.path.join(plugin_dir, "bin", "rom-launcher")
-        assert result[0]["start_dir"] == os.path.join(plugin_dir, "bin")
+        assert result[0]["exe"] == _LAUNCHER
+        assert result[0]["start_dir"] == os.path.dirname(_LAUNCHER)
         assert result[1]["fs_name"] == ""
 
     def test_installed_rom_gets_launch_command(self):
         roms = [{"id": 1, "name": "Game A"}]
-        result = build_shortcuts_data(roms, "/plugin", {1: "/roms/n64/gamea.z64"}, {})
+        result = build_shortcuts_data(roms, _LAUNCHER, {1: "/roms/n64/gamea.z64"}, {})
         assert result[0]["launch_options"] == 'flatpak run net.retrodeck.retrodeck "/roms/n64/gamea.z64"'
 
     def test_installed_rom_path_with_spaces_is_quoted(self):
         roms = [{"id": 7, "name": "Spacey"}]
-        result = build_shortcuts_data(roms, "/plugin", {7: "/roms/dc/My Game.chd"}, {})
+        result = build_shortcuts_data(roms, _LAUNCHER, {7: "/roms/dc/My Game.chd"}, {})
         assert result[0]["launch_options"] == 'flatpak run net.retrodeck.retrodeck "/roms/dc/My Game.chd"'
 
     def test_uninstalled_rom_gets_empty_launch_options(self):
         roms = [{"id": 2, "name": "Game B"}]
-        result = build_shortcuts_data(roms, "/plugin", {}, {})
+        result = build_shortcuts_data(roms, _LAUNCHER, {}, {})
         assert result[0]["launch_options"] == ""
 
     def test_mixed_installed_and_uninstalled(self):
@@ -294,7 +297,7 @@ class TestBuildShortcutsData:
             {"id": 1, "name": "Installed"},
             {"id": 2, "name": "NotInstalled"},
         ]
-        result = build_shortcuts_data(roms, "/plugin", {1: "/roms/snes/installed.sfc"}, {})
+        result = build_shortcuts_data(roms, _LAUNCHER, {1: "/roms/snes/installed.sfc"}, {})
         assert result[0]["launch_options"] == 'flatpak run net.retrodeck.retrodeck "/roms/snes/installed.sfc"'
         assert result[1]["launch_options"] == ""
 
@@ -304,7 +307,7 @@ class TestBuildShortcutsData:
         # same empty launch command an un-downloaded ROM's does, never a command
         # composed around a bare "".
         roms = [{"id": 1, "name": "Sealed In A PKG"}]
-        result = build_shortcuts_data(roms, "/plugin", {1: ""}, {})
+        result = build_shortcuts_data(roms, _LAUNCHER, {1: ""}, {})
         assert result[0]["launch_options"] == ""
 
     def test_no_launch_target_beats_a_core_override(self):
@@ -312,14 +315,14 @@ class TestBuildShortcutsData:
         # system cannot boot — no ``-e`` form is composed either.
         roms = [{"id": 1, "name": "Sealed In A PKG"}]
         overrides = {1: EmulatorInvocation.libretro("pcsx_rearmed_libretro")}
-        result = build_shortcuts_data(roms, "/plugin", {1: ""}, overrides)
+        result = build_shortcuts_data(roms, _LAUNCHER, {1: ""}, overrides)
         assert result[0]["launch_options"] == ""
 
     def test_installed_rom_with_core_override_bakes_e_form(self):
         # A rom_id present in core_overrides bakes the -e override into its launch.
         roms = [{"id": 1, "name": "PSX Game"}]
         result = build_shortcuts_data(
-            roms, "/plugin", {1: "/roms/psx/game.chd"}, {1: EmulatorInvocation.libretro("pcsx_rearmed_libretro")}
+            roms, _LAUNCHER, {1: "/roms/psx/game.chd"}, {1: EmulatorInvocation.libretro("pcsx_rearmed_libretro")}
         )
         assert result[0]["launch_options"] == (
             "flatpak run net.retrodeck.retrodeck "
@@ -332,7 +335,7 @@ class TestBuildShortcutsData:
         roms = [{"id": 1, "name": "PS3 Game"}]
         result = build_shortcuts_data(
             roms,
-            "/plugin",
+            _LAUNCHER,
             {1: "/roms/ps3/game/PS3_GAME/USRDIR/EBOOT.BIN"},
             {1: EmulatorInvocation.standalone("%EMULATOR_RPCS3% --no-gui %ROM%")},
         )
@@ -345,7 +348,7 @@ class TestBuildShortcutsData:
         # A rom_id NOT in core_overrides follows the default — plain launch, no -e.
         roms = [{"id": 1, "name": "Plain"}]
         result = build_shortcuts_data(
-            roms, "/plugin", {1: "/roms/n64/g.z64"}, {2: EmulatorInvocation.libretro("other_libretro")}
+            roms, _LAUNCHER, {1: "/roms/n64/g.z64"}, {2: EmulatorInvocation.libretro("other_libretro")}
         )
         assert result[0]["launch_options"] == 'flatpak run net.retrodeck.retrodeck "/roms/n64/g.z64"'
         assert "-e" not in result[0]["launch_options"]
@@ -353,7 +356,7 @@ class TestBuildShortcutsData:
     def test_uninstalled_rom_with_override_still_empty(self):
         # An override on an UNINSTALLED rom can't bake — no path, empty placeholder.
         roms = [{"id": 1, "name": "NotDownloaded"}]
-        result = build_shortcuts_data(roms, "/plugin", {}, {1: EmulatorInvocation.libretro("pcsx_rearmed_libretro")})
+        result = build_shortcuts_data(roms, _LAUNCHER, {}, {1: EmulatorInvocation.libretro("pcsx_rearmed_libretro")})
         assert result[0]["launch_options"] == ""
 
     def test_empty_roms(self):
@@ -362,7 +365,7 @@ class TestBuildShortcutsData:
 
     def test_missing_optional_fields(self):
         roms = [{"id": 5, "name": "Minimal"}]
-        result = build_shortcuts_data(roms, "/plugin", {}, {})
+        result = build_shortcuts_data(roms, _LAUNCHER, {}, {})
         assert result[0]["rom_id"] == 5
         assert result[0]["platform_name"] == "Unknown"
         assert result[0]["platform_slug"] == ""
@@ -372,31 +375,29 @@ class TestBuildShortcutsData:
     def test_carries_fs_size_bytes_from_raw_rom(self):
         # The server-reported size (#1395) rides the built dict onto the commit.
         roms = [{"id": 1, "name": "Game A", "fs_size_bytes": 3_145_728}]
-        result = build_shortcuts_data(roms, "/plugin", {}, {})
+        result = build_shortcuts_data(roms, _LAUNCHER, {}, {})
         assert result[0]["fs_size_bytes"] == 3_145_728
 
     def test_missing_fs_size_bytes_is_none(self):
         # A raw ROM without the key builds None — "size unknown".
         roms = [{"id": 1, "name": "Game A"}]
-        result = build_shortcuts_data(roms, "/plugin", {}, {})
+        result = build_shortcuts_data(roms, _LAUNCHER, {}, {})
         assert result[0]["fs_size_bytes"] is None
 
     def test_exe_path_contains_rom_launcher(self):
-        plugin_dir = "/home/deck/homebrew/plugins/decky-romm-sync"
         roms = [{"id": 1, "name": "Game"}]
-        result = build_shortcuts_data(roms, plugin_dir, {}, {})
+        result = build_shortcuts_data(roms, _LAUNCHER, {}, {})
         assert result[0]["exe"].endswith("/bin/rom-launcher")
 
     def test_start_dir_is_parent_of_exe(self):
-        plugin_dir = "/home/deck/homebrew/plugins/decky-romm-sync"
         roms = [{"id": 1, "name": "Game"}]
-        result = build_shortcuts_data(roms, plugin_dir, {}, {})
+        result = build_shortcuts_data(roms, _LAUNCHER, {}, {})
         assert result[0]["start_dir"] == os.path.dirname(result[0]["exe"])
 
     def test_multiple_roms_each_has_required_fields(self):
         required_fields = {"rom_id", "name", "exe", "start_dir", "launch_options", "platform_name", "platform_slug"}
         roms = [{"id": i, "name": f"Game {i}"} for i in range(5)]
-        result = build_shortcuts_data(roms, "/plugin", {}, {})
+        result = build_shortcuts_data(roms, _LAUNCHER, {}, {})
         for item in result:
             for field in required_fields:
                 assert field in item, f"Missing field '{field}' in shortcut data"
@@ -419,7 +420,7 @@ class TestBuildShortcutsDataVersionMetadata:
                 "rom_user": {"is_main_sibling": True},
             }
         ]
-        result = build_shortcuts_data(roms, "/plugin", {}, {})
+        result = build_shortcuts_data(roms, _LAUNCHER, {}, {})
         assert result[0]["sibling_group_key"] == "igdb:3404:57"
         assert result[0]["regions"] == ["USA", "Europe"]
         assert result[0]["languages"] == ["En", "Fr"]
@@ -429,14 +430,14 @@ class TestBuildShortcutsDataVersionMetadata:
 
     def test_unmatched_rom_gets_fallback_group_key(self):
         roms = [{"id": 4409, "name": "Solo", "platform_id": 57}]
-        result = build_shortcuts_data(roms, "/plugin", {}, {})
+        result = build_shortcuts_data(roms, _LAUNCHER, {}, {})
         assert result[0]["sibling_group_key"] == "romm:4409:57"
 
     def test_missing_version_fields_default_empty(self):
         # A ROM with no version metadata at all: empty arrays, blank revision,
         # is_main_sibling False (rom_user absent → the `or {}` guard).
         roms = [{"id": 5, "name": "Minimal", "platform_id": 9}]
-        result = build_shortcuts_data(roms, "/plugin", {}, {})
+        result = build_shortcuts_data(roms, _LAUNCHER, {}, {})
         assert result[0]["regions"] == []
         assert result[0]["languages"] == []
         assert result[0]["revision"] == ""
@@ -447,7 +448,7 @@ class TestBuildShortcutsDataVersionMetadata:
         # Defensive guard: a missing or null rom_user (whatever the server
         # schema promises) must degrade to False without raising.
         roms = [{"id": 6, "name": "Untouched", "platform_id": 9, "rom_user": None}]
-        result = build_shortcuts_data(roms, "/plugin", {}, {})
+        result = build_shortcuts_data(roms, _LAUNCHER, {}, {})
         assert result[0]["is_main_sibling"] is False
 
     def test_null_version_arrays_default_empty(self):
@@ -463,7 +464,7 @@ class TestBuildShortcutsDataVersionMetadata:
                 "revision": None,
             }
         ]
-        result = build_shortcuts_data(roms, "/plugin", {}, {})
+        result = build_shortcuts_data(roms, _LAUNCHER, {}, {})
         assert result[0]["regions"] == []
         assert result[0]["languages"] == []
         assert result[0]["tags"] == []
@@ -475,7 +476,7 @@ class TestBuildShortcutsDataVersionMetadata:
         # "igdb:100:None" and split the group's bucket from a freshly-fetched
         # sibling that DOES carry platform_id. The persisted key must win verbatim.
         reconstructed = {"id": 10, "name": "Zelda (USA)", "igdb_id": 100, "sibling_group_key": "igdb:100:57"}
-        result = build_shortcuts_data([reconstructed], "/plugin", {}, {})
+        result = build_shortcuts_data([reconstructed], _LAUNCHER, {}, {})
         assert result[0]["sibling_group_key"] == "igdb:100:57"
 
     def test_reconstructed_and_fetched_sibling_land_in_one_bucket(self):
@@ -487,7 +488,7 @@ class TestBuildShortcutsDataVersionMetadata:
 
         reconstructed = {"id": 10, "name": "Zelda (USA)", "sibling_group_key": "igdb:100:57"}
         fetched = {"id": 11, "name": "Zelda (JP)", "igdb_id": 100, "platform_id": 57}
-        result = build_shortcuts_data([reconstructed, fetched], "/plugin", {}, {})
+        result = build_shortcuts_data([reconstructed, fetched], _LAUNCHER, {}, {})
         assert {sd["sibling_group_key"] for sd in result} == {"igdb:100:57"}
 
         emitted = collapse_sibling_groups(result, registry={}, installed_rom_ids=set(), complete_group_view=True)

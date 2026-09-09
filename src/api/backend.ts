@@ -1116,6 +1116,26 @@ export const getLegacyInstallNotice = callable<[], { pending: boolean; legacy_da
   "get_legacy_install_notice",
 );
 
+/** Where the launcher a Steam shortcut runs through lives this run. */
+export interface ShortcutLauncher {
+  /** The path a shortcut's `exe` names — under the user's data root, not the plugin folder. */
+  exe: string;
+  /** The directory holding it, written as the shortcut's start dir. */
+  start_dir: string;
+  /**
+   * Whether this start actually got the launcher to `exe`.
+   *
+   * The rewrite of EXISTING shortcuts turns on it: pointing one at a launcher
+   * that is not there stops its game from starting, and nothing in the plugin
+   * could put the file back. A shortcut the backend BUILDS is given `exe`
+   * either way — a library split across two launcher paths is a state nothing
+   * later could tell apart.
+   */
+  installed: boolean;
+}
+
+export const getShortcutLauncher = callable<[], ShortcutLauncher>("get_shortcut_launcher");
+
 /** What kind of data-location condition the last start left standing. */
 export type DataLocationKind = "choice" | "failed";
 

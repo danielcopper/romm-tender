@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import pathlib
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -37,6 +38,7 @@ from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 from models.data_location import UserDataLocations
+from models.shortcut_launcher import ShortcutLauncher
 
 from adapters.gavel_native import GavelNativeAdapter
 from adapters.retrodeck_paths import RetroDeckPathsAdapter
@@ -201,6 +203,66 @@ class TestBootstrap:
         assert result.adapters.sgdb_adapter._user_agent == "decky-romm-sync/0.0.0"
 
 
+class TestBootstrapInstallsTheLauncher:
+    """The launcher leaves the plugin folder, and every start puts this release's there."""
+
+    @staticmethod
+    def _ship(tmp_path) -> bytes:
+        shipped = tmp_path / "plugin" / "bin" / "rom-launcher"
+        shipped.parent.mkdir(parents=True, exist_ok=True)
+        shipped.write_bytes(b'#!/bin/bash\nexec "$@"\n')
+        shipped.chmod(0o755)
+        return shipped.read_bytes()
+
+    @staticmethod
+    def _home(tmp_path) -> pathlib.Path:
+        return tmp_path / "home" / ".local" / "share" / "romm-tender" / "bin" / "rom-launcher"
+
+    def test_the_launcher_is_installed_under_the_users_data_root(self, tmp_path):
+        content = self._ship(tmp_path)
+
+        result = _bootstrap_for(tmp_path)
+
+        assert result.launcher.path == str(self._home(tmp_path))
+        assert result.launcher.installed is True
+        assert self._home(tmp_path).read_bytes() == content
+
+    def test_the_launcher_is_not_put_in_deckys_own_directory(self, tmp_path):
+        """``runtime_dir`` answers Decky's layout question and this one is the data root's.
+
+        Both are plain strings on structs the composition root hands around, so
+        nothing but this pins which of the two the launcher followed.
+        """
+        self._ship(tmp_path)
+
+        result = _bootstrap_for(tmp_path)
+
+        assert str(tmp_path / "runtime") not in result.launcher.path
+        assert str(tmp_path / "plugin") not in result.launcher.path
+
+    def test_a_launcher_the_release_did_not_ship_leaves_the_start_running(self, tmp_path):
+        """The one thing that must not happen is the plugin failing to start over it."""
+        result = _bootstrap_for(tmp_path)
+
+        assert result.launcher.installed is False
+        assert result.launcher.path == str(self._home(tmp_path))
+
+    def test_a_launcher_that_cannot_be_written_leaves_the_start_running(self, tmp_path):
+        """The database is fatal to a start; the launcher is not, and says so instead."""
+        self._ship(tmp_path)
+        blocked = tmp_path / "home" / ".local" / "share" / "romm-tender" / "bin"
+        blocked.mkdir(parents=True)
+        blocked.chmod(0o500)
+        try:
+            result = _bootstrap_for(tmp_path)
+        finally:
+            blocked.chmod(0o700)
+
+        assert result.launcher.installed is False
+        assert result.launcher.path == str(self._home(tmp_path))
+        assert result.adapters.romm_api is not None
+
+
 class TestBootstrapSettingsResetMarker:
     """Bootstrap folds a corrupt-settings reset into the persistent
     ``_settings_reset_notice`` marker so it survives a plugin reload."""
@@ -307,6 +369,10 @@ class TestWireServices:
                 choice_required=False,
                 failure=None,
             ),
+            "launcher": ShortcutLauncher(
+                path=str(tmp_path / "data" / "bin" / "rom-launcher"),
+                installed=True,
+            ),
         }
 
     @staticmethod
@@ -374,6 +440,7 @@ class TestWireServices:
             ),
             min_required_version=deps["min_required_version"],
             locations=deps["locations"],
+            launcher=deps["launcher"],
         )
 
     def test_returns_all_services(self, tmp_path):
@@ -468,6 +535,15 @@ class TestWireServices:
 
         assert artwork_service._get_pending_sync() == {42: {"name": "Game", "platform_name": "N64"}}
         assert sgdb_service._get_pending_sync() == {42: {"name": "Game", "platform_name": "N64"}}
+        deps["loop"].close()
+
+    def test_library_service_bakes_the_launcher_it_was_given(self, tmp_path):
+        """Every shortcut this run writes names the launcher's home, not the plugin folder."""
+        deps = self._make_deps(tmp_path)
+
+        result = wire_services(self._make_config(deps))
+
+        assert result["sync_service"]._orchestrator._launcher_exe == deps["launcher"].path
         deps["loop"].close()
 
     def test_migration_service_receives_the_firmware_resolver(self, tmp_path):

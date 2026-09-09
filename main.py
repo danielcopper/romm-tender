@@ -51,6 +51,7 @@ class Plugin:
     _romm_api: Any
     _steam_config: Any
     _retrodeck_paths: Any
+    _launcher: Any
 
     # Strong refs to the fire-and-forget play-session flush tasks. ``create_task``
     # alone is not enough — without a strong ref the loop is free to GC the task
@@ -133,6 +134,10 @@ class Plugin:
         # callable can read the resolution health without routing through a
         # service (it's a pure adapter read, no orchestration).
         self._retrodeck_paths = result.callbacks.retrodeck_paths
+        # Where the shortcut launcher lives this run, and whether this start got
+        # it there — settled by the composition root and read by one callable,
+        # so there is no service between the two to hold it.
+        self._launcher = result.launcher
 
         # ── 4. Wire services ────────────────────────────────────────────────
         services = wire_services(
@@ -154,6 +159,7 @@ class Plugin:
                 callbacks=result.callbacks,
                 min_required_version=self._MIN_REQUIRED_VERSION,
                 locations=result.locations,
+                launcher=result.launcher,
             )
         )
         self._save_sync_service = services["save_sync_service"]
@@ -1020,6 +1026,32 @@ class Plugin:
         condition ends when the folder does, and a marker would outlive it.
         """
         return self._legacy_install_service.get_legacy_install_notice()
+
+    async def get_shortcut_launcher(self):
+        """Report the launcher a Steam shortcut runs through, and whether it is there.
+
+        Returns ``{"exe": str, "start_dir": str, "installed": bool}``. ``exe`` is
+        the path every shortcut this plugin writes names, under the user's data
+        root rather than in the plugin folder Decky deletes before each update
+        (ADR-0032); ``start_dir`` is the directory holding it, so the frontend
+        does the same path algebra as the shortcut builder in no second place.
+
+        ``installed`` is a separate answer and is what the frontend's rewrite of
+        the EXISTING shortcuts turns on: pointing one at a launcher this start
+        could not place would stop its game from starting, and nothing here
+        could put the file back. The path is reported either way — a shortcut
+        built this run is built for the one home whatever happened, because a
+        library split across two launcher paths is a state nothing later could
+        tell apart.
+
+        Settled at start-up and unchanged for the life of the process, so one
+        read at plugin load is the whole of it.
+        """
+        return {
+            "exe": self._launcher.path,
+            "start_dir": self._launcher.start_dir,
+            "installed": self._launcher.installed,
+        }
 
     async def get_data_location_notice(self):
         """Report what this start's data-location migration left standing.

@@ -202,11 +202,16 @@ def extract_version_metadata(rom: dict[str, Any]) -> dict[str, Any]:
 
 def build_shortcuts_data(
     roms: list[dict[str, Any]],
-    plugin_dir: str,
+    launcher_exe: str,
     installed_paths: dict[int, str],
     core_overrides: dict[int, EmulatorInvocation],
 ) -> list[dict[str, Any]]:
     """Transform ROM list into shortcut data dicts for frontend AddShortcut calls.
+
+    *launcher_exe* is the launcher every built shortcut's ``exe`` names, and the
+    directory holding it is the ``start_dir`` written beside it. It is handed in
+    rather than composed here because its home is under the user's data root,
+    which one start's migration settles and only the composition root knows.
 
     *installed_paths* maps ``rom_id`` to the resolved on-disk launch path. An
     installed ROM gets a full launch command in ``launch_options``; a ROM absent
@@ -231,8 +236,7 @@ def build_shortcuts_data(
     on the ``Rom`` aggregate. ``is_main_sibling`` sits under ``rom_user``; the
     lookup is guarded so a missing or ``null`` ``rom_user`` degrades to ``False``.
     """
-    exe = os.path.join(plugin_dir, "bin", "rom-launcher")
-    start_dir = os.path.join(plugin_dir, "bin")
+    start_dir = os.path.dirname(launcher_exe)
     return [
         {
             "rom_id": rom["id"],
@@ -243,7 +247,7 @@ def build_shortcuts_data(
             # back to the filename stem when absent. No DB column — carried only
             # through the sync pipeline, never persisted.
             "fs_name_no_ext": rom.get("fs_name_no_ext") or os.path.splitext(rom.get("fs_name", ""))[0],
-            "exe": exe,
+            "exe": launcher_exe,
             "start_dir": start_dir,
             "launch_options": (
                 build_launch_options(

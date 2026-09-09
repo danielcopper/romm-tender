@@ -18,6 +18,8 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from models.shortcut_launcher import ShortcutLauncher
+
 from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.asyncio_sleeper import AsyncioSleeper
 from adapters.atlas_catalogue import AtlasCatalogueAdapter, first_detected_installation
@@ -30,6 +32,7 @@ from adapters.firmware_file import FirmwareFileAdapter
 from adapters.game_process import GameProcessAdapter
 from adapters.gavel_native import GavelNativeAdapter
 from adapters.hostname import HostnameAdapter
+from adapters.launcher_install import LauncherInstallAdapter
 from adapters.machine_id import MachineIdAdapter
 from adapters.migration_file import MigrationFileAdapter
 from adapters.path_probe import PathProbeAdapter, ResolvedPathAdapter
@@ -61,7 +64,7 @@ from adapters.system_clock import SystemClock
 from adapters.system_uuid_gen import SystemUuidGen
 from adapters.user_data_migration import SourceLocation, UserDataMigrationAdapter
 from domain.state_migrations import fold_legacy_save_sync_settings, migrate_settings
-from domain.user_data_location import SOURCE_FOLDER_NAMES, config_root, data_root
+from domain.user_data_location import SOURCE_FOLDER_NAMES, config_root, data_root, launcher_path
 
 if TYPE_CHECKING:
     import asyncio
@@ -258,8 +261,10 @@ class BootstrapResult:
     raw outputs only ``main.py`` itself binds (debug logger); and
     :attr:`locations` says which two directories this run ended up
     reading and writing, which nothing else can answer because the
-    start-up migration decides it. Together they replace the historical
-    untyped ``dict`` return so every consumer is caught by basedpyright
+    start-up migration decides it; :attr:`launcher` says where the
+    shortcut launcher lives beneath the data half and whether this
+    start got it there. Together they replace the historical untyped
+    ``dict`` return so every consumer is caught by basedpyright
     instead of failing silently at runtime on a typo.
     """
 
@@ -269,6 +274,7 @@ class BootstrapResult:
     runtime_adapters: RuntimeAdaptersBundle
     handles: BootstrapHandles
     locations: UserDataLocations
+    launcher: ShortcutLauncher
 
 
 def bootstrap(
@@ -344,6 +350,22 @@ def bootstrap(
         logger=logger,
     )
     locations = data_location_store.migrate()
+
+    # Then the launcher, which is code rather than data and moves for the other
+    # reason: Decky deletes the whole plugin folder before it unpacks an update,
+    # and every shortcut's ``exe`` used to name a file inside it. It is written
+    # on every start rather than once, so the launcher a shortcut runs is always
+    # the one this release ships — a launcher installed once would freeze at
+    # whatever version the day of the move happened to bring.
+    launcher_home = launcher_path(locations.data_dir)
+    launcher = ShortcutLauncher(
+        path=launcher_home,
+        installed=LauncherInstallAdapter(
+            source=launcher_path(plugin_dir),
+            destination=launcher_home,
+            logger=logger,
+        ).install(),
+    )
 
     # Bring the on-disk SQLite schema up to date before any service is wired —
     # the composition root owns startup infra. Post-cutover (#784) SQLite is the
@@ -510,4 +532,5 @@ def bootstrap(
         runtime_adapters=runtime_adapters,
         handles=handles,
         locations=locations,
+        launcher=launcher,
     )
