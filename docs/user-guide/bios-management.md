@@ -384,7 +384,7 @@ Four things about that line:
   red line comes back. The BIOS tab's core list highlights whichever core the line is about.
 - **It is a statement about the console, not about your library.** The file rows underneath are unchanged: each one
   still says whether it is present, which cores use it, and whether your RomM library holds it. The downloads are
-  unchanged too — fetching one of the listed images is exactly what clears the line.
+  unchanged too — fetching one of the images that core asks for is exactly what clears the line.
 - **The red BIOS badge beside Play appears for it**, the same badge a missing required file raises. The game does not
   start either way, so it is the same warning rather than a softer one of its own.
 
