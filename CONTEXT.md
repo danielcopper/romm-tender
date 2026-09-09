@@ -55,6 +55,19 @@ opens one connection, exposes the repositories, and commits on clean exit / roll
 database reads/writes, never network/file I/O or a frontend round-trip; cross-operation consistency comes from the
 operation's own serialization (the per-ROM save lock, the single library-sync task), not from holding a UoW open.
 
+### Config root / data root
+
+The two directories the plugin's own persisted state lives in, both under the **user's** home directory rather than
+anywhere the packaging decides. The **config root** holds user-intent configuration — the settings file and its
+siblings. The **data root** holds everything the plugin derived or downloaded for itself: the database, the cover and
+artwork caches. The split is the one a reader would draw anyway: the config root is small, hand-editable and worth
+carrying to another device; the data root is large and rebuildable.
+
+They are two roots, not two names for one, and each is filled independently — one can be at its new home while the other
+is not. Neither is a **Decky-assigned directory**: those are named after the plugin's own folder, which is what made the
+data move on a rename, and are what the plugin falls back to while a root is not yet filled. _Avoid_: XDG directory (the
+XDG environment variables are deliberately not read), plugin directory, install directory.
+
 ### Persistence boundary (settings.json / SQLite)
 
 Where a piece of persisted state lives is a deliberate decision driven by what the data _is_, not which file it
@@ -528,6 +541,8 @@ not what makes it a notice. They do not all sit at the top: three lead the panel
 sit inside the status block, below the conditional slot — `docs/architecture/qam-panel.md`'s Main section has the order.
 The **home** of a condition is the one page where it is acted on. A notice names the condition and jumps to its home;
 the action exists only there, never on the notice — with one exception today, the RetroArch input driver, whose **Fix**
-still applies in place behind a confirmation until Settings (#1816) gives it a home. A condition with no home in the
-plugin stays a notice without a jump, with Dismiss where there is a sensible end to it. _Avoid_: banner (component names
-only), warning, alert.
+still applies in place behind a confirmation until Settings (#1816) gives it a home. A condition answered **once and for
+all** — the user picks between named outcomes, and answering ends the condition for good — has no page to return to, so
+its home is a modal opened from the notice; that modal _is_ the home, not a second exception to the rule. A condition
+with no home in the plugin stays a notice without a jump, with Dismiss where there is a sensible end to it. _Avoid_:
+banner (component names only), warning, alert.

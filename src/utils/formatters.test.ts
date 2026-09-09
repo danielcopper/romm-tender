@@ -4,6 +4,7 @@ import {
   formatLastPlayed,
   formatPlaytime,
   formatTimestamp,
+  formatTimestampWithYear,
   formatTimeAgo,
   formatUninstallStatus,
 } from "./formatters";
@@ -52,6 +53,25 @@ describe("formatTimestamp", () => {
     // fallback. This documents that branch; if behavior changes we want to know.
     const out = formatTimestamp("not-a-date");
     expect(out).toBe("Invalid Date");
+  });
+});
+
+describe("formatTimestampWithYear", () => {
+  it("returns 'unknown' for null", () => {
+    expect(formatTimestampWithYear(null)).toBe("unknown");
+  });
+
+  it("carries the year its sibling drops, and drops the seconds", () => {
+    // The one caller shows two folders that can be a year apart and differ in
+    // nothing else a reader can see; seconds tell them apart in neither case.
+    const out = formatTimestampWithYear("2025-06-15T12:34:56Z");
+    expect(out).toContain("2025");
+    expect(out).toContain("Jun");
+    expect(formatTimestamp("2025-06-15T12:34:56Z")).not.toContain("2025");
+  });
+
+  it("returns 'Invalid Date' for an unparseable string, like its sibling", () => {
+    expect(formatTimestampWithYear("not-a-date")).toBe("Invalid Date");
   });
 });
 

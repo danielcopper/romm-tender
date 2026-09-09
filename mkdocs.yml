@@ -70,6 +70,7 @@ nav:
       - Save File Extensions: user-guide/save-file-extensions.md
       - Save Sync Support Matrix: user-guide/save-sync-support-matrix.md
       - RetroDECK Path Migration: user-guide/retrodeck-path-migration.md
+      - Where Your Data Lives: user-guide/where-your-data-lives.md
       - Troubleshooting: user-guide/troubleshooting.md
   - Architecture:
       - Backend Architecture: architecture/backend-architecture.md

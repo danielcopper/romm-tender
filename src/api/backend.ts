@@ -1116,6 +1116,45 @@ export const getLegacyInstallNotice = callable<[], { pending: boolean; legacy_da
   "get_legacy_install_notice",
 );
 
+/** What kind of data-location condition the last start left standing. */
+export type DataLocationKind = "choice" | "failed";
+
+export interface DataLocationNotice {
+  pending: boolean;
+  /** `null` exactly when nothing is pending. */
+  kind: DataLocationKind | null;
+  /** What went wrong, on a `failed` condition only. */
+  message: string | null;
+}
+
+export interface DataLocationCandidate {
+  /** The folder name the older location sits under, and the value a choice names. */
+  source: string;
+  path: string;
+  /** Whether the folder is on disk at all. A location that has gone is still listed. */
+  present: boolean;
+  /** `null` when the reading could not be completed — never an approximation. */
+  size_bytes: number | null;
+  /** ISO-8601, `null` alongside an unmeasurable size or an absent folder. */
+  changed_at: string | null;
+}
+
+export interface DataLocationCandidates {
+  candidates: DataLocationCandidate[];
+}
+
+// Where the plugin's own data lives. `get_data_location_notice` reports what the
+// start-up migration left standing — two older installs it declined to pick
+// between, or a copy that did not finish — and is read live off what that start
+// decided, so there is no dismiss callable: neither condition ends by being
+// acknowledged. The candidates are a separate read because measuring a location
+// walks every file in it, and only the modal ever needs the numbers; it carries
+// no failure shape because every partial answer is stated on the entry it is
+// about rather than collapsing the whole list.
+export const getDataLocationNotice = callable<[], DataLocationNotice>("get_data_location_notice");
+export const getDataLocationCandidates = callable<[], DataLocationCandidates>("get_data_location_candidates");
+export const chooseDataLocation = callable<[string], { success: true } | CallableFailure>("choose_data_location");
+
 // Durable "re-sign-in for cross-device playtime" notice. The backend persists a
 // flag when a playtime reconcile is rejected because the Client API Token lacks
 // the `roms.user.read` scope; pending:true means the user should sign in again

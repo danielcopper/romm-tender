@@ -10,6 +10,7 @@ read-model survive untouched (005 only flips ``slot_confirmed``, never deletes).
 
 from __future__ import annotations
 
+import os
 import sqlite3
 
 from adapters.sqlite_migrations import apply_migrations
@@ -20,7 +21,7 @@ from ._seed import enable_save_sync, seed_save_state
 
 def _db_path(harness) -> str:
     """The real SQLite database the harness's services read/write."""
-    return str(harness.tmp_path / "runtime" / "romm_sync.db")
+    return os.path.join(harness.data_dir, "romm_sync.db")
 
 
 def _rewind_to_v4(db_path: str) -> None:

@@ -87,6 +87,7 @@ _BOUND_SERVICE_ATTRS = {
     "_connection_service": "connection_service",
     "_startup_healing_service": "startup_healing_service",
     "_legacy_install_service": "legacy_install_service",
+    "_data_location_service": "data_location_service",
     "_launch_gate_service": "launch_gate_service",
     "_session_lifecycle_service": "session_lifecycle_service",
     "_game_process_service": "game_process_service",
@@ -124,6 +125,12 @@ class ContractHarness:
     # The in-memory process table behind the stop-game ladder. Tests seed ``pids``
     # (and ``survive_stop`` / ``alive``) to stage what the kill should find.
     game_process: FakeGameProcessControlAdapter
+    # Where the real ``bootstrap()`` ended up reading and writing, which is the
+    # start-up migration's answer and not a path a test may compose: settings and
+    # the database live under the user's home now, and only a run whose migration
+    # could not finish is still in Decky's directories.
+    settings_dir: str
+    data_dir: str
 
 
 def _single_attempt_pass_through(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
@@ -213,6 +220,7 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
         ),
         callbacks=result.callbacks,
         min_required_version=Plugin._MIN_REQUIRED_VERSION,
+        locations=result.locations,
     )
     services = wire_services(cfg)
 
@@ -241,4 +249,6 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
         uow_factory=result.callbacks.uow_factory,
         retrodeck_paths=result.callbacks.retrodeck_paths,
         game_process=fake_game_process,
+        settings_dir=result.locations.settings_dir,
+        data_dir=result.locations.data_dir,
     )

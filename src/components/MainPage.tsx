@@ -44,6 +44,7 @@ import { DownloadProgressRow } from "./DownloadProgressRow";
 import { MigrationBlockedPage } from "./MigrationBlockedPage";
 import { SettingsResetBanner } from "./SettingsResetBanner";
 import { LegacyInstallNotice } from "./LegacyInstallBanner";
+import { DataLocationNotice } from "./DataLocationNotice";
 import { PlaytimeScopeBanner } from "./PlaytimeScopeBanner";
 import type { SyncPreview, SyncProgress, SyncRunKind, SyncStats, Page } from "../types";
 import { detach } from "../utils/detach";
@@ -809,6 +810,11 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
             </PanelSectionRow>
           </>
         )}
+        {/* Last of the button-carrying notices: nothing is lost either way and
+            the plugin is running, so what is outstanding is only where its data
+            ends up. Its button opens a modal rather than a page, because the
+            condition is answered once and for all. */}
+        <DataLocationNotice />
         <BlockSeparator />
       </PanelSection>
 

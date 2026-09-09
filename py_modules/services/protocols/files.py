@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from contextlib import AbstractContextManager
 
     from models.adoption import ArchiveMemberInfo, ExistingContent, MoveOutcome, TopLevelEntry, TopLevelName
+    from models.data_location import SourceDescription
     from models.prune import (
         MutationOutcome,
         RecoveryArtifact,
@@ -747,6 +748,19 @@ class PruneArtifactStore(Protocol):
 
     def recovery_artifacts(self, rom_ids: list[int]) -> list[RecoveryArtifact]: ...
     def remove(self, rom_ids: list[int], claims: dict[str, SourceClaim] | None = None) -> MutationOutcome: ...
+
+
+class DataLocationStore(Protocol):
+    """Own the older data locations the plugin may still be asked to move from.
+
+    Only the two operations a running plugin performs: describing the candidates
+    a user is choosing between, and recording which one they picked. The copy
+    itself happens at the next start, before the database is opened, and is not
+    on this seam.
+    """
+
+    def describe_sources(self) -> list[SourceDescription]: ...
+    def record_answer(self, name: str) -> None: ...
 
 
 class SteamRecoveryStore(Protocol):

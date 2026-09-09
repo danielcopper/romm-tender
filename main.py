@@ -153,6 +153,7 @@ class Plugin:
                 ),
                 callbacks=result.callbacks,
                 min_required_version=self._MIN_REQUIRED_VERSION,
+                locations=result.locations,
             )
         )
         self._save_sync_service = services["save_sync_service"]
@@ -177,6 +178,7 @@ class Plugin:
         self._connection_service = services["connection_service"]
         self._startup_healing_service = services["startup_healing_service"]
         self._legacy_install_service = services["legacy_install_service"]
+        self._data_location_service = services["data_location_service"]
         self._launch_gate_service = services["launch_gate_service"]
         self._session_lifecycle_service = services["session_lifecycle_service"]
         self._game_process_service = services["game_process_service"]
@@ -1018,3 +1020,39 @@ class Plugin:
         condition ends when the folder does, and a marker would outlive it.
         """
         return self._legacy_install_service.get_legacy_install_notice()
+
+    async def get_data_location_notice(self):
+        """Report what this start's data-location migration left standing.
+
+        Returns ``{"pending": bool, "kind": str | None, "message": str | None}``.
+        ``kind`` is ``"choice"`` where two older installs both hold a library, so
+        the plugin declined to pick and is still running from the directories
+        Decky assigned it; ``"failed"`` where a copy was attempted and did not
+        finish, with ``message`` saying what went wrong. Both stand until a start
+        completes the move — neither is dismissible, because neither ends by
+        being acknowledged.
+        """
+        return self._data_location_service.get_data_location_notice()
+
+    async def get_data_location_candidates(self):
+        """Describe the older data locations the user is choosing between.
+
+        Returns ``{"candidates": [...]}``, one entry per older location the
+        plugin knows about — folder name, path, whether it is on disk, size in
+        bytes and when it last changed. A location that has gone is listed
+        saying so rather than dropped, because a choice shown with one option is
+        not the question that was asked. Read on demand rather than at startup:
+        measuring a location is a walk of every file in it.
+        """
+        return await self._data_location_service.get_data_location_candidates()
+
+    async def choose_data_location(self, source):
+        """Record which older data location the next start copies from.
+
+        Returns ``{"success": True}``. The copy is not performed here: this
+        plugin is running from one of the candidates with its database open, and
+        copying a live SQLite file risks a torn copy — so the answer is recorded
+        and the plugin's next start acts on it, which is why the panel offers a
+        device restart rather than reporting the move as done.
+        """
+        return await self._data_location_service.choose_data_location(source)

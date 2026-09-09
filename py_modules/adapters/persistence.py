@@ -19,6 +19,16 @@ from adapters.system_clock import SystemClock
 _SETTINGS_VERSION = 13
 _LOCK_EXT = ".lock"
 
+# The settings file's name, and the only spelling of it in the codebase.
+# ``scripts/check_settings_owner.py`` confines the literal here as a PROXY for
+# "every write goes through the owner" — name-confinement, not dataflow: a
+# module handed an already-built path is not caught, as that gate's own
+# docstring says. Not private: the data-location migration has to recognise a
+# configured install without reading it, and a second spelling of the name there
+# would drift silently and leave that probe quietly answering about a file we no
+# longer write.
+SETTINGS_FILENAME = "settings.json"
+
 
 class _ClockPort(Protocol):
     """Minimal wall-clock port the persistence adapter consumes.
@@ -192,7 +202,7 @@ class PersistenceAdapter:
         itself fails, the error is logged and defaults are still returned so
         boot never crashes.
         """
-        settings_path = os.path.join(self._settings_dir, "settings.json")
+        settings_path = os.path.join(self._settings_dir, SETTINGS_FILENAME)
         try:
             with open(settings_path) as f:
                 settings = json.load(f)
@@ -277,7 +287,7 @@ class PersistenceAdapter:
         except (TypeError, ValueError):
             stored = 0
         data["version"] = max(stored, _SETTINGS_VERSION)
-        settings_path = os.path.join(self._settings_dir, "settings.json")
+        settings_path = os.path.join(self._settings_dir, SETTINGS_FILENAME)
         self._locked_write(settings_path, data)
 
     # ------------------------------------------------------------------

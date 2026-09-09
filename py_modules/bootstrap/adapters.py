@@ -34,6 +34,7 @@ from adapters.machine_id import MachineIdAdapter
 from adapters.migration_file import MigrationFileAdapter
 from adapters.path_probe import PathProbeAdapter, ResolvedPathAdapter
 from adapters.persistence import (
+    SETTINGS_FILENAME,
     PersistenceAdapter,
     PlatformCoreReaderAdapter,
     SettingsPersisterAdapter,
@@ -58,12 +59,16 @@ from adapters.steam_recovery import SteamRecoveryAdapter
 from adapters.steamgriddb import SteamGridDbAdapter
 from adapters.system_clock import SystemClock
 from adapters.system_uuid_gen import SystemUuidGen
+from adapters.user_data_migration import SourceLocation, UserDataMigrationAdapter
 from domain.state_migrations import fold_legacy_save_sync_settings, migrate_settings
+from domain.user_data_location import SOURCE_FOLDER_NAMES, config_root, data_root
 
 if TYPE_CHECKING:
     import asyncio
     import logging
     from typing import Any
+
+    from models.data_location import UserDataLocations
 
     from services.protocols import (
         AdoptionMoveStore,
@@ -72,6 +77,7 @@ if TYPE_CHECKING:
         CoreInfoProvider,
         CoreNameProviderFn,
         CoverArtFileStore,
+        DataLocationStore,
         DebugLogger,
         DirectoryFileListerFn,
         DownloadFileStore,
@@ -118,6 +124,13 @@ if TYPE_CHECKING:
 # file we no longer write.
 DB_FILENAME = "romm_sync.db"
 
+# Where a user's answer to the two-libraries question waits for the next start.
+# It lives in the Decky-assigned runtime directory, which is the directory Decky
+# hands THIS install whichever candidate it is running from — so a start can find
+# the answer before it has decided anything. That directory is also one of the
+# candidates' own, which is why the migration's copy skips this file.
+DATA_LOCATION_ANSWER_FILENAME = "data-location-choice.json"
+
 
 @dataclass(frozen=True)
 class AdapterBundle:
@@ -148,6 +161,7 @@ class AdapterBundle:
     recovery_store: RecoveryBundleStore
     prune_artifacts: PruneArtifactStore
     steam_recovery: SteamRecoveryStore
+    data_location_store: DataLocationStore
 
 
 @dataclass(frozen=True)
@@ -164,6 +178,14 @@ class RuntimeBundle:
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
     plugin_dir: str
+    # The DECKY-ASSIGNED runtime directory, and nothing else. It is not where
+    # the user's data lives — that is ``WiringConfig.locations.data_dir``, which
+    # a migration may have moved out of Decky's tree entirely. What is asked of
+    # this one is a question about Decky's own layout: whether the folder the
+    # pre-rename release unpacked into still stands beside ours, which is
+    # answered by taking this directory's parent. Point it at the data root and
+    # that probe asks about a directory Decky never created, and the warning it
+    # carries goes quiet without failing.
     runtime_dir: str
     emit: EventEmitter
     clock: Clock
@@ -233,10 +255,12 @@ class BootstrapResult:
 
     The four bundles carry every Protocol-typed seam and live state
     dict that services need; :attr:`handles` carries the small set of
-    raw outputs only ``main.py`` itself binds (debug logger). Together
-    they replace the historical untyped ``dict`` return so every
-    consumer is caught by basedpyright instead of failing silently at
-    runtime on a typo.
+    raw outputs only ``main.py`` itself binds (debug logger); and
+    :attr:`locations` says which two directories this run ended up
+    reading and writing, which nothing else can answer because the
+    start-up migration decides it. Together they replace the historical
+    untyped ``dict`` return so every consumer is caught by basedpyright
+    instead of failing silently at runtime on a typo.
     """
 
     adapters: AdapterBundle
@@ -244,6 +268,7 @@ class BootstrapResult:
     callbacks: CallbackBundle
     runtime_adapters: RuntimeAdaptersBundle
     handles: BootstrapHandles
+    locations: UserDataLocations
 
 
 def bootstrap(
@@ -265,13 +290,16 @@ def bootstrap(
     Parameters
     ----------
     settings_dir:
-        ``decky.DECKY_PLUGIN_SETTINGS_DIR``
+        ``decky.DECKY_PLUGIN_SETTINGS_DIR`` — where settings USED to live, and
+        where they still live for a run whose migration could not finish.
     runtime_dir:
-        ``decky.DECKY_PLUGIN_RUNTIME_DIR``
+        ``decky.DECKY_PLUGIN_RUNTIME_DIR`` — the same, for the data half, and
+        the directory a recorded data-location answer waits in.
     plugin_dir:
         ``decky.DECKY_PLUGIN_DIR``
     user_home:
-        ``decky.DECKY_USER_HOME`` — base for RetroDECK and Steam path lookups.
+        ``decky.DECKY_USER_HOME`` — base for the plugin's own data roots, and
+        for RetroDECK and Steam path lookups.
     logger:
         ``decky.logger``
 
@@ -279,16 +307,51 @@ def bootstrap(
     -------
     :class:`BootstrapResult`
         Typed bundles consumed by ``wire_services`` (``adapters``,
-        ``stores``, ``callbacks``) plus the small set of Plugin-only
-        handles ``main.py`` itself binds (``handles.debug_logger``).
+        ``stores``, ``callbacks``, ``locations``) plus the small set of
+        Plugin-only handles ``main.py`` itself binds
+        (``handles.debug_logger``).
     """
+    # SystemClock is dependency-free; construct it first so the single shared
+    # instance threads into the data-location migration (the date in the note it
+    # leaves behind), PersistenceAdapter (corrupt-settings backup stamp) and
+    # every later seam (uuid_gen/sleeper neighbours, runtime bundle).
+    clock = SystemClock()
+
+    # Before anything opens a file: bring the user's data to the plugin's own
+    # roots. Decky derives its per-plugin directories from the plugin's folder
+    # name, so the folder rename at 0.31.0 moved every user's data — putting the
+    # roots under the user's home takes that decision away from the packaging.
+    # Each older location's two halves are found by taking the parent of the
+    # directory Decky assigned US and looking for the folder name beside it,
+    # which asserts one layout fact less than composing ``DECKY_HOME`` here.
+    data_location_store = UserDataMigrationAdapter(
+        settings_root=config_root(user_home),
+        data_root=data_root(user_home),
+        fallback_settings_dir=settings_dir,
+        fallback_data_dir=runtime_dir,
+        sources=[
+            SourceLocation(
+                name=name,
+                settings_dir=os.path.join(os.path.dirname(settings_dir), name),
+                data_dir=os.path.join(os.path.dirname(runtime_dir), name),
+            )
+            for name in SOURCE_FOLDER_NAMES
+        ],
+        answer_path=os.path.join(runtime_dir, DATA_LOCATION_ANSWER_FILENAME),
+        db_filename=DB_FILENAME,
+        settings_filename=SETTINGS_FILENAME,
+        clock=clock,
+        logger=logger,
+    )
+    locations = data_location_store.migrate()
+
     # Bring the on-disk SQLite schema up to date before any service is wired —
     # the composition root owns startup infra. Post-cutover (#784) SQLite is the
     # sole persistence backend: there is no JSON fallback, so a failed or
     # unopenable database is fatal. Log the cause, then re-raise so bootstrap
     # aborts and the plugin stays inert — matching the RomM-minimum-version
     # gate's "inert until the environment is fixed" posture.
-    db_path = os.path.join(runtime_dir, DB_FILENAME)
+    db_path = os.path.join(locations.data_dir, DB_FILENAME)
     try:
         apply_migrations(db_path, MIGRATIONS_DIR, logger=logger)
     except Exception:
@@ -305,11 +368,7 @@ def bootstrap(
     retroarch_core_info = RetroArchCoreInfoAdapter(user_home=user_home, logger=logger)
     es_find_rules = EsFindRulesAdapter(logger=logger, user_home=user_home)
 
-    # SystemClock is dependency-free; construct it here so the single shared
-    # instance threads into PersistenceAdapter (corrupt-settings backup stamp)
-    # and every later seam (uuid_gen/sleeper neighbours, runtime bundle).
-    clock = SystemClock()
-    persistence = PersistenceAdapter(settings_dir, runtime_dir, logger, clock=clock)
+    persistence = PersistenceAdapter(locations.settings_dir, locations.data_dir, logger, clock=clock)
     settings = persistence.load_settings()
     # One-time JSON→JSON lift (ADR-0003): fold the legacy save-sync knobs +
     # device_name out of save_sync_state.json before the schema bump stamps
@@ -342,14 +401,14 @@ def bootstrap(
         package_name=package_name,
         plugin_version=plugin_version,
     )
-    prune_artifacts = PruneArtifactAdapter(runtime_dir=runtime_dir)
+    prune_artifacts = PruneArtifactAdapter(runtime_dir=locations.data_dir)
     steam_recovery = SteamRecoveryAdapter(user_home=user_home, logger=logger)
     http_adapter = RommHttpAdapter(settings, plugin_dir, logger, user_agent)
     romm_api = RommApiAdapter(http_adapter)
     steam_config = SteamConfigAdapter(user_home=user_home, logger=logger)
     sgdb_adapter = SteamGridDbAdapter(settings=settings, logger=logger, user_agent=user_agent)
     cover_art_file_store = CoverArtFileStoreAdapter()
-    sgdb_artwork_cache = SgdbArtworkCacheAdapter(runtime_dir=runtime_dir)
+    sgdb_artwork_cache = SgdbArtworkCacheAdapter(runtime_dir=locations.data_dir)
     download_file_store = DownloadFileAdapter()
     adoption_move = AdoptionMoveAdapter()
     firmware_file_store = FirmwareFileAdapter()
@@ -414,6 +473,7 @@ def bootstrap(
         recovery_store=recovery_store,
         prune_artifacts=prune_artifacts,
         steam_recovery=steam_recovery,
+        data_location_store=data_location_store,
     )
     stores = StateBundle(
         settings=settings,
@@ -449,4 +509,5 @@ def bootstrap(
         callbacks=callbacks,
         runtime_adapters=runtime_adapters,
         handles=handles,
+        locations=locations,
     )

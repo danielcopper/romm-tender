@@ -36,6 +36,7 @@ from fakes.fake_save_file_store import FakeSaveFileStore
 from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
+from models.data_location import UserDataLocations
 
 from adapters.gavel_native import GavelNativeAdapter
 from adapters.retrodeck_paths import RetroDeckPathsAdapter
@@ -43,6 +44,7 @@ from adapters.romm.http import RommHttpAdapter
 from adapters.romm.romm_api import RommApiAdapter
 from adapters.steam_config import SteamConfigAdapter
 from domain.save_layout import InSaveDir
+from domain.user_data_location import config_root
 from services.achievements import AchievementsService
 from services.cores import CoreService
 from services.disc import DiscService
@@ -206,8 +208,11 @@ class TestBootstrapSettingsResetMarker:
     def test_corrupt_boot_persists_marker_into_settings(self, tmp_path):
         import json
         import os
+        import pathlib
 
-        settings_dir = tmp_path / "settings"
+        # Seeded where bootstrap actually reads: the plugin's own config root
+        # under the user's home, not the directory Decky assigned.
+        settings_dir = pathlib.Path(config_root(str(tmp_path / "home")))
         settings_dir.mkdir(parents=True, exist_ok=True)
         settings_path = settings_dir / "settings.json"
         settings_path.write_text("NOT VALID JSON {{{")
@@ -263,6 +268,7 @@ class TestWireServices:
             "recovery_store": MagicMock(),
             "prune_artifacts": MagicMock(),
             "steam_recovery": MagicMock(),
+            "data_location_store": MagicMock(),
             "settings": settings,
             "loop": asyncio.new_event_loop(),
             "logger": logger,
@@ -295,6 +301,12 @@ class TestWireServices:
             "log_debug": MagicMock(),
             "plugin_metadata": FakePluginMetadataReader(version="0.14.0"),
             "uow_factory": FakeUnitOfWorkFactory(),
+            "locations": UserDataLocations(
+                settings_dir=str(tmp_path / "config"),
+                data_dir=str(tmp_path / "data"),
+                choice_required=False,
+                failure=None,
+            ),
         }
 
     @staticmethod
@@ -327,6 +339,7 @@ class TestWireServices:
                 recovery_store=deps["recovery_store"],
                 prune_artifacts=deps["prune_artifacts"],
                 steam_recovery=deps["steam_recovery"],
+                data_location_store=deps["data_location_store"],
             ),
             stores=StateBundle(
                 settings=deps["settings"],
@@ -360,6 +373,7 @@ class TestWireServices:
                 uow_factory=deps["uow_factory"],
             ),
             min_required_version=deps["min_required_version"],
+            locations=deps["locations"],
         )
 
     def test_returns_all_services(self, tmp_path):
@@ -413,7 +427,7 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(result) == 26
+        assert len(result) == 27
         assert "migration_service" in result
         assert "game_detail_service" in result
         assert "rom_removal_service" in result
@@ -428,6 +442,7 @@ class TestWireServices:
         assert "connection_service" in result
         assert "startup_healing_service" in result
         assert "legacy_install_service" in result
+        assert "data_location_service" in result
         assert "launch_gate_service" in result
         assert "session_lifecycle_service" in result
         assert "game_process_service" in result
