@@ -29,7 +29,7 @@ const ScopeBannerHost: FC = () => {
     const unsub = onPlaytimeScopeChange(() => setScope(getPlaytimeScopeState()));
     return unsub;
   }, []);
-  return scope.pending ? <PlaytimeScopeBanner /> : null;
+  return scope.pending ? <PlaytimeScopeBanner onOpenConnections={() => {}} /> : null;
 };
 
 describe("PlaytimeScopeBanner component", () => {
@@ -39,7 +39,7 @@ describe("PlaytimeScopeBanner component", () => {
   });
 
   it("renders the PanelSection title + the sign-in message", () => {
-    const { container } = render(<PlaytimeScopeBanner />);
+    const { container } = render(<PlaytimeScopeBanner onOpenConnections={vi.fn()} />);
     // PanelSection's `title` prop is forwarded by the global stub as a DOM
     // attribute on <section>, so assert via getAttribute, not textContent.
     const section = container.querySelector("section");
@@ -49,13 +49,24 @@ describe("PlaytimeScopeBanner component", () => {
   });
 
   it("renders a Dismiss button", () => {
-    const { getByText } = render(<PlaytimeScopeBanner />);
+    const { getByText } = render(<PlaytimeScopeBanner onOpenConnections={vi.fn()} />);
     expect(getByText("Dismiss")).toBeInTheDocument();
+  });
+
+  it("Open Connections calls the jump and leaves the condition standing", () => {
+    setPlaytimeScopeState({ pending: true });
+    const onOpenConnections = vi.fn();
+    const { getByText } = render(<PlaytimeScopeBanner onOpenConnections={onOpenConnections} />);
+    fireEvent.click(getByText("Open Connections"));
+    expect(onOpenConnections).toHaveBeenCalledTimes(1);
+    // The jump is not an answer: only a fresh sign-in ends the condition, so
+    // the notice is still pending when the reader comes back.
+    expect(getPlaytimeScopeState()).toEqual({ pending: true });
   });
 
   it("Dismiss → clears the shared store (local dismiss, no backend call)", async () => {
     setPlaytimeScopeState({ pending: true });
-    const { getByText } = render(<PlaytimeScopeBanner />);
+    const { getByText } = render(<PlaytimeScopeBanner onOpenConnections={vi.fn()} />);
     await act(async () => {
       fireEvent.click(getByText("Dismiss"));
       await flushAsync();

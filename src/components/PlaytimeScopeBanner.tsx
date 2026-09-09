@@ -1,5 +1,5 @@
 import { FC } from "react";
-import { PanelSection, PanelSectionRow, ButtonItem } from "@decky/ui";
+import { PanelSection, PanelSectionRow, DialogButton, Focusable } from "@decky/ui";
 import { setPlaytimeScopeState } from "../utils/playtimeScopeStore";
 
 /** Title of the account-wide QAM playtime-scope banner. */
@@ -16,8 +16,11 @@ export const PLAYTIME_SCOPE_MESSAGE = "Sign in again to enable cross-device play
  * is no backend dismiss callable: the durable flag clears itself once a scoped
  * token is minted (a fresh sign-in or a later successful reconcile), so the
  * next MainPage mount re-fetches the real state.
+ *
+ * The condition's home is Settings › Connections, where the accounts are: the
+ * sign-in that ends it exists only there, and this notice is the door to it.
  */
-export const PlaytimeScopeBanner: FC = () => {
+export const PlaytimeScopeBanner: FC<{ onOpenConnections: () => void }> = ({ onOpenConnections }) => {
   const handleDismiss = () => {
     setPlaytimeScopeState({ pending: false });
   };
@@ -49,9 +52,17 @@ export const PlaytimeScopeBanner: FC = () => {
         </div>
       </PanelSectionRow>
       <PanelSectionRow>
-        <ButtonItem layout="below" onClick={handleDismiss}>
-          Dismiss
-        </ButtonItem>
+        {/* Two buttons on one row rather than two full-width rows: Main is the
+            narrow page, and a notice that costs three rows pushes the status
+            block it sits above off the screen. */}
+        <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
+          <DialogButton style={{ flex: "1 1 auto", minWidth: 0 }} onClick={onOpenConnections}>
+            Open Connections
+          </DialogButton>
+          <DialogButton style={{ flex: "1 1 auto", minWidth: 0 }} onClick={handleDismiss}>
+            Dismiss
+          </DialogButton>
+        </Focusable>
       </PanelSectionRow>
     </PanelSection>
   );
