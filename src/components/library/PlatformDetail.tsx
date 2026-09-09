@@ -166,10 +166,10 @@ function getBiosSummary(
  * folder row the read could not judge — the LRPS2 shape. They are not two gaps
  * over two different file sets there: a row that is `required_by_active` always
  * carries the active core, so it is always one of the rows the console's
- * disjunction is read over (`classify_system_image`). It need not be WHY that
- * verdict declined — an image the rows show held while the resolver says the core
- * will not start declines it too, with no withheld row anywhere near it — but it
- * is always inside the set the console's sentence is about, and it is the only
+ * disjunction is read over (`classify_system_image`). It is always one of the
+ * unjudged rows that verdict is read over rather than a finding beside it — the
+ * decline needs at least one such row, and this is one — and need not be the only
+ * one, since another image the core declares can be unjudged too. It is the only
  * half of the pair that can name a file. Saying both would point twice at one
  * file list, once named and once vague; saying only the console's would drop the
  * pointer into that list, where the row shows the caveat explaining itself. So

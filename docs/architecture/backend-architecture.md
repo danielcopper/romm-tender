@@ -1897,9 +1897,9 @@ core as `FirmwareCatalogue.core_verdicts` and turned into `domain/bios_status.py
   count, and `"unsettled"` raises nothing, exactly as a withheld required row does not. Where a withheld required row
   and an unsettled console demand hold together, the platform detail names the ROW. The two are not gaps over two
   different file sets: a `required_by_active` row always carries the active core, so it is always one of the rows the
-  disjunction is read over. It need not be why the verdict declined — an image the rows show held while the resolver
-  says the core will not start declines it too — but it is always inside the set the console's sentence is about, and it
-  is the only half of the pair that can name a file.
+  disjunction is read over. It is always one of the unjudged rows that verdict is read over rather than a finding beside
+  it — the decline needs at least one such row, and this is one — and need not be the only one, since another image the
+  core declares can be unjudged too; it is the only half of the pair that can name a file.
 
 **No BIOS answer outlives the page that asked for it.** `get_cached_game_detail` carries none and says so
 (`bios_status_unknown`), and the live `get_bios_status` fills it in a moment later; there is deliberately no cached twin

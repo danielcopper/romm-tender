@@ -533,10 +533,10 @@ Format: **invariant** — tier — enforced by.
   BOTH ignorances hold** — a console needing an image whose required folder row could not be judged, the LRPS2 shape and
   a reachable one — `getUnknownSummary` names the withheld ROW rather than the console. They are not two gaps over two
   different file sets: a `required_by_active` row always carries the active core, so it is always one of the rows the
-  disjunction is read over. It need not be WHY the verdict declined — an image the rows show held while the resolver
-  says the core will not start declines it too, with no withheld row anywhere near it — but it is always inside the set
-  the console's sentence is about, and it is the only half of the pair that can name a file; naming the row points at
-  the file list, where its caveat explains itself. **All three wording surfaces test `"absent"` BEFORE the level's
+  disjunction is read over. It is always one of the unjudged rows that verdict is read over rather than a finding beside
+  it — the decline needs at least one such row, and this is one — and need not be the only one, since another image the
+  core declares can be unjudged too; it is the only half of the pair that can name a file, and naming it points at the
+  file list, where its caveat explains itself. **All three wording surfaces test `"absent"` BEFORE the level's
   decline**, and they agree today only because the backend guarantees `absent ⟹ missing`, so the state never arrives: a
   decline added ahead of that test in `compute_bios_level` would have `PlatformDetail` alone say "Nothing installed
   could answer for this system" and withdraw every download button while the other two read "Needs one of these BIOS
