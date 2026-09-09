@@ -27,7 +27,13 @@ from adapters.steam_config import SteamConfigAdapter
 from domain.bios_file import BiosFile
 from domain.bios_status import BiosFileEntry
 from domain.firmware_cache import FirmwareCacheEntry
-from domain.firmware_wants import FolderVerdict
+from domain.firmware_wants import (
+    SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
+    SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
+    SYSTEM_FIRMWARE_OPEN,
+    SYSTEM_FIRMWARE_RUNS_WITHOUT,
+    FolderVerdict,
+)
 from domain.rom import Rom
 from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
@@ -2005,6 +2011,159 @@ class TestCheckPlatformBiosUnknown:
         assert result["known_count"] == 2
         assert result["server_count"] == 2
         assert result["bios_level"] != "unknown"
+
+
+_PSX_CORE = "swanstation_libretro"
+_PSX_ALTERNATIVE_CORE = "pcsx_rearmed_libretro"
+_PSX_IMAGES = ("scph5500.bin", "scph5501.bin", "scph5502.bin")
+
+
+def _psx_service(
+    *,
+    core_so: str = _PSX_CORE,
+    system_firmware: str | None = SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
+    requirements_met: bool | None = False,
+    held: str | None = None,
+    bios_dir=None,
+) -> FirmwareService:
+    """A PlayStation platform as the machine really answers it.
+
+    Every image the core declares is ``optional`` — that is all a libretro
+    ``.info`` can say — so the file counts alone report nothing required. What
+    separates a console that boots from one that does not is the per-core
+    verdict, which is why it is seeded per core here rather than per file.
+    """
+    romm_api = MagicMock()
+    romm_api.list_firmware.return_value = [
+        {
+            "id": index,
+            "file_name": name,
+            "file_path": f"bios/ps/{name}",
+            "file_size_bytes": 100,
+            "md5_hash": "",
+        }
+        for index, name in enumerate(_PSX_IMAGES, start=1)
+    ]
+    resolver = FakeFirmwareResolver(bios_root=str(bios_dir) if bios_dir is not None else None)
+    for name in _PSX_IMAGES:
+        resolver.declare(name, optional_for=[core_so], present=(name == held) or None)
+    resolver.record_system(core_so, system_firmware=system_firmware, requirements_met=requirements_met)
+    fw = _make_firmware_service(
+        romm_api=romm_api,
+        firmware_resolver=resolver,
+        core_info=FakeCoreInfoProvider(
+            active_core=(core_so, "PS1 core"),
+            options=[libretro_option(core_so, "PS1 core")],
+        ),
+    )
+    _inline_executor(fw)
+    return fw
+
+
+class TestTheConsolesOwnFirmwareDemand:
+    """A requirement no ``.info`` can state, and no count may be asked to carry.
+
+    A libretro declaration marks each file required or optional, and nothing
+    else. So SwanStation, whose console will not boot without a BIOS image,
+    marks all of its images optional — and a PlayStation page read a green
+    "Nothing required (0/20 files held)" while not one game on it would start.
+    The demand is disjunctive: one of these, not each of these.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_console_needing_an_image_with_none_in_place_is_not_green(self):
+        fw = _psx_service()
+
+        result = await fw.check_platform_bios("psx")
+
+        assert result["required_count"] == 0
+        assert result["system_image"] == "absent"
+        assert result["bios_level"] == "missing"
+        # Never a required-file ratio: there are three files and one
+        # requirement, and "0/3 required" would state the wrong set.
+        assert result["bios_label"] == "Missing"
+
+    @pytest.mark.asyncio
+    async def test_one_image_in_place_answers_the_whole_demand(self, tmp_path):
+        bios_dir = tmp_path / "bios"
+        bios_dir.mkdir()
+        (bios_dir / "scph5501.bin").write_bytes(b"bios")
+        fw = _psx_service(held="scph5501.bin", requirements_met=None, bios_dir=bios_dir)
+
+        result = await fw.check_platform_bios("psx")
+
+        assert result["system_image"] == "held"
+        assert result["bios_level"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_the_verdict_flips_with_the_core_the_game_launches_with(self):
+        """PCSX ReARMed carries its own HLE BIOS over the identical machine.
+
+        The two cores see the same three files and the same empty BIOS
+        directory; the only thing that has ever separated their answers is a
+        fact no file list holds.
+        """
+        needs = await _psx_service(core_so=_PSX_CORE).check_platform_bios("psx")
+        carries = await _psx_service(
+            core_so=_PSX_ALTERNATIVE_CORE,
+            system_firmware=SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
+            requirements_met=True,
+        ).check_platform_bios("psx")
+
+        assert (needs["system_image"], needs["bios_level"]) == ("absent", "missing")
+        assert (carries["system_image"], carries["bios_level"]) == ("not_demanded", "ok")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "state", [SYSTEM_FIRMWARE_RUNS_WITHOUT, SYSTEM_FIRMWARE_OPEN, SYSTEM_FIRMWARE_CORE_ALTERNATIVE, None]
+    )
+    async def test_every_other_recording_leaves_todays_answer_standing(self, state):
+        """Including ``None`` — nothing recorded about this console.
+
+        It is an unasked question, so it changes nothing here; what it must
+        never become is a green claim of its own, which is what the ``absent``
+        case above would otherwise be indistinguishable from.
+        """
+        fw = _psx_service(system_firmware=state, requirements_met=None)
+
+        result = await fw.check_platform_bios("psx")
+
+        assert result["system_image"] == "not_demanded"
+        assert result["bios_level"] == "ok"
+        assert result["bios_label"] == "OK"
+
+    @pytest.mark.asyncio
+    async def test_a_demand_nothing_could_settle_declines_rather_than_clearing(self):
+        """No row to read the disjunction off — grey, and never "nothing required"."""
+        romm_api = MagicMock()
+        romm_api.list_firmware.return_value = []
+        resolver = FakeFirmwareResolver()
+        resolver.record_system(_PSX_CORE, system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT, requirements_met=None)
+        fw = _make_firmware_service(
+            romm_api=romm_api,
+            firmware_resolver=resolver,
+            core_info=FakeCoreInfoProvider(
+                active_core=(_PSX_CORE, "PS1 core"), options=[libretro_option(_PSX_CORE, "PS1 core")]
+            ),
+        )
+        _inline_executor(fw)
+
+        result = await fw.check_platform_bios("psx")
+
+        assert result == {"needs_bios": False, "bios_status_unknown": True}
+
+    @pytest.mark.asyncio
+    async def test_the_overview_stamps_the_same_answer_the_game_page_reads(self):
+        """One builder, so a platform and its games cannot disagree about it."""
+        fw = _psx_service()
+
+        overview = await fw.get_firmware_status()
+        page = await fw.check_platform_bios("psx")
+
+        platform = next(p for p in overview["platforms"] if p["platform_slug"] == "ps")
+        assert platform["system_image"] == page["system_image"] == "absent"
+        assert platform["bios_level"] == page["bios_level"] == "missing"
+        assert platform["required_count"] == 0
 
 
 class TestDownloadFirmware:

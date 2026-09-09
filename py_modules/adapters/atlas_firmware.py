@@ -52,6 +52,7 @@ from _vendor.atlas import CAVEAT_FIRMWARE_IMAGE_IDENTIFIED, CAVEAT_FIRMWARE_IMAG
 from domain.firmware_wants import (
     DECLARED_DIRECTORY,
     DECLARED_FILE,
+    CoreFirmwareVerdict,
     FirmwareCatalogue,
     FirmwarePlacement,
     FirmwareWant,
@@ -134,13 +135,24 @@ class AtlasFirmwareAdapter:
             unread_cores=_unread_cores(answer),
             resolved=True,
             caveats=_caveat_codes(answer),
+            core_verdicts=_core_verdicts(answer),
         )
 
     def _trace(self, kind: str, answer: Any) -> None:
-        """Trace the answer's shape and its stable caveat codes."""
+        """Trace the answer's shape, its stable caveat codes, and the system verdicts.
+
+        The verdicts are traced by their exception rather than in full: the state
+        that changes a reading is the one that says the console will not start,
+        and an entry per core would bury it — the answer carries one per
+        installed core, which is the whole of what a distribution ships.
+        """
+        needing = sorted(
+            core_so for core_so, verdict in _core_verdicts(answer).items() if verdict.system_needs_an_image
+        )
         self._log_debug(
             f"[firmware] {kind}: root={answer.root!r} cores={len(answer.cores)} "
-            f"requirements={len(answer.requirements)} caveats={sorted(set(_caveat_codes(answer)))}"
+            f"requirements={len(answer.requirements)} caveats={sorted(set(_caveat_codes(answer)))} "
+            f"system-firmware-needed={needing}"
         )
 
 
@@ -266,6 +278,30 @@ def _unread_cores(answer: Any) -> frozenset[str]:
         if core.declaration not in _STATED_DECLARATIONS or core.refused:
             unread.add(core_so)
     return frozenset(unread)
+
+
+def _core_verdicts(answer: Any) -> dict[str, CoreFirmwareVerdict]:
+    """Each core's two answers about itself, in the plugin's identifier space.
+
+    Keyed on the core rather than folded onto a file row, because that is what
+    they are about: one machine's PlayStation BIOS images read one way under
+    SwanStation and another under PCSX ReARMed, and a per-file row has no room
+    for a fact that changes with the emulator the game launches with.
+
+    A standalone emulator has no ``.so`` to key on and is skipped; a core the
+    answer names twice keeps the first entry, the same rule
+    :func:`_placement_for` applies to a destination read twice.
+    """
+    verdicts: dict[str, CoreFirmwareVerdict] = {}
+    for core in answer.cores:
+        core_so = _plugin_core_so(core.core_so)
+        if core_so is None:
+            continue
+        verdicts.setdefault(
+            core_so,
+            CoreFirmwareVerdict(system_firmware=core.system_firmware, requirements_met=core.requirements_met),
+        )
+    return verdicts
 
 
 def _requirement_entries(core: Any) -> list[Any]:

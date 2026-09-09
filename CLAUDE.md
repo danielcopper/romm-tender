@@ -490,6 +490,31 @@ Format: **invariant** — tier — enforced by.
   `FirmwareDownloader.download_platform_firmware_file`, which answers one named file and so refuses with a reason where
   the batch simply passes the row over); `FirmwareDownloader.download_firmware(firmware_id)` still does not. It is the
   DECLARATION's kind, so it survives an absent folder, which is exactly the case a presence check would let through
+- **The console's own firmware demand is a value of its own (`system_image`) and is never folded into a count, and the
+  resolver's `system_firmware: null` reaches it as a claim about nothing** — test + prompt-only —
+  `tests/domain/test_bios_status.py::TestClassifySystemImage` pins all four answers and the precedence over them,
+  `::TestTheVerdictOverTheSystemImage` pins what the level and the token do with each, and
+  `tests/services/test_firmware.py::TestTheConsolesOwnFirmwareDemand` pins the PlayStation case end to end including
+  that the overview and the game page stamp one answer. The frontend halves are pinned per surface
+  (`src/components/BiosTab.test.tsx`, `src/components/library/PlatformsTab.test.tsx`). **The rule spans five modules and
+  nothing joins them**: the adapter carries `CoreFirmware.system_firmware` and `requirements_met` per core,
+  `domain/firmware_wants.py::CoreFirmwareVerdict` holds the four spellings apart from the absence,
+  `domain/bios_status.py::classify_system_image` decides, `services/firmware/status.py` stamps it beside the counts, and
+  three frontend surfaces word it. A libretro `.info` can mark a file required or optional and nothing else, so a core
+  whose console does not boot without a BIOS image marks every image **optional** — which is why no count can carry
+  this: it is ONE requirement over the whole list, and putting it in `required_count` reports every one of them as
+  required — `0 / 20 required files ready` on the PlayStation page this was observed on. Each fold fails its own way and
+  all of them silently. Fold it into the counts and the page states a ratio over the wrong set. Read
+  `system_firmware: null` as "this console needs nothing" — a truthiness test, a `!= "runs-without-firmware"` bucket, a
+  default — and the plugin claims an all-clear over a console nobody has looked at, which is the collapse the
+  `unknown`/`not_needed` entry above is about, one axis over. Take the held/absent half from `requirements_met` instead
+  of from the rows and a PlayStation page whose every row is green goes grey: the whole-machine inventory is asked
+  **unverified** (the entry below), so a BIOS sitting exactly where the core opens it answers `satisfied is None` and
+  the resolver's verdict is `None` with it. `requirements_met` is read in the narrowing direction only — it folds the
+  per-file conjunction and the console's disjunction into one answer, so it can say the core will not start and cannot
+  say which of the two is why. And on the frontend, `system_image: "unsettled"` joins `required_withheld` on the KEEPING
+  side of `PlatformDetail`'s `nothingEstablished`: its rows were answered, so withdrawing the downloads there takes away
+  the one action that still moves the platform along
 - **The whole-machine firmware inventory is never asked with content verification** — prompt-only —
   `firmware_inventory()` is asked unverified and the verified question goes through `FirmwareFolderVerdictFn`, one core
   per call, only for the folder rows `unanswered_folder_cores` reports still open. `verify=True` on the inventory sweeps

@@ -21,11 +21,20 @@ claim can be made either way).
 Collapsing the last two into one value is the defect this vocabulary exists to
 prevent: a file nothing wants is a finished answer, and a file we could not ask
 about is not.
+
+A second axis runs beside that one and is not a property of any file: what is
+recorded about the **system** an emulator declares for. A libretro ``.info`` can
+mark a slot required or optional and nothing else, so a core whose console does
+not boot without a BIOS image can only mark every image it declares optional —
+which reads, per file, as a finished answer that nothing is missing. The
+resolver answers that half from a packaged table
+(:class:`CoreFirmwareVerdict`), and its ``None`` means nobody has looked at the
+system, never that the system needs nothing.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -37,6 +46,22 @@ WANTED_NOT_NEEDED = "not_needed"
 WANTED_UNKNOWN = "unknown"
 
 WANTED_VALUES = (WANTED_NEEDED, WANTED_OPTIONAL, WANTED_NOT_NEEDED, WANTED_UNKNOWN)
+
+# What is recorded about the SYSTEM one core declares firmware for — the half a
+# libretro ``.info`` has no way to state, so it can never be read off a file
+# list. Spelled here the way the resolver spells them, and held equal to its
+# constants by ``tests/adapters/test_atlas_firmware.py``.
+SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT = "cannot-run-without-firmware"
+SYSTEM_FIRMWARE_CORE_ALTERNATIVE = "core-supplies-an-alternative"
+SYSTEM_FIRMWARE_RUNS_WITHOUT = "runs-without-firmware"
+SYSTEM_FIRMWARE_OPEN = "open"
+
+SYSTEM_FIRMWARE_STATES = (
+    SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
+    SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
+    SYSTEM_FIRMWARE_RUNS_WITHOUT,
+    SYSTEM_FIRMWARE_OPEN,
+)
 
 # What the emulator opens the declaration AT — a file it reads, or a folder it
 # lists. A property of the DECLARATION, so it survives an empty destination:
@@ -78,6 +103,41 @@ class FolderVerdict:
     satisfied: bool | None
     images: tuple[str, ...] = ()
     caveats: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class CoreFirmwareVerdict:
+    """What the resolver says about one core BEYOND the files it declares.
+
+    ``system_firmware`` is world knowledge about the console — one of
+    :data:`SYSTEM_FIRMWARE_STATES`, or ``None`` where the packaged table records
+    nothing about the system at all. **``None`` is not "nothing is needed"**: the
+    table covers the systems somebody has looked at, so an absent entry is an
+    unasked question, and the same rule holds for it that holds for
+    :data:`WANTED_UNKNOWN`.
+
+    ``requirements_met`` is the resolver's own three-valued verdict over that
+    core's whole declaration weighed against what is on disk and against the
+    system entry. It only ever NARROWS: it can say a core cannot run, never that
+    one can where the files did not already say so. Read here for that direction
+    alone — it folds the per-file conjunction and the system's own disjunction
+    into one answer, so it can say *this core will not start* and cannot say
+    which of the two is why.
+    """
+
+    system_firmware: str | None = None
+    requirements_met: bool | None = None
+
+    @property
+    def system_needs_an_image(self) -> bool:
+        """Does the console need a firmware image this core does not carry itself?
+
+        True for exactly one of the four states. The other three are recorded
+        answers that leave the file rows to speak for themselves — the core
+        supplies its own substitute, the system was established to start without
+        one, or nobody has established which.
+        """
+        return self.system_firmware == SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT
 
 
 @dataclass(frozen=True)
@@ -189,12 +249,28 @@ class FirmwareCatalogue:
 
     ``caveats`` carries the resolver's stable degradation codes, never its human
     messages: the codes are the contract, the messages are prose.
+
+    ``core_verdicts`` is the per-core half — keyed by the core's ``.so`` stem, in
+    the plugin's own identifier space — and it is deliberately separate from
+    ``placements``: a placement is one file every surface reads the same way,
+    while a verdict is about the emulator a particular game will launch with.
+    Empty for a reading that did not happen, and a core it holds no entry for is
+    a core nothing was recorded about (:meth:`verdict_for`).
     """
 
     placements: tuple[FirmwarePlacement, ...]
     unread_cores: frozenset[str]
     resolved: bool
     caveats: tuple[str, ...] = ()
+    core_verdicts: Mapping[str, CoreFirmwareVerdict] = field(default_factory=dict)
+
+    def verdict_for(self, core_so: str | None) -> CoreFirmwareVerdict | None:
+        """What was recorded about *core_so*, or ``None`` where nothing was.
+
+        ``None`` for a core with no entry, and for a caller with no core to name
+        — an unresolvable active core is not a licence to answer for one.
+        """
+        return self.core_verdicts.get(core_so) if core_so is not None else None
 
     def by_file_name(self) -> dict[str, FirmwarePlacement]:
         """The placements indexed by file name — the shape every lookup wants.

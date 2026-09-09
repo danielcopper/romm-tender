@@ -315,6 +315,34 @@ and no others — and their **verdicts** are dropped unread. Either way, reading
 verdict would decline readiness for every row on every platform. The foil to **not on server**, which is a settled
 absence and does count towards readiness.
 
+### System image (firmware): held / absent / unsettled / not demanded
+
+Whether the core a game launches with has the firmware image its **console** cannot start without — a requirement no
+libretro declaration can express. A `.info` marks each file **needed** or **optional** and nothing else, so a core whose
+console will not boot without a BIOS image can only mark every image it declares optional, and the file counts alone
+then read a green **Nothing required** over a system on which no game starts. The console's own answer is world
+knowledge rather than a reading of the machine — the resolver keeps a source-cited table of it, per system.
+
+It is a **disjunction**, and that is what keeps it out of the counts. The console asks for _one_ of the images the core
+declares, not for each of them, so it is a single requirement over the whole list rather than one requirement per file.
+Folded into **required by active core** it would report every listed image as required — `0 / 20 required files ready`
+on the PlayStation page this was observed on; carried as its own axis it is worded "one of these" and never as a ratio.
+
+- **held** — one of the images is at its destination. Which one is not asked: any of them answers the whole requirement.
+- **absent** — the console needs one and every image the launching core declares was established to be absent. The
+  **BIOS level** goes to `missing`, ahead of every decline — a demonstration outranks an unjudged row.
+- **unsettled** — the console needs one and whether it is there could not be established. It can turn a green verdict
+  grey and nothing else: where the counts already read `partial` or `missing`, something is known to be absent and a
+  doubt about one further file does not unsay it.
+- **not demanded** — the axis makes no claim, and the file rows speak for themselves. Four recordings reach it: the core
+  carries its own substitute (PCSX ReARMed's HLE BIOS), the console was established to start with nothing present, the
+  question is recorded as open, or **nothing is recorded about the console at all**. The last is an unasked question and
+  may never be read as "this console needs no firmware" — the same rule that keeps **unknown** apart from **not needed**
+  one axis over.
+
+Scoped to the **active core**, like **required by active core** and unlike **wanted**: the same twenty PlayStation
+images read `absent` under SwanStation and `not demanded` under PCSX ReARMed over one unchanged machine.
+
 ### Safely-bakeable
 
 An ES-DE `<command>` the plugin can bake into a Steam shortcut's `-e` override: a real emulator invocation that **ends

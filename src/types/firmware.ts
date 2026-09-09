@@ -183,6 +183,10 @@ export interface FirmwarePlatformExt extends FirmwarePlatform {
    *  from a platform nothing could speak for: here the rows have answers and
    *  only the one-line verdict declines, so the downloads stay. */
   required_withheld?: number;
+  /** The console's own firmware demand on the launching core — see
+   *  {@link SystemImage}. Absent on a payload from before the field existed,
+   *  which reads as the neutral answer. */
+  system_image?: SystemImage;
   server_count?: number;
   local_count?: number;
   known_count?: number;
@@ -241,6 +245,21 @@ export interface BiosFileStatus extends FirmwareVerdict {
  */
 export type BiosLevel = "ok" | "partial" | "missing" | "unknown";
 
+/**
+ * Whether the core this platform launches with has the image its CONSOLE cannot
+ * start without — the backend's `classify_system_image`, and a value rather than
+ * a count because the requirement is a DISJUNCTION: the console asks for one of
+ * the images the core declares, not for each of them. A libretro `.info` has no
+ * way to say that, so such a core marks every image optional and the file counts
+ * alone read "nothing required" over a system that will not boot.
+ *
+ * `"not_demanded"` is the neutral answer and covers four recordings that all
+ * leave the file rows to speak for themselves — including "nothing is recorded
+ * about this console", which is an unasked question and never an all-clear. Every
+ * surface renders it as no sentence at all rather than as a green one.
+ */
+export type SystemImage = "not_demanded" | "held" | "absent" | "unsettled";
+
 export interface BiosStatus {
   needs_bios: boolean;
   server_count?: number;
@@ -257,6 +276,10 @@ export interface BiosStatus {
    *  answers. A row answered `false` is NOT here: that is a requirement shown to
    *  be unmet, and it reads red like any other. */
   required_withheld?: number;
+  /** The console's own firmware demand on the launching core — see
+   *  {@link SystemImage}. It is deliberately NOT in `required_count`: that count
+   *  is files each individually required, and this one is "one of these". */
+  system_image?: SystemImage;
   // Server files an installed emulator asks for, and files nothing could answer
   // about. A `not_needed` file is in neither — it is answered for, and wanted by
   // nothing — which is what keeps "nothing here is needed" apart from "nothing

@@ -95,33 +95,48 @@ function buildBiosCoreLines(
  * (#1660). What is true there is that nothing is required; the ratio is then
  * inventory, and says so. "Optional" would be the wrong word for it — those
  * files may be required by a core the user is not launching with.
+ *
+ * The **console's own demand** (`system_image`) is a third shape and comes first
+ * among the answers, because it is the one no count can state: the console needs
+ * ONE of these images and the core's declaration can only mark each of them
+ * optional. So it says "one of these" and never a required-file ratio — a
+ * PlayStation page read a green "Nothing required (0/20 files held)" while no
+ * game on it would start. It names no core: which core the sentence is about is
+ * the highlighted line in the list below, and repeating it here would be the
+ * same fact twice on one pane.
  */
 function buildBiosHeader(bios: BiosStatus, biosLevel: BiosTabProps["biosLevel"]): ReactElement[] {
   const localCount = bios.local_count ?? 0;
   const serverCount = bios.server_count ?? 0;
   const reqCount = bios.required_count ?? 0;
   const reqDone = bios.required_downloaded ?? 0;
+  const heldRatio = serverCount > 0 ? ` (${localCount}/${serverCount} files held)` : "";
 
   // Color is sourced from the backend unknown/ok/partial/missing verdict via the
   // shared helper — never re-derived here. The verbose phrasing below stays this
   // surface's own concern (per-surface wording).
   const biosColor = biosColorForLevel(biosLevel);
   let biosLabel: string;
-  if (biosLevel === "unknown") {
-    // Two ignorances behind one grey dot, and they are not the same sentence.
-    // With a required row nothing could judge, the requirement IS known — a
-    // folder whose contents could not be read, say — and it is the readiness
-    // that cannot be stated. Without one, nothing installed could say whether
-    // these files are wanted at all.
+  if (bios.system_image === "absent") {
+    biosLabel = `Needs one of these BIOS files${heldRatio}`;
+  } else if (biosLevel === "unknown") {
+    // Three ignorances behind one grey dot, and they are not the same sentence.
+    // With a required row nothing could judge — or with the console's own image
+    // unsettled — the requirement IS known and it is the readiness that cannot
+    // be stated. Otherwise nothing installed could say whether these files are
+    // wanted at all.
     // Neither is the "Nothing required" below, which is an answer.
-    biosLabel = (bios.required_withheld ?? 0) > 0 ? "BIOS readiness unknown" : "BIOS requirement unknown";
+    biosLabel =
+      (bios.required_withheld ?? 0) > 0 || bios.system_image === "unsettled"
+        ? "BIOS readiness unknown"
+        : "BIOS requirement unknown";
   } else if (reqCount > 0) {
     biosLabel =
       reqDone >= reqCount
         ? `All required ready (${reqDone}/${reqCount})`
         : `${reqDone}/${reqCount} required files ready`;
   } else {
-    biosLabel = serverCount > 0 ? `Nothing required (${localCount}/${serverCount} files held)` : "Nothing required";
+    biosLabel = `Nothing required${heldRatio}`;
   }
 
   return [

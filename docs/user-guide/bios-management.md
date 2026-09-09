@@ -29,7 +29,8 @@ unknown/ok/partial/missing verdict used everywhere in the plugin:
 - **Green** — nothing required is missing: "All required ready (2/2)", or "Nothing required (3/5 files held)" when the
   core you launch with requires none of the system's files
 - **Orange** — some required files present: "1/2 required files ready"
-- **Red** — no required files present yet
+- **Red** — no required files present yet, or "Needs one of these BIOS files" where the console itself will not start
+  without one of them (see [When the console needs a BIOS image](#when-the-console-needs-a-bios-image))
 - **Grey** — no readiness claim, in one of two wordings: "BIOS requirement unknown", where the plugin could not work the
   requirement out at all (see [When the requirement is unknown](#when-the-requirement-is-unknown)), or "BIOS readiness
   unknown", where it knows the requirement and could not settle whether you have it (see
@@ -165,8 +166,10 @@ and the row you focus is the one the right-hand pane describes.
    RetroDECK not found — a line under the header says so as well, since a tooltip needs a mouse
 6. **BIOS files** states how many required files are ready (e.g. "1 / 2 required") when the system needs any, and
    otherwise reads "Nothing required" with the inventory of your library's files beside it (e.g. "3 / 5 files held"). A
-   system with a required row the plugin could not judge — a declared folder it could not read, say — reads "BIOS
-   readiness unknown" instead — see [When readiness cannot be stated](#when-readiness-cannot-be-stated)
+   console that will not start without one of the listed images, with none of them in place, reads **"Needs one of
+   these"** — see [When the console needs a BIOS image](#when-the-console-needs-a-bios-image). A system with a required
+   row the plugin could not judge — a declared folder it could not read, say — reads "BIOS readiness unknown" instead —
+   see [When readiness cannot be stated](#when-readiness-cannot-be-stated)
 7. Below it, a table lists the files themselves: the **file**, whether it is **on disk**, and its **contents**. Where
    the emulator asks for the file in a subfolder, the folder is shown in front of the name (`dc/` **`dc_boot.bin`**) —
    that is where it has to go, and it is the one thing you need when placing a file by hand. The description in
@@ -349,6 +352,37 @@ where there was no answer at all, and they come back the moment anything install
     or amber**, because one does and the table simply never knew, or **grey**, because the system offers no RetroArch
     core to ask. All three are new, and all three are honest.
 
+### When the console needs a BIOS image
+
+Some consoles do not start at all without a BIOS image — the PlayStation is the standard example. A RetroArch core has
+no way to say that. Its description file marks each file it wants **required** or **optional**, and nothing more, so a
+core like SwanStation marks every PlayStation BIOS image _optional_ — which is true of each file on its own, because any
+one of them will do, and misleading about the console, which needs one of them.
+
+Read off the file list alone that came out as a green **"Nothing required (0/20 files held)"** on a Steam Deck with no
+PlayStation BIOS at all, while not one PS1 game would launch. The plugin now carries the console's own answer beside the
+file list, and the page says:
+
+**Needs one of these BIOS files (0/20 files held)** — red.
+
+Three things about that line:
+
+- **One of these, not all of these.** There is one requirement here and a page full of files that could satisfy it. Put
+  any single one of them in place and the line turns green — you do not need twenty BIOS images, or two, and the page
+  never reports a "0 / 20 required" ratio for it.
+- **It follows the core you launch with.** PCSX ReARMed ships its own built-in replacement for the PlayStation BIOS, so
+  the same page with that core selected reads green and stays green. Switch back to SwanStation, or Beetle PSX, and the
+  red line comes back. The BIOS tab's core list highlights whichever core the line is about.
+- **It is a statement about the console, not about your library.** The file rows underneath are unchanged: each one
+  still says whether it is present, which cores use it, and whether your RomM library holds it. The downloads are
+  unchanged too — fetching one of the listed images is exactly what clears the line.
+
+Where the plugin cannot tell whether one of them is in place, it says **"BIOS readiness unknown"** rather than picking a
+colour — see the next section, which that shape shares.
+
+Systems the plugin holds no such record for are unaffected, and this is deliberate: no record means nobody has checked
+that console, which is not the same as "this console needs nothing". Those systems keep exactly the page they had.
+
 ### When readiness cannot be stated
 
 There is a second grey state, and it is a different sentence: **"BIOS readiness unknown"**. Here the plugin knows
@@ -359,6 +393,9 @@ The usual cause is a required **folder** the plugin could not read all the way: 
 come back, a folder it could not list in full, or an image its identity table and the emulator's own check disagree
 about. It is not the ordinary state of a PS2 system — a folder that reads cleanly is answered green or red like any
 other requirement.
+
+The second cause is the one the previous section describes: the console needs a BIOS image and whether one of them is in
+place could not be settled — every candidate row unread, say. The requirement is known; only the answer is not.
 
 What the plugin will not do is guess at the part it could not reach. A folder whose listing broke off part-way might
 hold a BIOS image in the part that was never read, or might not; calling it ready and calling it empty are both claims

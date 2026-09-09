@@ -16,7 +16,7 @@
 import type { FC, ReactNode } from "react";
 import { ConfirmModal, DialogButton, Focusable, showContextMenu, showModal, Spinner } from "@decky/ui";
 import { FaMicrochip } from "react-icons/fa";
-import type { FirmwarePlatformExt, SystemCoreInfo } from "../../types";
+import type { FirmwarePlatformExt, SystemCoreInfo, SystemImage } from "../../types";
 import { biosColorForLevel } from "../../utils/biosColor";
 import { biosFileNote } from "../../utils/biosFileNote";
 import { buildEmulatorMenu } from "../../utils/emulatorMenu";
@@ -110,7 +110,19 @@ function getBiosSummary(
   optionalMissing: number,
   done: number,
   total: number,
+  systemImage: SystemImage,
 ) {
+  // The console's own demand comes first, because no count can state it: it asks
+  // for ONE of these images and a libretro declaration can only mark each of
+  // them optional, so the required-file phrasing below reads "Nothing required"
+  // over a system that will not boot. Stated as "one of these" and never as a
+  // ratio — the list is many files and the requirement is one.
+  if (systemImage === "absent") {
+    return {
+      summaryLabel: "Needs one of these",
+      summaryDescription: "This system needs one of these BIOS files and none of them is in place",
+    };
+  }
   if (requiredCount > 0 && requiredReady) {
     return {
       summaryLabel: `${requiredDone} / ${requiredCount} required`,
@@ -131,20 +143,28 @@ function getBiosSummary(
 }
 
 /**
- * The summary for a platform making no readiness claim. Two shapes reach it and
- * they are different sentences.
+ * The summary for a platform making no readiness claim. Three shapes reach it
+ * and they are different sentences.
  *
  * `requiredWithheld` above zero is a platform whose emulators DID answer and one
  * of whose required rows nothing could judge — a declared folder the resolver
- * could not read, say. Zero is no installed emulator's answer being established
- * for the platform at all.
+ * could not read, say. An unsettled `system_image` is the same kind of gap one
+ * axis over: the console's own demand is known and whether it is met is not.
+ * Neither is the last shape, which is no installed emulator's answer being
+ * established for the platform at all.
  *
- * The second states no count. The rows nothing could answer for are counted
+ * That last one states no count. The rows nothing could answer for are counted
  * once, under the table where the line that carries them also says where to
  * report the gap — and on this platform they are every row, so a count up here
  * as well is the same sentence twice on one screen.
  */
-function getUnknownSummary(requiredWithheld: number) {
+function getUnknownSummary(requiredWithheld: number, systemImage: SystemImage) {
+  if (systemImage === "unsettled") {
+    return {
+      summaryLabel: "BIOS readiness unknown",
+      summaryDescription: "Whether the BIOS image this system needs is in place could not be established",
+    };
+  }
   if (requiredWithheld > 0) {
     return {
       summaryLabel: "BIOS readiness unknown",
@@ -789,10 +809,14 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
 
   const isUnknown = firmware.bios_level === "unknown";
   const requiredWithheld = firmware.required_withheld ?? 0;
-  const nothingEstablished = isUnknown && requiredWithheld === 0;
+  const systemImage = firmware.system_image ?? "not_demanded";
+  // An unsettled console demand is a declined VERDICT and not an unanswered
+  // platform: its rows were answered, so the downloads below stay — the same
+  // reading `requiredWithheld` gets, one axis over.
+  const nothingEstablished = isUnknown && requiredWithheld === 0 && systemImage !== "unsettled";
   const { summaryLabel, summaryDescription } = isUnknown
-    ? getUnknownSummary(requiredWithheld)
-    : getBiosSummary(requiredCount, requiredDone, requiredReady, optionalMissing, done, total);
+    ? getUnknownSummary(requiredWithheld, systemImage)
+    : getBiosSummary(requiredCount, requiredDone, requiredReady, optionalMissing, done, total, systemImage);
 
   // The download affordances key off what is missing AND fetchable, never off
   // readiness: a required file the RomM library does not hold leaves the

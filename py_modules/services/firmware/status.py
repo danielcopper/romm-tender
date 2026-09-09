@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING, Any
 from domain import firmware_paths
 from domain.bios_status import (
     BIOS_LEVEL_UNKNOWN,
+    SYSTEM_IMAGE_NOT_DEMANDED,
+    classify_system_image,
     collect_firmware_status,
     compute_bios_label,
     compute_bios_level,
@@ -125,7 +127,7 @@ class FirmwareStatusReader:
         core_so, _ = self._core_info.get_active_core(system)
         return core_so
 
-    def _bios_aggregates(self, files, platform_slug: str, complete: bool) -> dict[str, Any]:
+    def _bios_aggregates(self, files, platform_slug: str, complete: bool, system_image: str) -> dict[str, Any]:
         """The counts, level and label every surface reads off one classified file list.
 
         One derivation for the per-game paths and the overview, so a platform
@@ -147,6 +149,12 @@ class FirmwareStatusReader:
         answer about the files themselves, and are the library's set too — they
         are weighed against ``server_count``, so a row it does not hold would
         raise the numerator of a ratio it is not in.
+
+        *system_image* is a fourth axis and the only one that is not a count
+        (:func:`classify_system_image`): the console's own demand on the
+        launching core is disjunctive — one of these images, not each of them —
+        so it travels as a value and every surface words it rather than printing
+        it as a ratio.
         """
         on_server = [f for f in files if f.on_server]
         server_count = len(on_server)
@@ -164,6 +172,7 @@ class FirmwareStatusReader:
             "required_withheld": count_required_withheld(files),
             "unknown_count": unknown_count,
             "known_count": known_count,
+            "system_image": system_image,
         }
         # The bios_level state ("unknown" / "ok" / "partial" / "missing") and the
         # compact bios_label beside it, so every consumer reads the verdict
@@ -181,14 +190,19 @@ class FirmwareStatusReader:
         # The rows travel with the counts here because one of those two shapes
         # turns on there being no row; ``result`` itself stays row-free, because
         # it is the aggregate half of a payload that carries them separately.
-        status = format_bios_status({**result, "files": files}, platform_slug, reading_complete=complete)
+        status = format_bios_status(
+            {**result, "files": files}, platform_slug, reading_complete=complete, system_image=system_image
+        )
         result["bios_level"] = compute_bios_level(status)
         result["bios_label"] = compute_bios_label(status)
         return result
 
-    def _bios_payload(self, files, platform_slug: str, complete: bool) -> dict[str, Any]:
+    def _bios_payload(self, files, platform_slug: str, complete: bool, system_image: str) -> dict[str, Any]:
         """The aggregates plus the per-file rows — what the per-game surfaces read."""
-        return {**self._bios_aggregates(files, platform_slug, complete), "files": [asdict(f) for f in files]}
+        return {
+            **self._bios_aggregates(files, platform_slug, complete, system_image),
+            "files": [asdict(f) for f in files],
+        }
 
     # ── The whole-library overview ───────────────────────────
 
@@ -393,14 +407,18 @@ class FirmwareStatusReader:
             plat["has_games"] = slug in synced_slugs
             plat["all_downloaded"] = all(f["downloaded"] for f in plat["files"])
             self._stamp_deletable(plat, slug, records)
-            self._set_platform_bios_aggregates(plat, slug, files, complete)
+            system_image = classify_system_image(catalogue.verdict_for(core_so), files, core_so)
+            self._set_platform_bios_aggregates(plat, slug, files, complete, system_image)
 
-    def _set_platform_bios_aggregates(self, plat: dict[str, Any], slug: str, files, complete: bool) -> None:
+    def _set_platform_bios_aggregates(
+        self, plat: dict[str, Any], slug: str, files, complete: bool, system_image: str
+    ) -> None:
         """Stamp the per-platform BIOS aggregates onto a ``get_firmware_status`` entry.
 
         Adds ``server_count`` / ``local_count`` / ``required_count`` /
-        ``required_downloaded`` / ``required_withheld`` and the ``bios_level``
-        state (``"unknown"`` / ``"ok"`` / ``"partial"`` / ``"missing"``) so the
+        ``required_downloaded`` / ``required_withheld`` / ``system_image`` and the
+        ``bios_level`` state (``"unknown"`` / ``"ok"`` / ``"partial"`` /
+        ``"missing"``) so the
         platform detail reads the decision and the display counts straight off
         this payload instead of re-deriving the threshold logic in the frontend. The
         whole payload comes from the same builder the per-game path uses, so the
@@ -414,14 +432,19 @@ class FirmwareStatusReader:
         *complete* is the reading state for the platform's own emulators, and it
         is what stops a platform with no file at all from reading a green "all
         ready" it could not have established.
+
+        *system_image* is the console's own demand on the launching core, and it
+        travels beside the counts rather than in them: the pane words it and the
+        list's tooltip words it, and neither may state it as a ratio.
         """
-        payload = self._bios_aggregates(files, slug, complete)
+        payload = self._bios_aggregates(files, slug, complete, system_image)
         plat["server_count"] = payload["server_count"]
         plat["local_count"] = payload["local_count"]
         plat["required_count"] = payload["required_count"]
         plat["required_downloaded"] = payload["required_downloaded"]
         plat["required_withheld"] = payload["required_withheld"]
         plat["bios_level"] = payload["bios_level"]
+        plat["system_image"] = payload["system_image"]
 
     async def get_firmware_status(self) -> dict[str, Any]:
         """Return BIOS/firmware status for every platform the page can speak for.
@@ -486,8 +509,9 @@ class FirmwareStatusReader:
 
         An unreachable server costs the files only it knows about, not the
         answer: what the platform's emulators want is read locally either way.
-        The one payload that still says nothing is a platform with no requirement
-        AND no complete reading — that ``needs_bios: False`` carries
+        The one payload that still says nothing is a platform with no row to show
+        AND either no complete reading or a console whose own firmware demand
+        this list cannot speak for — that ``needs_bios: False`` carries
         ``bios_status_unknown: True`` and no consumer may read it as "this
         platform needs none" (#1693).
         """
@@ -516,11 +540,13 @@ class FirmwareStatusReader:
         )
         complete = catalogue.reading_complete_for(scope)
         files = collect_firmware_status(items, placements, complete, active_core_so)
+        system_image = classify_system_image(catalogue.verdict_for(active_core_so), files, active_core_so)
 
         if not files:
-            return {"needs_bios": False} if complete else {"needs_bios": False, "bios_status_unknown": True}
+            settled = complete and system_image == SYSTEM_IMAGE_NOT_DEMANDED
+            return {"needs_bios": False} if settled else {"needs_bios": False, "bios_status_unknown": True}
 
-        return self._bios_payload(files, platform_slug, complete)
+        return self._bios_payload(files, platform_slug, complete, system_image)
 
 
 def _core_scope(options: dict[str, Any]) -> list[str] | None:

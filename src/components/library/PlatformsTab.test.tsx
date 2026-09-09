@@ -2377,6 +2377,71 @@ describe("Library › Platforms", () => {
       expect(buttonByText(container, "Download all")).toBeDisabled();
     });
 
+    it("says the console needs one of these where the counts would say nothing is required", async () => {
+      // The PlayStation state: every image the core declares is `optional`,
+      // because that is all a libretro `.info` can say, so the counts read
+      // "Nothing required" over a console that will not boot. One requirement,
+      // twenty files — so no ratio, here or in the list's own words.
+      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
+        success: true,
+        platforms: [
+          firmwarePlatform({
+            bios_level: "missing",
+            required_count: 0,
+            required_downloaded: 0,
+            required_withheld: 0,
+            system_image: "absent",
+            server_count: 3,
+            files: [firmwareFile({ wanted: "optional", required_by_active: false })],
+          }),
+        ],
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("Needs one of these");
+      expect(container.textContent).toContain("This system needs one of these BIOS files and none of them is in place");
+      expect(container.textContent).not.toContain("Nothing required");
+      const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
+        el.textContent.includes("Game Boy Advance"),
+      );
+      expect(row?.title).toBe("Needs one of these BIOS files");
+      // The rows were answered, so what the library still holds stays fetchable.
+      expect(buttonByText(container, "Download all")).not.toBeDisabled();
+    });
+
+    it("keeps the downloads when the console's own image is the unsettled part", async () => {
+      // An unsettled demand is a declined VERDICT, not an unanswered platform:
+      // its rows have answers, so withdrawing the downloads would take away the
+      // one thing that can still move it along.
+      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
+        success: true,
+        platforms: [
+          firmwarePlatform({
+            bios_level: "unknown",
+            required_count: 0,
+            required_downloaded: 0,
+            required_withheld: 0,
+            system_image: "unsettled",
+          }),
+        ],
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("BIOS readiness unknown");
+      expect(container.textContent).toContain(
+        "Whether the BIOS image this system needs is in place could not be established",
+      );
+      expect(container.textContent).not.toContain("Nothing installed could answer for this system");
+      expect(container.textContent).not.toContain("You can still put BIOS files in your BIOS folder by hand");
+      expect(buttonByText(container, "Download all")).not.toBeDisabled();
+      const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
+        el.textContent.includes("Game Boy Advance"),
+      );
+      expect(row?.title).toBe("BIOS readiness unknown");
+    });
+
     it("keeps the downloads when only the readiness verdict is withheld", async () => {
       vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
         success: true,

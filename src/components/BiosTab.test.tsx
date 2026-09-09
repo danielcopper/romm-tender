@@ -86,6 +86,85 @@ describe("BiosTab", () => {
     expect(container.textContent).not.toContain("files held");
   });
 
+  it("says the console needs one of these where the counts would say nothing is required", () => {
+    // The PlayStation state, and the whole reason the axis exists: SwanStation
+    // marks every image it declares optional — that is all a libretro `.info`
+    // can say — so `required_count` is 0 and the pane read a green "Nothing
+    // required (0/20 files held)" while no game on the platform would start.
+    // The sentence has to say ONE of these; twenty files are one requirement.
+    const { container } = render(
+      <BiosTab
+        biosStatus={{
+          needs_bios: true,
+          server_count: 20,
+          local_count: 0,
+          all_downloaded: false,
+          required_count: 0,
+          required_downloaded: 0,
+          system_image: "absent",
+        }}
+        biosLevel="missing"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+    expect(container.textContent).toContain("Needs one of these BIOS files (0/20 files held)");
+    expect(container.textContent).not.toContain("Nothing required");
+    expect(container.textContent).not.toContain("required files ready");
+    expect(container.innerHTML).toContain("#d94126");
+  });
+
+  it("names the readiness as the unknown where the console's own image is unsettled", () => {
+    // The requirement IS known here — this console needs an image — and it is
+    // whether one is in place that could not be established. "BIOS requirement
+    // unknown" would be the wrong half.
+    const { container } = render(
+      <BiosTab
+        biosStatus={{
+          needs_bios: true,
+          server_count: 20,
+          local_count: 0,
+          all_downloaded: false,
+          required_count: 0,
+          required_downloaded: 0,
+          required_withheld: 0,
+          system_image: "unsettled",
+        }}
+        biosLevel="unknown"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+    expect(container.textContent).toContain("BIOS readiness unknown");
+    expect(container.textContent).not.toContain("Nothing required");
+  });
+
+  it("says nothing of its own for the two quiet answers", () => {
+    // `not_demanded` covers a console nothing is recorded about, and it must
+    // change nothing — its own sentence would be a claim about an unasked
+    // question.
+    for (const systemImage of ["not_demanded", "held"] as const) {
+      const { container } = render(
+        <BiosTab
+          biosStatus={{
+            needs_bios: true,
+            server_count: 20,
+            local_count: 1,
+            all_downloaded: false,
+            required_count: 0,
+            required_downloaded: 0,
+            system_image: systemImage,
+          }}
+          biosLevel="ok"
+          coreInfo={coreInfo}
+          isActive={true}
+        />,
+      );
+      expect(container.textContent).toContain("Nothing required (1/20 files held)");
+      expect(container.textContent).not.toContain("Needs one of these");
+    }
+  });
+
   it("puts a satisfied folder's images on their own lines, under a name short enough to keep its dot", () => {
     // The row's name and its status dot share one flex line. Folding three
     // image descriptions into that name ran it to ~150 characters, wrapped the

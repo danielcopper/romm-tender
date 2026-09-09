@@ -13,6 +13,14 @@ the game in front of the user is ready to launch** is scoped to the core it will
 launch with, which is why an entry carries ``required_by_active`` beside its
 ``wanted`` and why the counts key off the first. A file three other cores demand
 is not a missing prerequisite for this launch.
+
+A third axis joins them and is a THIRD axis rather than a third count, because
+it is not counted at all: the **system image** (:func:`classify_system_image`).
+Where the console does not start without one of the images the launching core
+declares, what is missing is one file out of many rather than each of many —
+folding it into ``required_count`` would report every one of them as required
+where the truth is "one of these". It carries its own value and its own
+sentence, and it can only ever make the verdict less green.
 """
 
 from __future__ import annotations
@@ -32,7 +40,7 @@ from domain.firmware_wants import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from domain.firmware_wants import FirmwarePlacement
+    from domain.firmware_wants import CoreFirmwareVerdict, FirmwarePlacement
 
 BIOS_LEVEL_UNKNOWN = "unknown"
 BIOS_LEVEL_OK = "ok"
@@ -43,6 +51,29 @@ BIOS_LEVEL_MISSING = "missing"
 # constant because a caller that ships the level without going through the
 # function still has to name the label that goes with it.
 BIOS_LABEL_UNKNOWN = "Unknown"
+BIOS_LABEL_MISSING = "Missing"
+
+# The four answers to "does the launching core have the image its CONSOLE cannot
+# start without". Not a count and never one: the requirement is disjunctive.
+#
+# ``not_demanded`` is the neutral value and covers four different recordings —
+# the core carries its own substitute, the console was established to start with
+# nothing present, nobody has established which, and nothing is recorded about
+# the console at all. It says this axis makes no claim, and it must never be
+# read as "this console needs no firmware": the last of those four is an unasked
+# question, and reading it as an answer is the collapse
+# :mod:`domain.firmware_wants` exists to prevent.
+SYSTEM_IMAGE_NOT_DEMANDED = "not_demanded"
+SYSTEM_IMAGE_HELD = "held"
+SYSTEM_IMAGE_ABSENT = "absent"
+SYSTEM_IMAGE_UNSETTLED = "unsettled"
+
+SYSTEM_IMAGE_VALUES = (
+    SYSTEM_IMAGE_NOT_DEMANDED,
+    SYSTEM_IMAGE_HELD,
+    SYSTEM_IMAGE_ABSENT,
+    SYSTEM_IMAGE_UNSETTLED,
+)
 
 
 @dataclass(frozen=True)
@@ -142,6 +173,10 @@ class BiosStatus:
     # not supply it keeps the level it always got; the one decision it moves is
     # a platform with no files at all.
     reading_complete: bool = True
+    # The launching core's system-image answer (:func:`classify_system_image`),
+    # one of :data:`SYSTEM_IMAGE_VALUES`. Defaults to the neutral value so a
+    # caller that does not supply it keeps the verdict it always got.
+    system_image: str = SYSTEM_IMAGE_NOT_DEMANDED
     cached_at: float = 0.0
 
 
@@ -150,6 +185,7 @@ def format_bios_status(
     platform_slug: str,
     *,
     reading_complete: bool = True,
+    system_image: str = SYSTEM_IMAGE_NOT_DEMANDED,
     cached_at: float = 0.0,
 ) -> BiosStatus:
     """Build a frontend-ready BiosStatus dataclass from raw firmware check result."""
@@ -202,6 +238,7 @@ def format_bios_status(
         known_count=bios.get("known_count"),
         unknown_count=bios.get("unknown_count", 0),
         reading_complete=reading_complete,
+        system_image=system_image,
         cached_at=cached_at,
     )
 
@@ -344,6 +381,58 @@ def count_required_withheld(files: tuple[BiosFileEntry, ...]) -> int:
     return sum(1 for f in files if f.required_by_active and f.satisfied is None)
 
 
+def classify_system_image(
+    verdict: CoreFirmwareVerdict | None,
+    files: tuple[BiosFileEntry, ...],
+    active_core_so: str | None,
+) -> str:
+    """Does the launching core have the image its CONSOLE cannot start without?
+
+    One of :data:`SYSTEM_IMAGE_VALUES`. The question only arises for a core the
+    resolver's packaged table puts in that state; every other recording — a core
+    carrying its own substitute, a console established to start with nothing, an
+    open entry, no entry at all — answers :data:`SYSTEM_IMAGE_NOT_DEMANDED` and
+    leaves the file rows to speak for themselves.
+
+    **The requirement is a disjunction and is read as one.** The console asks for
+    ONE of the images the core declares, so a single satisfied row answers it and
+    a page full of absent ones is still one unmet requirement. That is why this
+    is a value and not a pair of counts: put into ``required_count`` it would
+    read ``0/N required files ready`` over a console that needs one image, with
+    ``N`` the whole list — the observed PlayStation page shows twenty.
+
+    **Held is read off the rows, not off the resolver's own verdict**, and
+    deliberately: every other readiness answer on these surfaces is presence at
+    the destination as the resolver read it, while ``requirements_met``
+    additionally wants the bytes IDENTIFIED — and the machine-wide reading is
+    asked unverified, so a PlayStation BIOS sitting right where the core will
+    open it comes back unestablished. Taking the verdict from there would grey a
+    page whose every row is green, which is a worse sentence than the one it
+    replaced.
+
+    ``requirements_met`` is read for the one thing it can say that the rows
+    cannot, and only in the direction it is safe in: where it states the core
+    will not start while the rows show an image held, the two readings disagree
+    and a disagreement is not a claim, so the answer declines. It can never turn
+    a decline into a hold.
+
+    *files* is this platform's list, so the disjunction spans the images this
+    core declares that the platform's own rows carry. The resolver reads the same
+    disjunction over every image the core declares machine-wide; the two sets
+    come apart only for a core serving several systems, and upstream states that
+    no core in its vector corpus or on its reference machine reaches this state
+    while declaring for more than one.
+    """
+    if verdict is None or active_core_so is None or not verdict.system_needs_an_image:
+        return SYSTEM_IMAGE_NOT_DEMANDED
+    images = [f for f in files if active_core_so in f.cores]
+    if any(f.satisfied for f in images):
+        return SYSTEM_IMAGE_UNSETTLED if verdict.requirements_met is False else SYSTEM_IMAGE_HELD
+    if images and all(f.satisfied is False for f in images):
+        return SYSTEM_IMAGE_ABSENT
+    return SYSTEM_IMAGE_UNSETTLED
+
+
 def _nothing_established(status: BiosStatus) -> bool:
     """Nothing about this platform's firmware could be established.
 
@@ -391,21 +480,8 @@ def _requirement_verdict_withheld(status: BiosStatus) -> bool:
     return any(f.required_by_active and f.satisfied is None for f in status.files)
 
 
-def compute_bios_level(status: BiosStatus) -> str:
-    """Compute BIOS status level: 'unknown', 'ok', 'partial', or 'missing'.
-
-    ``'unknown'`` means no readiness claim can be made — see
-    :func:`_nothing_established` and :func:`_requirement_verdict_withheld` for the three
-    shapes that reach it. They are checked first, before the required-count
-    logic; the first two only fire when the caller supplied ``known_count``
-    (else the decision is deferred to the existing ok/partial/missing logic).
-
-    A platform whose files are all *answered for* and wanted by nothing is a
-    different case entirely and reaches ``'ok'``: "no emulator here needs these"
-    is a finished answer, and the file rows say which files it covers.
-    """
-    if _nothing_established(status) or _requirement_verdict_withheld(status):
-        return BIOS_LEVEL_UNKNOWN
+def _counted_level(status: BiosStatus) -> str:
+    """The level the file counts alone give — the rule that predates every decline."""
     req_count = status.required_count
     req_done = status.required_downloaded
     if req_count is not None and req_done is not None:
@@ -421,14 +497,56 @@ def compute_bios_level(status: BiosStatus) -> str:
     return BIOS_LEVEL_MISSING
 
 
+def compute_bios_level(status: BiosStatus) -> str:
+    """Compute BIOS status level: 'unknown', 'ok', 'partial', or 'missing'.
+
+    ``'unknown'`` means no readiness claim can be made — see
+    :func:`_nothing_established` and :func:`_requirement_verdict_withheld` for the three
+    shapes that reach it. They are checked before the required-count logic; the
+    first two only fire when the caller supplied ``known_count`` (else the
+    decision is deferred to the existing ok/partial/missing logic).
+
+    A platform whose files are all *answered for* and wanted by nothing is a
+    different case entirely and reaches ``'ok'``: "no emulator here needs these"
+    is a finished answer, and the file rows say which files it covers.
+
+    The **system image** (:func:`classify_system_image`) enters at both ends and
+    only ever makes the answer less green. An established absence is checked
+    first and lands on ``'missing'``, ahead of every decline, because a
+    demonstration outranks an unjudged row — the same precedence the resolver
+    applies to its own two. An unsettled one can turn a green claim grey and
+    nothing else: where the counts already read ``'partial'`` or ``'missing'``,
+    something is known to be absent, and a doubt about one further file does not
+    unsay it.
+    """
+    if status.system_image == SYSTEM_IMAGE_ABSENT:
+        return BIOS_LEVEL_MISSING
+    if _nothing_established(status) or _requirement_verdict_withheld(status):
+        return BIOS_LEVEL_UNKNOWN
+    level = _counted_level(status)
+    if status.system_image == SYSTEM_IMAGE_UNSETTLED and level == BIOS_LEVEL_OK:
+        return BIOS_LEVEL_UNKNOWN
+    return level
+
+
 def compute_bios_label(status: BiosStatus) -> str:
     """Compute the compact BIOS status token (verbose phrasing stays per-surface).
 
-    Declines on exactly the shapes :func:`compute_bios_level` declines on, so the
-    token beside a grey dot can never read as a ratio the verdict withheld.
+    Declines on exactly the shapes :func:`compute_bios_level` declines on — by
+    asking it rather than by repeating them, so the token beside a grey dot can
+    never read as a ratio the verdict withheld.
     """
-    if _nothing_established(status) or _requirement_verdict_withheld(status):
+    if compute_bios_level(status) == BIOS_LEVEL_UNKNOWN:
         return BIOS_LABEL_UNKNOWN
+    # A console that needs one of these images and holds none: the ratio would
+    # count the wrong set, and the disjunction has no ratio to state.
+    if status.system_image == SYSTEM_IMAGE_ABSENT:
+        return BIOS_LABEL_MISSING
+    return _counted_label(status)
+
+
+def _counted_label(status: BiosStatus) -> str:
+    """The token the file counts alone give — :func:`_counted_level`'s ratios in words."""
     req_count = status.required_count
     req_done = status.required_downloaded
     if req_count is not None and req_done is not None:
@@ -436,12 +554,12 @@ def compute_bios_label(status: BiosStatus) -> str:
             return "OK"
         if req_done > 0:
             return f"{req_done}/{req_count} required"
-        return "Missing"
+        return BIOS_LABEL_MISSING
     if status.all_downloaded:
         return "OK"
     if (status.local_count or 0) > 0:
         return f"{status.local_count}/{status.server_count}"
-    return "Missing"
+    return BIOS_LABEL_MISSING
 
 
 def count_wanted(files: tuple[BiosFileEntry, ...]) -> tuple[int, int]:
