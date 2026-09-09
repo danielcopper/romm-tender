@@ -646,11 +646,14 @@ Format: **invariant** — tier — enforced by.
   (`src/components/RomMGameInfoPanel.test.tsx`); the store side and every new write site on either are prompt-only,
   because a checker scoped to the store's own function bodies would be green on the case this rule was written for. The
   reasons behind the two writer mechanisms live at `writerForRom` and `RomBinding` — do not restate them here
-- **Every row a reader must be able to reach on a wide QAM page is a row Steam can focus — a toggle, a button, or a
+- **Every row a reader must be able to reach on a QAM page is a row Steam can focus — a toggle, a button, or a
   `Focusable` carrying an activate handler, including a table row with no action of its own, so the reader can walk the
-  table** — prompt-only — nothing checks it, and the frontend suite cannot see it: happy-dom has no nav tree, so a page
-  whose rows are unreachable renders exactly like one whose rows are not, and a mouse-driven dev loop never meets the
-  problem either. A region scrolls only by moving focus — Steam's plain `ScrollPanel` binds no gamepad direction — so an
+  table** — check + prompt-only — `tender/qam-focusable-row` checks the narrow syntactic slice where an `@decky/ui`
+  `Focusable` in the QAM module map has no self-focus prop, static focusable descendant, opaque child, or unknown
+  spread; focus order, runtime reachability, edge revelation, scrolling geometry, and controller behaviour remain
+  prompt-only. The frontend suite cannot see those runtime properties: happy-dom has no nav tree, so a page whose rows
+  are unreachable renders exactly like one whose rows are not, and a mouse-driven dev loop never meets the problem
+  either. A region scrolls only by moving focus — Steam's plain `ScrollPanel` binds no gamepad direction — so an
   unreachable row is also an unscrollable one, and everything below the fold is simply out of reach with a controller.
   The trap is that a bare `Focusable` is a container rather than a focus stop: the base panel sets `focusable` only from
   a caller prop or an `onActivate`/`onOKButton`, and `GetFocusable()` answers `"none"` for a node with neither and no

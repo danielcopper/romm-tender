@@ -7,6 +7,7 @@ import importX, { createNodeResolver } from "eslint-plugin-import-x";
 import { createTypeScriptImportResolver } from "eslint-import-resolver-typescript";
 import eslintConfigPrettier from "eslint-config-prettier";
 import globals from "globals";
+import qamFocusableRow from "./eslint-rules/qam-focusable-row.js";
 
 export default tseslint.config(
   // `.venv` (local uv/mise Python env) and `site` (local mkdocs build output) are
@@ -80,6 +81,27 @@ export default tseslint.config(
           ],
         },
       ],
+    },
+  },
+  {
+    files: [
+      "src/index.tsx",
+      "src/components/{MainPage,SyncPage,LibraryPage,SettingsPage,DangerZone,RemovedGamesCleanup,DownloadQueue}.tsx",
+      "src/components/{SessionBudgetBanner,MigrationBlockedPage,SettingsResetBanner,PlaytimeScopeBanner,DownloadProgressRow,LoadingRow}.tsx",
+      "src/components/{qam,sync,library,settings}/**/*.tsx",
+    ],
+    // A test renders no row a reader walks, and a modal is not a panel row at all —
+    // it mounts in Steam's `ModalRoot`, outside the region that scrolls by focus.
+    // Neither exemption is load-bearing today: with both removed the rule still
+    // reports nothing across `src/**/*.tsx`.
+    ignores: ["src/**/*.test.tsx", "src/components/**/*Modal.tsx"],
+    plugins: {
+      tender: {
+        rules: { "qam-focusable-row": qamFocusableRow },
+      },
+    },
+    rules: {
+      "tender/qam-focusable-row": "error",
     },
   },
   {
