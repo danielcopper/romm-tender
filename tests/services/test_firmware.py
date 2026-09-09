@@ -2030,8 +2030,11 @@ def _psx_service(
 
     Every image the core declares is ``optional`` — that is all a libretro
     ``.info`` can say — so the file counts alone report nothing required. What
-    separates a console that boots from one that does not is the per-core
-    verdict, which is why it is seeded per core here rather than per file.
+    separates a console that boots from one that does not is the resolver's
+    ``system_firmware`` entry, which is why it is seeded per core here rather
+    than per file. ``requirements_met`` is seeded beside it because the resolver
+    carries it, not because anything reads it: the default is the ``False`` the
+    reference device reports for every core in this state.
     """
     romm_api = MagicMock()
     romm_api.list_firmware.return_value = [
@@ -2085,10 +2088,13 @@ class TestTheConsolesOwnFirmwareDemand:
 
     @pytest.mark.asyncio
     async def test_one_image_in_place_answers_the_whole_demand(self, tmp_path):
+        # ``requirements_met`` stays at the default ``False`` deliberately: the
+        # answer is a reading of the rows, so the resolver's own verdict over the
+        # core's whole declaration cannot take a held image back off the page.
         bios_dir = tmp_path / "bios"
         bios_dir.mkdir()
         (bios_dir / "scph5501.bin").write_bytes(b"bios")
-        fw = _psx_service(held="scph5501.bin", requirements_met=None, bios_dir=bios_dir)
+        fw = _psx_service(held="scph5501.bin", bios_dir=bios_dir)
 
         result = await fw.check_platform_bios("psx")
 

@@ -581,7 +581,13 @@ class TestCoreVerdicts:
         assert verdict.system_needs_an_image is False
 
     def test_the_resolvers_own_verdict_travels_beside_it(self, adapter, monkeypatch):
-        """``requirements_met`` is atlas's, not ours — carried, never re-derived."""
+        """``requirements_met`` is atlas's, not ours — carried, and read by nothing.
+
+        The adapter still passes it through, so a future consumer meets the
+        resolver's own answer rather than one this layer invented. What no
+        consumer may do is weigh it against the file rows: see
+        ``domain/bios_status.py::classify_system_image``.
+        """
         answer = _answer(
             _core(
                 core_so="swanstation_libretro.so",

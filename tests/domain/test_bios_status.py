@@ -140,15 +140,20 @@ class TestClassifySystemImage:
 
         assert classify_system_image(verdict, (), _CORE) == SYSTEM_IMAGE_UNSETTLED
 
-    def test_the_resolvers_refusal_can_only_take_a_hold_back_to_unsettled(self):
-        # ``requirements_met`` folds the per-file conjunction and the console's
-        # own disjunction into one answer, so it can say the core will not start
-        # and cannot say which of the two is why. Read in the narrowing direction
-        # only: a disagreement with the rows is not a claim, and never a hold.
-        verdict = CoreFirmwareVerdict(system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT, requirements_met=False)
-        files = (_image("scph5501.bin", satisfied=True),)
+    @pytest.mark.parametrize("requirements_met", [True, False, None])
+    def test_a_held_image_is_held_whatever_the_resolvers_own_verdict_says(self, requirements_met):
+        # The axis is a reading and carries no conflict logic: demand from the
+        # system table, presence from the rows. ``requirements_met`` is not a
+        # second opinion on the same question — ignorance there is ``None``, so a
+        # ``False`` states that something ELSE is unmet (another required file,
+        # or wrong bytes), and both of those are already red on a row of their
+        # own, by name.
+        verdict = CoreFirmwareVerdict(
+            system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT, requirements_met=requirements_met
+        )
+        files = (_image("scph5500.bin", satisfied=False), _image("scph5501.bin", satisfied=True))
 
-        assert classify_system_image(verdict, files, _CORE) == SYSTEM_IMAGE_UNSETTLED
+        assert classify_system_image(verdict, files, _CORE) == SYSTEM_IMAGE_HELD
 
     @pytest.mark.parametrize(
         "state", [SYSTEM_FIRMWARE_CORE_ALTERNATIVE, SYSTEM_FIRMWARE_RUNS_WITHOUT, SYSTEM_FIRMWARE_OPEN, None]

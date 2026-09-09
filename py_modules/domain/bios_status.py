@@ -63,6 +63,10 @@ BIOS_LABEL_MISSING = "Missing"
 # read as "this console needs no firmware": the last of those four is an unasked
 # question, and reading it as an answer is the collapse
 # :mod:`domain.firmware_wants` exists to prevent.
+#
+# ``unsettled`` has two producers and no others: a row nothing could judge among
+# the ones the core declares, and a console whose demand this platform's list
+# carries no row for at all.
 SYSTEM_IMAGE_NOT_DEMANDED = "not_demanded"
 SYSTEM_IMAGE_HELD = "held"
 SYSTEM_IMAGE_ABSENT = "absent"
@@ -404,20 +408,26 @@ def classify_system_image(
     again: the RomM library's inventory for the platform, which this answer
     neither counts nor is scoped to.
 
-    **Held is read off the rows, not off the resolver's own verdict**, and
-    deliberately: every other readiness answer on these surfaces is presence at
-    the destination as the resolver read it, while ``requirements_met``
-    additionally wants the bytes IDENTIFIED — and the machine-wide reading is
-    asked unverified, so a PlayStation BIOS sitting right where the core will
-    open it comes back unestablished. Taking the verdict from there would grey a
-    page whose every row is green, which is a worse sentence than the one it
-    replaced.
+    **The demand comes from the table, the presence comes from the rows, and
+    nothing here weighs one against the other.** ``requirements_met`` is not
+    consulted, and reading it as a second opinion on the same question would be
+    the misreading the field exists to prevent: at the resolver, ignorance is
+    always ``None``, so a ``False`` is a demonstrated statement rather than a
+    disagreement to be resolved. It has exactly two causes — a DIFFERENT required
+    file is absent, or one that is there has the wrong bytes — and both leave one
+    of our own required rows unmet, so the ordinary counts already report them,
+    by name, which this axis never could. The second cause needs a content check
+    to arise at all, and the whole-machine reading these rows come from is asked
+    unverified by invariant, so on this path it cannot occur.
 
-    ``requirements_met`` is read for the one thing it can say that the rows
-    cannot, and only in the direction it is safe in: where it states the core
-    will not start while the rows show an image held, the two readings disagree
-    and a disagreement is not a claim, so the answer declines. It can never turn
-    a decline into a hold.
+    **A row's** ``satisfied`` **is presence, not the resolver's usability
+    verdict** — the name invites the second reading and does not carry it. For a
+    declared file it is ``FirmwareDemand.is_downloaded``, which ends at
+    ``placement.present is True``; for a folder declaration it is the verdict on
+    what the folder HOLDS, and may be ``None``; and where something other than
+    the expected file occupies the destination it is ``None`` too. Either
+    ``None`` reads here as not held — the safe direction, since the alternative
+    claims a readiness nothing established.
 
     *files* is this platform's list, so the disjunction spans the rows this core
     declares that the platform's own list carries — every one of them, BIOS image
@@ -434,7 +444,7 @@ def classify_system_image(
         return SYSTEM_IMAGE_NOT_DEMANDED
     images = [f for f in files if active_core_so in f.cores]
     if any(f.satisfied for f in images):
-        return SYSTEM_IMAGE_UNSETTLED if verdict.requirements_met is False else SYSTEM_IMAGE_HELD
+        return SYSTEM_IMAGE_HELD
     if images and all(f.satisfied is False for f in images):
         return SYSTEM_IMAGE_ABSENT
     return SYSTEM_IMAGE_UNSETTLED

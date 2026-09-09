@@ -1864,13 +1864,20 @@ core as `FirmwareCatalogue.core_verdicts` and turned into `domain/bios_status.py
   `0 / 5 required files ready` under the SwanStation this was observed on, five being what that core declares. The
   twenty in the page's own `0/20 files held` is a different set again — the RomM library's inventory for the platform,
   which this axis neither counts nor is scoped to. Every surface words it "one of these" and none states it as a ratio.
-- **Whether an image is held is read off the rows, not off the resolver's `requirements_met`.** Every other readiness
-  answer on these surfaces is presence at the destination, while `requirements_met` additionally wants the bytes
-  identified — and the machine-wide inventory is asked unverified, so a PlayStation BIOS sitting exactly where the core
-  will open it comes back unestablished. Taking the verdict from there would grey a page whose every row is green.
-  `requirements_met` is read for the one thing the rows cannot say, in the one direction it is safe in: where it states
-  the core will not start while the rows show an image held, the two readings disagree and the answer declines to
-  `unsettled`. It can never turn a decline into a hold.
+- **Whether an image is held is read off the rows, and `requirements_met` is not consulted at all.** The demand comes
+  from the system table, the presence from the file rows, and nothing weighs one against the other — which is the shape
+  upstream intends for a consumer here. Reading that field as a second opinion would be the misreading it exists to
+  prevent: at the resolver ignorance is always `null`, so a `false` is a demonstrated statement rather than a
+  disagreement to resolve. It has exactly two causes — a **different** required file is absent, or one that is present
+  has the wrong bytes — and each of them leaves one of this platform's own required rows unmet, so the ordinary counts
+  already report it, by name, which this axis never could. The second cause needs a content check to arise at all, and
+  the whole-machine inventory is asked unverified (the entry below), so on this path it cannot occur: on the reference
+  device `checked == "mismatch"` appears on no requirement of any core, and `hash_checked` on that answer is `false`.
+  The combination the removed branch was written for does not arise either — of the three cores there in the
+  `cannot-run-without-firmware` state, none has a single row the resolver reports present. What a row's `satisfied`
+  resolves to — presence, and the two shapes where it is `null` — is written out at `classify_system_image`, where the
+  alternative is built. It is stated once, there, because an outside reader took the field for the resolver's usability
+  answer and drew a false finding from it.
 - **It only ever makes the verdict less green.** `absent` lands on `missing`, tested ahead of the declines so that a
   demonstration outranks a platform nothing could be established for. Only one of the three declines can reach that
   comparison, so the order is a rule about that one and a guard for the rest: `absent` needs every row the launching

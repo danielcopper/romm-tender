@@ -123,11 +123,15 @@ class CoreFirmwareVerdict:
 
     ``requirements_met`` is the resolver's own three-valued verdict over that
     core's whole declaration weighed against what is on disk and against the
-    system entry. It only ever NARROWS: it can say a core cannot run, never that
-    one can where the files did not already say so. Read here for that direction
-    alone — it folds the per-file conjunction and the system's own disjunction
-    into one answer, so it can say *this core will not start* and cannot say
-    which of the two is why.
+    system entry. It is **carried and not read**, and that is a decision rather
+    than an omission: it folds the per-file conjunction and the system's own
+    disjunction into one answer, so it can say *this core will not start* and
+    cannot say which of the two is why — while both of the things it can be
+    saying (a required file absent, or one present with the wrong bytes) already
+    reach the surfaces through the file rows, by name. Reading it as a second
+    opinion on a question the rows have answered is the misreading it exists to
+    prevent: ignorance here is ``None``, so a ``False`` is a demonstrated
+    statement and never a doubt.
     """
 
     system_firmware: str | None = None
