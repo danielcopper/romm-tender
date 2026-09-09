@@ -1,4 +1,4 @@
-"""ISO-8601 timestamp parsing helpers — pure compute, stdlib only."""
+"""Timestamp helpers — ISO-8601 parsing and rendering, pure compute, stdlib only."""
 
 from __future__ import annotations
 
@@ -30,3 +30,15 @@ def parse_iso_to_epoch(value: str | None) -> float | None:
 def epoch_to_iso(epoch: float) -> str:
     """Render epoch seconds as a UTC ISO-8601 string — round-trip inverse of parse_iso_to_epoch."""
     return datetime.fromtimestamp(epoch, tz=UTC).isoformat()
+
+
+def epoch_to_local_stamp(epoch: float) -> str:
+    """Render epoch seconds as a date and time a person reads, in the machine's own zone.
+
+    For text a user opens rather than anything that parses it back, so it drops
+    the seconds and the offset that make :func:`epoch_to_iso` a round-trip. The
+    zone is the machine's because the alternative — UTC — is an hour or two off
+    the clock the reader just looked at, with nothing on the line saying so.
+    """
+    moment = datetime.fromtimestamp(epoch)
+    return f"{moment.day} {moment:%B %Y at %H:%M}"

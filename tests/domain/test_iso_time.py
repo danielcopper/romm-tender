@@ -1,10 +1,28 @@
-"""Unit tests for domain.iso_time — ISO-8601 timestamp helpers."""
+"""Unit tests for domain.iso_time — timestamp parsing and rendering."""
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime, timedelta, timezone
 
-from domain.iso_time import epoch_to_iso, parse_iso, parse_iso_to_epoch
+import pytest
+
+from domain.iso_time import epoch_to_iso, epoch_to_local_stamp, parse_iso, parse_iso_to_epoch
+
+
+@pytest.fixture
+def berlin(monkeypatch):
+    """Run the test two hours off UTC, so a local rendering cannot pass as a UTC one.
+
+    ``tzset`` is what the C library reads ``TZ`` through, and it is called
+    again on the way out: ``monkeypatch`` restores the variable, and without
+    that second call the process would keep the zone for every later test.
+    """
+    monkeypatch.setenv("TZ", "Europe/Berlin")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
 
 
 class TestParseIso:
@@ -156,3 +174,39 @@ class TestEdgeOffsets:
         # Compare with a manual aware dt for equality
         expected = datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone(timedelta(hours=5, minutes=45)))
         assert dt == expected
+
+
+class TestEpochToLocalStamp:
+    """The rendering for text a person reads, not for anything that parses it back."""
+
+    def test_renders_the_instant_in_the_machines_own_zone(self, berlin):
+        assert epoch_to_local_stamp(datetime(2026, 9, 4, 12, 0, tzinfo=UTC).timestamp()) == (
+            "4 September 2026 at 14:00"
+        )
+
+    def test_the_day_is_not_padded(self, berlin):
+        assert epoch_to_local_stamp(datetime(2026, 9, 1, 6, 30, tzinfo=UTC).timestamp()).startswith("1 September")
+
+    def test_a_zone_change_moves_the_reading_and_epoch_to_iso_never_does(self, berlin, monkeypatch):
+        """The two renderings answer different questions, and only one follows the reader.
+
+        ``epoch_to_iso`` is on the wire and is parsed back, so it stays UTC
+        whatever the machine is set to.
+        """
+        instant = datetime(2026, 9, 4, 12, 0, tzinfo=UTC).timestamp()
+        in_berlin = epoch_to_local_stamp(instant)
+
+        monkeypatch.setenv("TZ", "UTC")
+        time.tzset()
+
+        assert epoch_to_local_stamp(instant) == "4 September 2026 at 12:00"
+        assert in_berlin == "4 September 2026 at 14:00"
+        assert epoch_to_iso(instant).startswith("2026-09-04T12:00")
+
+    def test_it_carries_no_seconds_offset_or_t_separator(self, berlin):
+        """The shape a reader was given instead of ``2026-09-09T11:58:19.009461+00:00``."""
+        rendered = epoch_to_local_stamp(datetime(2026, 9, 4, 12, 0, 19, 9461, tzinfo=UTC).timestamp())
+
+        assert rendered == "4 September 2026 at 14:00"
+        assert "T" not in rendered
+        assert "+" not in rendered

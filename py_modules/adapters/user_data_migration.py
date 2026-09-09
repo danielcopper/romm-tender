@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from models.data_location import UserDataLocations
 
-from domain.iso_time import epoch_to_iso
+from domain.iso_time import epoch_to_iso, epoch_to_local_stamp
 from domain.user_data_location import DATA_HALF, SETTINGS_HALF, SourceFacts, plan_migration
 
 if TYPE_CHECKING:
@@ -147,18 +147,23 @@ class UserDataMigrationAdapter:
         done = {half for half, probe in probes.items() if probe.settled}
         failures = [error for half in (SETTINGS_HALF, DATA_HALF) if (error := probes[half].error) is not None]
 
+        moved: list[str] = []
         if plan.choice_required:
             self._logger.info("Two older installs both hold a library; waiting for the user to pick one")
         elif plan.outstanding:
             source = self._source_named(plan.source_name)
             for half in plan.outstanding:
                 try:
-                    self._fill(half, source)
+                    copied_from = self._fill(half, source)
                 except OSError as e:
                     self._logger.warning(f"Could not move the {half} half of the plugin's data: {e}")
                     failures.append(str(e))
                     continue
                 done.add(half)
+                if copied_from is not None:
+                    moved.append(f"{half} from {copied_from} to {self._root_for(half)}")
+        if moved:
+            self._logger.info(f"Moved the plugin's data to its own directories: {'; '.join(moved)}")
         # An answer is dropped only once nothing is left for it to name: while
         # any half is still outstanding the next start needs it to reach the
         # same location this one was heading for.
@@ -188,15 +193,22 @@ class UserDataMigrationAdapter:
     def _source_named(self, name: str | None) -> SourceLocation | None:
         return next((source for source in self._sources if source.name == name), None)
 
-    def _fill(self, half: str, source: SourceLocation | None) -> None:
-        """Put one half at its root, copying from *source* when there is one."""
-        root = self._settings_root if half == SETTINGS_HALF else self._data_root
+    def _root_for(self, half: str) -> str:
+        return self._settings_root if half == SETTINGS_HALF else self._data_root
+
+    def _fill(self, half: str, source: SourceLocation | None) -> str | None:
+        """Put one half at its root, copying from *source* when there is one.
+
+        Returns the directory the half was copied FROM, or ``None`` where there
+        was nothing to copy and the root was simply created — which is what
+        separates a real move, worth a line in the log, from a fresh install.
+        """
         origin = None
         if source is not None:
             origin = source.settings_dir if half == SETTINGS_HALF else source.data_dir
-        self._copy_into_place(origin, root)
+        return self._copy_into_place(origin, self._root_for(half))
 
-    def _copy_into_place(self, origin: str | None, root: str) -> None:
+    def _copy_into_place(self, origin: str | None, root: str) -> str | None:
         """Copy *origin* into a staging directory beside *root*, then rename it on.
 
         The whole directory comes along — every backup, every cache, every file
@@ -220,6 +232,7 @@ class UserDataMigrationAdapter:
         os.rename(staging, root)
         if copied_from is not None:
             self._leave_note(copied_from, root)
+        return copied_from
 
     def _ignore_our_own_files(self, origin: str) -> Callable[[str, list[str]], set[str]]:
         """Keep the two files this adapter writes itself out of the copy of *origin*.
@@ -282,7 +295,7 @@ class UserDataMigrationAdapter:
             "folders after the plugin's own folder — so renaming the plugin moved\n"
             "your data with it.\n"
             "\n"
-            f"  Copied on: {epoch_to_iso(self._clock.time())}\n"
+            f"  Copied on: {epoch_to_local_stamp(self._clock.time())}\n"
             f"  Copied to: {root}\n"
             "\n"
             "Nothing was removed: this folder is the copy left behind. Tender no\n"
