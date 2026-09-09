@@ -220,6 +220,60 @@ describe("extractBiosInfo", () => {
       };
       expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(true);
     });
+
+    it("is set when the console cannot start and none of its images is in place", () => {
+      // The second absence, and the one no count can express: SwanStation marks
+      // every PlayStation BIOS image optional, so `required_count` is 0 and the
+      // comparison above is vacuously false while no game on the platform
+      // launches. Taken off the backend's `system_image`, never re-derived.
+      const answer = {
+        bios_status: {
+          ...requirement,
+          server_count: 20,
+          local_count: 0,
+          required_count: 0,
+          required_downloaded: 0,
+          system_image: "absent" as const,
+        },
+        bios_level: "missing" as const,
+        bios_label: "Missing",
+      };
+      expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(true);
+      expect(extractBiosInfo(answer)!.biosLabel).toBe("Missing");
+    });
+
+    it.each(["not_demanded", "held", "unsettled"] as const)(
+      "is clear for a console demand answered %s, with nothing required",
+      (systemImage) => {
+        // The other direction, and what keeps the badge off every platform the
+        // table records nothing about: `not_demanded` covers exactly that case.
+        // `unsettled` is an absence nobody established, which this badge never
+        // claims — the same reading a withheld required row gets.
+        const answer = {
+          bios_status: {
+            ...requirement,
+            server_count: 20,
+            local_count: 0,
+            required_count: 0,
+            required_downloaded: 0,
+            system_image: systemImage,
+          },
+          bios_level: "ok" as const,
+          bios_label: "OK",
+        };
+        expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(false);
+      },
+    );
+
+    it("is clear for a payload that states no console demand at all", () => {
+      // A payload from before the field existed reads as the neutral answer.
+      const answer = {
+        bios_status: { ...requirement, required_count: 0, required_downloaded: 0 },
+        bios_level: "ok" as const,
+        bios_label: "OK",
+      };
+      expect(extractBiosInfo(answer)!.biosRequiredMissing).toBe(false);
+    });
   });
 });
 

@@ -49,20 +49,26 @@ cannot.
 The readiness line is computed against the **active core** for that game — so switching to a core that needs no BIOS (or
 that treats a file as optional) clears the warning, while switching to a core that requires a missing file surfaces it.
 
-Beside the Play button there is also a short **BIOS** badge, which is a shortcut into this tab. It appears on one
-condition and no other: a file the active core **requires** is shown to be absent from your BIOS folder. If that core
-requires nothing, or requires only files you already have, there is no badge — however many optional files are missing,
-and whether or not the requirement could be worked out at all. A required **folder** counts here like any other
+Beside the Play button there is also a short **BIOS** badge, which is a shortcut into this tab. Two things raise it, and
+nothing else does. The first: a file the active core **requires** is shown to be absent from your BIOS folder. If that
+core requires nothing, or requires only files you already have, there is no badge — however many optional files are
+missing, and whether or not the requirement could be worked out at all. A required **folder** counts here like any other
 requirement: once the plugin has established that it holds no BIOS image, the badge appears, because what satisfies the
 requirement is a file inside the folder and there is none. What raises no badge is a requirement nothing could settle —
 a folder the plugin could not read, say — since it has not shown anything to be absent. Those cases are worth reading,
 but not worth a warning next to Play, so they live in the tab.
 
+The second: the **console itself** does not start without one of the images the core declares, and none of them is in
+place — the state the tab words "Needs one of these BIOS files" (see
+[When the console needs a BIOS image](#when-the-console-needs-a-bios-image)). No count can express that one, because the
+core marks every such image optional, so without it the badge stayed silent on a PlayStation where nothing would launch.
+It follows the same rule as the first: shown to be absent raises it, not-yet-established does not.
+
 The badge is always **red**. It is a warning, not a status: the four-colour dot above belongs to the tab's readiness
-line, and every state that raises the badge is one where a file the emulator asks for is not there. Having one of three
-required files is not a milder version of the problem, so it does not get a milder colour. The badge does not predict
-whether a game starts — that is between the emulator and the file, and the declaration the badge counts is not what
-decides it.
+line, and every state that raises the badge is one where firmware the emulator needs is not there. Having one of three
+required files is not a milder version of the problem, so it does not get a milder colour, and neither does a console
+that will not boot. The badge does not predict whether a game starts — that is between the emulator and the file, and
+the declaration the badge counts is not what decides it.
 
 A BIOS warning only ever disappears on an **answer**. When a check cannot be run at all — most often right after a BIOS
 download or delete, before the state has been read again — the plugin keeps showing the last status it knew rather than
@@ -376,6 +382,8 @@ Three things about that line:
 - **It is a statement about the console, not about your library.** The file rows underneath are unchanged: each one
   still says whether it is present, which cores use it, and whether your RomM library holds it. The downloads are
   unchanged too — fetching one of the listed images is exactly what clears the line.
+- **The red BIOS badge beside Play appears for it**, the same badge a missing required file raises. The game does not
+  start either way, so it is the same warning rather than a softer one of its own.
 
 Where the plugin cannot tell whether one of them is in place, it says **"BIOS readiness unknown"** rather than picking a
 colour — see the next section, which that shape shares.

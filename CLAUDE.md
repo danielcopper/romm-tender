@@ -514,7 +514,16 @@ Format: **invariant** — tier — enforced by.
   per-file conjunction and the console's disjunction into one answer, so it can say the core will not start and cannot
   say which of the two is why. And on the frontend, `system_image: "unsettled"` joins `required_withheld` on the KEEPING
   side of `PlatformDetail`'s `nothingEstablished`: its rows were answered, so withdrawing the downloads there takes away
-  the one action that still moves the platform along
+  the one action that still moves the platform along. **A fourth frontend reader is the play row's BIOS badge**
+  (`src/utils/playSection.ts::extractBiosInfo`), where `"absent"` is a second established absence beside the required
+  count — the count cannot carry it, because the images it is about are all declared optional, so `required_count` is 0
+  and the comparison beside it is vacuously false. `"unsettled"` deliberately raises no badge, the same reading a
+  withheld required row gets: the badge claims a file is NOT THERE, and nothing established that. **Where BOTH
+  ignorances hold** — a console needing an image whose required folder row could not be judged, the LRPS2 shape and a
+  reachable one — `getUnknownSummary` names the withheld ROW rather than the console. They are not independent there: a
+  `required_by_active` row always carries the active core, so it is always one of the images the disjunction spans and
+  is therefore a CAUSE of the unsettled verdict, not a second finding beside it; naming the row points at the file list,
+  where its caveat explains itself
 - **The whole-machine firmware inventory is never asked with content verification** — prompt-only —
   `firmware_inventory()` is asked unverified and the verified question goes through `FirmwareFolderVerdictFn`, one core
   per call, only for the folder rows `unanswered_folder_cores` reports still open. `verify=True` on the inventory sweeps

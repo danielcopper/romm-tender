@@ -16,6 +16,7 @@ import type {
   FirmwareStatus,
   FirmwareDownloadResult,
   BiosLevel,
+  SystemImage,
   BiosStatus,
   BiosFileStatus,
   CoreInfo,
@@ -153,6 +154,10 @@ export interface BiosAnswer {
     required_count?: number;
     required_downloaded?: number;
     required_withheld?: number;
+    /** The console's own firmware demand on the launching core — see
+     *  {@link SystemImage}. Read by the play row's badge, which cannot get it
+     *  from the counts: the images it is about are all declared optional. */
+    system_image?: SystemImage;
     cached_at?: number;
     files?: BiosFileStatus[];
   } | null;

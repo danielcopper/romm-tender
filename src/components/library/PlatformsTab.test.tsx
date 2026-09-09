@@ -2442,6 +2442,38 @@ describe("Library › Platforms", () => {
       expect(row?.title).toBe("BIOS readiness unknown");
     });
 
+    it("names the unjudged row, not the console, when both ignorances hold at once", async () => {
+      // Reachable, and it is the LRPS2 shape: a console that needs an image
+      // whose required folder row the read could not judge. The two are not
+      // independent — a `required_by_active` row always carries the active core,
+      // so it is always one of the images the console's disjunction spans, which
+      // makes it the CAUSE of the unsettled verdict rather than a second finding
+      // beside it. So the page names the row and points at the file list, rather
+      // than restating the same gap one altitude up with nothing to look at.
+      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
+        success: true,
+        platforms: [
+          firmwarePlatform({
+            bios_level: "unknown",
+            required_count: 1,
+            required_downloaded: 0,
+            required_withheld: 1,
+            system_image: "unsettled",
+          }),
+        ],
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("A required file could not be judged — see the file list");
+      expect(container.textContent).not.toContain("Whether the BIOS image this system needs is in place");
+      // Both sentences carry the same label, so the label alone cannot say which
+      // one the pane chose — assert the description, and that the downloads the
+      // unsettled case keeps are still here.
+      expect(container.textContent).toContain("BIOS readiness unknown");
+      expect(buttonByText(container, "Download all")).not.toBeDisabled();
+    });
+
     it("keeps the downloads when only the readiness verdict is withheld", async () => {
       vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
         success: true,

@@ -157,14 +157,20 @@ function getBiosSummary(
  * once, under the table where the line that carries them also says where to
  * report the gap — and on this platform they are every row, so a count up here
  * as well is the same sentence twice on one screen.
+ *
+ * **The first two can hold together, and the withheld row is then the truer
+ * sentence.** They co-occur on a console that needs an image whose required
+ * folder row the read could not judge — the LRPS2 shape. They are not two
+ * independent gaps there: a row that is `required_by_active` always carries the
+ * active core, so it is always one of the images the console's disjunction spans
+ * (`classify_system_image`), which makes it a CAUSE of the unsettled verdict
+ * rather than a second finding beside it. Saying both would state one gap twice,
+ * once named and once vague; saying only the console's would drop the pointer
+ * into the file list, where that row shows the caveat explaining itself. So the
+ * withheld count is checked first. The reverse — a console demand unsettled with
+ * no withheld required row — is a different platform and keeps its own sentence.
  */
 function getUnknownSummary(requiredWithheld: number, systemImage: SystemImage) {
-  if (systemImage === "unsettled") {
-    return {
-      summaryLabel: "BIOS readiness unknown",
-      summaryDescription: "Whether the BIOS image this system needs is in place could not be established",
-    };
-  }
   if (requiredWithheld > 0) {
     return {
       summaryLabel: "BIOS readiness unknown",
@@ -172,6 +178,12 @@ function getUnknownSummary(requiredWithheld: number, systemImage: SystemImage) {
         requiredWithheld === 1
           ? "A required file could not be judged — see the file list"
           : `${requiredWithheld} required files could not be judged — see the file list`,
+    };
+  }
+  if (systemImage === "unsettled") {
+    return {
+      summaryLabel: "BIOS readiness unknown",
+      summaryDescription: "Whether the BIOS image this system needs is in place could not be established",
     };
   }
   return {

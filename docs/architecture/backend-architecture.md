@@ -1876,6 +1876,12 @@ about the **system** (`CoreFirmware.system_firmware`), carried through the adapt
 - The answer is scoped to the **active core**, so the same twenty images read `absent` under SwanStation and
   `not_demanded` under PCSX ReARMed, which carries its own HLE BIOS. Both come off the one builder, so a platform and
   its games cannot disagree about it.
+- **Four frontend surfaces read it**: the game page's BIOS headline, the platform detail's summary, the platform list's
+  row tooltip, and the play row's red BIOS badge — where `"absent"` is a second established absence beside the required
+  count, and `"unsettled"` raises nothing, exactly as a withheld required row does not. Where a withheld required row
+  and an unsettled console demand hold together, the platform detail names the ROW: a `required_by_active` row always
+  carries the active core, so it is always one of the images the disjunction spans and is a cause of the unsettled
+  verdict rather than a finding beside it.
 
 **No BIOS answer outlives the page that asked for it.** `get_cached_game_detail` carries none and says so
 (`bios_status_unknown`), and the live `get_bios_status` fills it in a moment later; there is deliberately no cached twin
