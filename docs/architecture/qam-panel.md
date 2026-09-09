@@ -343,10 +343,6 @@ preview (a row per platform; New, Updated, Removed), registered devices, cleanup
 facts were folded into a field's label and description, which is why #1803's third axis had no slot on the rows the
 System page drew; the platform detail's BIOS table is where that column now sits.
 
-**Registered devices is still the folded shape**, and deliberately so for now: it is one group inside a Save Sync pane
-whose every other row is a Steam `Field`, and a lone grid there would be the only content on the page in a second visual
-language. It becomes a table when the Settings panes are written against the pane primitives the platform detail uses.
-
 **A cell clips; it never overflows.** A grid track sized `minmax(0, 1fr)` shrinks under its content and the content then
 spills across the track beside it — on the Deck a platform name and its note ran into the New column's digit. The clip
 (`overflow: hidden`, `text-overflow: ellipsis`, `white-space: nowrap`, `min-width: 0`) belongs on the **cell**, because
@@ -1057,10 +1053,14 @@ sits under Save Sync, and SteamGridDB joins the other external service under Con
 | Section       | Holds                                                                                                                                                                                                                                                                                                   |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Connections   | the services the plugin talks to: RomM (URL, account, Sign out, Allow insecure SSL) and SteamGridDB (the API key), one group each, titled by service. Home of every sign-in.                                                                                                                            |
-| Save Sync     | the save-sort migration first, as the condition asking to be answered; then the toggle, device, before-launch and after-exit, default slot, history limit, Sync all now; then the registered devices                                                                                                    |
+| Save Sync     | the save-sort migration first, as the condition asking to be answered; then the toggle, device, before-launch and after-exit, default slot, history limit, Sync all now; then the registered devices as a table                                                                                         |
 | Controller    | Steam Input mode, Apply to all shortcuts, the `input_driver` fix. Home of the fix.                                                                                                                                                                                                                      |
 | Steam Library | preferred region, collection games in platform groups, collection types in Steam names — the narrow page's **Library** section, renamed because a Library page now exists: the page is the RomM side (what is synced), the section is the Steam side (which version, in which groups, under which name) |
 | Advanced      | log level                                                                                                                                                                                                                                                                                               |
+
+The registered devices are the one thing on the page with more than two facts per row, so they are a table — Device,
+Client, Last seen. The layout study it was chosen from is
+[device-list-layouts.html](../assets/device-list-layouts.html).
 
 **RetroAchievements is not here, and Connections is still its home.** The plugin has no RetroAchievements account and no
 sign-in for it — building one is #1627, which also left the badge's home open between the game page, the retired System
@@ -1069,10 +1069,12 @@ not.
 
 The section rows carry no control of their own, so the list is built with `selectOnActivate`: the activate handler that
 adds is what makes a row a focus stop, and without it the list is neither walkable nor scrollable. Every read-only row
-in a detail pane — a sign-in result, the registered device rows, the row naming this device — is `focusable` for the
-same reason, since a pane scrolls only by moving focus and a group with no stop in it cannot be reached at all. The
-exceptions are the lines the region reveals on its own: content above the pane's first stop or below its last
-(`ScrollRegion`'s `revealEdge`), which is why the migration card carries no handler.
+in a detail pane — a sign-in result, each row of the registered-devices table, the row naming this device — is a stop
+for the same reason, since a pane scrolls only by moving focus and a group with no stop in it cannot be reached at all.
+Two kinds of line are not, and for two different reasons. Content the region reveals on its own — above the pane's first
+stop or below its last (`ScrollRegion`'s `revealEdge`) — needs none, which is why the migration card carries no handler.
+And the devices table's **column header** carries none under the Tables rule: the names accompany the rows below them
+and a stop there would be a step that leads nowhere.
 
 Text input stays in modals — RomM URL, account, API key, default slot — because the on-screen keyboard needs the room.
 
@@ -1169,6 +1171,15 @@ store screenshots (#830) are taken after.
   forgets; and it draws both of the left column's button rows under their tables, where the shipped page puts them
   above, because on a controller a button is reached by walking focus onto it one table row at a time. Like the
   Platforms study, it is a record of a choice rather than a description of the page.
+- The layout study the registered-devices table was chosen from:
+  [device-list-layouts.html](../assets/device-list-layouts.html) — three layouts for that one block at the Deck's
+  measured width, everything else on the page held identical so the comparison is about the block alone: today's folded
+  rows, a three-column table with a header, and a two-column middle keeping the Steam `Field` shape with Last seen
+  right-aligned. The table is what shipped, on the axis the Deck is short of — one row per device instead of two, and
+  eight devices costing nine rows rather than sixteen — and the platform and the shortened id are dropped with it. It
+  records its own objection: the table is the only content on that pane with column headers, which ends when the
+  remaining Settings panes are written against the same pane primitives the Platforms detail uses. Like the studies
+  above it is a record of a choice, not a description of the page.
 - The static prototype the decisions were made on: [qam-prototype.html](../assets/qam-prototype.html), a single
   self-contained page kept in `docs/assets/`. Every page at device size with numbered notes; its example data is
   invented, and it reflects the decisions as of this page's first version. Redrawn to the Deck's real 854 × 534 CSS px —
