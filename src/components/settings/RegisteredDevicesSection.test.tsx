@@ -56,6 +56,35 @@ function cells(row: Element): string[] {
   return Array.from(row.children).map((cell) => cell.textContent);
 }
 
+// What this plugin registers itself as: `register_device` passes
+// `client="decky-romm-sync"` with the plugin version
+// (`py_modules/services/saves/sync_engine/devices.py`). Every row a Deck shows
+// carries it, so it is the string the Client column has to hold.
+const REAL_CLIENT = "decky-romm-sync";
+const REAL_VERSION = "0.32.0";
+
+// The width `decky-romm-sync v0.32.0` needs at the 11px these cells are set in,
+// summed from the fonts' own glyph advances: 131px in Noto Sans, 143px in
+// DejaVu Sans. Steam renders it in Motiva Sans, which is on no machine here, so
+// the column is held to the wider of the two.
+//
+// **This number is not read from the component**, which is the whole point of
+// the test below: it is the requirement the component's own track is checked
+// against, so narrowing that track fails here instead of silently clipping the
+// version on a device nobody is looking at. happy-dom lays nothing out, so
+// comparing the declaration against a measured requirement is the only way this
+// can be checked at all.
+const CLIENT_CELL_PX = 143;
+
+/** The px width the rendered `grid-template-columns` gives the Client track. */
+function clientTrackPx(el: Element): number {
+  const tracks = (el as HTMLElement).style.gridTemplateColumns.split(/\s+/);
+  expect(tracks).toHaveLength(3);
+  const client = tracks[1] ?? "";
+  expect(client).toMatch(/^\d+px$/);
+  return Number.parseInt(client, 10);
+}
+
 describe("RegisteredDevicesSection", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -139,6 +168,26 @@ describe("RegisteredDevicesSection", () => {
       for (let el: Element | null = getByTestId("devices-header"); el; el = el.parentElement) {
         expect(el.getAttribute("tabindex")).toBeNull();
       }
+    });
+
+    it("gives Client a track wide enough for the client name the plugin registers", () => {
+      const device = makeDevice({ client: REAL_CLIENT, client_version: REAL_VERSION });
+      const { getByTestId } = render(<RegisteredDevicesSection {...defaultProps({ registeredDevices: [device] })} />);
+      // The cell really does carry the long string, so the width below is
+      // checked against what is rendered rather than against a hypothetical.
+      expect(cells(getByTestId("device-row"))[1]).toBe("decky-romm-sync v0.32.0");
+      expect(clientTrackPx(getByTestId("device-row"))).toBeGreaterThanOrEqual(CLIENT_CELL_PX);
+    });
+
+    it("declares the same columns on the header as on a row, or they would not line up", () => {
+      const { getByTestId } = render(
+        <RegisteredDevicesSection {...defaultProps({ registeredDevices: [makeDevice()] })} />,
+      );
+      const header = (getByTestId("devices-header") as HTMLElement).style.gridTemplateColumns;
+      const row = (getByTestId("device-row") as HTMLElement).style.gridTemplateColumns;
+      expect(header).toBe(row);
+      // Non-vacuous: both were read, and both name three tracks.
+      expect(header).toMatch(/^\S+\s+\S+\s+\S+$/);
     });
 
     it("renders one row per device, each a focus stop so the table can be walked", () => {
