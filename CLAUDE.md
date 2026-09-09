@@ -572,28 +572,34 @@ Format: **invariant** — tier — enforced by.
   `components` directly gets neither rule, and syncing Saturn's `.smpc` overwrites the console settings the user chose
   on the other device. Saturn is the only example that actually reaches the rule on a stock RetroDECK: MAME states a
   per-game `.cfg` too, but its answer classifies as not-established, so the sync refuses before any role is consulted.
-  (3) The two axes a rendering must read alongside the state are single fields nothing forces a consumer to touch.
-  `SaveAnswer.unestablished` holds three shapes, and a truthiness test on `state == "unestablished"` collapses "nobody
-  has audited this core" into "the folder is known and the names are not" and into "the question was never put".
-  `content_installed` is worse, because ignoring it is invisible: an uninstalled ROM answers with a state, a directory
-  and a full file list, every name a prediction about the path the game WOULD occupy, so a surface that renders them
-  tells a user their uninstalled game already has three save files. The wire flag beside each name is `carried`, not
-  `synced`, for the same reason — it names the RULE applied to a file, never that file's sync state. (4) **The question
-  must carry the ROM's REAL content path**, because the answer turns on the content file's own EXTENSION — PUAE answers
-  `save-inside-content` for an Amiga `.adf` and establishes nothing for an `.hdf`; Genesis Plus GX answers a shared
-  `scd_*.brm` for a Sega CD `.chd` and a per-game `.srm` for a `.bin`. Within `RomInfoService` the system and the path
-  are decided in exactly two places — `_installed_answer` for a ROM on disk and `_uninstalled_answer` for one the
-  library only knows about — so ADR-0010's slug leak has two sites to guard there rather than one per caller. A
-  **third** site exists outside it: `services/migration/save_sort.py` asks the resolver directly for each ROM its walk
-  sees, taking both the system and the path off the install record, which is the source ADR-0010 says to use — so it
-  cannot leak the slug, and it is a site the same rule has to hold at. A synthetic stem passed anywhere else answers a
-  different question in a shape that looks like an answer to this one, and nothing would say so. It is also why every
-  per-system pin in `tests/adapters/test_atlas_saves.py` is keyed by `(system, extension)`: a pin that does not name the
-  extension it asked with is pinning nothing, which is how two independent measurements of the same systems produced
-  contradictory fact lists. **Every path asks live and nothing caches an answer** — only the installation handle is
-  memoised — because the user changes a core's options in the emulator's own quick menu between a launch and the next
-  sync; a display cache added without invalidating it on every sync entry is the one change that makes this rule fail
-  silently and expensively. Detail: `docs/architecture/save-sync-coverage.md`, CONTEXT.md → Save state / Save scope
+  The rule is a DENIAL — `CONFIGURATION_ROLES` names what to hold back — and turning it into an allow-list of the roles
+  known today is the one change here that fails in silence and in the expensive direction: the resolver's own `unknown`
+  role (a file on the machine no declaration describes) and a component with no role at all are both carried today, and
+  an allow-list drops them, along with every role upstream names next. `tests/domain/test_save_answer.py` and
+  `tests/adapters/test_atlas_saves.py` pin both directions; nothing else would notice, because a dropped file is simply
+  a file the page does not mention. (3) The two axes a rendering must read alongside the state are single fields nothing
+  forces a consumer to touch. `SaveAnswer.unestablished` holds three shapes, and a truthiness test on
+  `state == "unestablished"` collapses "nobody has audited this core" into "the folder is known and the names are not"
+  and into "the question was never put". `content_installed` is worse, because ignoring it is invisible: an uninstalled
+  ROM answers with a state, a directory and a full file list, every name a prediction about the path the game WOULD
+  occupy, so a surface that renders them tells a user their uninstalled game already has three save files. The wire flag
+  beside each name is `carried`, not `synced`, for the same reason — it names the RULE applied to a file, never that
+  file's sync state. (4) **The question must carry the ROM's REAL content path**, because the answer turns on the
+  content file's own EXTENSION — PUAE answers `save-inside-content` for an Amiga `.adf` and establishes nothing for an
+  `.hdf`; Genesis Plus GX answers a shared `scd_*.brm` for a Sega CD `.chd` and a per-game `.srm` for a `.bin`. Within
+  `RomInfoService` the system and the path are decided in exactly two places — `_installed_answer` for a ROM on disk and
+  `_uninstalled_answer` for one the library only knows about — so ADR-0010's slug leak has two sites to guard there
+  rather than one per caller. A **third** site exists outside it: `services/migration/save_sort.py` asks the resolver
+  directly for each ROM its walk sees, taking both the system and the path off the install record, which is the source
+  ADR-0010 says to use — so it cannot leak the slug, and it is a site the same rule has to hold at. A synthetic stem
+  passed anywhere else answers a different question in a shape that looks like an answer to this one, and nothing would
+  say so. It is also why every per-system pin in `tests/adapters/test_atlas_saves.py` is keyed by `(system, extension)`:
+  a pin that does not name the extension it asked with is pinning nothing, which is how two independent measurements of
+  the same systems produced contradictory fact lists. **Every path asks live and nothing caches an answer** — only the
+  installation handle is memoised — because the user changes a core's options in the emulator's own quick menu between a
+  launch and the next sync; a display cache added without invalidating it on every sync entry is the one change that
+  makes this rule fail silently and expensively. Detail: `docs/architecture/save-sync-coverage.md`, CONTEXT.md → Save
+  state / Save scope
 - **Per-slot server reads/deletes go through `domain/save_slot.py` (legacy omits `&slot=`, client-filters)** —
   prompt-only — `get_slot_saves` / `get_slot_delete_info` / `delete_slot` / `list_file_versions` / `rollback_to_version`
   use `slot_query_param` + `save_in_slot`; RomM can't address `slot:null` via the param, so legacy MUST omit it + filter

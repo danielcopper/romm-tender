@@ -132,6 +132,14 @@ deliberately leave it alone" rather than simply not showing it. A **directory mo
 carry it, because splitting one save across two directories breaks the game as surely as leaving the battery file
 behind.
 
+**The rule names the roles to hold back, never the roles to carry**, and that is a decision rather than the shape it
+happens to have. The resolver has a value for a file on the machine that no declaration describes (`unknown`), and a
+component carries no role at all where no group claimed it — two ways of saying nobody said what this file is, and both
+are carried. The two failures are not symmetric: a settings file carried onto another device costs a setting the user
+can make again, and a battery file left behind costs a save nothing can restore. An allow-list of the roles known today
+inverts exactly that, and it fails silently — on the day upstream names a new role, every file carrying it is dropped
+and nothing says so.
+
 ## How RomM stores saves
 
 RomM treats a save as a file blob keyed by `(rom_id, slot)`, with an `emulator` tag (which becomes a storage

@@ -40,6 +40,8 @@ from _vendor.atlas import (
     ROLE_BATTERY,
     ROLE_NOTES,
     ROLE_SETTINGS,
+    ROLE_UNKNOWN,
+    ROLES,
     Unresolved,
 )
 from _vendor.atlas.placement import (
@@ -570,6 +572,21 @@ class TestTheVocabularyIsTheResolversOwn:
 
     def test_the_configuration_roles(self):
         assert frozenset({ROLE_SETTINGS, ROLE_NOTES}) == CONFIGURATION_ROLES
+
+    def test_every_other_role_the_resolver_states_is_carried(self):
+        # The rule is a denial, so a role added upstream is carried rather than
+        # dropped — including ``unknown``, the resolver's own word for a file no
+        # declaration describes. Written over the whole vocabulary because that
+        # is what an allow-list would silently narrow.
+        from domain.save_answer import SaveComponent
+
+        carried = {role for role in ROLES if role not in CONFIGURATION_ROLES}
+
+        assert ROLE_UNKNOWN in carried
+        assert all(
+            SaveComponent(name="Game.dat", directory=_SAVES, role=role, granularity=None).is_progress
+            for role in carried
+        )
 
     def test_the_shared_granularities(self):
         from domain.save_answer import _SHARED_GRANULARITIES

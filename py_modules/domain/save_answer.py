@@ -70,6 +70,16 @@ UnestablishedShape = Literal["nothing_established", "directory_known", "not_aske
 # Roles that are the emulator's configuration rather than the player's progress.
 # A configuration file is never synced: it is machine-local by nature, and
 # carrying one between devices overwrites settings the user chose there.
+#
+# **Stated as the roles to EXCLUDE, and that is the decision rather than the
+# shape it happens to have.** The resolver's vocabulary has a value for a file
+# no declaration described (``unknown``) and a component carries ``None`` where
+# no group claimed it — two ways of saying nobody said what this file is — and
+# both must be carried, because dropping a file that turns out to be progress
+# loses a player's game and carrying one that turns out to be configuration
+# costs a settings file the user can set again. An allow-list of the roles to
+# carry inverts exactly that: it drops every file the vocabulary has not named
+# yet, silently, on the day upstream adds one.
 CONFIGURATION_ROLES = frozenset({"settings", "notes"})
 
 # Granularities where one file holds many games' progress.
@@ -130,7 +140,9 @@ class SaveComponent:
     """One named file a save consists of, and what that file is.
 
     ``role`` is the resolver's word for what the file holds (``battery``,
-    ``memory-card``, ``settings``, …) or ``None`` where no group claimed it.
+    ``memory-card``, ``settings``, …), its own ``unknown`` for a file on the
+    machine that no declaration describes, or ``None`` where no group claimed it
+    at all.
     """
 
     name: str
@@ -140,7 +152,15 @@ class SaveComponent:
 
     @property
     def is_progress(self) -> bool:
-        """Whether this file is the player's progress rather than configuration."""
+        """Whether this file is the player's progress rather than configuration.
+
+        A role nobody named — the resolver's ``unknown``, or no role at all —
+        answers ``True`` and the file is carried. That is the decision and not
+        an accident of the test's shape: the two failures are not symmetric, and
+        a settings file carried onto another device costs a setting the user can
+        make again where a battery file left behind costs a save nothing can
+        restore. :data:`CONFIGURATION_ROLES` says why the test is a denial.
+        """
         return self.role not in CONFIGURATION_ROLES
 
 

@@ -35,6 +35,11 @@ from domain.save_answer import (
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _DIR = "/saves/gba"
 
+# The resolver's word for a file no declaration describes. Spelled here rather
+# than imported because these tests hold no resolver types; it is pinned against
+# the resolver's own ``ROLE_UNKNOWN`` in ``tests/adapters/test_atlas_saves.py``.
+ROLE_NOBODY_NAMED = "unknown"
+
 
 def _answer(**overrides):
     kwargs = {
@@ -184,6 +189,38 @@ class TestProgressAndConfiguration:
 
         assert answer.components[0].role is None
         assert answer.synced_names == ("Game.srm",)
+
+    def test_a_file_whose_role_nobody_named_is_carried(self):
+        # The resolver's own value for a file on the machine that no declaration
+        # describes. It has to be constructed rather than waited for: nothing on
+        # the reference machine answers it today, and the day something does is
+        # exactly the day this rule decides whether a save survives. Carried,
+        # because the failures are not symmetric — a settings file carried costs
+        # a setting, a battery file dropped costs the game.
+        answer = _answer(
+            files=("Game.srm", "Game.dat"),
+            groups=(
+                SaveGroup(directory=_DIR, files=("Game.srm",), role="battery", granularity="per-game-file"),
+                SaveGroup(directory=_DIR, files=("Game.dat",), role=ROLE_NOBODY_NAMED, granularity="per-game-file"),
+            ),
+        )
+
+        assert [component.role for component in answer.components] == ["battery", ROLE_NOBODY_NAMED]
+        assert all(component.is_progress for component in answer.components)
+        assert answer.synced_names == ("Game.srm", "Game.dat")
+
+    @pytest.mark.parametrize("role", ["settings", "notes"])
+    def test_only_the_two_configuration_roles_are_held_back(self, role):
+        # The other half of the rule above, and what makes it non-vacuous: turn
+        # the denial into an allow-list of the roles known today and the case
+        # above goes red, while this one stays green either way.
+        answer = _answer(
+            files=("Game.srm",),
+            groups=(SaveGroup(directory=_DIR, files=("Game.srm",), role=role, granularity="per-game-file"),),
+        )
+
+        assert answer.owned_files[0].name == "Game.srm"
+        assert answer.synced_names == ()
 
 
 class TestPickDownloadName:
