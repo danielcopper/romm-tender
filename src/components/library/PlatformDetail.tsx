@@ -826,14 +826,22 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   // when the level is absent from the payload.
   const requiredReady = firmware.bios_level == null ? requiredDone === requiredCount : firmware.bios_level === "ok";
 
-  const isUnknown = firmware.bios_level === "unknown";
   const requiredWithheld = firmware.required_withheld ?? 0;
   const systemImage = firmware.system_image ?? "not_demanded";
+  // The console's own established absence is tested BEFORE the decline, which is
+  // the order the BIOS tab's headline and the platform list's tooltip already
+  // read in. Today all three agree by way of the backend, where `absent` lands
+  // on `missing` and so never arrives with an `unknown` level — but nothing
+  // joins the three surfaces, and a decline added ahead of that test in
+  // `compute_bios_level` would leave this pane alone saying "Nothing installed
+  // could answer for this system" and withdrawing every download button while
+  // the other two said the console needs one of these files.
+  const declined = firmware.bios_level === "unknown" && systemImage !== "absent";
   // An unsettled console demand is a declined VERDICT and not an unanswered
   // platform: its rows were answered, so the downloads below stay — the same
   // reading `requiredWithheld` gets, one axis over.
-  const nothingEstablished = isUnknown && requiredWithheld === 0 && systemImage !== "unsettled";
-  const { summaryLabel, summaryDescription } = isUnknown
+  const nothingEstablished = declined && requiredWithheld === 0 && systemImage !== "unsettled";
+  const { summaryLabel, summaryDescription } = declined
     ? getUnknownSummary(requiredWithheld, systemImage)
     : getBiosSummary(requiredCount, requiredDone, requiredReady, optionalMissing, done, total, systemImage);
 

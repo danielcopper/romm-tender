@@ -2410,6 +2410,42 @@ describe("Library › Platforms", () => {
       expect(buttonByText(container, "Download all")).not.toBeDisabled();
     });
 
+    it("says the console needs one of these even where the level declines", async () => {
+      // The order the pane, the row tooltip and the game page's BIOS headline
+      // have to share. Today the backend never sends this pair — `absent` lands
+      // on `missing` — but nothing joins the three surfaces, so each pins its
+      // own: were a decline added ahead of the `absent` test in
+      // `compute_bios_level`, this pane alone would say "Nothing installed could
+      // answer for this system" and withdraw every download button, over a
+      // requirement the rows demonstrated.
+      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
+        success: true,
+        platforms: [
+          firmwarePlatform({
+            bios_level: "unknown",
+            required_count: 0,
+            required_downloaded: 0,
+            required_withheld: 0,
+            system_image: "absent",
+            server_count: 3,
+            files: [firmwareFile({ wanted: "optional", required_by_active: false })],
+          }),
+        ],
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("Needs one of these");
+      expect(container.textContent).not.toContain("BIOS readiness unknown");
+      expect(container.textContent).not.toContain("Nothing installed could answer for this system");
+      const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
+        el.textContent.includes("Game Boy Advance"),
+      );
+      expect(row?.title).toBe("Needs one of these BIOS files");
+      // The rows were answered, so the downloads are not withdrawn either.
+      expect(buttonByText(container, "Download all")).not.toBeDisabled();
+    });
+
     it("keeps the downloads when the console's own image is the unsettled part", async () => {
       // An unsettled demand is a declined VERDICT, not an unanswered platform:
       // its rows have answers, so withdrawing the downloads would take away the

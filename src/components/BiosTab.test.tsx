@@ -116,6 +116,34 @@ describe("BiosTab", () => {
     expect(container.innerHTML).toContain("#d94126");
   });
 
+  it("says the console needs one of these even where the level declines", () => {
+    // The order the three surfaces have to share. Today the backend never sends
+    // this pair — `absent` lands on `missing` — but nothing joins the three, so
+    // each pins its own: were a decline added ahead of the `absent` test in
+    // `compute_bios_level`, a surface reading the level first would print an
+    // ignorance over a requirement that was demonstrated.
+    const { container } = render(
+      <BiosTab
+        biosStatus={{
+          needs_bios: true,
+          server_count: 20,
+          local_count: 0,
+          all_downloaded: false,
+          required_count: 0,
+          required_downloaded: 0,
+          required_withheld: 0,
+          system_image: "absent",
+        }}
+        biosLevel="unknown"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+    expect(container.textContent).toContain("Needs one of these BIOS files (0/20 files held)");
+    expect(container.textContent).not.toContain("BIOS readiness unknown");
+    expect(container.textContent).not.toContain("BIOS requirement unknown");
+  });
+
   it("names the readiness as the unknown where the console's own image is unsettled", () => {
     // The requirement IS known here — this console needs an image — and it is
     // whether one is in place that could not be established. "BIOS requirement
