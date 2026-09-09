@@ -40,10 +40,10 @@ answers with its own message instead — "Server unreachable", "Sign-in rejected
 **Symptom**: Decky lists two plugins — an older **RomM Sync** and **Tender** — and Tender's QAM panel shows a warning
 card about it. Tender may also look brand new, with no server configured and no synced games.
 
-**Fix**: Nothing to fix, and one thing to avoid: **do not remove "RomM Sync"**. Every Steam shortcut launches through a
-file in that older plugin's folder, so removing it stops all of your games from starting, and Tender cannot put the file
-back. Leave both installed until a version ships that moves everything across. See
-[Updating from a release before 0.31.0](getting-started.md#updating-from-a-release-before-0310).
+**Fix**: Nothing to fix — read the card. It says one of three things, and only the last one means the older plugin can
+go: your games still launch through a file in its folder, or your library is still inside it, or nothing in Tender
+depends on it any more. Removing it before the card says so stops all of your games from starting, and Tender cannot put
+that file back. See [Updating from a release before 0.31.0](getting-started.md#updating-from-a-release-before-0310).
 
 ### BIOS files missing
 

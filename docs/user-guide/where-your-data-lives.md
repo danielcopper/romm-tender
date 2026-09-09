@@ -44,10 +44,9 @@ in a folder, it did not copy from it, and there is nothing there it moved.
 
 !!! warning "This is not the same as the old plugin"
 
-    If Decky still lists an older **"RomM Sync"** plugin, leave that _plugin_ installed. Every Steam shortcut Tender
-    wrote launches through a file inside it, so removing it stops your games from starting. That is a separate warning
-    with its own card in the panel — see
-    [Updating from a release before 0.31.0](getting-started.md#updating-from-a-release-before-0310).
+    If Decky still lists an older **"RomM Sync"** plugin, that is a separate thing from the folders above, with its own
+    card in the panel — and the card is what says whether it can go yet. Removing it before it does can stop your games
+    from starting. See [Updating from a release before 0.31.0](getting-started.md#updating-from-a-release-before-0310).
 
 ## "Tender found two copies of your library"
 
