@@ -1,11 +1,49 @@
 # Configuration
 
-All settings are accessible from the plugin's QAM panel. Open the Quick Access Menu (**...** button) and navigate to the
-Tender plugin.
+All settings are accessible from the plugin's QAM panel. Open the Quick Access Menu (**...** button), navigate to the
+Tender plugin, and pick **Settings** from the menu at the bottom of the panel.
+
+## The Settings page
+
+Settings is a wide page split in two: a list of five sections on the left, and the focused section's controls on the
+right. Move onto a section in the list and the right-hand side changes at once — there is nothing to confirm.
+
+| Section           | What is in it                                                                                                                                                                                                  |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Connections**   | the services Tender talks to: **RomM** (server URL, account, Sign out, Allow Insecure SSL) and **SteamGridDB** (the API key)                                                                                   |
+| **Save Sync**     | the save-sync switch and its settings (device, before launch, after exit, default slot, history limit, Sync All Saves Now), the list of registered devices, and the save-sorting migration when one is waiting |
+| **Controller**    | Steam Input Mode, Apply to All Shortcuts, and the RetroArch `input_driver` fix                                                                                                                                 |
+| **Steam Library** | preferred region, collection games in platform groups, collection types in Steam names                                                                                                                         |
+| **Advanced**      | log level                                                                                                                                                                                                      |
+
+If you used an earlier version, everything is still here — the eight blocks the panel used to stack are grouped into
+those five. Registered Devices and the save-sorting migration are now inside **Save Sync**, the SteamGridDB key is
+inside **Connections**, and the section that used to be called **Library** is now **Steam Library**: the Library _page_
+is about what gets synced out of RomM, this section is about how it looks once it is in Steam.
+
+**Signing in to RetroAchievements is not here yet.** When it arrives it will live under Connections, with the other
+accounts.
+
+### Getting there from a notice
+
+Three of the notices on the plugin's main panel are doors into a section, and the action they are about lives only
+behind that door:
+
+| The notice says                | Its button           | Where it takes you     |
+| ------------------------------ | -------------------- | ---------------------- |
+| RetroArch: input_driver issue  | **Open Controller**  | Settings › Controller  |
+| RetroArch save sorting changed | **Open Save Sync**   | Settings › Save Sync   |
+| Cross-device playtime          | **Open Connections** | Settings › Connections |
+
+The main panel only names the condition — it no longer carries a Fix button or the migration's own buttons, so there is
+one place to do each of these and no chance of two of them disagreeing. **B** takes you back to the main panel from
+anywhere on the page.
+
+Where the sections below say "in Connection Settings", read it as **Settings › Connections**.
 
 ## Connection Settings
 
-The Connection Settings page manages your RomM server connection.
+The **Connections** section manages your RomM server connection.
 
 <!-- Screenshot: Connection Settings page -->
 
@@ -119,6 +157,8 @@ carry them. `me.write` is deliberately **not** requested — a pasted token cann
 
 ## SteamGridDB API Key
 
+Under **Settings › Connections**, below the RomM group — SteamGridDB is one of the two services Tender talks to.
+
 The plugin uses [SteamGridDB](https://www.steamgriddb.com/) to fetch additional artwork for your games — hero banners,
 logos, and wide grid images. RomM provides cover art, but SteamGridDB fills in the rest so your games look like
 first-class Steam titles.
@@ -127,7 +167,7 @@ To set this up:
 
 1. Create a free account at [steamgriddb.com](https://www.steamgriddb.com/)
 2. Go to your [API preferences](https://www.steamgriddb.com/profile/preferences/api) and copy your API key
-3. In Connection Settings, tap **Edit** next to **API Key** under "SteamGridDB" and paste your key
+3. In **Settings › Connections**, tap **Edit** next to **API Key** under "SteamGridDB" and paste your key
 4. Tap **Save** — the key is checked against SteamGridDB first, so an invalid key is rejected inline and only a working
    key is stored
 
@@ -138,8 +178,7 @@ will be missing.
 
 ## Steam Input Mode
 
-Controls how Steam handles controller input for ROM shortcuts. Found under the **Controller** section in Connection
-Settings.
+Controls how Steam handles controller input for ROM shortcuts. Found in **Settings › Controller**.
 
 | Mode                      | Description                                                                                                                |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
@@ -147,15 +186,17 @@ Settings.
 | **Force On**              | Explicitly enables Steam Input wrapping. Normalizes the controller as standard XInput, which RetroArch autoconfig expects. |
 | **Force Off**             | Raw HID passthrough. Only for advanced users — may break RetroArch menu navigation.                                        |
 
-After changing the mode, tap **Apply to All Shortcuts** to update all existing ROM shortcuts.
+After changing the mode, tap **Apply to All Shortcuts** to update all existing ROM shortcuts. The button reads
+**Applying to all shortcuts…** and stops responding while the run is going — a second tap is refused rather than
+starting a second pass over the same shortcuts.
 
 <!-- Screenshot: Steam Input Mode dropdown with the three options -->
 
 ## Preferred region
 
-A dropdown in the **Library** section of the settings page. When a game exists in your RomM library as several regional
-dumps (versions), this decides which region the plugin prefers when it picks the version to bind and the name it gives
-the Steam shortcut.
+A dropdown in **Settings › Steam Library**. When a game exists in your RomM library as several regional dumps
+(versions), this decides which region the plugin prefers when it picks the version to bind and the name it gives the
+Steam shortcut.
 
 | Option                                   | Effect                                                                                              |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -178,7 +219,7 @@ picture.
 
 ## Log Level
 
-A dropdown in the **Advanced** section on the main page. Controls how much detail the plugin logs.
+A dropdown in **Settings › Advanced**. Controls how much detail the plugin logs.
 
 | Level              | Description                        |
 | ------------------ | ---------------------------------- |
@@ -193,8 +234,10 @@ problems.
 ## RetroArch Input Driver Fix
 
 If the plugin detects that RetroArch is using the `x` input driver (which causes controller issues in menus on Wayland
-systems), a warning appears on the main page with a **Change to sdl2** button. This modifies your RetroArch config to
-use `sdl2` instead, which fixes controller navigation in RetroArch menus.
+systems), a notice appears on the main panel with an **Open Controller** button. The fix itself is in **Settings ›
+Controller**: **Fix input_driver to sdl2** modifies your RetroArch config to use `sdl2` instead, which fixes controller
+navigation in RetroArch menus. The result is reported under the button, and the warning goes away once the config has
+been changed.
 
 <!-- Screenshot: RetroArch input_driver warning with fix button -->
 

@@ -102,7 +102,7 @@ location — your existing settings and synced library are in the older install 
 After installation, you need to connect the plugin to your RomM server:
 
 1. Open the QAM and find **Tender**
-2. Tap **Connection Settings**
+2. Tap **Settings** in the menu, then **Connections** in the section list on the left
 3. Enter your RomM server URL (e.g. `http://192.168.1.100:8080`) — this saves automatically
 4. Tap **Sign in**, enter your RomM username and password once, and confirm
 5. The **RomM Account** row shows **Signed in** on success. The plugin's main QAM panel has a **Connection** row that

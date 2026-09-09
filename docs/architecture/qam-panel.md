@@ -179,7 +179,7 @@ does not say it owns its regions. A tabbed body gets none from the frame, and ne
 | Main            | 348   | notices, status, the conditional slot, the download summary, the menu                                         | as described                                                                      |
 | Sync            | 854   | preview as a table, the run as a plan, Skip preview, Force Full Sync, Steam memory, session budget, last runs | as described; the import choice (#1364) is the one thing still to come            |
 | Library         | 854   | Platforms as list and detail (sync, core, BIOS files, removal); Collections as filter and list                | Platforms is built; Collections still carries the narrow page's controls and list |
-| Settings        | 854   | five sections, list and detail                                                                                | narrow; eight sections stacked                                                    |
+| Settings        | 854   | five sections, list and detail                                                                                | as described; RetroAchievements has no sign-in to hold yet (#1627)                |
 | Data Management | 854   | five library-wide operations, list and detail                                                                 | narrow; opens the cleanup in a modal                                              |
 | Downloads       | 348   | the queue with its controls                                                                                   | unchanged                                                                         |
 
@@ -188,22 +188,26 @@ BIOS files are in Library › Platforms, and the value, the router branch and th
 
 The Sync page opens from the menu, from the conditional slot while there is something in it, and from **Open Sync** on
 the paused-run notice; Downloads opens from **View All** in the download summary, which is shown only while the queue is
-not empty. A notice can carry a door of its own — **Go to Settings** on the save-sorting notice is the other one — but a
-notice and the slot are both there only while their condition is, so the menu is the navigation a reader can go looking
-for. Every page but Main opens with a **Back** chip, which returns to Main. The chip shares its line with the page title
-— one row, not the three a full-width button plus a title line used to cost, which on the Deck's body is most of what a
-detail pane has to spend. Back is also on **B**, and the binding lives in the panel's router (`src/index.tsx`) rather
-than on a page: one `Focusable` with `onCancelButton` wraps the mounted content **only while `page` is not `main`**, so
-every sub-page — wide and narrow — answers B from wherever focus sits, and Main answers nothing, so Decky's own B still
-leaves the plugin. That condition is what makes taking B safe: the escape route is never removed, it is exactly as far
-away as the user walked in, and the last press is never swallowed. Steam already prints "B ZURÜCK" in its footer legend,
-which this makes true rather than misleading, so no legend entry of ours is needed. The chip stays as the discoverable
-half and as the mouse path, and it carries **Steam's own B glyph** — drawn for the controller in the user's hands, so it
-is ○ on a PlayStation pad and the swapped face button under a Nintendo layout. `@decky/ui` does not re-export that
-component, so `src/utils/deckyUiInternals.ts` reaches it by a module probe and types it as possibly absent; the chip
-falls back to its chevron the day the probe misses. The button number it passes is Steam's own action-button enum
-(`A=0, B=1, X=2, Y=3`), **not** `@decky/ui`'s `GamepadButton`, where 1 is A — the two disagree on every value, and the
-wrong one draws the wrong glyph without failing.
+not empty. A notice can carry a door of its own, and three of them name a Settings SECTION rather than the page — **Open
+Controller**, **Open Save Sync**, **Open Connections** — but a notice and the slot are both there only while their
+condition is, so the menu is the navigation a reader can go looking for. A target is a page id, or
+`{ page: "settings", section }` for those three (`src/types/navigation.ts`); the section rides on the page rather than
+beside it, so no target can pair a section with a page that has none, and the router (`src/index.tsx`) stays the only
+thing that decides what is mounted. A navigation naming no section opens Settings on its first, exactly as the menu's
+own entry does. Every page but Main opens with a **Back** chip, which returns to Main. The chip shares its line with the
+page title — one row, not the three a full-width button plus a title line used to cost, which on the Deck's body is most
+of what a detail pane has to spend. Back is also on **B**, and the binding lives in the panel's router (`src/index.tsx`)
+rather than on a page: one `Focusable` with `onCancelButton` wraps the mounted content **only while `page` is not
+`main`**, so every sub-page — wide and narrow — answers B from wherever focus sits, and Main answers nothing, so Decky's
+own B still leaves the plugin. That condition is what makes taking B safe: the escape route is never removed, it is
+exactly as far away as the user walked in, and the last press is never swallowed. Steam already prints "B ZURÜCK" in its
+footer legend, which this makes true rather than misleading, so no legend entry of ours is needed. The chip stays as the
+discoverable half and as the mouse path, and it carries **Steam's own B glyph** — drawn for the controller in the user's
+hands, so it is ○ on a PlayStation pad and the swapped face button under a Nintendo layout. `@decky/ui` does not
+re-export that component, so `src/utils/deckyUiInternals.ts` reaches it by a module probe and types it as possibly
+absent; the chip falls back to its chevron the day the probe misses. The button number it passes is Steam's own
+action-button enum (`A=0, B=1, X=2, Y=3`), **not** `@decky/ui`'s `GamepadButton`, where 1 is A — the two disagree on
+every value, and the wrong one draws the wrong glyph without failing.
 
 **A tabbed wide page has to get out of the way for that to work.** Steam's tabbed page renders its content pane as
 `onCancelButton: !cancelSkipTabHeader && <focus the tab row>` (`chunk~2dcc5aaf7.js`), so without the flag the first B
@@ -260,11 +264,12 @@ screen, so a button-first rule would open the panel wherever the day's condition
 dropped for the same reason, back when its argument was that a narrow page is one column of Steam's own full-width rows
 where the first button IS the first row — true of Main only while Main had a Sync button near the top.
 
-**Settings, Data Management and Downloads are unmoved**, and declare nothing: each leads with its Back button, which is
-both the first stop and the first button, so the router's default already opens them there. Whatever the rule, the root
-it searches is the plugin's own content and nothing above it — Decky renders its panel title and the back arrow beside
-it outside that box, 34 px above it (`WidePage`'s `ancestorOverhang` measures the gap) — so no rule here could reach
-Decky's own chrome. The declaration, the finder, the shared set of shapes and the `.focus()` + `gpfocus` pair are
+**Data Management and Downloads are unmoved**, and declare nothing: each leads with its Back button, which is both the
+first stop and the first button, so the router's default already opens them there. Settings left that group when it
+became a wide page — the frame owns its entry focus now, and lands it on the first section row. Whatever the rule, the
+root it searches is the plugin's own content and nothing above it — Decky renders its panel title and the back arrow
+beside it outside that box, 34 px above it (`WidePage`'s `ancestorOverhang` measures the gap) — so no rule here could
+reach Decky's own chrome. The declaration, the finder, the shared set of shapes and the `.focus()` + `gpfocus` pair are
 `src/utils/entryFocus.ts`. It is a second attribute rather than a second use of the wide frame's `OWNS_ENTRY_FOCUS_ATTR`
 because the two say opposite things: that one tells the router to place nothing, this one tells it where.
 
@@ -338,6 +343,10 @@ preview (a row per platform; New, Updated, Removed), registered devices, cleanup
 facts were folded into a field's label and description, which is why #1803's third axis had no slot on the rows the
 System page drew; the platform detail's BIOS table is where that column now sits.
 
+**Registered devices is still the folded shape**, and deliberately so for now: it is one group inside a Save Sync pane
+whose every other row is a Steam `Field`, and a lone grid there would be the only content on the page in a second visual
+language. It becomes a table when the Settings panes are written against the pane primitives the platform detail uses.
+
 **A cell clips; it never overflows.** A grid track sized `minmax(0, 1fr)` shrinks under its content and the content then
 spills across the track beside it — on the Deck a platform name and its note ran into the New column's digit. The clip
 (`overflow: hidden`, `text-overflow: ellipsis`, `white-space: nowrap`, `min-width: 0`) belongs on the **cell**, because
@@ -368,10 +377,13 @@ modal opened from the notice; that modal _is_ the home, not an exception to the 
 | Save-file sorting changed                   | text, **Open Save Sync**                      | Settings › Save Sync, which holds Migrate and Dismiss |
 | Sync paused on the session budget           | text, **Open Sync**                           | Sync, which holds Restart Steam now and Resume        |
 
-Today the `input_driver` fix has a button on Main and another in Settings, the save-sort card exists on both pages, the
-session-budget card with **Restart Steam now** sits on Main, and the playtime notice has Dismiss but no jump. The two
-full-page states — a version error and a pending RetroDECK migration — are not notices; they replace the page, and
-exactly one condition is carried inside them (below).
+Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
+migration — are not notices; they replace the page, and exactly one condition is carried inside them (below).
+
+The playtime notice is the one that carries **two** buttons, and they sit side by side on one row rather than on two
+full-width ones: Main is the narrow page, and a notice costing three rows pushes the status block it sits above off the
+screen. Its jump is not an answer either — only a fresh sign-in ends the condition, so **Open Connections** leaves it
+standing and **Dismiss** remains the way to put it away for this view.
 
 **The two data-location conditions are one card in one component** (`src/components/DataLocationNotice.tsx`), because
 they are two outcomes of the same start-up step and only ever one of them stands. The choice's modal
@@ -1038,20 +1050,37 @@ with them.
 
 ## Settings
 
-Wide, list and detail: the sections on the left, the focused section on the right. Five sections instead of today's
-eight — the save-sort migration becomes a notice with its actions inside Save Sync, Registered Devices moves into Save
-Sync, and SteamGridDB joins the other external services under Connections.
+Wide, untabbed, list and detail: the sections on the left, the focused section on the right. Five sections, where the
+narrow page stacked eight — the save-sort migration is a notice with its actions inside Save Sync, Registered Devices
+sits under Save Sync, and SteamGridDB joins the other external service under Connections.
 
-| Section       | Holds                                                                                                                                                                                                                                                                                                      |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Connections   | the services the plugin talks to: RomM (URL, account, Sign out, Allow insecure SSL), RetroAchievements (account and sign-in state; #1627 left the badge's home open between the game page, the retired System page and global settings — it lands here), SteamGridDB (the API key). Home of every sign-in. |
-| Save Sync     | the toggle, device, before-launch and after-exit, default slot, history limit, Sync all now; the registered devices as a table; home of the save-sort migration                                                                                                                                            |
-| Controller    | Steam Input mode, Apply to all shortcuts, the `input_driver` fix. Home of the fix.                                                                                                                                                                                                                         |
-| Steam Library | preferred region, collection games in platform groups, collection types in Steam names — today's **Library** section, renamed because a Library page now exists: the page is the RomM side (what is synced), the section is the Steam side (which version, in which groups, under which name)              |
-| Advanced      | log level                                                                                                                                                                                                                                                                                                  |
+| Section       | Holds                                                                                                                                                                                                                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Connections   | the services the plugin talks to: RomM (URL, account, Sign out, Allow insecure SSL) and SteamGridDB (the API key), one group each, titled by service. Home of every sign-in.                                                                                                                            |
+| Save Sync     | the save-sort migration first, as the condition asking to be answered; then the toggle, device, before-launch and after-exit, default slot, history limit, Sync all now; then the registered devices                                                                                                    |
+| Controller    | Steam Input mode, Apply to all shortcuts, the `input_driver` fix. Home of the fix.                                                                                                                                                                                                                      |
+| Steam Library | preferred region, collection games in platform groups, collection types in Steam names — the narrow page's **Library** section, renamed because a Library page now exists: the page is the RomM side (what is synced), the section is the Steam side (which version, in which groups, under which name) |
+| Advanced      | log level                                                                                                                                                                                                                                                                                               |
+
+**RetroAchievements is not here, and Connections is still its home.** The plugin has no RetroAchievements account and no
+sign-in for it — building one is #1627, which also left the badge's home open between the game page, the retired System
+page and global settings. The section holds the two services that exist rather than a placeholder for the one that does
+not.
+
+The section rows carry no control of their own, so the list is built with `selectOnActivate`: the activate handler that
+adds is what makes a row a focus stop, and without it the list is neither walkable nor scrollable. Every read-only row
+in a detail pane — a sign-in result, the registered device rows, the row naming this device — is `focusable` for the
+same reason, since a pane scrolls only by moving focus and a group with no stop in it cannot be reached at all. The
+exceptions are the lines the region reveals on its own: content above the pane's first stop or below its last
+(`ScrollRegion`'s `revealEdge`), which is why the migration card carries no handler.
 
 Text input stays in modals — RomM URL, account, API key, default slot — because the on-screen keyboard needs the room.
-The sticky pending URL and the unguarded Apply-to-all double press (#1020) are fixed in the rewrite.
+
+Two failures the narrow page carried are fixed here (#1020). A refused URL no longer sticks: the pending edit exists to
+carry a value across the remount that closing the modal can cause, so it is cleared whichever way the attempt ends, and
+the next open of the page shows the URL that was saved rather than the one that was rejected. And **Apply to all
+shortcuts** refuses a second press while a run is in flight — the guard is in the handler rather than only on the
+button, because a disabled control still reports a press on the device, and the button says which state it is in.
 
 ## Data Management
 
@@ -1084,8 +1113,8 @@ menu entry.
 | Delete BIOS files                  | Library › Platforms    | Library › Platforms                          |
 | Remove one platform's shortcuts    | Library › Platforms    | Library › Platforms                          |
 | Delete one platform's save files   | Library › Platforms    | Library › Platforms                          |
-| Fix the RetroArch `input_driver`   | Main **and** Settings  | Settings › Controller; Main shows the notice |
-| Migrate the save-file sorting      | Settings; Main links   | Settings › Save Sync; Main shows the notice  |
+| Fix the RetroArch `input_driver`   | Settings › Controller  | Settings › Controller; Main shows the notice |
+| Migrate the save-file sorting      | Settings › Save Sync   | Settings › Save Sync; Main shows the notice  |
 | Pause or cancel a download         | Downloads              | Downloads                                    |
 | Clean up removed RomM games        | Data Management, modal | Data Management, as a page                   |
 
@@ -1107,7 +1136,7 @@ The pages land in this order under #1808, each with the open work that already s
    import choice (#1364) is the one thing the page leaves space for.
 4. **Settings** ([#1816](https://github.com/danielcopper/romm-tender/issues/1816)) — the sections, Steam Library, the
    homes for the `input_driver` fix and the save-sort migration with their notices on Main. Carries #1020's URL and
-   double-press fixes.
+   double-press fixes. **Landed**, in one PR; RetroAchievements has no sign-in for Connections to hold until #1627.
 5. **Data Management** ([#1817](https://github.com/danielcopper/romm-tender/issues/1817)) — the operations, the cleanup
    as a pane. After Library, which removes the platform modal.
 

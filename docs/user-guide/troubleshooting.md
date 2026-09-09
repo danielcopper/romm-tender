@@ -202,7 +202,7 @@ keep a particular recovery copy long-term, move it out of `.romm-backup` yoursel
 
 **Symptom**: Games have cover art but no hero banner, logo, or wide grid image. The detail page background is blank.
 
-**Fix**: Configure a SteamGridDB API key in [Connection Settings](configuration.md#steamgriddb-api-key). It's free —
+**Fix**: Configure a SteamGridDB API key in [Settings › Connections](configuration.md#steamgriddb-api-key). It's free —
 create an account at steamgriddb.com and copy your API key.
 
 ### Game not found on SteamGridDB
