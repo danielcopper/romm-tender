@@ -62,6 +62,7 @@ from types import MappingProxyType
 from typing import Iterable, Literal, Mapping, Sequence, TypeAlias, TypeVar
 
 from .retroarch_cfg import CFG_LAYER_KINDS, RetroArchCfg
+from .system_firmware import CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE, STATED_EVIDENCE_WORDS
 from .yaml_scalars import REFUSAL_CODES
 
 # Root kinds — where the placement's directory is anchored. The closed
@@ -239,7 +240,21 @@ GRANULARITY_NONE = "none"
 # other's meaning.
 #
 # Closed and named per value like every other vocabulary here. A client syncing
-# save data takes every role but :data:`ROLE_SETTINGS`; see ``docs/how-to-use.md``.
+# save data takes every role but :data:`ROLE_SETTINGS`, and decides for itself
+# about :data:`ROLE_UNKNOWN` below; see ``docs/how-to-use.md``.
+#
+# :data:`ROLE_UNKNOWN` is the one value no evidence states — it is what a group
+# carries where a file is on the machine and no declaration covering that
+# directory says what kind of data it holds. Not knowing the *name* is not the
+# same as not knowing the kind: a card that states a directory's role and
+# refuses its file names has said what lies there, and a file found there takes
+# that role rather than this one. It is a value rather than an absence on
+# purpose, and the reason is a consumer that lost data: a save sync that skips
+# :data:`ROLE_SETTINGS` read "no role stated" as "ordinary progress" and copied
+# a console's settings file over the other device's. Absence is what misled it,
+# so the answer says *there is nothing to say about this file* in a word a
+# caller has to branch on. A card may never declare it (the card loader refuses
+# the spelling): it is the resolver's word for what no declaration named.
 #
 # :data:`ROLE_HIGH_SCORE` is the arcade family's, and it is a separate value
 # rather than a battery because the *merge* differs, which is the one thing a
@@ -261,6 +276,7 @@ ROLE_DISK_DIFF = "disk-diff"
 ROLE_HIGH_SCORE = "high-score"
 ROLE_SETTINGS = "settings"
 ROLE_NOTES = "notes"
+ROLE_UNKNOWN = "unknown"
 ROLES = (
     ROLE_BATTERY,
     ROLE_MEMORY_CARD,
@@ -268,6 +284,7 @@ ROLES = (
     ROLE_HIGH_SCORE,
     ROLE_SETTINGS,
     ROLE_NOTES,
+    ROLE_UNKNOWN,
 )
 
 
@@ -936,6 +953,14 @@ class FileGroup:
     carries is prose: what a file is *for* beyond its role belongs in the
     answer's ``sources``, not in a field a client would have to parse.
 
+    A group of an *observed* set is what was found under one declared meaning,
+    and a file the declaration does not name is a group too, with
+    :data:`ROLE_UNKNOWN`. Such a group states its ``granularity`` from the only
+    evidence there is, the names: the observation matched the content's own
+    stem, so these are this game's files rather than every game's, and whether
+    that reads ``per-game-file`` or ``per-game-files`` follows from how many the
+    group holds — the same count a card states its own groups by.
+
     ``files`` is ``None`` where the emulator writes save data into this directory
     under names that follow from nothing atlas reads — MAME names a hard disk's
     differencing image after the disk's entry in the machine's own ROM table, and
@@ -947,7 +972,10 @@ class FileGroup:
     blind there instead of silently skipping the player's progress. The reason
     travels beside the answer as ``file-names-unestablished``, which carries the
     citation; the group is where the directory itself belongs, so that one walk
-    over ``groups`` reaches every place a save lives.
+    over a declared answer's ``groups`` reaches every place a save lives. Only a
+    declared answer has such a group at all: ``files=None`` says a name was
+    never derivable, which is a statement about the card and not about what a
+    listing found.
     """
 
     dir: str
@@ -964,7 +992,8 @@ class FileGroup:
     """
     role: str
     """What kind of data this group holds — one of :data:`ROLES`, the word a syncing
-    client decides by.
+    client decides by, and :data:`ROLE_UNKNOWN` where nothing atlas read says what the
+    file is.
     """
 
     def __post_init__(self) -> None:
@@ -1011,25 +1040,62 @@ class FileSet:
     audit grind can earn a ``True`` here one card at a time without the shape
     of an answer changing.
 
-    ``groups`` decomposes a declared set whose parts differ in kind or owner —
-    see :class:`FileGroup`. It is empty wherever nothing decomposed the answer,
-    which is every observation, every unknown and every standard-rule
-    declaration; empty means *not decomposed*, never *no files*.
+    ``groups`` decomposes a set whose parts differ in kind or owner — see
+    :class:`FileGroup`. An *unknown* set has none, because it has no files;
+    empty means *not decomposed*, never *no files*.
 
-    Where it is populated, ``files`` stays exactly what it always was — the
-    names lying in ``dir`` — and that is enforced: it must be every group under
-    the first group's directory whose names are established, in order. So a
-    client that never reads ``groups`` sees no change when a card splits one
-    list into two by role, while a client that does gets the parts under the
-    other directories too. Cards state the save's own state first, so the first
-    group is the one a save-syncing client would have taken anyway.
+    **A savefile answer's observed set is decomposed too, and every file it
+    found is in one of its groups** — with the role the declaration knows for
+    that name, and with :data:`ROLE_UNKNOWN` where no declaration names it. The
+    two routes to one answer used to differ here: while the directory was empty
+    the declared set said which of the files were the console's settings, and
+    the moment the game had run once the same question came back with the names
+    and no roles at all. A client reading the absence as "ordinary progress"
+    then synchronised a settings file the user had chosen on that device. So a
+    role does not depend on whether anything was found: a name the declaration
+    covers keeps it, and so does a file in a directory whose role the card
+    states without its file names. A file no group of that directory covers says
+    so in a word. The savestate question's observation is the one that is not
+    decomposed at all — see :class:`SavestatePlacement`.
 
-    **``groups`` is the complete list of places, and ``files`` is one of them.**
-    A group whose names are not established carries ``files=None`` and still
-    appears here, so a single walk over ``groups`` reaches every directory the
-    card knows about — there is no second structure to correlate. A group with
-    ``None`` contributes nothing to ``files``, which is what keeps the flat list
-    exactly the set of names a caller can look for.
+    Where ``groups`` is populated, ``files`` stays exactly what it always was —
+    the names lying in ``dir`` — and that is enforced: every group under the
+    first group's directory whose names are established holds exactly those
+    names. A declared set is held to the card's order as well, which is the
+    order it states its parts in. An observed set is held to the names alone,
+    because its two lists come out of different passes: the groups follow the
+    declaration's order, while ``files`` follows the observation's — sorted
+    basenames where a directory is globbed, the card's own candidate order where
+    the card's names are checked one by one. So a client that never reads
+    ``groups`` sees no change when a
+    card splits one list into two by role, while a client that does gets the
+    parts under the other directories too wherever the set is declared. Cards
+    state the save's own state first, so the first group is the one a
+    save-syncing client would have taken anyway.
+
+    **Where a card decomposed a declared set, ``groups`` is the complete list of
+    places, and ``files`` is one of them.** A group whose names are not established carries
+    ``files=None`` and still appears here, so a single walk over ``groups``
+    reaches every directory the card knows about — there is no second structure
+    to correlate. A group with ``None`` contributes nothing to ``files``, which
+    is what keeps the flat list exactly the set of names a caller can look for.
+
+    **An observed set's groups describe the directory that was read, and only
+    it.** They are the found files sorted into what the declaration says they
+    are, so a card that also writes elsewhere has parts that no group of this
+    answer carries. Two kinds: the parts under another root, which
+    :data:`CAVEAT_FILE_SET_SPANS_ROOTS` names in either state, and the parts
+    under this answer's own root in another subdirectory, which are the ones to
+    know about. Kronos declares three groups over ``kronos/saturn`` and
+    ``kronos/stv`` and an observation of the first states one; MAME 2010
+    declares eight directories and an observation states one. Of the seven it
+    drops, the three whose names were never derivable still travel as
+    :data:`CAVEAT_FILE_NAMES_UNESTABLISHED`, which carries the directory; the
+    four that state files travel nowhere. Those directories are in the card, and
+    the same question states them as groups until this content's own name turns
+    up in the answer's directory and the set becomes an observation. This is a
+    known gap in what an observed answer states, never a claim that the other
+    directories hold nothing.
     """
 
     state: FileSetState
@@ -1046,7 +1112,8 @@ class FileSet:
     answer atlas can give today, which is not the same as having no opinion.
     """
     groups: tuple[FileGroup, ...] = ()
-    """Every place this save lives, where a card decomposed it by kind or owner — empty
+    """Where this save lives, decomposed by kind or owner: every place the card knows
+    on a declared answer, the one directory that was read on an observation — empty
     means not decomposed, never no files.
     """
 
@@ -1055,20 +1122,45 @@ class FileSet:
             raise ValueError(f"FileSet: state must be one of {_FILE_SET_STATES}, got {self.state!r}")
         if self.state == "unknown" and (self.files or self.complete):
             raise ValueError("FileSet: an unknown set carries no files and no completeness claim")
-        if self.groups and self.state != FILE_SET_DECLARED:
-            raise ValueError("FileSet: only a declared set is decomposed into groups")
+        if self.groups and self.state == FILE_SET_UNKNOWN:
+            raise ValueError("FileSet: an unknown set has no files to decompose into groups")
         if self.groups:
-            here = tuple(
-                name
-                for group in self.groups
-                if group.dir == self.groups[0].dir and group.files is not None
-                for name in group.files
+            self._check_group_agreement()
+
+    def _check_group_agreement(self) -> None:
+        """Hold ``files`` to the groups stating names in the answer's own directory.
+
+        What this checks is agreement, not coverage: a set that carries groups
+        may not lose, invent or double a name between them and ``files``. It
+        says nothing about a set that carries none — the ``if self.groups`` at
+        the one call site is the whole condition — so "every file a savefile
+        observation found is in a group" is the resolver's doing
+        (``_observed_groups``), not this type's. The guard is also what keeps
+        that silence true: reached on an empty tuple this check would not raise
+        on ``groups[0]``, which the comprehension never evaluates, but would
+        refuse the set for groups that name nothing. A savestate answer builds
+        an observed set with files and no groups and is legal in a ``FileSet``.
+
+        The sequence is held only where it is stated. Both lists come out of
+        their own pass: the groups follow the declaration's order, while
+        ``files`` follows the observation's — sorted basenames where a directory
+        is globbed, the card's own candidate order where the card's names are
+        checked one by one. Neither is the order the directory happens to hold,
+        and the two need not agree.
+        """
+        here = tuple(
+            name
+            for group in self.groups
+            if group.dir == self.groups[0].dir and group.files is not None
+            for name in group.files
+        )
+        observed = self.state == FILE_SET_OBSERVED
+        ordered = "" if observed else ", in order"
+        if (sorted(here) if observed else here) != (sorted(self.files) if observed else self.files):
+            raise ValueError(
+                "FileSet: files must be every group in the answer's own directory whose names "
+                f"are established{ordered} — got {self.files}, groups say {here}"
             )
-            if here != self.files:
-                raise ValueError(
-                    "FileSet: files must be every group in the answer's own directory whose names "
-                    f"are established, in order — got {self.files}, groups say {here}"
-                )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1353,8 +1445,8 @@ UNRESOLVED_EMULATOR_CONFIG_UNREADABLE = "emulator-config-unreadable"
 REASON_KEY_UNREAD = "key-unread"
 EMULATOR_CONFIG_UNREADABLE_REASONS = (*REFUSAL_CODES, REASON_KEY_UNREAD)
 
-# The four ``(code, key)`` pairs whose value became an enumeration in this
-# round, and the vocabulary each comes from. Checked at construction, the way
+# The ``(code, key)`` pairs whose value is an enumeration, and the vocabulary
+# each comes from. Checked at construction, the way
 # :class:`CfgSource` checks its kind and the card loader checks its tokens —
 # because being closed by convention is not being closed: a typo in a resolver
 # no fixture reaches would otherwise ship through the type check, the tests and
@@ -1372,6 +1464,12 @@ ENUMERATED_DATA: "Mapping[tuple[str, str], tuple[str, ...]]" = MappingProxyType(
             FILES_ESTABLISHED_FOR_TOKENS
         ),
         (CAVEAT_INVALID_SAVE_DIRECTORY, "layer"): CFG_LAYER_KINDS,
+        # The world-knowledge mark carries two keys and only one of them is
+        # closed: the evidence level, as the contract spells it rather than in
+        # the bracket notation the research pages use. The system it is about
+        # is a system id — open by construction, because atlas publishes its
+        # own spelling wherever no catalogue declares one.
+        (CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE, "evidence"): STATED_EVIDENCE_WORDS,
         (UNRESOLVED_EMULATOR_CONFIG_UNREADABLE, "reason"): EMULATOR_CONFIG_UNREADABLE_REASONS,
     }
 )
@@ -1460,6 +1558,15 @@ class SavestatePlacement:
     ``<stem>.state.auto`` (``runloop.c:8185-8207``). Which of them exist is
     still an observation — the slot is a live setting and nothing on disk says
     how many were ever written — so the set is never ``complete``.
+
+    That set is the one atlas never decomposes: ``file_set.groups`` is empty on
+    every savestate answer, in every state. A group exists to say what a file is
+    and whose it is, and this question has already said both — the set is this
+    content's states, under names the paragraph above states rather than per-core
+    behaviour, so a role beside them would repeat the question. The observation
+    also picks up the ``.png`` thumbnail RetroArch writes beside a state with
+    ``savestate_thumbnail_enable`` on, and the one decomposition anyone could
+    build here would part each thumbnail from the state it belongs to.
 
     ``fallback_dir`` and ``physical_dir`` mean exactly what they do on a save
     placement: the root RetroArch silently reverts to when it cannot create the

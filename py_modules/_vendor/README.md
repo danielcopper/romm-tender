@@ -48,8 +48,8 @@ The [emu-atlas](https://github.com/danielcopper/emu-atlas) resolver — the conf
 extracted from this plugin.
 
 - **Upstream:** <https://github.com/danielcopper/emu-atlas>
-- **Version:** 0.14.0 — tag `v0.14.0`, from the release's `emu_atlas-0.14.0-py3-none-any.whl`
-  (`sha256:91a42b48636bd44cdfa325bc12bf9901665309213397a37825ff6fe2deec53ef`)
+- **Version:** 0.15.0 — tag `v0.15.0`, from the release's `emu_atlas-0.15.0-py3-none-any.whl`
+  (`sha256:07b8aa8c2d46e9716d714d4e4e485785b706e43775145084b3ab056ec28fe289`)
 - **License:** MIT — see [`atlas.LICENSE`](atlas.LICENSE)
 - **Local patches:** none. Upstream made the package relocatable in
   [emu-atlas#327](https://github.com/danielcopper/emu-atlas/issues/327) — no absolute self-imports, no `files("atlas")`

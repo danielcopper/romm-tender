@@ -230,6 +230,7 @@ from .placement import (
     ROLE_BATTERY,
     ROLE_MEMORY_CARD,
     ROLE_SETTINGS,
+    ROLE_UNKNOWN,
     ROOT_CONTENT_DIRECTORY,
     ROOT_EMULATOR_DIRECTORY,
     ROOT_SAVEFILE_DIRECTORY,
@@ -2771,7 +2772,16 @@ def _card_file_set(
     candidates = tuple(f for f in (observe if observe is not None else declared) if f not in excluded)
     present = tuple(f for f in candidates if machine.path_kind(os.path.join(directory, f)) == KIND_FILE)
     if present:
-        return FileSet("observed", present, f"observed on the machine: {directory}", complete=mode.complete)
+        return FileSet(
+            "observed",
+            present,
+            f"observed on the machine: {directory}",
+            complete=mode.complete,
+            # Every candidate came from a group of this mode, so the found ones
+            # keep the role and grouping that group states — the declaration is
+            # not worth less for having been confirmed.
+            groups=_observed_groups(present, directory=directory, rom_stem=rom_stem, mode=mode),
+        )
     return FileSet(
         "declared",
         declared,
@@ -3027,8 +3037,11 @@ def _with_cross_parts(file_set: FileSet, cross_parts: "_CrossParts") -> FileSet:
     """The declared decomposition gains the parts under the other roots.
 
     The flat ``files`` stays the answer's own directory, as it always was. An
-    observed or unknown set keeps its shape — no decomposition exists there to
-    extend, and the spans-roots caveats carry the parts instead.
+    unknown set has nothing to extend, and an observed one's groups are what was
+    found in the directory this answer read: a part under another root was never
+    looked at, so appending its declared names would state files nobody saw
+    inside an answer whose state says *seen*. The spans-roots caveat carries
+    those parts for both, which is the carrier that survives an observation.
     """
     if cross_parts.groups and file_set.state == FILE_SET_DECLARED and file_set.groups:
         return FileSet(
@@ -3489,8 +3502,10 @@ def _declared_groups(
 
     **Every group the card knows about**, including the ones whose file names
     follow from nothing atlas reads — those carry ``files=None``. That is what
-    makes one walk over ``groups`` reach every place a save lives, rather than a
-    walk plus a scan of the caveats for the directories the walk left out. The
+    makes one walk over a declared answer's ``groups`` reach every place a save
+    lives, rather than a walk plus a scan of the caveats for the directories the
+    walk left out; the observed decomposition beside this one covers the
+    directory it read and no other (:func:`_observed_groups`). The
     caveat still travels, because it carries the citation and the sentence a
     person reads; it is no longer the only carrier.
 
@@ -3525,6 +3540,136 @@ def _declared_groups(
     return tuple(groups)
 
 
+def _observation_names(group: SaveGroup, rom_stem: str | None) -> frozenset[str]:
+    """The names a card group would recognise in its own directory, resolved.
+
+    A group's observation candidates where it states them (Flycast's slot-2
+    VMUs), otherwise its declared list. A name whose ``<rom_stem>`` hole this
+    content cannot fill recognises nothing: the group's own answer would be
+    unknown there, so it may not claim a file either.
+    """
+    names = group.observe if group.observe is not None else group.files
+    if names is None:
+        return frozenset()
+    return frozenset(_card_files(names, rom_stem) or ())
+
+
+def _unnamed_here(mode: SaveMode | None) -> SaveGroup | None:
+    """The group that states this directory's role and refuses its file names.
+
+    Such a group is a claim about the directory, not about a list: ScummVM
+    names its slot files per engine from the launcher target, and WHDLoad gives
+    a program its own drawer that the running game then fills under names of
+    its own. The card still says
+    what lies there — that is why its ``file-names-unestablished`` caveat
+    carries a ``role`` — so a file found there is that group's data, and the
+    only thing missing was ever the name.
+
+    ``None`` where no such group covers the answer's own directory, and
+    deliberately ``None`` where two would: a name two groups both claim has no
+    role atlas read, which is what :data:`~atlas.placement.ROLE_UNKNOWN` says.
+    No shipped card has two in one directory; the arm exists so that the day
+    one does, the answer degrades to the honest value instead of picking.
+    """
+    if mode is None or mode.stated is not None:
+        # A mode that states no separate save file declares no groups at all,
+        # so there is no claim over a directory to find. The walk below would
+        # answer the same by running over an empty tuple — this says it up
+        # front rather than leaving it to be inferred from that.
+        return None
+    here = [
+        group
+        for group in mode.unnamed
+        if group.root is None and group.subdir == mode.primary.subdir
+    ]
+    return here[0] if len(here) == 1 else None
+
+
+def _observed_groups(
+    observed: tuple[str, ...], *, directory: str, rom_stem: str | None, mode: SaveMode | None
+) -> tuple[FileGroup, ...]:
+    """Every observed name in a group, carrying the role its declaration knows.
+
+    The declaration is in scope while the observation is being answered, and
+    dropping it there was the whole defect: the same question about the same
+    game answered with roles while the directory was empty and without them
+    once the game had run once, and a save-syncing client read the absence as
+    "ordinary progress" and copied a console settings file between devices.
+
+    Groups come in the card's own order and hold the names in the answer's,
+    which is what the two states can each honestly say. Three passes, most
+    specific first:
+
+    1. the named groups take the names they declare or watch for;
+    2. the group that states this directory's role without its names — see
+       :func:`_unnamed_here` — takes what is left, because the card did say
+       what lies here and only refused to spell it;
+    3. whatever no group covers is a group of its own with
+       :data:`~atlas.placement.ROLE_UNKNOWN`, rather than being left out.
+
+    The third is a statement, and it is the one a caller must not be able to
+    mistake for "nothing is here". Its granularity is read off the names like
+    every other fact here: the observation matched the content's own stem, so
+    these are this game's files rather than every game's, and one or several of
+    them the way a card counts its own group's. The second pass keeps that value
+    for what it is for: without it, a file found in such a directory came back
+    roleless beside a caveat naming that directory's role, an answer
+    contradicting itself in one envelope.
+
+    Both cards reach that observation the same narrow way, and for the same
+    reason their groups are nameless at all. The glob is the content's own stem,
+    while a ScummVM slot file is named from the launcher's target and a file in
+    a WHDLoad drawer by the game that wrote it — neither of which atlas reads.
+    So a slot file arrives only where the target happens to equal the content's
+    stem, and a file in the drawer only where the game's own name does;
+    otherwise nothing matches and the answer stays declared.
+
+    What this does *not* produce is the card's other directories. Every pass
+    above is about the answer's own directory, because that is the one the
+    observation read, so a mode with groups in sibling subdirectories
+    (``kronos/stv`` beside ``kronos/saturn``) states them while the set is
+    declared and not once it is observed. Those keep their
+    ``file-names-unestablished`` caveat where they are unnamed and travel
+    nowhere where they state files. The type's own docstring states that limit
+    for callers, and closing it is a decision about what an observed answer may
+    carry, not a change to this function's shape.
+    """
+    unclaimed = list(observed)
+    groups: list[FileGroup] = []
+    for group in mode.here if mode is not None and mode.stated is None else ():
+        names = _observation_names(group, rom_stem)
+        mine = tuple(name for name in unclaimed if name in names)
+        if not mine:
+            continue
+        unclaimed = [name for name in unclaimed if name not in names]
+        groups.append(
+            FileGroup(dir=directory, files=mine, granularity=group.granularity, role=group.role)
+        )
+    catchall = _unnamed_here(mode) if unclaimed else None
+    if catchall is not None:
+        groups.append(
+            FileGroup(
+                dir=directory,
+                files=tuple(unclaimed),
+                granularity=catchall.granularity,
+                role=catchall.role,
+            )
+        )
+        unclaimed = []
+    if unclaimed:
+        groups.append(
+            FileGroup(
+                dir=directory,
+                files=tuple(unclaimed),
+                granularity=(
+                    GRANULARITY_PER_GAME_FILE if len(unclaimed) == 1 else GRANULARITY_PER_GAME_FILES
+                ),
+                role=ROLE_UNKNOWN,
+            )
+        )
+    return tuple(groups)
+
+
 def _file_set_of(
     matches: list[str],
     *,
@@ -3548,6 +3693,7 @@ def _file_set_of(
             files=observed,
             provenance=f"observed on the machine: {directory}",
             complete=complete,
+            groups=_observed_groups(observed, directory=directory, rom_stem=rom_stem, mode=mode),
         )
     if declared is not None and card is not None:
         return FileSet(

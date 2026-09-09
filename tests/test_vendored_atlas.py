@@ -33,7 +33,7 @@ from _vendor import atlas
 if TYPE_CHECKING:
     from types import ModuleType
 
-VENDORED_VERSION = "0.14.0"
+VENDORED_VERSION = "0.15.0"
 
 
 class _NoEtree:

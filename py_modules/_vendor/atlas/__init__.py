@@ -64,7 +64,7 @@ from __future__ import annotations
 # tests/test_version.py holds it equal to pyproject — CI's package job holds
 # dist-info to pyproject in a clean venv — so drift is a red test, not a
 # silent fork.
-__version__ = "0.14.0"  # x-release-please-version
+__version__ = "0.15.0"  # x-release-please-version
 
 # --- The two entry points, and the aggregate over them -----------------------
 from .detect import detect
@@ -268,6 +268,7 @@ from .firmware import (
     CAVEAT_STANDALONE_UNSUPPORTED,
     CAVEAT_SYSTEM_ASSIGNMENT_DERIVED,
     CAVEAT_SYSTEM_ASSIGNMENT_MAY_HIDE_CORES,
+    CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE,
     CAVEAT_SYSTEM_NOT_IN_CATALOGUE,
     CAVEAT_SYSTEM_UNKNOWN,
     CHECKED_MISMATCH,
@@ -275,6 +276,7 @@ from .firmware import (
     CHECKED_UNCHECKED,
     CHECKED_UNKNOWN,
     CHECKED_VERIFIED,
+    CORE_SYSTEM_FIRMWARE_STATES,
     DECLARATION_ABSENT,
     DECLARATION_PACKAGED,
     DECLARATION_READ,
@@ -292,13 +294,29 @@ from .firmware import (
     SOURCE_SLUG,
     SOURCE_SYSTEMNAME,
     SYSTEMS_WITHOUT_CATALOGUE_ID,
+    SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
+    SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
+    SYSTEM_FIRMWARE_OPEN,
+    SYSTEM_FIRMWARE_RUNS_WITHOUT,
     ArchiveReason,
     CoreDeclarationState,
+    CoreSystemFirmware,
     DeclaredKind,
     FirmwareChecked,
     FirmwareIdentityKind,
     FirmwareNeed,
     SystemSource,
+)
+
+# The evidence scale the world-knowledge mark's `evidence` comes from, as the
+# CONTRACT spells it. The bracket forms beside these in `atlas.system_firmware`
+# ([V], [D], [O]) are this repository's documentation notation and stay inside
+# the package; a client renders the word.
+from .system_firmware import (
+    EVIDENCE_WORD_DERIVED,
+    EVIDENCE_WORD_OPEN,
+    EVIDENCE_WORD_VERIFIED,
+    STATED_EVIDENCE_WORDS,
 )
 from .content_tree_wiring import (
     ArrangementWiring,
@@ -480,6 +498,7 @@ from .placement import (
     ROLE_HIGH_SCORE,
     ROLE_MEMORY_CARD,
     ROLE_SETTINGS,
+    ROLE_UNKNOWN,
     ROLES,
     ROOT_CONTENT_DIRECTORY,
     ROOT_EMULATOR_DIRECTORY,
@@ -643,6 +662,7 @@ __all__ = [
     "FirmwareIdentityKind",
     "ArchiveReason",
     "CoreDeclarationState",
+    "CoreSystemFirmware",
     "SystemSource",
     # Vocabulary values — path kinds and read statuses (answers carry both)
     "KIND_FILE",
@@ -691,6 +711,15 @@ __all__ = [
     "SOURCE_SLUG",
     "SOURCE_NONE",
     "SOURCE_CARD",
+    "SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT",
+    "SYSTEM_FIRMWARE_CORE_ALTERNATIVE",
+    "SYSTEM_FIRMWARE_RUNS_WITHOUT",
+    "SYSTEM_FIRMWARE_OPEN",
+    "CORE_SYSTEM_FIRMWARE_STATES",
+    "EVIDENCE_WORD_VERIFIED",
+    "EVIDENCE_WORD_DERIVED",
+    "EVIDENCE_WORD_OPEN",
+    "STATED_EVIDENCE_WORDS",
     "SYSTEMS_WITHOUT_CATALOGUE_ID",
     # Vocabulary values — the holes a caller fills, and the closed sets the
     # contract serializes them beside. A client branches on `needs` and reads
@@ -778,6 +807,7 @@ __all__ = [
     "ROLE_DISK_DIFF",
     "ROLE_HIGH_SCORE",
     "ROLE_SETTINGS",
+    "ROLE_UNKNOWN",
     "ROLES",
     "KEYING_GAME_ID",
     "KEYING_SERIAL",
@@ -929,6 +959,7 @@ __all__ = [
     "CAVEAT_STANDALONE_UNSUPPORTED",
     "CAVEAT_SYMLINK_LOOP",
     "CAVEAT_SYSTEM_ASSIGNMENT_DERIVED",
+    "CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE",
     "CAVEAT_SYSTEM_NOT_IN_CATALOGUE",
     "CAVEAT_SYSTEM_ASSIGNMENT_MAY_HIDE_CORES",
     "CAVEAT_SYSTEM_DIRECTORY_CLEARED",
