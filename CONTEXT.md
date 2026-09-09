@@ -274,8 +274,9 @@ outside the scope.
 Keeping the last two apart is the whole point of the vocabulary — "nothing wants this" is a finished answer and "nothing
 could be established" is the absence of one, and a single boolean called both _not required_. **Wanted** is a property
 of the machine and does not move with the core the user picked; the launch-scoped question is **required by active
-core**, which is what the missing-BIOS badge counts. The foil to **BIOS level** (the platform-wide readiness verdict:
-unknown / ok / partial / missing).
+core**, which is what the missing-BIOS badge counts — beside **system image**, the console's own demand, which no count
+carries and which raises that same badge. The foil to **BIOS level** (the platform-wide readiness verdict: unknown / ok
+/ partial / missing).
 
 A wanted file need not be one the RomM library holds — the two sets overlap without either containing the other, and a
 platform's list is their **union**. A row the library does not hold is marked **not on server**: it counts towards
@@ -318,19 +319,26 @@ absence and does count towards readiness.
 ### System image (firmware): held / absent / unsettled / not demanded
 
 Whether the core a game launches with has the firmware image its **console** cannot start without — a requirement no
-libretro declaration can express. A `.info` marks each file **needed** or **optional** and nothing else, so a core whose
-console will not boot without a BIOS image can only mark every image it declares optional, and the file counts alone
-then read a green **Nothing required** over a system on which no game starts. The console's own answer is world
-knowledge rather than a reading of the machine — the resolver keeps a source-cited table of it, per system.
+libretro declaration can express. A `.info` marks each file **needed** or **optional** and nothing else: no way to say
+"one of these", and no way to say the console will not boot without one. An author who knows it will not has two lossy
+moves and the deployed catalogue takes both — SwanStation marks all five of its PlayStation images optional, Beetle PSX
+marks three of its own required — so the file counts alone read a green **Nothing required** under the one core and
+three separate prerequisites under the other, over a system on which no game starts either way. The console's own answer
+is world knowledge rather than a reading of the machine — the resolver keeps a source-cited table of it, per system.
 
 It is a **disjunction**, and that is what keeps it out of the counts. The console asks for _one_ of the images the core
 declares, not for each of them, so it is a single requirement over the whole list rather than one requirement per file.
-Folded into **required by active core** it would report every listed image as required — `0 / 20 required files ready`
-on the PlayStation page this was observed on; carried as its own axis it is worded "one of these" and never as a ratio.
+Folded into **required by active core** it would report every image the core declares as required —
+`0 / 5 required
+files ready` under SwanStation, which declares five; carried as its own axis it is worded "one of these"
+and never as a ratio. The twenty in the same page's `0 / 20 files held` is a different set again: the library's own
+inventory for the platform.
 
 - **held** — one of the images is at its destination. Which one is not asked: any of them answers the whole requirement.
-- **absent** — the console needs one and every image the launching core declares was established to be absent. The
-  **BIOS level** goes to `missing`, ahead of every decline — a demonstration outranks an unjudged row.
+- **absent** — the console needs one and every row the launching core declares was established to be absent. The **BIOS
+  level** goes to `missing`, tested ahead of the declines so a demonstration outranks a platform nothing could be
+  established for. A withheld required row cannot hold with it: that row is one of the rows the disjunction is read
+  over, so it leaves the answer **unsettled** instead.
 - **unsettled** — the console needs one and whether it is there could not be established. It can turn a green verdict
   grey and nothing else: where the counts already read `partial` or `missing`, something is known to be absent and a
   doubt about one further file does not unsay it.
@@ -340,8 +348,9 @@ on the PlayStation page this was observed on; carried as its own axis it is word
   may never be read as "this console needs no firmware" — the same rule that keeps **unknown** apart from **not needed**
   one axis over.
 
-Scoped to the **active core**, like **required by active core** and unlike **wanted**: the same twenty PlayStation
-images read `absent` under SwanStation and `not demanded` under PCSX ReARMed over one unchanged machine.
+Scoped to the **active core**, like **required by active core** and unlike **wanted**: one unchanged PlayStation reads
+`absent` under SwanStation, whose five declared images the console needs one of, and `not demanded` under PCSX ReARMed,
+which carries its own substitute.
 
 ### Safely-bakeable
 

@@ -112,11 +112,14 @@ function getBiosSummary(
   total: number,
   systemImage: SystemImage,
 ) {
-  // The console's own demand comes first, because no count can state it: it asks
-  // for ONE of these images and a libretro declaration can only mark each of
-  // them optional, so the required-file phrasing below reads "Nothing required"
-  // over a system that will not boot. Stated as "one of these" and never as a
-  // ratio — the list is many files and the requirement is one.
+  // The console's own demand comes first, because no count can be relied on to
+  // state it: it asks for ONE of these images, and a libretro declaration marks
+  // each file required or optional and can say nothing else. Which of the two an
+  // author reaches for is their choice, and over one PlayStation the deployed
+  // catalogue goes both ways — SwanStation marks all five of its images
+  // optional, so the required-file phrasing below reads "Nothing required" over
+  // a system that will not boot. Stated as "one of these" and never as a ratio —
+  // the list is many files and the requirement is one.
   if (systemImage === "absent") {
     return {
       summaryLabel: "Needs one of these",
@@ -160,15 +163,19 @@ function getBiosSummary(
  *
  * **The first two can hold together, and the withheld row is then the truer
  * sentence.** They co-occur on a console that needs an image whose required
- * folder row the read could not judge — the LRPS2 shape. They are not two
- * independent gaps there: a row that is `required_by_active` always carries the
- * active core, so it is always one of the images the console's disjunction spans
- * (`classify_system_image`), which makes it a CAUSE of the unsettled verdict
- * rather than a second finding beside it. Saying both would state one gap twice,
- * once named and once vague; saying only the console's would drop the pointer
- * into the file list, where that row shows the caveat explaining itself. So the
- * withheld count is checked first. The reverse — a console demand unsettled with
- * no withheld required row — is a different platform and keeps its own sentence.
+ * folder row the read could not judge — the LRPS2 shape. They are not two gaps
+ * over two different file sets there: a row that is `required_by_active` always
+ * carries the active core, so it is always one of the rows the console's
+ * disjunction is read over (`classify_system_image`). It need not be WHY that
+ * verdict declined — an image the rows show held while the resolver says the core
+ * will not start declines it too, with no withheld row anywhere near it — but it
+ * is always inside the set the console's sentence is about, and it is the only
+ * half of the pair that can name a file. Saying both would point twice at one
+ * file list, once named and once vague; saying only the console's would drop the
+ * pointer into that list, where the row shows the caveat explaining itself. So
+ * the withheld count is checked first. The reverse — a console demand unsettled
+ * with no withheld required row — is a different platform and keeps its own
+ * sentence.
  */
 function getUnknownSummary(requiredWithheld: number, systemImage: SystemImage) {
   if (requiredWithheld > 0) {

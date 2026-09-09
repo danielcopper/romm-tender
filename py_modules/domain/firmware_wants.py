@@ -24,9 +24,14 @@ about is not.
 
 A second axis runs beside that one and is not a property of any file: what is
 recorded about the **system** an emulator declares for. A libretro ``.info`` can
-mark a slot required or optional and nothing else, so a core whose console does
-not boot without a BIOS image can only mark every image it declares optional —
-which reads, per file, as a finished answer that nothing is missing. The
+mark a slot required or optional and nothing else — no way to say "one of
+these", and no way to say the console does not start without one. An author who
+knows a PlayStation needs a BIOS image therefore has two lossy moves, and the
+deployed catalogue takes both: SwanStation marks all five of its images
+optional, which reads per file as a finished answer that nothing is missing,
+while Beetle PSX marks three of its own required, which reads as three separate
+prerequisites where the console asks for one. Neither states the console's
+demand, so no reading of the declaration can be relied on to carry it. The
 resolver answers that half from a packaged table
 (:class:`CoreFirmwareVerdict`), and its ``None`` means nobody has looked at the
 system, never that the system needs nothing.

@@ -124,10 +124,14 @@ export function extractBiosInfo(answer: BiosAnswer): BiosInfoFields | null {
   // the resolver listed and found no BIOS image in is exactly the state the
   // badge is for.
   const requiredJudged = requiredCount - (answer.bios_status.required_withheld ?? 0);
-  // The console's own demand, taken as the backend stated it. It is a second
-  // absence rather than a second reading of the same one: the images it is
-  // about are all declared optional, so they raise no required count, and the
-  // comparison beside it can only ever be false for them.
+  // The console's own demand, taken as the backend stated it — a second
+  // established absence beside the count rather than a second reading of the
+  // same one. Whether the count sees it at all is the core author's choice: a
+  // libretro declaration marks each file required or optional and can say
+  // nothing about the console, so over one PlayStation SwanStation marks all
+  // five of its images optional (`required_count` 0, the comparison below
+  // vacuously false) while Beetle PSX marks three of its own required. This axis
+  // answers the same either way.
   const systemImageAbsent = answer.bios_status.system_image === "absent";
   return {
     biosNeeded: true,

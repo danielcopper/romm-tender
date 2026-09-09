@@ -9,6 +9,8 @@ what the verdict does with each of them.
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from domain.bios_status import (
@@ -27,6 +29,7 @@ from domain.bios_status import (
     classify_system_image,
     compute_bios_label,
     compute_bios_level,
+    count_wanted,
 )
 from domain.firmware_wants import (
     SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
@@ -34,6 +37,7 @@ from domain.firmware_wants import (
     SYSTEM_FIRMWARE_OPEN,
     SYSTEM_FIRMWARE_RUNS_WITHOUT,
     WANTED_OPTIONAL,
+    WANTED_UNKNOWN,
     CoreFirmwareVerdict,
 )
 
@@ -58,6 +62,27 @@ def _image(name: str, *, satisfied: bool | None, core: str = _CORE) -> BiosFileE
         cores={core: {"required": False}},
         used_by_active=True,
         satisfied=satisfied,
+    )
+
+
+def _withheld_folder_row() -> BiosFileEntry:
+    """The LRPS2 folder row nothing could judge — required by the launching core.
+
+    ``required_by_active`` is what carries the active core onto the row: the
+    plugin sets it from that core's own entry in ``cores``, so such a row is
+    always one of the rows the console's disjunction is read over.
+    """
+    return BiosFileEntry(
+        file_name="pcsx2/bios",
+        downloaded=True,
+        local_path="/bios/pcsx2/bios",
+        declared_path="pcsx2/bios",
+        description="PS2 BIOS folder",
+        wanted=WANTED_OPTIONAL,
+        required_by_active=True,
+        cores={_CORE: {"required": True}},
+        used_by_active=True,
+        satisfied=None,
     )
 
 
@@ -94,7 +119,7 @@ class TestClassifySystemImage:
 
     def test_one_held_image_answers_the_whole_disjunction(self):
         # One of these, not each of these: a single satisfied row settles it and
-        # nineteen absent ones do not unsettle it.
+        # the absent rows beside it do not unsettle it.
         verdict = CoreFirmwareVerdict(system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT, requirements_met=None)
         files = (
             _image("scph5500.bin", satisfied=False),
@@ -149,6 +174,17 @@ class TestClassifySystemImage:
             SYSTEM_IMAGE_NOT_DEMANDED
         )
 
+    def test_a_withheld_required_row_cannot_hold_with_an_absent_image(self):
+        # The combination ``compute_bios_level``'s ordering guards against does
+        # not arise, and the prose about that ordering rests on this: a
+        # ``required_by_active`` row always carries the active core, so it is one
+        # of the rows the disjunction is read over, and one nothing could judge
+        # leaves the answer unsettled rather than absent.
+        verdict = CoreFirmwareVerdict(system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT, requirements_met=False)
+        files = (_image("scph5500.bin", satisfied=False), _withheld_folder_row())
+
+        assert classify_system_image(verdict, files, _CORE) == SYSTEM_IMAGE_UNSETTLED
+
     def test_the_disjunction_spans_only_the_launching_cores_own_images(self):
         # A file three other cores declare is not this launch's prerequisite —
         # the same scoping the required counts take, one axis over.
@@ -170,28 +206,45 @@ class TestTheVerdictOverTheSystemImage:
         assert compute_bios_level(status) == BIOS_LEVEL_MISSING
         assert compute_bios_label(status) == BIOS_LABEL_MISSING
 
-    def test_an_absent_image_outranks_a_withheld_required_row(self):
-        # A demonstration beats an unjudged row — the same precedence the
-        # resolver applies to its own two.
-        withheld = BiosFileEntry(
-            file_name="pcsx2/bios",
-            downloaded=True,
-            local_path="/bios/pcsx2/bios",
-            declared_path="pcsx2/bios",
-            description="PS2 BIOS folder",
-            wanted=WANTED_OPTIONAL,
-            required_by_active=True,
-            cores={_CORE: {"required": True}},
+    def test_an_absent_image_outranks_a_platform_nothing_could_be_established_for(self):
+        # The one decline the ordering really decides against, and it is
+        # reachable: the library's own rows all went unanswered under an
+        # incomplete reading, while the images the core declares are rows the
+        # library does not hold and every one of them is absent. A demonstration
+        # is a claim, so the level is 'missing' rather than 'unknown'.
+        #
+        # The counts come off the file list through the same helper the service
+        # uses, so what this pins is that the state exists rather than that a
+        # hand-written pair of numbers can be typed.
+        unanswerable = BiosFileEntry(
+            file_name="scph7003.bin",
+            downloaded=False,
+            local_path="/bios/scph7003.bin",
+            declared_path="scph7003.bin",
+            description="scph7003.bin",
+            wanted=WANTED_UNKNOWN,
+            required_by_active=False,
+            cores={},
             used_by_active=True,
             satisfied=None,
         )
+        declared = _image("scph5500.bin", satisfied=False)
+        files = (dataclasses.replace(declared, on_server=False), unanswerable)
+        known, unknown = count_wanted(files)
         status = _status(
-            (withheld,),
-            required_count=1,
-            required_downloaded=0,
+            files,
+            server_count=sum(1 for f in files if f.on_server),
+            known_count=known,
+            unknown_count=unknown,
+            reading_complete=False,
             system_image=SYSTEM_IMAGE_ABSENT,
         )
 
+        # The decline is live: take the console's answer away and this platform
+        # is exactly the one nothing could be established for.
+        assert compute_bios_level(dataclasses.replace(status, system_image=SYSTEM_IMAGE_NOT_DEMANDED)) == (
+            BIOS_LEVEL_UNKNOWN
+        )
         assert compute_bios_level(status) == BIOS_LEVEL_MISSING
 
     def test_an_unsettled_image_turns_a_green_count_grey(self):

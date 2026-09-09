@@ -396,10 +396,13 @@ def classify_system_image(
 
     **The requirement is a disjunction and is read as one.** The console asks for
     ONE of the images the core declares, so a single satisfied row answers it and
-    a page full of absent ones is still one unmet requirement. That is why this
+    the absent ones beside it are still one unmet requirement. That is why this
     is a value and not a pair of counts: put into ``required_count`` it would
     read ``0/N required files ready`` over a console that needs one image, with
-    ``N`` the whole list — the observed PlayStation page shows twenty.
+    ``N`` every row the core declares — five, for the SwanStation this was
+    observed on. The twenty in that page's ``0/20 files held`` is a different set
+    again: the RomM library's inventory for the platform, which this answer
+    neither counts nor is scoped to.
 
     **Held is read off the rows, not off the resolver's own verdict**, and
     deliberately: every other readiness answer on these surfaces is presence at
@@ -416,12 +419,16 @@ def classify_system_image(
     and a disagreement is not a claim, so the answer declines. It can never turn
     a decline into a hold.
 
-    *files* is this platform's list, so the disjunction spans the images this
-    core declares that the platform's own rows carry. The resolver reads the same
-    disjunction over every image the core declares machine-wide; the two sets
-    come apart only for a core serving several systems, and upstream states that
-    no core in its vector corpus or on its reference machine reaches this state
-    while declaring for more than one.
+    *files* is this platform's list, so the disjunction spans the rows this core
+    declares that the platform's own list carries — every one of them, BIOS image
+    or not: a declaration mixes images with the odd data file (LRPS2 lists
+    ``GameIndex.yaml`` beside its BIOS folder) and nothing on a row says which is
+    which. That is upstream's reading too — ``CoreFirmware._system_image_in_place``
+    folds the whole declaration in the same way — so the two agree rather than
+    one of them quietly narrowing. The resolver reads it over every row the core
+    declares machine-wide; the two sets come apart only for a core serving
+    several systems, and upstream states that no core in its vector corpus or on
+    its reference machine reaches this state while declaring for more than one.
     """
     if verdict is None or active_core_so is None or not verdict.system_needs_an_image:
         return SYSTEM_IMAGE_NOT_DEMANDED
@@ -500,24 +507,33 @@ def _counted_level(status: BiosStatus) -> str:
 def compute_bios_level(status: BiosStatus) -> str:
     """Compute BIOS status level: 'unknown', 'ok', 'partial', or 'missing'.
 
-    ``'unknown'`` means no readiness claim can be made — see
-    :func:`_nothing_established` and :func:`_requirement_verdict_withheld` for the three
-    shapes that reach it. They are checked before the required-count logic; the
-    first two only fire when the caller supplied ``known_count`` (else the
-    decision is deferred to the existing ok/partial/missing logic).
+    ``'unknown'`` means no readiness claim can be made, and four shapes reach it.
+    Three are declines — see :func:`_nothing_established` and
+    :func:`_requirement_verdict_withheld` — checked before the required-count
+    logic; the first two only fire when the caller supplied ``known_count`` (else
+    the decision is deferred to the existing ok/partial/missing logic). The
+    fourth is an unsettled system image over counts that would otherwise read
+    ``'ok'``, described below.
 
     A platform whose files are all *answered for* and wanted by nothing is a
     different case entirely and reaches ``'ok'``: "no emulator here needs these"
     is a finished answer, and the file rows say which files it covers.
 
     The **system image** (:func:`classify_system_image`) enters at both ends and
-    only ever makes the answer less green. An established absence is checked
-    first and lands on ``'missing'``, ahead of every decline, because a
-    demonstration outranks an unjudged row — the same precedence the resolver
-    applies to its own two. An unsettled one can turn a green claim grey and
-    nothing else: where the counts already read ``'partial'`` or ``'missing'``,
-    something is known to be absent, and a doubt about one further file does not
-    unsay it.
+    only ever makes the answer less green. An established absence lands on
+    ``'missing'``, and is tested first so that a demonstration outranks a
+    platform nothing could be established for. **Only one of the three declines
+    can reach that comparison**, so the order is a rule about that one and a
+    guard for the rest: ``'absent'`` needs every row the launching core declares
+    answered ``False``, which a withheld required row contradicts by construction
+    — it carries the active core (:func:`build_file_entry`), so it is one of
+    those rows, with ``satisfied is None`` — and which an empty file list cannot
+    produce at all. What is left is :func:`_nothing_established`'s first shape:
+    the library's own rows all unanswered under an incomplete reading, while the
+    core's declared images are rows the library does not hold and every one of
+    them is absent. An unsettled image can turn a green claim grey and nothing
+    else: where the counts already read ``'partial'`` or ``'missing'``, something
+    is known to be absent, and a doubt about one further file does not unsay it.
     """
     if status.system_image == SYSTEM_IMAGE_ABSENT:
         return BIOS_LEVEL_MISSING

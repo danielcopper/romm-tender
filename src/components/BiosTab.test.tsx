@@ -88,10 +88,12 @@ describe("BiosTab", () => {
 
   it("says the console needs one of these where the counts would say nothing is required", () => {
     // The PlayStation state, and the whole reason the axis exists: SwanStation
-    // marks every image it declares optional — that is all a libretro `.info`
-    // can say — so `required_count` is 0 and the pane read a green "Nothing
-    // required (0/20 files held)" while no game on the platform would start.
-    // The sentence has to say ONE of these; twenty files are one requirement.
+    // marks every image it declares optional — a libretro `.info` cannot say the
+    // console needs one of them — so `required_count` is 0 and the pane read a
+    // green "Nothing required (0/20 files held)" while no game on the platform
+    // would start. The sentence has to say ONE of these; the images that core
+    // declares are one requirement between them, and the twenty in the ratio is
+    // the library's inventory rather than that set.
     const { container } = render(
       <BiosTab
         biosStatus={{

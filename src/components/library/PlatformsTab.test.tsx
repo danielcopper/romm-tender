@@ -2378,10 +2378,10 @@ describe("Library › Platforms", () => {
     });
 
     it("says the console needs one of these where the counts would say nothing is required", async () => {
-      // The PlayStation state: every image the core declares is `optional`,
-      // because that is all a libretro `.info` can say, so the counts read
-      // "Nothing required" over a console that will not boot. One requirement,
-      // twenty files — so no ratio, here or in the list's own words.
+      // The PlayStation state under SwanStation: every image that core declares
+      // is `optional`, so the counts read "Nothing required" over a console that
+      // will not boot. One requirement over the images the core declares — so no
+      // ratio, here or in the list's own words.
       vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
         success: true,
         platforms: [
@@ -2444,12 +2444,13 @@ describe("Library › Platforms", () => {
 
     it("names the unjudged row, not the console, when both ignorances hold at once", async () => {
       // Reachable, and it is the LRPS2 shape: a console that needs an image
-      // whose required folder row the read could not judge. The two are not
-      // independent — a `required_by_active` row always carries the active core,
-      // so it is always one of the images the console's disjunction spans, which
-      // makes it the CAUSE of the unsettled verdict rather than a second finding
-      // beside it. So the page names the row and points at the file list, rather
-      // than restating the same gap one altitude up with nothing to look at.
+      // whose required folder row the read could not judge. The two are not gaps
+      // over two different file sets — a `required_by_active` row always carries
+      // the active core, so it is always one of the rows the console's
+      // disjunction is read over — and the row is the only half of the pair that
+      // can name a file. So the page names the row and points at the file list,
+      // rather than restating the same list one altitude up with nothing to look
+      // at.
       vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
         success: true,
         platforms: [

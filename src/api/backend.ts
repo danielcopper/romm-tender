@@ -155,8 +155,10 @@ export interface BiosAnswer {
     required_downloaded?: number;
     required_withheld?: number;
     /** The console's own firmware demand on the launching core — see
-     *  {@link SystemImage}. Read by the play row's badge, which cannot get it
-     *  from the counts: the images it is about are all declared optional. */
+     *  {@link SystemImage}. Read by the play row's badge, which cannot rely on
+     *  the counts for it: whether any of the images is marked required is the
+     *  core author's choice, and over one PlayStation the deployed catalogue
+     *  goes both ways. */
     system_image?: SystemImage;
     cached_at?: number;
     files?: BiosFileStatus[];

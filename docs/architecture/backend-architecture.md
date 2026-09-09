@@ -1849,17 +1849,21 @@ keeping side for the same reason. Neither condition is ever per file — a platf
 of files no installed emulator asks for, and every one of those stays fetchable, because "nothing wants this" is an
 answer.
 
-**The console's own firmware demand is a third axis, and it is a value rather than a count.** A libretro `.info` marks
-each file required or optional and can say nothing else, so a core whose console does not boot without a BIOS image
-marks every image it declares **optional** — and the file counts alone then report a green "Nothing required (0/20 files
-held)" over a PlayStation on which no game starts. The resolver answers that half from a packaged, source-cited table
-about the **system** (`CoreFirmware.system_firmware`), carried through the adapter per core as
-`FirmwareCatalogue.core_verdicts` and turned into `domain/bios_status.py`'s `classify_system_image`.
+**The console's own firmware demand is a third axis — beside the launching core's required-file counts and the library's
+own held/offered ratio — and it is a value rather than a count.** A libretro `.info` marks each file required or
+optional and can say nothing else: there is no way to say "one of these", and no way to say the console does not start
+without one. An author who knows a PlayStation needs a BIOS image has two lossy moves and the deployed catalogue takes
+both — SwanStation marks all five of its images **optional**, Beetle PSX marks three of its own **required** — so the
+file counts alone report a green "Nothing required (0/20 files held)" under the one core and three separate
+prerequisites under the other, over one PlayStation on which no game starts. The resolver answers the missing half from
+a packaged, source-cited table about the **system** (`CoreFirmware.system_firmware`), carried through the adapter per
+core as `FirmwareCatalogue.core_verdicts` and turned into `domain/bios_status.py`'s `classify_system_image`.
 
 - **It is not folded into `required_count`.** The console asks for _one_ of the images the core declares, so it is one
   requirement over the whole list rather than one requirement per file; put into that count it would read
-  `0 / 20 required files ready` on the PlayStation page this was observed on. Every surface words it "one of these" and
-  none states it as a ratio.
+  `0 / 5 required files ready` under the SwanStation this was observed on, five being what that core declares. The
+  twenty in the page's own `0/20 files held` is a different set again — the RomM library's inventory for the platform,
+  which this axis neither counts nor is scoped to. Every surface words it "one of these" and none states it as a ratio.
 - **Whether an image is held is read off the rows, not off the resolver's `requirements_met`.** Every other readiness
   answer on these surfaces is presence at the destination, while `requirements_met` additionally wants the bytes
   identified — and the machine-wide inventory is asked unverified, so a PlayStation BIOS sitting exactly where the core
@@ -1867,21 +1871,28 @@ about the **system** (`CoreFirmware.system_firmware`), carried through the adapt
   `requirements_met` is read for the one thing the rows cannot say, in the one direction it is safe in: where it states
   the core will not start while the rows show an image held, the two readings disagree and the answer declines to
   `unsettled`. It can never turn a decline into a hold.
-- **It only ever makes the verdict less green.** `absent` lands on `missing` ahead of every decline, because a
-  demonstration outranks an unjudged row — the same precedence the resolver applies to its own two. `unsettled` turns an
-  `ok` grey and nothing else. `held` and `not_demanded` change nothing.
+- **It only ever makes the verdict less green.** `absent` lands on `missing`, tested ahead of the declines so that a
+  demonstration outranks a platform nothing could be established for. Only one of the three declines can reach that
+  comparison, so the order is a rule about that one and a guard for the rest: `absent` needs every row the launching
+  core declares answered `False`, which a withheld required row contradicts by construction — it carries the active
+  core, so it is one of those rows, with `satisfied` null — and which an empty file list cannot produce at all. What is
+  left is `_nothing_established`'s first shape, where the library's own rows all went unanswered under an incomplete
+  reading while the core's declared images are rows the library does not hold and every one of them is absent.
+  `unsettled` turns an `ok` grey and nothing else. `held` and `not_demanded` change nothing.
 - **`system_firmware: null` is an unasked question.** The table covers the systems somebody has looked at, so an absent
   entry is a system nobody has looked at. It reaches `not_demanded`, which makes no claim of its own — and it must never
   be spent as one, for the same reason `unknown` is not `not_needed` one axis over.
-- The answer is scoped to the **active core**, so the same twenty images read `absent` under SwanStation and
-  `not_demanded` under PCSX ReARMed, which carries its own HLE BIOS. Both come off the one builder, so a platform and
-  its games cannot disagree about it.
+- The answer is scoped to the **active core**, so one unchanged PlayStation page reads `absent` under SwanStation, whose
+  five declared images the table says the console cannot start without one of, and `not_demanded` under PCSX ReARMed,
+  which carries its own HLE BIOS. Both come off the one builder, so a platform and its games cannot disagree about it.
 - **Four frontend surfaces read it**: the game page's BIOS headline, the platform detail's summary, the platform list's
   row tooltip, and the play row's red BIOS badge — where `"absent"` is a second established absence beside the required
   count, and `"unsettled"` raises nothing, exactly as a withheld required row does not. Where a withheld required row
-  and an unsettled console demand hold together, the platform detail names the ROW: a `required_by_active` row always
-  carries the active core, so it is always one of the images the disjunction spans and is a cause of the unsettled
-  verdict rather than a finding beside it.
+  and an unsettled console demand hold together, the platform detail names the ROW. The two are not gaps over two
+  different file sets: a `required_by_active` row always carries the active core, so it is always one of the rows the
+  disjunction is read over. It need not be why the verdict declined — an image the rows show held while the resolver
+  says the core will not start declines it too — but it is always inside the set the console's sentence is about, and it
+  is the only half of the pair that can name a file.
 
 **No BIOS answer outlives the page that asked for it.** `get_cached_game_detail` carries none and says so
 (`bios_status_unknown`), and the live `get_bios_status` fills it in a moment later; there is deliberately no cached twin

@@ -97,13 +97,16 @@ function buildBiosCoreLines(
  * files may be required by a core the user is not launching with.
  *
  * The **console's own demand** (`system_image`) is a third shape and comes first
- * among the answers, because it is the one no count can state: the console needs
- * ONE of these images and the core's declaration can only mark each of them
- * optional. So it says "one of these" and never a required-file ratio — a
- * PlayStation page read a green "Nothing required (0/20 files held)" while no
- * game on it would start. It names no core: which core the sentence is about is
- * the highlighted line in the list below, and repeating it here would be the
- * same fact twice on one pane.
+ * among the answers, because it is the one no count can be relied on to state:
+ * the console needs ONE of these images, and a libretro declaration marks each
+ * file required or optional and can say nothing else. Which of the two an author
+ * reaches for is their choice, and over one PlayStation the deployed catalogue
+ * goes both ways — SwanStation marks all five of its images optional, Beetle PSX
+ * marks three of its own required. So this says "one of these" and never a
+ * required-file ratio — under SwanStation the pane read a green "Nothing
+ * required (0/20 files held)" while no game on it would start. It names no core:
+ * which core the sentence is about is the highlighted line in the list below,
+ * and repeating it here would be the same fact twice on one pane.
  */
 function buildBiosHeader(bios: BiosStatus, biosLevel: BiosTabProps["biosLevel"]): ReactElement[] {
   const localCount = bios.local_count ?? 0;

@@ -150,7 +150,8 @@ class FirmwareStatusReader:
         are weighed against ``server_count``, so a row it does not hold would
         raise the numerator of a ratio it is not in.
 
-        *system_image* is a fourth axis and the only one that is not a count
+        *system_image* is a fourth axis beside those three counted sets, and the
+        only one of the four that is not a count at all
         (:func:`classify_system_image`): the console's own demand on the
         launching core is disjunctive — one of these images, not each of them —
         so it travels as a value and every surface words it rather than printing

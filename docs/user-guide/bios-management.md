@@ -371,11 +371,14 @@ file list, and the page says:
 
 **Needs one of these BIOS files (0/20 files held)** — red.
 
-Three things about that line:
+Four things about that line:
 
-- **One of these, not all of these.** There is one requirement here and a page full of files that could satisfy it. Put
-  any single one of them in place and the line turns green — you do not need twenty BIOS images, or two, and the page
-  never reports a "0 / 20 required" ratio for it.
+- **One of these, not all of these — and not every file on the page.** The files that can answer it are the ones the
+  core you launch with asks for. Every file row lists the emulators that use it and highlights the one you launch with,
+  so those are the rows to look at: with SwanStation on a PlayStation there are five of them, on a page that also lists
+  every other PlayStation BIOS your RomM library happens to hold. The `0/20` in the line is that library count, not the
+  requirement. Download any single one of the five and the line turns green — you do not need all five, and downloading
+  a file the highlighted emulator does not list leaves the line exactly as it was.
 - **It follows the core you launch with.** PCSX ReARMed ships its own built-in replacement for the PlayStation BIOS, so
   the same page with that core selected reads green and stays green. Switch back to SwanStation, or Beetle PSX, and the
   red line comes back. The BIOS tab's core list highlights whichever core the line is about.
@@ -386,7 +389,9 @@ Three things about that line:
   start either way, so it is the same warning rather than a softer one of its own.
 
 Where the plugin cannot tell whether one of them is in place, it says **"BIOS readiness unknown"** rather than picking a
-colour — see the next section, which that shape shares.
+colour — see the next section, which that shape shares. That only ever replaces a line which would otherwise have been
+green: where a required file is already known to be missing, the red line stands, because a doubt about one more file
+does not take back what was shown.
 
 Systems the plugin holds no such record for are unaffected, and this is deliberate: no record means nobody has checked
 that console, which is not the same as "this console needs nothing". Those systems keep exactly the page they had.
