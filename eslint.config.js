@@ -86,7 +86,8 @@ export default tseslint.config(
   {
     files: [
       "src/index.tsx",
-      "src/components/{MainPage,SyncPage,LibraryPage,SettingsPage,DangerZone,RemovedGamesCleanup,DownloadQueue,SessionBudgetBanner}.tsx",
+      "src/components/{MainPage,SyncPage,LibraryPage,SettingsPage,DangerZone,RemovedGamesCleanup,DownloadQueue}.tsx",
+      "src/components/{SessionBudgetBanner,MigrationBlockedPage,SettingsResetBanner,PlaytimeScopeBanner,DownloadProgressRow,LoadingRow}.tsx",
       "src/components/{qam,sync,library,settings}/**/*.tsx",
     ],
     ignores: ["src/**/*.test.tsx", "src/components/**/*Modal.tsx"],

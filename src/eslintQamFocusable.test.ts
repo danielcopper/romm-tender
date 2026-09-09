@@ -25,6 +25,7 @@ const FIXTURES: [dir: string, name: string, source: string][] = [
 export const Activate = () => <Focusable onActivate={() => {}}><div>Reachable</div></Focusable>;
 export const OkButton = () => <Focusable onOKButton={() => {}}><div>Reachable</div></Focusable>;
 export const Explicit = () => <Focusable focusable={true}><div>Reachable</div></Focusable>;
+export const StaticSpread = () => <Focusable {...{ onActivate: () => {} }}><div>Reachable</div></Focusable>;
 export const Descendant = () => <Focusable><div><Focusable onActivate={() => {}}>Reachable</Focusable></div></Focusable>;
 `,
   ],
@@ -41,6 +42,23 @@ export const Spread = (props: { onActivate?: () => void }) => <Focusable {...pro
     QAM_FIXTURE_DIR,
     "localFocusable.tsx",
     "const Focusable = ({ children }: { children: string }) => <div>{children}</div>;\nexport const Local = () => <Focusable>Unrelated</Focusable>;\n",
+  ],
+  [
+    QAM_FIXTURE_DIR,
+    "shadowedFocusable.tsx",
+    `import type { ComponentType, PropsWithChildren } from "react";
+import { Focusable } from "@decky/ui";
+export const Imported = () => <Focusable onActivate={() => {}}>Reachable</Focusable>;
+export const Local = ({ Focusable }: { Focusable: ComponentType<PropsWithChildren> }) => <Focusable>Unrelated</Focusable>;
+`,
+  ],
+  [
+    QAM_FIXTURE_DIR,
+    "staticExpressions.tsx",
+    `import { Focusable } from "@decky/ui";
+export const Literal = () => <Focusable>{"Unreadable"}</Focusable>;
+export const StaticSpread = () => <Focusable {...{ className: "row" }}><div>Unreadable</div></Focusable>;
+`,
   ],
   [
     OFF_SCOPE_FIXTURE_DIR,
@@ -79,7 +97,7 @@ describe("QAM Focusable row rule", () => {
     expect(await ruleMessages(path.join(QAM_FIXTURE_DIR, "aliasedBadRow.tsx"))).toEqual([RULE_ID]);
   });
 
-  it("accepts every self-focus prop and a focusable descendant through wrappers", async () => {
+  it("accepts activation props, the lower-level focusable syntax, and a focusable descendant", async () => {
     expect(await ruleMessages(path.join(QAM_FIXTURE_DIR, "validRows.tsx"))).toEqual([]);
   });
 
@@ -89,15 +107,38 @@ describe("QAM Focusable row rule", () => {
 
   it("ignores an unrelated local component named Focusable", async () => {
     expect(await ruleMessages(path.join(QAM_FIXTURE_DIR, "localFocusable.tsx"))).toEqual([]);
+    expect(await ruleMessages(path.join(QAM_FIXTURE_DIR, "shadowedFocusable.tsx"))).toEqual([]);
+  });
+
+  it("reports statically known non-focusable expressions and spreads", async () => {
+    expect(await ruleMessages(path.join(QAM_FIXTURE_DIR, "staticExpressions.tsx"))).toEqual([RULE_ID, RULE_ID]);
   });
 
   it("does not impose the QAM rule on game-detail components", async () => {
     expect(await ruleMessages(path.join(OFF_SCOPE_FIXTURE_DIR, "gameDetailRoute.tsx"))).toEqual([]);
   });
 
-  it("covers narrow QAM pages without reaching game-detail routes", async () => {
-    expect(await configuredRule(path.join(process.cwd(), "src", "components", "MainPage.tsx"))).toEqual([2]);
-    expect(await configuredRule(path.join(process.cwd(), "src", "components", "DownloadQueue.tsx"))).toEqual([2]);
+  it("covers every QAM page root and shared QAM-only module without reaching game-detail routes", async () => {
+    const qamFiles = [
+      "MainPage.tsx",
+      "SyncPage.tsx",
+      "LibraryPage.tsx",
+      "SettingsPage.tsx",
+      "DangerZone.tsx",
+      "RemovedGamesCleanup.tsx",
+      "DownloadQueue.tsx",
+      "SessionBudgetBanner.tsx",
+      "MigrationBlockedPage.tsx",
+      "SettingsResetBanner.tsx",
+      "PlaytimeScopeBanner.tsx",
+      "DownloadProgressRow.tsx",
+      "LoadingRow.tsx",
+    ];
+    await Promise.all(
+      qamFiles.map(async (file) => {
+        expect(await configuredRule(path.join(process.cwd(), "src", "components", file))).toEqual([2]);
+      }),
+    );
     expect(await configuredRule(path.join(process.cwd(), "src", "components", "CustomPlayButton.tsx"))).toBeUndefined();
   });
 }, 60_000);

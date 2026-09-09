@@ -125,11 +125,12 @@ rather than taking it. Plain text that only accompanies a row, a hint under a gr
 need not be reachable itself. This is what focus-driven scrolling costs: content nobody can focus cannot be scrolled to.
 
 The repository ESLint rule `tender/qam-focusable-row` checks one syntactic slice of that rule in the QAM modules listed
-above. A `Focusable` imported from `@decky/ui` must declare `onActivate`, `onOKButton`, or `focusable`, contain a static
-focus stop, or contain a child/spread whose focusability cannot be established statically. This catches an action-less
-row written as a static wrapper while leaving structural containers and opaque children alone. It does not check focus
-order, runtime reachability, edge revelation, scrolling geometry, or controller behaviour; those parts remain a device
-and review invariant.
+above. A `Focusable` imported from `@decky/ui` must declare `onActivate` or `onOKButton`, contain a static focus stop,
+or contain a child/spread whose focusability cannot be established statically. The matcher also recognises the
+underlying control's `focusable` prop, but `@decky/ui` does not expose that prop in `FocusableProps`, so authored
+TypeScript rows use an activate handler. This catches an action-less row written as a static wrapper while leaving
+structural containers and opaque children alone. It does not check focus order, runtime reachability, edge revelation,
+scrolling geometry, or controller behaviour; those parts remain a device and review invariant.
 
 **The one place a page cannot buy its way out of that is the content OUTSIDE its focusable rows**, and the frame handles
 it rather than each page: a heading, a counts line or a column header sitting over the topmost row, and a legend, a
