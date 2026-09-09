@@ -2,6 +2,9 @@
  * Controller settings — Steam Input mode dropdown, "Apply to All Shortcuts"
  * trigger, and the RetroArch input_driver warning + auto-fix affordance.
  * Pure renderer: parent owns the mode value, status strings, and warning data.
+ *
+ * This is the input_driver fix's only home. Main names the condition and jumps
+ * here; the button that changes the config exists nowhere else.
  */
 
 import { FC } from "react";
@@ -13,7 +16,10 @@ interface ControllerSectionProps {
   steamInputStatus: string;
   retroarchWarning: RetroArchInputCheck | null;
   retroarchFixStatus: string;
-  loading: boolean;
+  /** An apply run is in flight. The button is dead and says so while it is, and
+   *  the parent refuses a second press independently — a disabled control still
+   *  reports one on the device. */
+  applying: boolean;
   onModeChange: (mode: string) => void;
   onApplyMode: () => void;
   onFixInputDriver: () => void;
@@ -24,7 +30,7 @@ export const ControllerSection: FC<ControllerSectionProps> = ({
   steamInputStatus,
   retroarchWarning,
   retroarchFixStatus,
-  loading,
+  applying,
   onModeChange,
   onApplyMode,
   onFixInputDriver,
@@ -45,13 +51,15 @@ export const ControllerSection: FC<ControllerSectionProps> = ({
         />
       </PanelSectionRow>
       <PanelSectionRow>
-        <ButtonItem layout="below" onClick={onApplyMode} disabled={loading}>
-          Apply to All Shortcuts
+        <ButtonItem layout="below" onClick={onApplyMode} disabled={applying}>
+          {applying ? "Applying to all shortcuts…" : "Apply to All Shortcuts"}
         </ButtonItem>
       </PanelSectionRow>
       {steamInputStatus && (
         <PanelSectionRow>
-          <Field label={steamInputStatus} />
+          {/* Focusable for the reason every read-only row on a wide pane is: the
+              region scrolls by moving focus, and rows follow this one. */}
+          <Field label={steamInputStatus} focusable={true} />
         </PanelSectionRow>
       )}
       {retroarchWarning?.warning && (
@@ -60,6 +68,7 @@ export const ControllerSection: FC<ControllerSectionProps> = ({
             <Field
               label={`RetroArch input_driver: "${retroarchWarning.current}"`}
               description="Controller navigation in RetroArch menus may not work with this setting."
+              focusable={true}
             />
           </PanelSectionRow>
           <PanelSectionRow>
@@ -69,7 +78,7 @@ export const ControllerSection: FC<ControllerSectionProps> = ({
           </PanelSectionRow>
           {retroarchFixStatus && (
             <PanelSectionRow>
-              <Field label={retroarchFixStatus} />
+              <Field label={retroarchFixStatus} focusable={true} />
             </PanelSectionRow>
           )}
         </>

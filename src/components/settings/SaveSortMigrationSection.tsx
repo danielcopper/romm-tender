@@ -3,6 +3,11 @@
  * existing local saves need to be relocated. Pure renderer — the parent owns
  * the in-flight `migrating` flag and the result message; this section only
  * dispatches user intent (migrate / dismiss) back upstream.
+ *
+ * It is the condition's only home: Main names it and jumps here, and Migrate
+ * and Dismiss exist nowhere else. The card itself carries no focus handler —
+ * it sits above the first button of the Save Sync pane, and the region reveals
+ * its own top when focus reaches that button.
  */
 
 import { FC } from "react";
@@ -66,7 +71,7 @@ export const SaveSortMigrationSection: FC<SaveSortMigrationSectionProps> = ({
       </PanelSectionRow>
       {result && (
         <PanelSectionRow>
-          <Field label={result} />
+          <Field label={result} focusable={true} />
         </PanelSectionRow>
       )}
     </PanelSection>

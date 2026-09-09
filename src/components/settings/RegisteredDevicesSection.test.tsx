@@ -10,10 +10,13 @@ type AnyProps = Record<string, unknown> & { children?: unknown };
 vi.mock("@decky/ui", () => ({
   PanelSection: (p: AnyProps) => createElement("section", {}, p.children as never),
   PanelSectionRow: (p: AnyProps) => createElement("div", { "data-testid": "row" }, p.children as never),
-  Field: (p: AnyProps & { label?: unknown; description?: unknown }) =>
+  // `focusable` renders tabindex="0", which is what makes a row with no control
+  // of its own a focus stop — and a wide pane scrolls only by moving focus, so
+  // a mock that dropped it would make an unreachable group look reachable.
+  Field: (p: AnyProps & { label?: unknown; description?: unknown; focusable?: boolean }) =>
     createElement(
       "div",
-      { "data-testid": "field" },
+      { "data-testid": "field", tabIndex: p.focusable ? 0 : undefined },
       createElement("span", { "data-testid": "field-label" }, p.label as never),
       createElement("span", { "data-testid": "field-desc" }, p.description as never),
     ),
@@ -154,6 +157,13 @@ describe("RegisteredDevicesSection", () => {
       const { container } = render(<RegisteredDevicesSection {...defaultProps({ registeredDevices: devices })} />);
       const matches = container.textContent.match(/\(this device\)/g) ?? [];
       expect(matches).toHaveLength(1);
+    });
+
+    it("makes every row a focus stop, so the list can be walked and scrolled", () => {
+      const devices = [makeDevice({ id: "device-aaaaaaaa" }), makeDevice({ id: "device-bbbbbbbb" })];
+      const { getAllByTestId } = render(<RegisteredDevicesSection {...defaultProps({ registeredDevices: devices })} />);
+      const stops = getAllByTestId("field").map((el) => el.getAttribute("tabindex"));
+      expect(stops).toEqual(["0", "0"]);
     });
 
     it("renders 'ID —' when the id is empty string", () => {

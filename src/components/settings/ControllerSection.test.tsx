@@ -50,7 +50,7 @@ function defaultProps(overrides: Partial<React.ComponentProps<typeof ControllerS
     steamInputStatus: "",
     retroarchWarning: null,
     retroarchFixStatus: "",
-    loading: false,
+    applying: false,
     onModeChange: vi.fn(),
     onApplyMode: vi.fn(),
     onFixInputDriver: vi.fn(),
@@ -93,12 +93,13 @@ describe("ControllerSection", () => {
       expect(onApplyMode).toHaveBeenCalledTimes(1);
     });
 
-    it("is disabled while loading=true", () => {
-      const { getByText } = render(<ControllerSection {...defaultProps({ loading: true })} />);
-      expect(getByText("Apply to All Shortcuts")).toBeDisabled();
+    it("is disabled and says a run is in flight while applying=true", () => {
+      const { getByText, queryByText } = render(<ControllerSection {...defaultProps({ applying: true })} />);
+      expect(getByText("Applying to all shortcuts…")).toBeDisabled();
+      expect(queryByText("Apply to All Shortcuts")).toBeNull();
     });
 
-    it("is enabled when loading=false", () => {
+    it("is enabled when applying=false", () => {
       const { getByText } = render(<ControllerSection {...defaultProps()} />);
       expect(getByText("Apply to All Shortcuts")).not.toBeDisabled();
     });

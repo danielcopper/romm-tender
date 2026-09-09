@@ -2,6 +2,10 @@
  * Read-only list of devices currently registered with the RomM save-sync
  * backend. Visible only when save-sync is enabled; parent owns the device
  * list, loading flag, and error message.
+ *
+ * Every row here is a focus stop, and the group's whole content is read-only —
+ * a wide pane scrolls only by moving focus, so a group with no stop in it is a
+ * group nobody can scroll to.
  */
 
 import { FC } from "react";
@@ -24,17 +28,17 @@ export const RegisteredDevicesSection: FC<RegisteredDevicesSectionProps> = ({
     <PanelSection title="Registered Devices">
       {devicesLoading && (
         <PanelSectionRow>
-          <Field label="Loading..." />
+          <Field label="Loading..." focusable={true} />
         </PanelSectionRow>
       )}
       {!devicesLoading && devicesError && (
         <PanelSectionRow>
-          <Field label="Could not load devices" description={devicesError} />
+          <Field label="Could not load devices" description={devicesError} focusable={true} />
         </PanelSectionRow>
       )}
       {!devicesLoading && !devicesError && registeredDevices !== null && registeredDevices.length === 0 && (
         <PanelSectionRow>
-          <Field label="No devices registered" />
+          <Field label="No devices registered" focusable={true} />
         </PanelSectionRow>
       )}
       {!devicesLoading &&
@@ -50,6 +54,7 @@ export const RegisteredDevicesSection: FC<RegisteredDevicesSectionProps> = ({
           return (
             <PanelSectionRow key={device.id || `idx-${i}`}>
               <Field
+                focusable={true}
                 label={
                   <span>
                     {device.name ?? "(unnamed)"}

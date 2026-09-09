@@ -10,7 +10,7 @@ import { render, fireEvent, act } from "@testing-library/react";
 import { createElement, useSyncExternalStore, type ComponentProps, type ReactElement } from "react";
 import { SettingsPage } from "./SettingsPage";
 import * as backend from "../api/backend";
-import type { SaveSortMigrationStatus, RegisteredDevice } from "../types";
+import type { SaveSortMigrationStatus, RegisteredDevice, SettingsSection } from "../types";
 import { showModal } from "@decky/ui";
 import { toaster } from "@decky/api";
 import {
@@ -120,23 +120,53 @@ vi.mock("./settings/TextInputModal", () => ({
   pendingEdits: {} as { url?: string; username?: string; password?: string },
 }));
 
-// Local @decky/ui re-mock — the global stub in src/test-setup.ts doesn't ship
-// a ButtonItem (used here for Back), so render() would crash on "Element type
-// is invalid". We mirror the stubs we need (ButtonItem + ConfirmModal +
-// showModal + PanelSection/Row) and keep showModal a vi.fn so the call-capture
-// pattern still works.
+// Local @decky/ui re-mock — the page is a wide list-and-detail page, so the
+// frame and the layout it wraps need Focusable (the row wrapper the layout
+// makes a focus stop), DialogButton (the Back chip) and Field (a section row).
+// showModal stays a vi.fn so the call-capture pattern still works.
 type AnyProps = Record<string, unknown> & { children?: unknown };
 vi.mock("@decky/ui", () => ({
   PanelSection: (p: AnyProps) => createElement("section", null, p.children as never),
   PanelSectionRow: (p: AnyProps) => createElement("div", null, p.children as never),
   ButtonItem: (p: AnyProps & { onClick?: () => void }) =>
     createElement("button", { onClick: p.onClick }, p.children as never),
+  DialogButton: (p: AnyProps & { onClick?: () => void }) =>
+    createElement("button", { onClick: p.onClick }, p.children as never),
+  Field: (p: AnyProps & { label?: unknown }) => createElement("div", { "data-testid": "field" }, p.label as never),
+  // onFocus is how the layout learns focus moved onto a row, and onActivate is
+  // what `selectOnActivate` puts there — surfaced as onClick so a test can
+  // press a section row the way a reader does. Dropping either would make the
+  // selection vacuously untestable.
+  Focusable: (p: AnyProps & { onFocus?: (e: unknown) => void; onActivate?: (e: unknown) => void }) =>
+    createElement(
+      "div",
+      { "data-testid": "focusable", onFocus: p.onFocus, onClick: p.onActivate },
+      p.children as never,
+    ),
   ConfirmModal: (p: AnyProps) => createElement("div", { "data-testid": "confirm-modal" }, p.children as never),
   showModal: vi.fn(),
+  useQuickAccessVisible: () => true,
 }));
 
-// scrollToTop is a no-op in jsdom; mock for cleanliness.
-vi.mock("../utils/scrollHelpers", () => ({ scrollToTop: vi.fn() }));
+// The wide frame reaches Steam's tabbed page and its scroll panel through this
+// module — a webpack probe with no answer under happy-dom. Settings is untabbed,
+// so only the absences matter here.
+vi.mock("../utils/deckyUiInternals", () => ({
+  quickAccessMenuClasses: undefined,
+  ScrollPanel: undefined,
+  findSP: () => undefined,
+  ControllerGlyph: undefined,
+  GLYPH_BUTTON_B: 1,
+  Tabs: undefined,
+}));
+
+// Scroll helpers are no-ops without a layout engine; the frame reads
+// offsetWithinScroller when it measures its body.
+vi.mock("../utils/scrollHelpers", () => ({
+  scrollToTop: vi.fn(),
+  scrollElementToTop: vi.fn(),
+  offsetWithinScroller: () => 0,
+}));
 
 // Mock the saveSortMigrationStore — own listener list + state so tests can
 // drive the subscribe/unsubscribe + state-change flow deterministically.
@@ -213,8 +243,17 @@ function lastConfirmModalProps<T = Record<string, unknown>>(): T | null {
   return el?.props ?? null;
 }
 
+// Which section the page opens on for the tests below. The page is list and
+// detail, so a section's props reach its component only while that section is
+// the selected one — a describe whose tests are about one section declares it
+// here rather than every test re-stating it.
+let openOn: SettingsSection = "connections";
+
+const renderPage = () => render(<SettingsPage onBack={vi.fn()} section={openOn} />);
+
 describe("SettingsPage", () => {
   beforeEach(() => {
+    openOn = "connections";
     vi.resetAllMocks();
     capturedConnection.length = 0;
     capturedSgdb.length = 0;
@@ -244,18 +283,22 @@ describe("SettingsPage", () => {
   });
 
   describe("initial mount — getSettings", () => {
-    it("applies the full settings payload to ConnectionSection / SteamGridDBSection / ControllerSection / AdvancedSection", async () => {
-      vi.mocked(backend.getSettings).mockResolvedValue({
-        ...defaultSettings(),
-        romm_url: "https://my.romm",
-        has_token: true,
-        romm_allow_insecure_ssl: true,
-        sgdb_api_key_masked: "abc",
-        steam_input_mode: "force_on",
-        log_level: "debug",
-        retroarch_input_check: { warning: true, current: "sdl2" },
-      });
-      render(<SettingsPage onBack={vi.fn()} />);
+    // The payload feeds four sections and the pane mounts one at a time, so
+    // each half of the hydration is asserted on the section that shows it.
+    const fullPayload = (): import("../types").PluginSettings => ({
+      ...defaultSettings(),
+      romm_url: "https://my.romm",
+      has_token: true,
+      romm_allow_insecure_ssl: true,
+      sgdb_api_key_masked: "abc",
+      steam_input_mode: "force_on",
+      log_level: "debug",
+      retroarch_input_check: { warning: true, current: "sdl2" },
+    });
+
+    it("applies the payload's connection half to ConnectionSection / SteamGridDBSection", async () => {
+      vi.mocked(backend.getSettings).mockResolvedValue(fullPayload());
+      renderPage();
       await flushAsync();
 
       const conn = capturedConnection[capturedConnection.length - 1];
@@ -265,18 +308,31 @@ describe("SettingsPage", () => {
 
       const sgdb = capturedSgdb[capturedSgdb.length - 1];
       expect(sgdb?.sgdbApiKey).toBe("abc");
+    });
+
+    it("applies the payload's controller half to ControllerSection", async () => {
+      openOn = "controller";
+      vi.mocked(backend.getSettings).mockResolvedValue(fullPayload());
+      renderPage();
+      await flushAsync();
 
       const ctrl = capturedController[capturedController.length - 1];
       expect(ctrl?.steamInputMode).toBe("force_on");
       expect(ctrl?.retroarchWarning).toEqual({ warning: true, current: "sdl2" });
+    });
 
-      const adv = capturedAdvanced[capturedAdvanced.length - 1];
-      expect(adv?.logLevel).toBe("debug");
+    it("applies the payload's log level to AdvancedSection", async () => {
+      openOn = "advanced";
+      vi.mocked(backend.getSettings).mockResolvedValue(fullPayload());
+      renderPage();
+      await flushAsync();
+
+      expect(capturedAdvanced[capturedAdvanced.length - 1]?.logLevel).toBe("debug");
     });
 
     it("prefers a pendingEdits URL over the backend value", async () => {
       pendingEdits.url = "https://pending.url";
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       const conn = capturedConnection[capturedConnection.length - 1];
@@ -288,13 +344,14 @@ describe("SettingsPage", () => {
         ...defaultSettings(),
         has_token: false,
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(capturedConnection[capturedConnection.length - 1]?.hasToken).toBe(false);
     });
 
     it("does not set retroarchWarning when retroarch_input_check is absent", async () => {
-      render(<SettingsPage onBack={vi.fn()} />);
+      openOn = "controller";
+      renderPage();
       await flushAsync();
       expect(capturedController[capturedController.length - 1]?.retroarchWarning).toBeNull();
     });
@@ -302,7 +359,7 @@ describe("SettingsPage", () => {
     it("logs the failure and surfaces 'Failed to load settings' when getSettings rejects", async () => {
       vi.mocked(backend.getSettings).mockRejectedValue(new Error("boom"));
       const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to load settings"));
       logSpy.mockRestore();
@@ -310,10 +367,14 @@ describe("SettingsPage", () => {
   });
 
   describe("initial mount — getSaveSyncSettings", () => {
+    beforeEach(() => {
+      openOn = "save-sync";
+    });
+
     it("forwards the fetched settings to SaveSyncSection", async () => {
       const s = { ...defaultSaveSyncSettings(), save_sync_enabled: true };
       vi.mocked(backend.getSaveSyncSettings).mockResolvedValue(s);
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       const ss = capturedSaveSync[capturedSaveSync.length - 1];
       expect(ss?.saveSyncSettings).toEqual(s);
@@ -324,7 +385,7 @@ describe("SettingsPage", () => {
         ...defaultSaveSyncSettings(),
         save_sync_enabled: true,
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(vi.mocked(backend.ensureDeviceRegistered)).toHaveBeenCalledTimes(1);
       expect(vi.mocked(backend.listDevices)).toHaveBeenCalledTimes(1);
@@ -335,7 +396,7 @@ describe("SettingsPage", () => {
 
     it("does NOT call ensureDeviceRegistered / listDevices when disabled", async () => {
       // defaults to disabled
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(vi.mocked(backend.ensureDeviceRegistered)).not.toHaveBeenCalled();
       expect(vi.mocked(backend.listDevices)).not.toHaveBeenCalled();
@@ -351,7 +412,7 @@ describe("SettingsPage", () => {
         device_id: "",
         device_name: "",
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(capturedSaveSync[capturedSaveSync.length - 1]?.deviceInfo).toBeNull();
     });
@@ -363,7 +424,7 @@ describe("SettingsPage", () => {
       });
       vi.mocked(backend.ensureDeviceRegistered).mockRejectedValue(new Error("net"));
       const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(capturedSaveSync[capturedSaveSync.length - 1]?.deviceInfo).toBeNull();
       // Catch is `.catch(() => {})` — rejection must NOT escape to logError.
@@ -374,7 +435,7 @@ describe("SettingsPage", () => {
     it("logs the failure when getSaveSyncSettings rejects", async () => {
       vi.mocked(backend.getSaveSyncSettings).mockRejectedValue(new Error("denied"));
       const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to load save sync settings"));
       logSpy.mockRestore();
@@ -382,6 +443,10 @@ describe("SettingsPage", () => {
   });
 
   describe("initial mount — getSaveSortMigrationStatus", () => {
+    beforeEach(() => {
+      openOn = "save-sync";
+    });
+
     it("forwards a pending status into the store and into local state", async () => {
       const pending: SaveSortMigrationStatus = {
         pending: true,
@@ -390,7 +455,7 @@ describe("SettingsPage", () => {
         saves_count: 5,
       };
       vi.mocked(backend.getSaveSortMigrationStatus).mockResolvedValue(pending);
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(vi.mocked(setSaveSortMigrationStatus)).toHaveBeenCalledWith(pending);
       expect(capturedMigration[capturedMigration.length - 1]?.migration).toEqual(pending);
@@ -398,7 +463,7 @@ describe("SettingsPage", () => {
 
     it("does nothing when the status is not pending", async () => {
       // defaults — pending=false
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(vi.mocked(setSaveSortMigrationStatus)).not.toHaveBeenCalled();
     });
@@ -406,7 +471,7 @@ describe("SettingsPage", () => {
     it("silently swallows a getSaveSortMigrationStatus rejection", async () => {
       vi.mocked(backend.getSaveSortMigrationStatus).mockRejectedValue(new Error("oops"));
       const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       // No logError for this branch — it's a fire-and-forget probe.
       const calls = logSpy.mock.calls.map((c) => c[0]);
@@ -416,6 +481,10 @@ describe("SettingsPage", () => {
   });
 
   describe("loadDevices flow", () => {
+    beforeEach(() => {
+      openOn = "save-sync";
+    });
+
     it("forwards the devices list down on listDevices success", async () => {
       vi.mocked(backend.getSaveSyncSettings).mockResolvedValue({
         ...defaultSaveSyncSettings(),
@@ -434,7 +503,7 @@ describe("SettingsPage", () => {
         },
       ];
       vi.mocked(backend.listDevices).mockResolvedValue({ success: true, devices });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(capturedDevices[capturedDevices.length - 1]?.registeredDevices).toEqual(devices);
     });
@@ -449,7 +518,7 @@ describe("SettingsPage", () => {
         devices: [],
         disabled: true,
       });
-      const { queryByTestId } = render(<SettingsPage onBack={vi.fn()} />);
+      const { queryByTestId } = renderPage();
       await flushAsync();
       expect(queryByTestId("devices-section")).toBeNull();
     });
@@ -469,7 +538,7 @@ describe("SettingsPage", () => {
         reason: "server_unreachable",
         message: "Could not load devices",
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       const d = capturedDevices[capturedDevices.length - 1];
       expect(d?.devicesError).toBe("Could not load devices");
@@ -487,7 +556,7 @@ describe("SettingsPage", () => {
         success: false,
         devices: [],
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(capturedDevices[capturedDevices.length - 1]?.devicesError).toBe("Failed to load devices");
     });
@@ -498,7 +567,7 @@ describe("SettingsPage", () => {
         save_sync_enabled: true,
       });
       vi.mocked(backend.listDevices).mockRejectedValue(new Error("network down"));
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       const d = capturedDevices[capturedDevices.length - 1];
       expect(d?.devicesError).toBe("network down");
@@ -511,7 +580,7 @@ describe("SettingsPage", () => {
         save_sync_enabled: true,
       });
       vi.mocked(backend.listDevices).mockRejectedValue("string error");
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(capturedDevices[capturedDevices.length - 1]?.devicesError).toBe("Failed to load devices");
     });
@@ -521,7 +590,7 @@ describe("SettingsPage", () => {
     it("handleUrlChange persists URL + SSL via saveServerUrl and clears the pending URL edit", async () => {
       vi.mocked(backend.saveServerUrl).mockResolvedValue({ success: true, message: "" });
       pendingEdits.url = "draft";
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       const conn = capturedConnection[capturedConnection.length - 1];
 
@@ -536,7 +605,7 @@ describe("SettingsPage", () => {
 
     it("rejects an invalid URL inline without calling saveServerUrl", async () => {
       vi.mocked(backend.saveServerUrl).mockResolvedValue({ success: true, message: "" });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       const conn = capturedConnection[capturedConnection.length - 1];
 
@@ -553,7 +622,7 @@ describe("SettingsPage", () => {
 
     it("trims the URL before persisting", async () => {
       vi.mocked(backend.saveServerUrl).mockResolvedValue({ success: true, message: "" });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       const conn = capturedConnection[capturedConnection.length - 1];
 
@@ -565,10 +634,10 @@ describe("SettingsPage", () => {
       expect(vi.mocked(backend.saveServerUrl)).toHaveBeenCalledWith("https://new.url", false);
     });
 
-    it("does not delete the pending URL edit when saveServerUrl rejects (status fallback wired)", async () => {
+    it("clears the pending URL edit when saveServerUrl rejects (status fallback wired)", async () => {
       vi.mocked(backend.saveServerUrl).mockRejectedValue(new Error("nope"));
       pendingEdits.url = "draft";
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       const conn = capturedConnection[capturedConnection.length - 1];
 
@@ -577,13 +646,47 @@ describe("SettingsPage", () => {
         await Promise.resolve();
       });
 
-      expect(pendingEdits.url).toBe("draft");
+      expect(pendingEdits.url).toBeUndefined();
       expect(capturedConnection[capturedConnection.length - 1]?.status).toBe("Failed to save settings");
+    });
+
+    it("clears the pending URL edit when the URL is refused as invalid", async () => {
+      pendingEdits.url = "draft";
+      renderPage();
+      await flushAsync();
+      const conn = capturedConnection[capturedConnection.length - 1];
+
+      await act(async () => {
+        conn?.onUrlChange("romm.local");
+        await Promise.resolve();
+      });
+
+      expect(pendingEdits.url).toBeUndefined();
+    });
+
+    it("shows the saved URL, not the rejected one, at the next open (#1020)", async () => {
+      vi.mocked(backend.saveServerUrl).mockRejectedValue(new Error("nope"));
+      const first = renderPage();
+      await flushAsync();
+
+      await act(async () => {
+        capturedConnection[capturedConnection.length - 1]?.onUrlChange("https://rejected.url");
+        await Promise.resolve();
+      });
+      // The attempt is still in the field it was typed into, under the reason
+      // it did not take.
+      expect(capturedConnection[capturedConnection.length - 1]?.url).toBe("https://rejected.url");
+      first.unmount();
+
+      capturedConnection.length = 0;
+      renderPage();
+      await flushAsync();
+      expect(capturedConnection[capturedConnection.length - 1]?.url).toBe("https://romm.local");
     });
 
     it("handleAllowInsecureSslChange forwards the URL + new flag to saveServerUrl", async () => {
       vi.mocked(backend.saveServerUrl).mockResolvedValue({ success: true, message: "" });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       const conn = capturedConnection[capturedConnection.length - 1];
 
@@ -597,7 +700,7 @@ describe("SettingsPage", () => {
 
     it("handleAllowInsecureSslChange surfaces 'Failed to save settings' on rejection", async () => {
       vi.mocked(backend.saveServerUrl).mockRejectedValue(new Error("ssl"));
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       const conn = capturedConnection[capturedConnection.length - 1];
 
@@ -624,7 +727,7 @@ describe("SettingsPage", () => {
         message: "Connected!",
         romm_version: "4.8.1",
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       // Precondition: not yet connected.
       expect(capturedConnection[capturedConnection.length - 1]?.hasToken).toBe(false);
@@ -656,7 +759,7 @@ describe("SettingsPage", () => {
         message: "This account cannot create API tokens.",
         reason: "auth_failed",
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       let result: { success: boolean; message: string } | undefined;
@@ -677,7 +780,7 @@ describe("SettingsPage", () => {
         romm_url: "romm.local", // scheme-less — invalid
         has_token: false,
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       let result: { success: boolean; message: string } | undefined;
@@ -692,7 +795,7 @@ describe("SettingsPage", () => {
 
     it("returns a generic failure to the modal when connectWithCredentials throws", async () => {
       vi.mocked(backend.connectWithCredentials).mockRejectedValue(new Error("net"));
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       let result: { success: boolean; message: string } | undefined;
@@ -716,7 +819,7 @@ describe("SettingsPage", () => {
         message: "Connected!",
         romm_version: "4.9.0",
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(capturedConnection[capturedConnection.length - 1]?.hasToken).toBe(false);
 
@@ -742,7 +845,7 @@ describe("SettingsPage", () => {
         message: "The API token is missing required permissions (scopes).",
         reason: "auth_failed",
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       let result: { success: boolean; message: string } | undefined;
@@ -765,7 +868,7 @@ describe("SettingsPage", () => {
         romm_url: "romm.local", // scheme-less — invalid
         has_token: false,
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       let result: { success: boolean; message: string } | undefined;
@@ -780,7 +883,7 @@ describe("SettingsPage", () => {
 
     it("returns a generic failure to the modal when connectWithToken throws", async () => {
       vi.mocked(backend.connectWithToken).mockRejectedValue(new Error("net"));
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       let result: { success: boolean; message: string } | undefined;
@@ -804,7 +907,7 @@ describe("SettingsPage", () => {
         message: "Connected!",
         romm_version: "4.9.0",
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(capturedConnection[capturedConnection.length - 1]?.hasToken).toBe(false);
 
@@ -832,7 +935,7 @@ describe("SettingsPage", () => {
         message: "Pairing code is invalid or has expired.",
         reason: "auth_failed",
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       let result: { success: boolean; message: string } | undefined;
@@ -852,7 +955,7 @@ describe("SettingsPage", () => {
         romm_url: "romm.local", // scheme-less — invalid
         has_token: false,
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       let result: { success: boolean; message: string } | undefined;
@@ -867,7 +970,7 @@ describe("SettingsPage", () => {
 
     it("returns a generic failure to the modal when connectWithPairingCode throws", async () => {
       vi.mocked(backend.connectWithPairingCode).mockRejectedValue(new Error("net"));
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       let result: { success: boolean; message: string } | undefined;
@@ -890,7 +993,7 @@ describe("SettingsPage", () => {
         success: true,
         message: "Signed out. The token is still valid in RomM.",
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       // Precondition: signed in.
       expect(capturedConnection[capturedConnection.length - 1]?.hasToken).toBe(true);
@@ -916,7 +1019,7 @@ describe("SettingsPage", () => {
         message: "Could not save settings.",
         reason: "config_error",
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       await act(async () => {
@@ -935,7 +1038,7 @@ describe("SettingsPage", () => {
         has_token: true,
       });
       vi.mocked(backend.signOut).mockRejectedValue(new Error("net"));
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       await act(async () => {
@@ -951,6 +1054,10 @@ describe("SettingsPage", () => {
   });
 
   describe("handleSaveSyncSettingChange", () => {
+    beforeEach(() => {
+      openOn = "save-sync";
+    });
+
     it("does nothing when saveSyncSettings is still null", async () => {
       // Cause getSaveSyncSettings to never resolve — saveSyncSettings stays null.
       vi.mocked(backend.getSaveSyncSettings).mockImplementation(
@@ -959,7 +1066,7 @@ describe("SettingsPage", () => {
             /* never */
           }),
       );
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       // No flush — initial state null. capturedSaveSync still has at least one
       // entry from the synchronous first render.
       const ss = capturedSaveSync[capturedSaveSync.length - 1];
@@ -972,7 +1079,7 @@ describe("SettingsPage", () => {
 
     it("updates a non-enabled partial via updateSaveSyncSettings without dispatching", async () => {
       vi.mocked(backend.updateSaveSyncSettings).mockResolvedValue({ success: true });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       const listener = vi.fn();
@@ -996,7 +1103,7 @@ describe("SettingsPage", () => {
     it("dispatches romm_data_changed with detail.save_sync_enabled=true and triggers loadDevices on enable", async () => {
       vi.mocked(backend.updateSaveSyncSettings).mockResolvedValue({ success: true });
       vi.mocked(backend.listDevices).mockResolvedValue({ success: true, devices: [] });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       const listener = vi.fn();
@@ -1028,7 +1135,7 @@ describe("SettingsPage", () => {
         save_sync_enabled: true,
       });
       vi.mocked(backend.updateSaveSyncSettings).mockResolvedValue({ success: true });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       const listener = vi.fn();
@@ -1059,7 +1166,7 @@ describe("SettingsPage", () => {
       });
       vi.mocked(backend.updateSaveSyncSettings).mockResolvedValue({ success: true });
       vi.mocked(backend.listDevices).mockResolvedValue({ success: true, devices: [] });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       // Sanity: before disable, devices section is mounted with [] (non-null).
@@ -1101,7 +1208,7 @@ describe("SettingsPage", () => {
     it("logs the failure when updateSaveSyncSettings rejects", async () => {
       vi.mocked(backend.updateSaveSyncSettings).mockRejectedValue(new Error("denied"));
       const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedSaveSync[capturedSaveSync.length - 1]?.onSettingChange({
@@ -1114,6 +1221,10 @@ describe("SettingsPage", () => {
   });
 
   describe("handleSyncAll", () => {
+    beforeEach(() => {
+      openOn = "save-sync";
+    });
+
     it("forwards syncAllSaves result.message to syncStatus and dispatches romm_data_changed on success", async () => {
       vi.mocked(backend.syncAllSaves).mockResolvedValue({
         success: true,
@@ -1121,7 +1232,7 @@ describe("SettingsPage", () => {
         synced: 4,
         conflicts: 0,
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       const listener = vi.fn();
@@ -1141,7 +1252,7 @@ describe("SettingsPage", () => {
 
     it("sets syncStatus='Sync failed' on throw", async () => {
       vi.mocked(backend.syncAllSaves).mockRejectedValue(new Error("net"));
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedSaveSync[capturedSaveSync.length - 1]?.onSyncAll();
@@ -1151,8 +1262,12 @@ describe("SettingsPage", () => {
   });
 
   describe("handleToggleSaveSync — enable confirmation flow", () => {
+    beforeEach(() => {
+      openOn = "save-sync";
+    });
+
     it("opens the enable-save-sync ConfirmModal when toggled to true", async () => {
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       act(() => {
         capturedSaveSync[capturedSaveSync.length - 1]?.onToggleSaveSync(true);
@@ -1177,7 +1292,7 @@ describe("SettingsPage", () => {
 
     it("invokes handleSaveSyncSettingChange({save_sync_enabled:true}) when OK is clicked", async () => {
       vi.mocked(backend.updateSaveSyncSettings).mockResolvedValue({ success: true });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       act(() => {
         capturedSaveSync[capturedSaveSync.length - 1]?.onToggleSaveSync(true);
@@ -1192,7 +1307,7 @@ describe("SettingsPage", () => {
     });
 
     it("bumps saveSyncToggleKey when Cancel is clicked", async () => {
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       const initialKey = capturedSaveSync[capturedSaveSync.length - 1]?.saveSyncToggleKey;
       expect(initialKey).toBe(0);
@@ -1210,13 +1325,17 @@ describe("SettingsPage", () => {
   });
 
   describe("handleToggleSaveSync — disable path", () => {
+    beforeEach(() => {
+      openOn = "save-sync";
+    });
+
     it("calls handleSaveSyncSettingChange({save_sync_enabled:false}) directly without showing a modal", async () => {
       vi.mocked(backend.getSaveSyncSettings).mockResolvedValue({
         ...defaultSaveSyncSettings(),
         save_sync_enabled: true,
       });
       vi.mocked(backend.updateSaveSyncSettings).mockResolvedValue({ success: true });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedSaveSync[capturedSaveSync.length - 1]?.onToggleSaveSync(false);
@@ -1230,9 +1349,13 @@ describe("SettingsPage", () => {
   });
 
   describe("default-slot submit + reset", () => {
+    beforeEach(() => {
+      openOn = "save-sync";
+    });
+
     it("forwards a trimmed non-empty value to handleSaveSyncSettingChange", async () => {
       vi.mocked(backend.updateSaveSyncSettings).mockResolvedValue({ success: true });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedSaveSync[capturedSaveSync.length - 1]?.onDefaultSlotSubmit("  alpha  ");
@@ -1245,7 +1368,7 @@ describe("SettingsPage", () => {
 
     it("resets to 'default' without a confirm modal when the value is empty", async () => {
       vi.mocked(backend.updateSaveSyncSettings).mockResolvedValue({ success: true });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedSaveSync[capturedSaveSync.length - 1]?.onDefaultSlotSubmit("   ");
@@ -1266,7 +1389,7 @@ describe("SettingsPage", () => {
 
     it("handleResetDefaultSlot sets default_slot='default' and toasts", async () => {
       vi.mocked(backend.updateSaveSyncSettings).mockResolvedValue({ success: true });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedSaveSync[capturedSaveSync.length - 1]?.onResetDefaultSlot();
@@ -1287,7 +1410,7 @@ describe("SettingsPage", () => {
   describe("SteamGridDB handlers", () => {
     it("wires onVerifyKey directly to the verifySgdbApiKey callable (tests the key without persisting)", async () => {
       vi.mocked(backend.verifySgdbApiKey).mockResolvedValue({ success: true, message: "API key is valid" });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       const sgdb = capturedSgdb[capturedSgdb.length - 1];
       await act(async () => {
@@ -1300,7 +1423,7 @@ describe("SettingsPage", () => {
 
     it("handleSaveSgdbKey persists via saveSgdbApiKey and flips the masked display to a configured key", async () => {
       vi.mocked(backend.saveSgdbApiKey).mockResolvedValue({ success: true, message: "Saved!" });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         await capturedSgdb[capturedSgdb.length - 1]?.onSaveKey("apikey123");
@@ -1312,7 +1435,7 @@ describe("SettingsPage", () => {
 
     it("handleSaveSgdbKey lets a save rejection propagate so the modal can surface it", async () => {
       vi.mocked(backend.saveSgdbApiKey).mockRejectedValue(new Error("boom"));
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       const sgdb = capturedSgdb[capturedSgdb.length - 1];
       // The handler does not swallow — the modal's own try/catch owns the error
@@ -1324,8 +1447,12 @@ describe("SettingsPage", () => {
   });
 
   describe("Controller handlers", () => {
+    beforeEach(() => {
+      openOn = "controller";
+    });
+
     it("handleSteamInputModeChange persists via saveSteamInputSetting and updates the dropdown", async () => {
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       act(() => {
         capturedController[capturedController.length - 1]?.onModeChange("force_on");
@@ -1339,7 +1466,7 @@ describe("SettingsPage", () => {
         success: true,
         message: "Applied",
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedController[capturedController.length - 1]?.onApplyMode();
@@ -1348,9 +1475,54 @@ describe("SettingsPage", () => {
       expect(capturedController[capturedController.length - 1]?.steamInputStatus).toBe("Applied");
     });
 
+    it("refuses a second Apply while one run is in flight, and says so on the button (#1020)", async () => {
+      let release: ((r: { success: boolean; message: string }) => void) | undefined;
+      vi.mocked(backend.applySteamInputSetting).mockReturnValue(
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+      );
+      renderPage();
+      await flushAsync();
+
+      await act(async () => {
+        capturedController[capturedController.length - 1]?.onApplyMode();
+        await Promise.resolve();
+      });
+      // The run is still going: the button is dead and says which state it is in.
+      expect(capturedController[capturedController.length - 1]?.applying).toBe(true);
+
+      await act(async () => {
+        capturedController[capturedController.length - 1]?.onApplyMode();
+        await Promise.resolve();
+      });
+      expect(vi.mocked(backend.applySteamInputSetting)).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        release?.({ success: true, message: "Applied" });
+        await Promise.resolve();
+      });
+      // Re-armed by the run ending, and the second press left no trace on the
+      // answer the first one produced.
+      expect(capturedController[capturedController.length - 1]?.applying).toBe(false);
+      expect(capturedController[capturedController.length - 1]?.steamInputStatus).toBe("Applied");
+    });
+
+    it("re-arms the Apply button after a run that threw", async () => {
+      vi.mocked(backend.applySteamInputSetting).mockRejectedValue(new Error("boom"));
+      renderPage();
+      await flushAsync();
+      await act(async () => {
+        capturedController[capturedController.length - 1]?.onApplyMode();
+        await Promise.resolve();
+      });
+      expect(capturedController[capturedController.length - 1]?.applying).toBe(false);
+      expect(capturedController[capturedController.length - 1]?.steamInputStatus).toBe("Failed to apply");
+    });
+
     it("handleApplySteamInput throw → steamInputStatus='Failed to apply'", async () => {
       vi.mocked(backend.applySteamInputSetting).mockRejectedValue(new Error("boom"));
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedController[capturedController.length - 1]?.onApplyMode();
@@ -1368,7 +1540,7 @@ describe("SettingsPage", () => {
         success: true,
         message: "Fixed",
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       // Pre-condition: warning is set
       expect(capturedController[capturedController.length - 1]?.retroarchWarning).not.toBeNull();
@@ -1391,7 +1563,7 @@ describe("SettingsPage", () => {
         success: false,
         message: "Could not write",
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedController[capturedController.length - 1]?.onFixInputDriver();
@@ -1404,7 +1576,7 @@ describe("SettingsPage", () => {
 
     it("handleFixInputDriver throw → retroarchFixStatus='Failed to apply fix'", async () => {
       vi.mocked(backend.fixRetroarchInputDriver).mockRejectedValue(new Error("perm"));
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedController[capturedController.length - 1]?.onFixInputDriver();
@@ -1415,8 +1587,12 @@ describe("SettingsPage", () => {
   });
 
   describe("Advanced handlers", () => {
+    beforeEach(() => {
+      openOn = "advanced";
+    });
+
     it("handleLogLevelChange persists via saveLogLevel and updates the dropdown", async () => {
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       act(() => {
         capturedAdvanced[capturedAdvanced.length - 1]?.onLogLevelChange("debug");
@@ -1427,32 +1603,36 @@ describe("SettingsPage", () => {
   });
 
   describe("Library handlers", () => {
+    beforeEach(() => {
+      openOn = "steam-library";
+    });
+
     it("hydrates preferredRegion from getSettings", async () => {
       vi.mocked(backend.getSettings).mockResolvedValue({
         ...defaultSettings(),
         preferred_region: "Japan",
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(capturedLibrary[capturedLibrary.length - 1]?.preferredRegion).toBe("Japan");
     });
 
     it("defaults preferredRegion to 'auto' when getSettings omits it", async () => {
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(capturedLibrary[capturedLibrary.length - 1]?.preferredRegion).toBe("auto");
     });
 
     it("forwards library regions from getKnownRegions to LibrarySection", async () => {
       vi.mocked(backend.getKnownRegions).mockResolvedValue(["Korea", "Brazil"]);
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(capturedLibrary[capturedLibrary.length - 1]?.libraryRegions).toEqual(["Korea", "Brazil"]);
     });
 
     it("change → confirm shows the explanation modal, then persists and updates the dropdown", async () => {
       vi.mocked(showPreferredRegionModal).mockResolvedValue(true);
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedLibrary[capturedLibrary.length - 1]?.onPreferredRegionChange("Japan");
@@ -1468,7 +1648,7 @@ describe("SettingsPage", () => {
 
     it("change → cancel shows the modal but does NOT persist and leaves the dropdown unchanged", async () => {
       vi.mocked(showPreferredRegionModal).mockResolvedValue(false);
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedLibrary[capturedLibrary.length - 1]?.onPreferredRegionChange("Japan");
@@ -1482,7 +1662,7 @@ describe("SettingsPage", () => {
     });
 
     it("selecting the already-current region is a no-op (no modal, no save)", async () => {
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedLibrary[capturedLibrary.length - 1]?.onPreferredRegionChange("auto");
@@ -1497,20 +1677,20 @@ describe("SettingsPage", () => {
         ...defaultSettings(),
         collection_create_platform_groups: true,
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(capturedLibrary[capturedLibrary.length - 1]?.platformGroups).toBe(true);
     });
 
     it("defaults platformGroups to false when getSettings omits it", async () => {
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(capturedLibrary[capturedLibrary.length - 1]?.platformGroups).toBe(false);
     });
 
     it("onPlatformGroupsChange persists via saveCollectionPlatformGroups and flips the value", async () => {
       vi.mocked(backend.saveCollectionPlatformGroups).mockResolvedValue({ success: true });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedLibrary[capturedLibrary.length - 1]?.onPlatformGroupsChange(true);
@@ -1522,7 +1702,7 @@ describe("SettingsPage", () => {
 
     it("reverts platformGroups when saveCollectionPlatformGroups rejects", async () => {
       vi.mocked(backend.saveCollectionPlatformGroups).mockRejectedValue(new Error("boom"));
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedLibrary[capturedLibrary.length - 1]?.onPlatformGroupsChange(true);
@@ -1539,20 +1719,20 @@ describe("SettingsPage", () => {
         ...defaultSettings(),
         collection_naming_mode: "by_label",
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(capturedLibrary[capturedLibrary.length - 1]?.namingMode).toBe("by_label");
     });
 
     it("defaults namingMode to merge when getSettings omits it", async () => {
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(capturedLibrary[capturedLibrary.length - 1]?.namingMode).toBe("merge");
     });
 
     it("onNamingModeChange persists via setCollectionNamingMode and flips the value", async () => {
       vi.mocked(backend.setCollectionNamingMode).mockResolvedValue({ success: true });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedLibrary[capturedLibrary.length - 1]?.onNamingModeChange("by_label");
@@ -1564,7 +1744,7 @@ describe("SettingsPage", () => {
 
     it("reverts namingMode to its prior value when setCollectionNamingMode rejects", async () => {
       vi.mocked(backend.setCollectionNamingMode).mockRejectedValue(new Error("boom"));
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedLibrary[capturedLibrary.length - 1]?.onNamingModeChange("by_label");
@@ -1578,6 +1758,10 @@ describe("SettingsPage", () => {
   });
 
   describe("save-sort migration handlers", () => {
+    beforeEach(() => {
+      openOn = "save-sync";
+    });
+
     it("handleMigrateSaveSort success clears the store, toasts, and forwards result.message", async () => {
       vi.mocked(backend.getSaveSortMigrationStatus).mockResolvedValue({
         pending: true,
@@ -1589,7 +1773,7 @@ describe("SettingsPage", () => {
         success: true,
         message: "Moved 2 files",
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       await act(async () => {
@@ -1614,7 +1798,7 @@ describe("SettingsPage", () => {
         success: true,
         message: "",
       });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
 
       await act(async () => {
@@ -1634,7 +1818,7 @@ describe("SettingsPage", () => {
         pending: true,
       });
       vi.mocked(backend.migrateSaveSortFiles).mockRejectedValue(new Error("io"));
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedMigration[capturedMigration.length - 1]?.onMigrate();
@@ -1648,7 +1832,7 @@ describe("SettingsPage", () => {
         pending: true,
       });
       vi.mocked(backend.dismissSaveSortMigration).mockResolvedValue({ success: true });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedMigration[capturedMigration.length - 1]?.onDismiss();
@@ -1663,7 +1847,7 @@ describe("SettingsPage", () => {
         pending: true,
       });
       vi.mocked(backend.dismissSaveSortMigration).mockRejectedValue(new Error("net"));
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedMigration[capturedMigration.length - 1]?.onDismiss();
@@ -1674,8 +1858,12 @@ describe("SettingsPage", () => {
   });
 
   describe("saveSortMigrationStore subscribe / unsubscribe", () => {
+    beforeEach(() => {
+      openOn = "save-sync";
+    });
+
     it("subscribes on mount and unsubscribes on unmount", async () => {
-      const { unmount } = render(<SettingsPage onBack={vi.fn()} />);
+      const { unmount } = renderPage();
       await flushAsync();
       expect(vi.mocked(onSaveSortMigrationChange)).toHaveBeenCalledTimes(1);
       expect(saveSortListeners.length).toBe(1);
@@ -1684,7 +1872,7 @@ describe("SettingsPage", () => {
     });
 
     it("re-renders the migration section when the store flips to pending", async () => {
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       // Initially: no migration section because pending=false.
       expect(capturedMigration.length).toBe(0);
@@ -1703,8 +1891,12 @@ describe("SettingsPage", () => {
   });
 
   describe("conditional renders", () => {
+    beforeEach(() => {
+      openOn = "save-sync";
+    });
+
     it("hides RegisteredDevicesSection when save sync is disabled", async () => {
-      const { queryByTestId } = render(<SettingsPage onBack={vi.fn()} />);
+      const { queryByTestId } = renderPage();
       await flushAsync();
       expect(queryByTestId("devices-section")).toBeNull();
     });
@@ -1714,13 +1906,13 @@ describe("SettingsPage", () => {
         ...defaultSaveSyncSettings(),
         save_sync_enabled: true,
       });
-      const { queryByTestId } = render(<SettingsPage onBack={vi.fn()} />);
+      const { queryByTestId } = renderPage();
       await flushAsync();
       expect(queryByTestId("devices-section")).not.toBeNull();
     });
 
     it("hides SaveSortMigrationSection when pending=false", async () => {
-      const { queryByTestId } = render(<SettingsPage onBack={vi.fn()} />);
+      const { queryByTestId } = renderPage();
       await flushAsync();
       expect(queryByTestId("migration-section")).toBeNull();
     });
@@ -1730,19 +1922,89 @@ describe("SettingsPage", () => {
         pending: true,
         saves_count: 3,
       });
-      const { queryByTestId } = render(<SettingsPage onBack={vi.fn()} />);
+      const { queryByTestId } = renderPage();
       await flushAsync();
       expect(queryByTestId("migration-section")).not.toBeNull();
     });
   });
 
-  describe("back button", () => {
-    it("calls onBack when the Back button is clicked", async () => {
+  describe("the page frame", () => {
+    it("renders as a wide page titled Settings with a Back chip that calls onBack", async () => {
       const onBack = vi.fn();
       const { getByText } = render(<SettingsPage onBack={onBack} />);
       await flushAsync();
-      fireEvent.click(getByText("Back"));
+      expect(getByText("Settings")).toBeInTheDocument();
+      // The chip's glyph probe misses under happy-dom, so it renders its
+      // chevron fallback.
+      fireEvent.click(getByText("‹ Back"));
       expect(onBack).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("the section list", () => {
+    it("shows exactly the five sections, in order", async () => {
+      const { getAllByTestId } = renderPage();
+      await flushAsync();
+      const labels = getAllByTestId("field").map((el) => el.textContent);
+      expect(labels).toEqual(["Connections", "Save Sync", "Controller", "Steam Library", "Advanced"]);
+    });
+
+    it("opens on the section a navigation names", async () => {
+      openOn = "controller";
+      renderPage();
+      await flushAsync();
+      expect(capturedController.length).toBeGreaterThan(0);
+      expect(capturedConnection.length).toBe(0);
+    });
+
+    it("opens on the first section when a navigation names none", async () => {
+      const { queryByTestId } = render(<SettingsPage onBack={vi.fn()} />);
+      await flushAsync();
+      expect(queryByTestId("connection-section")).not.toBeNull();
+      expect(queryByTestId("advanced-section")).toBeNull();
+    });
+
+    it("selects on activate, so a row that carries no control is still a focus stop", async () => {
+      const { getByTestId, queryByTestId } = renderPage();
+      await flushAsync();
+      expect(queryByTestId("advanced-section")).toBeNull();
+      // The wrapper the layout puts round each row is what carries the activate
+      // handler; the press on the row's own content bubbles to it.
+      await act(async () => {
+        fireEvent.click(getByTestId("settings-section-advanced"));
+      });
+      expect(queryByTestId("advanced-section")).not.toBeNull();
+      expect(queryByTestId("connection-section")).toBeNull();
+    });
+
+    it("moving focus onto a row selects it, without a press", async () => {
+      const { getByTestId, queryByTestId } = renderPage();
+      await flushAsync();
+      await act(async () => {
+        fireEvent.focus(getByTestId("settings-section-steam-library"));
+      });
+      expect(queryByTestId("library-section")).not.toBeNull();
+    });
+
+    it.each([
+      ["connections", "connection-section"],
+      ["save-sync", "savesync-section"],
+      ["controller", "controller-section"],
+      ["steam-library", "library-section"],
+      ["advanced", "advanced-section"],
+    ] as const)("reaches every section's content: %s", async (section, testId) => {
+      const { getByTestId, queryByTestId } = renderPage();
+      await flushAsync();
+      await act(async () => {
+        fireEvent.click(getByTestId(`settings-section-${section}`));
+      });
+      expect(queryByTestId(testId)).not.toBeNull();
+    });
+
+    it("keeps the SteamGridDB key on the Connections pane, not on its own section", async () => {
+      const { queryByTestId } = renderPage();
+      await flushAsync();
+      expect(queryByTestId("sgdb-section")).not.toBeNull();
     });
   });
 });

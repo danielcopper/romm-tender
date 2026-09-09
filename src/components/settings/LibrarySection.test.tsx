@@ -22,7 +22,14 @@ vi.mock("@decky/ui", () => {
   type AnyProps = Record<string, unknown> & { children?: unknown };
   const passthrough = (tag: string) => (p: AnyProps) => createElement(tag, {}, p.children as never);
   return {
-    PanelSection: passthrough("section"),
+    // The title is rendered rather than dropped: it is what names the group on
+    // the Settings pane, and the section it belongs to is not called Library.
+    PanelSection: (p: AnyProps & { title?: unknown }) =>
+      createElement(
+        "section",
+        { "data-title": typeof p.title === "string" ? p.title : undefined },
+        p.children as never,
+      ),
     PanelSectionRow: passthrough("div"),
     DropdownItem: (p: DropdownItemProps) => {
       captured.items.push(p);
@@ -83,6 +90,23 @@ describe("buildRegionOptions", () => {
 describe("LibrarySection", () => {
   beforeEach(() => {
     captured.items = [];
+  });
+
+  it("titles its group Steam Library, not Library", () => {
+    // The Library PAGE is the RomM side — what gets synced. This group is the
+    // Steam side, and one word for both would name two different things.
+    const { container } = render(
+      <LibrarySection
+        preferredRegion={AUTO_REGION}
+        libraryRegions={[]}
+        onPreferredRegionChange={vi.fn()}
+        platformGroups={false}
+        onPlatformGroupsChange={vi.fn()}
+        namingMode="merge"
+        onNamingModeChange={vi.fn()}
+      />,
+    );
+    expect(container.querySelector("section")?.getAttribute("data-title")).toBe("Steam Library");
   });
 
   it("renders the preferred-region dropdown with anchors + library regions", () => {

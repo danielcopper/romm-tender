@@ -3,6 +3,10 @@
  * Pure renderer: the parent owns the field values, the has-token flag, the
  * status string, and the save/sign-in logic. The QAM connection row probes the
  * server automatically, so there is no manual test affordance here.
+ *
+ * It is one group of the Settings page's Connections section, and its title
+ * names the SERVICE rather than the section: SteamGridDB is the other service
+ * on that pane and both are connections.
  */
 
 import { FC } from "react";
@@ -52,7 +56,7 @@ export const ConnectionSection: FC<ConnectionSectionProps> = ({
   onSignOut,
 }) => {
   return (
-    <PanelSection title="Connection">
+    <PanelSection title="RomM">
       <PanelSectionRow>
         <Field label="RomM URL" description={url || "(not set)"}>
           <DialogButton
@@ -116,7 +120,11 @@ export const ConnectionSection: FC<ConnectionSectionProps> = ({
       )}
       {status && (
         <PanelSectionRow>
-          <Field label={status} />
+          {/* Focusable because the pane scrolls by moving focus and this line
+              is not the last thing on it — the SteamGridDB group follows, so a
+              reader walking down would step straight over the answer to the
+              sign-in they just made. */}
+          <Field label={status} focusable={true} />
         </PanelSectionRow>
       )}
     </PanelSection>
