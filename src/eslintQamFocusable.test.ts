@@ -56,8 +56,11 @@ export const Local = ({ Focusable }: { Focusable: ComponentType<PropsWithChildre
     QAM_FIXTURE_DIR,
     "staticExpressions.tsx",
     `import { Focusable } from "@decky/ui";
+const value = "row";
 export const Literal = () => <Focusable>{"Unreadable"}</Focusable>;
 export const StaticSpread = () => <Focusable {...{ className: "row" }}><div>Unreadable</div></Focusable>;
+export const Template = () => <Focusable>{\`Unreadable \${value}\`}</Focusable>;
+export const Satisfies = () => <Focusable {...({ className: value } satisfies Record<string, string>)}><div>Unreadable</div></Focusable>;
 `,
   ],
   [
@@ -111,7 +114,12 @@ describe("QAM Focusable row rule", () => {
   });
 
   it("reports statically known non-focusable expressions and spreads", async () => {
-    expect(await ruleMessages(path.join(QAM_FIXTURE_DIR, "staticExpressions.tsx"))).toEqual([RULE_ID, RULE_ID]);
+    expect(await ruleMessages(path.join(QAM_FIXTURE_DIR, "staticExpressions.tsx"))).toEqual([
+      RULE_ID,
+      RULE_ID,
+      RULE_ID,
+      RULE_ID,
+    ]);
   });
 
   it("does not impose the QAM rule on game-detail components", async () => {

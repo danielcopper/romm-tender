@@ -10,6 +10,7 @@ function unwrapExpression(expression) {
     expression.type === "ChainExpression" ||
     expression.type === "TSAsExpression" ||
     expression.type === "TSNonNullExpression" ||
+    expression.type === "TSSatisfiesExpression" ||
     expression.type === "TSTypeAssertion"
   ) {
     expression = expression.expression;
@@ -53,9 +54,14 @@ function isNativeFocusElement(openingElement) {
 
 function expressionMayContainFocus(expression, isDeckyFocusable) {
   expression = unwrapExpression(expression);
-  if (expression.type === "Literal" || expression.type === "ObjectExpression") return false;
-  if (expression.type === "TemplateLiteral") {
-    return expression.expressions.some((nested) => expressionMayContainFocus(nested, isDeckyFocusable));
+  // A template literal coerces every substitution to text, so an opaque one cannot
+  // put a focusable node in the child position — unlike an opaque identifier, which can.
+  if (
+    expression.type === "Literal" ||
+    expression.type === "ObjectExpression" ||
+    expression.type === "TemplateLiteral"
+  ) {
+    return false;
   }
   if (expression.type === "JSXElement" || expression.type === "JSXFragment") {
     return childMayContainFocus(expression, isDeckyFocusable);

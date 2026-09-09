@@ -90,6 +90,10 @@ export default tseslint.config(
       "src/components/{SessionBudgetBanner,MigrationBlockedPage,SettingsResetBanner,PlaytimeScopeBanner,DownloadProgressRow,LoadingRow}.tsx",
       "src/components/{qam,sync,library,settings}/**/*.tsx",
     ],
+    // A test renders no row a reader walks, and a modal is not a panel row at all —
+    // it mounts in Steam's `ModalRoot`, outside the region that scrolls by focus.
+    // Neither exemption is load-bearing today: with both removed the rule still
+    // reports nothing across `src/**/*.tsx`.
     ignores: ["src/**/*.test.tsx", "src/components/**/*Modal.tsx"],
     plugins: {
       tender: {
