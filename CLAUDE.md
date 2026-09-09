@@ -201,6 +201,17 @@ Format: **invariant** — tier — enforced by.
 - **Every backend `emit` event name has a frontend listener, and vice versa** — check — `scripts/check_event_parity.py`
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
   `scripts/check_settings_owner.py`
+- **Where the user's data lives is read only from `WiringConfig.locations`; `RuntimeBundle.runtime_dir` is the
+  Decky-assigned directory and answers Decky's own layout question, nothing else** — prompt-only — the two are different
+  questions and each half of the mix-up is silent. Five call sites read the data root, all in `bootstrap/`: the
+  `db_path` the schema runner and the UoW factory open, `PersistenceAdapter`'s two arguments, `PruneArtifactAdapter`,
+  `SgdbArtworkCacheAdapter`, and `services.py`'s `cover_cache_dir`. One reads `runtime_dir`: `LegacyInstallService`,
+  which asks whether the pre-rename plugin folder still stands beside ours by taking that directory's PARENT. Hand it
+  `locations.data_dir` and it computes `~/.local/share/decky-romm-sync`, a directory Decky never created — the card's
+  second sentence goes quiet and nothing fails, which is exactly the card that keeps a user from removing the install
+  their every shortcut launches through. The other direction is worse and equally quiet: a new consumer of the data root
+  reaching for `runtime_dir` writes into Decky's tree, where the next release's folder name moves it. Nothing mechanical
+  tells the two apart — both are plain `str` fields on structs the composition root hands around
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
 - **A library-sync seam is held only by the module owning the job it belongs to: `active_core` / `disc_resolver` by

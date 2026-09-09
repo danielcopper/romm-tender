@@ -58,6 +58,32 @@ export function formatTimestamp(iso: string | null): string {
 }
 
 /**
+ * Like {@link formatTimestamp}, but carrying the YEAR and dropping the seconds.
+ *
+ * A separate function rather than a change to its sibling: every other caller
+ * shows a save or a sync from the last few minutes, where the year is noise and
+ * the seconds tell two writes apart. This one exists for the opposite case — two
+ * copies of a library whose only distinguishing marks are their size and their
+ * date, and which can easily be a year apart. Without the year they read as the
+ * same day.
+ */
+export function formatTimestampWithYear(iso: string | null): string {
+  if (!iso) return "unknown";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+/**
  * Format the status line for the "Uninstall All Installed ROMs" action.
  * Always shows the count of removed ROMs; appends an "(N errors)" suffix when
  * the backend reported any per-ROM failures.

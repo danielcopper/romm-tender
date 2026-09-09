@@ -15,7 +15,9 @@ import { MigrationBlockedPage } from "./MigrationBlockedPage";
 import * as backend from "../api/backend";
 import { setMigrationStatus, clearMigration, getMigrationState } from "../utils/migrationStore";
 import { setLegacyInstallState } from "../utils/legacyInstallStore";
+import { setDataLocationState } from "../utils/dataLocationStore";
 import { LEGACY_INSTALL_TITLE } from "./LegacyInstallBanner";
+import { DATA_LOCATION_CHOICE_TITLE, DATA_LOCATION_FAILED_TITLE } from "./DataLocationNotice";
 import type { MigrationStatus, MigrationResult } from "../types";
 // Type-only — vi.mock("./MigrationConflictModal") below replaces the runtime
 // impl; the captured-props type stays pinned to the real component.
@@ -40,6 +42,11 @@ type CapturedConflictModalProps = ComponentProps<typeof MigrationConflictModal>;
 vi.mock("./MigrationConflictModal", () => ({
   MigrationConflictModal: () => createElement("div", { "data-testid": "migration-conflict-modal" }),
 }));
+
+function buttonByText(container: HTMLElement, text: string): HTMLButtonElement | undefined {
+  return Array.from(container.querySelectorAll("button")).find((b) => b.textContent === text) as
+    HTMLButtonElement | undefined;
+}
 
 // Helpers — pull props off the React element passed to showModal.
 function lastShownModalProps<T = Record<string, unknown>>(): T | null {
@@ -151,6 +158,41 @@ describe("MigrationBlockedPage component", () => {
       const { container } = render(<MigrationBlockedPage migration={defaultMigration} />);
       expect(container.textContent).toContain("RetroDECK location changed");
       expect(container.textContent).not.toContain(LEGACY_INSTALL_TITLE);
+    });
+  });
+
+  describe("data-location notice", () => {
+    // Leaving this page needs a user action, so a condition that is invisible
+    // here is invisible for as long as the user takes to migrate RetroDECK —
+    // and the choice is itself a question only the user can answer.
+    afterEach(() => {
+      act(() => {
+        setDataLocationState({ pending: false, kind: null, message: null });
+      });
+    });
+
+    it("carries the two-libraries choice, so it can be answered from here", () => {
+      act(() => {
+        setDataLocationState({ pending: true, kind: "choice", message: null });
+      });
+      const { container } = render(<MigrationBlockedPage migration={defaultMigration} />);
+      expect(container.textContent).toContain(DATA_LOCATION_CHOICE_TITLE);
+      expect(buttonByText(container, "Choose a copy")).toBeDefined();
+    });
+
+    it("carries a failed move and the reason it failed", () => {
+      act(() => {
+        setDataLocationState({ pending: true, kind: "failed", message: "[Errno 28] No space left on device" });
+      });
+      const { container } = render(<MigrationBlockedPage migration={defaultMigration} />);
+      expect(container.textContent).toContain(DATA_LOCATION_FAILED_TITLE);
+      expect(container.textContent).toContain("No space left on device");
+    });
+
+    it("adds nothing to the page while no data-location condition stands", () => {
+      const { container } = render(<MigrationBlockedPage migration={defaultMigration} />);
+      expect(container.textContent).not.toContain(DATA_LOCATION_CHOICE_TITLE);
+      expect(container.textContent).not.toContain(DATA_LOCATION_FAILED_TITLE);
     });
   });
 
