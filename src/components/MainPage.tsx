@@ -596,9 +596,9 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
         {retrodeckBanner && (
           <PanelSectionRow>
             {/* WarningCard is shared with the game-detail context, so it carries no
-                focusable child of its own — wrap it here (QAM-only) so gamepad focus
-                can reach it. */}
-            <Focusable>
+                focus contract of its own. This QAM-only wrapper's no-op activation
+                makes the notice itself a stop for focus-driven scrolling. */}
+            <Focusable onActivate={() => {}}>
               <WarningCard title={retrodeckBanner.title} message={retrodeckBanner.message} compact />
             </Focusable>
           </PanelSectionRow>
@@ -753,7 +753,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
         {saveSortMigration.pending && (
           <>
             <PanelSectionRow>
-              <Focusable>
+              <Focusable onActivate={() => {}}>
                 <div
                   style={{
                     padding: "8px 12px",
@@ -784,7 +784,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
         {lastRunPaused && (
           <>
             <PanelSectionRow>
-              <Focusable>
+              <Focusable onActivate={() => {}}>
                 <div
                   data-testid="sync-paused-notice"
                   style={{

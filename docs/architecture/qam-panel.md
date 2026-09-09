@@ -120,10 +120,16 @@ the rows inside it take focus directly and Steam scrolls the focused row into vi
 
 **Every row a reader must be able to reach is a focusable row.** A toggle, a button, or — where a table row carries no
 action of its own, so the reader can still walk the table — a `Focusable` with an `onActivate` handler. The handler is
-what makes it a stop: `FocusableProps` exposes no `focusable` prop, an activate handler is what sets one, and a bare
-`Focusable` is a container that passes focus on to its children rather than taking it. Plain text that only accompanies
-a row, a hint under a group, scrolls with its neighbours and need not be reachable itself. This is what focus-driven
-scrolling costs: content nobody can focus cannot be scrolled to.
+what makes the current action-less rows stops; a bare `Focusable` is a container that passes focus on to its children
+rather than taking it. Plain text that only accompanies a row, a hint under a group, scrolls with its neighbours and
+need not be reachable itself. This is what focus-driven scrolling costs: content nobody can focus cannot be scrolled to.
+
+The repository ESLint rule `tender/qam-focusable-row` checks one syntactic slice of that rule in the QAM modules listed
+above. A `Focusable` imported from `@decky/ui` must declare `onActivate`, `onOKButton`, or `focusable`, contain a static
+focus stop, or contain a child/spread whose focusability cannot be established statically. This catches an action-less
+row written as a static wrapper while leaving structural containers and opaque children alone. It does not check focus
+order, runtime reachability, edge revelation, scrolling geometry, or controller behaviour; those parts remain a device
+and review invariant.
 
 **The one place a page cannot buy its way out of that is the content OUTSIDE its focusable rows**, and the frame handles
 it rather than each page: a heading, a counts line or a column header sitting over the topmost row, and a legend, a

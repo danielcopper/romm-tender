@@ -45,10 +45,9 @@ export function memoryLevelColor(rssKb: number, warnKb: number, ceilingKb: numbe
 function bannerCard(accent: string, background: string, testId: string, title: string, body: string): ReactNode {
   return (
     <PanelSectionRow>
-      {/* Focusable so Steam's gamepad focus engine can reach and scroll the banner
-          into view — this component is QAM-only. The card div keeps the testId +
-          styling; the wrapper adds only the focus highlight. */}
-      <Focusable>
+      {/* This component is QAM-only. The no-op activation makes the banner a
+          focus stop for scrolling; the card div keeps the testId and styling. */}
+      <Focusable onActivate={() => {}}>
         <div
           data-testid={testId}
           style={{
