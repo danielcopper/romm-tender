@@ -2020,8 +2020,10 @@ The plugin's own data lives under the **user's home directory**, in two roots bu
 takes from the directory it builds from. Built from the checkout, that made the delivered folder follow the GitHub
 repository — so the rename at 0.31.0 silently moved every user's data, and nothing inside the plugin could have
 prevented it or noticed. `.github/workflows/release.yml` now builds from a copy at a fixed name and asserts the result,
-so a repository rename cannot move it again; putting the roots under the home directory takes the decision away from
-packaging entirely. See [ADR-0031](../adr/0031-user-data-lives-outside-the-plugin-directory.md).
+so a repository rename cannot move it again ([ADR-0033](../adr/0033-the-shipped-folder-name-is-chosen-here.md)); putting
+the roots under the home directory takes the decision away from packaging entirely
+([ADR-0031](../adr/0031-user-data-lives-outside-the-plugin-directory.md)). The two are separate on purpose: one decides
+where the user's data lives, the other what the plugin ships as, and neither may be derived from the other.
 
 **Why not `XDG_CONFIG_HOME` / `XDG_DATA_HOME`.** They are deliberately not read. A plugin's environment descends from a
 root systemd system service — the unit sets only `UNPRIVILEGED_PATH`, `PRIVILEGED_PATH` and `LOG_LEVEL`, and Decky's
