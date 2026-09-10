@@ -20,10 +20,17 @@ vi.mock("@decky/ui", () => ({
       createElement("span", { "data-testid": "field-label" }, p.label as never),
       createElement("span", { "data-testid": "field-desc" }, p.description as never),
     ),
+  // The testid is forwarded when one is passed: the shared table primitive puts
+  // it on the row WRAPPER, which is also the focus stop, so a mock that
+  // hardcoded its own would hide both from every assertion below.
   Focusable: (p: AnyProps & { onActivate?: (e: unknown) => void; style?: unknown }) =>
     createElement(
       "div",
-      { "data-testid": "focusable", tabIndex: p.onActivate ? 0 : undefined, style: p.style },
+      {
+        "data-testid": (p["data-testid"] as string | undefined) ?? "focusable",
+        tabIndex: p.onActivate ? 0 : undefined,
+        style: p.style,
+      },
       p.children as never,
     ),
 }));
@@ -51,9 +58,17 @@ function defaultProps(overrides: Partial<React.ComponentProps<typeof RegisteredD
   };
 }
 
-/** The three cells of a row, in column order. */
-function cells(row: Element): string[] {
-  return Array.from(row.children).map((cell) => cell.textContent);
+/** The grid inside a row wrapper, or the header, whichever was handed in — the
+ *  element that carries the column declaration and holds the cells. The shared
+ *  primitive puts the testid on the row's focusable WRAPPER and the grid one
+ *  level in; a header is its own grid. */
+function grid(el: Element): HTMLElement {
+  return (el.getAttribute("data-testid") === "device-row" ? el.firstElementChild : el) as HTMLElement;
+}
+
+/** The three cells of a row or header, in column order. */
+function cells(el: Element): string[] {
+  return Array.from(grid(el).children).map((cell) => cell.textContent);
 }
 
 // What this plugin registers itself as: `register_device` passes
@@ -78,7 +93,7 @@ const CLIENT_CELL_PX = 143;
 
 /** The px width the rendered `grid-template-columns` gives the Client track. */
 function clientTrackPx(el: Element): number {
-  const tracks = (el as HTMLElement).style.gridTemplateColumns.split(/\s+/);
+  const tracks = grid(el).style.gridTemplateColumns.split(/\s+/);
   expect(tracks).toHaveLength(3);
   const client = tracks[1] ?? "";
   expect(client).toMatch(/^\d+px$/);
@@ -183,8 +198,8 @@ describe("RegisteredDevicesSection", () => {
       const { getByTestId } = render(
         <RegisteredDevicesSection {...defaultProps({ registeredDevices: [makeDevice()] })} />,
       );
-      const header = (getByTestId("devices-header") as HTMLElement).style.gridTemplateColumns;
-      const row = (getByTestId("device-row") as HTMLElement).style.gridTemplateColumns;
+      const header = grid(getByTestId("devices-header")).style.gridTemplateColumns;
+      const row = grid(getByTestId("device-row")).style.gridTemplateColumns;
       expect(header).toBe(row);
       // Non-vacuous: both were read, and both name three tracks.
       expect(header).toMatch(/^\S+\s+\S+\s+\S+$/);
@@ -198,7 +213,8 @@ describe("RegisteredDevicesSection", () => {
       const { getAllByTestId } = render(<RegisteredDevicesSection {...defaultProps({ registeredDevices: devices })} />);
       const rows = getAllByTestId("device-row");
       expect(rows).toHaveLength(2);
-      expect(rows.map((row) => row.parentElement?.getAttribute("tabindex"))).toEqual(["0", "0"]);
+      // The wrapper the primitive puts the testid on IS the stop.
+      expect(rows.map((row) => row.getAttribute("tabindex"))).toEqual(["0", "0"]);
     });
 
     it("puts the name, the client with its version, and the relative time in their own columns", () => {
@@ -233,7 +249,7 @@ describe("RegisteredDevicesSection", () => {
       const { getByTestId } = render(
         <RegisteredDevicesSection {...defaultProps({ registeredDevices: [makeDevice({ name })] })} />,
       );
-      const nameCell = getByTestId("device-row").children[0] as HTMLElement;
+      const nameCell = grid(getByTestId("device-row")).children[0] as HTMLElement;
       expect(nameCell.getAttribute("title")).toBe(name);
       // The clip lives on the flex ITEM holding the name, not on the flex
       // container around it — clipping the container would take the

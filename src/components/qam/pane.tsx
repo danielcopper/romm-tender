@@ -1,8 +1,9 @@
 /**
  * The pieces a wide page's detail pane is built from: the type scale it sets
  * secondary lines in, the colours it says things with, the two button shapes,
- * and the small components every pane repeats — a section title, a muted line,
- * a row of buttons, and the two lines that report an action.
+ * the table every page with more than two facts per row draws, and the small
+ * components every pane repeats — a section title, a muted line, a row of
+ * buttons, and the two lines that report an action.
  *
  * They are here rather than on a page because the next pane is written against
  * the same scale: a second literal for the same size is how two panes drift
@@ -11,7 +12,7 @@
  * Structure and vocabulary: `docs/architecture/qam-panel.md`.
  */
 
-import type { FC, ReactElement, ReactNode } from "react";
+import type { CSSProperties, FC, ReactElement, ReactNode } from "react";
 import { Focusable } from "@decky/ui";
 
 /** The size every secondary LINE on a pane is set in: a header's counts clause,
@@ -53,6 +54,181 @@ export const ROW_CONTENT_INSET = ROW_MARKER_WIDTH + ROW_MARKER_GAP;
 /** What the marker is drawn in while its row is the selected one. Outside the
  *  verdict palette above: it reports where the reader is, not how anything is. */
 export const SELECTION_ACCENT = "#1a9fff";
+
+/** The horizontal gutter a pane's content sits in — what `SectionTitle` and
+ *  `Muted` are padded by, so a table lines up with the section it sits under. */
+export const PANE_GUTTER = "16px";
+
+/** The rule under a table header and above a total row — Steam's own hairline
+ *  weight, the one the panel already separates its blocks with. */
+export const TABLE_LINE = "1px solid rgba(255, 255, 255, 0.12)";
+
+/**
+ * How tightly a page sets its table — the one thing the three tables genuinely
+ * differ in, and therefore a value a page passes rather than a reason to write
+ * a second table.
+ *
+ * The Sync page is the one that needs its own: a plan of seventeen units has to
+ * fit the column under the whole-run bar, so its rows are flatter and smaller
+ * than a pane's default type, and both of its tables take the same one so the
+ * preview and the run read as one family.
+ */
+export interface TableRegister {
+  /** Padding on the row wrapper, gutter included. */
+  rowPadding: string;
+  /** Padding on the header, gutter included — its bottom is the air between the
+   *  column names and the first row. */
+  headerPadding: string;
+  /** Set where a page wants a tighter type than the pane's own; left off, a row
+   *  inherits the pane's. */
+  rowFont?: CSSProperties["fontSize"];
+  rowLineHeight?: CSSProperties["lineHeight"];
+  /** A hairline under the column names. */
+  rule?: boolean;
+}
+
+/** What a table is set in unless a page says otherwise. */
+export const PANE_TABLE_REGISTER: TableRegister = {
+  rowPadding: `4px ${PANE_GUTTER}`,
+  headerPadding: `0 ${PANE_GUTTER} 4px`,
+};
+
+/**
+ * The three properties that make a cell clip rather than spill across the track
+ * beside it, plus the floor reset that lets it shrink at all.
+ *
+ * A grid track sized `minmax(0, 1fr)` shrinks under its content and the content
+ * then spills sideways — on the Deck a platform name ran into the New column's
+ * digit. They belong on the grid ITEM, which is blockified, so `text-overflow`
+ * applies to it where an inline `span` nested inside it is not and the same
+ * three do nothing at all. What the clip takes away is handed back in a `title`.
+ */
+export const CELL_CLIP: CSSProperties = {
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+/** One cell of a table row or header. */
+export interface TableCell {
+  content: ReactNode;
+  /** Merged over the clip, so a cell can be right-aligned, muted, or made a flex
+   *  container without restating it. */
+  style?: CSSProperties;
+  /** What the clip took away, for the mouse. */
+  title?: string;
+  /**
+   * Off for a cell whose content is not a run of text — a row of glyphs, a
+   * button. There is nothing to ellipsise, and hidden overflow would cut the
+   * focus ring off a control.
+   */
+  clip?: boolean;
+}
+
+const asCell = (cell: string | TableCell): TableCell => (typeof cell === "string" ? { content: cell } : cell);
+
+const cellStyle = (cell: TableCell): CSSProperties => ({ ...(cell.clip === false ? {} : CELL_CLIP), ...cell.style });
+
+// The gap between columns is the same on every table here and is not a knob: two
+// tables whose columns breathe differently read as two kinds of table.
+const COLUMN_GAP = "8px";
+
+const Cells: FC<{ cells: readonly TableCell[] }> = ({ cells }) => (
+  <>
+    {cells.map((cell, index) => (
+      // The index IS the identity: a cell is the column it sits in, and the
+      // columns of one table never reorder.
+      <span key={index} style={cellStyle(cell)} {...(cell.title === undefined ? {} : { title: cell.title })}>
+        {cell.content}
+      </span>
+    ))}
+  </>
+);
+
+/**
+ * Column names over a table.
+ *
+ * Plain text, and never a focus stop: the names accompany the rows below them
+ * and scroll with them, so a stop here would add a step that leads nowhere.
+ * `ScrollRegion` reveals them when focus reaches the first row.
+ */
+export const PaneTableHeader: FC<{
+  columns: string;
+  cells: readonly (string | TableCell)[];
+  register?: TableRegister;
+  testId?: string;
+}> = ({ columns, cells, register = PANE_TABLE_REGISTER, testId }) => (
+  <div
+    {...(testId === undefined ? {} : { "data-testid": testId })}
+    style={{
+      display: "grid",
+      gridTemplateColumns: columns,
+      gap: COLUMN_GAP,
+      padding: register.headerPadding,
+      ...(register.rule ? { borderBottom: TABLE_LINE } : {}),
+      fontSize: SECONDARY_FONT,
+      color: MUTED,
+    }}
+  >
+    <Cells cells={cells.map(asCell)} />
+  </div>
+);
+
+/**
+ * One row of a table, and — unless one of its own cells carries a control — a
+ * focus stop.
+ *
+ * **A region scrolls only by moving focus**, so a row nothing can focus is a row
+ * nothing can scroll to. A row whose cells carry no control of their own has
+ * nothing else that could hold that focus, so the activate handler is what makes
+ * the `Focusable` a stop rather than a container that passes focus through to
+ * children it does not have.
+ *
+ * `focusStop={false}` is for the other case, and it is not an exemption from
+ * that rule: a row that DOES carry a control is already reachable through it,
+ * and a stop on the wrapper as well would put a dead step in front of every one
+ * of those controls.
+ *
+ * `children` are rendered inside the row and under its cells — the line a
+ * narrow column cannot hold, the note under a name. Inside rather than beside,
+ * so it travels with the focus highlight instead of being stranded between two
+ * stops.
+ */
+export const PaneTableRow: FC<{
+  columns: string;
+  cells: readonly TableCell[];
+  register?: TableRegister;
+  style?: CSSProperties;
+  testId?: string;
+  focusStop?: boolean;
+  children?: ReactNode;
+}> = ({ columns, cells, register = PANE_TABLE_REGISTER, style, testId, focusStop = true, children }) => {
+  const body = (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: columns, gap: COLUMN_GAP, alignItems: "center" }}>
+        <Cells cells={cells} />
+      </div>
+      {children}
+    </>
+  );
+  const wrapperStyle: CSSProperties = {
+    padding: register.rowPadding,
+    ...(register.rowFont === undefined ? {} : { fontSize: register.rowFont }),
+    ...(register.rowLineHeight === undefined ? {} : { lineHeight: register.rowLineHeight }),
+    ...style,
+  };
+  const marker = testId === undefined ? {} : { "data-testid": testId };
+  return focusStop ? (
+    <Focusable onActivate={() => {}} style={wrapperStyle} {...marker}>
+      {body}
+    </Focusable>
+  ) : (
+    <div style={wrapperStyle} {...marker}>
+      {body}
+    </div>
+  );
+};
 
 /**
  * The padding a `DialogButton` is given wherever a pane puts buttons in a row.

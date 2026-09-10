@@ -21,7 +21,7 @@ without restating it. The width mechanism's decision record is
 | `src/index.tsx` (`QAMPanel`)                                  | The router: one `Page` value, one mounted page, a module-level `currentPage` that survives a QAM remount                                                            |
 | `src/types/navigation.ts`                                     | The `Page` union — every page the router can land on                                                                                                                |
 | `src/components/MainPage.tsx`                                 | Main                                                                                                                                                                |
-| `src/components/SyncPage.tsx`, `src/components/sync/`         | Sync — the frame and its three left-column bodies, plus `useSyncPage` (its reads and actions) and the table pieces both its tables are built from                   |
+| `src/components/SyncPage.tsx`, `src/components/sync/`         | Sync — the frame and its three left-column bodies, plus `useSyncPage` (its reads and actions) and the register both its tables are set in                           |
 | `src/components/LibraryPage.tsx`                              | Library — the frame, the two tabs and their state                                                                                                                   |
 | `src/components/SettingsPage.tsx`, `src/components/settings/` | Settings and its sections                                                                                                                                           |
 | `src/components/DangerZone.tsx`, `RemovedGamesCleanup.tsx`    | Data Management                                                                                                                                                     |
@@ -339,9 +339,21 @@ pair now runs 79.9 → 335.9.
 ### Tables
 
 Anything with more than two facts per row is a table with a header row: BIOS files (File, On disk, Contents), the
-preview (a row per platform; New, Updated, Removed), registered devices, cleanup candidates, collections. Today those
-facts were folded into a field's label and description, which is why #1803's third axis had no slot on the rows the
+preview (a row per platform; New, Updated, Removed), registered devices, cleanup candidates, collections. Those facts
+were once folded into a field's label and description, which is why #1803's third axis had no slot on the rows the
 System page drew; the platform detail's BIOS table is where that column now sits.
+
+**There is one table, and a page passes the register it is set in** (`PaneTableHeader` / `PaneTableRow` in
+`src/components/qam/pane.tsx`). The shape is shared — a grid of a page's own columns, an 8 px gutter between them, the
+header's names in the secondary size and colour, a row that is a focus stop, a cell that clips — and what a page varies
+is the type size, the leading, the row and header padding, and whether a hairline sits under the column names. That is a
+`TableRegister`, and the default is what a pane uses unless it says otherwise. It is one component rather than three
+because three drifted: the same header was written three times, and only one of the three clipped its cells.
+
+A row is a focus stop **unless one of its own cells carries a control** — the BIOS table's action column is the case,
+and there the button is already the stop, so a second one on the wrapper would put a dead step in front of every one of
+them. A cell opts out of the clip for the same kind of reason: a cell of glyphs has nothing to ellipsise, and a cell
+holding a button must not hide the overflow its focus ring is drawn in.
 
 **A cell clips; it never overflows.** A grid track sized `minmax(0, 1fr)` shrinks under its content and the content then
 spills across the track beside it — on the Deck a platform name and its note ran into the New column's digit. The clip
@@ -648,8 +660,10 @@ only place sixteen units of plan do not stand between the reader and it, exactly
 list is a scrolling region of its own**, taking what is left of the column under the bar and that button: a plan of
 seventeen units is taller than the Deck's column, and without it the running unit walks out of sight below the fold.
 Nothing moves focus during a run, so the page scrolls that region itself and puts the running row in the middle of it,
-clamped to the list's own ends. Both tables' rows are set in one flat, small register, held in one place
-(`paneTable.tsx`) so that stays a decision rather than a drift.
+clamped to the list's own ends. Both tables are the pane's own table (§ Tables) set in one flat, small register —
+`SYNC_TABLE_REGISTER` in `paneTable.tsx`, which is also where the numeric-column split and the pieces that are not
+tables at all live. Holding the register in one place is still what keeps it a decision rather than a drift; what
+changed is that it is now a value this page passes rather than a second table it owns.
 
 **Focus lands on Cancel Sync when this body takes the column**, by the swap rule above: what it picks is the first stop
 holding no stop of its own, and every unit row below is a stop too, so what puts it on the button is the button being
@@ -1059,8 +1073,8 @@ sits under Save Sync, and SteamGridDB joins the other external service under Con
 | Advanced      | log level                                                                                                                                                                                                                                                                                               |
 
 The registered devices are the one thing on the page with more than two facts per row, so they are a table — Device,
-Client, Last seen. The layout study it was chosen from is
-[device-list-layouts.html](../assets/device-list-layouts.html).
+Client, Last seen — drawn with § Tables' shared one at the pane's default register. The layout study it was chosen from
+is [device-list-layouts.html](../assets/device-list-layouts.html).
 
 **RetroAchievements is not here, and Connections is still its home.** The plugin has no RetroAchievements account and no
 sign-in for it — building one is #1627, which also left the badge's home open between the game page, the retired System
@@ -1177,9 +1191,11 @@ store screenshots (#830) are taken after.
   rows, a three-column table with a header, and a two-column middle keeping the Steam `Field` shape with Last seen
   right-aligned. The table is what shipped, on the axis the Deck is short of — one row per device instead of two, and
   eight devices costing nine rows rather than sixteen — and the platform and the shortened id are dropped with it. It
-  records its own objection: the table is the only content on that pane with column headers, which ends when the
-  remaining Settings panes are written against the same pane primitives the Platforms detail uses. Like the studies
-  above it is a record of a choice, not a description of the page.
+  records its own objection, and half of it has since been answered: the table is no longer an implementation of its own
+  — it is § Tables' shared one, the same component the BIOS files and the preview draw. What still stands is what the
+  study actually says: it remains the only content on that pane with column headers, and that ends when the rows around
+  it are written against the pane primitives too, which is not done. Like the studies above it is a record of a choice,
+  not a description of the page.
 - The static prototype the decisions were made on: [qam-prototype.html](../assets/qam-prototype.html), a single
   self-contained page kept in `docs/assets/`. Every page at device size with numbered notes; its example data is
   invented, and it reflects the decisions as of this page's first version. Redrawn to the Deck's real 854 × 534 CSS px —
