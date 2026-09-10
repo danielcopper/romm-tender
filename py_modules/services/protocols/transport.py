@@ -1,10 +1,11 @@
 """External system client Protocols.
 
 Domain-oriented interfaces for the HTTP and IPC surfaces the plugin
-talks to: RomM's REST API, SteamGridDB's REST API, and the Steam
-client's local IPC. Each Protocol declares the semantic operations
-services need; concrete implementations live in adapters and own the
-raw transport (HTTP requests, file writes, Steam IPC calls).
+talks to: RomM's REST API, SteamGridDB's REST API, GitHub's releases
+API, and the Steam client's local IPC. Each Protocol declares the
+semantic operations services need; concrete implementations live in
+adapters and own the raw transport (HTTP requests, file writes, Steam
+IPC calls).
 """
 
 from __future__ import annotations
@@ -21,6 +22,8 @@ if TYPE_CHECKING:
         SyncCompleteResponse,
         SyncNegotiateResponse,
     )
+
+    from domain.update_release import LatestRelease
 
 
 class SteamConfigStore(Protocol):
@@ -475,6 +478,18 @@ class RommApi(
     Protocol,
 ):
     """Umbrella Protocol composing all per-domain RomM API Protocols."""
+
+
+class LatestReleaseFn(Protocol):
+    """Read this plugin's latest published release, or answer that none could be read.
+
+    The one seam that talks to GitHub. Implementations never raise and never
+    report a failure: an unreachable server, an unreadable answer, and a payload
+    naming no version all answer ``None``, because the caller's only output is a
+    card it may quietly not show.
+    """
+
+    def __call__(self) -> LatestRelease | None: ...
 
 
 class SteamGridDbApi(Protocol):

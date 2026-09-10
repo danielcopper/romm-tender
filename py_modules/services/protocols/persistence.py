@@ -19,14 +19,18 @@ class SettingsPersister(Protocol):
 
 
 class PluginMetadataReader(Protocol):
-    """Read plugin install metadata from ``package.json``.
+    """Read the plugin's own install metadata off its manifests.
 
-    Owns the one-shot read of the plugin's ``package.json`` at startup
-    so ``bootstrap`` does not perform raw ``open()`` calls. The plugin
-    directory is supplied by the caller — implementations resolve the
-    ``package.json`` path and parse the JSON payload. A missing or
-    malformed file must not abort bootstrap; implementations return the
-    documented fallback (``"0.0.0"`` for ``read_version``).
+    Owns the reads of the plugin's ``package.json`` and ``plugin.json`` so
+    consumers do not perform raw ``open()`` calls. The plugin directory is
+    supplied by the caller — implementations resolve each manifest path and
+    parse the JSON payload. A missing or malformed file must not abort
+    bootstrap; implementations return the documented fallback (``"0.0.0"`` for
+    ``read_version``).
+
+    The two manifests both carry a ``name`` and they are different names: which
+    one a caller wants is decided by which method it calls, never by taking one
+    for the other.
     """
 
     def read_metadata(self, plugin_dir: str) -> tuple[str, str]:
@@ -43,5 +47,21 @@ class PluginMetadataReader(Protocol):
         ...
 
     def read_name(self, plugin_dir: str) -> str:
-        """Return the declared package name, or ``"decky-plugin"`` on failure."""
+        """Return ``package.json``'s declared package name, or ``"decky-plugin"`` on failure.
+
+        The name the plugin folder and the outgoing User-Agent are built from —
+        NOT the name Decky Loader knows the plugin by (see
+        :meth:`read_decky_name`).
+        """
+        ...
+
+    def read_decky_name(self, plugin_dir: str) -> str:
+        """Return ``plugin.json``'s declared name — what Decky Loader calls this plugin.
+
+        The name Decky matches an already-installed plugin against, so it is
+        what an install-from-URL must be handed for the existing installation to
+        be replaced rather than duplicated. Returns ``""`` when ``plugin.json``
+        is missing, malformed, or declares no usable name: no fallback spelling
+        exists, because a second literal is exactly the drift this read prevents.
+        """
         ...

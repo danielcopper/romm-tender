@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from domain.version import meets_min_version
+from domain.version import is_newer_version, meets_min_version
 
 MIN = (4, 8, 1)
 
@@ -89,3 +89,42 @@ class TestMeetsMinVersion:
 
     def test_prerelease_missing_tag_number_only(self):
         assert meets_min_version("5.0.0-alpha.", MIN) is False
+
+
+class TestIsNewerVersion:
+    def test_a_later_version_is_newer(self):
+        assert is_newer_version("0.33.0", "0.32.0") is True
+
+    def test_the_running_version_is_not_newer_than_itself(self):
+        """The comparison is strictly "later than" — equality never offers an update."""
+        assert is_newer_version("0.32.0", "0.32.0") is False
+
+    def test_an_earlier_version_is_not_newer(self):
+        assert is_newer_version("0.31.1", "0.32.0") is False
+
+    def test_a_later_major_is_newer(self):
+        assert is_newer_version("1.0.0", "0.32.0") is True
+
+    def test_a_prerelease_of_the_running_version_is_not_newer(self):
+        assert is_newer_version("0.32.0-beta", "0.32.0") is False
+
+    def test_a_prerelease_of_a_later_version_is_newer(self):
+        assert is_newer_version("0.33.0-beta", "0.32.0") is True
+
+    def test_the_release_of_the_running_prerelease_is_newer(self):
+        assert is_newer_version("0.32.0", "0.32.0-beta") is True
+
+    @pytest.mark.parametrize(
+        ("candidate", "current"),
+        [
+            (None, "0.32.0"),
+            ("0.33.0", None),
+            ("", "0.32.0"),
+            ("tender-v0.33.0", "0.32.0"),
+            ("development", "0.32.0"),
+            ("0.33.0", "development"),
+        ],
+    )
+    def test_an_unreadable_version_says_nothing(self, candidate: Any, current: Any):
+        """False is the silent direction: the caller offers an update on a True."""
+        assert is_newer_version(candidate, current) is False
