@@ -212,19 +212,26 @@ describe("WidePage", () => {
   it("gives the body a definite height taken from the remaining viewport", async () => {
     const WidePage = await loadWidePage(StubTabs);
 
-    render(
+    const { container } = render(
       <WidePage title="Settings" onBack={vi.fn()}>
         <div>page body</div>
       </WidePage>,
     );
 
     // happy-dom reports every rect at the origin, so the body's top is 0 and the
-    // measurement is the viewport minus the frame's bottom gap.
+    // measurement is the whole viewport: nothing is held back under the page.
     expect(window.innerHeight).toBeGreaterThan(240);
-    expect(body().style.height).toBe(`${window.innerHeight - 12}px`);
+    expect(body().style.height).toBe(`${window.innerHeight}px`);
     // Steam's tabbed page fills its parent instead of growing: a min-height
     // leaves the body with no height at all and the page clips.
     expect(body().style.minHeight).toBe("");
+    // Nothing computes `overflow-y: auto` here, so this is the no-scroller
+    // fallback — the one branch that measures no ancestor box. It must pull the
+    // root up by nothing: the height it just paid out is viewport-relative and
+    // counts no overhang, so a margin here would shorten the page against
+    // nothing, and the branch is what a chain this frame has never seen falls
+    // into. Every other case in this file takes the scroller branch.
+    expect((container.firstElementChild as HTMLElement).style.marginBottom).toBe("0px");
   });
 
   it("measures the same height however far the scrolling panel is scrolled", async () => {
@@ -264,27 +271,28 @@ describe("WidePage", () => {
       }
     };
 
-    // 600 − 100 − 12 both times. The panel-rect form answers 488 and then 988,
+    // 600 − 100 both times. The panel-rect form answers 500 and then 1000,
     // because the body's top has moved and the panel's has not; the original
     // `innerHeight − top` fails at the FIRST assertion instead, since
     // happy-dom's viewport is 768 rather than the panel's 600.
-    expect(await measure(0)).toBe(488);
-    expect(await measure(500)).toBe(488);
+    expect(await measure(0)).toBe(500);
+    expect(await measure(500)).toBe(500);
   });
 
   it("claims the space its ancestors hang below the panel, and pulls them back inside it", async () => {
-    // Decky wraps a plugin's content in a box that overhangs its parent — on
-    // the reference machine by 50 px, from its own inset plus padding. Nothing
-    // of ours is in those pixels, but the panel scrolls by them, and that is
-    // exactly enough to take the frame's Back row off the top. Giving the
-    // height up instead is what left a band of the panel empty under every wide
-    // page; the pull-up cancels the overhang without paying for it twice.
+    // Decky wraps a plugin's content in a box that overhangs its parent, from
+    // its own inset plus padding. Nothing of ours is painted in those pixels,
+    // but the panel scrolls by them, and that is enough to take the frame's
+    // Back row off the top. Giving the height up instead is what left a band of
+    // the panel empty under every wide page; the pull-up cancels the overhang
+    // without buying room for it.
     const fitWithOverhang = await measuredFit(50);
 
-    // 600 − 100 − 12, the whole of the panel below the body's top. Subtracting
-    // the overhang from the height as well leaves it at 438, which is the
-    // 50 px band the device reported.
-    expect(fitWithOverhang.height).toBe(488);
+    // 600 − 100, the whole of the panel below the body's top. Subtracting the
+    // overhang from the height as well leaves it at 450 — the band, in this
+    // fixture's terms. The 50 is the fixture's own parameter, not a fact about
+    // any panel: the next case runs the same page at 30.
+    expect(fitWithOverhang.height).toBe(500);
     expect(fitWithOverhang.rootMarginBottom).toBe("-50px");
   });
 
@@ -292,18 +300,19 @@ describe("WidePage", () => {
     // The two are one decision: a height counting the overhang without the
     // margin that cancels it overflows the scroller by exactly that much, and
     // the panel then scrolls the Back row off the top. So the margin has to
-    // follow whatever this machine's wrapper actually overhangs by — the whole
-    // reason the overhang is measured rather than written down as 50.
+    // follow whatever this chain actually overhangs by, whatever the display,
+    // scale or Decky version makes that — the whole reason it is measured
+    // rather than written down.
     const shallower = await measuredFit(30);
 
-    expect(shallower.height).toBe(488);
+    expect(shallower.height).toBe(500);
     expect(shallower.rootMarginBottom).toBe("-30px");
   });
 
   it("pulls the root up by nothing where no ancestor overhangs", async () => {
     const flush = await measuredFit(0);
 
-    expect(flush.height).toBe(488);
+    expect(flush.height).toBe(500);
     expect(flush.rootMarginBottom).toBe("0px");
   });
 
