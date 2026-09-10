@@ -4,12 +4,22 @@
  * Pure renderer: parent owns the mode value, status strings, and warning data.
  *
  * This is the input_driver fix's only home. Main names the condition and jumps
- * here; the button that changes the config exists nowhere else.
+ * here; the button that changes the config exists nowhere else, and it asks
+ * before it acts — the confirmation moved here with the button rather than
+ * being left behind on Main.
  */
 
 import { FC } from "react";
-import { PanelSection, PanelSectionRow, ButtonItem, Field, DropdownItem } from "@decky/ui";
+import { PanelSection, PanelSectionRow, ButtonItem, ConfirmModal, Field, DropdownItem, showModal } from "@decky/ui";
 import type { RetroArchInputCheck } from "../../types";
+
+// The fix rewrites `retroarch.cfg` in place and keeps no copy of what was there
+// (`adapters/steam_config.py`, `fix_retroarch_input_driver`), so it takes the
+// confirm leg of the register's backup-or-confirm rule. The wording is the one
+// the button carried on Main before this became its only home.
+const FIX_INPUT_DRIVER_DESCRIPTION =
+  "This will change input_driver to sdl2 in your RetroArch config. " +
+  "Controllers should work better in RetroArch menus after this change.";
 
 interface ControllerSectionProps {
   steamInputMode: string;
@@ -72,7 +82,20 @@ export const ControllerSection: FC<ControllerSectionProps> = ({
             />
           </PanelSectionRow>
           <PanelSectionRow>
-            <ButtonItem layout="below" onClick={onFixInputDriver}>
+            <ButtonItem
+              layout="below"
+              onClick={() =>
+                showModal(
+                  <ConfirmModal
+                    strTitle="Fix RetroArch input_driver?"
+                    strDescription={FIX_INPUT_DRIVER_DESCRIPTION}
+                    strOKButtonText="Apply Fix"
+                    strCancelButtonText="Cancel"
+                    onOK={onFixInputDriver}
+                  />,
+                )
+              }
+            >
               Fix input_driver to sdl2
             </ButtonItem>
           </PanelSectionRow>
