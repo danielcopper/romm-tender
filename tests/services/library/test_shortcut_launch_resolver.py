@@ -41,7 +41,9 @@ class TestBuildCoreOverrides:
         roms = [{"id": 10, "platform_slug": "psx"}, {"id": 11, "platform_slug": "psx"}]
         result = plugin._sync_service._shortcut_launch_resolver.do_build_core_overrides(roms)
 
-        assert result == {10: EmulatorInvocation.libretro("pcsx_rearmed_libretro", "PCSX ReARMed")}
+        assert result == {
+            10: EmulatorInvocation.libretro("pcsx_rearmed_libretro", "PCSX ReARMed", "pcsx_rearmed_libretro.so")
+        }
         assert 11 not in result
 
     def test_stale_override_omitted_with_warning(self, plugin, caplog):

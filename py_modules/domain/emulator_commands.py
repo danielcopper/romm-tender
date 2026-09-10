@@ -75,6 +75,13 @@ class EmulatorOption:
     ``reason`` is ``None`` when bakeable, else one of ``"inject"``,
     ``"not_installed"``, ``"shortcut_script"``, ``"no_rom_target"``,
     ``"quoting"``, ``"startdir"``, ``"unknown_placeholder"``.
+
+    ``emulator`` is the resolver's identity for the emulator behind this row, and
+    it is what a firmware answer is joined and scoped on — the one field that
+    names a standalone emulator, which ``core_so`` cannot. It is not derivable
+    from ``label``: ES-DE lists one ``pcsx2_libretro.so`` as both ``LRPS2`` and
+    ``PCSX2``, so two labels can be one emulator. ``None`` is an emulator the
+    resolver could not identify, and nothing may be scoped to it.
     """
 
     label: str
@@ -83,14 +90,20 @@ class EmulatorOption:
     command: str
     status: str
     reason: str | None
+    emulator: str | None
 
 
-def classify_command(label: str, text: str) -> EmulatorOption:
+def classify_command(label: str, text: str, *, emulator: str | None = None) -> EmulatorOption:
     """Classify a single ES-DE ``<command>`` (``label`` + ``text``).
 
     Applies the bake-verdict rules in order (the first that matches wins) and
     determines the emulator kind, returning a fully-populated
     :class:`EmulatorOption`. Pure — no I/O, deterministic in its inputs.
+
+    *emulator* is the resolver's identity for the row, carried through
+    unexamined: this function classifies what a command DOES, and who the
+    emulator is is read off the catalogue entry beside it rather than parsed out
+    of the command text.
     """
     status, reason = _bake_verdict(text)
     kind, core_so = _emulator_kind(text)
@@ -101,6 +114,7 @@ def classify_command(label: str, text: str) -> EmulatorOption:
         command=text.strip(),
         status=status,
         reason=reason,
+        emulator=emulator,
     )
 
 
@@ -187,9 +201,9 @@ def option_to_invocation(option: EmulatorOption | None) -> EmulatorInvocation | 
     if option is None or option.status != "bakeable":
         return None
     if option.kind == "libretro" and option.core_so:
-        return EmulatorInvocation.libretro(option.core_so, option.label)
+        return EmulatorInvocation.libretro(option.core_so, option.label, option.emulator)
     if option.kind == "standalone" and option.command:
-        return EmulatorInvocation.standalone(option.command, option.label)
+        return EmulatorInvocation.standalone(option.command, option.label, option.emulator)
     return None
 
 
@@ -265,13 +279,20 @@ def resolve_platform_label(options: list[EmulatorOption], override: str | None) 
 def options_to_payload(options: list[EmulatorOption]) -> list[dict[str, Any]]:
     """Project options into the frontend emulator-picker payload.
 
-    Each entry is ``{label, kind, core_so, is_default, bakeable, reason}``.
-    ``is_default`` marks the single option :func:`select_default_option` picks
-    (the first bakeable one); ``bakeable`` is ``True`` only for a fully bakeable
-    option (``needs_setup`` reads as ``bakeable: False`` with its ``reason`` —
-    ``"inject"`` or ``"not_installed"`` — so the picker can disable it with a
-    distinct message). The raw ``command`` text is intentionally dropped from the
-    wire payload.
+    Each entry is ``{label, kind, core_so, emulator, is_default, bakeable,
+    reason}``. ``is_default`` marks the single option
+    :func:`select_default_option` picks (the first bakeable one); ``bakeable`` is
+    ``True`` only for a fully bakeable option (``needs_setup`` reads as
+    ``bakeable: False`` with its ``reason`` — ``"inject"`` or ``"not_installed"``
+    — so the picker can disable it with a distinct message). The raw ``command``
+    text is intentionally dropped from the wire payload.
+
+    ``emulator`` is the identity, and it travels beside ``core_so`` rather than
+    replacing it because the two answer different questions: ``core_so`` is the
+    libretro core a surface may still need to name, the identity is what a
+    firmware row's per-emulator entries are keyed on. Without it on the wire a
+    surface holding both answers has nothing to join them by for a standalone
+    emulator, and two labels of one emulator look like two emulators.
     """
     default = select_default_option(options)
     return [
@@ -279,6 +300,7 @@ def options_to_payload(options: list[EmulatorOption]) -> list[dict[str, Any]]:
             "label": option.label,
             "kind": option.kind,
             "core_so": option.core_so,
+            "emulator": option.emulator,
             "is_default": option is default,
             "bakeable": option.status == "bakeable",
             "reason": option.reason,

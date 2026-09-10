@@ -206,16 +206,20 @@ class BiosChecker(Protocol):
     wants one asks for it, and a page that has not asked yet shows that it does
     not know.
 
-    ``active_core_so`` is pre-resolved rather than a ROM filename: the per-game
-    active core is resolved upstream (GameDetailService runs
-    ``ActiveCoreReader.active_core_for_rom`` where it already holds the
-    ``rom_id``) so the BIOS filter never re-derives the core. ``None`` means "use
-    the system default" — the standalone platform-level checks (the
-    ``check_platform_bios`` callable, the post-system-core-write recheck) pass
-    ``None``; the per-game game-detail path passes the resolved ``.so``.
+    ``launching_emulator`` is pre-resolved rather than a ROM filename: the
+    per-game emulator is resolved upstream (GameDetailService runs
+    ``ActiveCoreReader.active_emulator_for_rom`` where it already holds the
+    ``rom_id``) so the BIOS filter never re-derives it. It is the resolver's
+    IDENTITY for that emulator, which names a standalone one as readily as a
+    libretro core. ``None`` means "use the platform's own pick" — the
+    platform-level checks (the ``check_platform_bios`` callable, the
+    post-system-core-write recheck) pass it, and so does the per-game path when
+    nothing could be resolved or identified for the ROM.
     """
 
-    async def check_platform_bios(self, platform_slug: str, active_core_so: str | None = None) -> dict[str, Any]: ...
+    async def check_platform_bios(
+        self, platform_slug: str, launching_emulator: str | None = None
+    ) -> dict[str, Any]: ...
 
 
 class ActiveCoreReader(Protocol):

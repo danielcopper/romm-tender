@@ -56,5 +56,8 @@ class FakeActiveCoreResolver:
             return self.default_emulator
         core_so, label = self.per_rom.get(rom_id, self.default)
         if core_so is not None:
-            return EmulatorInvocation.libretro(core_so, label)
+            # The identity a libretro entry carries is the core file's own
+            # basename, which is what the resolver states for it — so a
+            # tuple-configured test gets the identity its core would really have.
+            return EmulatorInvocation.libretro(core_so, label, f"{core_so}.so")
         return None

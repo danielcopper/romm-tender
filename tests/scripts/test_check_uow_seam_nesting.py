@@ -351,7 +351,8 @@ class TestIoSeamsViolations:
             "_sandbox_launcher",
             "_system_extensions",
             "_system_known",
-            "_firmware_folder_verdicts",
+            "_platform_firmware_resolver",
+            "_firmware_resolver",
             "_resolve_path",
         ],
     )

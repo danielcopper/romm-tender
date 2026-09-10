@@ -8,13 +8,17 @@ from domain.emulator_commands import EmulatorOption
 from domain.shortcut_data import EmulatorInvocation
 
 
-def libretro_option(core_so: str, label: str) -> EmulatorOption:
+def libretro_option(core_so: str, label: str, *, emulator: str | None = None) -> EmulatorOption:
     """Build a bakeable libretro :class:`EmulatorOption` for a core.
 
     Mirrors the real classifier's output for the RetroArch ``-L`` shape, so a
     test can seed the fake with ``options=[libretro_option("mgba_libretro",
     "mGBA"), ...]`` and have ``label_to_invocation`` resolve the label to the
     same libretro invocation the adapter would.
+
+    The identity defaults to the resolver's own spelling for a libretro entry —
+    the core file's basename, ``<core_so>.so`` — so a test seeding a core gets
+    the identity a firmware answer would carry for it without saying so twice.
     """
     return EmulatorOption(
         label=label,
@@ -23,19 +27,34 @@ def libretro_option(core_so: str, label: str) -> EmulatorOption:
         command=f"%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/{core_so}.so %ROM%",
         status="bakeable",
         reason=None,
+        emulator=f"{core_so}.so" if emulator is None else emulator,
     )
 
 
 def standalone_option(
-    command: str, label: str, *, status: str = "bakeable", reason: str | None = None
+    command: str,
+    label: str,
+    *,
+    status: str = "bakeable",
+    reason: str | None = None,
+    emulator: str | None = None,
 ) -> EmulatorOption:
     """Build a standalone :class:`EmulatorOption` from a full ES-DE command.
 
     Defaults to a bakeable option; pass ``status``/``reason`` to seed a
     ``needs_setup`` or ``unbakeable`` entry (e.g. to prove a per-game pin to an
-    un-bakeable label hard-fails).
+    un-bakeable label hard-fails). ``emulator`` is the identity a firmware answer
+    joins on, and it is left unset for the entry the resolver could not identify.
     """
-    return EmulatorOption(label=label, kind="standalone", core_so=None, command=command, status=status, reason=reason)
+    return EmulatorOption(
+        label=label,
+        kind="standalone",
+        core_so=None,
+        command=command,
+        status=status,
+        reason=reason,
+        emulator=emulator,
+    )
 
 
 class FakeCoreInfoProvider:

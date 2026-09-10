@@ -45,7 +45,7 @@ class FirmwareDownloaderConfig:
     Holds the RomM API adapter the bytes come from, the two peer sub-services
     (the listing a platform's rows are picked out of, the demand each
     destination is resolved through), the ES-DE core reads and the per-platform
-    emulator override the required-only filter resolves its core from, the file
+    emulator override the required-only filter resolves its emulator from, the file
     store, the clock the download timestamp is taken from, the Unit-of-Work
     factory the record is written through, and runtime infrastructure.
     """
@@ -201,7 +201,7 @@ class FirmwareDownloader:
         if failure is not None:
             return failure
 
-        placements = await self._loop.run_in_executor(None, self._demand.placement_index)
+        placements = await self._platform_placements(self._resolve_system(platform_slug))
         downloaded, errors = await self._download_firmware_batch(platform_firmware, placements)
 
         msg = f"Downloaded {downloaded} firmware files"
@@ -283,7 +283,7 @@ class FirmwareDownloader:
                 "downloaded": 0,
             }
 
-        placements = await self._loop.run_in_executor(None, self._demand.placement_index)
+        placements = await self._platform_placements(self._resolve_system(platform_slug))
         fw = wanted[0]
         placement = placements.get(file_name)
         if placement is not None and placement.declares_directory:
@@ -308,21 +308,22 @@ class FirmwareDownloader:
         return {**result, "message": f"Downloaded {file_name}", "downloaded": 1}
 
     async def download_required_firmware(self, platform_slug) -> dict[str, Any]:
-        """Download only the firmware the platform's launching core will not run without.
+        """Download only the firmware the platform's launching emulator will not run without.
 
-        The core is the platform's own pick — the per-platform override when it
-        still resolves, else the es_systems default — which is the same pick the
-        status surfaces judge by, so the button fetches the set the pane above it
-        called required. A pick that is a standalone emulator names no core and
-        falls back to "any emulator requires it" (:func:`_required_by`).
+        The emulator is the platform's own pick — the per-platform override when
+        it still resolves, else the es_systems default — which is the same pick
+        the status surfaces judge by, so the button fetches the set the pane above
+        it called required. A pick the resolver could not identify falls back to
+        "any emulator requires it" (:func:`_required_by`).
         """
         rows, failure = await self._platform_firmware_rows(platform_slug)
         if failure is not None:
             return failure
 
-        core_so = self._platform_core(platform_slug)
-        placements = await self._loop.run_in_executor(None, self._demand.placement_index)
-        platform_firmware = [fw for fw in rows if _required_by(placements.get(fw.get("file_name", "")), core_so)]
+        system = self._resolve_system(platform_slug)
+        identity = self._platform_emulator_identity(system, platform_slug)
+        placements = await self._platform_placements(system)
+        platform_firmware = [fw for fw in rows if _required_by(placements.get(fw.get("file_name", "")), identity)]
 
         downloaded, errors = await self._download_firmware_batch(platform_firmware, placements)
 
@@ -331,31 +332,48 @@ class FirmwareDownloader:
             msg += f" ({len(errors)} failed: {', '.join(errors)})"
         return {"success": True, "message": msg, "downloaded": downloaded}
 
-    def _platform_core(self, platform_slug: str) -> str | None:
-        """The ``.so`` the platform's resolved emulator names, or ``None``.
+    def _platform_emulator_identity(self, system: str, platform_slug: str) -> str | None:
+        """The identity of the platform's resolved emulator, or ``None``.
 
         The same resolution the status surfaces read
         (:func:`domain.emulator_commands.resolve_platform_option`), asked here
         rather than taken off a status payload because this path never builds
         one — and asked the same way, so a third answer to "which emulator is
         this platform about" cannot appear behind a download button.
+
+        Takes both vocabularies because it needs both: the emulator list is keyed
+        by the resolved *system* (ADR-0010 §2) and the per-platform override by
+        the raw *platform_slug*.
         """
-        options = self._core_info.get_emulator_options(self._resolve_system(platform_slug))
+        options = self._core_info.get_emulator_options(system)
         emulator = resolve_platform_option(
             options["options"], self._platform_core_reader.get_platform_core(platform_slug)
         )
-        return emulator.core_so if emulator is not None else None
+        return emulator.emulator if emulator is not None else None
+
+    async def _platform_placements(self, system: str) -> Mapping[str, FirmwarePlacement]:
+        """Where *system*'s firmware files go, read off that platform's own demand.
+
+        The platform-scoped reading rather than the whole machine's, for the same
+        reason the status surfaces take it: a standalone emulator's declarations
+        reach a platform only through the emulators ES-DE offers for it, and a
+        machine-wide reading carries none of them — so a file only a standalone
+        emulator declares would land in the flat fallback instead of where it
+        will be opened from.
+        """
+        catalogue = await self._loop.run_in_executor(None, self._demand.platform_catalogue, system)
+        return catalogue.by_file_name()
 
 
-def _required_by(placement: FirmwarePlacement | None, core_so: str | None) -> bool:
-    """Will *core_so* refuse to run without the file *placement* describes?
+def _required_by(placement: FirmwarePlacement | None, emulator: str | None) -> bool:
+    """Will *emulator* refuse to run without the file *placement* describes?
 
-    ``None`` for the core — the platform's default could not be resolved — falls
-    back to "any emulator requires it", the same permissive default the status
-    surfaces use when they cannot name the launching core.
+    ``None`` for the emulator — the platform's pick could not be resolved or
+    identified — falls back to "any emulator requires it", the same permissive
+    default the status surfaces use when they cannot name the launching one.
     """
     if placement is None:
         return False
-    if core_so is None:
+    if emulator is None:
         return placement.required_by_any
-    return any(want.core_so == core_so and want.required for want in placement.wants)
+    return any(want.emulator == emulator and want.required for want in placement.wants)

@@ -49,6 +49,7 @@ _MGBA_ENTRY = {
     "label": "mGBA",
     "kind": "libretro",
     "core_so": "mgba_libretro",
+    "emulator": "mgba_libretro.so",
     "is_default": True,
     "bakeable": True,
     "reason": None,
@@ -57,6 +58,7 @@ _VBA_NEXT_ENTRY = {
     "label": "VBA Next",
     "kind": "libretro",
     "core_so": "vba_next_libretro",
+    "emulator": "vba_next_libretro.so",
     "is_default": False,
     "bakeable": True,
     "reason": None,
@@ -231,7 +233,11 @@ async def test_get_firmware_status_carries_emulators_per_platform(harness):
     gba = next(p for p in result["platforms"] if p["platform_slug"] == "gba")
     assert gba["emulator_data_available"] is True
     assert gba["emulators"] == [_MGBA_ENTRY, _VBA_NEXT_ENTRY]
-    assert gba["active_core"] == "mgba_libretro"
+    # The pane's pick and the identity its BIOS rows are keyed on are one field,
+    # and it is the identity — the one spelling that names a standalone emulator
+    # too. It is the same string the picker entry beside it carries.
+    assert gba["active_core"] == "mgba_libretro.so"
+    assert gba["active_core"] == _MGBA_ENTRY["emulator"]
 
 
 async def test_get_firmware_status_flags_unavailable_emulator_data(harness):
@@ -315,6 +321,7 @@ async def test_a_standalone_whose_component_is_absent_never_becomes_the_default(
             "label": "Ryubing (Standalone)",
             "kind": "standalone",
             "core_so": None,
+            "emulator": "RYUBING",
             "is_default": False,
             "bakeable": False,
             "reason": "not_installed",
@@ -323,6 +330,7 @@ async def test_a_standalone_whose_component_is_absent_never_becomes_the_default(
             "label": "Yuzu",
             "kind": "libretro",
             "core_so": "yuzu_libretro",
+            "emulator": "yuzu_libretro.so",
             "is_default": True,
             "bakeable": True,
             "reason": None,

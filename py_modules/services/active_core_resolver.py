@@ -179,7 +179,7 @@ class ActiveCoreResolver:
                 emulator.label,
             )
             return emulator
-        return EmulatorInvocation.direct(emulator.command, launcher, emulator.label)
+        return EmulatorInvocation.direct(emulator.command, launcher, emulator.label, emulator.emulator)
 
     def active_core_for_rom(self, rom_id: int) -> tuple[str | None, str | None]:
         """Return the ``(core_so, label)`` the ROM ``rom_id`` will launch with.

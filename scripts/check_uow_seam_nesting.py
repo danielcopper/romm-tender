@@ -78,17 +78,17 @@ seams are closed the cheap way instead: every consumer in ``services/`` binds
 each to one attribute, and that attribute name is what the list carries. **The
 leading underscore is what marks such an entry**, which makes the count
 derivable rather than remembered: the entries in :data:`IO_SEAM_METHODS`
-beginning with ``_`` are exactly the call-shaped seams — six today,
+beginning with ``_`` are exactly the call-shaped seams — seven today,
 ``_resolve_system``, ``_sandbox_launcher``, ``_system_extensions``,
-``_system_known``, ``_firmware_folder_verdicts`` and ``_resolve_path``. Two of
-those six are listed a second time under their implementation's own method name,
+``_system_known``, ``_platform_firmware_resolver``, ``_firmware_resolver`` and
+``_resolve_path``. Two of those seven are listed a second time under their implementation's own method name,
 for a peer that holds the object rather than the bound method:
 ``RommHttpAdapter.resolve_system`` beside ``_resolve_system``, and
 ``EsFindRulesAdapter.resolve_sandbox_launcher`` beside ``_sandbox_launcher``.
 The first pair happens to be the attribute minus its underscore and the second
 plainly is not, which is the point: a twin exists when the implementation has a
 method name a peer could write, and it has to be read off the implementation
-rather than derived from the attribute. The other four have no such twin.
+rather than derived from the attribute. The other five have no such twin.
 That is a convention, not a guarantee — a
 consumer binding one under a different attribute slips past, and it only works
 while the attribute name means one thing. Doing the same for rule 1 means a
@@ -245,13 +245,16 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # services/shortcut_removal.py and services/library/reporter.py, and
         # check_retroarch_input_driver() from services/settings.py.
         "read_shortcut_exes",
-        # FirmwareFolderVerdictFn (services/protocols/paths.py) — lists one
-        # core's declared folder and reads every candidate inside it the way the
-        # core does (0.26 s for LRPS2 on the reference machine, against 0.24 s
-        # for the whole machine's unverified inventory). Another call-shaped
+        # FirmwarePlatformResolver (services/protocols/paths.py) — reads what
+        # one system's emulators want, with content verification: it opens each
+        # candidate in a declared folder and reads it the way the emulator does,
+        # 64-318 ms per system on the reference machine. Another call-shaped
         # seam, so the list carries the attribute every consumer in services/
-        # binds it to, as it does for the others.
-        "_firmware_folder_verdicts",
+        # binds it to, as it does for the others. Its whole-machine sibling
+        # FirmwareResolver is bound to ``_firmware_resolver`` and is listed for
+        # the same reason.
+        "_platform_firmware_resolver",
+        "_firmware_resolver",
         # SystemSupportedExtensionsFn / SystemKnownFn (services/protocols/paths.py)
         # — two more questions to ES-DE's catalogue, answered by the same
         # resolver and through the same adapter cache as the CoreInfoProvider

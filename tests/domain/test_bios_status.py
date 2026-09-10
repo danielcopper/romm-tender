@@ -216,11 +216,13 @@ class TestTheVerdictOverTheSystemImage:
         assert compute_bios_label(status) == BIOS_LABEL_MISSING
 
     def test_an_absent_image_outranks_a_platform_nothing_could_be_established_for(self):
-        # The one decline the ordering really decides against, and it is
-        # reachable: the library's own rows all went unanswered under an
-        # incomplete reading, while the images the core declares are rows the
-        # library does not hold and every one of them is absent. A demonstration
-        # is a claim, so the level is 'missing' rather than 'unknown'.
+        # The ordering, stated over a state the real builders cannot produce:
+        # an unread launching emulator declares nothing, so no row carries it and
+        # `classify_system_image` answers 'unsettled' rather than 'absent'. The
+        # order is therefore a guard rather than a live case — and it is pinned
+        # anyway, because it is what decides which way a future builder that CAN
+        # produce both would fall: a demonstration is a claim, and 'missing'
+        # says more than 'unknown'.
         #
         # The counts come off the file list through the same helper the service
         # uses, so what this pins is that the state exists rather than that a
@@ -255,6 +257,31 @@ class TestTheVerdictOverTheSystemImage:
             BIOS_LEVEL_UNKNOWN
         )
         assert compute_bios_level(status) == BIOS_LEVEL_MISSING
+
+    def test_an_unread_launching_emulator_declines_over_another_emulators_rows(self):
+        """The rows on the page belong to somebody else, and they are not an all-clear.
+
+        With the launching emulator unread, ``required_by_active`` is zero by
+        construction — it declared nothing anyone here knows about — so the counts
+        read "nothing required" over a console nobody asked about. A stock
+        RetroDECK reaches this on PS2: LRPS2 declares a folder and a data file,
+        and with standalone PCSX2 launching, neither row says what PCSX2 wants.
+        """
+        files = (dataclasses.replace(_image("GameIndex.yaml", satisfied=True), required_by_active=False),)
+        known, unknown = count_wanted(files)
+        status = _status(
+            files,
+            server_count=sum(1 for f in files if f.on_server),
+            known_count=known,
+            unknown_count=unknown,
+            reading_complete=False,
+        )
+
+        assert compute_bios_level(status) == BIOS_LEVEL_UNKNOWN
+        assert compute_bios_label(status) == BIOS_LABEL_UNKNOWN
+        # The same rows under a reading that DID cover the launching emulator are
+        # a finished answer, so the decline is the reading's and not the rows'.
+        assert compute_bios_level(dataclasses.replace(status, reading_complete=True)) == BIOS_LEVEL_OK
 
     def test_an_unsettled_image_turns_a_green_count_grey(self):
         status = _status((_image("scph5500.bin", satisfied=None),), system_image=SYSTEM_IMAGE_UNSETTLED)
@@ -301,20 +328,20 @@ class TestWhatACoresEntryOnARowSays:
         relative_path="scph5501.bin",
         description="PlayStation BIOS",
         wants=(
-            FirmwareWant(core_so=_CORE, required=False),
-            FirmwareWant(core_so=_ALTERNATIVE_CORE, required=False),
-            FirmwareWant(core_so=None, required=True),
+            FirmwareWant(emulator=_CORE, required=False),
+            FirmwareWant(emulator=_ALTERNATIVE_CORE, required=False),
+            FirmwareWant(emulator=None, required=True),
         ),
     )
 
-    def _entry(self, cores_needing_one_of=None, *, active_core_so: str | None = _CORE) -> BiosFileEntry:
+    def _entry(self, cores_needing_one_of=None, *, launching_emulator: str | None = _CORE) -> BiosFileEntry:
         return build_file_entry(
             "scph5501.bin",
             False,
             "/bios/scph5501.bin",
             self._PLACEMENT,
             True,
-            active_core_so,
+            launching_emulator,
             cores_needing_one_of=cores_needing_one_of if cores_needing_one_of is not None else {},
         )
 
@@ -349,14 +376,14 @@ class TestWhatACoresEntryOnARowSays:
 
     def test_a_row_the_launching_core_does_not_state_a_disjunction_for_is_not_a_candidate(self):
         """PCSX ReARMed declares the same file and carries its own substitute."""
-        entry = self._entry({_CORE: 5}, active_core_so=_ALTERNATIVE_CORE)
+        entry = self._entry({_CORE: 5}, launching_emulator=_ALTERNATIVE_CORE)
 
         assert entry.system_image_candidate is False
         assert entry.cores[_ALTERNATIVE_CORE]["needs_one_of"] is None
 
     def test_a_caller_with_no_core_to_name_claims_no_candidate(self):
         """An unresolvable active core is not a licence to answer for one."""
-        assert self._entry({_CORE: 5}, active_core_so=None).system_image_candidate is False
+        assert self._entry({_CORE: 5}, launching_emulator=None).system_image_candidate is False
 
     def test_a_candidate_that_is_there_answers_the_console(self):
         """Candidate + met implies ``held``, which is what lets a row say so alone.

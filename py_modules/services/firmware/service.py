@@ -30,7 +30,7 @@ if TYPE_CHECKING:
         Clock,
         CoreInfoProvider,
         FirmwareFileStore,
-        FirmwareFolderVerdictFn,
+        FirmwarePlatformResolver,
         FirmwareResolver,
         PlatformCoreReader,
         RetroDeckPaths,
@@ -57,7 +57,7 @@ class FirmwareServiceConfig:
     clock: Clock
     firmware_file_store: FirmwareFileStore
     firmware_resolver: FirmwareResolver
-    firmware_folder_verdicts: FirmwareFolderVerdictFn
+    platform_firmware_resolver: FirmwarePlatformResolver
     retrodeck_paths: RetroDeckPaths
     core_info: CoreInfoProvider
     resolve_system: SystemResolver
@@ -95,7 +95,7 @@ class FirmwareService:
         self._demand = FirmwareDemand(
             config=FirmwareDemandConfig(
                 firmware_resolver=config.firmware_resolver,
-                firmware_folder_verdicts=config.firmware_folder_verdicts,
+                platform_firmware_resolver=config.platform_firmware_resolver,
                 retrodeck_paths=config.retrodeck_paths,
                 firmware_file_store=config.firmware_file_store,
                 logger=config.logger,
@@ -150,9 +150,9 @@ class FirmwareService:
         """Return BIOS/firmware status for every platform the page can speak for."""
         return await self._status.get_firmware_status()
 
-    async def check_platform_bios(self, platform_slug, active_core_so=None) -> dict[str, Any]:
-        """Return the platform's BIOS status, filtered by what *active_core_so* needs."""
-        return await self._status.check_platform_bios(platform_slug, active_core_so)
+    async def check_platform_bios(self, platform_slug, launching_emulator=None) -> dict[str, Any]:
+        """Return the platform's BIOS status, filtered by what *launching_emulator* needs."""
+        return await self._status.check_platform_bios(platform_slug, launching_emulator)
 
     async def download_firmware(self, firmware_id) -> dict[str, Any]:
         """Download one firmware file by its RomM id."""

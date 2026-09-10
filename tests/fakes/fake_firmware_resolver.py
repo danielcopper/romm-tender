@@ -1,4 +1,4 @@
-"""In-memory firmware seams for service tests — the demand, and the folder verdicts."""
+"""The in-memory firmware seam for service tests — one platform's demand, stated."""
 
 from __future__ import annotations
 
@@ -16,19 +16,25 @@ from domain.firmware_wants import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable
     from types import EllipsisType
 
 
 class FakeFirmwareResolver:
-    """The machine's firmware demand, stated by the test instead of read off disk.
+    """One platform's firmware demand, stated by the test instead of read off disk.
 
-    Seed it with :meth:`declare` — one call per file, naming the cores that
-    require it and the cores that merely accept it. ``unread_cores`` names the
-    emulators whose declaration could not be read, which is what decides whether
-    a file the catalogue does not hold reads ``not_needed`` or ``unknown`` for a
-    given platform; ``resolved=False`` stands for a reading that never happened
-    at all.
+    Seed it with :meth:`declare` — one call per file, naming the emulators that
+    require it and those that merely accept it, by IDENTITY: one string per
+    emulator, standalone or libretro. ``unread_emulators`` names the emulators
+    whose declaration could not be read, which is what decides whether a file the
+    catalogue does not hold reads ``not_needed`` or ``unknown`` for a launch;
+    ``resolved=False`` stands for a reading that never happened at all.
+
+    It stands in for BOTH resolver seams, and the per-system one ignores the
+    system it is asked about: a test states one platform's demand and the
+    question's scope is not what it is pinning. ``calls`` records the systems it
+    was asked about, in order, so a test CAN pin the scope where that is the
+    point.
 
     ``bios_root`` and ``present_probe`` are what make the fake a stand-in for a
     resolver that reads a disk: given them, each placement's ``present`` is
@@ -43,46 +49,42 @@ class FakeFirmwareResolver:
     ``present`` there.
 
     :meth:`record_system` states the second axis — what the packaged table says
-    about the console one core declares for. It is per core rather than per file
-    because the same images read differently under two cores of one system.
-
-    ``calls`` counts invocations so a test can pin that a whole-machine question
-    costing hundreds of milliseconds on a real device is asked once per query
-    rather than once per platform.
+    about the console one emulator declares for. It is per emulator rather than
+    per file because the same images read differently under two of them.
     """
 
     def __init__(
         self,
         *,
         placements: list[FirmwarePlacement] | None = None,
-        unread_cores: frozenset[str] = frozenset(),
+        unread_emulators: frozenset[str] = frozenset(),
         resolved: bool = True,
         caveats: tuple[str, ...] = (),
         bios_root: str | None = None,
         present_probe: Callable[[str], bool] = os.path.exists,
     ) -> None:
         self.placements: list[FirmwarePlacement] = list(placements or [])
-        self.unread_cores = unread_cores
+        self.unread_emulators = unread_emulators
         self.resolved = resolved
         self.caveats = caveats
         self.bios_root = bios_root
         self.present_probe = present_probe
-        self.core_verdicts: dict[str, CoreFirmwareVerdict] = {}
-        self.calls = 0
+        self.emulator_verdicts: dict[str, CoreFirmwareVerdict] = {}
+        self.calls: list[str] = []
 
     def record_system(
         self,
-        core_so: str,
+        emulator: str,
         *,
         system_firmware: str | None,
         requirements_met: bool | None = None,
     ) -> None:
-        """State what the packaged table records about *core_so*'s console.
+        """State what the packaged table records about *emulator*'s console.
 
-        A core no test records anything for is a core the table holds no entry
+        An emulator no test records anything for is one the table holds no entry
         for, which is the ordinary case and the one that must change nothing.
         """
-        self.core_verdicts[core_so] = CoreFirmwareVerdict(
+        self.emulator_verdicts[emulator] = CoreFirmwareVerdict(
             system_firmware=system_firmware, requirements_met=requirements_met
         )
 
@@ -113,17 +115,17 @@ class FakeFirmwareResolver:
 
         ``declares_directory`` is what the EMULATOR opens the destination at, not
         what is there — a folder declaration whose folder is absent is still one.
-        ``folder`` is the verdict about its contents where the reading settled
-        one; leaving it unset is the folder that has not been looked inside, and
-        :class:`FakeFolderVerdicts` is what answers it.
+        ``folder`` is the verdict about its contents; leaving it unset is the
+        reading that established nothing about them, which is what a row nobody
+        looked inside answers.
         """
         placement = FirmwarePlacement(
             file_name=file_name,
             relative_path=file_name if relative_path is ... else relative_path,
             description=description if description is not None else file_name,
             wants=tuple(
-                [FirmwareWant(core_so=core, required=True) for core in required_by]
-                + [FirmwareWant(core_so=core, required=False) for core in optional_for]
+                [FirmwareWant(emulator=emulator, required=True) for emulator in required_by]
+                + [FirmwareWant(emulator=emulator, required=False) for emulator in optional_for]
             ),
             present=present,
             declared_kind=DECLARED_DIRECTORY if declares_directory else DECLARED_FILE,
@@ -151,30 +153,12 @@ class FakeFirmwareResolver:
             supplied_by=placement.supplied_by,
         )
 
-    def __call__(self) -> FirmwareCatalogue:
-        self.calls += 1
+    def __call__(self, system: str | None = None) -> FirmwareCatalogue:
+        self.calls.append("" if system is None else system)
         return FirmwareCatalogue(
             placements=tuple(self._read(placement) for placement in self.placements),
-            unread_cores=self.unread_cores,
+            unread_emulators=self.unread_emulators,
             resolved=self.resolved,
             caveats=self.caveats,
-            core_verdicts=dict(self.core_verdicts),
+            emulator_verdicts=dict(self.emulator_verdicts),
         )
-
-
-class FakeFolderVerdicts:
-    """The verified folder reading, stated by the test instead of read off disk.
-
-    Seeded per core, because that is the seam's scope: a verified read opens one
-    core's declared folder and reads the candidates inside it. ``calls`` records
-    the cores it was asked about, in order, so a test can pin that the expensive
-    question is asked once per core and only where a folder row is unanswered.
-    """
-
-    def __init__(self, verdicts: dict[str, dict[str, FolderVerdict]] | None = None) -> None:
-        self.verdicts = verdicts or {}
-        self.calls: list[str] = []
-
-    def __call__(self, core_so: str) -> Mapping[str, FolderVerdict]:
-        self.calls.append(core_so)
-        return self.verdicts.get(core_so, {})

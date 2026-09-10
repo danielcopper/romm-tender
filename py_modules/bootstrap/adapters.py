@@ -23,7 +23,7 @@ from models.shortcut_launcher import ShortcutLauncher
 from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.asyncio_sleeper import AsyncioSleeper
 from adapters.atlas_catalogue import AtlasCatalogueAdapter, first_detected_installation
-from adapters.atlas_firmware import AtlasFirmwareAdapter, AtlasFolderVerdictAdapter
+from adapters.atlas_firmware import AtlasFirmwareAdapter, AtlasPlatformFirmwareAdapter
 from adapters.atlas_host import grant_core_probe_interpreter
 from adapters.atlas_saves import AtlasSaveLocationAdapter
 from adapters.cover_art_file_store import CoverArtFileStoreAdapter
@@ -88,7 +88,7 @@ if TYPE_CHECKING:
         DownloadFileStore,
         EventEmitter,
         FirmwareFileStore,
-        FirmwareFolderVerdictFn,
+        FirmwarePlatformResolver,
         FirmwareResolver,
         GameProcessControl,
         HostnameReader,
@@ -152,7 +152,7 @@ class AdapterBundle:
     adoption_move: AdoptionMoveStore
     firmware_file_store: FirmwareFileStore
     firmware_resolver: FirmwareResolver
-    firmware_folder_verdicts: FirmwareFolderVerdictFn
+    platform_firmware_resolver: FirmwarePlatformResolver
     migration_file_store: MigrationFileStore
     rom_file_store: RomFileStore
     save_file_store: SaveFileStore
@@ -501,7 +501,7 @@ def bootstrap(
     # this seam or not at all. That holds for both firmware questions and for
     # the emulator catalogue.
     firmware_resolver = AtlasFirmwareAdapter(user_home=user_home, log_debug=debug_logger)
-    firmware_folder_verdicts = AtlasFolderVerdictAdapter(user_home=user_home, log_debug=debug_logger)
+    platform_firmware_resolver = AtlasPlatformFirmwareAdapter(user_home=user_home, log_debug=debug_logger)
     # Detection never picks a winner, so the choice is made here rather than in
     # the adapter: the highest-priority arrangement, which is RetroDECK wherever
     # one is installed. Offering the others is #918; nothing in services/ learns
@@ -529,7 +529,7 @@ def bootstrap(
         adoption_move=adoption_move,
         firmware_file_store=firmware_file_store,
         firmware_resolver=firmware_resolver,
-        firmware_folder_verdicts=firmware_folder_verdicts,
+        platform_firmware_resolver=platform_firmware_resolver,
         migration_file_store=migration_file_store,
         rom_file_store=rom_file_store,
         save_file_store=save_file_store,

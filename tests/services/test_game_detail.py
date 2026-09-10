@@ -10,7 +10,7 @@ from _factories import _make_retry, _make_testable_plugin
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
 from fakes.fake_disc_resolver import FakeDiscResolver
-from fakes.fake_firmware_resolver import FakeFirmwareResolver, FakeFolderVerdicts
+from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_hostname_reader import FakeHostnameReader
 from fakes.fake_machine_id_reader import FakeMachineIdReader
 from fakes.fake_path_exists_reader import FakePathExistsReader
@@ -163,7 +163,7 @@ def plugin(tmp_path):
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             firmware_file_store=FirmwareFileAdapter(),
             firmware_resolver=FakeFirmwareResolver(),
-            firmware_folder_verdicts=FakeFolderVerdicts(),
+            platform_firmware_resolver=FakeFirmwareResolver(),
             retrodeck_paths=FakeRetroDeckPaths(),
             core_info=FakeCoreInfoProvider(),
             resolve_system=lambda platform_slug, platform_fs_slug=None: platform_slug,
@@ -861,17 +861,17 @@ class TestGetBiosStatusFound:
 
         captured = {}
 
-        async def capture_check(slug, active_core_so=None):
+        async def capture_check(slug, launching_emulator=None):
             captured["slug"] = slug
-            captured["active_core_so"] = active_core_so
+            captured["launching_emulator"] = launching_emulator
             return {"needs_bios": False}
 
         game_detail_service._bios_checker.check_platform_bios = capture_check
 
         await game_detail_service.get_bios_status(42)
         assert captured["slug"] == "gba"
-        assert captured["active_core_so"] == "gpsp_libretro"
-        assert active_core_resolver.calls == [42]
+        assert captured["launching_emulator"] == "gpsp_libretro.so"
+        assert active_core_resolver.emulator_calls == [42]
 
     @pytest.mark.asyncio
     async def test_bios_check_differs_by_per_game_override(self, plugin, game_detail_service, active_core_resolver):
@@ -886,8 +886,8 @@ class TestGetBiosStatusFound:
         active_core_resolver.per_rom[42] = ("gpsp_libretro", "gpSP")
         # rom 43 falls through to the default (None, None) → system default.
 
-        async def fake_check(slug, active_core_so=None):
-            if active_core_so == "gpsp_libretro":
+        async def fake_check(slug, launching_emulator=None):
+            if launching_emulator == "gpsp_libretro.so":
                 return {
                     "needs_bios": True,
                     "server_count": 1,
@@ -908,7 +908,7 @@ class TestGetBiosStatusFound:
 
         assert pinned["bios_level"] == "missing"
         assert plain["bios_status"] is None
-        assert active_core_resolver.calls == [42, 43]
+        assert active_core_resolver.emulator_calls == [42, 43]
 
 
 class TestGetBiosStatusNotFound:

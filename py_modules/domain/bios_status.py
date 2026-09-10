@@ -8,15 +8,16 @@ concerns and deliberately do NOT live here.
 
 Two axes run through this module and must not be folded into one. **What wants a
 file** is :mod:`domain.firmware_wants`' four-valued answer, and it is a property
-of the machine: the same file answers the same way on every surface. **Whether
-the game in front of the user is ready to launch** is scoped to the core it will
-launch with, which is why an entry carries ``required_by_active`` beside its
-``wanted`` and why the counts key off the first. A file three other cores demand
-is not a missing prerequisite for this launch.
+of the platform: the same file answers the same way on every surface that shows
+it. **Whether the game in front of the user is ready to launch** is scoped to the
+emulator it will launch with — libretro or standalone, one identity either way —
+which is why an entry carries ``required_by_active`` beside its ``wanted`` and
+why the counts key off the first. A file three other emulators demand is not a
+missing prerequisite for this launch.
 
 A third axis joins them and is a THIRD axis rather than a third count, because
 it is not counted at all: the **system image** (:func:`classify_system_image`).
-Where the console does not start without one of the images the launching core
+Where the console does not start without one of the images the launching emulator
 declares, what is missing is one file out of many rather than each of many —
 folding it into ``required_count`` would report every one of them as required
 where the truth is "one of these". It carries its own value and its own
@@ -54,20 +55,21 @@ BIOS_LEVEL_MISSING = "missing"
 BIOS_LABEL_UNKNOWN = "Unknown"
 BIOS_LABEL_MISSING = "Missing"
 
-# The four answers to "does the launching core have the image its CONSOLE cannot
-# start without". Not a count and never one: the requirement is disjunctive.
+# The four answers to "does the launching emulator have the image its CONSOLE
+# cannot start without". Not a count and never one: the requirement is
+# disjunctive.
 #
 # ``not_demanded`` is the neutral value and covers four different recordings —
-# the core carries its own substitute, the console was established to start with
-# nothing present, nobody has established which, and nothing is recorded about
-# the console at all. It says this axis makes no claim, and it must never be
-# read as "this console needs no firmware": the last of those four is an unasked
-# question, and reading it as an answer is the collapse
+# the emulator carries its own substitute, the console was established to start
+# with nothing present, nobody has established which, and nothing is recorded
+# about the console at all. It says this axis makes no claim, and it must never
+# be read as "this console needs no firmware": the last of those four is an
+# unasked question, and reading it as an answer is the collapse
 # :mod:`domain.firmware_wants` exists to prevent.
 #
 # ``unsettled`` has two producers and no others: a row nothing could judge among
-# the ones the core declares, and a console whose demand this platform's list
-# carries no row for at all.
+# the ones the launching emulator declares, and a console whose demand this
+# platform's list carries no row for at all.
 SYSTEM_IMAGE_NOT_DEMANDED = "not_demanded"
 SYSTEM_IMAGE_HELD = "held"
 SYSTEM_IMAGE_ABSENT = "absent"
@@ -96,8 +98,8 @@ class BiosFileEntry:
 
     ``wanted`` is the machine's answer about the file (one of
     :data:`domain.firmware_wants.WANTED_VALUES`); ``required_by_active`` is the
-    launching core's, and only that one decides whether the file is counted as a
-    missing prerequisite.
+    launching emulator's, and only that one decides whether the file is counted
+    as a missing prerequisite.
 
     ``on_server`` is clear for a file an installed emulator asks for that the
     RomM library does not hold. Such a file is real, and missing, and nothing on
@@ -142,17 +144,19 @@ class BiosFileEntry:
     description: str
     wanted: str
     required_by_active: bool
-    # {core_so: {"required": bool, "needs_one_of": int | None}} — per core, what
-    # its own declaration says about this file and, where that core states a
-    # disjunction, how many files the demand is spread over. Two speakers, two
-    # keys, never folded into one.
+    # {emulator identity: {"required": bool, "needs_one_of": int | None}} — per
+    # emulator, what its own declaration says about this file and, where it
+    # states a disjunction, how many files the demand is spread over. Two
+    # speakers, two keys, never folded into one. The key is the emulator's
+    # identity, so a standalone emulator is a speaker here like any other; the
+    # field keeps the name the wire has always carried.
     cores: dict[str, dict[str, Any]]
     used_by_active: bool
     on_server: bool = True
-    # Is this row one of the images that would answer the launching core's
-    # console on its own? Set only where that core states a DISJUNCTION — see
-    # :func:`_active_core_answer`, which explains why it is silent for a core
-    # that does state required files.
+    # Is this row one of the images that would answer the launching emulator's
+    # console on its own? Set only where that emulator states a DISJUNCTION — see
+    # :func:`_active_core_answer`, which explains why it is silent for one that
+    # does state required files.
     system_image_candidate: bool = False
     supplied_by: str | None = None
     satisfied: bool | None = None
@@ -187,7 +191,7 @@ class BiosStatus:
     # not supply it keeps the level it always got; the one decision it moves is
     # a platform with no files at all.
     reading_complete: bool = True
-    # The launching core's system-image answer (:func:`classify_system_image`),
+    # The launching emulator's system-image answer (:func:`classify_system_image`),
     # one of :data:`SYSTEM_IMAGE_VALUES`. Defaults to the neutral value so a
     # caller that does not supply it keeps the verdict it always got.
     system_image: str = SYSTEM_IMAGE_NOT_DEMANDED
@@ -270,7 +274,7 @@ def build_file_entry(
     dest: str,
     placement: FirmwarePlacement | None,
     complete: bool,
-    active_core_so: str | None,
+    launching_emulator: str | None,
     *,
     on_server: bool = True,
     cores_needing_one_of: Mapping[str, int] = _NO_DISJUNCTIVE_CORES,
@@ -278,31 +282,31 @@ def build_file_entry(
     """Build a single file status entry from the machine's answer about it.
 
     ``placement`` is the catalogue's entry for the file (``None`` when nothing
-    declares it) and ``complete`` the reading state for the platform's own
-    emulators — together they decide ``wanted``. What the core the game will
-    launch with says about the row is :func:`_active_core_answer`'s, and
-    ``active_core_so`` is passed straight through to it.
+    declares it) and ``complete`` the reading state for the launching emulator —
+    together they decide ``wanted``. What the emulator the game will launch with
+    says about the row is :func:`_active_core_answer`'s, and
+    ``launching_emulator`` is passed straight through to it.
 
     ``cores_needing_one_of`` is
-    :meth:`~domain.firmware_wants.FirmwareCatalogue.cores_needing_one_of_their_files`
-    — the cores whose console needs an image and that mark nothing required, each
-    with the number of files it declares. It rides on each core's own entry in
-    ``cores`` because the two statements there belong to different speakers:
-    ``required`` is what that core's ``.info`` says about this file,
-    ``needs_one_of`` is what the packaged table says about that core's console,
-    counted over the core's whole declaration. A core can say ``optional`` about
+    :meth:`~domain.firmware_wants.FirmwareCatalogue.emulators_needing_one_of_their_files`
+    — the emulators whose console needs an image and that mark nothing required,
+    each with the number of files it declares. It rides on each emulator's own
+    entry in ``cores`` because the two statements there belong to different
+    speakers: ``required`` is what that emulator's own declaration says about this
+    file, ``needs_one_of`` is what the packaged table says about its console,
+    counted over its whole declaration. An emulator can say ``optional`` about
     every one of five files while the console cannot start without one of them,
-    and that pair is exactly what a surface listing the core has to be able to
-    show. Nothing is folded: the declaration is carried unaltered.
+    and that pair is exactly what a surface listing it has to be able to show.
+    Nothing is folded: the declaration is carried unaltered.
     """
     folder = placement.folder if placement is not None else None
     wants = placement.wants if placement is not None else ()
     cores = {
-        want.core_so: {"required": want.required, "needs_one_of": cores_needing_one_of.get(want.core_so)}
+        want.emulator: {"required": want.required, "needs_one_of": cores_needing_one_of.get(want.emulator)}
         for want in wants
-        if want.core_so is not None
+        if want.emulator is not None
     }
-    active = _active_core_answer(cores, placement, active_core_so)
+    active = _active_core_answer(cores, placement, launching_emulator)
     return BiosFileEntry(
         file_name=file_name,
         downloaded=downloaded,
@@ -325,11 +329,11 @@ def build_file_entry(
 
 @dataclass(frozen=True)
 class _ActiveCoreAnswer:
-    """The launching core's say about one row — the three launch-scoped fields.
+    """The launching emulator's say about one row — the three launch-scoped fields.
 
     ``wanted`` is the machine's answer about a file and reads the same on every
-    surface; these three are the core the game will launch with speaking about
-    the same row, and :class:`BiosFileEntry` carries each of them.
+    surface; these three are the emulator the game will launch with speaking
+    about the same row, and :class:`BiosFileEntry` carries each of them.
     """
 
     used_by_active: bool
@@ -340,36 +344,37 @@ class _ActiveCoreAnswer:
 def _active_core_answer(
     cores: Mapping[str, dict[str, Any]],
     placement: FirmwarePlacement | None,
-    active_core_so: str | None,
+    launching_emulator: str | None,
 ) -> _ActiveCoreAnswer:
-    """What the core the game will launch with says about one row.
+    """What the emulator the game will launch with says about one row.
 
-    ``active_core_so`` is that core, or ``None`` when it could not be resolved;
-    then every declaring core stands in for it, which is the same permissive
-    default the platform has always fallen back to.
+    ``launching_emulator`` is that emulator's identity, or ``None`` when it could
+    not be resolved or identified; then every declaring emulator stands in for
+    it, which is the same permissive default the platform has always fallen back
+    to.
 
-    ``system_image_candidate`` reads the active core's own ``needs_one_of`` off
-    its entry in ``cores``, so the row and the per-core entries cannot disagree
-    about which cores state a disjunction: this row is one of the images that
-    would answer the launching core's console on its own.
+    ``system_image_candidate`` reads the launching emulator's own ``needs_one_of``
+    off its entry in ``cores``, so the row and the per-emulator entries cannot
+    disagree about which of them state a disjunction: this row is one of the
+    images that would answer the launching emulator's console on its own.
 
     **It is deliberately narrower than the set**
     :func:`classify_system_image` **reads**, and the asymmetry is the point. That
-    function weighs every image the active core declares; this flag marks those
-    rows only where the core marks NOTHING required. Where a core does state
+    function weighs every image the launching emulator declares; this flag marks
+    those rows only where it marks NOTHING required. Where an emulator does state
     required files — Beetle PSX declares three of the same PlayStation images
     ``required`` — those rows already carry the console's demand as plain
     ``required_by_active``, and marking them again would say one thing twice in
     two vocabularies. The flag is the DISPLAY axis for the disjunction, not a
-    second readiness rule, so widening it to every image-demanding core would add
-    no answer and would put two marks on one requirement.
+    second readiness rule, so widening it to every image-demanding emulator would
+    add no answer and would put two marks on one requirement.
     """
-    active_entry = cores.get(active_core_so) if active_core_so is not None else None
-    if active_core_so is None:
+    active_entry = cores.get(launching_emulator) if launching_emulator is not None else None
+    if launching_emulator is None:
         used_by_active = True
         required_by_active = placement.required_by_any if placement is not None else False
     else:
-        used_by_active = active_core_so in cores if cores else True
+        used_by_active = launching_emulator in cores if cores else True
         required_by_active = active_entry["required"] if active_entry is not None else False
     return _ActiveCoreAnswer(
         used_by_active=used_by_active,
@@ -409,15 +414,15 @@ def collect_firmware_status(
     items: list[dict[str, Any]],
     placements: Mapping[str, FirmwarePlacement],
     complete: bool,
-    active_core_so: str | None,
+    launching_emulator: str | None,
     cores_needing_one_of: Mapping[str, int] = _NO_DISJUNCTIVE_CORES,
 ) -> tuple[BiosFileEntry, ...]:
     """Build BiosFileEntry objects for a list of pre-resolved firmware items.
 
     Each item must have keys: file_name, downloaded, dest; ``on_server``
     defaults to ``True`` for the items that came off the RomM listing.
-    ``cores_needing_one_of`` is machine-wide and is read per row, so one core's
-    console answers the same way on every file it declares.
+    ``cores_needing_one_of`` spans the whole answer and is read per row, so one
+    emulator's console answers the same way on every file it declares.
     """
     return tuple(
         build_file_entry(
@@ -426,7 +431,7 @@ def collect_firmware_status(
             item["dest"],
             placements.get(item["file_name"]),
             complete,
-            active_core_so,
+            launching_emulator,
             on_server=item.get("on_server", True),
             cores_needing_one_of=cores_needing_one_of,
         )
@@ -435,7 +440,7 @@ def collect_firmware_status(
 
 
 def count_required(files: tuple[BiosFileEntry, ...]) -> tuple[int, int]:
-    """``(required, of those downloaded)`` for the core the game will launch with.
+    """``(required, of those downloaded)`` for the emulator the game will launch with.
 
     The badge's two numbers, derived in one place so the platform detail and
     the game-detail page can never disagree about which files count. A file the
@@ -462,7 +467,7 @@ def count_required(files: tuple[BiosFileEntry, ...]) -> tuple[int, int]:
 
 
 def count_required_withheld(files: tuple[BiosFileEntry, ...]) -> int:
-    """How many of the launching core's required files nothing could judge.
+    """How many of the launching emulator's required files nothing could judge.
 
     The third number beside :func:`count_required`'s two, and the one that keeps
     a declined verdict from reading as an absence. A surface that warns about
@@ -476,22 +481,22 @@ def count_required_withheld(files: tuple[BiosFileEntry, ...]) -> int:
 def classify_system_image(
     verdict: CoreFirmwareVerdict | None,
     files: tuple[BiosFileEntry, ...],
-    active_core_so: str | None,
+    launching_emulator: str | None,
 ) -> str:
-    """Does the launching core have the image its CONSOLE cannot start without?
+    """Does the launching emulator have the image its CONSOLE cannot start without?
 
-    One of :data:`SYSTEM_IMAGE_VALUES`. The question only arises for a core the
-    resolver's packaged table puts in that state; every other recording — a core
+    One of :data:`SYSTEM_IMAGE_VALUES`. The question only arises for an emulator
+    the resolver's packaged table puts in that state; every other recording — one
     carrying its own substitute, a console established to start with nothing, an
     open entry, no entry at all — answers :data:`SYSTEM_IMAGE_NOT_DEMANDED` and
     leaves the file rows to speak for themselves.
 
     **The requirement is a disjunction and is read as one.** The console asks for
-    ONE of the images the core declares, so a single satisfied row answers it and
-    the absent ones beside it are still one unmet requirement. That is why this
-    is a value and not a pair of counts: put into ``required_count`` it would
+    ONE of the images the emulator declares, so a single satisfied row answers it
+    and the absent ones beside it are still one unmet requirement. That is why
+    this is a value and not a pair of counts: put into ``required_count`` it would
     read ``0/N required files ready`` over a console that needs one image, with
-    ``N`` every row the core declares — five, for the SwanStation this was
+    ``N`` every row the emulator declares — five, for the SwanStation this was
     observed on. The twenty in that page's ``0/20 files held`` is a different set
     again: the RomM library's inventory for the platform, which this answer
     neither counts nor is scoped to.
@@ -504,9 +509,11 @@ def classify_system_image(
     disagreement to be resolved. It has exactly two causes — a DIFFERENT required
     file is absent, or one that is there has the wrong bytes — and both leave one
     of our own required rows unmet, so the ordinary counts already report them,
-    by name, which this axis never could. The second cause needs a content check
-    to arise at all, and the whole-machine reading these rows come from is asked
-    unverified by invariant, so on this path it cannot occur.
+    by name, which this axis never could. The second cause is reachable here: the
+    per-platform reading is asked with content verification, which is what lets a
+    packaged card name an image at all. That widens what ``requirements_met``
+    could say and changes nothing about whether it may be read — the counts still
+    report the same file by name, and this axis still does not weigh it.
 
     **A row's** ``satisfied`` **is presence, not the resolver's usability
     verdict** — the name invites the second reading and does not carry it. For a
@@ -517,27 +524,29 @@ def classify_system_image(
     ``None`` reads here as not held — the safe direction, since the alternative
     claims a readiness nothing established.
 
-    *files* is this platform's list, so the disjunction spans the rows this core
-    declares that the platform's own list carries — every one of them, BIOS image
-    or not: a declaration mixes images with the odd data file (LRPS2 lists
-    ``GameIndex.yaml`` beside its BIOS folder) and nothing on a row says which is
-    which. That is upstream's reading too — ``CoreFirmware._system_image_in_place``
-    folds the whole declaration in the same way — so the two agree rather than
-    one of them quietly narrowing. The resolver reads it over every row the core
-    declares machine-wide; the two sets come apart only for a core serving
-    several systems, and upstream states that no core in its vector corpus or on
-    its reference machine reaches this state while declaring for more than one.
+    *files* is this platform's list, so the disjunction spans the rows this
+    emulator declares that the platform's own list carries — every one of them,
+    BIOS image or not: a declaration mixes images with the odd data file (LRPS2
+    lists ``GameIndex.yaml`` beside its BIOS folder) and nothing on a row says
+    which is which. That is upstream's reading too —
+    ``CoreFirmware._system_image_in_place`` folds the whole declaration in the
+    same way — so the two agree rather than one of them quietly narrowing. The
+    resolver reads it over the emulator's WHOLE declaration, which a per-system
+    answer still carries in full; the two sets come apart only for an emulator
+    serving several systems, and upstream states that none in its vector corpus
+    or on its reference machine reaches this state while declaring for more than
+    one.
 
     That set is WIDER than the rows ``BiosFileEntry.system_image_candidate``
     marks, and the difference is deliberate rather than a gap to close: the flag
-    is silent for a core that states required files, whose rows already carry the
-    same demand as ``required_by_active``, while this answer is the console's and
-    weighs every image the core declares whatever the core called it. The reason
-    lives in full at :func:`_active_core_answer`.
+    is silent for an emulator that states required files, whose rows already carry
+    the same demand as ``required_by_active``, while this answer is the console's
+    and weighs every image the emulator declares whatever it called them. The
+    reason lives in full at :func:`_active_core_answer`.
     """
-    if verdict is None or active_core_so is None or not verdict.system_needs_an_image:
+    if verdict is None or launching_emulator is None or not verdict.system_needs_an_image:
         return SYSTEM_IMAGE_NOT_DEMANDED
-    images = [f for f in files if active_core_so in f.cores]
+    images = [f for f in files if launching_emulator in f.cores]
     if any(f.satisfied for f in images):
         return SYSTEM_IMAGE_HELD
     if images and all(f.satisfied is False for f in images):
@@ -548,33 +557,33 @@ def classify_system_image(
 def _nothing_established(status: BiosStatus) -> bool:
     """Nothing about this platform's firmware could be established.
 
-    Two shapes, and the second is why ``reading_complete`` exists. The server
-    holds firmware and the machine answered for none of it — every row unknown,
-    so there is nothing to base a claim on. Or the platform has no file at all
-    AND its reading was not complete: an empty list under a complete reading is
-    the finished answer "no emulator here wants anything", while under an
-    incomplete one it is silence, and silence read as an answer is a claim about
-    a question nothing finished asking. Which surface that claim reaches depends
-    on the caller: the platform detail renders this level whether or not there
-    are rows, so it is where an empty list would read green.
+    One shape, and it is the reading itself: the emulator this platform launches
+    with could not be asked what it wants — it ships no declaration, the resolver
+    holds no card for it, it could not be identified, or no pick could be made at
+    all. Nothing that follows can be a claim about this launch, because the one
+    emulator the claim would be about said nothing.
 
-    ``reading_complete`` is False whenever ANY core in the platform's scope went
-    unread, not only when nothing could be asked at all; the two are the same
-    thing to this function, which is why the shape it names is an empty file
-    list rather than an empty scope.
+    **The rows on the page do not rescue it, and that is the point.** They belong
+    to the platform's OTHER emulators and to the RomM library, so under an unread
+    launching emulator ``required_by_active`` is zero by construction and the
+    counts read "nothing required" — a green all-clear over a console whose
+    emulator nobody asked. A stock RetroDECK reaches that on PS2: LRPS2 declares
+    a folder and a data file, and with standalone PCSX2 launching, those two rows
+    say nothing about what PCSX2 wants.
+
+    Two narrower shapes used to be named here and both are inside this one, since
+    a row reads ``unknown`` only under an incomplete reading: a server listing
+    answered for in no part, and an empty file list. Neither can arise while the
+    launching emulator was read.
 
     ``known_count is None`` is a caller that did not supply the counts, and the
     decision is then left to the required-count logic as it always was.
     """
-    if status.known_count is None:
-        return False
-    if not status.reading_complete and not status.files:
-        return True
-    return status.server_count > 0 and status.known_count == 0 and status.unknown_count > 0
+    return status.known_count is not None and not status.reading_complete
 
 
 def _requirement_verdict_withheld(status: BiosStatus) -> bool:
-    """Is one of the launching core's required files one nothing could judge?
+    """Is one of the launching emulator's required files one nothing could judge?
 
     The third shape that declines a readiness claim, and the only one that
     coexists with a real requirement. The other two (:func:`_nothing_established`)
@@ -612,33 +621,33 @@ def _counted_level(status: BiosStatus) -> str:
 def compute_bios_level(status: BiosStatus) -> str:
     """Compute BIOS status level: 'unknown', 'ok', 'partial', or 'missing'.
 
-    ``'unknown'`` means no readiness claim can be made, and four shapes reach it.
-    Three are declines — see :func:`_nothing_established` and
+    ``'unknown'`` means no readiness claim can be made, and three shapes reach it.
+    Two are declines — see :func:`_nothing_established` and
     :func:`_requirement_verdict_withheld` — checked before the required-count
-    logic; the first two only fire when the caller supplied ``known_count`` (else
-    the decision is deferred to the existing ok/partial/missing logic). The
-    fourth is an unsettled system image over counts that would otherwise read
-    ``'ok'``, described below.
+    logic; the first fires only when the caller supplied ``known_count`` (else
+    the decision is deferred to the existing ok/partial/missing logic). The third
+    is an unsettled system image over counts that would otherwise read ``'ok'``,
+    described below.
 
     A platform whose files are all *answered for* and wanted by nothing is a
-    different case entirely and reaches ``'ok'``: "no emulator here needs these"
-    is a finished answer, and the file rows say which files it covers.
+    different case entirely and reaches ``'ok'``: "the emulator this launches
+    with needs none of these" is a finished answer, and the file rows say which
+    files it covers.
 
     The **system image** (:func:`classify_system_image`) enters at both ends and
     only ever makes the answer less green. An established absence lands on
     ``'missing'``, and is tested first so that a demonstration outranks a
-    platform nothing could be established for. **Only one of the three declines
-    can reach that comparison**, so the order is a rule about that one and a
-    guard for the rest: ``'absent'`` needs every row the launching core declares
-    answered ``False``, which a withheld required row contradicts by construction
-    — it carries the active core (:func:`build_file_entry`), so it is one of
-    those rows, with ``satisfied is None`` — and which an empty file list cannot
-    produce at all. What is left is :func:`_nothing_established`'s first shape:
-    the library's own rows all unanswered under an incomplete reading, while the
-    core's declared images are rows the library does not hold and every one of
-    them is absent. An unsettled image can turn a green claim grey and nothing
-    else: where the counts already read ``'partial'`` or ``'missing'``, something
-    is known to be absent, and a doubt about one further file does not unsay it.
+    platform nothing could be established for. **Neither decline can actually
+    reach that comparison**, so the order is a guard rather than a rule about a
+    live case. ``'absent'`` needs at least one row carrying the launching
+    emulator, every one of them answered ``False``. A withheld required row
+    contradicts that by construction — it carries the launching emulator
+    (:func:`build_file_entry`), so it is one of those rows, with ``satisfied is
+    None``. And an unread launching emulator declares nothing, so no row carries
+    it at all and the answer is ``'unsettled'``, never ``'absent'``. An unsettled
+    image can turn a green claim grey and nothing else: where the counts already
+    read ``'partial'`` or ``'missing'``, something is known to be absent, and a
+    doubt about one further file does not unsay it.
     """
     if status.system_image == SYSTEM_IMAGE_ABSENT:
         return BIOS_LEVEL_MISSING

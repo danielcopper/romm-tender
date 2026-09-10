@@ -6,13 +6,13 @@ the vendored resolver at all, so this module holds only the words the answer
 comes back in — the same split :mod:`domain.sync_action` makes for the save-sync
 core.
 
-The resolver answers per *file* whether a core needs it or merely accepts it.
-"Nothing wants it" and "nothing could be established" are not properties of a
-file — they are properties of the **reading**, one level up on the core, which is
-why :class:`FirmwareCatalogue` names the cores it could not ask. Our own file
-list comes from the RomM server rather than from the resolver, so each server
-file is classified by whether the catalogue holds a placement for it, and by
-whether the reading was complete for the emulators the caller's platform offers:
+The resolver answers per *file* whether an emulator needs it or merely accepts
+it. "Nothing wants it" and "nothing could be established" are not properties of a
+file — they are properties of the **reading**, one level up on the emulator,
+which is why :class:`FirmwareCatalogue` names the emulators it could not ask. Our
+own file list comes from the RomM server rather than from the resolver, so each
+server file is classified by whether the catalogue holds a placement for it, and
+by whether the reading was complete for the emulator the game will launch with:
 
 ``needed`` · ``optional`` · ``not_needed`` (the whole reading succeeded and no
 emulator asked for it) · ``unknown`` (something in the reading failed, so no
@@ -21,6 +21,21 @@ claim can be made either way).
 Collapsing the last two into one value is the defect this vocabulary exists to
 prevent: a file nothing wants is a finished answer, and a file we could not ask
 about is not.
+
+**One emulator is one identity, whatever launches it.** The resolver states that
+identity in the spelling the launch command uses — a libretro entry's core file
+basename (``dolphin_libretro.so``), a standalone entry's own command name
+(``DOLPHIN``, ``PCSX2``) — and both a catalogue entry and a firmware answer carry
+it under that one name, which is what lets a pick made in the emulator picker be
+matched against the firmware answer it should be judged by. A standalone
+emulator therefore has an identity here where it has no ``core_so``, and the
+identity is never derived from a display label: ES-DE lists one PCSX2 under two
+labels, so a label is a presentation and not a name.
+
+The identity can be absent, and that is a state rather than an error: an entry
+the resolver could not identify cannot be scoped to, so nothing may be ruled out
+for it. It reaches the answer as "could not be established", never as "nothing
+needed" — the same rule :data:`WANTED_UNKNOWN` carries one level down.
 
 A second axis runs beside that one and is not a property of any file: what is
 recorded about the **system** an emulator declares for. A libretro ``.info`` can
@@ -39,11 +54,11 @@ system, never that the system needs nothing.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Mapping
+    from collections.abc import Mapping
 
 WANTED_NEEDED = "needed"
 WANTED_OPTIONAL = "optional"
@@ -99,15 +114,17 @@ class FolderVerdict:
     holding none, ``None`` for everything the read did not establish.
 
     ``images`` names what was found, in the resolver's own words, and is empty
-    for every verdict but a satisfied one. ``caveats`` carries the stable codes
-    stating why the verdict reads as it does — the codes are the contract, the
-    messages are prose — and a surface takes the CAUSE from them, because
-    ``satisfied`` is the verdict alone and carries none of it.
+    for every verdict but a satisfied one.
+
+    The CAUSE of the verdict is not here: ``satisfied`` is the verdict alone, and
+    what speaks for it rides on the row's own ``caveats`` beside every other
+    statement about that destination. One list per row rather than two, because a
+    surface wording a row has one place to look and cannot show the same code
+    twice.
     """
 
     satisfied: bool | None
     images: tuple[str, ...] = ()
-    caveats: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -153,17 +170,21 @@ class CoreFirmwareVerdict:
 class FirmwareWant:
     """One emulator's demand for one firmware file.
 
-    ``core_so`` is ``None`` for an emulator that ships no libretro core — the
-    identifier space is the core's ``.so`` basename and inventing one for a
-    standalone emulator would collide with it. ``required`` is the resolver's
-    own two-valued answer: the core will not run without the file, or it will.
+    ``emulator`` is that emulator's identity — one string for both kinds, so a
+    standalone declaration is an owner here rather than an orphan. ``None`` is
+    the entry the resolver could not identify: it owns the file as much as any
+    other, which is why it still stands in ``wants``, but nothing can be scoped
+    to it, so every identity-keyed reading passes it over. ``required`` is the
+    resolver's own two-valued answer: the emulator will not run without the
+    file, or it will.
 
-    No display label: what a core is called to a user is ES-DE's answer, read
-    per platform off ``es_systems.xml``, and a second spelling arriving with the
-    requirement would be a second thing to keep in step with it.
+    No display label: what an emulator is called to a user is ES-DE's answer,
+    read per platform off ``es_systems.xml``, and a second spelling arriving with
+    the requirement would be a second thing to keep in step with it — and one
+    that does not identify, since ES-DE lists one PCSX2 under two labels.
     """
 
-    core_so: str | None
+    emulator: str | None
     required: bool
 
 
@@ -187,9 +208,12 @@ class FirmwarePlacement:
     what else the reading found there, in the resolver's stable codes.
 
     ``folder`` is the verdict about what a **declared folder** holds, and it is
-    ``None`` for every file declaration and for a folder nothing looked inside
-    — the resolver answers it only when asked to verify contents, which costs a
-    read of every candidate's bytes.
+    ``None`` for every file declaration. On a folder declaration it always
+    stands, carrying the resolver's own three-valued answer: the folder holds an
+    image the emulator accepts, it holds none, or nothing established which.
+    Reading contents costs a read of every candidate's bytes, so a reading asked
+    without that check settles the shapes a stat can settle and answers ``None``
+    for the rest.
 
     ``supplied_by`` names the distribution whose own copy is sitting at the
     destination, as the resolver writes that distribution's name — a display
@@ -242,15 +266,16 @@ class FirmwarePlacement:
 
 @dataclass(frozen=True)
 class FirmwareCatalogue:
-    """Everything the installed emulators want, and which of them could not be asked.
+    """Everything one platform's emulators want, and which of them could not be asked.
 
-    ``placements`` is machine-wide: a file is declared, or it is not, and the
-    answer does not change with the surface asking. What DOES depend on the
-    caller is whether an absence may be read as "nothing wants it", and that is
-    :meth:`reading_complete_for` — the emulators that could not be asked are
-    named in ``unread_cores``, so a caller scopes the doubt to the emulators its
-    platform actually offers instead of letting one unreadable core anywhere
-    silence every answer.
+    ``placements`` is one file per name across every emulator in the answer's
+    scope: a file is declared, or it is not, and which emulators declare it is
+    the row's own ``wants``. What does NOT live on a row is whether an absence
+    may be read as "nothing wants it" — that is :meth:`reading_complete_for`, and
+    it is asked about the ONE emulator the game will launch with, because an
+    emulator the platform offers and the user does not launch with cannot make
+    the launch's answer doubtful. The emulators that could not be asked are named
+    in ``unread_emulators``.
 
     ``resolved`` is ``False`` when the reading did not happen at all — no
     installation found, or the resolver refused. Then nothing may be ruled out
@@ -259,75 +284,77 @@ class FirmwareCatalogue:
     ``caveats`` carries the resolver's stable degradation codes, never its human
     messages: the codes are the contract, the messages are prose.
 
-    ``core_verdicts`` is the per-core half — keyed by the core's ``.so`` stem, in
-    the plugin's own identifier space — and it is deliberately separate from
-    ``placements``: a placement is one file every surface reads the same way,
-    while a verdict is about the emulator a particular game will launch with.
-    Empty for a reading that did not happen, and a core it holds no entry for is
-    a core nothing was recorded about (:meth:`verdict_for`).
+    ``emulator_verdicts`` is the per-emulator half — keyed by identity — and it
+    is deliberately separate from ``placements``: a placement is one file every
+    surface reads the same way, while a verdict is about the emulator a
+    particular game will launch with. Empty for a reading that did not happen,
+    and an emulator it holds no entry for is one nothing was recorded about
+    (:meth:`verdict_for`).
     """
 
     placements: tuple[FirmwarePlacement, ...]
-    unread_cores: frozenset[str]
+    unread_emulators: frozenset[str]
     resolved: bool
     caveats: tuple[str, ...] = ()
-    core_verdicts: Mapping[str, CoreFirmwareVerdict] = field(default_factory=dict)
+    emulator_verdicts: Mapping[str, CoreFirmwareVerdict] = field(default_factory=dict)
 
-    def verdict_for(self, core_so: str | None) -> CoreFirmwareVerdict | None:
-        """What was recorded about *core_so*, or ``None`` where nothing was.
+    def verdict_for(self, emulator: str | None) -> CoreFirmwareVerdict | None:
+        """What was recorded about *emulator*, or ``None`` where nothing was.
 
-        ``None`` for a core with no entry, and for a caller with no core to name
-        — an unresolvable active core is not a licence to answer for one.
+        ``None`` for an emulator with no entry, and for a caller with no identity
+        to name — an unidentified emulator is not a licence to answer for one.
         """
-        return self.core_verdicts.get(core_so) if core_so is not None else None
+        return self.emulator_verdicts.get(emulator) if emulator is not None else None
 
-    def cores_needing_a_system_image(self) -> frozenset[str]:
-        """The cores whose CONSOLE the table says will not start without an image.
+    def emulators_needing_a_system_image(self) -> frozenset[str]:
+        """The emulators whose CONSOLE the table says will not start without an image.
 
-        The per-core half of :meth:`verdict_for`, read over every core at once —
-        the widest form of the answer, and the set
-        :meth:`cores_needing_one_of_their_files` narrows to the cores that state
-        the demand as a disjunction. Every other recording is left out, including
-        the absent entry: a core the table says nothing about is an unasked
-        question, and this set answers only where something was recorded.
+        The per-emulator half of :meth:`verdict_for`, read over every emulator at
+        once — the widest form of the answer, and the set
+        :meth:`emulators_needing_one_of_their_files` narrows to the emulators that
+        state the demand as a disjunction. Every other recording is left out,
+        including the absent entry: an emulator the table says nothing about is an
+        unasked question, and this set answers only where something was recorded.
         """
-        return frozenset(core_so for core_so, verdict in self.core_verdicts.items() if verdict.system_needs_an_image)
+        return frozenset(
+            emulator for emulator, verdict in self.emulator_verdicts.items() if verdict.system_needs_an_image
+        )
 
-    def cores_needing_one_of_their_files(self) -> dict[str, int]:
-        """Core → how many files it declares, for the cores that state a DISJUNCTION.
+    def emulators_needing_one_of_their_files(self) -> dict[str, int]:
+        """Emulator → how many files it declares, for those that state a DISJUNCTION.
 
-        The narrower half of :meth:`cores_needing_a_system_image`, and the one a
-        surface can word on a row. A core is here only where its console needs an
-        image **and** the core marks nothing required anywhere in the catalogue,
-        because that is the only shape in which "one of these" is the whole of
-        what the core says. Where a core does mark files required, the console's
-        demand already reaches every surface as those rows' own requirement, and
-        a second statement of it beside them would say the same thing twice in
-        weaker words. The deployed catalogue has both shapes over one
-        PlayStation: SwanStation marks all five of its images optional, Beetle
+        The narrower half of :meth:`emulators_needing_a_system_image`, and the one
+        a surface can word on a row. An emulator is here only where its console
+        needs an image **and** it marks nothing required anywhere in the
+        catalogue, because that is the only shape in which "one of these" is the
+        whole of what it says. Where an emulator does mark files required, the
+        console's demand already reaches every surface as those rows' own
+        requirement, and a second statement of it beside them would say the same
+        thing twice in weaker words. The deployed catalogue has both shapes over
+        one PlayStation: SwanStation marks all five of its images optional, Beetle
         PSX marks three of its own required.
 
-        The count is the core's whole declaration, machine-wide, rather than a
+        The count is the emulator's whole declaration in this answer rather than a
         platform's row set — it is the number a surface says "one of its N BIOS
         files" with, and a platform whose list happens to carry four of the five
-        would otherwise word the core's demand as a number the core never stated.
-        A core with no entry here is silent, which is also every core the
-        packaged table records nothing about.
+        would otherwise word the demand as a number the emulator never stated. An
+        emulator with no entry here is silent, which is also every one the packaged
+        table records nothing about.
         """
-        demanding = self.cores_needing_a_system_image()
+        demanding = self.emulators_needing_a_system_image()
         declared: dict[str, int] = {}
         requires_something: set[str] = set()
         for placement in self.placements:
             for want in placement.wants:
-                if want.core_so is None:
+                if want.emulator is None:
                     continue
-                declared[want.core_so] = declared.get(want.core_so, 0) + 1
+                declared[want.emulator] = declared.get(want.emulator, 0) + 1
                 if want.required:
-                    requires_something.add(want.core_so)
+                    requires_something.add(want.emulator)
         return {
-            core_so: count
-            for core_so, count in declared.items()
-            if core_so in demanding and core_so not in requires_something
+            emulator: count
+            for emulator, count in declared.items()
+            if emulator in demanding and emulator not in requires_something
         }
 
     def by_file_name(self) -> dict[str, FirmwarePlacement]:
@@ -339,27 +366,27 @@ class FirmwareCatalogue:
         """
         return {placement.file_name: placement for placement in self.placements}
 
-    def reading_complete_for(self, core_sos: Collection[str] | None) -> bool:
-        """May an absence be read as "nothing wants it" for the scope *core_sos*?
+    def reading_complete_for(self, emulator: str | None) -> bool:
+        """May an absence be read as "nothing wants it" for the launching *emulator*?
 
-        ``core_sos`` is the scope the caller is answering for — the libretro
-        cores its platform offers — and the question is whether every one of
-        them was asked. ``None`` means the caller could not establish its own
-        scope, which is itself a reason to rule nothing out.
+        *emulator* is the one the game will launch with, and the question is
+        whether it was asked. **The doubt is scoped to it alone**: an unreadable
+        emulator the platform offers and this launch does not use says nothing
+        about this launch, so letting it withhold the verdict would grey out a
+        platform over an emulator nobody is running. What it costs is that a user
+        switching emulators can move a platform from a finished answer to a
+        withheld one — which is the truth about the new launch rather than a
+        regression in the old one.
 
-        **An empty scope is refused too**, though every emulator in it was
-        vacuously asked. Read as complete it would license the strongest claim
-        this vocabulary can make — "no emulator here wants any of these files" —
-        off asking nobody, which is the very collapse the four values exist to
-        prevent. A caller reaching this with no core to name has not established
-        a reading, whether it says so with ``None`` or with an empty list, so
-        both answer the same. That makes the refusal belt-and-braces rather than
-        the only guard: ``services/firmware/status.py``'s ``_core_scope`` already returns ``None``
-        for a platform ES-DE offers no libretro core for.
+        ``None`` is an emulator that could not be identified or resolved at all,
+        and it is refused: read as complete it would license the strongest claim
+        this vocabulary can make — "nothing here wants any of these files" — off
+        asking nobody, which is the very collapse the four values exist to
+        prevent.
         """
-        if not self.resolved or not core_sos:
+        if not self.resolved or emulator is None:
             return False
-        return not self.unread_cores.intersection(core_sos)
+        return emulator not in self.unread_emulators
 
 
 def classify_wanted(placement: FirmwarePlacement | None, complete: bool) -> str:
@@ -371,56 +398,3 @@ def classify_wanted(placement: FirmwarePlacement | None, complete: bool) -> str:
     if placement is not None:
         return WANTED_NEEDED if placement.required_by_any else WANTED_OPTIONAL
     return WANTED_NOT_NEEDED if complete else WANTED_UNKNOWN
-
-
-def unanswered_folder_cores(
-    placements: Mapping[str, FirmwarePlacement], core_sos: Collection[str] | None
-) -> tuple[str, ...]:
-    """The cores in *core_sos* whose folder declaration still has no verdict.
-
-    The scope of the one question that costs a content read: the resolver
-    answers a folder declaration from the folder's own listing, and a listing it
-    was not asked to make leaves ``folder`` unset. A row the machine-wide
-    reading already settled is left alone — asking about it would pay a whole
-    verified per-core resolve for an answer in hand — and which rows those are
-    is the resolver's own verdict rather than a list of shapes kept here.
-
-    Sorted and deduplicated: an ES-DE catalogue can list one core under two
-    entries, and the caller asks the resolver once per name it is handed.
-    """
-    if not core_sos:
-        return ()
-    scope = set(core_sos)
-    return tuple(
-        sorted(
-            {
-                want.core_so
-                for placement in placements.values()
-                if placement.declares_directory and placement.folder is None
-                for want in placement.wants
-                if want.core_so is not None and want.core_so in scope
-            }
-        )
-    )
-
-
-def merge_folder_verdicts(
-    placements: Mapping[str, FirmwarePlacement], verdicts: Mapping[str, FolderVerdict]
-) -> dict[str, FirmwarePlacement]:
-    """*placements* with each named folder's verdict folded into its row.
-
-    The verdict's caveats join the destination's rather than replacing them:
-    both are statements about one place, and a row that says a folder holds no
-    image and that something obstructs it is saying two true things.
-
-    A verdict for a file declaration is dropped. The resolver states one only
-    over a folder it listed, so such an entry would mean the two disagree about
-    what the emulator opens, and the declaration is the half that decides.
-    """
-    merged = dict(placements)
-    for file_name, verdict in verdicts.items():
-        placement = merged.get(file_name)
-        if placement is None or not placement.declares_directory:
-            continue
-        merged[file_name] = replace(placement, folder=verdict, caveats=(*placement.caveats, *verdict.caveats))
-    return merged

@@ -386,7 +386,9 @@ def test_per_game_pin_beats_standalone_system_default() -> None:
     )
     resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
-    assert resolver.active_emulator_for_rom(51) == EmulatorInvocation.libretro("pcsx2_libretro", "LRPS2")
+    assert resolver.active_emulator_for_rom(51) == EmulatorInvocation.libretro(
+        "pcsx2_libretro", "LRPS2", "pcsx2_libretro.so"
+    )
 
 
 def test_per_platform_core_beats_standalone_system_default() -> None:
@@ -400,7 +402,9 @@ def test_per_platform_core_beats_standalone_system_default() -> None:
     platform_reader = FakePlatformCoreReader(mapping={"ps2": "LRPS2"})
     resolver, _ = _make_resolver(uow=uow, core_info=core_info, platform_core_reader=platform_reader)
 
-    assert resolver.active_emulator_for_rom(52) == EmulatorInvocation.libretro("pcsx2_libretro", "LRPS2")
+    assert resolver.active_emulator_for_rom(52) == EmulatorInvocation.libretro(
+        "pcsx2_libretro", "LRPS2", "pcsx2_libretro.so"
+    )
 
 
 def test_resolvable_pin_returns_libretro_invocation() -> None:
@@ -412,7 +416,9 @@ def test_resolvable_pin_returns_libretro_invocation() -> None:
     )
     resolver, _ = _make_resolver(uow=uow, core_info=core_info)
 
-    assert resolver.active_emulator_for_rom(53) == EmulatorInvocation.libretro("mgba_libretro", "mGBA")
+    assert resolver.active_emulator_for_rom(53) == EmulatorInvocation.libretro(
+        "mgba_libretro", "mGBA", "mgba_libretro.so"
+    )
 
 
 def test_unresolvable_platform_returns_none() -> None:
@@ -558,7 +564,9 @@ def test_libretro_over_folder_boot_install_is_never_rewritten() -> None:
     )
     resolver, _ = _make_resolver(uow=uow, core_info=core_info, sandbox_launchers={_RPCS3_COMMAND: _RPCS3_LAUNCHER})
 
-    assert resolver.active_emulator_for_rom(74) == EmulatorInvocation.libretro("lrps3_libretro", "LRPS3")
+    assert resolver.active_emulator_for_rom(74) == EmulatorInvocation.libretro(
+        "lrps3_libretro", "LRPS3", "lrps3_libretro.so"
+    )
 
 
 def test_folder_boot_standalone_unresolvable_launcher_keeps_run_game_and_warns(

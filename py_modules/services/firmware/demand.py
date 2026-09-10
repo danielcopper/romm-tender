@@ -15,17 +15,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.firmware_wants import merge_folder_verdicts, unanswered_folder_cores
 from lib.path_safety import PathTraversalError, safe_join
 
 if TYPE_CHECKING:
     import logging
     from collections.abc import Mapping
 
-    from domain.firmware_wants import FirmwareCatalogue, FirmwarePlacement, FolderVerdict
+    from domain.firmware_wants import FirmwareCatalogue, FirmwarePlacement
     from services.protocols import (
         FirmwareFileStore,
-        FirmwareFolderVerdictFn,
+        FirmwarePlatformResolver,
         FirmwareResolver,
         RetroDeckPaths,
     )
@@ -35,14 +34,15 @@ if TYPE_CHECKING:
 class FirmwareDemandConfig:
     """Frozen wiring bundle handed to ``FirmwareDemand.__init__``.
 
-    Holds the two resolver seams — the whole-machine reading and the narrower
-    per-core folder read — the RetroDECK path accessor the destinations are
-    built under, the file store the plugin's own presence probe goes through,
-    and the logger a poisoned entry is reported on.
+    Holds the two resolver seams — the per-platform reading every status answer
+    is built from, and the whole-machine one the two callers with no platform to
+    name fall back to — the RetroDECK path accessor the destinations are built
+    under, the file store the plugin's own presence probe goes through, and the
+    logger a poisoned entry is reported on.
     """
 
     firmware_resolver: FirmwareResolver
-    firmware_folder_verdicts: FirmwareFolderVerdictFn
+    platform_firmware_resolver: FirmwarePlatformResolver
     retrodeck_paths: RetroDeckPaths
     firmware_file_store: FirmwareFileStore
     logger: logging.Logger
@@ -53,41 +53,34 @@ class FirmwareDemand:
 
     def __init__(self, *, config: FirmwareDemandConfig) -> None:
         self._firmware_resolver = config.firmware_resolver
-        self._firmware_folder_verdicts = config.firmware_folder_verdicts
+        self._platform_firmware_resolver = config.platform_firmware_resolver
         self._retrodeck_paths = config.retrodeck_paths
         self._firmware_file_store = config.firmware_file_store
         self._logger = config.logger
 
     # ── What the machine wants ───────────────────────────────
 
+    def platform_catalogue(self, system: str) -> FirmwareCatalogue:
+        """What *system*'s emulators want, read fresh and verified. Blocking.
+
+        The question every platform-scoped answer asks, and the only one that
+        covers a standalone emulator or settles a folder declaration.
+        """
+        return self._platform_firmware_resolver(system)
+
     def catalogue(self) -> FirmwareCatalogue:
-        """The whole machine's demand, read fresh. Blocking."""
+        """Every installed libretro core's demand, read fresh. Blocking.
+
+        The fallback for a caller with no platform to name — one firmware id, or
+        the home migration's sweep over a whole BIOS tree. It enumerates cores,
+        so it can answer where a file GOES for anything a core declares and can
+        never say what a standalone emulator wants.
+        """
         return self._firmware_resolver()
 
     def placement_index(self) -> Mapping[str, FirmwarePlacement]:
         """The machine's demand indexed by file name, for the paths that need only that."""
         return self.catalogue().by_file_name()
-
-    def folder_answers(
-        self,
-        placements: Mapping[str, FirmwarePlacement],
-        scope: list[str] | None,
-        asked: dict[str, Mapping[str, FolderVerdict]],
-    ) -> Mapping[str, FirmwarePlacement]:
-        """*placements* with the folder rows in *scope* answered by a verified read.
-
-        Blocking: the read opens the folder's candidates and reads them the way
-        the core does, so it is asked per core and only for the rows the
-        machine-wide reading left open. *asked* is the query's memo — the cores
-        are per platform, the answer per core.
-        """
-        verdicts: dict[str, FolderVerdict] = {}
-        for core_so in unanswered_folder_cores(placements, scope):
-            if core_so not in asked:
-                asked[core_so] = self._firmware_folder_verdicts(core_so)
-            for file_name, verdict in asked[core_so].items():
-                verdicts.setdefault(file_name, verdict)
-        return merge_folder_verdicts(placements, verdicts) if verdicts else placements
 
     # ── Destinations ─────────────────────────────────────────
 
@@ -167,7 +160,7 @@ class FirmwareDemand:
 
         What this never asks is whether the requirement is MET — that is
         ``BiosFileEntry.satisfied``, and for a folder declaration the two come
-        apart: what satisfies the core is a file inside the folder, and the
+        apart: what satisfies the emulator is a file inside the folder, and the
         folder itself is there on every stock RetroDECK.
         """
         if placement is None or placement.relative_path is None:
@@ -175,33 +168,29 @@ class FirmwareDemand:
         return placement.present is True
 
     def wanted_beyond_server(
-        self, placements: Mapping[str, FirmwarePlacement], scope: list[str] | None, in_library: set[str]
+        self, placements: Mapping[str, FirmwarePlacement], in_library: set[str]
     ) -> list[dict[str, Any]]:
         """Items for files this platform's emulators want that the library lacks.
 
-        A placement belongs to this platform when one of the libretro cores
-        ES-DE offers for it declares the file — the same scope the completeness
-        question uses, so a platform never claims a requirement from an emulator
-        it does not offer. ``scope`` is ``None`` when ``es_systems.xml`` could
-        not be read, and then no requirement can be attributed to any platform.
+        *placements* is the platform's own catalogue, so belonging is settled
+        before this is called: every placement in it was declared by an emulator
+        ES-DE offers for this system, and a reading that did not happen carries
+        no placement at all. That is what stops a platform from claiming a
+        requirement from an emulator it does not offer, and it now holds for a
+        standalone emulator's declarations too.
 
         ``in_library`` is every file name the RomM listing carries, across all
-        platforms — not just this one's. A core that serves several systems
+        platforms — not just this one's. An emulator that serves several systems
         declares the same file for each of them while RomM files it under one
         directory, so a per-platform check would tell the user a file is not in
         their library while it sits there under the neighbouring system. It is
         one download either way: the destination comes from the placement, so
-        fetching it anywhere satisfies every core that asked.
+        fetching it anywhere satisfies every emulator that asked.
         """
-        if not scope:
-            return []
-        cores = set(scope)
         bios_base = self._retrodeck_paths.bios_path()
         items: list[dict[str, Any]] = []
         for placement in sorted(placements.values(), key=lambda entry: entry.file_name):
             if placement.file_name in in_library:
-                continue
-            if not any(want.core_so in cores for want in placement.wants):
                 continue
             try:
                 dest = safe_join(bios_base, placement.destination, allow_base=True)

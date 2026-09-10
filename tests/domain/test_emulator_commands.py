@@ -277,6 +277,7 @@ class TestOptionsToPayload:
                 "label": "RPCS3 Shortcut (Standalone)",
                 "kind": "standalone",
                 "core_so": None,
+                "emulator": None,
                 "is_default": False,
                 "bakeable": False,
                 "reason": "shortcut_script",
@@ -285,6 +286,7 @@ class TestOptionsToPayload:
                 "label": "RPCS3 Game Serial (Standalone)",
                 "kind": "standalone",
                 "core_so": None,
+                "emulator": None,
                 "is_default": False,
                 "bakeable": False,
                 "reason": "inject",
@@ -293,6 +295,7 @@ class TestOptionsToPayload:
                 "label": "RPCS3 Directory (Standalone)",
                 "kind": "standalone",
                 "core_so": None,
+                "emulator": None,
                 "is_default": True,
                 "bakeable": True,
                 "reason": None,
@@ -304,6 +307,31 @@ class TestOptionsToPayload:
         assert payload[0]["kind"] == "libretro"
         assert payload[0]["core_so"] == "swanstation_libretro"
         assert payload[0]["is_default"] is True
+
+    def test_the_payload_carries_the_identity_beside_the_core(self):
+        """The one field naming both kinds, so a surface can join a pick to a firmware row.
+
+        ``core_so`` answers a different question and stays: a standalone
+        emulator has an identity and no core, and neither field is derivable from
+        the other.
+        """
+        payload = options_to_payload(
+            [
+                classify_command("SwanStation", PSX_SWANSTATION, emulator="swanstation_libretro.so"),
+                classify_command("PCSX2 (Standalone)", PS2_PCSX2_BATCH, emulator="PCSX2"),
+            ]
+        )
+
+        assert [(e["core_so"], e["emulator"]) for e in payload] == [
+            ("swanstation_libretro", "swanstation_libretro.so"),
+            (None, "PCSX2"),
+        ]
+
+    def test_an_unidentified_row_carries_no_identity(self):
+        """The resolver could not name the emulator, and the payload says so rather than guessing."""
+        payload = options_to_payload([classify_command("Citra", PSX_SWANSTATION)])
+
+        assert payload[0]["emulator"] is None
 
     def test_no_default_when_none_bakeable(self):
         payload = options_to_payload([classify_command("MAME (Standalone)", ARCADE_MAME_STANDALONE)])
@@ -374,6 +402,8 @@ class TestClassificationInvariants:
 
 
 def test_emulator_option_is_frozen():
-    option = EmulatorOption(label="x", kind="standalone", core_so=None, command="%ROM%", status="bakeable", reason=None)
+    option = EmulatorOption(
+        label="x", kind="standalone", core_so=None, command="%ROM%", status="bakeable", reason=None, emulator="RPCS3"
+    )
     with pytest.raises(dataclasses.FrozenInstanceError):
         option.label = "y"  # type: ignore[misc]

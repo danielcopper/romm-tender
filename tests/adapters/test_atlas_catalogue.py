@@ -49,6 +49,21 @@ _RETROARCH = "%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/{core}.so %ROM%"
 _HEALTH = Caveat(code=HEALTH_ISSUE_ROOT_MISSING, message="a health finding, on every answer this machine gives")
 
 
+class _Identifying:
+    """The installation an entry asks who it is — the one placement question this fixture answers.
+
+    ``emulator`` is not a spec field: the arrangement reads it, because the
+    spelling is the frontend's own. A libretro entry answers with its core file
+    basename, a standalone one with the identity the test states.
+    """
+
+    def __init__(self, emulator: str | None) -> None:
+        self._emulator = emulator
+
+    def entry_emulator(self, spec: EmulatorSpec) -> str | None:
+        return spec.core_so if spec.kind == KIND_LIBRETRO else self._emulator
+
+
 def _entry(
     *,
     label: str,
@@ -58,14 +73,16 @@ def _entry(
     core_so: str | None = None,
     selection: str | None = None,
     system: str = "ps3",
+    emulator: str | None = None,
 ) -> EmulatorEntry:
     """One catalogue entry, as the resolver hands it over.
 
-    The host an entry is bound to answers its placement questions, and nothing
-    here asks one — the adapter reads the spec's fields alone.
+    The host an entry is bound to answers its identity and its placement
+    questions; only the first is asked here, and the adapter reads the spec's
+    other fields directly.
     """
     return EmulatorEntry(
-        cast("Any", None),
+        cast("Any", _Identifying(emulator)),
         EmulatorSpec(
             system=system,
             label=label,
@@ -452,7 +469,9 @@ class TestInstalledProbe:
 
         options = adapter.get_emulator_options("switch")["options"]
         assert (options[0].status, options[0].reason) == ("needs_setup", "not_installed")
-        assert adapter.get_default_emulator("switch") == EmulatorInvocation.libretro("yuzu_libretro", "Yuzu")
+        assert adapter.get_default_emulator("switch") == EmulatorInvocation.libretro(
+            "yuzu_libretro", "Yuzu", "yuzu_libretro.so"
+        )
 
     def test_a_libretro_entry_is_never_downgraded(self, traces):
         installation = _Installation(catalogue=_answer(_libretro(label="mGBA", core="mgba_libretro", declared_index=0)))

@@ -56,6 +56,7 @@ from _vendor.atlas import (
     detect,
 )
 
+from adapters.atlas_identity import emulator_identity
 from domain.emulator_commands import (
     EmulatorOption,
     classify_command,
@@ -289,7 +290,7 @@ class AtlasCatalogueAdapter:
         if answer is None or _refused(answer):
             return _unavailable()
         options = [
-            self._probe_installed(classify_command(entry.label, entry.command))
+            self._probe_installed(classify_command(entry.label, entry.command, emulator=emulator_identity(entry)))
             for entry in _declared_order(answer.entries)
         ]
         return {"available": True, "options": options}

@@ -14,9 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    from domain.firmware_wants import FirmwareCatalogue, FolderVerdict
+    from domain.firmware_wants import FirmwareCatalogue
     from domain.save_answer import SaveAnswer
     from domain.save_layout import SaveLayout
     from domain.shortcut_data import EmulatorInvocation
@@ -30,40 +28,45 @@ class SystemResolver(Protocol):
 
 
 class FirmwareResolver(Protocol):
-    """Read what the installed emulators want, live off the machine.
+    """Read what every installed libretro core wants, live off the machine.
 
-    One whole-machine question per call, deliberately: the answer's scope is
-    every installed emulator, so a file classifies identically on the System
-    page and on a game detail page. Asking per platform instead is what let the
-    same file read "known" on one surface and "unknown" on another.
+    The whole-machine question, and it is the right one only where the caller
+    has **no platform to name**: the RetroDECK-home migration's untracked-BIOS
+    sweep, and the download of one firmware id. It enumerates installed cores,
+    so it carries no standalone emulator at all and can never say what one
+    wants — a platform-scoped answer asks :class:`FirmwarePlatformResolver`
+    instead.
 
     Implementations never raise and never guess: a reading that fails comes back
-    as a catalogue with no placements and ``complete`` clear, which classifies
+    as a catalogue with no placements and ``resolved`` clear, which classifies
     every server file as ``unknown`` rather than as "nothing needed".
     """
 
     def __call__(self) -> FirmwareCatalogue: ...
 
 
-class FirmwareFolderVerdictFn(Protocol):
-    """Read what one core's declared FOLDERS hold, verified off the machine.
+class FirmwarePlatformResolver(Protocol):
+    """Read what ONE system's emulators want, verified, live off the machine.
 
-    The question :class:`FirmwareResolver` deliberately does not answer. A core
-    that lists a folder is satisfied by a file *inside* it, so the only reading
-    that settles such a row opens the candidates and reads them the way the core
-    does — and doing that across a whole machine would sweep every unclaimed file
-    under the BIOS root on every game-page open, plus each declared file the
-    packaged identity table covers at a matching size. So the scope is one core,
-    and a caller asks only for the cores whose folder row the whole-machine
-    reading left unanswered (``domain.firmware_wants.unanswered_folder_cores``).
+    Every platform-scoped firmware answer. *system* is the resolved RetroDECK
+    system name (ADR-0010 §2), and the answer covers every emulator the
+    frontend's catalogue offers for it — libretro and standalone alike, which is
+    the whole reason this question exists beside :class:`FirmwareResolver`.
 
-    *core_so* is the plugin's identifier space: the bare ``.so`` basename
-    without its extension. Implementations never raise and never guess — a
-    reading that fails answers with no verdict at all, which leaves the row
-    withheld rather than claiming the folder holds nothing.
+    **The reading is verified, and that is a contract rather than an
+    implementation detail.** Two things cannot be answered without reading
+    bytes: a packaged rule card that identifies its image by content names no
+    file until one is read, and a folder declaration is satisfied by a file
+    INSIDE the folder rather than by the folder being there. An unverified
+    answer states both as silence, which a caller cannot tell from "nothing is
+    wanted". The cost is bounded by the system's own scope rather than by the
+    whole BIOS root.
+
+    Implementations never raise and never guess, on the same terms as
+    :class:`FirmwareResolver`.
     """
 
-    def __call__(self, core_so: str) -> Mapping[str, FolderVerdict]: ...
+    def __call__(self, system: str) -> FirmwareCatalogue: ...
 
 
 class RetroDeckPaths(Protocol):

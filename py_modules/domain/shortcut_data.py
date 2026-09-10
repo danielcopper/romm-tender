@@ -68,6 +68,13 @@ class EmulatorInvocation:
     standalone-emulator seam (#129); read-path consumers that only understand
     libretro keep reading ``core_so`` (``None`` for a standalone or direct
     emulator) and degrade exactly as they do for a ``(None, None)`` resolution.
+
+    ``emulator`` is the resolver's identity for this emulator, and it is the one
+    field that names it for BOTH kinds — the join a firmware answer is scoped
+    on. It is not a second spelling of ``label``: ES-DE lists one
+    ``pcsx2_libretro.so`` under two labels, so a label identifies a launch row
+    and not an emulator. ``None`` is an emulator the resolver could not identify,
+    which no answer may be scoped to.
     """
 
     kind: str  # "libretro" | "standalone" | "direct"
@@ -75,26 +82,29 @@ class EmulatorInvocation:
     core_so: str | None = None
     command: str | None = None
     launcher: str | None = None
+    emulator: str | None = None
 
     @classmethod
-    def libretro(cls, core_so: str, label: str | None = None) -> EmulatorInvocation:
+    def libretro(cls, core_so: str, label: str | None = None, emulator: str | None = None) -> EmulatorInvocation:
         """A RetroArch libretro core, identified by its bare ``.so`` name."""
-        return cls(kind="libretro", label=label, core_so=core_so)
+        return cls(kind="libretro", label=label, core_so=core_so, emulator=emulator)
 
     @classmethod
-    def standalone(cls, command: str, label: str | None = None) -> EmulatorInvocation:
+    def standalone(cls, command: str, label: str | None = None, emulator: str | None = None) -> EmulatorInvocation:
         """A standalone emulator, identified by its full ES-DE ``<command>`` text."""
-        return cls(kind="standalone", label=label, command=command)
+        return cls(kind="standalone", label=label, command=command, emulator=emulator)
 
     @classmethod
-    def direct(cls, command: str, launcher: str, label: str | None = None) -> EmulatorInvocation:
+    def direct(
+        cls, command: str, launcher: str, label: str | None = None, emulator: str | None = None
+    ) -> EmulatorInvocation:
         """A standalone emulator launched directly via its sandbox *launcher* (folder-boot form).
 
         *command* is the full ES-DE standalone ``<command>`` (its middle args are
         recovered at render time); *launcher* is the emulator's sandbox launcher
         path handed to ``flatpak run --command=``.
         """
-        return cls(kind="direct", label=label, command=command, launcher=launcher)
+        return cls(kind="direct", label=label, command=command, launcher=launcher, emulator=emulator)
 
 
 def resolve_emulator_invocation(rom: dict[str, Any], emulator: EmulatorInvocation | None = None) -> str:

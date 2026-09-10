@@ -5,10 +5,16 @@ aggregates: what each file is, whether the requirement it carries is met, and
 the platform-wide verdict that follows. Both answers come off one builder, so a
 platform and its games can never show a different level for the same files.
 
-The demand is read once per query for the whole machine, so one file cannot
-answer differently on two surfaces. Only the question "may an absence be read as
-*nothing wants it*" is narrowed, to the libretro cores ES-DE offers for the
-platform being rendered.
+**The demand is read per platform**, because which emulators can run a system is
+the only thing that says whether a standalone emulator's declarations belong to
+it — a whole-machine reading enumerates installed cores and carries no standalone
+entry at all. So the overview pays one reading per platform it renders rather
+than one for the page. Within a platform the two surfaces still share every
+answer: the pane and its games read one catalogue, one row set, one verdict.
+
+The doubt is narrower still, and is narrowed to ONE emulator: the pick the
+platform launches with. An emulator ES-DE also offers, that nothing could be read
+for, says nothing about a launch that does not use it.
 """
 
 from __future__ import annotations
@@ -35,11 +41,10 @@ from domain.firmware_wants import DECLARED_DIRECTORY
 if TYPE_CHECKING:
     import asyncio
     import logging
-    from collections.abc import Mapping
 
     from domain.bios_file import BiosFile
     from domain.emulator_commands import EmulatorOption
-    from domain.firmware_wants import FirmwareCatalogue, FirmwarePlacement, FolderVerdict
+    from domain.firmware_wants import FirmwareCatalogue
     from services.firmware.demand import FirmwareDemand
     from services.firmware.listing import FirmwareListing
     from services.protocols import (
@@ -55,7 +60,7 @@ if TYPE_CHECKING:
 class FirmwareStatusReaderConfig:
     """Frozen wiring bundle handed to ``FirmwareStatusReader.__init__``.
 
-    Holds the two peer sub-services the answers are built from — the machine's
+    Holds the two peer sub-services the answers are built from — the platform's
     demand and the RomM listing — plus the ES-DE core reads, the slug/system
     mapping, the per-platform emulator override, the file store the delete
     count probes through, the Unit-of-Work factory, and runtime infrastructure.
@@ -88,32 +93,32 @@ class FirmwareStatusReader:
 
     # ── Rows and aggregates ──────────────────────────────────
 
-    def _build_firmware_status_items(
-        self, firmware_iter, placements: Mapping[str, FirmwarePlacement]
-    ) -> list[dict[str, Any]]:
-        """Build ``collect_firmware_status`` items, dropping traversal-poisoned entries.
+    def _platform_demand(
+        self, system: str, server_rows: list[dict[str, Any]], in_library: set[str]
+    ) -> tuple[FirmwareCatalogue, list[dict[str, Any]]]:
+        """One platform's demand and its whole row set, in one worker hop. Blocking.
 
-        Each item carries the resolved ``dest`` and its ``downloaded``
-        flag. A firmware entry whose ``file_name`` fails the path-safety
-        check resolves to ``None`` and is skipped (logged in
-        ``FirmwareDemand.safe_dest_path``) so a single malicious entry cannot
-        crash the status query.
+        The reading, the destination each server row resolves to under it, the
+        presence answer that follows, and the rows for files the emulators want
+        that the library does not hold — every one of them a disk read, and all
+        of them behind one catalogue so a row and the verdict over it can never
+        come from two readings.
+
+        A server row whose ``file_name`` fails the path-safety check cannot be on
+        disk, so it is dropped rather than crashing the query (logged in
+        ``FirmwareDemand.safe_dest_path``).
         """
-        items: list[dict[str, Any]] = []
-        for fw in firmware_iter:
-            file_name = fw.get("file_name", "")
-            placement = placements.get(file_name)
-            dest = self._demand.safe_dest_path(fw, placement)
+        catalogue = self._demand.platform_catalogue(system)
+        placements = catalogue.by_file_name()
+        rows: list[dict[str, Any]] = []
+        for row in server_rows:
+            placement = placements.get(row["file_name"])
+            dest = self._demand.safe_dest_path(row, placement)
             if dest is None:
                 continue
-            items.append(
-                {
-                    "file_name": file_name,
-                    "downloaded": self._demand.is_downloaded(placement, dest),
-                    "dest": dest,
-                }
-            )
-        return items
+            rows.append({**row, "local_path": dest, "downloaded": self._demand.is_downloaded(placement, dest)})
+        rows.extend(_overview_row(item) for item in self._demand.wanted_beyond_server(placements, in_library))
+        return catalogue, rows
 
     def _platform_emulator(self, platform_slug: str, options: dict[str, Any]) -> EmulatorOption | None:
         """The emulator this platform resolves to — the one pick every surface here reads.
@@ -121,7 +126,7 @@ class FirmwareStatusReader:
         :func:`resolve_platform_option` over the emulators ES-DE lists and the
         per-platform override, which is the read-path precedence minus the
         per-game layer. Both projections of it are taken from this one call: the
-        label a pane displays and the ``.so`` its BIOS answers key on.
+        label a pane displays and the identity its BIOS answers key on.
 
         Takes the already-read *options* rather than the system name, because
         every caller needs the emulator list anyway and reading it costs a
@@ -129,23 +134,24 @@ class FirmwareStatusReader:
         """
         return resolve_platform_option(options["options"], self._platform_core_reader.get_platform_core(platform_slug))
 
-    def _resolve_bios_filter_core(
-        self, platform_slug: str, options: dict[str, Any], active_core_so: str | None
+    def _resolve_launching_emulator(
+        self, platform_slug: str, options: dict[str, Any], launching_emulator: str | None
     ) -> str | None:
-        """Return the ``.so`` to filter the firmware list against.
+        """Return the emulator identity the firmware answer is scoped to.
 
-        A non-``None`` ``active_core_so`` is the pre-resolved per-game core (the
-        game-detail path runs ``ActiveCoreResolver`` upstream) and is used as-is.
-        ``None`` is the platform-level callers' "use the platform's own pick"
-        signal — and it is also what the per-game path passes when the ROM
-        resolves to a **standalone** emulator, which names no core. Both are
-        answered by :meth:`_platform_emulator`, so the game page and the platform
-        pane cannot key their answers on two different emulators.
+        A non-``None`` *launching_emulator* is the pre-resolved per-game pick (the
+        game-detail path runs ``ActiveCoreResolver`` upstream) and is used as-is —
+        libretro or standalone, since the identity names both. ``None`` is the
+        platform-level callers' "use the platform's own pick" signal, and it is
+        also what the per-game path passes when nothing could be resolved or
+        identified for the ROM at all. Both are answered by
+        :meth:`_platform_emulator`, so the game page and the platform pane cannot
+        key their answers on two different emulators.
         """
-        if active_core_so is not None:
-            return active_core_so
+        if launching_emulator is not None:
+            return launching_emulator
         emulator = self._platform_emulator(platform_slug, options)
-        return emulator.core_so if emulator is not None else None
+        return emulator.emulator if emulator is not None else None
 
     def _bios_aggregates(self, files, platform_slug: str, complete: bool, system_image: str) -> dict[str, Any]:
         """The counts, level and label every surface reads off one classified file list.
@@ -154,7 +160,7 @@ class FirmwareStatusReader:
         and its games can never show a different level for the same files.
 
         Three axes, and each counts a different set on purpose.
-        ``required_count`` is the launching core's — the badge's — and includes a
+        ``required_count`` is the launching emulator's — the badge's — and includes a
         required file the library does not hold, because that file is a
         prerequisite whether or not anything here can fetch it.
         ``required_withheld`` rides with it as the part of that count nothing
@@ -173,7 +179,7 @@ class FirmwareStatusReader:
         *system_image* is a fourth axis beside those three counted sets, and the
         only one of the four that is not a count at all
         (:func:`classify_system_image`): the console's own demand on the
-        launching core is disjunctive — one of these images, not each of them —
+        launching emulator is disjunctive — one of these images, not each of them —
         so it travels as a value and every surface words it rather than printing
         it as a ratio.
         """
@@ -201,7 +207,7 @@ class FirmwareStatusReader:
         # "unknown" replaces the false "ok" a bare count would give, for a
         # platform whose server files went entirely unanswered, for one holding
         # no file at all under a reading that never happened, and for one whose
-        # launching core requires a file nothing could judge.
+        # launching emulator requires a file nothing could judge.
         #
         # Derived HERE and only here because this is where ``complete`` is known:
         # a second derivation elsewhere would have to be handed the same reading
@@ -227,26 +233,26 @@ class FirmwareStatusReader:
 
     # ── The whole-library overview ───────────────────────────
 
-    def _group_server_firmware(self, firmware_list, placements: Mapping[str, FirmwarePlacement]):
-        """Group server firmware list by platform slug."""
+    @staticmethod
+    def _group_server_firmware(firmware_list):
+        """Group server firmware list by platform slug.
+
+        The server's own fields only. Where each file goes and whether it is
+        there are answers about ONE platform's emulators, so they are filled in
+        per platform (:meth:`_platform_demand`) once that platform's reading is
+        in hand rather than from a machine-wide index this page no longer holds.
+        """
         platforms_map = {}
         for fw in firmware_list:
             platform_slug = firmware_paths.parse_firmware_slug(fw.get("file_path", "")) or "unknown"
-            file_name = fw.get("file_name", "")
-            placement = placements.get(file_name)
-            dest = self._demand.safe_dest_path(fw, placement)
-            if dest is None:
-                continue
             if platform_slug not in platforms_map:
                 platforms_map[platform_slug] = {"platform_slug": platform_slug, "files": []}
             platforms_map[platform_slug]["files"].append(
                 {
                     "id": fw.get("id"),
-                    "file_name": file_name,
+                    "file_name": fw.get("file_name", ""),
                     "size": fw.get("file_size_bytes", 0),
                     "md5": fw.get("md5_hash", ""),
-                    "local_path": dest,
-                    "downloaded": self._demand.is_downloaded(placement, dest),
                     "on_server": True,
                 }
             )
@@ -346,11 +352,10 @@ class FirmwareStatusReader:
         self,
         platforms_map,
         synced_slugs,
-        catalogue: FirmwareCatalogue,
         in_library: set[str],
         records: list[BiosFile],
     ):
-        """Add core info, wants, and game-installed flags to each platform entry.
+        """Add emulator info, wants, and game-installed flags to each platform entry.
 
         The core read seams key by the resolved RetroDECK ``system`` (ADR-0010
         §2), so each entry's raw RomM/BIOS-folder slug is normalized before the
@@ -360,42 +365,38 @@ class FirmwareStatusReader:
         (:meth:`_platform_emulator`) — the per-platform override
         (``platform_cores``) when set and still resolvable, else the es_systems
         default — so the pane cannot name one emulator and judge by another.
-        ``active_core`` is ``None`` where that pick is a **standalone** emulator,
-        which names no core: the BIOS filter then falls back to every declaring
-        emulator, the degraded answer ADR-0020 defers. The ``emulators`` list is
-        the full classified picker payload and ``emulator_data_available`` flags
-        whether ``es_systems.xml`` was readable.
+        ``active_core`` carries that pick's IDENTITY, which stands for a
+        standalone emulator as much as for a libretro core; it is ``None`` only
+        where the pick could not be made or the resolver could not identify it,
+        and the rows then fall back to every declaring emulator. The
+        ``emulators`` list is the full classified picker payload and
+        ``emulator_data_available`` flags whether ``es_systems.xml`` was readable.
 
-        *catalogue* is read once by the caller and shared across every platform:
-        it is one machine-wide question costing hundreds of milliseconds, and
-        asking it per platform would multiply that by the platform count while
-        answering the same thing each time. *in_library* is likewise the whole
-        listing's file names rather than one platform's slice — see
-        :meth:`FirmwareDemand.wanted_beyond_server`. *records* is every BIOS
-        download row, read once for the same reason and sliced per platform by
-        :meth:`_stamp_deletable`. The folder verdicts are scoped per platform and
-        memoised across them (:meth:`FirmwareDemand.folder_answers`) — the cores
-        are the platform's, the answer is the core's.
+        **The demand is read per platform**, because a standalone emulator's
+        declarations belong to a platform only by way of the emulators ES-DE
+        offers for it. That is the cost this page pays for answering at all for a
+        platform whose emulators are all standalone. *in_library* is still the
+        whole listing's file names rather than one platform's slice — see
+        :meth:`FirmwareDemand.wanted_beyond_server` — and *records* is every BIOS
+        download row, read once and sliced per platform by
+        :meth:`_stamp_deletable`.
         """
-        index = catalogue.by_file_name()
-        disjunctive_cores = catalogue.cores_needing_one_of_their_files()
-        asked: dict[str, Mapping[str, FolderVerdict]] = {}
         for plat in platforms_map.values():
             slug = plat["platform_slug"]
             system = self._resolve_system(slug)
             options = self._core_info.get_emulator_options(system)
             emulator = self._platform_emulator(slug, options)
-            core_so = emulator.core_so if emulator is not None else None
-            plat["active_core"] = core_so
+            identity = emulator.emulator if emulator is not None else None
+            plat["active_core"] = identity
             plat["active_core_label"] = emulator.label if emulator is not None else None
             plat["emulators"] = options_to_payload(options["options"])
             plat["emulator_data_available"] = options["available"]
-            scope = _core_scope(options)
-            placements = await self._loop.run_in_executor(None, self._demand.folder_answers, index, scope, asked)
-            complete = catalogue.reading_complete_for(scope)
-            plat["files"].extend(
-                _overview_row(item) for item in self._demand.wanted_beyond_server(placements, scope, in_library)
+            catalogue, rows = await self._loop.run_in_executor(
+                None, self._platform_demand, system, plat["files"], in_library
             )
+            plat["files"] = rows
+            placements = catalogue.by_file_name()
+            complete = catalogue.reading_complete_for(identity)
             files = collect_firmware_status(
                 [
                     {
@@ -408,8 +409,8 @@ class FirmwareStatusReader:
                 ],
                 placements,
                 complete,
-                core_so,
-                disjunctive_cores,
+                identity,
+                catalogue.emulators_needing_one_of_their_files(),
             )
             plat["files"] = [{**raw, **_wanted_fields(entry)} for raw, entry in zip(plat["files"], files, strict=True)]
             # Alphabetical, and only here: the two halves arrive in their own
@@ -428,7 +429,7 @@ class FirmwareStatusReader:
             plat["has_games"] = slug in synced_slugs
             plat["all_downloaded"] = all(f["downloaded"] for f in plat["files"])
             self._stamp_deletable(plat, slug, records)
-            system_image = classify_system_image(catalogue.verdict_for(core_so), files, core_so)
+            system_image = classify_system_image(catalogue.verdict_for(identity), files, identity)
             self._set_platform_bios_aggregates(plat, slug, files, complete, system_image)
 
     def _set_platform_bios_aggregates(
@@ -450,11 +451,12 @@ class FirmwareStatusReader:
         rows were answered and whose verdict was declined by a single unjudgeable
         requirement keeps every one of them.
 
-        *complete* is the reading state for the platform's own emulators, and it
-        is what stops a platform with no file at all from reading a green "all
-        ready" it could not have established.
+        *complete* is whether the LAUNCHING emulator could be asked at all, and
+        it is what stops a platform reading a green "all ready" over an emulator
+        nobody asked — including one whose page carries another emulator's rows,
+        where the counts would otherwise say nothing is required.
 
-        *system_image* is the console's own demand on the launching core, and it
+        *system_image* is the console's own demand on the launching emulator, and it
         travels beside the counts rather than in them: the pane words it and the
         list's tooltip words it, and neither may state it as a ratio.
         """
@@ -475,12 +477,11 @@ class FirmwareStatusReader:
         so the platforms, their emulator pickers and their readiness all survive.
         """
         server_offline = False
-        catalogue, synced_slugs, records = await self._loop.run_in_executor(None, self._read_status_inputs)
-        placements = catalogue.by_file_name()
+        synced_slugs, records = await self._loop.run_in_executor(None, self._read_status_inputs)
         firmware_list: list[dict[str, Any]] = []
         try:
             firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
-            platforms_map = self._group_server_firmware(firmware_list, placements)
+            platforms_map = self._group_server_firmware(firmware_list)
         except Exception as e:
             self._logger.warning(f"Building the firmware overview without the server listing: {e}")
             server_offline = True
@@ -488,21 +489,22 @@ class FirmwareStatusReader:
 
         seeded = self._seed_synced_platforms(platforms_map, synced_slugs)
         in_library = {fw.get("file_name", "") for fw in firmware_list}
-        await self._enrich_platform_map(platforms_map, synced_slugs, catalogue, in_library, records)
+        await self._enrich_platform_map(platforms_map, synced_slugs, in_library, records)
         platforms = sorted(
             (plat for slug, plat in platforms_map.items() if slug not in seeded or _has_something_to_say(plat)),
             key=lambda p: p["platform_slug"],
         )
         return {"success": True, "server_offline": server_offline, "platforms": platforms}
 
-    def _read_status_inputs(self) -> tuple[FirmwareCatalogue, set[str], list[BiosFile]]:
-        """The three blocking reads the overview needs, in one worker hop.
+    def _read_status_inputs(self) -> tuple[set[str], list[BiosFile]]:
+        """The two blocking DB reads the overview needs, in one worker hop.
 
-        The resolver walks a few hundred ``.info`` files and the two DB reads
-        each open a UoW; all of it belongs off the loop thread, and none of it
-        depends on the others.
+        Both open a UoW, so both belong off the loop thread, and neither depends
+        on the other. The firmware readings are not here: there is one per
+        platform and each needs that platform's resolved system name
+        (:meth:`_platform_demand`).
         """
-        return self._demand.catalogue(), self._read_synced_slugs(), self._read_bios_records()
+        return self._read_synced_slugs(), self._read_bios_records()
 
     def _read_bios_records(self) -> list[BiosFile]:
         """Every BIOS download record, for the overview's per-platform delete count.
@@ -516,17 +518,18 @@ class FirmwareStatusReader:
 
     # ── The per-game check ───────────────────────────────────
 
-    async def check_platform_bios(self, platform_slug, active_core_so=None) -> dict[str, Any]:
+    async def check_platform_bios(self, platform_slug, launching_emulator=None) -> dict[str, Any]:
         """Check if RomM has firmware for this platform and whether it's downloaded.
 
-        Returns BIOS status only. ``active_core_so`` is the pre-resolved core used
-        to filter the firmware list by what THIS core needs (an INPUT to
-        ``collect_firmware_status`` so ``required_count`` / the missing-BIOS badge
-        stay core-aware); it is never served back to the UI. ``None`` means "use
-        the platform's own pick" (:meth:`_resolve_bios_filter_core`); the
-        per-game game-detail path passes the ROM's resolved ``.so``. Core info
-        reaches the frontend through the dedicated ``get_platform_core_info``
-        path, not this payload (#923).
+        Returns BIOS status only. ``launching_emulator`` is the pre-resolved
+        emulator IDENTITY used to filter the firmware list by what THIS emulator
+        needs (an INPUT to ``collect_firmware_status`` so ``required_count`` /
+        the missing-BIOS badge stay launch-aware); it is never served back to the
+        UI. ``None`` means "use the platform's own pick"
+        (:meth:`_resolve_launching_emulator`); the per-game game-detail path
+        passes the ROM's resolved identity, which names a standalone emulator as
+        readily as a libretro core. Emulator info reaches the frontend through
+        the dedicated ``get_platform_core_info`` path, not this payload (#923).
 
         An unreachable server costs the files only it knows about, not the
         answer: what the platform's emulators want is read locally either way.
@@ -539,8 +542,7 @@ class FirmwareStatusReader:
         system = self._resolve_system(platform_slug)
         fw_slugs = firmware_paths.resolve_firmware_slugs(platform_slug)
         options = self._core_info.get_emulator_options(system)
-        scope = _core_scope(options)
-        active_core_so = self._resolve_bios_filter_core(platform_slug, options, active_core_so)
+        launching_emulator = self._resolve_launching_emulator(platform_slug, options, launching_emulator)
 
         try:
             firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
@@ -548,71 +550,35 @@ class FirmwareStatusReader:
             self._logger.warning(f"Answering BIOS status without the server listing: {e}")
             firmware_list = []
 
-        catalogue = await self._loop.run_in_executor(None, self._demand.catalogue)
-        placements = await self._loop.run_in_executor(
-            None, self._demand.folder_answers, catalogue.by_file_name(), scope, {}
+        server_rows = [
+            {"file_name": fw.get("file_name", ""), "on_server": True}
+            for fw in firmware_list
+            if firmware_paths.parse_firmware_slug(fw.get("file_path", "")) in fw_slugs
+        ]
+        catalogue, rows = await self._loop.run_in_executor(
+            None, self._platform_demand, system, server_rows, {fw.get("file_name", "") for fw in firmware_list}
         )
-        items = self._build_firmware_status_items(
-            (fw for fw in firmware_list if firmware_paths.parse_firmware_slug(fw.get("file_path", "")) in fw_slugs),
-            placements,
-        )
-        items.extend(
-            self._demand.wanted_beyond_server(placements, scope, {fw.get("file_name", "") for fw in firmware_list})
-        )
-        complete = catalogue.reading_complete_for(scope)
+        items = [
+            {
+                "file_name": r["file_name"],
+                "downloaded": r["downloaded"],
+                "dest": r["local_path"],
+                "on_server": r["on_server"],
+            }
+            for r in rows
+        ]
+        placements = catalogue.by_file_name()
+        complete = catalogue.reading_complete_for(launching_emulator)
         files = collect_firmware_status(
-            items, placements, complete, active_core_so, catalogue.cores_needing_one_of_their_files()
+            items, placements, complete, launching_emulator, catalogue.emulators_needing_one_of_their_files()
         )
-        system_image = classify_system_image(catalogue.verdict_for(active_core_so), files, active_core_so)
+        system_image = classify_system_image(catalogue.verdict_for(launching_emulator), files, launching_emulator)
 
         if not files:
             settled = complete and system_image == SYSTEM_IMAGE_NOT_DEMANDED
             return {"needs_bios": False} if settled else {"needs_bios": False, "bios_status_unknown": True}
 
         return self._bios_payload(files, platform_slug, complete, system_image)
-
-
-def _core_scope(options: dict[str, Any]) -> list[str] | None:
-    """The libretro cores an ES-DE emulator list offers, or ``None`` when it names none.
-
-    The scope an absence is judged against. ``None`` means the scope itself
-    is unestablished, so nothing may be ruled out for this platform — and it
-    has two causes that are the same thing to the caller: the emulator
-    catalogue could not be read (no installation detected, a refusal on the
-    answer, or the resolver raised), or it was read and offers this system no
-    libretro core at all.
-
-    The second is not a corner case. 35 of ES-DE's 172 systems have no
-    libretro command, ``ps3`` among them — a mapped RomM platform whose only
-    entry is RPCS3. An empty list would be a *complete* reading of nothing:
-    every server file classifies ``not_needed``, ``required_count`` is 0, and
-    the platform reads a green "Nothing required" over firmware RPCS3 will
-    not boot without. The same applies to any RomM slug ``resolve_system``
-    maps to a name ``es_systems.xml`` does not carry. Grey ``unknown`` is
-    the honest answer for a platform whose emulators this service does not
-    enumerate, and it is what ADR-0020's standalone deferral licenses.
-
-    Standalone entries are out of the scope by that deferral rather than by
-    oversight: ADR-0020 defers standalone BIOS accuracy (inheriting
-    ADR-0012's), which is also why a platform resolving to a standalone
-    emulator names no filter core (:meth:`FirmwareStatusReader._platform_emulator`).
-    Widening the scope is not the whole of lifting it — the resolver
-    does answer per-system for standalone emulators, but
-    ``_vendor/atlas/data/standalone_firmware.json`` holds cards for five of
-    them (CEMU, DUCKSTATION, MELONDS, PCSX2, XEMU), and those five answer
-    ``declaration="packaged"``. Every other standalone emulator answers
-    ``declaration="unsupported"``, which upstream documents as meaning
-    unknown, not "needs nothing" — measured here, 20 distinct standalone
-    emulators in ``es_systems.xml`` and so 15 of them uncovered, though that
-    count moves with each RetroDECK release. So the deferral outlives this
-    scope: upstream coverage has to arrive first.
-
-    Takes the already-read options rather than the system name so a caller
-    that needs the emulator list anyway reads it once.
-    """
-    if not options["available"]:
-        return None
-    return [option.core_so for option in options["options"] if option.core_so] or None
 
 
 def _has_something_to_say(plat: dict[str, Any]) -> bool:
@@ -623,9 +589,9 @@ def _has_something_to_say(plat: dict[str, Any]) -> bool:
     file to show, it speaks for itself. With none, it stays only when its answer
     is ``unknown``: dropping the block is itself a claim, read by anyone looking
     for the platform as "nothing to manage here", and that is the false negative
-    a platform whose emulators cannot be asked must never give. A platform whose
-    reading finished and found nothing wanted really has nothing to manage, and
-    still drops out.
+    a platform whose launching emulator cannot be asked must never give. A
+    platform whose reading finished and found nothing wanted really has nothing
+    to manage, and still drops out.
     """
     return bool(plat["files"]) or plat["bios_level"] == BIOS_LEVEL_UNKNOWN
 

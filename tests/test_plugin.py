@@ -1170,7 +1170,7 @@ class TestMainStartupOrdering:
                 adoption_move=MagicMock(),
                 firmware_file_store=MagicMock(),
                 firmware_resolver=MagicMock(),
-                firmware_folder_verdicts=MagicMock(),
+                platform_firmware_resolver=MagicMock(),
                 migration_file_store=MagicMock(),
                 rom_file_store=MagicMock(),
                 save_file_store=MagicMock(),

@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from domain.firmware_wants import (
-    DECLARED_DIRECTORY,
     SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
     SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
     SYSTEM_FIRMWARE_OPEN,
@@ -18,10 +17,7 @@ from domain.firmware_wants import (
     FirmwareCatalogue,
     FirmwarePlacement,
     FirmwareWant,
-    FolderVerdict,
     classify_wanted,
-    merge_folder_verdicts,
-    unanswered_folder_cores,
 )
 
 
@@ -39,38 +35,38 @@ def _catalogue(
     unread: frozenset[str] = frozenset(),
     resolved: bool = True,
 ) -> FirmwareCatalogue:
-    return FirmwareCatalogue(placements=placements, unread_cores=unread, resolved=resolved)
+    return FirmwareCatalogue(placements=placements, unread_emulators=unread, resolved=resolved)
 
 
 class TestRequiredByAny:
     def test_required_by_one_core_is_required(self):
         placement = _placement(
             "scph5501.bin",
-            FirmwareWant(core_so="swanstation_libretro", required=False),
-            FirmwareWant(core_so="mednafen_psx_libretro", required=True),
+            FirmwareWant(emulator="swanstation_libretro", required=False),
+            FirmwareWant(emulator="mednafen_psx_libretro", required=True),
         )
         assert placement.required_by_any is True
 
     def test_optional_everywhere_is_not_required(self):
         placement = _placement(
             "dc_boot.bin",
-            FirmwareWant(core_so="flycast_libretro", required=False),
+            FirmwareWant(emulator="flycast_libretro", required=False),
         )
         assert placement.required_by_any is False
 
 
 class TestClassifyWanted:
     def test_required_by_any_core_is_needed(self):
-        placement = _placement("codehandler.bin", FirmwareWant(core_so="dolphin_libretro", required=True))
+        placement = _placement("codehandler.bin", FirmwareWant(emulator="dolphin_libretro", required=True))
         assert classify_wanted(placement, complete=True) == WANTED_NEEDED
 
     def test_declared_but_never_required_is_optional(self):
-        placement = _placement("dc_boot.bin", FirmwareWant(core_so="flycast_libretro", required=False))
+        placement = _placement("dc_boot.bin", FirmwareWant(emulator="flycast_libretro", required=False))
         assert classify_wanted(placement, complete=True) == WANTED_OPTIONAL
 
     def test_a_needed_file_stays_needed_on_an_incomplete_reading(self):
         """A match is a match — the reading state only ever decides an ABSENCE."""
-        placement = _placement("codehandler.bin", FirmwareWant(core_so="dolphin_libretro", required=True))
+        placement = _placement("codehandler.bin", FirmwareWant(emulator="dolphin_libretro", required=True))
         assert classify_wanted(placement, complete=False) == WANTED_NEEDED
 
     def test_no_placement_on_a_complete_reading_is_not_needed(self):
@@ -82,40 +78,43 @@ class TestClassifyWanted:
 
 
 class TestReadingCompleteFor:
-    def test_scope_with_no_unread_core_is_complete(self):
-        catalogue = _catalogue(unread=frozenset({"fbalpha_libretro"}))
-        assert catalogue.reading_complete_for(["mgba_libretro", "gambatte_libretro"]) is True
+    def test_a_launching_emulator_that_was_read_is_complete(self):
+        catalogue = _catalogue(unread=frozenset({"fbalpha_libretro.so"}))
+        assert catalogue.reading_complete_for("mgba_libretro.so") is True
 
-    def test_an_unread_core_inside_the_scope_blocks_completeness(self):
-        catalogue = _catalogue(unread=frozenset({"fbalpha_libretro"}))
-        assert catalogue.reading_complete_for(["fbalpha_libretro", "mame_libretro"]) is False
+    def test_an_unread_launching_emulator_blocks_completeness(self):
+        catalogue = _catalogue(unread=frozenset({"fbalpha_libretro.so"}))
+        assert catalogue.reading_complete_for("fbalpha_libretro.so") is False
 
-    def test_an_unread_core_outside_the_scope_does_not(self):
-        """One unreadable core anywhere must not silence every platform's answer."""
-        catalogue = _catalogue(unread=frozenset({"gearlynx_libretro"}))
-        assert catalogue.reading_complete_for(["mednafen_psx_libretro"]) is True
+    def test_another_unread_emulator_of_the_platform_does_not(self):
+        """The doubt is the launch's, and an emulator nobody is running is not in it.
 
-    def test_an_unknown_scope_is_never_complete(self):
+        A platform offering four emulators used to lose its whole answer to any
+        one of them being unreadable, whichever one the game launches with.
+        """
+        catalogue = _catalogue(unread=frozenset({"gearlynx_libretro.so"}))
+        assert catalogue.reading_complete_for("mednafen_psx_libretro.so") is True
+
+    def test_a_standalone_emulator_is_asked_about_like_any_other(self):
+        catalogue = _catalogue(unread=frozenset({"PCSX2"}))
+
+        assert catalogue.reading_complete_for("DUCKSTATION") is True
+        assert catalogue.reading_complete_for("PCSX2") is False
+
+    def test_no_emulator_to_name_is_never_complete(self):
+        """Nothing was resolved or nothing could be identified — the same silence either way.
+
+        Answering ``True`` would let every server file classify ``not_needed``
+        and the platform read a green "Nothing required" off asking nobody, which
+        is the collapse the four-valued vocabulary exists to prevent.
+        """
         catalogue = _catalogue()
         assert catalogue.reading_complete_for(None) is False
 
     def test_an_unresolved_reading_is_never_complete(self):
-        """A scope that would otherwise be complete, so the ``resolved`` gate is what answers."""
+        """An emulator that would otherwise be complete, so the ``resolved`` gate is what answers."""
         catalogue = _catalogue(resolved=False)
-        assert catalogue.reading_complete_for(["mgba_libretro"]) is False
-
-    def test_an_empty_scope_is_never_complete(self):
-        """Vacuously every core was asked — and that is exactly the trap.
-
-        A platform ES-DE offers no libretro core for (35 of its 172 systems,
-        ``ps3`` among them) yields an empty scope. Answering ``True`` would let
-        every server file classify ``not_needed`` and the platform read a green
-        "Nothing required" off asking nobody, which is the collapse the
-        four-valued vocabulary exists to prevent. Asking no one establishes
-        nothing, so an empty scope answers like ``None``.
-        """
-        catalogue = _catalogue(unread=frozenset({"fbalpha_libretro"}))
-        assert catalogue.reading_complete_for([]) is False
+        assert catalogue.reading_complete_for("mgba_libretro.so") is False
 
 
 class TestCoresNeedingASystemImage:
@@ -131,9 +130,11 @@ class TestCoresNeedingASystemImage:
     def _with(**verdicts: str | None) -> FirmwareCatalogue:
         return FirmwareCatalogue(
             placements=(),
-            unread_cores=frozenset(),
+            unread_emulators=frozenset(),
             resolved=True,
-            core_verdicts={core_so: CoreFirmwareVerdict(system_firmware=state) for core_so, state in verdicts.items()},
+            emulator_verdicts={
+                emulator: CoreFirmwareVerdict(system_firmware=state) for emulator, state in verdicts.items()
+            },
         )
 
     def test_only_the_console_that_will_not_start_is_named(self):
@@ -144,17 +145,17 @@ class TestCoresNeedingASystemImage:
             mgba_libretro=SYSTEM_FIRMWARE_OPEN,
         )
 
-        assert catalogue.cores_needing_a_system_image() == frozenset({"swanstation_libretro"})
+        assert catalogue.emulators_needing_a_system_image() == frozenset({"swanstation_libretro"})
 
     def test_a_core_the_table_says_nothing_about_is_left_out(self):
         """An absent entry is an unasked question, and this set answers only where something was recorded."""
         catalogue = self._with(swanstation_libretro=None)
 
-        assert catalogue.cores_needing_a_system_image() == frozenset()
+        assert catalogue.emulators_needing_a_system_image() == frozenset()
         assert catalogue.verdict_for("gpsp_libretro") is None
 
     def test_a_reading_that_did_not_happen_names_nobody(self):
-        assert _catalogue(resolved=False).cores_needing_a_system_image() == frozenset()
+        assert _catalogue(resolved=False).emulators_needing_a_system_image() == frozenset()
 
     def test_it_agrees_with_the_per_core_answer_for_every_core(self):
         """One question, two shapes — asked over all cores or one at a time."""
@@ -163,18 +164,18 @@ class TestCoresNeedingASystemImage:
             pcsx_rearmed_libretro=SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
         )
 
-        named = catalogue.cores_needing_a_system_image()
+        named = catalogue.emulators_needing_a_system_image()
 
-        for core_so in ("swanstation_libretro", "pcsx_rearmed_libretro"):
-            verdict = catalogue.verdict_for(core_so)
+        for emulator in ("swanstation_libretro", "pcsx_rearmed_libretro"):
+            verdict = catalogue.verdict_for(emulator)
             assert verdict is not None
-            assert (core_so in named) is verdict.system_needs_an_image
+            assert (emulator in named) is verdict.system_needs_an_image
 
 
 class TestCoresNeedingOneOfTheirFiles:
     """Which cores state a DISJUNCTION, and over how many files.
 
-    The narrower half of :meth:`cores_needing_a_system_image`: a core is here
+    The narrower half of :meth:`emulators_needing_a_system_image`: a core is here
     only where its console needs an image AND the core marks nothing required,
     because that is the only shape in which "one of these" is the whole of what
     the core says. The corpus is the deployed PlayStation as it was measured on
@@ -196,17 +197,17 @@ class TestCoresNeedingOneOfTheirFiles:
         placements = tuple(
             _placement(
                 name,
-                FirmwareWant(core_so="swanstation_libretro", required=False),
-                FirmwareWant(core_so="mednafen_psx_libretro", required=beetle_required and name.startswith("scph")),
-                FirmwareWant(core_so="pcsx_rearmed_libretro", required=False),
+                FirmwareWant(emulator="swanstation_libretro", required=False),
+                FirmwareWant(emulator="mednafen_psx_libretro", required=beetle_required and name.startswith("scph")),
+                FirmwareWant(emulator="pcsx_rearmed_libretro", required=False),
             )
             for name in cls._IMAGES
         )
         return FirmwareCatalogue(
             placements=placements,
-            unread_cores=frozenset(),
+            unread_emulators=frozenset(),
             resolved=True,
-            core_verdicts={
+            emulator_verdicts={
                 "swanstation_libretro": CoreFirmwareVerdict(system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT),
                 "mednafen_psx_libretro": CoreFirmwareVerdict(system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT),
                 "pcsx_rearmed_libretro": CoreFirmwareVerdict(system_firmware=SYSTEM_FIRMWARE_CORE_ALTERNATIVE),
@@ -215,7 +216,7 @@ class TestCoresNeedingOneOfTheirFiles:
 
     def test_a_core_that_marks_nothing_required_carries_its_whole_declaration(self):
         """Five, because SwanStation declares five — not because a platform lists five."""
-        assert self._psx().cores_needing_one_of_their_files()["swanstation_libretro"] == 5
+        assert self._psx().emulators_needing_one_of_their_files()["swanstation_libretro"] == 5
 
     def test_a_core_that_does_mark_something_required_is_left_out(self):
         """The Beetle PSX shape, and the reason the two answers differ.
@@ -227,8 +228,8 @@ class TestCoresNeedingOneOfTheirFiles:
         """
         catalogue = self._psx()
 
-        assert "mednafen_psx_libretro" in catalogue.cores_needing_a_system_image()
-        assert "mednafen_psx_libretro" not in catalogue.cores_needing_one_of_their_files()
+        assert "mednafen_psx_libretro" in catalogue.emulators_needing_a_system_image()
+        assert "mednafen_psx_libretro" not in catalogue.emulators_needing_one_of_their_files()
 
     def test_one_required_file_anywhere_silences_the_core_on_every_file(self):
         """It is the core's whole declaration that decides, not the file in hand.
@@ -238,39 +239,39 @@ class TestCoresNeedingOneOfTheirFiles:
         annotation that put "the console will not start without one" under a
         core that hard-requires three other images.
         """
-        assert "mednafen_psx_libretro" not in self._psx(beetle_required=True).cores_needing_one_of_their_files()
-        assert self._psx(beetle_required=False).cores_needing_one_of_their_files()["mednafen_psx_libretro"] == 5
+        assert "mednafen_psx_libretro" not in self._psx(beetle_required=True).emulators_needing_one_of_their_files()
+        assert self._psx(beetle_required=False).emulators_needing_one_of_their_files()["mednafen_psx_libretro"] == 5
 
     def test_a_core_carrying_its_own_substitute_is_left_out(self):
         """PCSX ReARMed marks nothing required either — its console makes the difference."""
-        assert "pcsx_rearmed_libretro" not in self._psx().cores_needing_one_of_their_files()
+        assert "pcsx_rearmed_libretro" not in self._psx().emulators_needing_one_of_their_files()
 
     def test_a_core_the_table_says_nothing_about_is_left_out(self):
         """An absent entry is an unasked question, never a demand."""
-        catalogue = _catalogue(_placement("gba_bios.bin", FirmwareWant(core_so="gpsp_libretro", required=False)))
+        catalogue = _catalogue(_placement("gba_bios.bin", FirmwareWant(emulator="gpsp_libretro", required=False)))
 
-        assert catalogue.cores_needing_one_of_their_files() == {}
+        assert catalogue.emulators_needing_one_of_their_files() == {}
 
     def test_a_reading_that_did_not_happen_names_nobody(self):
-        assert _catalogue(resolved=False).cores_needing_one_of_their_files() == {}
+        assert _catalogue(resolved=False).emulators_needing_one_of_their_files() == {}
 
     def test_an_emulator_with_no_core_of_its_own_is_not_counted(self):
         """A standalone emulator names no ``.so``, so there is no key to answer under."""
         catalogue = FirmwareCatalogue(
-            placements=(_placement("scph5501.bin", FirmwareWant(core_so=None, required=False)),),
-            unread_cores=frozenset(),
+            placements=(_placement("scph5501.bin", FirmwareWant(emulator=None, required=False)),),
+            unread_emulators=frozenset(),
             resolved=True,
-            core_verdicts={"swanstation_libretro": CoreFirmwareVerdict(SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT)},
+            emulator_verdicts={"swanstation_libretro": CoreFirmwareVerdict(SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT)},
         )
 
-        assert catalogue.cores_needing_one_of_their_files() == {}
+        assert catalogue.emulators_needing_one_of_their_files() == {}
 
 
 class TestByFileName:
     def test_indexes_every_placement(self):
         catalogue = _catalogue(
-            _placement("a.bin", FirmwareWant(core_so="one_libretro", required=True)),
-            _placement("b.bin", FirmwareWant(core_so="two_libretro", required=False)),
+            _placement("a.bin", FirmwareWant(emulator="one_libretro", required=True)),
+            _placement("b.bin", FirmwareWant(emulator="two_libretro", required=False)),
         )
         index = catalogue.by_file_name()
         assert set(index) == {"a.bin", "b.bin"}
@@ -286,89 +287,3 @@ class TestByFileName:
 )
 def test_absence_is_classified_by_the_reading_state_alone(complete, expected):
     assert classify_wanted(None, complete=complete) == expected
-
-
-def _folder(*wants: FirmwareWant, verdict: FolderVerdict | None = None, caveats=()) -> FirmwarePlacement:
-    return FirmwarePlacement(
-        file_name="bios",
-        relative_path="pcsx2/bios",
-        description="'pcsx2/bios' folder",
-        wants=wants,
-        declared_kind=DECLARED_DIRECTORY,
-        caveats=caveats,
-        folder=verdict,
-    )
-
-
-_LRPS2 = FirmwareWant(core_so="pcsx2_libretro", required=True)
-
-
-class TestUnansweredFolderCores:
-    def test_a_core_whose_folder_row_is_open_is_named(self):
-        placements = {"bios": _folder(_LRPS2)}
-
-        assert unanswered_folder_cores(placements, ["pcsx2_libretro", "mgba_libretro"]) == ("pcsx2_libretro",)
-
-    def test_a_folder_the_reading_already_settled_is_not_asked_about(self):
-        placements = {"bios": _folder(_LRPS2, verdict=FolderVerdict(satisfied=False))}
-
-        assert unanswered_folder_cores(placements, ["pcsx2_libretro"]) == ()
-
-    def test_a_core_outside_the_scope_is_not_asked_about(self):
-        placements = {"bios": _folder(_LRPS2)}
-
-        assert unanswered_folder_cores(placements, ["mgba_libretro"]) == ()
-
-    def test_an_unestablished_scope_asks_nobody(self):
-        placements = {"bios": _folder(_LRPS2)}
-
-        assert unanswered_folder_cores(placements, None) == ()
-
-    def test_a_file_declaration_never_puts_its_cores_on_the_list(self):
-        placements = {"gba_bios.bin": _placement("gba_bios.bin", FirmwareWant(core_so="mgba_libretro", required=True))}
-
-        assert unanswered_folder_cores(placements, ["mgba_libretro"]) == ()
-
-    def test_one_core_named_twice_is_asked_about_once(self):
-        """An ES-DE catalogue can list one core under two entries for a system."""
-        placements = {"bios": _folder(_LRPS2, _LRPS2)}
-
-        assert unanswered_folder_cores(placements, ["pcsx2_libretro", "pcsx2_libretro"]) == ("pcsx2_libretro",)
-
-
-class TestMergeFolderVerdicts:
-    def test_the_verdict_lands_on_its_row(self):
-        placements = {"bios": _folder(_LRPS2)}
-
-        merged = merge_folder_verdicts(placements, {"bios": FolderVerdict(satisfied=True, images=("Europe",))})
-
-        assert merged["bios"].folder == FolderVerdict(satisfied=True, images=("Europe",))
-
-    def test_the_verdicts_caveats_join_the_destinations(self):
-        """Both are statements about one place, and both are true."""
-        placements = {"bios": _folder(_LRPS2, caveats=("firmware-scan-incomplete",))}
-
-        merged = merge_folder_verdicts(
-            placements, {"bios": FolderVerdict(satisfied=None, caveats=("firmware-image-contradicted",))}
-        )
-
-        assert merged["bios"].caveats == ("firmware-scan-incomplete", "firmware-image-contradicted")
-
-    def test_a_verdict_for_a_file_declaration_is_dropped(self):
-        """The declaration decides what the emulator opens; a folder verdict cannot override it."""
-        placements = {"gba_bios.bin": _placement("gba_bios.bin", FirmwareWant(core_so="mgba_libretro", required=True))}
-
-        merged = merge_folder_verdicts(placements, {"gba_bios.bin": FolderVerdict(satisfied=True)})
-
-        assert merged["gba_bios.bin"].folder is None
-
-    def test_a_verdict_for_a_row_that_is_not_there_is_dropped(self):
-        assert merge_folder_verdicts({}, {"bios": FolderVerdict(satisfied=True)}) == {}
-
-    def test_the_rows_beside_it_are_untouched(self):
-        beside = _placement("GameIndex.yaml", FirmwareWant(core_so="pcsx2_libretro", required=True))
-        placements = {"bios": _folder(_LRPS2), "GameIndex.yaml": beside}
-
-        merged = merge_folder_verdicts(placements, {"bios": FolderVerdict(satisfied=True)})
-
-        assert merged["GameIndex.yaml"] is beside
