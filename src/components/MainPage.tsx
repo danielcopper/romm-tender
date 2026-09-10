@@ -1,21 +1,9 @@
 import { useState, useEffect, useRef, FC, ReactNode } from "react";
-import {
-  PanelSection,
-  PanelSectionRow,
-  ButtonItem,
-  Field,
-  Focusable,
-  ProgressBar,
-  Spinner,
-  DialogButton,
-  ConfirmModal,
-  showModal,
-} from "@decky/ui";
+import { PanelSection, PanelSectionRow, ButtonItem, Field, Focusable, ProgressBar, Spinner } from "@decky/ui";
 import { FaCheckCircle, FaTimesCircle, FaExclamationTriangle } from "react-icons/fa";
 import {
   cancelSync,
   getSettings,
-  fixRetroarchInputDriver,
   refreshMigrationState,
   getSyncStatus,
   getRetroDeckStatus,
@@ -46,12 +34,12 @@ import { SettingsResetBanner } from "./SettingsResetBanner";
 import { LegacyInstallNotice } from "./LegacyInstallBanner";
 import { DataLocationNotice } from "./DataLocationNotice";
 import { PlaytimeScopeBanner } from "./PlaytimeScopeBanner";
-import type { SyncPreview, SyncProgress, SyncRunKind, SyncStats, Page } from "../types";
+import type { SyncPreview, SyncProgress, SyncRunKind, SyncStats, NavTarget } from "../types";
 import { detach } from "../utils/detach";
 import { wrapText } from "../utils/textStyles";
 
 interface MainPageProps {
-  onNavigate: (page: Exclude<Page, "main">) => void;
+  onNavigate: (target: NavTarget) => void;
 }
 
 /** The connection-row label for a failed probe, mapped from the backend's
@@ -588,7 +576,9 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
     <>
       <LegacyInstallNotice />
       {settingsReset.pending && <SettingsResetBanner backedUpTo={settingsReset.backedUpTo} />}
-      {playtimeScope.pending && <PlaytimeScopeBanner />}
+      {playtimeScope.pending && (
+        <PlaytimeScopeBanner onOpenConnections={() => onNavigate({ page: "settings", section: "connections" })} />
+      )}
       {/* Untitled status block (Connection / Last sync / Library) leads the
           panel — a hairline is what separates one block from the next, so a
           "Status" title would cost a row and buy nothing. */}
@@ -712,43 +702,28 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
             />
           </PanelSectionRow>
         )}
+        {/* A notice, not the fix: the button that rewrites the RetroArch config
+            is in Settings › Controller and nowhere else. */}
         {retroarchWarning?.warning && (
-          <PanelSectionRow>
-            <Field
-              label="RetroArch: input_driver issue"
-              description={`Using "${retroarchWarning.current}"`}
-              bottomSeparator="none"
-            >
-              <DialogButton
-                onClick={() =>
-                  showModal(
-                    <ConfirmModal
-                      strTitle="Fix RetroArch input_driver?"
-                      strDescription="This will change input_driver to sdl2 in your RetroArch config. Controllers should work better in RetroArch menus after this change."
-                      strOKButtonText="Apply Fix"
-                      strCancelButtonText="Cancel"
-                      onOK={() => {
-                        detach(
-                          (async () => {
-                            try {
-                              const result = await fixRetroarchInputDriver();
-                              if (result.success) {
-                                setRetroarchWarning(null);
-                              }
-                            } catch {
-                              // ignore
-                            }
-                          })(),
-                        );
-                      }}
-                    />,
-                  )
-                }
+          <>
+            <PanelSectionRow>
+              <Field
+                label="RetroArch: input_driver issue"
+                description={`Using "${retroarchWarning.current}" \u2014 controller navigation in RetroArch menus may not work.`}
+                focusable={true}
+                bottomSeparator="none"
+              />
+            </PanelSectionRow>
+            <PanelSectionRow>
+              <ButtonItem
+                layout="below"
+                bottomSeparator="none"
+                onClick={() => onNavigate({ page: "settings", section: "controller" })}
               >
-                Fix
-              </DialogButton>
-            </Field>
-          </PanelSectionRow>
+                Open Controller
+              </ButtonItem>
+            </PanelSectionRow>
+          </>
         )}
         {saveSortMigration.pending && (
           <>
@@ -773,8 +748,12 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
               </Focusable>
             </PanelSectionRow>
             <PanelSectionRow>
-              <ButtonItem layout="below" bottomSeparator="none" onClick={() => onNavigate("settings")}>
-                Go to Settings
+              <ButtonItem
+                layout="below"
+                bottomSeparator="none"
+                onClick={() => onNavigate({ page: "settings", section: "save-sync" })}
+              >
+                Open Save Sync
               </ButtonItem>
             </PanelSectionRow>
           </>

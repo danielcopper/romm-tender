@@ -67,7 +67,10 @@ export const SaveSyncSection: FC<SaveSyncSectionProps> = ({
             <>
               {deviceInfo && (
                 <PanelSectionRow>
-                  <Field label="Device" description={`Registered as "${deviceInfo.device_name}"`} />
+                  {/* Focusable: the pane scrolls by moving focus, and this row
+                      sits between two toggles, so it is neither end of the
+                      region that gets revealed on its own. */}
+                  <Field label="Device" description={`Registered as "${deviceInfo.device_name}"`} focusable={true} />
                 </PanelSectionRow>
               )}
               <PanelSectionRow>
@@ -135,7 +138,7 @@ export const SaveSyncSection: FC<SaveSyncSectionProps> = ({
               </PanelSectionRow>
               {syncStatus && (
                 <PanelSectionRow>
-                  <Field label={syncStatus} />
+                  <Field label={syncStatus} focusable={true} />
                 </PanelSectionRow>
               )}
             </>

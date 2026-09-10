@@ -14,6 +14,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import type { FC, ReactNode } from "react";
+import { ENTRY_STOP_ATTR } from "../../utils/entryFocus";
 import { WIDE_ROOT_CLASS } from "../../utils/qamExpansion";
 import { OWNS_ENTRY_FOCUS_ATTR, type WidePageProps, type WidePageTab } from "./WidePage";
 
@@ -90,6 +91,47 @@ const TAB_SET: WidePageTab[] = [
 
 function body(): HTMLElement {
   return screen.getByTestId("wide-page-body");
+}
+
+/**
+ * The frame's two-part fit under a mocked layout: a 600 px scrolling panel whose
+ * top is the viewport top, the page body 100 px down its content, and the body's
+ * own ancestors hanging `overhang` px below their parents.
+ *
+ * happy-dom performs no layout, so every rect here is a mock and the arithmetic
+ * is the whole of what these tests can pin. **Whether the panel then stops
+ * scrolling is a device question** — no test in this repo can see the defect
+ * this pair was written for, or its return.
+ */
+async function measuredFit(overhang: number): Promise<{ height: number; rootMarginBottom: string }> {
+  const WidePage = await loadWidePage(StubTabs);
+  // Only the document body scrolls, so the page's own body has real ancestors
+  // between it and the scroller — which is the shape the overhang lives in.
+  vi.spyOn(window, "getComputedStyle").mockImplementation(
+    (el: Element) => ({ overflowY: el.tagName === "BODY" ? "auto" : "visible" }) as CSSStyleDeclaration,
+  );
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    const isPageBody = this.dataset.testid === "wide-page-body";
+    return (isPageBody ? { top: 100, bottom: 600 + overhang } : { top: 0, bottom: 600 }) as DOMRect;
+  });
+  vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600);
+  vi.spyOn(HTMLElement.prototype, "clientTop", "get").mockReturnValue(0);
+  vi.spyOn(Element.prototype, "scrollTop", "get").mockReturnValue(0);
+
+  try {
+    const { container } = render(
+      <WidePage title="Settings" onBack={vi.fn()}>
+        <div>page body</div>
+      </WidePage>,
+    );
+    return {
+      height: Number.parseFloat(body().style.height),
+      rootMarginBottom: (container.firstElementChild as HTMLElement).style.marginBottom,
+    };
+  } finally {
+    vi.restoreAllMocks();
+    cleanup();
+  }
 }
 
 describe("WidePage", () => {
@@ -171,19 +213,26 @@ describe("WidePage", () => {
   it("gives the body a definite height taken from the remaining viewport", async () => {
     const WidePage = await loadWidePage(StubTabs);
 
-    render(
+    const { container } = render(
       <WidePage title="Settings" onBack={vi.fn()}>
         <div>page body</div>
       </WidePage>,
     );
 
     // happy-dom reports every rect at the origin, so the body's top is 0 and the
-    // measurement is the viewport minus the frame's bottom gap.
+    // measurement is the whole viewport: nothing is held back under the page.
     expect(window.innerHeight).toBeGreaterThan(240);
-    expect(body().style.height).toBe(`${window.innerHeight - 12}px`);
+    expect(body().style.height).toBe(`${window.innerHeight}px`);
     // Steam's tabbed page fills its parent instead of growing: a min-height
     // leaves the body with no height at all and the page clips.
     expect(body().style.minHeight).toBe("");
+    // Nothing computes `overflow-y: auto` here, so this is the no-scroller
+    // fallback — the one branch that measures no ancestor box. It must pull the
+    // root up by nothing: the height it just paid out is viewport-relative and
+    // counts no overhang, so a margin here would shorten the page against
+    // nothing, and the branch is what a chain this frame has never seen falls
+    // into. Every other case in this file takes the scroller branch.
+    expect((container.firstElementChild as HTMLElement).style.marginBottom).toBe("0px");
   });
 
   it("measures the same height however far the scrolling panel is scrolled", async () => {
@@ -223,46 +272,49 @@ describe("WidePage", () => {
       }
     };
 
-    // 600 − 100 − 12 both times. The panel-rect form answers 488 and then 988,
+    // 600 − 100 both times. The panel-rect form answers 500 and then 1000,
     // because the body's top has moved and the panel's has not; the original
     // `innerHeight − top` fails at the FIRST assertion instead, since
     // happy-dom's viewport is 768 rather than the panel's 600.
-    expect(await measure(0)).toBe(488);
-    expect(await measure(500)).toBe(488);
+    expect(await measure(0)).toBe(500);
+    expect(await measure(500)).toBe(500);
   });
 
-  it("gives back the space its own ancestors hang below the panel", async () => {
-    // Decky wraps a plugin's content in a box that overhangs its parent — on
-    // the reference machine by 50 px, from its own inset plus padding. Nothing
-    // of ours is in those pixels, but the panel scrolls by them, and that is
-    // exactly enough to take the frame's Back row off the top.
-    const WidePage = await loadWidePage(StubTabs);
-    // Only the document body scrolls, so the page's own body has real ancestors
-    // between it and the scroller — which is the shape the overhang lives in.
-    vi.spyOn(window, "getComputedStyle").mockImplementation(
-      (el: Element) => ({ overflowY: el.tagName === "BODY" ? "auto" : "visible" }) as CSSStyleDeclaration,
-    );
-    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
-      const isPageBody = this.dataset.testid === "wide-page-body";
-      return (isPageBody ? { top: 100, bottom: 650 } : { top: 0, bottom: 600 }) as DOMRect;
-    });
-    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600);
-    vi.spyOn(HTMLElement.prototype, "clientTop", "get").mockReturnValue(0);
-    vi.spyOn(Element.prototype, "scrollTop", "get").mockReturnValue(0);
+  it("claims the space its ancestors hang below the panel, and pulls them back inside it", async () => {
+    // Decky wraps a plugin's content in a box that overhangs its parent, from
+    // its own inset plus padding. Nothing of ours is painted in those pixels,
+    // but the panel scrolls by them, and that is enough to take the frame's
+    // Back row off the top. Giving the height up instead is what left a band of
+    // the panel empty under every wide page; the pull-up cancels the overhang
+    // without buying room for it.
+    const fitWithOverhang = await measuredFit(50);
 
-    try {
-      render(
-        <WidePage title="Settings" onBack={vi.fn()}>
-          <div>page body</div>
-        </WidePage>,
-      );
-      // 600 − 100 − 50 − 12. Without the overhang term it is 488, and the panel
-      // keeps 50 px of scroll it has no content for.
-      expect(Number.parseFloat(body().style.height)).toBe(438);
-    } finally {
-      vi.restoreAllMocks();
-      cleanup();
-    }
+    // 600 − 100, the whole of the panel below the body's top. Subtracting the
+    // overhang from the height as well leaves it at 450 — the band, in this
+    // fixture's terms. The 50 is the fixture's own parameter, not a fact about
+    // any panel: the next case runs the same page at 30.
+    expect(fitWithOverhang.height).toBe(500);
+    expect(fitWithOverhang.rootMarginBottom).toBe("-50px");
+  });
+
+  it("takes the pull-up from the same measurement as the height, not a constant", async () => {
+    // The two are one decision: a height counting the overhang without the
+    // margin that cancels it overflows the scroller by exactly that much, and
+    // the panel then scrolls the Back row off the top. So the margin has to
+    // follow whatever this chain actually overhangs by, whatever the display,
+    // scale or Decky version makes that — the whole reason it is measured
+    // rather than written down.
+    const shallower = await measuredFit(30);
+
+    expect(shallower.height).toBe(500);
+    expect(shallower.rootMarginBottom).toBe("-30px");
+  });
+
+  it("pulls the root up by nothing where no ancestor overhangs", async () => {
+    const flush = await measuredFit(0);
+
+    expect(flush.height).toBe(500);
+    expect(flush.rootMarginBottom).toBe("0px");
   });
 
   it("never measures the body below its floor", async () => {
@@ -394,6 +446,32 @@ describe("WidePage", () => {
       expect(row).toHaveClass("gpfocus");
       expect(screen.getByRole("button", { name: "‹ Back" })).not.toHaveFocus();
       expect(container.firstElementChild).toHaveAttribute(OWNS_ENTRY_FOCUS_ATTR);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("opens on the area the body declared rather than on its first stop", async () => {
+    const WidePage = await loadWidePage(StubTabs);
+    vi.useFakeTimers();
+    try {
+      render(
+        <WidePage title="Settings" onBack={vi.fn()}>
+          <button>Connections</button>
+          <div {...{ [ENTRY_STOP_ATTR]: "" }}>
+            <button>Controller</button>
+          </div>
+        </WidePage>,
+      );
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+
+      // A NON-first declaration, because the first one passes whether the frame
+      // reads the declaration or not — which is exactly how Settings shipped
+      // opening on Connections whatever section it was sent to.
+      expect(screen.getByRole("button", { name: "Controller" })).toHaveFocus();
+      expect(screen.getByRole("button", { name: "Connections" })).not.toHaveFocus();
     } finally {
       vi.useRealTimers();
     }

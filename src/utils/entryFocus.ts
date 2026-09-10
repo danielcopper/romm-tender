@@ -11,9 +11,12 @@
  * {@link useEntryFocusOnBodySwap} for a page whose body changes under the reader
  * while the page stays open — the Sync page's left column.
  *
- * The frame and the swap take {@link firstBodyStop} as it stands. The router
- * takes {@link pageEntryStop}, which lets the page it has just mounted name the
- * area focus belongs in and otherwise answers exactly the same thing.
+ * The two that open a page — the frame and the router — take
+ * {@link pageEntryStop}, which lets the page they have just mounted name the
+ * area focus belongs in and otherwise answers exactly what
+ * {@link firstBodyStop} would. The swap takes `firstBodyStop` as it stands: its
+ * root is one body of a page already open rather than a whole page, and no body
+ * that swaps declares an area.
  */
 
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
@@ -79,14 +82,22 @@ export function firstBodyStop(root: ParentNode): HTMLElement | null {
 }
 
 /**
- * Marks the part of a page entry focus belongs in — a declaration, read by the
- * panel's router (`src/index.tsx`) and by nothing else.
+ * Marks the part of a page entry focus belongs in — a declaration, read through
+ * {@link pageEntryStop} and therefore by both of the placers that open a page:
+ * the panel's router (`src/index.tsx`) for the narrow pages, and the wide-page
+ * frame (`src/components/qam/WidePage.tsx`) for its own body.
  *
  * It is the other half of `WidePage`'s `OWNS_ENTRY_FOCUS_ATTR` rather than a
- * second spelling of it, which is why it is a second attribute: that one tells
- * the router to place NOTHING, because the page places its own; this one tells
- * it WHERE. Carrying both would ask the router to honour a declaration it has
- * already been told to stay out of, and no page carries both.
+ * second spelling of it, which is why it is a second attribute: that one says
+ * WHO places entry focus — it tells the router to place none, because the frame
+ * places its own — and this one says WHERE, to whichever of them places it.
+ *
+ * **A wide page carries both, and they answer different questions rather than
+ * the same one twice.** Settings is one: the frame's root says "I place my own"
+ * and the list's selected row says "here". The router never reaches the second —
+ * it looks for `OWNS_ENTRY_FOCUS_ATTR` first and, finding it, sets no timer at
+ * all — so no declaration ever asks it to honour a page it was told to stay out
+ * of.
  *
  * It names an AREA, not the stop: {@link firstBodyStop} still picks the element
  * inside it, so one rule decides which node takes focus wherever focus is
@@ -103,18 +114,25 @@ export const ENTRY_STOP_ATTR = "data-romm-entry-stop";
 export const ENTRY_FOCUS_DELAY_MS = 50;
 
 /**
- * The stop the panel's router opens a page on: inside the page's own
- * declaration where it makes one, and the first stop of the whole body
- * otherwise.
+ * The stop a page opens on: inside the page's own declaration where it makes
+ * one, and the first stop of the whole body otherwise.
  *
- * Main is the only page that declares one, on the menu's Sync entry — its three
- * status rows act on nothing, so opening on the first of them spends the
- * reader's first press moving to what they came for. The cost of that is
- * Steam's: it scrolls the focused element into view, so on a Main tall enough to
- * scroll the panel opens part-way down. Stated in
+ * Two things declare, for two different reasons. Main declares on the menu's
+ * Sync entry — its three status rows act on nothing, so opening on the first of
+ * them spends the reader's first press moving to what they came for. The cost of
+ * that is Steam's: it scrolls the focused element into view, so on a Main tall
+ * enough to scroll the panel opens part-way down. Stated in
  * `docs/architecture/qam-panel.md`, section Main, and deliberately not defended
  * against here — a rule that opened somewhere else depending on what is on
  * screen is the thing this declaration replaced.
+ *
+ * A list-and-detail page (`components/qam/ListDetail.tsx`) declares on its
+ * SELECTED row, and there the declaration is what makes the page keep the state
+ * it was opened with rather than a preference about where to land: focus selects
+ * on that layout, so opening on the first row would select the first row. It
+ * takes nothing away from a page opened without a section named: such a page
+ * either selects its own first row, which is what the fallback would have
+ * picked, or selects nothing at all and so declares nothing.
  */
 export function pageEntryStop(root: ParentNode): HTMLElement | null {
   const declared = root.querySelector<HTMLElement>(`[${ENTRY_STOP_ATTR}]`);

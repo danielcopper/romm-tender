@@ -1,5 +1,17 @@
-import { useState, useEffect, FC } from "react";
-import { PanelSection, PanelSectionRow, ButtonItem, ConfirmModal, showModal } from "@decky/ui";
+/**
+ * The Settings page: five sections on the left, the focused section's controls
+ * on the right.
+ *
+ * Every section's state and every handler lives here rather than in the section
+ * components, which are pure renderers — the pane mounts only the focused
+ * section, so a section owning its own reads would re-issue them on each move
+ * through the list.
+ *
+ * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Settings.
+ */
+
+import { useState, useEffect, FC, type ReactNode } from "react";
+import { ConfirmModal, Field, showModal } from "@decky/ui";
 import { showToast } from "../utils/toast";
 import {
   getSettings,
@@ -33,15 +45,19 @@ import type {
   CollectionNamingMode,
   SaveSyncSettings as SaveSyncSettingsType,
   RetroArchInputCheck,
+  SettingsSection,
 } from "../types";
+import { SETTINGS_SECTIONS } from "../types";
 import {
   setSaveSortMigrationStatus as setStoreSaveSortStatus,
   clearSaveSortMigration,
   useSaveSortMigrationState,
 } from "../utils/saveSortMigrationStore";
-import { scrollToTop } from "../utils/scrollHelpers";
 import { detach } from "../utils/detach";
 import { trimServerUrl, isValidServerUrl } from "../utils/serverUrl";
+import { WidePage } from "./qam/WidePage";
+import { ListDetail, type ListDetailItem } from "./qam/ListDetail";
+import { ROW_MARKER_GAP, ROW_MARKER_WIDTH, SELECTION_ACCENT } from "./qam/pane";
 import { pendingEdits } from "./settings/TextInputModal";
 import { SaveSortMigrationSection } from "./settings/SaveSortMigrationSection";
 import { ConnectionSection } from "./settings/ConnectionSection";
@@ -55,6 +71,13 @@ import { showPreferredRegionModal } from "./settings/PreferredRegionModal";
 
 interface SettingsPageProps {
   onBack: () => void;
+  /**
+   * The section the page opens on — a navigation from one of Main's notices
+   * names the one that holds the action it is about. It is the OPENING
+   * selection and nothing more: the panel reaches Settings only from Main, so
+   * every navigation here mounts the page afresh.
+   */
+  section?: SettingsSection;
 }
 
 // Messages the connect handlers return to the ConnectModal (which surfaces them
@@ -63,7 +86,24 @@ interface SettingsPageProps {
 const INVALID_URL_MESSAGE = "Enter a valid http:// or https:// server URL";
 const GENERIC_SIGN_IN_ERROR = "Sign-in failed. Check your connection and try again.";
 
-export const SettingsPage: FC<SettingsPageProps> = ({ onBack }) => {
+// What the list calls each section. The ids and their order are the navigation
+// module's, so a section reachable by a jump is a section the list shows.
+const SECTION_LABELS: Record<SettingsSection, string> = {
+  connections: "Connections",
+  "save-sync": "Save Sync",
+  controller: "Controller",
+  "steam-library": "Steam Library",
+  advanced: "Advanced",
+};
+
+/** The list hands its ids back as plain strings; this is where one becomes a
+ *  section again — by lookup rather than by assertion, so an id no section
+ *  answers to opens the first section instead of typing as one that is absent. */
+const asSection = (id: string | null): SettingsSection =>
+  SETTINGS_SECTIONS.find((candidate) => candidate === id) ?? SETTINGS_SECTIONS[0];
+
+export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
+  const [selectedSection, setSelectedSection] = useState<SettingsSection>(section ?? SETTINGS_SECTIONS[0]);
   // Connection state
   const [url, setUrl] = useState("");
   const [hasToken, setHasToken] = useState(false);
@@ -88,6 +128,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack }) => {
   // Controller state
   const [steamInputMode, setSteamInputMode] = useState("default");
   const [steamInputStatus, setSteamInputStatus] = useState("");
+  const [applyingSteamInput, setApplyingSteamInput] = useState(false);
   const [retroarchWarning, setRetroarchWarning] = useState<RetroArchInputCheck | null>(null);
   const [retroarchFixStatus, setRetroarchFixStatus] = useState("");
 
@@ -270,15 +311,20 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack }) => {
   const handleUrlChange = async (value: string) => {
     const trimmed = trimServerUrl(value);
     setUrl(trimmed);
-    if (!isValidServerUrl(trimmed)) {
-      setStatus("Enter a valid http:// or https:// server URL");
-      return;
-    }
     try {
+      if (!isValidServerUrl(trimmed)) {
+        setStatus(INVALID_URL_MESSAGE);
+        return;
+      }
       await saveServerUrl(trimmed, allowInsecureSsl);
-      delete pendingEdits.url;
     } catch {
       setStatus("Failed to save settings");
+    } finally {
+      // The pending value exists to carry an edit across the remount closing
+      // the modal can cause, not to outlive the attempt: left behind, a value
+      // the backend refused is what every later open of the page shows in the
+      // field, over the URL actually saved (#1020).
+      delete pendingEdits.url;
     }
   };
   const handleAllowInsecureSslChange = (val: boolean) => {
@@ -386,12 +432,22 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack }) => {
     setSteamInputStatus("");
   };
   const handleApplySteamInput = async () => {
+    // A second press while the first run is in flight is refused rather than
+    // queued: the run walks every shortcut Steam holds and two of them
+    // interleave their writes, and the button says so while it is dead (#1020).
+    // The guard is here rather than only on the button because a press is
+    // delivered on activate, and a disabled control still reports one on the
+    // device.
+    if (applyingSteamInput) return;
+    setApplyingSteamInput(true);
     setSteamInputStatus("Applying...");
     try {
       const result = await applySteamInputSetting();
       setSteamInputStatus(result.message);
     } catch {
       setSteamInputStatus("Failed to apply");
+    } finally {
+      setApplyingSteamInput(false);
     }
   };
   const handleFixInputDriver = async () => {
@@ -486,100 +542,136 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack }) => {
     }
   };
 
-  return (
-    <>
-      <PanelSection>
-        <PanelSectionRow>
-          <ButtonItem
-            layout="below"
-            onClick={onBack}
-            // @ts-expect-error onFocus works at runtime; not in Decky's ButtonItem types
-            onFocus={scrollToTop}
-          >
-            Back
-          </ButtonItem>
-        </PanelSectionRow>
-      </PanelSection>
-      {saveSortMigration.pending && (
-        <SaveSortMigrationSection
-          migration={saveSortMigration}
-          migrating={saveSortMigrating}
-          result={saveSortResult}
-          onMigrate={() => {
-            detach(handleMigrateSaveSort());
-          }}
-          onDismiss={() => {
-            detach(handleDismissSaveSort());
-          }}
-        />
-      )}
-      <ConnectionSection
-        url={url}
-        hasToken={hasToken}
-        allowInsecureSsl={allowInsecureSsl}
-        status={status}
-        onUrlChange={(value) => {
-          detach(handleUrlChange(value));
-        }}
-        onConnect={handleConnect}
-        onConnectToken={handleConnectToken}
-        onConnectPairing={handleConnectPairing}
-        onAllowInsecureSslChange={handleAllowInsecureSslChange}
-        onSignOut={() => {
-          detach(handleSignOut());
-        }}
-      />
-      <SteamGridDBSection sgdbApiKey={sgdbApiKey} onVerifyKey={verifySgdbApiKey} onSaveKey={handleSaveSgdbKey} />
-      <SaveSyncSection
-        saveSyncSettings={saveSyncSettings}
-        saveSyncToggleKey={saveSyncToggleKey}
-        deviceInfo={deviceInfo}
-        syncing={syncing}
-        syncStatus={syncStatus}
-        onToggleSaveSync={handleToggleSaveSync}
-        onSettingChange={(partial) => {
-          detach(handleSaveSyncSettingChange(partial));
-        }}
-        onDefaultSlotSubmit={handleDefaultSlotSubmit}
-        onResetDefaultSlot={handleResetDefaultSlot}
-        onSyncAll={() => {
-          detach(handleSyncAll());
-        }}
-      />
-      {saveSyncEnabled && (devicesLoading || registeredDevices !== null) && (
-        <RegisteredDevicesSection
-          devicesLoading={devicesLoading}
-          devicesError={devicesError}
-          registeredDevices={registeredDevices}
-        />
-      )}
-      <ControllerSection
-        steamInputMode={steamInputMode}
-        steamInputStatus={steamInputStatus}
-        retroarchWarning={retroarchWarning}
-        retroarchFixStatus={retroarchFixStatus}
-        // No manual connection test remains to drive a shared loading flag; the
-        // Apply button is never gated on one.
-        loading={false}
-        onModeChange={handleSteamInputModeChange}
-        onApplyMode={() => {
-          detach(handleApplySteamInput());
-        }}
-        onFixInputDriver={() => {
-          detach(handleFixInputDriver());
-        }}
-      />
-      <LibrarySection
-        preferredRegion={preferredRegion}
-        libraryRegions={libraryRegions}
-        onPreferredRegionChange={handlePreferredRegionChange}
-        platformGroups={platformGroups}
-        onPlatformGroupsChange={handlePlatformGroupsChange}
-        namingMode={namingMode}
-        onNamingModeChange={handleNamingModeChange}
-      />
+  const renderSection = (id: SettingsSection): ReactNode => {
+    switch (id) {
+      case "connections":
+        return (
+          <>
+            <ConnectionSection
+              url={url}
+              hasToken={hasToken}
+              allowInsecureSsl={allowInsecureSsl}
+              status={status}
+              onUrlChange={(value) => {
+                detach(handleUrlChange(value));
+              }}
+              onConnect={handleConnect}
+              onConnectToken={handleConnectToken}
+              onConnectPairing={handleConnectPairing}
+              onAllowInsecureSslChange={handleAllowInsecureSslChange}
+              onSignOut={() => {
+                detach(handleSignOut());
+              }}
+            />
+            <SteamGridDBSection sgdbApiKey={sgdbApiKey} onVerifyKey={verifySgdbApiKey} onSaveKey={handleSaveSgdbKey} />
+          </>
+        );
+      case "save-sync":
+        return (
+          <>
+            {/* First in the pane: it is a condition asking to be answered, and
+                the two settings groups below it are true whether it stands or
+                not. */}
+            {saveSortMigration.pending && (
+              <SaveSortMigrationSection
+                migration={saveSortMigration}
+                migrating={saveSortMigrating}
+                result={saveSortResult}
+                onMigrate={() => {
+                  detach(handleMigrateSaveSort());
+                }}
+                onDismiss={() => {
+                  detach(handleDismissSaveSort());
+                }}
+              />
+            )}
+            <SaveSyncSection
+              saveSyncSettings={saveSyncSettings}
+              saveSyncToggleKey={saveSyncToggleKey}
+              deviceInfo={deviceInfo}
+              syncing={syncing}
+              syncStatus={syncStatus}
+              onToggleSaveSync={handleToggleSaveSync}
+              onSettingChange={(partial) => {
+                detach(handleSaveSyncSettingChange(partial));
+              }}
+              onDefaultSlotSubmit={handleDefaultSlotSubmit}
+              onResetDefaultSlot={handleResetDefaultSlot}
+              onSyncAll={() => {
+                detach(handleSyncAll());
+              }}
+            />
+            {saveSyncEnabled && (devicesLoading || registeredDevices !== null) && (
+              <RegisteredDevicesSection
+                devicesLoading={devicesLoading}
+                devicesError={devicesError}
+                registeredDevices={registeredDevices}
+              />
+            )}
+          </>
+        );
+      case "controller":
+        return (
+          <ControllerSection
+            steamInputMode={steamInputMode}
+            steamInputStatus={steamInputStatus}
+            retroarchWarning={retroarchWarning}
+            retroarchFixStatus={retroarchFixStatus}
+            applying={applyingSteamInput}
+            onModeChange={handleSteamInputModeChange}
+            onApplyMode={() => {
+              detach(handleApplySteamInput());
+            }}
+            onFixInputDriver={() => {
+              detach(handleFixInputDriver());
+            }}
+          />
+        );
+      case "steam-library":
+        return (
+          <LibrarySection
+            preferredRegion={preferredRegion}
+            libraryRegions={libraryRegions}
+            onPreferredRegionChange={handlePreferredRegionChange}
+            platformGroups={platformGroups}
+            onPlatformGroupsChange={handlePlatformGroupsChange}
+            namingMode={namingMode}
+            onNamingModeChange={handleNamingModeChange}
+          />
+        );
+      case "advanced":
+        return <AdvancedSection logLevel={logLevel} onLogLevelChange={handleLogLevelChange} />;
+    }
+  };
 
-      <AdvancedSection logLevel={logLevel} onLogLevelChange={handleLogLevelChange} />
-    </>
+  const items: ListDetailItem[] = SETTINGS_SECTIONS.map((id) => ({
+    id,
+    render: (selected: boolean) => (
+      // The marker bar and the label, and nothing else: these rows carry no
+      // control, which is what `selectOnActivate` below is for — the activate
+      // handler it adds to the wrapper is what makes the row a focus stop at
+      // all.
+      <div
+        data-testid={`settings-section-${id}`}
+        style={{
+          borderLeft: `${ROW_MARKER_WIDTH}px solid ${selected ? SELECTION_ACCENT : "transparent"}`,
+          paddingLeft: `${ROW_MARKER_GAP}px`,
+        }}
+      >
+        <Field label={SECTION_LABELS[id]} bottomSeparator="none" />
+      </div>
+    ),
+  }));
+
+  return (
+    <WidePage title="Settings" onBack={onBack} ownRegions>
+      <ListDetail
+        items={items}
+        selectedId={selectedSection}
+        onSelect={(id) => setSelectedSection(asSection(id))}
+        selectOnActivate
+        renderDetail={(id) => renderSection(asSection(id))}
+      />
+    </WidePage>
   );
 };

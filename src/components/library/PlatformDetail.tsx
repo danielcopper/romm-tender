@@ -33,6 +33,8 @@ import {
   MUTED,
   Muted,
   PALE_GREEN,
+  PaneTableHeader,
+  PaneTableRow,
   RED,
   ROW_BUTTON,
   SECONDARY_FONT,
@@ -358,23 +360,7 @@ function libraryMark(file: FirmwareRow): typeof LIBRARY_MARK | null {
 const TABLE_COLUMNS = "1fr 48px 84px 92px";
 
 const BiosTableHeader: FC = () => (
-  // Column names accompany the rows below them and scroll with them; making the
-  // header a focus stop would add a step that leads nowhere.
-  <div
-    style={{
-      display: "grid",
-      gridTemplateColumns: TABLE_COLUMNS,
-      gap: "8px",
-      padding: "0 16px 4px",
-      fontSize: SECONDARY_FONT,
-      color: MUTED,
-    }}
-  >
-    <span>File</span>
-    <span>On disk</span>
-    <span>Contents</span>
-    <span />
-  </div>
+  <PaneTableHeader columns={TABLE_COLUMNS} cells={["File", "On disk", "Contents", ""]} />
 );
 
 /**
@@ -583,35 +569,56 @@ const BiosFileRow: FC<{ file: FirmwareRow; systemImage: SystemImage; action: Rea
   // on a platform whose library holds little it was the same words under nearly
   // every row. Everything else moves under the row rather than into the cell.
   const rowLines = fromLibrary ? [] : [...(note ? [note] : []), ...lines];
-  const cells = (
-    <>
-      <div style={{ display: "grid", gridTemplateColumns: TABLE_COLUMNS, gap: "8px", alignItems: "center" }}>
-        {/* The cell ellipsises, and with the folder in front of it what gets cut
-            is now the NAME rather than the description that used to sit here —
-            `scummvm/extra/hadesch_translations.dat` does not fit 202px in any
-            arrangement. The title is the mouse's way back to it; a reader on the
-            controller has none, and the only real fix is width the list column
-            currently holds. */}
-        <span
-          title={file.declared_path ?? file.file_name}
-          style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-        >
-          {folder && <span style={{ color: MUTED }}>{folder}</span>}
-          {file.file_name}
-        </span>
-        <span style={{ display: "flex", gap: "4px", fontSize: "14px", whiteSpace: "nowrap" }}>
-          <span data-testid="disk-mark" style={{ color: mark.color }} title={mark.title}>
-            {mark.glyph}
-          </span>
-          {library && (
-            <span data-testid="library-mark" style={{ color: library.color }} title={library.title}>
-              {library.glyph}
-            </span>
-          )}
-        </span>
-        <span style={{ color: MUTED, fontSize: SECONDARY_FONT }}>{contentsCell(file)}</span>
-        <span>{action}</span>
-      </div>
+  return (
+    // The row is a focus stop only while it has nothing to press: an action cell
+    // holds a button that is already a stop, and a second one on the wrapper
+    // would put a dead step in front of every one of them. `action` is therefore
+    // a NODE that may be null and never a component element — an element is
+    // always truthy, which is how this branch went dead once while the comment
+    // on it went on explaining it.
+    <PaneTableRow
+      columns={TABLE_COLUMNS}
+      focusStop={!action}
+      cells={[
+        {
+          // With the folder in front of it what gets cut is the NAME rather
+          // than the description that used to sit here —
+          // `scummvm/extra/hadesch_translations.dat` does not fit 202px in any
+          // arrangement. The title is the mouse's way back to it; a reader on
+          // the controller has none, and the only real fix is width the list
+          // column currently holds.
+          content: (
+            <>
+              {folder && <span style={{ color: MUTED }}>{folder}</span>}
+              {file.file_name}
+            </>
+          ),
+          title: file.declared_path ?? file.file_name,
+        },
+        {
+          // Glyphs rather than a run of text: nothing to ellipsise, and the
+          // pair is laid out rather than flowed.
+          content: (
+            <>
+              <span data-testid="disk-mark" style={{ color: mark.color }} title={mark.title}>
+                {mark.glyph}
+              </span>
+              {library && (
+                <span data-testid="library-mark" style={{ color: library.color }} title={library.title}>
+                  {library.glyph}
+                </span>
+              )}
+            </>
+          ),
+          style: { display: "flex", gap: "4px", fontSize: "14px", whiteSpace: "nowrap" },
+          clip: false,
+        },
+        { content: contentsCell(file), style: { color: MUTED, fontSize: SECONDARY_FONT } },
+        // The button draws its focus ring outside its own box (the injected
+        // sheet's outline), so this cell must not hide its overflow.
+        { content: action, clip: false },
+      ]}
+    >
       {description && (
         <div
           style={{
@@ -627,18 +634,7 @@ const BiosFileRow: FC<{ file: FirmwareRow; systemImage: SystemImage; action: Rea
         </div>
       )}
       <BiosRowLines lines={rowLines} />
-    </>
-  );
-  if (action) return <div style={{ padding: "4px 16px" }}>{cells}</div>;
-  // A row with nothing to press still has to be reachable, or the reader cannot
-  // scroll past it to the rows below: the activate handler is what makes a
-  // Focusable a focus stop. `action` is therefore a NODE that may be null and
-  // never a component element — an element is always truthy, which is how this
-  // branch went dead once while this comment went on explaining it.
-  return (
-    <Focusable onActivate={() => {}} style={{ padding: "4px 16px" }}>
-      {cells}
-    </Focusable>
+    </PaneTableRow>
   );
 };
 

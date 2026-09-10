@@ -21,7 +21,7 @@ without restating it. The width mechanism's decision record is
 | `src/index.tsx` (`QAMPanel`)                                  | The router: one `Page` value, one mounted page, a module-level `currentPage` that survives a QAM remount                                                            |
 | `src/types/navigation.ts`                                     | The `Page` union — every page the router can land on                                                                                                                |
 | `src/components/MainPage.tsx`                                 | Main                                                                                                                                                                |
-| `src/components/SyncPage.tsx`, `src/components/sync/`         | Sync — the frame and its three left-column bodies, plus `useSyncPage` (its reads and actions) and the table pieces both its tables are built from                   |
+| `src/components/SyncPage.tsx`, `src/components/sync/`         | Sync — the frame and its three left-column bodies, plus `useSyncPage` (its reads and actions) and the register both its tables are set in                           |
 | `src/components/LibraryPage.tsx`                              | Library — the frame, the two tabs and their state                                                                                                                   |
 | `src/components/SettingsPage.tsx`, `src/components/settings/` | Settings and its sections                                                                                                                                           |
 | `src/components/DangerZone.tsx`, `RemovedGamesCleanup.tsx`    | Data Management                                                                                                                                                     |
@@ -95,8 +95,11 @@ literal `"https://steamloopback.host"` — which is what `window.origin` is in t
 
 Steam's tabbed page fills its parent instead of growing, and nothing in the QAM chain provides a height. A wide page
 therefore measures the space left below its header and takes that as its height; its regions scroll inside it. A
-`min-height` is not enough — it clips. Under Decky's title bar, the frame's Back row, its title and a tab bar, that
-leaves a body of roughly 260 px inside the 454 px view.
+`min-height` is not enough — it clips. What is left after Decky's own title bar and the frame's Back-and-title row is
+the panel's `clientHeight` less the body's offset within it, so it follows the view rather than any recorded number:
+measured through CEF on the dev window's 764 px view, with the change below applied to the running panel, that is a body
+of **660 px** ending flush with the panel's box. A tabbed page spends 58 px of it on Steam's tab row, which is drawn
+over the top of the content pane rather than above it.
 
 **That measurement has to be free of the scrolling panel's own offset, and only a layout-relative one is**: the body's
 position inside the scroller's content — its viewport top minus the scroller's, plus the scroller's `scrollTop` —
@@ -109,9 +112,67 @@ much more to scroll, and nothing re-measures. It reached a device as a page that
 Measured live in the QAM over the mounted page, at panel offsets 0 / 200 / 500 / 634 px, `window.innerHeight - top`
 answers 648 / 848 / 1148 / 1283 — and so does `scroller.getBoundingClientRect().bottom - top`, because the panel's rect
 bottom is 764.3 against an `innerHeight` of 764. **Bounding to the panel instead of the window is therefore not the
-fix**; it changes no number at any offset. The layout-relative form answers 648 at all four. What makes a non-zero
+fix**; it changes no number at any offset. The layout-relative form answers 648 at all four. Those four come from an
+earlier round, before the Back row and the title shared a line, so the body sat at offset 102 where it now sits at 89.8
+— which is why they are 12 short of the 660 above rather than the height of the gap this frame no longer keeps. What the
+passage is about survives the difference: the same form answers the same number at every offset. What makes a non-zero
 offset reachable at all is that `QAMPanel` resets the panel's scroll inside a `requestAnimationFrame`, a frame after the
 page's own layout effect has already measured.
+
+**The height alone is not the whole fit, because the frame's own ancestors hang below it.** Decky wraps a plugin's
+content in a box that sits 34 px below the panel top — its plugin title — and takes `height: 100%` of a parent it is
+already inset within, so its bottom lands **50 px past that parent's**. Nothing of ours is painted in those 50 px, but
+the panel scrolls by them, and a scroll of that size takes the frame's Back row off the top. `WidePage` measures the
+overhang (`ancestorOverhang`, summed over each ancestor up to the scroller) and **cancels it with a negative bottom
+margin on the page root** rather than taking it out of the height: a margin changes what the box claims after itself,
+not where it paints, so the ancestors end where the scroller's box does and nothing on the page moves. The height and
+that pull-up are one measured value applied in one render, because **each half alone is measurably useless**: applied
+live to the running panel, the height without the margin overflows the scroller (`scrollHeight` 800 against a
+`clientHeight` of 750 — 50 px of scroll, which is what takes the Back row off the top), and the margin without the
+height moves nothing a reader sees, the page still ending on the same line with the same band under it.
+
+**What makes the pull-up cancel anything is a structural assumption, and it is worth stating on its own**, because the
+overhang is measured against a PARENT and the margin is applied to our root. The boxes between our root and the scroller
+are content-sized: the wrapper's bottom is our body's plus its own inset, at every body height. So pulling our root's
+margin box up carries those bottoms up with it, and the chain stops claiming exactly the overhang the margin names. The
+assumption is a SHAPE rather than a value — every number is re-measured, so a Decky release that merely overhangs by a
+different amount is already handled — and it holds because the overhang is the wrapper's own inset and padding rather
+than anything derived from what we put inside. It was checked at several body heights in two panel geometries.
+
+**If it ever stops holding, this is what it looks like.** A wrapper pinned to a height of its own — a future Decky or
+Steam nesting the plugin differently — would not follow our body up: growing the body would overflow the wrapper instead
+of the wrapper's parent, the margin would cancel nothing that was in the way, and the panel would scroll again, which
+the reader meets as the Back row leaving the top. The check is one reading: the lowest ancestor bottom in the chain
+should equal the body's own with the margin applied, and sit an overhang below it without.
+
+Buying the room instead of cancelling it is what the first cut did, and it cost the bottom of every wide page: the body
+gave up 50 px of its own so the wrapper's empty 50 would fit, which left the wrapper ending 12 px short of the panel's
+box — the gap the frame kept — and our content a further 50 px above that — an empty band across Settings, Library and
+Sync, with content that would have fitted clipped out of the difference. Measured live — on Settings when it was
+reported, and again on Library, which answers the same because the scroller is the panel's rather than the page's — the
+scroller's box ran to y=764.3 (`clientHeight` 750, unscrollable) while the page root ended at y=702.
+
+**Two further gaps stood under a wide page after that, and neither was earned.** The first was ours: the frame kept 12
+px of breathing room off its own measurement, which is why a page ended at y=752 inside a panel whose box runs to 764.3.
+A QAM panel of Steam's own, measured in the same document, runs its content to its box with a gap of 0, so the constant
+went rather than being set to zero — room under a page belongs to that page's layout, where it can be seen and adjusted,
+not to a number the frame takes off every page's height. The second is Steam's, and it is **cancelled by an override
+rather than absorbed**: a tabbed page's content scroller carries `padding-bottom: 40px` (rule
+`._1X4dtbZ_AMX_DXT-SGiK01`), and that scroller sits inside the box `WidePage` measured and handed the tab as its height
+— so on Library the content stopped at y=712 inside a body of ours that ran to 752, a 40 px reserve taken out of a
+height the frame had already paid for. An untabbed page renders no such scroller and keeps none of it, which is why
+Library read as having a deeper band than Settings and Sync — the difference that was reported and could not be
+explained. The injected sheet zeroes the padding for a wide page of ours (`qamExpansion.ts`, written against the
+readable `_TabContentsScroll` rather than the hashed class, and degrading to Steam's padding if either name goes). With
+both gaps gone, Library's body measured 660 px and its content ran to y=764.0 against a panel box of 764.3,
+`scrollHeight` still equal to `clientHeight`. What the reader gets is 52 px on the tab's own scrolling region — the box
+the rows live in — measured on Library at 161.8 → 712 before and 161.8 → 764 after, a `clientHeight` of 550 against 602
+over the same 1570 px of content.
+
+**No test here can see any of that.** happy-dom performs no layout, so `WidePage.test.tsx` pins the arithmetic — the
+height, and that the pull-up equals whatever overhang was measured — and `qamExpansion.test.tsx` pins that the override
+is in the sheet and scoped to our root. That the panel does not scroll, and that the band is gone, is a device
+observation each time.
 
 A region scrolls the way the rest of the QAM scrolls: by moving focus. Every scrolling region goes through
 `ScrollRegion`, which renders Steam's plain `ScrollPanel` — the container the QAM's own tab panel is built from, and the
@@ -179,7 +240,7 @@ does not say it owns its regions. A tabbed body gets none from the frame, and ne
 | Main            | 348   | notices, status, the conditional slot, the download summary, the menu                                         | as described                                                                      |
 | Sync            | 854   | preview as a table, the run as a plan, Skip preview, Force Full Sync, Steam memory, session budget, last runs | as described; the import choice (#1364) is the one thing still to come            |
 | Library         | 854   | Platforms as list and detail (sync, core, BIOS files, removal); Collections as filter and list                | Platforms is built; Collections still carries the narrow page's controls and list |
-| Settings        | 854   | five sections, list and detail                                                                                | narrow; eight sections stacked                                                    |
+| Settings        | 854   | five sections, list and detail                                                                                | as described; RetroAchievements has no sign-in to hold yet (#1627)                |
 | Data Management | 854   | five library-wide operations, list and detail                                                                 | narrow; opens the cleanup in a modal                                              |
 | Downloads       | 348   | the queue with its controls                                                                                   | unchanged                                                                         |
 
@@ -188,22 +249,26 @@ BIOS files are in Library › Platforms, and the value, the router branch and th
 
 The Sync page opens from the menu, from the conditional slot while there is something in it, and from **Open Sync** on
 the paused-run notice; Downloads opens from **View All** in the download summary, which is shown only while the queue is
-not empty. A notice can carry a door of its own — **Go to Settings** on the save-sorting notice is the other one — but a
-notice and the slot are both there only while their condition is, so the menu is the navigation a reader can go looking
-for. Every page but Main opens with a **Back** chip, which returns to Main. The chip shares its line with the page title
-— one row, not the three a full-width button plus a title line used to cost, which on the Deck's body is most of what a
-detail pane has to spend. Back is also on **B**, and the binding lives in the panel's router (`src/index.tsx`) rather
-than on a page: one `Focusable` with `onCancelButton` wraps the mounted content **only while `page` is not `main`**, so
-every sub-page — wide and narrow — answers B from wherever focus sits, and Main answers nothing, so Decky's own B still
-leaves the plugin. That condition is what makes taking B safe: the escape route is never removed, it is exactly as far
-away as the user walked in, and the last press is never swallowed. Steam already prints "B ZURÜCK" in its footer legend,
-which this makes true rather than misleading, so no legend entry of ours is needed. The chip stays as the discoverable
-half and as the mouse path, and it carries **Steam's own B glyph** — drawn for the controller in the user's hands, so it
-is ○ on a PlayStation pad and the swapped face button under a Nintendo layout. `@decky/ui` does not re-export that
-component, so `src/utils/deckyUiInternals.ts` reaches it by a module probe and types it as possibly absent; the chip
-falls back to its chevron the day the probe misses. The button number it passes is Steam's own action-button enum
-(`A=0, B=1, X=2, Y=3`), **not** `@decky/ui`'s `GamepadButton`, where 1 is A — the two disagree on every value, and the
-wrong one draws the wrong glyph without failing.
+not empty. A notice can carry a door of its own, and three of them name a Settings SECTION rather than the page — **Open
+Controller**, **Open Save Sync**, **Open Connections** — but a notice and the slot are both there only while their
+condition is, so the menu is the navigation a reader can go looking for. A target is a page id, or
+`{ page: "settings", section }` for those three (`src/types/navigation.ts`); the section rides on the page rather than
+beside it, so no target can pair a section with a page that has none, and the router (`src/index.tsx`) stays the only
+thing that decides what is mounted. A navigation naming no section opens Settings on its first, exactly as the menu's
+own entry does. Every page but Main opens with a **Back** chip, which returns to Main. The chip shares its line with the
+page title — one row, not the three a full-width button plus a title line used to cost, which on the Deck's body is most
+of what a detail pane has to spend. Back is also on **B**, and the binding lives in the panel's router (`src/index.tsx`)
+rather than on a page: one `Focusable` with `onCancelButton` wraps the mounted content **only while `page` is not
+`main`**, so every sub-page — wide and narrow — answers B from wherever focus sits, and Main answers nothing, so Decky's
+own B still leaves the plugin. That condition is what makes taking B safe: the escape route is never removed, it is
+exactly as far away as the user walked in, and the last press is never swallowed. Steam already prints "B ZURÜCK" in its
+footer legend, which this makes true rather than misleading, so no legend entry of ours is needed. The chip stays as the
+discoverable half and as the mouse path, and it carries **Steam's own B glyph** — drawn for the controller in the user's
+hands, so it is ○ on a PlayStation pad and the swapped face button under a Nintendo layout. `@decky/ui` does not
+re-export that component, so `src/utils/deckyUiInternals.ts` reaches it by a module probe and types it as possibly
+absent; the chip falls back to its chevron the day the probe misses. The button number it passes is Steam's own
+action-button enum (`A=0, B=1, X=2, Y=3`), **not** `@decky/ui`'s `GamepadButton`, where 1 is A — the two disagree on
+every value, and the wrong one draws the wrong glyph without failing.
 
 **A tabbed wide page has to get out of the way for that to work.** Steam's tabbed page renders its content pane as
 `onCancelButton: !cancelSkipTabHeader && <focus the tab row>` (`chunk~2dcc5aaf7.js`), so without the flag the first B
@@ -228,10 +293,11 @@ follow, because Steam draws them only while gamepad focus is within the tabbed p
 **Entry focus belongs to the frame, on every wide page.** `WidePage` marks its root as placing its own, so the panel's
 router leaves the page alone rather than placing focus of its own, which would land on the Back chip above the body.
 Where Steam's tabbed page renders, its `autoFocusContents` does the placing; everywhere else — an untabbed page, and a
-tabbed one whose `Tabs` probe missed — the frame focuses the first stop inside the body itself, on the same 50 ms delay
-the router uses, because Steam's navigation resolves a focus pointer it retained across the page swap after the mount.
-Opening a page is the frame's moment and its only one: a page whose body changes while it stays open answers for that
-swap itself, by the same rule and under a condition of its own — the Sync page's left column is the one that does.
+tabbed one whose `Tabs` probe missed — the frame places focus inside the body itself, by the router's own rule and on
+the same 50 ms delay: the area the body declared, or its first stop where it declared none. The delay is there because
+Steam's navigation resolves a focus pointer it retained across the page swap after the mount. Opening a page is the
+frame's moment and its only one: a page whose body changes while it stays open answers for that swap itself, by the same
+rule and under a condition of its own — the Sync page's left column is the one that does.
 
 **The stop it picks is the first enabled focus stop in document order that contains no focus stop at all** — one rule,
 both widths. Document order rather than "the first button", because a page's first button is not its first row, and it
@@ -250,23 +316,36 @@ inner stop is disabled is stepped over, which no body's first column produces to
 enabled stop that is free of stops inside it — nothing is placed and the page keeps whatever Steam's retained pointer
 resolves to.
 
-**The narrow pages the router covers take the same rule, unless the page names somewhere better.** A page marks the area
-entry focus belongs in (`ENTRY_STOP_ATTR`) and the router picks the stop inside it with the same rule, so what a
-declaration changes is WHERE the rule is applied and never which element it picks. **Main is the only page that declares
-one**, on the menu's **Sync** entry: its three status rows act on nothing, so opening on the first of them — Connection,
-which is where the panel opened before — spends the reader's first press on a move to what they came for. The
-declaration is what makes that stable. Main's first BUTTON is not the menu whenever a notice carrying an action is on
-screen, so a button-first rule would open the panel wherever the day's conditions put one; that rule was tried and
-dropped for the same reason, back when its argument was that a narrow page is one column of Steam's own full-width rows
-where the first button IS the first row — true of Main only while Main had a Sync button near the top.
+**Every page takes the same rule, unless it names somewhere better.** A page marks the area entry focus belongs in
+(`ENTRY_STOP_ATTR`) and whichever placer opens it — the router, or the frame — picks the stop inside that area with the
+same rule, so what a declaration changes is WHERE the rule is applied and never which element it picks. **Two things
+declare, for two different reasons.** Main declares on the menu's **Sync** entry: its three status rows act on nothing,
+so opening on the first of them — Connection, which is where the panel opened before — spends the reader's first press
+on a move to what they came for. The declaration is what makes that stable. Main's first BUTTON is not the menu whenever
+a notice carrying an action is on screen, so a button-first rule would open the panel wherever the day's conditions put
+one; that rule was tried and dropped for the same reason, back when its argument was that a narrow page is one column of
+Steam's own full-width rows where the first button IS the first row — true of Main only while Main had a Sync button
+near the top.
 
-**Settings, Data Management and Downloads are unmoved**, and declare nothing: each leads with its Back button, which is
-both the first stop and the first button, so the router's default already opens them there. Whatever the rule, the root
-it searches is the plugin's own content and nothing above it — Decky renders its panel title and the back arrow beside
-it outside that box, 34 px above it (`WidePage`'s `ancestorOverhang` measures the gap) — so no rule here could reach
-Decky's own chrome. The declaration, the finder, the shared set of shapes and the `.focus()` + `gpfocus` pair are
-`src/utils/entryFocus.ts`. It is a second attribute rather than a second use of the wide frame's `OWNS_ENTRY_FOCUS_ATTR`
-because the two say opposite things: that one tells the router to place nothing, this one tells it where.
+**A list-and-detail page declares on its SELECTED row**, and there the declaration is not a preference about where to
+land but what makes the page keep the state it was opened with: focus selects on that layout, so entry focus landing on
+the first row selects the first row. Settings is opened on a named section by three of Main's notices, and before the
+row was declared each of those jumps mounted the right section and then had it overwritten about 50 ms later — Open
+Controller landed on Connections. A list opened with no section named loses nothing: it either selects its own first
+row, which is what the fallback would have picked, or selects nothing and so declares nothing (the Library page's
+platforms, which additionally are tabbed, so Steam places that focus and the frame places none).
+
+**Data Management and Downloads are unmoved**, and declare nothing: each leads with its Back button, which is both the
+first stop and the first button, so the router's default already opens them there. Whatever the rule, the root it
+searches is the plugin's own content and nothing above it — Decky renders its panel title and the back arrow beside it
+outside that box, 34 px above it (the same inset whose bottom `WidePage`'s `ancestorOverhang` measures) — so no rule
+here could reach Decky's own chrome. The declaration, the finder, the shared set of shapes and the `.focus()` +
+`gpfocus` pair are `src/utils/entryFocus.ts`. It is a second attribute rather than a second use of the wide frame's
+`OWNS_ENTRY_FOCUS_ATTR` because the two answer different questions: that one says WHO places entry focus — it tells the
+router to place none, because the frame places its own — and this one says WHERE, for whichever of them places it. **So
+a wide page carries both**, Settings being one: the root says "I place my own" and the list's selected row says "here".
+The router never reaches the second, because it looks for `OWNS_ENTRY_FOCUS_ATTR` first and, finding it, sets no timer
+at all.
 
 **A tab's content is the page's business, not the frame's.** The frame wraps an untabbed body in a `ScrollRegion` and a
 tabbed one in nothing: Steam's tabbed page already wraps each tab's content in this same plain scroll panel, so a region
@@ -334,9 +413,21 @@ pair now runs 79.9 → 335.9.
 ### Tables
 
 Anything with more than two facts per row is a table with a header row: BIOS files (File, On disk, Contents), the
-preview (a row per platform; New, Updated, Removed), registered devices, cleanup candidates, collections. Today those
-facts were folded into a field's label and description, which is why #1803's third axis had no slot on the rows the
+preview (a row per platform; New, Updated, Removed), registered devices, cleanup candidates, collections. Those facts
+were once folded into a field's label and description, which is why #1803's third axis had no slot on the rows the
 System page drew; the platform detail's BIOS table is where that column now sits.
+
+**There is one table, and a page passes the register it is set in** (`PaneTableHeader` / `PaneTableRow` in
+`src/components/qam/pane.tsx`). The shape is shared — a grid of a page's own columns, an 8 px gutter between them, the
+header's names in the secondary size and colour, a row that is a focus stop, a cell that clips — and what a page varies
+is the type size, the leading, the row and header padding, and whether a hairline sits under the column names. That is a
+`TableRegister`, and the default is what a pane uses unless it says otherwise. It is one component rather than three
+because three drifted: the same header was written three times, and only one of the three clipped its cells.
+
+A row is a focus stop **unless one of its own cells carries a control** — the BIOS table's action column is the case,
+and there the button is already the stop, so a second one on the wrapper would put a dead step in front of every one of
+them. A cell opts out of the clip for the same kind of reason: a cell of glyphs has nothing to ellipsise, and a cell
+holding a button must not hide the overflow its focus ring is drawn in.
 
 **A cell clips; it never overflows.** A grid track sized `minmax(0, 1fr)` shrinks under its content and the content then
 spills across the track beside it — on the Deck a platform name and its note ran into the New column's digit. The clip
@@ -368,10 +459,13 @@ modal opened from the notice; that modal _is_ the home, not an exception to the 
 | Save-file sorting changed                   | text, **Open Save Sync**                      | Settings › Save Sync, which holds Migrate and Dismiss |
 | Sync paused on the session budget           | text, **Open Sync**                           | Sync, which holds Restart Steam now and Resume        |
 
-Today the `input_driver` fix has a button on Main and another in Settings, the save-sort card exists on both pages, the
-session-budget card with **Restart Steam now** sits on Main, and the playtime notice has Dismiss but no jump. The two
-full-page states — a version error and a pending RetroDECK migration — are not notices; they replace the page, and
-exactly one condition is carried inside them (below).
+Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
+migration — are not notices; they replace the page, and exactly one condition is carried inside them (below).
+
+The playtime notice is the one that carries **two** buttons, and they sit side by side on one row rather than on two
+full-width ones: Main is the narrow page, and a notice costing three rows pushes the status block it sits above off the
+screen. Its jump is not an answer either — only a fresh sign-in ends the condition, so **Open Connections** leaves it
+standing and **Dismiss** remains the way to put it away for this view.
 
 **The two data-location conditions are one card in one component** (`src/components/DataLocationNotice.tsx`), because
 they are two outcomes of the same start-up step and only ever one of them stands. The choice's modal
@@ -640,8 +734,10 @@ only place sixteen units of plan do not stand between the reader and it, exactly
 list is a scrolling region of its own**, taking what is left of the column under the bar and that button: a plan of
 seventeen units is taller than the Deck's column, and without it the running unit walks out of sight below the fold.
 Nothing moves focus during a run, so the page scrolls that region itself and puts the running row in the middle of it,
-clamped to the list's own ends. Both tables' rows are set in one flat, small register, held in one place
-(`paneTable.tsx`) so that stays a decision rather than a drift.
+clamped to the list's own ends. Both tables are the pane's own table (§ Tables) set in one flat, small register —
+`SYNC_TABLE_REGISTER` in `paneTable.tsx`, which is also where the numeric-column split and the pieces that are not
+tables at all live. Holding the register in one place is still what keeps it a decision rather than a drift; what
+changed is that it is now a value this page passes rather than a second table it owns.
 
 **Focus lands on Cancel Sync when this body takes the column**, by the swap rule above: what it picks is the first stop
 holding no stop of its own, and every unit row below is a stop too, so what puts it on the button is the button being
@@ -1038,20 +1134,43 @@ with them.
 
 ## Settings
 
-Wide, list and detail: the sections on the left, the focused section on the right. Five sections instead of today's
-eight — the save-sort migration becomes a notice with its actions inside Save Sync, Registered Devices moves into Save
-Sync, and SteamGridDB joins the other external services under Connections.
+Wide, untabbed, list and detail: the sections on the left, the focused section on the right. Five sections, where the
+narrow page stacked eight — the save-sort migration is a notice with its actions inside Save Sync, Registered Devices
+sits under Save Sync, and SteamGridDB joins the other external service under Connections.
 
-| Section       | Holds                                                                                                                                                                                                                                                                                                      |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Connections   | the services the plugin talks to: RomM (URL, account, Sign out, Allow insecure SSL), RetroAchievements (account and sign-in state; #1627 left the badge's home open between the game page, the retired System page and global settings — it lands here), SteamGridDB (the API key). Home of every sign-in. |
-| Save Sync     | the toggle, device, before-launch and after-exit, default slot, history limit, Sync all now; the registered devices as a table; home of the save-sort migration                                                                                                                                            |
-| Controller    | Steam Input mode, Apply to all shortcuts, the `input_driver` fix. Home of the fix.                                                                                                                                                                                                                         |
-| Steam Library | preferred region, collection games in platform groups, collection types in Steam names — today's **Library** section, renamed because a Library page now exists: the page is the RomM side (what is synced), the section is the Steam side (which version, in which groups, under which name)              |
-| Advanced      | log level                                                                                                                                                                                                                                                                                                  |
+| Section       | Holds                                                                                                                                                                                                                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Connections   | the services the plugin talks to: RomM (URL, account, Sign out, Allow insecure SSL) and SteamGridDB (the API key), one group each, titled by service. Home of every sign-in.                                                                                                                            |
+| Save Sync     | the save-sort migration first, as the condition asking to be answered; then the toggle, device, before-launch and after-exit, default slot, history limit, Sync all now; then the registered devices as a table                                                                                         |
+| Controller    | Steam Input mode, Apply to all shortcuts, the `input_driver` fix. Home of the fix.                                                                                                                                                                                                                      |
+| Steam Library | preferred region, collection games in platform groups, collection types in Steam names — the narrow page's **Library** section, renamed because a Library page now exists: the page is the RomM side (what is synced), the section is the Steam side (which version, in which groups, under which name) |
+| Advanced      | log level                                                                                                                                                                                                                                                                                               |
+
+The registered devices are the one thing on the page with more than two facts per row, so they are a table — Device,
+Client, Last seen — drawn with § Tables' shared one at the pane's default register. The layout study it was chosen from
+is [device-list-layouts.html](../assets/device-list-layouts.html).
+
+**RetroAchievements is not here, and Connections is still its home.** The plugin has no RetroAchievements account and no
+sign-in for it — building one is #1627, which also left the badge's home open between the game page, the retired System
+page and global settings. The section holds the two services that exist rather than a placeholder for the one that does
+not.
+
+The section rows carry no control of their own, so the list is built with `selectOnActivate`: the activate handler that
+adds is what makes a row a focus stop, and without it the list is neither walkable nor scrollable. Every read-only row
+in a detail pane — a sign-in result, each row of the registered-devices table, the row naming this device — is a stop
+for the same reason, since a pane scrolls only by moving focus and a group with no stop in it cannot be reached at all.
+Two kinds of line are not, and for two different reasons. Content the region reveals on its own — above the pane's first
+stop or below its last (`ScrollRegion`'s `revealEdge`) — needs none, which is why the migration card carries no handler.
+And the devices table's **column header** carries none under the Tables rule: the names accompany the rows below them
+and a stop there would be a step that leads nowhere.
 
 Text input stays in modals — RomM URL, account, API key, default slot — because the on-screen keyboard needs the room.
-The sticky pending URL and the unguarded Apply-to-all double press (#1020) are fixed in the rewrite.
+
+Two failures the narrow page carried are fixed here (#1020). A refused URL no longer sticks: the pending edit exists to
+carry a value across the remount that closing the modal can cause, so it is cleared whichever way the attempt ends, and
+the next open of the page shows the URL that was saved rather than the one that was rejected. And **Apply to all
+shortcuts** refuses a second press while a run is in flight — the guard is in the handler rather than only on the
+button, because a disabled control still reports a press on the device, and the button says which state it is in.
 
 ## Data Management
 
@@ -1084,8 +1203,8 @@ menu entry.
 | Delete BIOS files                  | Library › Platforms    | Library › Platforms                          |
 | Remove one platform's shortcuts    | Library › Platforms    | Library › Platforms                          |
 | Delete one platform's save files   | Library › Platforms    | Library › Platforms                          |
-| Fix the RetroArch `input_driver`   | Main **and** Settings  | Settings › Controller; Main shows the notice |
-| Migrate the save-file sorting      | Settings; Main links   | Settings › Save Sync; Main shows the notice  |
+| Fix the RetroArch `input_driver`   | Settings › Controller  | Settings › Controller; Main shows the notice |
+| Migrate the save-file sorting      | Settings › Save Sync   | Settings › Save Sync; Main shows the notice  |
 | Pause or cancel a download         | Downloads              | Downloads                                    |
 | Clean up removed RomM games        | Data Management, modal | Data Management, as a page                   |
 
@@ -1107,7 +1226,7 @@ The pages land in this order under #1808, each with the open work that already s
    import choice (#1364) is the one thing the page leaves space for.
 4. **Settings** ([#1816](https://github.com/danielcopper/romm-tender/issues/1816)) — the sections, Steam Library, the
    homes for the `input_driver` fix and the save-sort migration with their notices on Main. Carries #1020's URL and
-   double-press fixes.
+   double-press fixes. **Landed**, in one PR; RetroAchievements has no sign-in for Connections to hold until #1627.
 5. **Data Management** ([#1817](https://github.com/danielcopper/romm-tender/issues/1817)) — the operations, the cleanup
    as a pane. After Library, which removes the platform modal.
 
@@ -1140,6 +1259,17 @@ store screenshots (#830) are taken after.
   forgets; and it draws both of the left column's button rows under their tables, where the shipped page puts them
   above, because on a controller a button is reached by walking focus onto it one table row at a time. Like the
   Platforms study, it is a record of a choice rather than a description of the page.
+- The layout study the registered-devices table was chosen from:
+  [device-list-layouts.html](../assets/device-list-layouts.html) — three layouts for that one block at the Deck's
+  measured width, everything else on the page held identical so the comparison is about the block alone: today's folded
+  rows, a three-column table with a header, and a two-column middle keeping the Steam `Field` shape with Last seen
+  right-aligned. The table is what shipped, on the axis the Deck is short of — one row per device instead of two, and
+  eight devices costing nine rows rather than sixteen — and the platform and the shortened id are dropped with it. It
+  records its own objection, and half of it has since been answered: the table is no longer an implementation of its own
+  — it is § Tables' shared one, the same component the BIOS files and the preview draw. What still stands is what the
+  study actually says: it remains the only content on that pane with column headers, and that ends when the rows around
+  it are written against the pane primitives too, which is not done. Like the studies above it is a record of a choice,
+  not a description of the page.
 - The static prototype the decisions were made on: [qam-prototype.html](../assets/qam-prototype.html), a single
   self-contained page kept in `docs/assets/`. Every page at device size with numbered notes; its example data is
   invented, and it reflects the decisions as of this page's first version. Redrawn to the Deck's real 854 × 534 CSS px —

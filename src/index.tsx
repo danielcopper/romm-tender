@@ -80,6 +80,8 @@ import type {
   SyncCollectionsData,
   ServerRetryProgressEvent,
   Page,
+  NavTarget,
+  SettingsSection,
 } from "./types";
 import { setLaunchOptionsConfirmed } from "./utils/steamShortcuts";
 import { removeShortcutsPaced } from "./utils/shortcutRemoval";
@@ -102,13 +104,27 @@ import { publishCommittedVersionSwitch } from "./utils/versionSwitchApplication"
 
 // Module-level page state survives QAM remounts (e.g. after modal close)
 let currentPage: Page = "main";
+// The section the last navigation named, held beside the page for the same
+// reason: without it a QAM remounted mid-edit would come back on Settings' first
+// section rather than the one the reader was sent to.
+let currentSection: SettingsSection | null = null;
 
 const QAMPanel: FC = () => {
   const [page, setPageState] = useState<Page>(currentPage); // NOSONAR(typescript:S6754) — setter intentionally renamed; setPage wraps it below to provide custom navigation behavior.
+  const [settingsSection, setSettingsSectionState] = useState<SettingsSection | null>(currentSection); // NOSONAR(typescript:S6754) — set through setPage, which owns both halves of a navigation.
   const rootRef = useRef<HTMLDivElement>(null);
-  const setPage = (p: Page) => {
+  const setPage = (p: Page, section: SettingsSection | null = null) => {
     currentPage = p;
+    currentSection = section;
     setPageState(p);
+    setSettingsSectionState(section);
+  };
+  // What a page hands back when the reader presses one of its doors. A bare
+  // page id is the whole target for every page but Settings, whose notices name
+  // the section that holds the action they are about.
+  const navigate = (target: NavTarget) => {
+    if (typeof target === "string") setPage(target);
+    else setPage(target.page, target.section);
   };
 
   useEffect(() => {
@@ -154,7 +170,12 @@ const QAMPanel: FC = () => {
       content = <SyncPage onBack={() => setPage("main")} />;
       break;
     case "settings":
-      content = <SettingsPage onBack={() => setPage("main")} />;
+      content = (
+        <SettingsPage
+          onBack={() => setPage("main")}
+          {...(settingsSection === null ? {} : { section: settingsSection })}
+        />
+      );
       break;
     case "library":
       content = <LibraryPage onBack={() => setPage("main")} />;
@@ -166,7 +187,7 @@ const QAMPanel: FC = () => {
       content = <DownloadQueue onBack={() => setPage("main")} />;
       break;
     default:
-      content = <MainPage onNavigate={(p) => setPage(p)} />;
+      content = <MainPage onNavigate={navigate} />;
   }
 
   // B goes back one page, from wherever focus is — bound here rather than on a

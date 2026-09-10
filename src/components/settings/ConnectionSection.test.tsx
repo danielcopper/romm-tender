@@ -21,12 +21,15 @@ interface ToggleFieldProps {
 const toggleCaptured: { items: ToggleFieldProps[] } = { items: [] };
 
 vi.mock("@decky/ui", () => ({
-  PanelSection: (p: AnyProps) => createElement("section", {}, p.children as never),
+  // The title is rendered rather than dropped: this is one of two service
+  // groups on the Connections pane, and it is the title that says which.
+  PanelSection: (p: AnyProps & { title?: unknown }) =>
+    createElement("section", { "data-title": typeof p.title === "string" ? p.title : undefined }, p.children as never),
   PanelSectionRow: (p: AnyProps) => createElement("div", {}, p.children as never),
-  Field: (p: AnyProps & { label?: unknown; description?: unknown }) =>
+  Field: (p: AnyProps & { label?: unknown; description?: unknown; focusable?: boolean }) =>
     createElement(
       "div",
-      { "data-testid": "field" },
+      { "data-testid": "field", tabIndex: p.focusable ? 0 : undefined },
       createElement("span", { "data-testid": "field-label" }, p.label as never),
       createElement("span", { "data-testid": "field-desc" }, p.description as never),
       p.children as never,
@@ -106,6 +109,19 @@ describe("ConnectionSection", () => {
   beforeEach(() => {
     toggleCaptured.items = [];
     vi.clearAllMocks();
+  });
+
+  it("titles its group after the service, not after the section it sits in", () => {
+    const { container } = render(<ConnectionSection {...defaultProps()} />);
+    expect(container.querySelector("section")?.getAttribute("data-title")).toBe("RomM");
+  });
+
+  it("makes the status line a focus stop, so a pane that scrolls by focus can reach it", () => {
+    const { getAllByTestId } = render(<ConnectionSection {...defaultProps({ status: "Signed in as deck" })} />);
+    const statusRow = getAllByTestId("field").find(
+      (el) => el.querySelector('[data-testid="field-label"]')?.textContent === "Signed in as deck",
+    );
+    expect(statusRow?.getAttribute("tabindex")).toBe("0");
   });
 
   describe("URL field", () => {

@@ -1,9 +1,13 @@
 /**
- * Library-wide sync preferences. Houses set-and-forget library toggles: the
- * preferred-region dropdown (ADR-0021 §3, which region wins when a game has
- * several dumps and the plugin must pick one to bind + name the shortcut after)
- * and the collection platform-groups toggle. Pure renderer: parent owns every
- * value and the save/confirm flow.
+ * Set-and-forget preferences about what the library looks like once it is IN
+ * Steam: the preferred-region dropdown (ADR-0021 §3, which region wins when a
+ * game has several dumps and the plugin must pick one to bind + name the
+ * shortcut after), the collection platform-groups toggle and the naming mode.
+ * Pure renderer: parent owns every value and the save/confirm flow.
+ *
+ * It is titled **Steam Library** rather than Library: the Library page is the
+ * RomM side of the same subject — what gets synced — and these are the Steam
+ * side, so one word for both would name two different things.
  */
 
 import { FC } from "react";
@@ -76,7 +80,7 @@ export const LibrarySection: FC<LibrarySectionProps> = ({
   onNamingModeChange,
 }) => {
   return (
-    <PanelSection title="Library">
+    <PanelSection title="Steam Library">
       <PanelSectionRow>
         <DropdownItem
           label="Preferred region"

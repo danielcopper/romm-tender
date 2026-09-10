@@ -21,6 +21,7 @@
 import type { FC, ReactNode } from "react";
 import { DialogButton, Focusable, ToggleField } from "@decky/ui";
 import { ListDetail, type ListDetailItem } from "../qam/ListDetail";
+import { ROW_CONTENT_INSET, ROW_MARKER_GAP, ROW_MARKER_WIDTH, SELECTION_ACCENT } from "../qam/pane";
 import { LoadingRow } from "../LoadingRow";
 import { biosColorForLevel } from "../../utils/biosColor";
 import { PlatformDetail } from "./PlatformDetail";
@@ -49,15 +50,6 @@ function biosTooltip(row: PlatformRow): string {
   if (required === 0) return "Nothing required";
   return `${firmware.required_downloaded ?? 0} / ${required} required BIOS files ready`;
 }
-
-// The selection marker and the gap after it, which together are how far a row's
-// content sits from the list column's edge. Named because the list header's
-// padding has to be the same number: the pair of buttons up there spans the rows
-// below it, and happy-dom lays nothing out, so a drift between the two would be
-// invisible to every test.
-const ROW_MARKER_WIDTH = 3;
-const ROW_MARKER_GAP = 5;
-const ROW_CONTENT_INSET = ROW_MARKER_WIDTH + ROW_MARKER_GAP;
 
 const GroupHeading: FC<{ title: string; count: number }> = ({ title, count }) => (
   // Plain text: it accompanies the rows under it and scrolls with them. Making
@@ -142,7 +134,7 @@ export const PlatformsTab: FC<{ state: PlatformsPageState }> = ({ state }) => {
                 against the dot it reads as part of it. */}
             <div
               style={{
-                borderLeft: `${ROW_MARKER_WIDTH}px solid ${selected ? "#1a9fff" : "transparent"}`,
+                borderLeft: `${ROW_MARKER_WIDTH}px solid ${selected ? SELECTION_ACCENT : "transparent"}`,
                 paddingLeft: `${ROW_MARKER_GAP}px`,
               }}
             >

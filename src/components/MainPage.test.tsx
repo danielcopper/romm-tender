@@ -15,8 +15,6 @@
 //   - handleCancel try/catch → showTransientStatus("Failed to cancel sync"),
 //     surfaced under the still-running progress rows (the status field is not
 //     gated on the run being idle).
-//   - fixRetroarchInputDriver inline `.catch(() => {})` (inside ConfirmModal
-//     onOK) — truly-ignored; warning state remains (no clear).
 //
 // MUTATION CHECKS (by inspection — auto-mode classifier likely blocks on
 // React state internals + listener cleanup, so confidence is recorded here):
@@ -36,7 +34,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
-import { createElement, useSyncExternalStore, type ReactElement } from "react";
+import { createElement, useSyncExternalStore } from "react";
 import { MainPage, ConnectionIndicator } from "./MainPage";
 import * as backend from "../api/backend";
 import { useVersionError } from "./VersionErrorCard";
@@ -56,9 +54,9 @@ import { setDownloads } from "../utils/downloadStore";
 import { resetConnectionProbeForTests } from "../utils/connectionProbe";
 import { resetSyncStatsStoreForTests } from "../utils/syncStatsStore";
 import { setLegacyInstallState } from "../utils/legacyInstallStore";
+import { setPlaytimeScopeState } from "../utils/playtimeScopeStore";
 import { LEGACY_INSTALL_TITLE } from "./LegacyInstallBanner";
 import { resetPendingPreviewStoreForTests, adoptPreview, clearPendingPreview } from "../utils/pendingPreviewStore";
-import { showModal } from "@decky/ui";
 import * as syncManager from "../utils/syncManager";
 import * as connectionState from "../utils/connectionState";
 import { firstBodyStop, pageEntryStop, placeEntryFocus } from "../utils/entryFocus";
@@ -152,8 +150,7 @@ vi.mock("../utils/syncManager", () => ({
 }));
 
 // Local @decky/ui re-mock — global stub lacks ProgressBar (used to render sync
-// + download progress). Mirror the rest with thin pass-throughs + a vi.fn
-// showModal so we can capture ConfirmModal calls.
+// + download progress). Mirror the rest with thin pass-throughs.
 vi.mock("@decky/ui", async () => {
   type AnyProps = Record<string, unknown> & { children?: unknown };
   const { createElement: ce } = await import("react");
@@ -296,13 +293,6 @@ function buttonByExactText(container: HTMLElement, text: string): HTMLButtonElem
   return (btn as HTMLButtonElement | undefined) ?? null;
 }
 
-function lastConfirmModalProps<T = Record<string, unknown>>(): T | null {
-  const calls = vi.mocked(showModal).mock.calls;
-  if (calls.length === 0) return null;
-  const el = calls[calls.length - 1]?.[0] as ReactElement<T> | undefined;
-  return el?.props ?? null;
-}
-
 /** What the conditional slot says, or `null` where there is no slot at all. */
 function slotLabel(container: HTMLElement): string | null {
   return container.querySelector('[data-testid="sync-slot-label"]')?.textContent ?? null;
@@ -383,6 +373,11 @@ describe("MainPage", () => {
       };
     });
 
+    // The playtime-scope store is module-level and outlives a render, so a test
+    // that raises the condition would leave the notice standing over every test
+    // after it.
+    setPlaytimeScopeState({ pending: false });
+
     // Default backend mocks — tests override per case.
     vi.mocked(backend.refreshMigrationState).mockResolvedValue({
       retrodeck: { pending: false },
@@ -451,10 +446,6 @@ describe("MainPage", () => {
     vi.mocked(backend.clearSyncCache).mockResolvedValue({
       success: true,
       message: "Cleared",
-    });
-    vi.mocked(backend.fixRetroarchInputDriver).mockResolvedValue({
-      success: true,
-      message: "Fixed",
     });
 
     // Reset version error spy + connectionState side-channel.
@@ -527,7 +518,7 @@ describe("MainPage", () => {
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
 
-      const noticeButton = buttonByExactText(container, "Go to Settings");
+      const noticeButton = buttonByExactText(container, "Open Save Sync");
       expect(noticeButton).not.toBeNull();
       expect(container.querySelector("button")).toBe(noticeButton);
       expect(pageEntryStop(container)?.textContent).toBe("Sync");
@@ -2569,81 +2560,31 @@ describe("MainPage", () => {
   // ===========================================================================
   // J. handleClearCache — Force Full Sync flow
   // ===========================================================================
-  describe("handleFixInputDriver (via ConfirmModal onOK)", () => {
-    async function renderWithWarning(): Promise<HTMLElement> {
+  describe("the input_driver notice", () => {
+    async function renderWithWarning(onNavigate = vi.fn()): Promise<HTMLElement> {
       vi.mocked(backend.getSettings).mockResolvedValue({
         ...defaultSettings(),
         retroarch_input_check: { warning: true, current: "udev" },
       });
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
+      const { container } = render(<MainPage onNavigate={onNavigate} />);
       await flushAsync();
       return container;
     }
 
-    it("clicking the Fix button opens the ConfirmModal via showModal", async () => {
+    it("names the condition and carries no fix of its own", async () => {
       const container = await renderWithWarning();
-      const fixBtn = Array.from(container.querySelectorAll('[data-testid="dialog-button"]')).find(
-        (b) => b.textContent === "Fix",
-      ) as HTMLButtonElement | undefined;
-      expect(fixBtn).not.toBeUndefined();
-      fireEvent.click(fixBtn!);
-      expect(vi.mocked(showModal)).toHaveBeenCalledTimes(1);
-      const props = lastConfirmModalProps<{
-        strTitle?: string;
-        strOKButtonText?: string;
-      }>();
-      expect(props?.strTitle).toBe("Fix RetroArch input_driver?");
-      expect(props?.strOKButtonText).toBe("Apply Fix");
+      expect(container.textContent).toContain("RetroArch: input_driver issue");
+      // The fix's only home is Settings › Controller: Main offers the door and
+      // never the action, so nothing here can write the RetroArch config.
+      expect(buttonByExactText(container, "Fix")).toBeNull();
+      expect(vi.mocked(backend.fixRetroarchInputDriver)).not.toHaveBeenCalled();
     });
 
-    it("onOK success=true clears the retroarchWarning section", async () => {
-      vi.mocked(backend.fixRetroarchInputDriver).mockResolvedValue({
-        success: true,
-        message: "Done",
-      });
-      const container = await renderWithWarning();
-      const fixBtn = Array.from(container.querySelectorAll('[data-testid="dialog-button"]')).find(
-        (b) => b.textContent === "Fix",
-      ) as HTMLButtonElement | undefined;
-      fireEvent.click(fixBtn!);
-      const props = lastConfirmModalProps<{ onOK?: () => void | Promise<void> }>();
-      await act(async () => {
-        await props?.onOK?.();
-      });
-      expect(container.textContent).not.toContain("RetroArch: input_driver");
-    });
-
-    it("onOK success=false leaves the warning in place", async () => {
-      vi.mocked(backend.fixRetroarchInputDriver).mockResolvedValue({
-        success: false,
-        message: "Could not write",
-      });
-      const container = await renderWithWarning();
-      const fixBtn = Array.from(container.querySelectorAll('[data-testid="dialog-button"]')).find(
-        (b) => b.textContent === "Fix",
-      ) as HTMLButtonElement | undefined;
-      fireEvent.click(fixBtn!);
-      const props = lastConfirmModalProps<{ onOK?: () => void | Promise<void> }>();
-      await act(async () => {
-        await props?.onOK?.();
-      });
-      // Warning stays
-      expect(container.textContent).toContain("RetroArch: input_driver");
-    });
-
-    it("onOK rejection is silently swallowed (warning stays, no crash)", async () => {
-      vi.mocked(backend.fixRetroarchInputDriver).mockRejectedValue(new Error("perm"));
-      const container = await renderWithWarning();
-      const fixBtn = Array.from(container.querySelectorAll('[data-testid="dialog-button"]')).find(
-        (b) => b.textContent === "Fix",
-      ) as HTMLButtonElement | undefined;
-      fireEvent.click(fixBtn!);
-      const props = lastConfirmModalProps<{ onOK?: () => void | Promise<void> }>();
-      await act(async () => {
-        await props?.onOK?.();
-      });
-      // Truly-ignored catch — warning unchanged.
-      expect(container.textContent).toContain("RetroArch: input_driver");
+    it("Open Controller lands on Settings › Controller", async () => {
+      const onNavigate = vi.fn();
+      const container = await renderWithWarning(onNavigate);
+      fireEvent.click(buttonByExactText(container, "Open Controller")!);
+      expect(onNavigate).toHaveBeenCalledWith({ page: "settings", section: "controller" });
     });
   });
 
@@ -2688,7 +2629,7 @@ describe("MainPage", () => {
       expect(buttonByExactText(container, "System")).toBeNull();
     });
 
-    it("clicking 'Go to Settings' (save-sort migration banner) invokes onNavigate('settings')", async () => {
+    it("the save-sort notice's Open Save Sync lands on Settings › Save Sync", async () => {
       currentSaveSortState = { pending: true, saves_count: 3 };
       // refreshMigrationState runs on mount and writes save_sort back to the
       // store — also return pending:true so the banner stays visible.
@@ -2699,8 +2640,23 @@ describe("MainPage", () => {
       const onNavigate = vi.fn();
       const { container } = render(<MainPage onNavigate={onNavigate} />);
       await flushAsync();
-      fireEvent.click(buttonByExactText(container, "Go to Settings")!);
-      expect(onNavigate).toHaveBeenCalledWith("settings");
+      // The migration itself has one home, and this is not it: Main names the
+      // condition, Settings › Save Sync holds Migrate and Dismiss.
+      expect(buttonByExactText(container, "Migrate Save Files")).toBeNull();
+      fireEvent.click(buttonByExactText(container, "Open Save Sync")!);
+      expect(onNavigate).toHaveBeenCalledWith({ page: "settings", section: "save-sync" });
+    });
+
+    it("the playtime-scope notice's Open Connections lands on Settings › Connections", async () => {
+      vi.mocked(backend.getPlaytimeScopeNotice).mockResolvedValue({ pending: true });
+      const onNavigate = vi.fn();
+      const { container } = render(<MainPage onNavigate={onNavigate} />);
+      await flushAsync();
+      // Dismiss is still beside it — the jump did not replace the way to end
+      // the notice locally.
+      expect(buttonByExactText(container, "Dismiss")).not.toBeNull();
+      fireEvent.click(buttonByExactText(container, "Open Connections")!);
+      expect(onNavigate).toHaveBeenCalledWith({ page: "settings", section: "connections" });
     });
 
     it("clicking 'View All' (Downloads section) invokes onNavigate('downloads')", async () => {
