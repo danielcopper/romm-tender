@@ -9,6 +9,32 @@
 # Markdown (deno fmt). A no-op or missing tool in one section must NOT skip the
 # others, so each section guards itself rather than exiting the whole hook.
 
+# Re-stage the files a formatter may have rewritten — but only those that had
+# no unstaged changes when this hook started.
+#
+# `git add` stages the whole worktree file, never the hunks that were chosen,
+# so re-adding a file with unstaged work commits the part the author
+# deliberately kept out of the index with `git add -p`, and nothing anywhere
+# says so. Such a file is named instead and left alone: the formatting reaches
+# the worktree and the next commit carries it, so what is committed now is
+# exactly what was staged — possibly unformatted, which CI will say out loud.
+# The other direction is silent, which is why it is the one being refused.
+#
+# The dirty list is the caller's to take, and it must be taken BEFORE the
+# formatter runs: afterwards every file the formatter rewrote looks unstaged
+# and this would refuse all of them.
+restage_formatted() {
+    local staged="$1" dirty="$2" file
+    for file in $staged; do
+        [ -f "$file" ] || continue
+        if [[ $'\n'"$dirty"$'\n' == *$'\n'"$file"$'\n'* ]]; then
+            echo "pre-commit: $file has unstaged changes — leaving the index exactly as you staged it"
+            continue
+        fi
+        git add "$file"
+    done
+}
+
 # --- Python: format + lint staged files with ruff -------------------------
 # Find ruff — prefer Mason binary, fall back to PATH
 RUFF="${HOME}/.local/share/nvim/mason/bin/ruff"
@@ -21,18 +47,18 @@ else
     # Get staged Python files. Skip the Python step if none changed.
     STAGED=$(git diff --cached --name-only --diff-filter=ACM -- '*.py')
     if [ -n "$STAGED" ]; then
+        # Before formatting, or every formatted file reads as dirty.
+        DIRTY=$(git diff --name-only -- $STAGED)
+
         # Format staged files, then re-stage
         $RUFF format $STAGED
         $RUFF check --fix $STAGED
 
-        # Re-stage any files that were modified by ruff
-        for file in $STAGED; do
-            if [ -f "$file" ]; then
-                git add "$file"
-            fi
-        done
+        restage_formatted "$STAGED" "$DIRTY"
 
-        # Final ruff check — abort on unfixable errors (e.g. line too long)
+        # Final ruff check — abort on unfixable errors (e.g. line too long).
+        # This reads the worktree, so a file held back above is checked as it
+        # will look once its formatting is committed, not as it was staged.
         if ! $RUFF check $STAGED; then
             echo "pre-commit: ruff found unfixable errors, aborting commit"
             exit 1
@@ -52,14 +78,13 @@ else
     # Get staged frontend files. Skip the frontend step if none changed.
     STAGED_FE=$(git diff --cached --name-only --diff-filter=ACM -- 'src/*.ts' 'src/*.tsx')
     if [ -n "$STAGED_FE" ]; then
+        # Before formatting, or every formatted file reads as dirty.
+        DIRTY_FE=$(git diff --name-only -- $STAGED_FE)
+
         # Format staged files, then re-stage
         $PRETTIER --write $STAGED_FE
 
-        for file in $STAGED_FE; do
-            if [ -f "$file" ]; then
-                git add "$file"
-            fi
-        done
+        restage_formatted "$STAGED_FE" "$DIRTY_FE"
     fi
 fi
 
@@ -76,13 +101,12 @@ else
     STAGED_MD=$(git diff --cached --name-only --diff-filter=ACM -- '*.md' \
         | grep -vE '^(CHANGELOG\.md$|site/|node_modules/|\.worktrees/)')
     if [ -n "$STAGED_MD" ]; then
+        # Before formatting, or every formatted file reads as dirty.
+        DIRTY_MD=$(git diff --name-only -- $STAGED_MD)
+
         # Format staged files (deno.json: proseWrap=always, lineWidth=120), then re-stage
         $DENO fmt $STAGED_MD
 
-        for file in $STAGED_MD; do
-            if [ -f "$file" ]; then
-                git add "$file"
-            fi
-        done
+        restage_formatted "$STAGED_MD" "$DIRTY_MD"
     fi
 fi
