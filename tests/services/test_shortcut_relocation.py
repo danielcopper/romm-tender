@@ -8,8 +8,10 @@ shortcuts it never reached stay on the old path for the life of the install.
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import logging
+import pathlib
 from typing import Any
 
 import pytest
@@ -20,6 +22,8 @@ from services.shortcut_relocation import (
     ShortcutRelocationService,
     ShortcutRelocationServiceConfig,
 )
+
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 _HOME = "/home/deck/.local/share/romm-tender/bin/rom-launcher"
 _HOME_DIR = "/home/deck/.local/share/romm-tender/bin"
@@ -125,9 +129,81 @@ class TestTheCompletionStamp:
 
         assert uow.kv_config.get(KV_RELOCATION_DONE) is None
 
-    @pytest.mark.asyncio
-    async def test_the_reading_is_the_only_thing_that_stamps_it(self):
-        """No report from the frontend can: only a reading of the file may say it is over."""
+
+class TestTheStampHasOneWriter:
+    """The reading of ``shortcuts.vdf`` is the single stamp authority, structurally.
+
+    The design rests on this: the completion may be recorded only by a call that
+    has just read the file and found nothing of ours outside the launcher's home.
+    No report can record it — not the frontend's, which is why the callable that
+    once let it was removed — because Steam writes its in-memory shortcuts to
+    that file when it chooses, so a report describes writes the file cannot yet
+    show. A second writer breaks no behavioural test below: it would stamp
+    early, the panel would offer the pre-rename install for removal on the
+    strength of it, and every later start would read nothing.
+
+    The scan pins the whole chain from the key to the reading — one write of the
+    ``kv_config`` key, one reference to the method holding it, one reference to
+    the method holding THAT — so a new writer has to break one of the three
+    counts wherever it is spliced in.
+
+    **What the scan SEES are attribute references by name, in this module's own
+    AST.** That covers a bound method handed to something else, which a call
+    count would not: ``run_in_executor(None, self._stamp_done_io)`` is how this
+    module reaches its own ``_io`` bodies. What it does not see is an alias
+    (``stamp = self._stamp_done`` under another name), a ``getattr``, or any
+    module but this one — :data:`KV_RELOCATION_DONE` is importable, and a write
+    under it from elsewhere would pass every assertion here.
+    """
+
+    _SOURCE = _REPO_ROOT / "py_modules" / "services" / "shortcut_relocation.py"
+
+    @classmethod
+    def _tree(cls) -> ast.Module:
+        return ast.parse(cls._SOURCE.read_text(encoding="utf-8"))
+
+    @staticmethod
+    def _holder(tree: ast.Module, node: ast.AST) -> str:
+        """The innermost ``def`` whose body holds *node*, by name."""
+        parents: dict[ast.AST, ast.AST] = {}
+        for parent in ast.walk(tree):
+            for child in ast.iter_child_nodes(parent):
+                parents[child] = parent
+        current: ast.AST | None = node
+        while current is not None:
+            if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                return current.name
+            current = parents.get(current)
+        return "<module>"
+
+    @classmethod
+    def _refs(cls, tree: ast.Module, attr: str) -> list[str]:
+        """Every ``<...>.attr`` reference, reported by the function holding it."""
+        return [
+            cls._holder(tree, node) for node in ast.walk(tree) if isinstance(node, ast.Attribute) and node.attr == attr
+        ]
+
+    def test_the_key_is_written_in_one_place(self):
+        tree = self._tree()
+        writes = [
+            self._holder(tree, node)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Attribute)
+            and node.attr == "set"
+            and isinstance(node.value, ast.Attribute)
+            and node.value.attr == "kv_config"
+        ]
+
+        assert writes == ["_stamp_done_io"]
+
+    def test_that_place_is_reached_from_one_place(self):
+        assert self._refs(self._tree(), "_stamp_done_io") == ["_stamp_done"]
+
+    def test_and_that_one_is_reached_only_from_the_reading(self):
+        assert self._refs(self._tree(), "_stamp_done") == ["get_shortcut_relocation"]
+
+    def test_no_completion_method_survives_on_the_service(self):
+        """The frontend's route to the stamp, removed rather than tuned."""
         assert not [name for name in dir(ShortcutRelocationService) if "complete" in name]
 
 
