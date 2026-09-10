@@ -3,9 +3,10 @@
  * launcher's home outside the plugin folder (ADR-0032).
  *
  * Which shortcuts need the write is the backend's answer, read out of
- * `shortcuts.vdf`; what this module owns is the writing, and the two directions
- * that must never be confused — a blocked answer writes nothing at all, and a
- * pass that did not finish must not be stamped complete.
+ * `shortcuts.vdf`, and so is recording that the transition is over. What this
+ * module owns is the writing, and the two directions that must never be
+ * confused — a blocked answer writes nothing at all, and a pass that did not
+ * finish must not report the library relocated.
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -14,31 +15,13 @@ import { relocateShortcutsToLauncher } from "./launcherRelocation";
 
 vi.mock("../api/backend");
 
-const OLD_LAUNCHER = "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher";
 const NEW_LAUNCHER = "/home/deck/.local/share/romm-tender/bin/rom-launcher";
 const NEW_START_DIR = "/home/deck/.local/share/romm-tender/bin";
 
-/**
- * Stub the three Steam calls a pass makes: the two writes, and the read-back
- * the stamp rests on. *readsBack* is the exe Steam reports for the confirmed
- * shortcut — the launcher's home by default, so the happy path confirms.
- */
-function stubSteam(readsBack: string | null = NEW_LAUNCHER): {
-  setExe: ReturnType<typeof vi.fn>;
-  setStartDir: ReturnType<typeof vi.fn>;
-} {
+function stubSteam(): { setExe: ReturnType<typeof vi.fn>; setStartDir: ReturnType<typeof vi.fn> } {
   const setExe = vi.fn();
   const setStartDir = vi.fn();
-  vi.stubGlobal("SteamClient", {
-    Apps: {
-      SetShortcutExe: setExe,
-      SetShortcutStartDir: setStartDir,
-      RegisterForAppDetails: vi.fn((_appId: number, callback: (d: SteamAppDetails | undefined) => void) => {
-        queueMicrotask(() => callback(readsBack === null ? undefined : { strShortcutExe: readsBack }));
-        return { unregister: vi.fn() };
-      }),
-    },
-  });
+  vi.stubGlobal("SteamClient", { Apps: { SetShortcutExe: setExe, SetShortcutStartDir: setStartDir } });
   return { setExe, setStartDir };
 }
 
@@ -56,7 +39,6 @@ const outstanding = (appIds: number[]): backend.ShortcutRelocation => ({
 describe("relocateShortcutsToLauncher", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(backend.completeShortcutRelocation).mockResolvedValue({ success: true });
   });
 
   it("writes both the exe and the start dir of every shortcut the backend named", async () => {
@@ -75,50 +57,23 @@ describe("relocateShortcutsToLauncher", () => {
     ]);
   });
 
-  it("stamps the transition complete once a write is read back from Steam", async () => {
+  it("records nothing — the backend stamps the transition off its own next reading", async () => {
+    // Steam holds its shortcuts in memory and writes the file when it chooses,
+    // so a report from here would be about writes the file cannot show yet
+    // (2026-09-10: a read-back disagreed seconds after a run that had in fact
+    // repointed all 826 correctly).
     planIs(outstanding([10]));
     stubSteam();
 
     await relocateShortcutsToLauncher();
 
-    expect(vi.mocked(backend.completeShortcutRelocation)).toHaveBeenCalledTimes(1);
+    const wrote = Object.entries(backend).filter(
+      ([name, value]) => name !== "getShortcutRelocation" && vi.isMockFunction(value) && value.mock.calls.length > 0,
+    );
+    expect(wrote.map(([name]) => name)).toEqual(["logInfo"]);
   });
 
-  it("does not stamp when Steam still reports the old exe", async () => {
-    // The stamp is permanent and the panel turns it into "you may remove the
-    // pre-rename install", so a run that wrote nowhere must not close it —
-    // Steam never flushing, or the wrong userdata directory having been read.
-    planIs(outstanding([10]));
-    const { setExe } = stubSteam(OLD_LAUNCHER);
-
-    await expect(relocateShortcutsToLauncher()).resolves.toEqual({ status: "blocked" });
-
-    expect(setExe).toHaveBeenCalledWith(10, NEW_LAUNCHER);
-    expect(vi.mocked(backend.completeShortcutRelocation)).not.toHaveBeenCalled();
-    expect(vi.mocked(backend.logError)).toHaveBeenCalledWith(expect.stringContaining(NEW_LAUNCHER));
-  });
-
-  it("does not stamp when Steam answers with no details at all", async () => {
-    planIs(outstanding([10]));
-    stubSteam(null);
-
-    await expect(relocateShortcutsToLauncher()).resolves.toEqual({ status: "blocked" });
-
-    expect(vi.mocked(backend.completeShortcutRelocation)).not.toHaveBeenCalled();
-  });
-
-  it("reads back one shortcut, not the whole library", async () => {
-    // Confirming each would cost 826 RegisterForAppDetails calls and the fat
-    // details object each one caches — the renderer cost this design removed.
-    planIs(outstanding([10, 20, 30]));
-    stubSteam();
-
-    await relocateShortcutsToLauncher();
-
-    expect(vi.mocked(SteamClient.Apps.RegisterForAppDetails)).toHaveBeenCalledTimes(1);
-  });
-
-  it("writes and stamps nothing when the backend says the transition is over", async () => {
+  it("writes nothing when the backend says the transition is over", async () => {
     planIs({ status: "done" });
     const { setExe, setStartDir } = stubSteam();
 
@@ -126,7 +81,6 @@ describe("relocateShortcutsToLauncher", () => {
 
     expect(setExe).not.toHaveBeenCalled();
     expect(setStartDir).not.toHaveBeenCalled();
-    expect(vi.mocked(backend.completeShortcutRelocation)).not.toHaveBeenCalled();
   });
 
   it("writes nothing when the backend blocks the rewrite", async () => {
@@ -139,25 +93,21 @@ describe("relocateShortcutsToLauncher", () => {
 
     expect(setExe).not.toHaveBeenCalled();
     expect(setStartDir).not.toHaveBeenCalled();
-    expect(vi.mocked(backend.completeShortcutRelocation)).not.toHaveBeenCalled();
     expect(vi.mocked(backend.logInfo)).toHaveBeenCalledWith(expect.stringContaining("not at its home"));
   });
 
-  it("leaves the transition unstamped when a write throws part-way through", async () => {
+  it("does not report the library relocated when a write throws part-way through", async () => {
     planIs(outstanding([10, 20, 30]));
     const setExe = vi.fn((appId: number) => {
       if (appId === 20) throw new Error("Steam said no");
     });
     const setStartDir = vi.fn();
-    vi.stubGlobal("SteamClient", {
-      Apps: { SetShortcutExe: setExe, SetShortcutStartDir: setStartDir, RegisterForAppDetails: vi.fn() },
-    });
+    vi.stubGlobal("SteamClient", { Apps: { SetShortcutExe: setExe, SetShortcutStartDir: setStartDir } });
 
     await expect(relocateShortcutsToLauncher()).resolves.toEqual({ status: "blocked" });
 
-    // The shortcuts it never reached must stay in the plan, so the next start
-    // is handed them again rather than finding the question closed.
-    expect(vi.mocked(backend.completeShortcutRelocation)).not.toHaveBeenCalled();
+    // The shortcuts it never reached are still in a plugin folder, so the card
+    // must not say otherwise; the next start's reading hands them over again.
     expect(setExe.mock.calls.map(([appId]) => appId)).toEqual([10, 20]);
     expect(vi.mocked(backend.logError)).toHaveBeenCalledWith(expect.stringContaining("Steam said no"));
   });

@@ -840,7 +840,6 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # and a shortcut left naming a file inside the plugin folder is the
     # condition that card exists to warn about.
     "get_shortcut_relocation",
-    "complete_shortcut_relocation",
     "dismiss_legacy_install_notice",
     # Where the plugin's OWN data lives — the notice, the two candidates behind
     # it, and the answer. None of the three touches RetroDECK state. The notice

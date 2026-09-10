@@ -1046,14 +1046,6 @@ class Plugin:
         """
         return await self._shortcut_relocation_service.get_shortcut_relocation()
 
-    async def complete_shortcut_relocation(self):
-        """Record that the frontend rewrote every shortcut it was handed.
-
-        Stamps the one-time transition complete, so no later start reads Steam's
-        shortcut file again. Idempotent; returns ``{"success": True}``.
-        """
-        return await self._shortcut_relocation_service.complete_shortcut_relocation()
-
     async def dismiss_legacy_install_notice(self):
         """Acknowledge the pre-rename install for good, keeping its card down.
 

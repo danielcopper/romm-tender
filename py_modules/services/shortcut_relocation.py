@@ -7,8 +7,9 @@ decides where the launcher lives; the composition root settles that and hands
 the answer in.
 
 A one-time transition task with a recorded completion, in the shape of a schema
-migration: once a run has repointed everything a reading found, the completion
-is stamped and no later start reads Steam's shortcut file again.
+migration: once a reading of Steam's shortcut file finds nothing of ours outside
+the launcher's home, the completion is stamped and no later start reads that
+file again.
 """
 
 from __future__ import annotations
@@ -69,11 +70,12 @@ class ShortcutRelocationService:
         - ``{"status": "done"}`` — no shortcut of ours names a plugin folder any
           more. Either the completion is already stamped, in which case nothing
           at all is read, or this call read the file and found nothing to do and
-          stamped it.
+          stamped it. **This is the only thing that ever stamps it**, and what it
+          rests on is the file rather than anybody's report: the frontend can say
+          it issued the writes, and only a later reading can say they are there.
         - ``{"status": "outstanding", "exe", "start_dir", "app_ids"}`` — those
           app IDs carry a launcher path that is not ``exe``. The frontend writes
-          both fields on each and then calls
-          :meth:`complete_shortcut_relocation`.
+          both fields on each and reports; it records nothing.
         - ``{"status": "blocked", "message"}`` — nothing may be repointed yet:
           the launcher is not at its home (the data migration is still
           outstanding, or the install failed), or Steam's shortcut file could
@@ -84,6 +86,28 @@ class ShortcutRelocationService:
         this plugin could put the file back, so every uncertainty resolves to
         it — and the panel keeps warning against removing the pre-rename
         install, which is still load-bearing exactly while this is the answer.
+
+        **A completed rewrite is therefore stamped on the FOLLOWING start**, and
+        that is the design rather than a delay that slipped in. Steam holds its
+        shortcuts in memory and rewrites the file from them when it chooses, so
+        the writes a run just issued are not in the file it was planned from —
+        measured 2026-09-10, where a read-back of one rewritten shortcut through
+        ``RegisterForAppDetails`` disagreed with the write seconds after a run
+        that had in fact repointed all 826 of them correctly, and Steam answered
+        with the new path a minute later. The cost is one start on which this
+        service reads the file and finds nothing to do; what it buys is a stamp
+        that no in-flight state can make wrong.
+
+        **The gap this leaves, deliberately.** The stamp is permanent and
+        nothing clears it: a shortcut that turns up later carrying the old path
+        — restored from a backup, written by a downgraded build — stays on it,
+        and no start will look again. It keeps launching, because the package
+        still ships ``bin/rom-launcher`` at that path; what it does NOT keep is
+        the panel's agreement, since the card reads this stamp as "nothing points
+        into the pre-rename install any more" and offers its removal. Clearing
+        the stamp on Force Full Sync was considered and rejected: it would only
+        ever reach a user who had already diagnosed the shortcut, and that button
+        carries enough meanings already.
         """
         if await self._already_done():
             return {"status": "done"}
@@ -106,32 +130,6 @@ class ShortcutRelocationService:
             "start_dir": os.path.dirname(self._launcher_exe),
             "app_ids": app_ids,
         }
-
-    async def complete_shortcut_relocation(self) -> dict[str, Any]:
-        """Record that a run repointed everything the reading found.
-
-        Called by the frontend once its writes are done AND one of them has been
-        read back from Steam carrying the launcher's home
-        (``src/utils/launcherRelocation.ts``). That read-back is what this stamp
-        rests on: ``SetShortcutExe`` returns nothing, and the run was planned off
-        ``shortcuts.vdf`` — which Steam rewrites from its own memory, and which
-        ``find_steam_user_dir`` picks by modification time where a machine has
-        more than one Steam account — so a run that wrote to the wrong place, or
-        to nothing, would otherwise report success. Idempotent.
-
-        **The gap this leaves, deliberately.** The stamp is permanent and
-        nothing clears it: a shortcut that turns up later carrying the old path
-        — restored from a backup, written by a downgraded build — stays on it,
-        and no start will look again. It keeps launching, because the package
-        still ships ``bin/rom-launcher`` at that path; what it does NOT keep is
-        the panel's agreement, since the card reads this stamp as "nothing points
-        into the pre-rename install any more" and offers its removal. Clearing
-        the stamp on Force Full Sync was considered and rejected: it would only
-        ever reach a user who had already diagnosed the shortcut, and that button
-        carries enough meanings already.
-        """
-        await self._stamp_done()
-        return {"success": True}
 
     async def _already_done(self) -> bool:
         return await self._loop.run_in_executor(None, self._read_done_io)

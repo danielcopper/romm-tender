@@ -99,6 +99,7 @@ class TestWhatIsLeftToDo:
 class TestTheCompletionStamp:
     @pytest.mark.asyncio
     async def test_finding_nothing_to_do_stamps_it(self):
+        """The one writer: a reading of the file that finds nothing of ours outside the home."""
         uow = FakeUnitOfWork()
         service, _, _ = _make(exes={10: _HOME}, uow=uow)
 
@@ -116,7 +117,7 @@ class TestTheCompletionStamp:
 
     @pytest.mark.asyncio
     async def test_handing_out_a_plan_stamps_nothing(self):
-        """Only the frontend can say the writes happened, so nothing is recorded yet."""
+        """The writes have not happened yet, and a later reading is what will say they did."""
         uow = FakeUnitOfWork()
         service, _, _ = _make(exes={10: _OLD}, uow=uow)
 
@@ -125,23 +126,9 @@ class TestTheCompletionStamp:
         assert uow.kv_config.get(KV_RELOCATION_DONE) is None
 
     @pytest.mark.asyncio
-    async def test_completing_stamps_it(self):
-        uow = FakeUnitOfWork()
-        service, _, _ = _make(exes={10: _OLD}, uow=uow)
-
-        assert await service.complete_shortcut_relocation() == {"success": True}
-
-        assert uow.kv_config.get(KV_RELOCATION_DONE) == "1"
-
-    @pytest.mark.asyncio
-    async def test_completing_twice_is_idempotent(self):
-        uow = FakeUnitOfWork()
-        service, _, _ = _make(uow=uow)
-
-        await service.complete_shortcut_relocation()
-        await service.complete_shortcut_relocation()
-
-        assert uow.kv_config.get(KV_RELOCATION_DONE) == "1"
+    async def test_the_reading_is_the_only_thing_that_stamps_it(self):
+        """No report from the frontend can: only a reading of the file may say it is over."""
+        assert not [name for name in dir(ShortcutRelocationService) if "complete" in name]
 
 
 class TestWhenNothingMayBeRewritten:

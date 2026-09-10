@@ -1,14 +1,17 @@
 """Contract test for the one-time move of the shortcuts onto the launcher's home.
 
 Driven frontend-shaped per ``src/api/backend.ts``:
-``getShortcutRelocation = callable<[], ShortcutRelocation>`` and
-``completeShortcutRelocation = callable<[], {success: boolean}>``.
+``getShortcutRelocation = callable<[], ShortcutRelocation>``.
 
-This tier reaches the answer through the real ``bootstrap()`` and a real
-SQLite database, which is what makes it worth having: the launcher path is
-derived from the data root the start-up migration settled, the completion stamp
-is a real ``kv_config`` row, and the reading is a real ``shortcuts.vdf`` parse.
-A unit test can only be told all three.
+This tier reaches the answer through the real ``bootstrap()`` and a real SQLite
+database, which is what makes it worth having: the launcher path is derived from
+the data root the start-up migration settled, the completion stamp is a real
+``kv_config`` row, and the reading is a real ``shortcuts.vdf`` parse. A unit test
+can only be told all three.
+
+It is also the only tier that can show the stamp's timing, because that timing
+is a property of the file: a rewrite is stamped by the reading AFTER it, once the
+file carries the new paths.
 """
 
 from __future__ import annotations
@@ -92,20 +95,39 @@ async def test_the_reported_exe_is_a_real_file_the_start_installed(harness):
     assert result["exe"].endswith("/bin/rom-launcher")
 
 
-async def test_completing_closes_the_question_for_every_later_start(harness):
+async def test_a_completed_rewrite_is_stamped_on_the_following_reading(harness):
+    """The file is the evidence, so the stamp lands one reading after the writes.
+
+    Steam holds its shortcuts in memory and rewrites the file when it chooses,
+    which is why nothing here reports the rewrite done — the next reading finds
+    the new paths and closes the question itself.
+    """
     _write_shortcuts(harness, [(1, "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher")])
     assert (await harness.plugin.get_shortcut_relocation())["status"] == "outstanding"
 
-    assert await harness.plugin.complete_shortcut_relocation() == {"success": True}
+    # The frontend has written, and Steam has since flushed its memory to disk.
+    _write_shortcuts(harness, [(1, _launcher_home(harness))])
 
-    # The same shortcut is still on the old path, and the answer is still done:
-    # the stamp is what closes it, deliberately and for good.
     assert await harness.plugin.get_shortcut_relocation() == {"status": "done"}
 
 
-async def test_a_stamp_survives_into_a_second_reading(harness):
-    """It is a real row, not a process-lifetime flag."""
-    await harness.plugin.complete_shortcut_relocation()
+async def test_a_reading_that_still_finds_them_stamps_nothing(harness):
+    """A pass whose writes are not in the file yet leaves the question open."""
+    _write_shortcuts(harness, [(1, "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher")])
+
+    first = await harness.plugin.get_shortcut_relocation()
+    second = await harness.plugin.get_shortcut_relocation()
+
+    assert first == second
+    assert second["status"] == "outstanding"
+    assert second["app_ids"] == [1]
+
+
+async def test_the_stamp_closes_the_question_for_every_later_start(harness):
+    """Permanent by design: a shortcut that turns up later on the old path stays on it."""
+    _write_shortcuts(harness, [(1, _launcher_home(harness))])
+    assert await harness.plugin.get_shortcut_relocation() == {"status": "done"}
+
     _write_shortcuts(harness, [(1, "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher")])
 
     assert await harness.plugin.get_shortcut_relocation() == {"status": "done"}

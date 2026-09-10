@@ -1123,8 +1123,8 @@ export const getLegacyInstallNotice = callable<
  * `done` — nothing of ours names a plugin folder any more; the transition is
  * over and no file was read to say so.
  * `outstanding` — those `app_ids` still carry a launcher path that is not
- * `exe`. Write `exe` and `start_dir` on each, then call
- * {@link completeShortcutRelocation}.
+ * `exe`. Write `exe` and `start_dir` on each; the backend stamps the transition
+ * complete on the next start whose own reading finds nothing left.
  * `blocked` — nothing may be rewritten yet, and the reason is the backend's
  * (the launcher is not at its home, or Steam's shortcut file could not be
  * read). Rewriting anyway would point games at a file that is not there.
@@ -1135,9 +1135,6 @@ export type ShortcutRelocation =
   | { status: "blocked"; message: string };
 
 export const getShortcutRelocation = callable<[], ShortcutRelocation>("get_shortcut_relocation");
-
-/** Stamp the one-time shortcut relocation complete, so no later start looks again. */
-export const completeShortcutRelocation = callable<[], { success: boolean }>("complete_shortcut_relocation");
 
 /** Persist the user's answer that they are keeping the pre-rename install. */
 export const dismissLegacyInstallNotice = callable<[], { success: boolean }>("dismiss_legacy_install_notice");

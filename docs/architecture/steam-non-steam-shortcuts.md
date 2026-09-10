@@ -51,10 +51,11 @@ there on every start, once the data migration's own half has landed.
 
 Shortcuts written before that move are repointed once, at plugin load. The **backend** decides which: it parses
 `shortcuts.vdf` and returns the app IDs whose `exe` still ends in `/bin/rom-launcher` but is not the launcher's home,
-plus the `exe` and `startDir` to write (`get_shortcut_relocation`). The frontend writes exactly those and then stamps
-the transition complete (`complete_shortcut_relocation`), after which no start reads that file again —
-`src/utils/launcherRelocation.ts`. An app **overview** carries no `exe`, so the frontend's own route to the same fact
-would be a `RegisterForAppDetails` per shortcut at every start.
+plus the `exe` and `startDir` to write (`get_shortcut_relocation`). The frontend writes exactly those and reports; it
+records nothing (`src/utils/launcherRelocation.ts`). The transition is stamped by the NEXT start's own reading of that
+file, once Steam has written its in-memory shortcuts out — after which no start reads it again. An app **overview**
+carries no `exe`, so the frontend's own route to the same fact would be a `RegisterForAppDetails` per shortcut at every
+start.
 
 Three properties of that path are load-bearing:
 

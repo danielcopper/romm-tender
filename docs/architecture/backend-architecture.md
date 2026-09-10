@@ -2036,12 +2036,14 @@ list of app IDs plus the `exe` and `start_dir` to write. Two shapes in that file
 quietly: the keys case-insensitively (Steam has written more than one case), and the app id converted out of the
 **signed** int32 form the file stores, since every `SteamClient` API takes the unsigned one.
 
-It is a one-time transition with a recorded completion (`kv_config`, `shortcut_launcher_relocated`): once a run has
-repointed everything a reading found, no later start reads the file again. Every uncertainty answers `blocked` instead —
-the launcher is not at its home, or the file could not be read — and a blocked answer is never stamped, so the next
-start asks again. The gap that leaves is named at `complete_shortcut_relocation`: nothing clears the stamp, so a
-shortcut that turns up later on the old path stays there, which is harmless while the package still ships
-`bin/rom-launcher`.
+It is a one-time transition with a recorded completion (`kv_config`, `shortcut_launcher_relocated`), and the reading is
+its only writer: a call that finds nothing of ours outside the launcher's home stamps it, and no later start reads the
+file again. The frontend writes and reports; it records nothing, so a completed rewrite is stamped on the FOLLOWING
+start — Steam writes its in-memory shortcuts to the file when it chooses, and the file is what the stamp rests on. Every
+uncertainty answers `blocked` instead — the launcher is not at its home, or the file could not be read — and a blocked
+answer is never stamped, so the next start asks again. The gap that leaves is named at `get_shortcut_relocation`:
+nothing clears the stamp, so a shortcut that turns up later on the old path keeps launching but loses the panel's
+agreement, since the card reads the stamp as "nothing points into the pre-rename install any more".
 
 **The choice the plugin will not make.** Two libraries is the one case with no safe automatic answer, so the panel
 raises a notice whose button opens a modal showing both candidates with their path, size and last-changed date. The

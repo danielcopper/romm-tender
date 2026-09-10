@@ -84,11 +84,19 @@ stops asking and only writes.
 Two shapes in that file are not obvious and both fail quietly: Steam has written the keys in more than one case, so they
 are matched case-insensitively, and the id is stored **signed** while every `SteamClient` API takes the unsigned form.
 
-**It is a one-time task with a recorded completion**, in the shape of a schema migration: once a run has rewritten
-everything a reading found, that is stamped in `kv_config` and no later start reads the file again — a plugin start
-already carries enough checks for this not to become a permanent one. The stamp is written only for a run that issued
-every write it was given; a reading that could not be done, or a pass that stopped part-way, leaves the question open
-for the next start.
+**It is a one-time task with a recorded completion**, in the shape of a schema migration: once a reading of
+`shortcuts.vdf` finds nothing of ours outside the launcher's home, that is stamped in `kv_config` and no later start
+reads the file again — a plugin start already carries enough checks for this not to become a permanent one.
+
+**The file is the evidence, and nothing else is**, so a completed rewrite is stamped on the FOLLOWING start. The
+frontend writes and reports; it records nothing. That is not a delay that slipped in — Steam holds its shortcuts in
+memory and rewrites the file from them when it chooses, so the writes a run has just issued are not yet in the file it
+was planned from. An earlier revision of this cut had the frontend read one rewritten shortcut back through
+`RegisterForAppDetails` and stamp on that. On the device (2026-09-10) it fired on a **healthy** run: 826 shortcuts had
+in fact been repointed correctly, and the same question asked a minute later answered with the new path. The next start
+read the file, found nothing outstanding and stamped, which is the whole mechanism doing its job — so the read-back was
+removed rather than tuned. The cost is one start; what it buys is a stamp that no in-flight state can make wrong, and a
+run that could not be read, or a pass that stopped part-way, simply leaves the question open.
 
 **Nothing clears the stamp, deliberately.** A shortcut that turns up later carrying the old path — restored from a
 backup, written by a downgraded build — stays on it, and no start will look again. It keeps launching, because the
