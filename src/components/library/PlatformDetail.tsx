@@ -259,15 +259,9 @@ function getUnknownSummary(requiredWithheld: number, systemImage: SystemImage) {
  * about to launch, a file it does not require is not a gap either way.
  *
  * **A `system_image_candidate` row is the one need the two channels above cannot
- * carry**, and it is the fifth state rather than a shade of the fourth. Its core
- * marks every such file optional — that is all a libretro `.info` can say about
- * one of five images any of which starts the console — so `required_by_active`
- * is false for all of them and the muted branch would draw five grey "missing,
- * not required" marks under a red headline saying the console needs one. What is
- * true of such a row depends on the PLATFORM's `system_image`, not on the row:
- * with none of them in place each is a way to fix it (red), with one in place the
- * rest are genuinely spare (muted), and where nothing could be established the
- * row inherits that doubt (amber). Only the muted answer is replaced — an
+ * carry**, and it is the fifth state rather than a shade of the fourth. Its mark
+ * is {@link systemImageCandidateMark}'s, and it is asked between the two above
+ * and the required/spare pair below: only the muted answer is replaced — an
  * unestablished verdict is still `?`, and an unestablished NEED is still amber,
  * both tested first.
  *
@@ -275,13 +269,7 @@ function getUnknownSummary(requiredWithheld: number, systemImage: SystemImage) {
  * renderings of one field and cannot contradict each other.
  */
 function diskMark(file: FirmwareRow, systemImage: SystemImage): { glyph: string; color: string; title: string } {
-  // A folder's verdict is what it HOLDS, never that the folder is there — the
-  // register's rule — so a payload carrying no verdict for one leaves the row
-  // unestablished rather than falling back to presence. For a declared file
-  // `downloaded` IS the verdict, which is the only thing the fallback is for.
-  const declaredFolder = file.declared_kind === "directory";
-  const fallback = declaredFolder ? null : file.downloaded;
-  const verdict = file.satisfied !== undefined ? file.satisfied : fallback;
+  const verdict = rowVerdict(file);
   if (verdict === null) return { glyph: "?", color: AMBER, title: MARK_UNCHECKED };
 
   const needUnknown = file.wanted === "unknown";
@@ -289,19 +277,53 @@ function diskMark(file: FirmwareRow, systemImage: SystemImage): { glyph: string;
   const candidate = file.system_image_candidate === true;
   if (verdict) {
     if (needUnknown) return { glyph: "✓", color: AMBER, title: MARK_HERE_NEED_UNKNOWN };
-    // A candidate whose verdict is true IS the console's held image: the
-    // candidates are a subset of the rows `classify_system_image` reads, so the
-    // platform is `held` and this row is why.
-    if (candidate) return { glyph: "✓", color: GREEN, title: MARK_STARTS_THE_SYSTEM };
+    if (candidate) return systemImageCandidateMark(verdict, systemImage);
     return { glyph: "✓", color: required ? GREEN : PALE_GREEN, title: required ? MARK_REQUIRED_HERE : MARK_HERE };
   }
   if (needUnknown) return { glyph: "✗", color: AMBER, title: MARK_MISSING_NEED_UNKNOWN };
-  if (candidate) {
-    if (systemImage === "absent") return { glyph: "✗", color: RED, title: MARK_ONE_OF_THESE_MISSING };
-    if (systemImage === "held") return { glyph: "✗", color: MUTED, title: MARK_ONE_OF_THESE_SPARE };
-    return { glyph: "✗", color: AMBER, title: MARK_ONE_OF_THESE_UNSETTLED };
-  }
+  if (candidate) return systemImageCandidateMark(verdict, systemImage);
   return { glyph: "✗", color: required ? RED : MUTED, title: required ? MARK_REQUIRED_MISSING : MARK_MISSING };
+}
+
+/**
+ * The row's verdict, as the payload states it or as its silence leaves it.
+ *
+ * A folder's verdict is what it HOLDS, never that the folder is there — the
+ * register's rule — so a payload carrying no verdict for one leaves the row
+ * unestablished rather than falling back to presence. For a declared file
+ * `downloaded` IS the verdict, which is the only thing the fallback is for.
+ */
+function rowVerdict(file: FirmwareRow): boolean | null {
+  const declaredFolder = file.declared_kind === "directory";
+  const fallback = declaredFolder ? null : file.downloaded;
+  return file.satisfied !== undefined ? file.satisfied : fallback;
+}
+
+/**
+ * The `On disk` mark for a row that could start the console on its own.
+ *
+ * Its core marks every such file optional — that is all a libretro `.info` can
+ * say about one of five images any of which starts the console — so
+ * `required_by_active` is false for all of them and {@link diskMark}'s muted
+ * branch would draw five grey "missing, not required" marks under a red headline
+ * saying the console needs one.
+ *
+ * What is true of such a row depends on the PLATFORM's `system_image`, not on
+ * the row: with none of them in place each is a way to fix it (red), with one in
+ * place the rest are genuinely spare (muted), and where nothing could be
+ * established the row inherits that doubt (amber). A verdict of true needs none
+ * of that: such a row IS the console's held image — the candidates are a subset
+ * of the rows `classify_system_image` reads, so the platform is `held` and this
+ * row is why.
+ */
+function systemImageCandidateMark(
+  verdict: boolean,
+  systemImage: SystemImage,
+): { glyph: string; color: string; title: string } {
+  if (verdict) return { glyph: "✓", color: GREEN, title: MARK_STARTS_THE_SYSTEM };
+  if (systemImage === "absent") return { glyph: "✗", color: RED, title: MARK_ONE_OF_THESE_MISSING };
+  if (systemImage === "held") return { glyph: "✗", color: MUTED, title: MARK_ONE_OF_THESE_SPARE };
+  return { glyph: "✗", color: AMBER, title: MARK_ONE_OF_THESE_UNSETTLED };
 }
 
 /**
