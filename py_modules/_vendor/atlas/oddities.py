@@ -31,9 +31,11 @@ from ._data import packaged_text
 from .mode_rules import RULES as MODE_RULES
 from .placement import (
     FILES_ESTABLISHED_FOR_TOKENS,
+    RULE_FILLED_TEMPLATES,
     GRANULARITIES,
     GRANULARITY_NONE,
     GRANULARITY_PER_GAME_FILE,
+    ROLE_UNKNOWN,
     ROLES,
     ROOT_CONTENT_DIRECTORY,
     ROOT_KINDS,
@@ -60,17 +62,21 @@ MODE_ALWAYS = "always"
 # looks right would be stated as fact.
 _KNOWN_MODE_ROOTS = set(ROOT_KINDS)
 _KNOWN_GRANULARITIES = set(GRANULARITIES)
-_KNOWN_ROLES = set(ROLES)
+# Every role but one: ROLE_UNKNOWN is what the *resolver* states about a file no
+# declaration names, so a card declaring it would be a card saying it does not
+# know what it is about to state — and the answer would carry that as though a
+# read had established it.
+_KNOWN_ROLES = set(ROLES) - {ROLE_UNKNOWN}
 # A declared file name is a template in the placement's own hole grammar. Only
 # these tokens exist: one the resolver fills, one the caller does. A token
 # outside the set would travel into a stated filename and be read as literal
 # text, so it fails the load instead.
-_KNOWN_FILE_TEMPLATES = (TEMPLATE_ROM_STEM, TEMPLATE_SAVE_ID)
+_KNOWN_FILE_TEMPLATES = (TEMPLATE_ROM_STEM, TEMPLATE_SAVE_ID, *RULE_FILLED_TEMPLATES)
 # A subdir segment is either a fixed name or exactly one of the placement's
 # subdir templates — the same one-grammar rule as file names, plus a whole-
 # segment requirement: ``_base_of`` undoes a subdir by counting segments, and
 # that arithmetic stays exact only while one template fills to exactly one.
-_KNOWN_SUBDIR_TEMPLATES = frozenset(SUBDIR_TEMPLATE_HOLES)
+_KNOWN_SUBDIR_TEMPLATES = frozenset(SUBDIR_TEMPLATE_HOLES) | frozenset(RULE_FILLED_TEMPLATES)
 # How a libretro core's ``.so`` is spelled. Derived from the card key rather
 # than restated in the card: the key IS that basename, so a second spelling
 # could only ever be a way for the two to disagree.
@@ -200,8 +206,9 @@ class SaveGroup:
     anything atlas reads** — MAME's differencing images for CHD hard disks take
     the disk image's own name out of the machine's ROM table inside the binary.
     Such a group reaches the answer as a :class:`~atlas.placement.FileGroup`
-    with ``files=None``, so one walk over ``groups`` covers every place the
-    save lives, and the ``file-names-unestablished`` caveat rides beside it
+    with ``files=None``, so one walk over a declared answer's ``groups`` covers
+    every place the save lives — an observation decomposes the directory it read
+    and no other — and the ``file-names-unestablished`` caveat rides beside it
     with this text as the citation — the sentence a person reads and the
     reason behind it. Silence would be worse than either: a backup that skips
     the directory loses the player's progress on every machine with a hard
@@ -897,6 +904,34 @@ def _expect_selectable_modes(
     )
 
 
+def _expect_rule_filled_templates(
+    where: str, *, rule_options: tuple[str, ...] | None, modes: Mapping[str, SaveMode]
+) -> None:
+    """A rule-filled template belongs only to a card that has a rule to fill it.
+
+    :data:`~atlas.placement.RULE_FILLED_TEMPLATES` are filled from a machine
+    read the card's own function makes, so on a card with no
+    ``governing_rule`` nothing would ever fill them and the token would reach
+    a caller as part of a stated name. That is the one thing the template
+    grammar exists to prevent, so it fails the load instead.
+    """
+    if rule_options is not None:
+        return
+    carried = sorted(
+        token
+        for token in RULE_FILLED_TEMPLATES
+        for mode in modes.values()
+        for group in mode.groups
+        if token in (group.subdir or "")
+        or any(token in name for name in (*(group.files or ()), *(group.observe or ())))
+    )
+    if carried:
+        raise ValueError(
+            f"{where}: {carried} are filled by a card's own selection rule, and this card declares "
+            "no governing_rule — nothing would fill them and the token would be stated as a name"
+        )
+
+
 def _retired_options(
     value: object, where: str, *, option_key: str | None, rule_options: tuple[str, ...] | None
 ) -> tuple[RetiredOption, ...]:
@@ -1003,6 +1038,7 @@ def load_oddities(text: str | None = None) -> tuple[CoreCard, ...]:
             saves.get("retired_options"), where, option_key=option_key, rule_options=rule_options
         )
         _expect_selectable_modes(where, option_key=option_key, rule_options=rule_options, modes=modes)
+        _expect_rule_filled_templates(where, rule_options=rule_options, modes=modes)
         if "so" in identifiers:
             raise ValueError(
                 f"{where}: identifiers.so is derived from the card key ({key + SO_SUFFIX!r}) and no "

@@ -25,7 +25,7 @@ import { removeShortcut, setLaunchOptionsConfirmed } from "../../utils/steamShor
 import { clearPlatformCollection } from "../../utils/collections";
 import { setSyncProgress } from "../../utils/syncProgress";
 import { biosColorForLevel } from "../../utils/biosColor";
-import type { FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo } from "../../types";
+import type { FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo, SystemImage } from "../../types";
 
 vi.mock("../../utils/scrollHelpers", () => ({ scrollToTop: vi.fn(), scrollElementToTop: vi.fn() }));
 vi.mock("../../utils/steamShortcuts", () => ({
@@ -151,6 +151,14 @@ function diskMarks(container: HTMLElement): { glyph: string; color: string }[] {
     glyph: el.textContent.trim(),
     color: el.style.color,
   }));
+}
+
+/** What each verdict mark SAYS, in row order — the row's tooltip, and the same
+ *  string the legend's line for that mark carries. The glyph and colour no
+ *  longer identify a mark on their own: red ✗ is both a missing required file
+ *  and a console with none of its images. */
+function diskMarkTitles(container: HTMLElement): string[] {
+  return [...container.querySelectorAll<HTMLElement>('[data-testid="disk-mark"]')].map((el) => el.title);
 }
 
 /** The second mark, one per row whose file the RomM library does not hold. Read
@@ -1583,6 +1591,139 @@ describe("Library › Platforms", () => {
       expect((legend as HTMLElement | null)?.style.flexDirection).toBe("column");
     });
 
+    describe("the console's own demand on a row", () => {
+      // The device pass: with SwanStation launching, no PlayStation row was
+      // `required_by_active` — the core marks all five images optional — so
+      // every row drew the muted "missing, not required" mark under a red
+      // headline saying the console needs at least one. The reader read the
+      // grey marks, correctly, as "not required".
+      const candidate = (overrides: Record<string, unknown> = {}) =>
+        firmwareFile({
+          wanted: "optional",
+          required_by_active: false,
+          system_image_candidate: true,
+          downloaded: false,
+          satisfied: false,
+          ...overrides,
+        });
+
+      const renderPlatform = async (
+        systemImage: SystemImage,
+        files: ReturnType<typeof firmwareFile>[],
+        overrides: Partial<FirmwarePlatformExt> = {},
+      ) => {
+        vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
+          success: true,
+          platforms: [
+            firmwarePlatform({
+              bios_level: systemImage === "absent" ? "missing" : "ok",
+              required_count: 0,
+              required_downloaded: 0,
+              required_withheld: 0,
+              system_image: systemImage,
+              server_count: files.length,
+              files,
+              ...overrides,
+            }),
+          ],
+        });
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        return container;
+      };
+
+      it("offers every image as a way to start the system when none is in place", async () => {
+        const container = await renderPlatform("absent", [
+          candidate({ file_name: "scph5500.bin" }),
+          candidate({ file_name: "scph5501.bin" }),
+        ]);
+
+        expect(diskMarks(container)).toEqual([
+          { glyph: "✗", color: RED },
+          { glyph: "✗", color: RED },
+        ]);
+        expect(diskMarkTitles(container)).toEqual([
+          "one of these — any one starts the system",
+          "one of these — any one starts the system",
+        ]);
+        // The muted answer these replaced is the defect, so its words must be
+        // gone from the table rather than merely outnumbered.
+        expect(container.textContent).not.toContain("missing, not required");
+      });
+
+      it("names the one that is there and calls the rest spare", async () => {
+        const container = await renderPlatform("held", [
+          candidate({ file_name: "scph5500.bin", downloaded: true, satisfied: true }),
+          candidate({ file_name: "scph5501.bin" }),
+        ]);
+
+        expect(diskMarks(container)).toEqual([
+          { glyph: "✓", color: GREEN },
+          { glyph: "✗", color: GREY },
+        ]);
+        expect(diskMarkTitles(container)).toEqual([
+          "this starts the system",
+          "not needed — one of these is already in place",
+        ]);
+      });
+
+      it("carries the console's own doubt onto the rows that would answer it", async () => {
+        const container = await renderPlatform("unsettled", [candidate({ file_name: "scph5500.bin" })], {
+          bios_level: "unknown",
+        });
+
+        expect(diskMarks(container)).toEqual([{ glyph: "✗", color: AMBER }]);
+        expect(diskMarkTitles(container)).toEqual(["one of these — whether one is in place could not be checked"]);
+      });
+
+      it("keeps an unestablished verdict and an unestablished need ahead of it", async () => {
+        // The order in `diskMark` is load-bearing: a row nothing could judge is
+        // `?` whatever the console needs, and a row no installed emulator could
+        // be asked about keeps the amber need mark. Neither is a state the
+        // console's own answer may overwrite.
+        const container = await renderPlatform("absent", [
+          candidate({ file_name: "unjudged.bin", satisfied: null }),
+          candidate({ file_name: "unasked.bin", wanted: "unknown" }),
+        ]);
+
+        expect(diskMarks(container)).toEqual([
+          { glyph: "?", color: AMBER },
+          { glyph: "✗", color: AMBER },
+        ]);
+        expect(diskMarkTitles(container)).toEqual([
+          "could not be checked",
+          "missing; nothing could say whether this is wanted",
+        ]);
+      });
+
+      it("gives the legend a line of its own beside the mark it shares a colour with", async () => {
+        // Two red ✗ on one table, and they mean different things. Keyed on
+        // glyph + colour the legend showed one of them and gave the other
+        // React's duplicate key; the sentence is the identity now, and the
+        // suite fails on a duplicate key by way of test-setup's console guard.
+        const container = await renderPlatform(
+          "absent",
+          [candidate({ file_name: "scph5500.bin" }), firmwareFile({ file_name: "required.bin" })],
+          { required_count: 1, bios_level: "missing" },
+        );
+
+        const lines = [...container.querySelectorAll('[data-testid="bios-legend"] > span')].map((el) => el.textContent);
+        expect(lines).toEqual(["✗ required, missing", "✗ one of these — any one starts the system"]);
+      });
+
+      it("leaves the line out of the legend on a platform with no such row", async () => {
+        const container = await renderPlatform("not_demanded", [firmwareFile({ file_name: "required.bin" })], {
+          required_count: 1,
+          bios_level: "missing",
+        });
+
+        const legend = container.querySelector('[data-testid="bios-legend"]');
+        expect(legend?.textContent).toContain("required, missing");
+        expect(legend?.textContent).not.toContain("starts the system");
+        expect(legend?.textContent).not.toContain("one of these");
+      });
+    });
+
     it("puts a row's own note under the row, out of the marks column", async () => {
       // Everything `biosFileNote` says that is NOT the library sentence still
       // has to reach the reader — it just gets the full width instead of a
@@ -2375,6 +2516,141 @@ describe("Library › Platforms", () => {
       expect(container.textContent).not.toContain("not supported for this system yet");
       expect(buttonByText(container, "Download")).toBeUndefined();
       expect(buttonByText(container, "Download all")).toBeDisabled();
+    });
+
+    it("says the console needs at least one file where the counts would say nothing is required", async () => {
+      // The PlayStation state under SwanStation: every image that core declares
+      // is `optional`, so the counts read "Nothing required" over a console that
+      // will not boot. One requirement over the images the core declares — so no
+      // ratio, here or in the list's own words, and no pointer at a file list
+      // where most rows cannot answer it.
+      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
+        success: true,
+        platforms: [
+          firmwarePlatform({
+            bios_level: "missing",
+            required_count: 0,
+            required_downloaded: 0,
+            required_withheld: 0,
+            system_image: "absent",
+            server_count: 3,
+            files: [firmwareFile({ wanted: "optional", required_by_active: false })],
+          }),
+        ],
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("Needs at least one BIOS file");
+      expect(container.textContent).toContain("This system needs at least one BIOS file and none is in place");
+      expect(container.textContent).not.toContain("Nothing required");
+      const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
+        el.textContent.includes("Game Boy Advance"),
+      );
+      expect(row?.title).toBe("Needs at least one BIOS file");
+      // The rows were answered, so what the library still holds stays fetchable.
+      expect(buttonByText(container, "Download all")).not.toBeDisabled();
+    });
+
+    it("says the console needs at least one file even where the level declines", async () => {
+      // The order the pane, the row tooltip and the game page's BIOS headline
+      // have to share. Today the backend never sends this pair — `absent` lands
+      // on `missing` — but nothing joins the three surfaces, so each pins its
+      // own: were a decline added ahead of the `absent` test in
+      // `compute_bios_level`, this pane alone would say "Nothing installed could
+      // answer for this system" and withdraw every download button, over a
+      // requirement the rows demonstrated.
+      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
+        success: true,
+        platforms: [
+          firmwarePlatform({
+            bios_level: "unknown",
+            required_count: 0,
+            required_downloaded: 0,
+            required_withheld: 0,
+            system_image: "absent",
+            server_count: 3,
+            files: [firmwareFile({ wanted: "optional", required_by_active: false })],
+          }),
+        ],
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("Needs at least one BIOS file");
+      expect(container.textContent).not.toContain("BIOS readiness unknown");
+      expect(container.textContent).not.toContain("Nothing installed could answer for this system");
+      const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
+        el.textContent.includes("Game Boy Advance"),
+      );
+      expect(row?.title).toBe("Needs at least one BIOS file");
+      // The rows were answered, so the downloads are not withdrawn either.
+      expect(buttonByText(container, "Download all")).not.toBeDisabled();
+    });
+
+    it("keeps the downloads when the console's own image is the unsettled part", async () => {
+      // An unsettled demand is a declined VERDICT, not an unanswered platform:
+      // its rows have answers, so withdrawing the downloads would take away the
+      // one thing that can still move it along.
+      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
+        success: true,
+        platforms: [
+          firmwarePlatform({
+            bios_level: "unknown",
+            required_count: 0,
+            required_downloaded: 0,
+            required_withheld: 0,
+            system_image: "unsettled",
+          }),
+        ],
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("BIOS readiness unknown");
+      expect(container.textContent).toContain(
+        "Whether the BIOS image this system needs is in place could not be established",
+      );
+      expect(container.textContent).not.toContain("Nothing installed could answer for this system");
+      expect(container.textContent).not.toContain("You can still put BIOS files in your BIOS folder by hand");
+      expect(buttonByText(container, "Download all")).not.toBeDisabled();
+      const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
+        el.textContent.includes("Game Boy Advance"),
+      );
+      expect(row?.title).toBe("BIOS readiness unknown");
+    });
+
+    it("names the unjudged row, not the console, when both ignorances hold at once", async () => {
+      // Reachable, and it is the LRPS2 shape: a console that needs an image
+      // whose required folder row the read could not judge. The two are not gaps
+      // over two different file sets — a `required_by_active` row always carries
+      // the active core, so it is always one of the rows the console's
+      // disjunction is read over — and the row is the only half of the pair that
+      // can name a file. So the page names the row and points at the file list,
+      // rather than restating the same list one altitude up with nothing to look
+      // at.
+      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
+        success: true,
+        platforms: [
+          firmwarePlatform({
+            bios_level: "unknown",
+            required_count: 1,
+            required_downloaded: 0,
+            required_withheld: 1,
+            system_image: "unsettled",
+          }),
+        ],
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("A required file could not be judged — see the file list");
+      expect(container.textContent).not.toContain("Whether the BIOS image this system needs is in place");
+      // Both sentences carry the same label, so the label alone cannot say which
+      // one the pane chose — assert the description, and that the downloads the
+      // unsettled case keeps are still here.
+      expect(container.textContent).toContain("BIOS readiness unknown");
+      expect(buttonByText(container, "Download all")).not.toBeDisabled();
     });
 
     it("keeps the downloads when only the readiness verdict is withheld", async () => {

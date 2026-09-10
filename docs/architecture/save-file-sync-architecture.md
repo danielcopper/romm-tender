@@ -5,13 +5,20 @@
 decky-romm-sync provides bidirectional save file synchronization between RetroDECK and a self-hosted RomM server. Saves
 are uploaded after play sessions and downloaded before game launch, enabling seamless multi-device play.
 
-The scope is **per-game RetroArch save files** across all systems that use RetroArch cores via RetroDECK (NES, SNES, GB,
-GBC, GBA, Genesis, N64, PSX via RetroArch cores, Saturn, Dreamcast, PC Engine, and more). Each system's full save-file
-**set** is discovered and synced — the default `.srm` / `.rtc` / `.sav` plus system-specific extensions (e.g. Saturn
-`.bkr` / `.bcr` / `.smpc`, NDS `.dsv`, Sega CD `.brm`); the extension list lives in `domain/save_extensions.py`. Every
-file syncs **independently against the server save sharing its own canonical target**, so a multi-file set never
-cross-mixes extensions. Standalone emulator saves (PCSX2, DuckStation, Dolphin, PPSSPP, melonDS, etc.) are deferred to
-Phase 7.
+The scope is **a per-game set of save files that this plugin can carry**. Which files those are is not a property of the
+platform and never was: it belongs to the **emulator** that opens the game, and it is read live off the machine by the
+vendored [emu-atlas](https://github.com/danielcopper/emu-atlas) resolver through `adapters/atlas_saves.py`. Services see
+a `domain.save_answer.SaveAnswer` and never a resolver type.
+
+That answer classifies every ROM into exactly one of **five save states**, and the sync runs in only the first of them —
+see [Save sync coverage](save-sync-coverage.md), which owns the states and the reasoning. Every file in a syncable set
+syncs **independently against the server save sharing its own canonical target**, so a multi-file set never cross-mixes
+extensions.
+
+The plugin used to hold its own per-system extension table (`domain/save_extensions.py`, retired). It was written from a
+one-pass desk audit and it was wrong in both directions: it searched forever for an Amiga `.nvr` that no core writes,
+and it never knew about the version digit in 3DO's `<stem>.0.srm`. Neither failure was visible — the search simply found
+nothing.
 
 ## RomM Save API
 
@@ -974,7 +981,7 @@ explicitly clicks the migrate button in Settings.
 
 ### Newest-wins conflict resolution
 
-Implemented in `_resolve_save_sort_conflict` in `py_modules/services/migration.py`.
+Implemented in `_resolve_save_sort_conflict` in `py_modules/services/migration/save_sort.py`.
 
 **The scenario**: the user enables `sort_savefiles_enable` mid-game and saves in-game. RetroArch writes fresh progress
 to the new layout — e.g. `saves/gba/mGBA/Example Quest.srm`. The old file at the original layout — e.g.
@@ -1010,33 +1017,32 @@ ever removed, the resolver would need to be made hash-aware.
 
 ### Relationship to `retrodeck_path_migration`
 
-The RetroDECK **path** migration — `_migrate_retrodeck_files_io` in `migration.py`, triggered when the RetroDECK home
-directory moves between the internal SSD and an SD card — uses a different conflict-resolution approach: a user-driven
-bulk strategy modal (overwrite / skip / cancel). That is intentional. ROMs and BIOS files are not progress files, and
-`mtime`-based resolution is not semantically meaningful for them. See
+The RetroDECK **path** migration — `_migrate_retrodeck_files_io` in `migration/service.py`, triggered when the RetroDECK
+home directory moves between the internal SSD and an SD card — uses a different conflict-resolution approach: a
+user-driven bulk strategy modal (overwrite / skip / cancel). That is intentional. ROMs and BIOS files are not progress
+files, and `mtime`-based resolution is not semantically meaningful for them. See
 [RetroDECK Path Migration](../user-guide/retrodeck-path-migration.md) for the user-facing side.
 
 ### Supported systems
 
 All paths below are relative to `<saves_path>` from `retrodeck.json`.
 
-| System                    | Save Path Example             | Extension |
-| ------------------------- | ----------------------------- | --------- |
-| NES                       | `saves/nes/game.srm`          | `.srm`    |
-| SNES                      | `saves/snes/game.srm`         | `.srm`    |
-| Game Boy                  | `saves/gb/game.srm`           | `.srm`    |
-| Game Boy Color            | `saves/gbc/game.srm`          | `.srm`    |
-| Game Boy Advance          | `saves/gba/game.srm`          | `.srm`    |
-| Genesis / Mega Drive      | `saves/genesis/game.srm`      | `.srm`    |
-| Master System             | `saves/mastersystem/game.srm` | `.srm`    |
-| Nintendo 64               | `saves/n64/game.srm`          | `.srm`    |
-| PlayStation (RetroArch)   | `saves/psx/game.srm`          | `.srm`    |
-| Saturn                    | `saves/saturn/game.srm`       | `.srm`    |
-| Dreamcast                 | `saves/dreamcast/game.srm`    | `.srm`    |
-| PC Engine / TurboGrafx-16 | `saves/pcengine/game.srm`     | `.srm`    |
-| Neo Geo Pocket            | `saves/ngp/game.srm`          | `.srm`    |
-| WonderSwan                | `saves/wonderswan/game.srm`   | `.srm`    |
-| Atari Lynx                | `saves/atarilynx/game.srm`    | `.srm`    |
+**There is no fixed table any more.** The file names come from the save answer, read per ROM and per the emulator that
+would launch it, so the examples below are illustrations of the SHAPE rather than a list to rely on — the same system
+answers differently for a different game file, and three of the rows a table like this used to carry were wrong.
+
+| System           | Save path example       | What the answer names                                                                   |
+| ---------------- | ----------------------- | --------------------------------------------------------------------------------------- |
+| Game Boy Advance | `saves/gba/game.srm`    | `<stem>.srm`                                                                            |
+| Game Boy         | `saves/gb/game.srm`     | `<stem>.srm` and `<stem>.rtc`                                                           |
+| Saturn           | `saves/saturn/game.bkr` | `<stem>.bkr` and `<stem>.bcr`, plus a `.smpc` that is configuration and is never synced |
+| Nintendo DS      | `saves/nds/game.dsv`    | `<stem>.dsv`                                                                            |
+| Neo Geo Pocket   | `saves/ngp/game.flash`  | `<stem>.flash`                                                                          |
+| PlayStation 2    | —                       | a shared memory card: refused                                                           |
+| Dreamcast        | —                       | a card named after the game's own id: refused                                           |
+
+The per-state picture, and which systems land where on a stock RetroDECK, is in
+[Save sync coverage](save-sync-coverage.md).
 
 ## Slot Deletion
 
@@ -2077,11 +2083,13 @@ Key challenges:
 
 Standalone emulator support is tracked on the [GitHub Projects board](https://github.com/users/danielcopper/projects/2).
 
-### Shared memory cards deferred
+### Shared memory cards are refused, not deferred
 
-PS1 and PS2 games using RetroArch cores that save to shared memory cards (rather than per-game `.srm`) are not handled.
-Syncing a shared memory card affects all games on the card, requiring system-level tracking rather than per-game
-tracking. Deferred to Phase 7.
+An emulator that writes a card many games share cannot be synced per game — a download would carry another game's
+progress onto this one's record and back out to every device. The machine now decides this per ROM: the save answer
+reports the `shared` state and the sync refuses with the benign-skip shape, so the user is told rather than shown "no
+saves". Offering to switch a core off its shared card is separate work, tracked on the
+[GitHub Projects board](https://github.com/users/danielcopper/projects/2).
 
 ### No aggregate playtime field in RomM (yet)
 

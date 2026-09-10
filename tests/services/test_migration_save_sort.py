@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -15,6 +15,7 @@ from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_migration_file_store import FakeMigrationFileStore
 from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from adapters.migration_file import MigrationFileAdapter
@@ -127,6 +128,7 @@ def _make_service(
                 home=str(tmp_path),
             ),
             get_save_layout=lambda: layout,
+            save_locations=FakeSaveLocationReader(),
             active_core=active_core if active_core is not None else FakeActiveCoreResolver(default=(None, None)),
             relaunch_options=FakeRelaunchOptionsResolver(),
             get_core_name=get_core_name,
@@ -141,7 +143,7 @@ class TestDetectSaveSortChange:
         """First run (stored=None) stores current settings, no event emitted."""
         svc, uow = _make_service(tmp_path, sort_settings=(True, False))
         mock_loop = MagicMock()
-        svc._loop = mock_loop
+        svc._save_sort._loop = mock_loop
 
         layout = svc.detect_save_sort_change()
 
@@ -164,7 +166,7 @@ class TestDetectSaveSortChange:
             state_overrides={"save_sort_settings": {"sort_by_content": True, "sort_by_core": False}},
         )
         mock_loop = MagicMock()
-        svc._loop = mock_loop
+        svc._save_sort._loop = mock_loop
         set_count_before = uow.kv_config.set_count
 
         layout = svc.detect_save_sort_change()
@@ -186,7 +188,7 @@ class TestDetectSaveSortChangeContentDir:
         """ContentDir → no kv_config write at all, returns ContentDir()."""
         svc, uow = _make_service(tmp_path, save_layout=ContentDir())
         mock_loop = MagicMock()
-        svc._loop = mock_loop
+        svc._save_sort._loop = mock_loop
         set_count_before = uow.kv_config.set_count
 
         layout = svc.detect_save_sort_change()
@@ -230,16 +232,18 @@ class TestDetectSaveSortChangeContentDir:
     def test_change_emits_event(self, tmp_path):
         """Settings changed — emits event, stores old + new."""
         old = {"sort_by_content": True, "sort_by_core": False}
-        # AsyncMock returns a coroutine when called — required because
-        # detect_save_sort_change schedules the emit coroutine via
-        # asyncio.run_coroutine_threadsafe, which validates that its
-        # first arg is an actual coroutine (#238 review finding 1).
+        # AsyncMock so ``_emit(...)`` returns a real coroutine, which the
+        # stub below closes. The real ``run_coroutine_threadsafe`` — which
+        # would reject a non-coroutine — is replaced on this path, so what
+        # the pairing buys is a clean run rather than a validated argument:
+        # a coroutine that is neither awaited nor closed raises a
+        # RuntimeWarning, and warnings are defects here.
         svc, uow = _make_service(
             tmp_path,
             sort_settings=(False, True),
             state_overrides={"save_sort_settings": old},
         )
-        svc._emit = AsyncMock()
+        svc._save_sort._emit = AsyncMock()
 
         # Stub run_coroutine_threadsafe at the module level so we can
         # observe scheduling without needing a running event loop. The
@@ -251,7 +255,7 @@ class TestDetectSaveSortChangeContentDir:
             scheduled.append(coro)
             return MagicMock()
 
-        import services.migration as migration_module
+        import services.migration.save_sort as migration_module
 
         original = migration_module.asyncio.run_coroutine_threadsafe
         migration_module.asyncio.run_coroutine_threadsafe = fake_schedule  # type: ignore[assignment]
@@ -301,13 +305,13 @@ class TestCollectSaveSortingItems:
             installed_roms=installed_roms,
             state_overrides={"save_sort_settings": {"sort_by_content": False, "sort_by_core": False}},
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         old_settings: SaveSortSettings = {"sort_by_content": True, "sort_by_core": False}
         new_settings: SaveSortSettings = {"sort_by_content": False, "sort_by_core": False}
         with uow:
             installs = list(uow.rom_installs.iter_all())
-        items = svc._collect_save_sorting_items(old_settings, new_settings, installs)
+        items = svc._save_sort._collect_save_sorting_items(old_settings, new_settings, installs)
 
         assert len(items) == 1
         label, old_path, _new_path, _, kind = items[0]
@@ -334,13 +338,13 @@ class TestCollectSaveSortingItems:
             }
         }
         svc, uow = _make_service(tmp_path, installed_roms=installed_roms)
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         # Same settings -> same dir
         same_settings: SaveSortSettings = {"sort_by_content": True, "sort_by_core": False}
         with uow:
             installs = list(uow.rom_installs.iter_all())
-        items = svc._collect_save_sorting_items(same_settings, same_settings, installs)
+        items = svc._save_sort._collect_save_sorting_items(same_settings, same_settings, installs)
 
         assert items == []
 
@@ -363,13 +367,13 @@ class TestCollectSaveSortingItems:
             }
         }
         svc, uow = _make_service(tmp_path, installed_roms=installed_roms)
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         old_settings: SaveSortSettings = {"sort_by_content": True, "sort_by_core": False}
         new_settings: SaveSortSettings = {"sort_by_content": False, "sort_by_core": False}
         with uow:
             installs = list(uow.rom_installs.iter_all())
-        items = svc._collect_save_sorting_items(old_settings, new_settings, installs)
+        items = svc._save_sort._collect_save_sorting_items(old_settings, new_settings, installs)
 
         assert items == []
 
@@ -418,7 +422,7 @@ class TestSaveSortMigrationStatus:
                 "save_sort_settings": new_settings,
             },
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         result = await svc.get_save_sort_migration_status()
 
@@ -426,6 +430,80 @@ class TestSaveSortMigrationStatus:
         assert result["saves_count"] == 1
         assert result["old_settings"] == old_settings
         assert result["new_settings"] == new_settings
+
+
+class TestASortMoveNeverStrandsAFile:
+    """A move is not a sync: a refusing answer still relocates what is on disk.
+
+    Discovery may not be able to say what an emulator writes, but the files are
+    already there and the sort change is only moving them. Leaving one behind
+    where the emulator will not look is worse than moving one this plugin would
+    never upload — and the extension list this replaced DID move those files.
+    """
+
+    def _machine(self, tmp_path, *, save_names: list[str]):
+        roms_path = tmp_path / "roms"
+        saves_path = tmp_path / "saves"
+        (roms_path / "atari2600").mkdir(parents=True)
+        (roms_path / "atari2600" / "Adventure.a26").write_text("rom")
+        old_save_dir = saves_path / "atari2600"
+        old_save_dir.mkdir(parents=True)
+        for name in save_names:
+            (old_save_dir / name).write_text(f"content of {name}")
+        installed_roms = {
+            "1": {
+                "system": "atari2600",
+                "file_path": str(roms_path / "atari2600" / "Adventure.a26"),
+                "platform_slug": "atari2600",
+            }
+        }
+        old_settings: SaveSortSettings = {"sort_by_content": True, "sort_by_core": False}
+        new_settings: SaveSortSettings = {"sort_by_content": False, "sort_by_core": False}
+        svc, _uow = _make_service(
+            tmp_path,
+            installed_roms=installed_roms,
+            state_overrides={
+                "save_sort_settings_previous": old_settings,
+                "save_sort_settings": new_settings,
+            },
+        )
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        cast("FakeSaveLocationReader", svc._save_locations).refuse("atari2600")
+        return svc, saves_path, old_save_dir
+
+    @pytest.mark.asyncio
+    async def test_a_refusing_answer_still_moves_what_the_directory_holds(self, tmp_path):
+        # Stella is unaudited, so the answer establishes nothing — and the file
+        # is right there under the ROM's name.
+        svc, saves_path, old_save_dir = self._machine(tmp_path, save_names=["Adventure.srm"])
+
+        result = await svc.migrate_save_sort_files()
+
+        assert result["success"] is True
+        assert result["saves_moved"] == 1
+        assert (saves_path / "Adventure.srm").read_text() == "content of Adventure.srm"
+        assert not (old_save_dir / "Adventure.srm").exists()
+
+    @pytest.mark.asyncio
+    async def test_it_carries_every_file_named_after_the_rom(self, tmp_path):
+        svc, saves_path, _old = self._machine(tmp_path, save_names=["Adventure.srm", "Adventure.rtc"])
+
+        result = await svc.migrate_save_sort_files()
+
+        assert result["saves_moved"] == 2
+        assert (saves_path / "Adventure.rtc").exists()
+
+    @pytest.mark.asyncio
+    async def test_it_does_not_drag_a_different_games_saves_along(self, tmp_path):
+        # ``Adventure 2.srm`` begins with the stem but belongs to another game.
+        # The match is anchored on ``<stem>.`` for exactly this reason.
+        svc, saves_path, old_save_dir = self._machine(tmp_path, save_names=["Adventure.srm", "Adventure 2.srm"])
+
+        result = await svc.migrate_save_sort_files()
+
+        assert result["saves_moved"] == 1
+        assert (old_save_dir / "Adventure 2.srm").exists()
+        assert not (saves_path / "Adventure 2.srm").exists()
 
 
 class TestMigrateSaveSortFiles:
@@ -464,7 +542,7 @@ class TestMigrateSaveSortFiles:
                 "save_sort_settings": new_settings,
             },
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         result = await svc.migrate_save_sort_files()
 
@@ -521,7 +599,7 @@ class TestMigrateSaveSortFiles:
                 "save_sort_settings": new_settings,
             },
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         result = await svc.migrate_save_sort_files()
 
@@ -574,7 +652,7 @@ class TestMigrateSaveSortFiles:
                 "save_sort_settings": new_settings,
             },
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         result = await svc.migrate_save_sort_files()
 
@@ -621,7 +699,7 @@ class TestMigrateSaveSortFiles:
             },
             migration_file_store=fake,
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         result = await svc.migrate_save_sort_files()
 
@@ -673,7 +751,7 @@ class TestMigrateSaveSortFiles:
             },
             migration_file_store=fake,
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         result = await svc.migrate_save_sort_files()
 
@@ -722,7 +800,7 @@ class TestMigrateSaveSortFiles:
             },
             migration_file_store=fake,
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         result = await svc.migrate_save_sort_files()
 
@@ -752,7 +830,7 @@ class TestMigrateSaveSortFiles:
                 "save_sort_settings": new_settings,
             },
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
 
         result = await svc.migrate_save_sort_files()
 
@@ -794,7 +872,7 @@ class TestResolveRetroArchCorename:
             return "Snes9x"
 
         svc, _ = _make_service(tmp_path, active_core=active_core, get_core_name=get_core_name)
-        assert svc._resolve_retroarch_corename(1) == ("Snes9x", "snes9x_libretro")
+        assert svc._save_sort._resolve_retroarch_corename(1) == ("Snes9x", "snes9x_libretro")
 
     def test_active_core_returns_none_returns_none(self, tmp_path):
         """Resolver cannot resolve the active core — method returns (None, None)."""
@@ -806,7 +884,7 @@ class TestResolveRetroArchCorename:
             raise AssertionError("get_core_name called despite unresolved core")
 
         svc, _ = _make_service(tmp_path, active_core=active_core, get_core_name=get_core_name)
-        assert svc._resolve_retroarch_corename(1) == (None, None)
+        assert svc._save_sort._resolve_retroarch_corename(1) == (None, None)
 
     def test_core_name_returns_none_returns_none_no_label_fallback(self, tmp_path):
         """The resolver gives us a core_so but the .info lookup fails — method
@@ -819,7 +897,7 @@ class TestResolveRetroArchCorename:
             return None
 
         svc, _ = _make_service(tmp_path, active_core=active_core, get_core_name=get_core_name)
-        assert svc._resolve_retroarch_corename(1) == (None, "oddcore_libretro")
+        assert svc._save_sort._resolve_retroarch_corename(1) == (None, "oddcore_libretro")
 
     def test_core_name_returns_empty_string_returns_none(self, tmp_path):
         """.info has ``corename = ""`` — adapter already coerces to None,
@@ -831,7 +909,7 @@ class TestResolveRetroArchCorename:
             return ""
 
         svc, _ = _make_service(tmp_path, active_core=active_core, get_core_name=get_core_name)
-        assert svc._resolve_retroarch_corename(1) == (None, "blank_libretro")
+        assert svc._save_sort._resolve_retroarch_corename(1) == (None, "blank_libretro")
 
 
 class TestSortByCoreMigrationEndToEnd:
@@ -884,11 +962,11 @@ class TestSortByCoreMigrationEndToEnd:
             active_core=active_core,
             get_core_name=get_core_name,
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
         with uow:
             installs = list(uow.rom_installs.iter_all())
 
-        items = svc._collect_save_sorting_items(old_settings, new_settings, installs)
+        items = svc._save_sort._collect_save_sorting_items(old_settings, new_settings, installs)
 
         # One item produced, destination path contains "Snes9x" (not "Snes9x - Current")
         assert len(items) == 1
@@ -943,11 +1021,11 @@ class TestSortByCoreMigrationEndToEnd:
             active_core=active_core,
             get_core_name=get_core_name,
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
         with uow:
             installs = list(uow.rom_installs.iter_all())
 
-        items = svc._collect_save_sorting_items(old_settings, new_settings, installs)
+        items = svc._save_sort._collect_save_sorting_items(old_settings, new_settings, installs)
 
         # The destination subdir flips on the per-game override (old_path carries
         # the source ROM name so each item is attributable to its ROM).
@@ -999,12 +1077,12 @@ class TestSortByCoreMigrationEndToEnd:
             active_core=active_core,
             get_core_name=get_core_name,
         )
-        svc._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
+        svc._save_sort._retrodeck_paths = FakeRetroDeckPaths(saves=str(saves_path), roms=str(roms_path))
         with uow:
             installs = list(uow.rom_installs.iter_all())
 
         with caplog.at_level(logging.WARNING):
-            items = svc._collect_save_sorting_items(old_settings, new_settings, installs)
+            items = svc._save_sort._collect_save_sorting_items(old_settings, new_settings, installs)
 
         assert items == []
         assert any("unable to resolve RetroArch corename" in rec.getMessage() for rec in caplog.records), (

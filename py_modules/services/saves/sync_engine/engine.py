@@ -30,6 +30,7 @@ matrix run — the session is an envelope, never a gate on sync.
 from __future__ import annotations
 
 import asyncio
+import functools
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -42,6 +43,7 @@ from services.saves._messages import (
     DEVICE_NOT_REGISTERED_REASON,
     DEVICE_SYNC_DISABLED,
     DEVICE_SYNC_DISABLED_REASON,
+    SAVE_SHAPE_UNSUPPORTED,
     SAVE_SYNC_BUSY,
     SAVE_SYNC_BUSY_REASON,
     SAVE_SYNC_DISABLED,
@@ -64,6 +66,7 @@ from services.saves.sync_engine._gate import (
     SaveSyncGate,
     SaveSyncTimeoutError,
 )
+from services.saves.sync_engine._shape_refusal import live_save_answer, save_shape_skip
 from services.saves.sync_engine.matrix import MatrixExecutor, MatrixOutcome
 from services.saves.sync_engine.rollback import RollbackOrchestrator
 
@@ -71,6 +74,7 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Iterator
 
+    from domain.save_answer import SaveAnswer
     from domain.save_layout import SaveLayout
     from services.protocols import (
         ActiveCoreReader,
@@ -299,13 +303,18 @@ class SyncEngine:
         core_so: str | None,
         default_slot: str | None = None,
         autocleanup_limit: int | None = None,
+        save_answer: SaveAnswer | None = None,
     ) -> tuple[int, int, list[str], list[dict[str, Any]]]:
         """Sync saves for a single ROM (delegate to :class:`MatrixExecutor`).
 
         Returns ``(uploaded, downloaded, errors, conflicts)`` — the per-direction
-        transfer counts (#250).
+        transfer counts (#250). *save_answer* is this operation's own live
+        reading, passed down so it is taken once rather than once per layer;
+        absent it, the matrix takes its own.
         """
-        return self._matrix.sync_rom_saves(rom_id, save_state, device_id, core_so, default_slot, autocleanup_limit)
+        return self._matrix.sync_rom_saves(
+            rom_id, save_state, device_id, core_so, default_slot, autocleanup_limit, save_answer=save_answer
+        )
 
     def do_download_save(
         self,
@@ -355,16 +364,22 @@ class SyncEngine:
 
     def iter_matrix_outcomes(
         self,
-        rom_id: int,
         server_in_slot: list[dict[str, Any]],
         *,
         save_state: RomSaveSyncState | None,
         device_id: str | None,
         info: dict[str, Any],
+        save_names: tuple[str, ...],
+        saves_dir: str | None,
     ) -> Iterator[MatrixOutcome]:
         """Yield one :class:`MatrixOutcome` per save file in the ROM's active slot."""
         return self._matrix.iter_matrix_outcomes(
-            rom_id, server_in_slot, save_state=save_state, device_id=device_id, info=info
+            server_in_slot,
+            save_state=save_state,
+            device_id=device_id,
+            info=info,
+            save_names=save_names,
+            saves_dir=saves_dir,
         )
 
     def adopt_baseline_hash(self, save_state: RomSaveSyncState, filename: str, local_hash: str) -> None:
@@ -582,6 +597,7 @@ class SyncEngine:
         require_confirmed: bool = False,
         session_id: int | None = None,
         session_counts: list[int] | None = None,
+        save_answer: SaveAnswer | None = None,
     ) -> tuple[int, int, list[str], list[dict[str, Any]]]:
         """Read inputs → sync in executor → persist, for one ROM under its lock.
 
@@ -596,7 +612,13 @@ class SyncEngine:
 
         A ROM with no install record has nothing to sync — and no ``roms`` row
         to anchor a ``rom_save_sync_states`` write against (ADR-0007 FK) — so we
-        short-circuit before touching the aggregate.
+        short-circuit before touching the aggregate. A ROM whose emulator keeps
+        no per-game save file set is short-circuited one level down, inside
+        ``do_sync_rom_saves``, which is where the answer is already resolved: the
+        single-ROM entry points check it themselves so they can name the skip in
+        their result, and that backstop is what makes the rule hold for the
+        whole-library sweep, whose one result has no room to say which ROM was
+        passed over.
 
         When *require_confirmed* is set (the bulk ``sync_all_saves`` sweep), a ROM
         whose slot the user has not confirmed is skipped entirely — no transfer,
@@ -636,7 +658,7 @@ class SyncEngine:
         # hash the same files (#1457). Reentrant with the bulk-sweep scope.
         with self._save_file_store.hash_memo_scope():
             if session_id is None and save_state.slot_confirmed and save_state.active_slot:
-                own_session_id = await self._open_negotiate_session(rom_id, device_id)
+                own_session_id = await self._open_negotiate_session(rom_id, device_id, save_answer)
 
             uploaded = 0
             downloaded = 0
@@ -644,7 +666,17 @@ class SyncEngine:
             conflicts: list[dict[str, Any]] = []
             try:
                 uploaded, downloaded, errors, conflicts = await self._loop.run_in_executor(
-                    None, self.do_sync_rom_saves, rom_id, save_state, device_id, core_so, default_slot, cleanup_limit
+                    None,
+                    functools.partial(
+                        self.do_sync_rom_saves,
+                        rom_id,
+                        save_state,
+                        device_id,
+                        core_so,
+                        default_slot,
+                        cleanup_limit,
+                        save_answer=save_answer,
+                    ),
                 )
                 await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
             finally:
@@ -656,7 +688,9 @@ class SyncEngine:
                     session_counts[1] += len(errors)
             return uploaded, downloaded, errors, conflicts
 
-    async def _open_negotiate_session(self, rom_id: int, device_id: str | None) -> int | None:
+    async def _open_negotiate_session(
+        self, rom_id: int, device_id: str | None, save_answer: SaveAnswer | None = None
+    ) -> int | None:
         """Open a transport-only negotiate session for a confirmed ROM; ``None`` on failure.
 
         POSTs the ROM-scoped inventory to ``negotiate`` and keeps only the
@@ -668,9 +702,16 @@ class SyncEngine:
         re-raised so the run aborts with a visible policy reason (#1489). An
         unclosed session lingers harmlessly until this device's next
         ``negotiate`` cancels it, so a missed close is harmless.
+
+        *save_answer* is the reading the run already took, handed on so the
+        inventory does not take a second one. Without it a ROM whose slot the
+        user has confirmed costs two live readings of the machine per sync
+        rather than one.
         """
         try:
-            inventory = await self._loop.run_in_executor(None, self._build_inventory, rom_id)
+            inventory = await self._loop.run_in_executor(
+                None, functools.partial(self._build_inventory, rom_id, save_answer=save_answer)
+            )
             response = await self._loop.run_in_executor(
                 None,
                 lambda: self._retry.with_retry(lambda: self._romm_api.negotiate_sync(device_id or "", inventory)),
@@ -732,6 +773,10 @@ class SyncEngine:
                 if self._save_sync_blocked():
                     return self._content_dir_skip()
 
+                save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+                if save_answer is not None and not save_answer.syncable:
+                    return save_shape_skip(save_answer)
+
                 if self._rom_info.is_save_sort_changed():
                     return {
                         "success": False,
@@ -759,7 +804,7 @@ class SyncEngine:
                 if failure is not None:
                     return failure
 
-                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id)
+                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id, save_answer=save_answer)
                 synced = uploaded + downloaded
 
                 msg = f"Downloaded {synced} save(s)"
@@ -829,6 +874,11 @@ class SyncEngine:
                     self._logger.info("post_exit_sync skipped: savefiles_in_content_dir")
                     return self._content_dir_skip()
 
+                save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+                if save_answer is not None and not save_answer.syncable:
+                    self._logger.info("post_exit_sync skipped: %s", SAVE_SHAPE_UNSUPPORTED)
+                    return save_shape_skip(save_answer)
+
                 try:
                     await self._loop.run_in_executor(None, self._romm_api.heartbeat)
                 except Exception as e:
@@ -838,7 +888,7 @@ class SyncEngine:
                 if failure is not None:
                     return failure
 
-                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id)
+                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id, save_answer=save_answer)
                 synced = uploaded + downloaded
 
                 self._logger.info(
@@ -911,11 +961,15 @@ class SyncEngine:
                 if self._save_sync_blocked():
                     return self._content_dir_skip()
 
+                save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+                if save_answer is not None and not save_answer.syncable:
+                    return save_shape_skip(save_answer)
+
                 failure = await self._ensure_device_live_or_fail()
                 if failure is not None:
                     return failure
 
-                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id)
+                uploaded, downloaded, errors, conflicts = await self._run_rom_sync(rom_id, save_answer=save_answer)
                 synced = uploaded + downloaded
 
                 msg = _summarize_sync_result(

@@ -450,15 +450,38 @@ def _requirement_entry_contract(
 def firmware_contract(answer: FirmwareAnswer) -> dict[str, Any]:
     """The stable form of a :class:`~atlas.firmware.FirmwareAnswer`.
 
-    ``description`` is prose and stays out. Three derived fields are in on
+    ``description`` is prose and stays out. Four derived fields are in on
     purpose, because a consumer deriving them itself is exactly how the answer
     gets read wrongly: ``declaration`` separates "this core needs nothing" from
     "atlas knows nothing about this core", ``satisfied`` says whether one file
-    is actually usable (a *present* file with the wrong bytes is not), and
-    ``requirements_met`` is the single number a client renders — never ``true``
-    out of ignorance, never ``true`` with a required file known to be wrong.
-    Two limits of it belong next to each other, because a consumer that renders
-    only this field cannot see either:
+    is actually usable (a *present* file with the wrong bytes is not),
+    ``system_firmware`` says what is recorded about the system behind the core,
+    and ``requirements_met`` is the single number a client renders — never
+    ``true`` out of ignorance, never ``true`` with a required file known to be
+    wrong.
+
+    **Two of the fields on a core answer to different owners.**
+    ``requirements`` is what the *emulator itself declared*, reproduced down to
+    each entry's ``need``: nothing read off the machine is ever overwritten, so
+    a core that marks a file it cannot start without ``optional`` still
+    serializes ``optional``. ``requirements_met`` is *atlas's own verdict*
+    about that declaration, and it draws on **world knowledge** as well as on
+    what was read from the machine — a packaged, source-cited table
+    (``atlas/data/system_firmware.json``) recording which systems do not start
+    without a firmware image, which is the half a libretro ``.info`` has no way
+    to state. ``system_firmware`` is that table's reading for this core, and
+    where the table *states* something the ``system-firmware-world-knowledge``
+    caveat marks the core with the system and the evidence level (``verified``
+    or ``derived``), so the second source is never silent. It does not ride an
+    ``open`` **system**, whose whole content is already the field value — and
+    a core reaching one open system and one established one therefore carries
+    a mark for the established one alone. **A ``system_firmware`` of ``null``
+    means nothing is recorded about that system, never that nothing is
+    needed**, which is a different case again from the value ``open``: there
+    somebody looked and did not settle it.
+
+    Two limits of ``requirements_met`` belong next to each other, because a
+    consumer that renders only this field cannot see either:
 
     - With ``hash_checked`` false it is ``null`` wherever a required file's
       identity is known and was not verified. Presence is not the question the
@@ -506,6 +529,7 @@ def firmware_contract(answer: FirmwareAnswer) -> dict[str, Any]:
                 "label": core.label,
                 "declaration": core.declaration,
                 "requirements_met": core.requirements_met,
+                "system_firmware": core.system_firmware,
                 "requirements": [_requirement_entry_contract(r) for r in core.requirements],
                 "refused": [{"declared": r.declared, "need": r.need, "reason": r.reason} for r in core.refused],
                 "caveats": _caveats_contract(core.caveats),

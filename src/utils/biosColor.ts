@@ -15,10 +15,12 @@
 import type { BiosLevel } from "../types";
 
 /** The red a missing BIOS requirement is drawn in. Named because one surface
- *  needs the colour WITHOUT the level: the play row's badge appears only when a
- *  file the active core requires is absent, so it has a single appearance and
- *  asks {@link biosColorForLevel} nothing. Sharing the spelling is what keeps
- *  that badge and the tab's red dot the same red. */
+ *  needs the colour WITHOUT the level: the play row's badge is raised by two
+ *  established absences — a file the active core requires, or the image the
+ *  console itself cannot start without (`system_image`) — and reads the same for
+ *  both, so it has a single appearance and asks
+ *  {@link biosColorForLevel} nothing. Sharing the spelling is what keeps that
+ *  badge and the tab's red dot the same red. */
 export const BIOS_MISSING_RED = "#d94126";
 
 /** Map a backend BIOS level to the status-dot hex color.

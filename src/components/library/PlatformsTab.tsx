@@ -36,8 +36,14 @@ import type { PlatformRow, PlatformsPageState } from "./usePlatformsPage";
 function biosTooltip(row: PlatformRow): string {
   const firmware = row.firmware;
   if (!firmware) return "Nothing is known about this platform's BIOS files";
+  // The console's own demand outranks the counts here for the reason it does in
+  // the pane: it is the one requirement no count can state, so "Nothing
+  // required" would stand over a system that will not boot.
+  if (firmware.system_image === "absent") return "Needs at least one BIOS file";
   if (firmware.bios_level === "unknown") {
-    return (firmware.required_withheld ?? 0) > 0 ? "BIOS readiness unknown" : "BIOS requirement unknown";
+    return (firmware.required_withheld ?? 0) > 0 || firmware.system_image === "unsettled"
+      ? "BIOS readiness unknown"
+      : "BIOS requirement unknown";
   }
   const required = firmware.required_count ?? 0;
   if (required === 0) return "Nothing required";

@@ -23,10 +23,11 @@ each one is, and both are asserted the same way. Where it is a wheel's manifest 
 gate has to except.
 
 **Nothing in this repo's toolchain runs Decky Loader's frozen Python.** The venv, the tests, the type-checker and the
-linters all run ordinary CPython, so a vendored package's assumptions about the standard library are invisible here and
-surface only when the plugin loads on a device. Two shapes have actually occurred, both recorded in emu-atlas and both
-fixed upstream in the release vendored today — but the first one hit this plugin's own code months before any vendoring,
-and that fix is still in the tree:
+linters all run ordinary CPython, so a vendored package's assumptions about the runtime it loads in are invisible here
+and surface on a device — when the plugin loads, or the first time a question reaches the assumption. Three shapes have
+actually occurred, all recorded in emu-atlas and all fixed upstream in the release vendored today — the third only
+halfway, by design, with the other half a grant this repo has to make. The first one hit this plugin's own code months
+before any vendoring, and that fix is still in the tree:
 
 - **A stdlib wrapper package a frozen build drops while the extension it wraps ships.** `xml.etree` is Python source
   over the expat extension; PyInstaller bundles only what its analysis reaches, so `import xml.etree.ElementTree` raises
@@ -42,6 +43,12 @@ and that fix is still in the tree:
   a string literal, so it is invisible to any import rewrite and to every grep for import statements. Fixed in emu-atlas
   by making a directory copy resolve under any parent package
   ([emu-atlas#327](https://github.com/danielcopper/emu-atlas/issues/327)).
+- **A package that spawns `sys.executable`.** Frozen, that is the application and not an interpreter, so the spawn
+  starts the host a second time — under Decky Loader it took the whole Steam UI down with it, at the first save question
+  rather than at load. Fixed in emu-atlas 0.14.0 halfway by design: atlas now spawns nothing it was not handed, so
+  **this host has to hand it one** — [`adapters/atlas_host.py`](../../py_modules/adapters/atlas_host.py), whose absence
+  fails nothing and quietly degrades save answers. Removing a grant is therefore a device-test trigger of its own. The
+  full account is in [`_vendor/README.md`](../../py_modules/_vendor/README.md).
 
 The consequence for this repo is the actionable half: **vendoring a package is a device-test trigger.** A green
 `mise run gate` says the copy hashes correctly and imports under CPython; it says nothing about whether it imports under

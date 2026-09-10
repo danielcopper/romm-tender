@@ -18,13 +18,22 @@ import { formatTimeAgo } from "./formatters";
 export interface BiosInfoFields {
   biosNeeded: boolean;
   biosLabel: string;
-  /** Whether a file the ACTIVE CORE requires is not on disk — the whole of the
-   *  play-row badge's rule, and the reason it is derived here rather than at the
-   *  row: it is a local fact (`required_downloaded` counts what the reading
-   *  found at each destination), and reassembling it from the numbers at the
-   *  call site is how it drifted into keying off the readiness verdict instead.
-   *  A required row whose verdict was withheld is out of both sides of the
-   *  comparison — it is not on disk and not shown to be missing either.
+  /** Whether this launch is missing firmware it cannot start without — the whole
+   *  of the play-row badge's rule, and the reason it is derived here rather than
+   *  at the row: it is a local fact (`required_downloaded` counts what the
+   *  reading found at each destination), and reassembling it from the numbers at
+   *  the call site is how it drifted into keying off the readiness verdict
+   *  instead.
+   *
+   *  **Two absences raise it, and neither can state the other.** A file the
+   *  ACTIVE CORE requires is not on disk — a required row whose verdict was
+   *  withheld is out of both sides of that comparison, being neither on disk nor
+   *  shown to be missing. Or the CONSOLE cannot start without one of the images
+   *  the core declares and none of them is in place (`system_image: "absent"`),
+   *  which no count can express: a libretro declaration marks each of those
+   *  images optional, so `required_count` is 0 and the comparison above is
+   *  vacuously false while no game on the platform launches. The second is read
+   *  off the backend's own answer, never re-derived from the rows here.
    *
    *  The four-valued `bios_level` is deliberately NOT projected. The badge has
    *  one appearance, so it needs no colour input, and the BIOS tab reads the
@@ -80,8 +89,9 @@ export function applySaveSyncDisplay(
  *  or `null` when the payload carries no answer at all. The label is never
  *  re-derived here.
  *
- *  Four payloads. `bios_status` present: the requirement, and whether the active
- *  core is missing one of its files. `bios_status` absent: the backend answering
+ *  Four payloads. `bios_status` present: the requirement, and whether this launch
+ *  is missing firmware it cannot start without — a file the active core requires,
+ *  or the image the console itself needs. `bios_status` absent: the backend answering
  *  "this core needs no BIOS", which clears the fields so a requirement can be
  *  taken back off the page (#1690). `bios_status_unknown` with an `"unknown"`
  *  level: a check that RAN and could not establish the requirement — an answer,
@@ -114,10 +124,19 @@ export function extractBiosInfo(answer: BiosAnswer): BiosInfoFields | null {
   // the resolver listed and found no BIOS image in is exactly the state the
   // badge is for.
   const requiredJudged = requiredCount - (answer.bios_status.required_withheld ?? 0);
+  // The console's own demand, taken as the backend stated it — a second
+  // established absence beside the count rather than a second reading of the
+  // same one. Whether the count sees it at all is the core author's choice: a
+  // libretro declaration marks each file required or optional and can say
+  // nothing about the console, so over one PlayStation SwanStation marks all
+  // five of its images optional (`required_count` 0, the comparison below
+  // vacuously false) while Beetle PSX marks three of its own required. This axis
+  // answers the same either way.
+  const systemImageAbsent = answer.bios_status.system_image === "absent";
   return {
     biosNeeded: true,
     biosLabel: answer.bios_label ?? "",
-    biosRequiredMissing: requiredJudged > 0 && requiredDownloaded < requiredJudged,
+    biosRequiredMissing: systemImageAbsent || (requiredJudged > 0 && requiredDownloaded < requiredJudged),
   };
 }
 

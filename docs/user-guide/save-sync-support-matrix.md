@@ -6,27 +6,45 @@ this page shows what syncs for each system today, and what's planned.
 
 ## How reliable is this page?
 
-Be aware of what this table is before you plan around it. Most of it is **derived from libretro's documentation and from
-reading core source**, not from watching each core actually write a save. A separate project,
-[emu-atlas](https://github.com/danielcopper/emu-atlas), is auditing the same ground with evidence grades per core; at
-the time of writing it has confirmed **17 of RetroDECK's 159 libretro cores**, and none of the 22 standalone emulators.
+**The plugin no longer decides what a save is from a table like this one.** It asks your machine, per game and per the
+emulator that will launch it, every time it syncs — so the answer follows your actual core choice and your actual core
+options rather than a row written in advance. This page is now background reading: it explains why a platform behaves
+the way it does, and the plugin's own answer is what governs.
 
-Two things follow that matter to you:
+Two things still matter when you read a row:
 
 - **A ❌ often means "not with the settings that ship", not "impossible".** Several cores can write per-game saves if
-  you change a core option — the rows below say which. Turning that on is not yet something the plugin does or detects
-  for you.
+  you change a core option — the rows below say which. Turning that on is not yet something the plugin does for you, but
+  it does now **notice**: change the option and the next sync reads the new answer.
 - **Rows are stated for each platform's _default_ core.** You can override the core per system and per game, and a
-  different core can behave differently. RetroArch settings such as `savefiles_in_content_dir` also move saves out of
-  where the plugin looks.
+  different core can behave differently — which is exactly why the plugin asks per game. RetroArch's
+  `savefiles_in_content_dir` still moves saves out of where the plugin looks, and that is reported separately.
 
-Where the audit has already corrected an earlier assumption, this page reflects the audit.
+Most of this table is derived from libretro's documentation and from reading core source, not from watching each core
+write a save. Where the [emu-atlas](https://github.com/danielcopper/emu-atlas) audit has corrected an earlier
+assumption, this page reflects the audit.
+
+## When save sync does nothing, and why
+
+Where the plugin cannot carry a game's saves it now says so instead of quietly finding nothing. There are four reasons,
+and they mean different things:
+
+- **The emulator keeps one save card that all games share.** Standalone PCSX2 is the common case. Syncing it per game
+  would copy other games' progress onto this one's record, so the plugin leaves it alone.
+- **The save is written inside the game file itself.** There is no separate file to carry.
+- **The emulator files saves under the game's own identity**, which the plugin cannot read yet — in the file name for
+  Dreamcast, in the folder name for GameCube. Dreamcast, GameCube, Nintendo 3DS and Wii U are here.
+- **What the emulator writes could not be established** — either nobody has audited that core yet, or the folder is
+  known and the names inside it are not.
+
+None of these is an error, and none of them stops a game launching. If you change the emulator for a game, the answer is
+read again for the new one.
 
 ## Categories
 
 |    | Meaning                                                                                                                                                                                                                                                        |
 | -- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ✅ | **Synced today.** Your saves for this system carry across devices automatically.                                                                                                                                                                               |
+| ✅ | **Synced today.** Your saves for this system carry across devices automatically. A few systems answer differently for a disc image than for a raw dump — where that is so, the note says which file gets you the per-game save.                                |
 | 🔜 | **Planned.** This save type isn't synced yet, but it fits the model and is on the way in a future release.                                                                                                                                                     |
 | ❌ | **Not synced yet.** This system's default core writes a _shared_ card (one file for many games), keeps saves outside the per-game save folder, or hasn't been pinned down yet — so it doesn't fit per-game sync today. Handled differently in a later release. |
 | ⚪ | **No save data.** This system's emulator has no in-game save to sync (you can still use save states locally).                                                                                                                                                  |
@@ -34,8 +52,17 @@ Where the audit has already corrected an earlier assumption, this page reflects 
 ## What syncs today ✅
 
 Standard per-game cartridge saves sync automatically. That covers the large majority of systems — Nintendo (NES, SNES,
-Game Boy / Color / Advance, N64, DS), Sega (Master System, Game Gear, Genesis / Mega Drive, Sega CD), PC Engine /
-TurboGrafx, WonderSwan, Atari Lynx, Virtual Boy, and more.
+Game Boy / Color / Advance, N64, DS), Sega (Master System, Game Gear, Genesis / Mega Drive), PC Engine / TurboGrafx,
+WonderSwan, Atari Lynx, Virtual Boy, and more.
+
+**Sega CD depends on your game file.** A raw `.bin` dump saves per game and syncs; a `.chd`, `.cue` or `.iso` disc image
+puts the save on a shared BRAM card that all your Sega CD games write to, which cannot be carried per game. Amiga is the
+same story with different answers: a `.chd` CD32 image saves per game, while an `.adf` floppy writes into the disk image
+itself, a `.lha` names a `WHDSaves` folder whose contents the core does not list, and an `.hdf` hard-disk image cannot
+be established at all.
+
+3DO and Neo Geo are named right and still not found: those emulators keep saves in a per-emulator subfolder that the
+plugin does not yet look in.
 
 The systems whose default core has been **watched writing a save on a stock RetroDECK install** are Game Boy / Color /
 Advance, N64, Saturn, Neo Geo Pocket (Color) and Pokémon Mini. The rest of the ✅ rows follow the same standard `.srm`
@@ -45,10 +72,11 @@ convention and are expected to behave identically, but haven't been observed one
 
 Per-game saves for these systems fit the sync model and are planned for a future release:
 
-| System      | Notes                                                                                                  |
-| ----------- | ------------------------------------------------------------------------------------------------------ |
-| PlayStation | Memory-card saves. The cores write them per game, but under a name the plugin doesn't probe yet.       |
-| 3DO         | The Opera core writes per-game NVRAM into its own `opera/per_game/` subfolder, under a versioned name. |
+| System      | Notes                                                                                                       |
+| ----------- | ----------------------------------------------------------------------------------------------------------- |
+| PlayStation | Memory-card saves. The cores write them per game, but under a name the plugin doesn't probe yet.            |
+| 3DO         | The Opera core writes per-game NVRAM into its own `opera/per_game/` subfolder, under a versioned name.      |
+| Neo Geo     | FinalBurn Neo writes a per-game save into its own `fbneo/` subfolder, which the plugin doesn't look in yet. |
 
 !!! warning "3DO was listed as syncing here before — it wasn't"
 
@@ -67,15 +95,16 @@ outside the per-game save folder, or haven't been pinned down yet. A shared card
 other games' saves, so it doesn't fit per-game sync today. We're looking at safe ways to handle these in a future
 release.
 
-| System         | Why it doesn't sync today                                                                                                                                                                                          |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Dreamcast      | Flycast ships with **Per-Game VMUs off**, so every game shares `vmu_save_A1.bin` and its siblings in RetroDECK's system folder. The core _can_ write per-game VMUs; the names it uses then aren't pinned down yet. |
-| PlayStation 2  | The LRPS2 core ships with **shared memory cards on** (`Mcd001.ps2` / `Mcd002.ps2`). With that option off it writes one `<game>.ps2` card per game — which would fit per-game sync.                                 |
-| GameCube / Wii | The Dolphin core appears to keep saves under its own subtree rather than the per-game save folder. Not confirmed on-device yet.                                                                                    |
-| Neo Geo CD     | Ships writing one shared save. The core has a per-content mode; which one wins when loading isn't confirmed.                                                                                                       |
-| Nintendo 3DS   | The Azahar core appears to use its own save subtree. Not confirmed on-device yet.                                                                                                                                  |
-| PSP            | Where the PPSSPP core keeps its saves, and whether they are per game, hasn't been established.                                                                                                                     |
-| Arcade (MAME)  | NVRAM is stored separately by the emulator, not as a file named after your ROM.                                                                                                                                    |
+| System         | Why it doesn't sync today                                                                                                                                                                                               |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dreamcast      | Flycast ships with **Per-Game VMUs off**, so every game shares `vmu_save_A1.bin` and its siblings in RetroDECK's system folder. The core _can_ write per-game VMUs; the names it uses then aren't pinned down yet.      |
+| PlayStation 2  | The LRPS2 core ships with **shared memory cards on** (`Mcd001.ps2` / `Mcd002.ps2`). With that option off it writes one `<game>.ps2` card per game — which would fit per-game sync.                                      |
+| GameCube / Wii | The Dolphin core appears to keep saves under its own subtree rather than the per-game save folder. Not confirmed on-device yet.                                                                                         |
+| Neo Geo CD     | Ships writing one shared save. The core has a per-content mode; which one wins when loading isn't confirmed.                                                                                                            |
+| Nintendo 3DS   | The Azahar core appears to use its own save subtree. Not confirmed on-device yet.                                                                                                                                       |
+| PSP            | Where the PPSSPP core keeps its saves, and whether they are per game, hasn't been established.                                                                                                                          |
+| Arcade (MAME)  | NVRAM is stored separately by the emulator, not as a file named after your ROM.                                                                                                                                         |
+| Amiga          | PUAE keeps an `.adf` floppy's save inside the disk image itself, so there is no separate file to carry. A `.lha` names a `WHDSaves` folder whose contents the core does not list, and an `.hdf` is not answered at all. |
 
 ## No save data ⚪
 
@@ -90,6 +119,7 @@ states still work locally). See the full table for specifics.
 
     | Platform | Status | Notes |
     | --- | --- | --- |
+    | `amiga` | ❌ | An `.adf` floppy keeps the save inside the disk image; a `.lha` names a folder whose contents the core does not list; an `.hdf` is not answered |
     | `amstradcpc` | ❌ | Not synced |
     | `apple2` | ❌ | Saves are stored separately by the emulator (MAME) |
     | `apple2gs` | ❌ | Saves are stored separately by the emulator (MAME) |
@@ -141,6 +171,7 @@ states still work locally). See the full table for specifics.
     | `cdimono1` | 🔜 | Under review |
     | `cdtv` | 🔜 | Planned — pending platform mapping (#907) |
     | `dos` | 🔜 | Planned |
+    | `neogeo` | 🔜 | Per-game saves, but in the FinalBurn Neo core's own `fbneo/` subfolder |
     | `pc` | 🔜 | Planned |
     | `pico8` | 🔜 | Planned |
     | `psx` | 🔜 | Planned |
@@ -150,8 +181,7 @@ states still work locally). See the full table for specifics.
     | `wasm4` | 🔜 | Under review |
     | `windows3x` | 🔜 | Planned |
     | `windows9x` | 🔜 | Planned |
-    | `amiga` | ✅ | Synced |
-    | `amigacd32` | ✅ | Synced |
+    | `amigacd32` | ✅ | A `.chd` disc image saves per game; a raw `.bin` is not answered |
     | `atari2600` | ✅ | Synced |
     | `c64` | ✅ | Synced |
     | `famicom` | ✅ | Synced |
@@ -164,8 +194,8 @@ states still work locally). See the full table for specifics.
     | `genesis` | ✅ | Synced |
     | `mark3` | ✅ | Synced |
     | `mastersystem` | ✅ | Synced |
-    | `megacd` | ✅ | Synced |
-    | `megacdjp` | ✅ | Synced |
+    | `megacd` | ✅ | A raw `.bin` dump saves per game; a disc image uses a shared BRAM card |
+    | `megacdjp` | ✅ | A raw `.bin` dump saves per game; a disc image uses a shared BRAM card |
     | `megadrive` | ✅ | Synced |
     | `megadrivejp` | ✅ | Synced |
     | `megaduck` | ✅ | Synced |
@@ -173,7 +203,6 @@ states still work locally). See the full table for specifics.
     | `n64` | ✅ | Synced |
     | `n64dd` | ✅ | Synced |
     | `nds` | ✅ | Synced |
-    | `neogeo` | ✅ | Synced |
     | `nes` | ✅ | Synced |
     | `ngp` | ✅ | Synced |
     | `ngpc` | ✅ | Synced |
@@ -188,7 +217,7 @@ states still work locally). See the full table for specifics.
     | `sega32x` | ✅ | Synced |
     | `sega32xjp` | ✅ | Synced |
     | `sega32xna` | ✅ | Synced |
-    | `segacd` | ✅ | Synced |
+    | `segacd` | ✅ | A raw `.bin` dump saves per game; a disc image uses a shared BRAM card |
     | `sfc` | ✅ | Synced |
     | `sg-1000` | ✅ | Synced |
     | `sgb` | ✅ | Synced |

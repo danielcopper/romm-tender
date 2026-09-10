@@ -23,11 +23,15 @@ from _vendor.atlas import (
     CAVEAT_FIRMWARE_PATH_OBSTRUCTED,
     CAVEAT_FIRMWARE_SEARCH_UNVERIFIED,
 )
-from _vendor.atlas.firmware import DECLARED_DIRECTORY as ATLAS_DECLARED_DIRECTORY
-from _vendor.atlas.firmware import DECLARED_FILE as ATLAS_DECLARED_FILE
 from _vendor.atlas.firmware import (
+    CORE_SYSTEM_FIRMWARE_STATES,
+    SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
+    SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
+    SYSTEM_FIRMWARE_OPEN,
+    SYSTEM_FIRMWARE_RUNS_WITHOUT,
     CoreDeclarationState,
     CoreFirmware,
+    CoreSystemFirmware,
     DeclaredKind,
     FirmwareAlternatives,
     FirmwareAnswer,
@@ -37,6 +41,8 @@ from _vendor.atlas.firmware import (
     RefusedDeclaration,
     SuppliedBy,
 )
+from _vendor.atlas.firmware import DECLARED_DIRECTORY as ATLAS_DECLARED_DIRECTORY
+from _vendor.atlas.firmware import DECLARED_FILE as ATLAS_DECLARED_FILE
 from _vendor.atlas.machine import KIND_DIRECTORY, KIND_FILE, KIND_INACCESSIBLE, KIND_MISSING, PathKind
 from _vendor.atlas.placement import Caveat
 
@@ -45,6 +51,7 @@ from domain.firmware_wants import (
     CAVEAT_PATH_OBSTRUCTED,
     DECLARED_DIRECTORY,
     DECLARED_FILE,
+    SYSTEM_FIRMWARE_STATES,
 )
 
 _ROOT = "/home/deck/retrodeck/bios"
@@ -98,6 +105,7 @@ def _core(
     requirements: tuple[FirmwareRequirement | FirmwareAlternatives, ...] = (),
     caveats: tuple[Caveat, ...] = (),
     refused: tuple[RefusedDeclaration, ...] = (),
+    system_firmware: CoreSystemFirmware | None = None,
 ) -> CoreFirmware:
     if declaration != "read" and not caveats:
         caveats = (Caveat(code="core-info-unreadable", message="its .info could not be read"),)
@@ -110,6 +118,7 @@ def _core(
         requirements=requirements,
         caveats=caveats,
         refused=refused,
+        system_firmware=system_firmware,
     )
 
 
@@ -514,6 +523,113 @@ class TestVocabularyConformance:
 
     def test_the_obstruction_code_matches(self):
         assert CAVEAT_PATH_OBSTRUCTED == CAVEAT_FIRMWARE_PATH_OBSTRUCTED
+
+    def test_the_system_firmware_states_match(self):
+        assert SYSTEM_FIRMWARE_STATES == CORE_SYSTEM_FIRMWARE_STATES
+
+
+class TestCoreVerdicts:
+    """What is recorded about a core's CONSOLE, carried per core and never per file.
+
+    The resolver reads it off a packaged table rather than off this machine, and
+    a ``None`` on it means nobody has looked at that console — a distinction the
+    adapter has to carry intact, because downstream it is the difference between
+    a grey answer and a green one.
+    """
+
+    def test_each_cores_verdict_is_keyed_in_the_plugins_identifier_space(self, adapter, monkeypatch):
+        answer = _answer(
+            _core(
+                core_so="swanstation_libretro.so",
+                requirements=(_requirement(core_so="swanstation_libretro.so", need="optional"),),
+                system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
+            ),
+            _core(
+                core_so="pcsx_rearmed_libretro.so",
+                requirements=(_requirement(core_so="pcsx_rearmed_libretro.so", need="optional"),),
+                system_firmware=SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
+            ),
+        )
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+
+        catalogue = adapter()
+
+        assert catalogue.verdict_for("swanstation_libretro").system_firmware == SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT
+        assert catalogue.verdict_for("swanstation_libretro").system_needs_an_image is True
+        assert catalogue.verdict_for("pcsx_rearmed_libretro").system_needs_an_image is False
+
+    @pytest.mark.parametrize(
+        "state", [SYSTEM_FIRMWARE_RUNS_WITHOUT, SYSTEM_FIRMWARE_OPEN, SYSTEM_FIRMWARE_CORE_ALTERNATIVE]
+    )
+    def test_no_other_recorded_state_demands_an_image(self, adapter, monkeypatch, state):
+        answer = _answer(_core(requirements=(_requirement(),), system_firmware=state))
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+
+        verdict = adapter().verdict_for("mgba_libretro")
+
+        assert verdict.system_firmware == state
+        assert verdict.system_needs_an_image is False
+
+    def test_a_core_the_table_records_nothing_about_carries_the_absence(self, adapter, monkeypatch):
+        """``None`` is an unasked question, and it must arrive as one."""
+        answer = _answer(_core(requirements=(_requirement(),)))
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+
+        verdict = adapter().verdict_for("mgba_libretro")
+
+        assert verdict.system_firmware is None
+        assert verdict.system_needs_an_image is False
+
+    def test_the_resolvers_own_verdict_travels_beside_it(self, adapter, monkeypatch):
+        """``requirements_met`` is atlas's, not ours — carried, and read by nothing.
+
+        The adapter still passes it through, so a future consumer meets the
+        resolver's own answer rather than one this layer invented. What no
+        consumer may do is weigh it against the file rows: see
+        ``domain/bios_status.py::classify_system_image``.
+        """
+        answer = _answer(
+            _core(
+                core_so="swanstation_libretro.so",
+                requirements=(_requirement(core_so="swanstation_libretro.so", need="optional"),),
+                system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
+            )
+        )
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+
+        assert adapter().verdict_for("swanstation_libretro").requirements_met is False
+
+    def test_a_standalone_emulator_has_no_so_to_key_on(self, adapter, monkeypatch):
+        answer = _answer(_core(core_so=None, declaration="packaged", requirements=(_requirement(core_so=None),)))
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+
+        assert adapter().core_verdicts == {}
+
+    def test_a_caller_with_no_core_to_name_is_answered_for_nobody(self, adapter, monkeypatch):
+        answer = _answer(_core(requirements=(_requirement(),), system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT))
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+
+        assert adapter().verdict_for(None) is None
+
+    def test_a_reading_that_did_not_happen_records_nothing(self, adapter, monkeypatch):
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(ValueError("nope"))))
+
+        assert adapter().core_verdicts == {}
+
+    def test_the_trace_names_the_cores_whose_console_needs_an_image(self, adapter, monkeypatch, traces):
+        answer = _answer(
+            _core(
+                core_so="swanstation_libretro.so",
+                requirements=(_requirement(core_so="swanstation_libretro.so", need="optional"),),
+                system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
+            ),
+            _core(core_so="mgba_libretro.so", requirements=(_requirement(),)),
+        )
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+
+        adapter()
+
+        assert any("system-firmware-needed=['swanstation_libretro']" in trace for trace in traces)
 
 
 class TestFolderVerdictsTheInventoryAlreadySettles:

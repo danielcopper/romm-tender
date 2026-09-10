@@ -67,6 +67,13 @@ interface FirmwareFile extends FirmwareVerdict {
    *  axis the "BIOS needed" badge and the required counts key off, distinct
    *  from `wanted`, which is about every installed emulator. */
   required_by_active: boolean;
+  /** Whether this row is one of the images that would answer the platform's
+   *  launching core CONSOLE on its own — see {@link SystemImage}. Set only where
+   *  that core marks nothing required, which is the only shape in which "one of
+   *  these" is the whole of what the core says; a core that does state required
+   *  files carries the same demand on those rows as `required_by_active`.
+   *  Absent claims nothing. */
+  system_image_candidate?: boolean;
   on_server: boolean;
   supplied_by?: string | null;
   /** How many of the plugin's own downloads a delete on THIS row would remove:
@@ -183,6 +190,10 @@ export interface FirmwarePlatformExt extends FirmwarePlatform {
    *  from a platform nothing could speak for: here the rows have answers and
    *  only the one-line verdict declines, so the downloads stay. */
   required_withheld?: number;
+  /** The console's own firmware demand on the launching core — see
+   *  {@link SystemImage}. Absent on a payload from before the field existed,
+   *  which reads as the neutral answer. */
+  system_image?: SystemImage;
   server_count?: number;
   local_count?: number;
   known_count?: number;
@@ -217,7 +228,20 @@ export interface BiosFileStatus extends FirmwareVerdict {
   /** Whether the core THIS game launches with requires the file. `wanted` is the
    *  machine's answer about the file; this one is the launch's. */
   required_by_active: boolean;
-  cores?: Record<string, { required: boolean }>;
+  /** Per core that declares the file: what that core's own `.info` says about
+   *  it (`required`), and — where that core's CONSOLE needs an image and the
+   *  core marks nothing required — how many files that one demand is spread over
+   *  (`needs_one_of`). Two speakers, so the pair `optional` + `needs_one_of` is
+   *  not a contradiction: it is a core saying "any one of my five will do", and
+   *  it is the case a surface has to be able to word. `needs_one_of` is null or
+   *  absent for every other core, including one whose console demands an image
+   *  and that marks files required — there the demand reaches the reader as
+   *  those rows' own `required`. */
+  cores?: Record<string, { required: boolean; needs_one_of?: number | null }>;
+  /** Whether this row is one of the images that would answer the launching
+   *  core's CONSOLE on its own — the row-level read of the same `needs_one_of`
+   *  answer. Absent claims nothing. */
+  system_image_candidate?: boolean;
   used_by_active?: boolean;
   /** False for a file an emulator asks for that the RomM library does not hold.
    *  It still counts as missing — it just cannot be fetched from the plugin. */
@@ -241,6 +265,21 @@ export interface BiosFileStatus extends FirmwareVerdict {
  */
 export type BiosLevel = "ok" | "partial" | "missing" | "unknown";
 
+/**
+ * Whether the core this platform launches with has the image its CONSOLE cannot
+ * start without — the backend's `classify_system_image`, and a value rather than
+ * a count because the requirement is a DISJUNCTION: the console asks for one of
+ * the images the core declares, not for each of them. A libretro `.info` has no
+ * way to say that, so such a core marks every image optional and the file counts
+ * alone read "nothing required" over a system that will not boot.
+ *
+ * `"not_demanded"` is the neutral answer and covers four recordings that all
+ * leave the file rows to speak for themselves — including "nothing is recorded
+ * about this console", which is an unasked question and never an all-clear. Every
+ * surface renders it as no sentence at all rather than as a green one.
+ */
+export type SystemImage = "not_demanded" | "held" | "absent" | "unsettled";
+
 export interface BiosStatus {
   needs_bios: boolean;
   server_count?: number;
@@ -257,6 +296,10 @@ export interface BiosStatus {
    *  answers. A row answered `false` is NOT here: that is a requirement shown to
    *  be unmet, and it reads red like any other. */
   required_withheld?: number;
+  /** The console's own firmware demand on the launching core — see
+   *  {@link SystemImage}. It is deliberately NOT in `required_count`: that count
+   *  is files each individually required, and this one is "one of these". */
+  system_image?: SystemImage;
   // Server files an installed emulator asks for, and files nothing could answer
   // about. A `not_needed` file is in neither — it is answered for, and wanted by
   // nothing — which is what keeps "nothing here is needed" apart from "nothing

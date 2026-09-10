@@ -274,6 +274,10 @@ Three distinct notions in core selection, kept separate because they have differ
 - **Active core** — the core a ROM actually launches with: the override when one exists, the default otherwise. One
   resolver answers it for both the launch and every read consumer (BIOS requirement, save path, game-detail badge), so
   the launched core never diverges from what those reads assume.
+- **Platform pick** — the same resolution asked of a PLATFORM rather than a ROM, so with no per-game layer to apply: the
+  per-platform override when its label still names a bakeable emulator, else the default emulator. It is one pick with
+  two projections — the name a surface displays, and the `.so` its BIOS answers key on (none, where the pick is a
+  standalone emulator) — and resolving those separately is what let one pane name an emulator and judge by another.
 
 ### Wanted (firmware): needed / optional / not needed / unknown
 
@@ -287,8 +291,9 @@ outside the scope.
 Keeping the last two apart is the whole point of the vocabulary — "nothing wants this" is a finished answer and "nothing
 could be established" is the absence of one, and a single boolean called both _not required_. **Wanted** is a property
 of the machine and does not move with the core the user picked; the launch-scoped question is **required by active
-core**, which is what the missing-BIOS badge counts. The foil to **BIOS level** (the platform-wide readiness verdict:
-unknown / ok / partial / missing).
+core**, which is what the missing-BIOS badge counts — beside **system image**, the console's own demand, which no count
+carries and which raises that same badge. The foil to **BIOS level** (the platform-wide readiness verdict: unknown / ok
+/ partial / missing).
 
 A wanted file need not be one the RomM library holds — the two sets overlap without either containing the other, and a
 platform's list is their **union**. A row the library does not hold is marked **not on server**: it counts towards
@@ -327,6 +332,59 @@ _is_ asked, it verifies that core's declared files too — each one the packaged
 and no others — and their **verdicts** are dropped unread. Either way, reading an unasked content question as a withheld
 verdict would decline readiness for every row on every platform. The foil to **not on server**, which is a settled
 absence and does count towards readiness.
+
+### System image (firmware): held / absent / unsettled / not demanded
+
+Whether the core a game launches with has the firmware image its **console** cannot start without — a requirement no
+libretro declaration can express. A `.info` marks each file **needed** or **optional** and nothing else: no way to say
+"one of these", and no way to say the console will not boot without one. An author who knows it will not has two lossy
+moves and the deployed catalogue takes both — SwanStation marks all five of its PlayStation images optional, Beetle PSX
+marks three of its own required — so the file counts alone read a green **Nothing required** under the one core and
+three separate prerequisites under the other, over a system on which no game starts either way. The console's own answer
+is world knowledge rather than a reading of the machine — the resolver keeps a source-cited table of it, per system.
+
+It is a **disjunction**, and that is what keeps it out of the counts. The console asks for _one_ of the images the core
+declares, not for each of them, so it is a single requirement over the whole list rather than one requirement per file.
+Folded into **required by active core** it would report every image the core declares as required —
+`0 / 5 required files ready` under SwanStation, which declares five; carried as its own axis it is worded "at least one"
+and never as a ratio, nor as a pointer at the file list, most of whose rows cannot answer it. The twenty in the same
+page's `0 / 20 files held` is a different set again: the library's own inventory for the platform.
+
+- **held** — one of the images is at its destination. Which one is not asked: any of them answers the whole requirement.
+- **absent** — the console needs one and every row the launching core declares was established to be absent. The **BIOS
+  level** goes to `missing`, tested ahead of the declines so a demonstration outranks a platform nothing could be
+  established for. A withheld required row cannot hold with it: that row is one of the rows the disjunction is read
+  over, so it leaves the answer **unsettled** instead.
+- **unsettled** — the console needs one and whether it is there could not be established. It can turn a green verdict
+  grey and nothing else: where the counts already read `partial` or `missing`, something is known to be absent and a
+  doubt about one further file does not unsay it.
+- **not demanded** — the axis makes no claim, and the file rows speak for themselves. Four recordings reach it: the core
+  carries its own substitute (PCSX ReARMed's HLE BIOS), the console was established to start with nothing present, the
+  question is recorded as open, or **nothing is recorded about the console at all**. The last is an unasked question and
+  may never be read as "this console needs no firmware" — the same rule that keeps **unknown** apart from **not needed**
+  one axis over.
+
+The same table answers **per core**, and a file row carries that answer on each core's own entry beside that core's
+`required` flag: what the core's `.info` says about this file, and — where that core states the demand as a
+**disjunction** — how many files it is spread over. Two speakers, so a core marking the file _optional_ while its
+console will not start without one of the five images it declares is the informative pair rather than a contradiction —
+and neither half is ever rewritten into the other.
+
+A core states the demand as a disjunction only where it marks **nothing** required: that is the one shape in which "one
+of these" is the whole of what the core says. A core whose console needs an image and that does mark files required —
+Beetle PSX marks three of the same five — says what it has to say through those rows' **required by active core**, so
+its entries carry no count and its rows are not marked. The **system image candidate** flag is the same answer read for
+the launching core onto the row: this row is one of the images that would start the console on its own.
+
+That candidate set is deliberately **narrower** than the set the **system image** value is read over, which is every
+image the launching core declares whatever the core called it. The two answer different questions — one is the console's
+verdict, the other is which rows a surface may mark as ways to reach it — so widening the flag to every image-demanding
+core would put a second mark on a requirement already stated, and narrowing the verdict to the marked rows would stop
+answering for the cores that state required files.
+
+Scoped to the **active core**, like **required by active core** and unlike **wanted**: one unchanged PlayStation reads
+`absent` under SwanStation, whose five declared images the console needs one of, and `not demanded` under PCSX ReARMed,
+which carries its own substitute.
 
 ### Safely-bakeable
 
@@ -382,6 +440,64 @@ changes only the path baked into the shortcut's `launch_options`, never `RomInst
 to how the override changes the invocation without touching `file_path`
 ([ADR-0014](docs/adr/0014-per-game-disc-selection-in-db-applied-as-bake-time-launch-path-override.md)). A stale pin (the
 disc no longer present) degrades to the default with a WARNING, never fatal.
+
+### Save answer
+
+What one ROM's save consists of, where the emulator keeps it, and whether this plugin may carry it —
+`domain.save_answer.SaveAnswer`, read live off the machine by the vendored resolver through `adapters/atlas_saves.py`.
+It replaced a per-system extension table the plugin maintained by hand.
+
+An answer is about one **ROM** and one **emulator**, never a platform (see
+[Save scope](#save-scope-per-rom-and-per-emulator-never-per-platform)), and it names the files, their directory, their
+roles, the holes left in any name, and the resolver's caveat codes. A file whose role is the emulator's
+**configuration** rather than the player's **progress** — Saturn's `.smpc` — is named on the answer and **not carried**;
+a directory move still moves it, because splitting one save across two directories breaks the game. Each named file
+carries a `carried` flag, named for the RULE and not for the file: it says save sync carries this name, which is a
+different claim from "this file is in sync".
+
+**An answer is not always about a file that exists.** A ROM the library holds but has not installed is asked about the
+path it WOULD occupy, because `roms.fs_name` carries the extension the answer turns on; every name in such an answer is
+a prediction. `content_installed` says which it is, and a surface that renders the names without reading it tells a user
+their uninstalled game already has save files.
+
+### Save state: per-game files / shared / inside the content / hole / not established
+
+The five values a save answer classifies a ROM into, **exactly one of which holds**. Only the first is a save this
+plugin can carry; the other four **refuse** — no path is probed, no sync state is written, and the sync returns the
+benign-skip shape rather than a failure.
+
+- **per-game files** — the answer names concrete files with no hole. Sync as usual, any number of files.
+- **shared** — the emulator's granularity is a shared card or a shared file, so one file holds many games' progress and
+  a per-game sync would carry another game's save onto this ROM's record.
+- **inside the content** — the save is written into the game file itself. There is nothing separate to carry.
+- **hole** — the shape is known, but part of the path or the name is the game's own identity, which nothing here
+  supplies. Flycast needs a `save_id` in the filename; Dolphin needs the `region` in the directory.
+- **not established** — nobody established what this emulator writes, or the directory is known and the names in it are
+  not, or no question reached the resolver at all. **These are three shapes, `nothing_established`, `directory_known`
+  and `not_asked`, and they stay apart**: they are different sentences to a reader, and collapsing them claims ignorance
+  about a folder we can point at, or claims a refusal where nobody was ever asked.
+
+Detail, including which systems land where on a stock RetroDECK, is in
+[Save sync coverage](docs/architecture/save-sync-coverage.md).
+
+### Save scope: per ROM and per emulator, never per platform
+
+A save answer is about **one ROM** and **the emulator that would launch it**, and means nothing without both.
+
+The emulator half: PS2 is not unsupported — **standalone PCSX2** is, because it keeps two shared memory cards, and a
+libretro core for the same platform can answer per-game.
+
+The ROM half: the answer turns on the **content file's own extension**. An Amiga `.adf` keeps its save inside the disk
+image, an Amiga `.lha` states a directory whose file names PUAE does not list, and an `.hdf` establishes nothing; a Sega
+CD `.chd` is a shared BRAM card where a `.bin` is a per-game `.srm`. So every question carries the ROM's real content
+path — `RomInstall.file_path` when installed, the path built from `roms.fs_name` when not — and a synthetic stem is
+never an acceptable stand-in, because it answers a different question in a shape that looks like an answer to this one.
+
+So a save state is never reported for a platform, and whatever carries one names the emulator it is about.
+
+This is why the question goes to the **catalogue entry** the plugin resolved for this ROM (the label
+`ActiveCoreResolver` produced, which is the label the launch bakes) rather than to a bare core: a standalone emulator
+answers for itself.
 
 ### Save-sync slot
 

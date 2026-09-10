@@ -194,6 +194,24 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         "get_active_core",
         "get_default_emulator",
         "get_emulator_options",
+        # SaveLocationReader (services/protocols/paths.py) — asks the vendored
+        # resolver where one ROM's save lives and what it consists of. Reads
+        # ES-DE's catalogue for the entry, the emulator's own configuration for
+        # the granularity, and the save root for the directory, on EVERY call:
+        # this seam caches no answer at all, because a remembered granularity
+        # would have the plugin carry a shared card as one game's save. 170 ms
+        # warm and 490 ms cold on the reference machine, which makes it the most
+        # expensive entry in this list. It is a method on an object-shaped
+        # Protocol, so the method name is what a consumer writes and there is no
+        # attribute to list beside it.
+        "resolve_save_answer",
+        # RomInfoService.save_answer (services/saves/rom_info.py) — the saves
+        # package's own wrapper around that seam, listed because it is what the
+        # peers in services/saves/ actually call. The seam itself is reached
+        # directly from two modules only (rom_info.py and migration/save_sort.py), so
+        # without this entry the rule would be enforced in those two files and
+        # green everywhere else it is reached from.
+        "save_answer",
         # SandboxLauncherFn (services/protocols/paths.py) — reads ES-DE's
         # es_find_rules.xml (re-probing the flatpak roots for it and re-statting
         # it before it may answer from the parse cache) to resolve a standalone

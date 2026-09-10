@@ -86,6 +86,116 @@ describe("BiosTab", () => {
     expect(container.textContent).not.toContain("files held");
   });
 
+  it("says the console needs at least one file where the counts would say nothing is required", () => {
+    // The PlayStation state, and the whole reason the axis exists: SwanStation
+    // marks every image it declares optional — a libretro `.info` cannot say the
+    // console needs one of them — so `required_count` is 0 and the pane read a
+    // green "Nothing required (0/20 files held)" while no game on the platform
+    // would start. The sentence has to say the requirement is ONE file, and to
+    // point at no set while doing it: only the images the launching core
+    // declares can answer it, and the twenty in the ratio is the library's
+    // inventory rather than that set.
+    const { container } = render(
+      <BiosTab
+        biosStatus={{
+          needs_bios: true,
+          server_count: 20,
+          local_count: 0,
+          all_downloaded: false,
+          required_count: 0,
+          required_downloaded: 0,
+          system_image: "absent",
+        }}
+        biosLevel="missing"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+    expect(container.textContent).toContain("Needs at least one BIOS file (0/20 files held)");
+    expect(container.textContent).not.toContain("Nothing required");
+    expect(container.textContent).not.toContain("required files ready");
+    expect(container.innerHTML).toContain("#d94126");
+  });
+
+  it("says the console needs at least one file even where the level declines", () => {
+    // The order the three surfaces have to share. Today the backend never sends
+    // this pair — `absent` lands on `missing` — but nothing joins the three, so
+    // each pins its own: were a decline added ahead of the `absent` test in
+    // `compute_bios_level`, a surface reading the level first would print an
+    // ignorance over a requirement that was demonstrated.
+    const { container } = render(
+      <BiosTab
+        biosStatus={{
+          needs_bios: true,
+          server_count: 20,
+          local_count: 0,
+          all_downloaded: false,
+          required_count: 0,
+          required_downloaded: 0,
+          required_withheld: 0,
+          system_image: "absent",
+        }}
+        biosLevel="unknown"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+    expect(container.textContent).toContain("Needs at least one BIOS file (0/20 files held)");
+    expect(container.textContent).not.toContain("BIOS readiness unknown");
+    expect(container.textContent).not.toContain("BIOS requirement unknown");
+  });
+
+  it("names the readiness as the unknown where the console's own image is unsettled", () => {
+    // The requirement IS known here — this console needs an image — and it is
+    // whether one is in place that could not be established. "BIOS requirement
+    // unknown" would be the wrong half.
+    const { container } = render(
+      <BiosTab
+        biosStatus={{
+          needs_bios: true,
+          server_count: 20,
+          local_count: 0,
+          all_downloaded: false,
+          required_count: 0,
+          required_downloaded: 0,
+          required_withheld: 0,
+          system_image: "unsettled",
+        }}
+        biosLevel="unknown"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+    expect(container.textContent).toContain("BIOS readiness unknown");
+    expect(container.textContent).not.toContain("Nothing required");
+  });
+
+  it("says nothing of its own for the two quiet answers", () => {
+    // `not_demanded` covers a console nothing is recorded about, and it must
+    // change nothing — its own sentence would be a claim about an unasked
+    // question.
+    for (const systemImage of ["not_demanded", "held"] as const) {
+      const { container } = render(
+        <BiosTab
+          biosStatus={{
+            needs_bios: true,
+            server_count: 20,
+            local_count: 1,
+            all_downloaded: false,
+            required_count: 0,
+            required_downloaded: 0,
+            system_image: systemImage,
+          }}
+          biosLevel="ok"
+          coreInfo={coreInfo}
+          isActive={true}
+        />,
+      );
+      expect(container.textContent).toContain("Nothing required (1/20 files held)");
+      expect(container.textContent).not.toContain("Needs at least one");
+    }
+  });
+
   it("puts a satisfied folder's images on their own lines, under a name short enough to keep its dot", () => {
     // The row's name and its status dot share one flex line. Folding three
     // image descriptions into that name ran it to ~150 characters, wrapped the
@@ -275,5 +385,98 @@ describe("BiosTab", () => {
       />,
     );
     expect(container.textContent).toContain("Default");
+  });
+
+  describe("a core's line", () => {
+    // Two speakers, and the line prints whichever of them has something to say.
+    // What a core marks the file is its own `.info` and is never rewritten;
+    // what its CONSOLE needs comes from the packaged table beside it. A libretro
+    // declaration has only "needed" and "optional" to reach for, so an author
+    // who knows the console will not start without one of these images writes
+    // "optional" and the row read as a flat contradiction of the headline above
+    // it.
+    const psxRow = (cores: Record<string, { required: boolean; needs_one_of?: number | null }>) => ({
+      needs_bios: true,
+      server_count: 1,
+      local_count: 0,
+      all_downloaded: false,
+      required_count: 0,
+      required_downloaded: 0,
+      required_withheld: 0,
+      system_image: "absent" as const,
+      files: [
+        {
+          file_name: "scph5501.bin",
+          downloaded: false,
+          local_path: "",
+          description: "PlayStation BIOS (SCPH-5501)",
+          wanted: "optional" as const,
+          required_by_active: false,
+          cores,
+          on_server: true,
+          declared_kind: "file" as const,
+          satisfied: false,
+        },
+      ],
+    });
+
+    const lineFor = (
+      cores: Record<string, { required: boolean; needs_one_of?: number | null }>,
+      label: string,
+    ): string | undefined => {
+      const { container } = render(
+        <BiosTab biosStatus={psxRow(cores)} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
+      );
+      // Leaf divs only: the block wrapping the core lines is a div too, and its
+      // text is every line run together.
+      return [...container.querySelectorAll("div")]
+        .filter((div) => div.children.length === 0)
+        .map((div) => div.textContent)
+        .find((text) => text.startsWith(label));
+    };
+
+    it("states the whole requirement where the core marks each of its files optional", () => {
+      // The count is what makes this line the only one that can: the headline
+      // above says "at least one" without a number, and each row below
+      // describes one file.
+      expect(lineFor({ swanstation_libretro: { required: false, needs_one_of: 5 } }, "swanstation")).toBe(
+        "swanstation (needs one of its 5 BIOS files)",
+      );
+    });
+
+    it("keeps the core's own word — the declaration is never rewritten", () => {
+      // "required" is what this core's `.info` says, and the console's demand
+      // adds nothing a reader would act on differently, so the line is
+      // unchanged. Reading the pair as licence to print "required" over an
+      // "optional" declaration is the misreading this shape exists to prevent.
+      expect(lineFor({ beetle_psx_libretro: { required: true, needs_one_of: null } }, "beetle_psx")).toBe(
+        "beetle_psx (required)",
+      );
+    });
+
+    it("says nothing extra for a core whose console the table has no entry for", () => {
+      // Absent is an unasked question, not "this console needs nothing" — so the
+      // line says only what the declaration said.
+      expect(lineFor({ mgba_libretro: { required: false } }, "mgba")).toBe("mgba (optional)");
+    });
+
+    it("leaves a file a demanding core marks optional beside required ones plain", () => {
+      // `ps1_rom.bin` under Beetle PSX, and the line the annotation this
+      // replaced got wrong. That console does not start without an image, and
+      // what the core says about it is three OTHER files marked required — so
+      // this row carries no disjunction and the line is the declaration alone.
+      expect(lineFor({ beetle_psx_libretro: { required: false } }, "beetle_psx")).toBe("beetle_psx (optional)");
+    });
+
+    it("answers each core on its own, over one file two of them declare", () => {
+      // One row, two emulators, two different consoles' answers: the pane lists
+      // both lines and neither may take the other's.
+      const cores = {
+        swanstation_libretro: { required: false, needs_one_of: 5 },
+        pcsx_rearmed_libretro: { required: false, needs_one_of: null },
+      };
+      expect(lineFor(cores, "swanstation")).toBe("swanstation (needs one of its 5 BIOS files)");
+      expect(lineFor(cores, "pcsx_rearmed")).toBe("pcsx_rearmed (optional)");
+    });
   });
 });

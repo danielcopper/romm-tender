@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
     from domain.disc_selection import Disc
     from domain.rom_install import RomInstall
+    from domain.save_answer import SaveAnswer
     from domain.save_layout import InSaveDir, SaveLayout
     from domain.shortcut_data import EmulatorInvocation
 
@@ -656,9 +657,16 @@ class SaveInventoryBuilderFn(Protocol):
     one ROM (the single-ROM negotiate trigger). Only confirmed, non-legacy-slot
     ROMs with local save files contribute entries — the wizard gate stays
     upstream of negotiate (ADR-0016).
+
+    ``save_answer`` hands the scoped form a save reading the caller already took
+    in this operation, so a single-ROM sync reads the machine once rather than
+    once per layer. It is ignored for the whole-device form, which runs before
+    any per-ROM answer exists.
     """
 
-    def __call__(self, rom_id: int | None = None) -> list[ClientSaveState]: ...
+    def __call__(
+        self, rom_id: int | None = None, *, save_answer: SaveAnswer | None = None
+    ) -> list[ClientSaveState]: ...
 
 
 class DeviceIdProvider(Protocol):
