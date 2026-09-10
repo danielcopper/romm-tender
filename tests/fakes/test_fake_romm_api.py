@@ -221,7 +221,7 @@ class TestDeviceRegistration:
 
     def test_register_device_assigns_id_and_stores(self) -> None:
         api = FakeRommApi()
-        device = api.register_device("deck", "steamos", "romm-tender", "0.1.0")
+        device = api.register_device("deck", "steamos", "Tender", "0.1.0")
         assert device["id"] == "device-1"
         assert len(api.devices) == 1
         assert api.list_devices()[0]["name"] == "deck"
@@ -233,12 +233,12 @@ class TestClientTokens:
     def test_mint_returns_staged_response(self) -> None:
         api = FakeRommApi()
         api.mint_client_token_response = {"id": 9, "raw_token": "rmm_seeded"}
-        result = api.mint_client_token("alice", "secret", token_name="romm-tender (Deck)")
+        result = api.mint_client_token("alice", "secret", token_name="Tender (Deck)")
         assert result == {"id": 9, "raw_token": "rmm_seeded"}
         name, args, kwargs = api.call_log[-1]
         assert name == "mint_client_token"
         assert args == ("alice", "secret")
-        assert kwargs == {"token_name": "romm-tender (Deck)"}
+        assert kwargs == {"token_name": "Tender (Deck)"}
 
     def test_delete_records_token_id(self) -> None:
         api = FakeRommApi()

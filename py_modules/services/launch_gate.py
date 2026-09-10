@@ -15,6 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
+from domain.identity import DISPLAY_NAME
+
 if TYPE_CHECKING:
     import asyncio
     import logging
@@ -28,10 +30,8 @@ if TYPE_CHECKING:
     from services.protocols.files import SaveFileStore
 
 
-# Every notice comes from the same plugin, so they all carry the same sender and
-# the body is what tells them apart. Must match the frontend's ``PLUGIN_NAME``
-# and ``plugin.json``; nothing checks that the three agree.
-_TOAST_TITLE = "Tender"
+# Every notice comes from the same plugin, so they all carry the same sender
+# (``DISPLAY_NAME``) and the body is what tells them apart.
 _TOAST_BODY_NOT_INSTALLED = "ROM not downloaded. Open the game page to download it first."
 _TOAST_BODY_SAVE_CONFLICT = "Save conflict detected — open game page to resolve before playing"
 _TOAST_BODY_SAVE_STATUS_FAILED = "Save-status check failed — retry?"
@@ -143,7 +143,7 @@ class LaunchGateService:
             return LaunchVerdict(
                 action="block",
                 reason="not_installed",
-                toast_title=_TOAST_TITLE,
+                toast_title=DISPLAY_NAME,
                 toast_body=_TOAST_BODY_NOT_INSTALLED,
             )
 
@@ -168,7 +168,7 @@ class LaunchGateService:
                 return LaunchVerdict(
                     action="warn",
                     reason="save_status_failed",
-                    toast_title=_TOAST_TITLE,
+                    toast_title=DISPLAY_NAME,
                     toast_body=_TOAST_BODY_SAVE_STATUS_FAILED,
                 )
             return LaunchVerdict(action="allow")
@@ -177,7 +177,7 @@ class LaunchGateService:
             return LaunchVerdict(
                 action="block",
                 reason="save_conflict",
-                toast_title=_TOAST_TITLE,
+                toast_title=DISPLAY_NAME,
                 toast_body=_TOAST_BODY_SAVE_CONFLICT,
             )
 

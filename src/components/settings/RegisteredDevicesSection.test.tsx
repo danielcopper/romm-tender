@@ -24,7 +24,7 @@ function makeDevice(overrides: Partial<RegisteredDevice> = {}): RegisteredDevice
     id: "d1abc12345678",
     name: "Steam Deck",
     platform: "linux",
-    client: "romm-tender",
+    client: "Tender",
     client_version: "0.17.1",
     last_seen: "2025-06-15T11:55:00Z",
     created_at: "2025-06-01T10:00:00Z",
@@ -105,7 +105,7 @@ describe("RegisteredDevicesSection", () => {
     it("formats the description as 'client vX · platform · last seen Xm ago · ID 8chars'", () => {
       const device = makeDevice({
         id: "device-aaaaaaaa-rest-of-uuid",
-        client: "romm-tender",
+        client: "Tender",
         client_version: "0.17.1",
         platform: "linux",
         last_seen: "2025-06-15T11:55:00Z", // 5 minutes ago
@@ -114,7 +114,7 @@ describe("RegisteredDevicesSection", () => {
         <RegisteredDevicesSection {...defaultProps({ registeredDevices: [device] })} />,
       );
       const desc = getAllByTestId("field-desc")[0]?.textContent ?? "";
-      expect(desc).toContain("romm-tender v0.17.1");
+      expect(desc).toContain("Tender v0.17.1");
       expect(desc).toContain("linux");
       expect(desc).toContain("last seen 5m ago");
       expect(desc).toContain("ID device-a"); // first 8 chars of id

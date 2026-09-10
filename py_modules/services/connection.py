@@ -21,6 +21,7 @@ import contextlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from domain.identity import DISPLAY_NAME
 from domain.version import meets_min_version
 from lib.errors import (
     PairingCodeInvalidError,
@@ -839,6 +840,13 @@ class ConnectionService:
         self._romm_api.delete_client_token(username, password, token_id=token_id)
 
     def _token_name(self) -> str:
-        """Build the device-scoped token name from the configured device name."""
+        """Build the device-scoped token name from the configured device name.
+
+        A label, and only a label: it is what the user reads in RomM's own token
+        list, and nothing on either side ever looks a token up by it — the
+        delete above goes by ``token_id``. So a token minted under an earlier
+        spelling keeps that spelling and keeps working, and this string is free
+        to be the display name rather than the package identifier.
+        """
         device_name = self._settings.get("device_name") or "Steam Deck"
-        return f"romm-tender ({device_name})"
+        return f"{DISPLAY_NAME} ({device_name})"

@@ -93,7 +93,7 @@ class TestDeviceRegistrationServer:
         assert len(reg_calls) == 1
         assert reg_calls[0][1][0]  # name (hostname)
         assert reg_calls[0][1][1] == "linux"  # platform
-        assert reg_calls[0][1][2] == "romm-tender"  # client
+        assert reg_calls[0][1][2] == "Tender"  # client
 
     @pytest.mark.asyncio
     async def test_returns_failure_on_server_error(self, tmp_path):

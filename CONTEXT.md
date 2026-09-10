@@ -55,6 +55,28 @@ opens one connection, exposes the repositories, and commits on clean exit / roll
 database reads/writes, never network/file I/O or a frontend round-trip; cross-operation consistency comes from the
 operation's own serialization (the per-ROM save lock, the single library-sync task), not from holding a UoW open.
 
+### Display name (Tender) vs identifier (romm-tender)
+
+The plugin has two names, and they are not interchangeable. The **display name** is `Tender`: the one a person reads — a
+toast's sender, the label on the Client API Token in their RomM account, the client a registered device is listed under,
+the headline of a README they open by hand. The **identifier** is `romm-tender`: the one a machine reads — folder names,
+the outgoing `User-Agent`, the `localStorage` key, `package.json`'s `name`. A new string picks by its reader, never by
+which one looks better in place.
+
+The display name has one home per side, and both are constants: `DISPLAY_NAME` in `py_modules/domain/identity.py` and
+`PLUGIN_NAME` in `src/utils/toast.ts`. Inside a user-facing **sentence** it stays literal text — interpolating a
+constant into prose costs readability and buys nothing.
+
+The identifier has **three** homes, and they are separate because they answer three questions that must stay free to
+disagree. `APP_DIR_NAME` (`domain/user_data_location.py`) says where the user's own data lives, and may never follow a
+manifest: read from `package.json`, a one-line edit there would relocate every user's library on the next start.
+`package.json`'s `name` reaches the recovery root and the `User-Agent` through bootstrap, and those two _should_ follow
+the package. `_LEGACY_PLUGIN_FOLDER` (`services/legacy_install.py`) is the folder releases up to 0.30.1 unpacked into —
+finished history that follows nothing at all. Fold any two together and one question's answer starts deciding another's,
+silently and in whichever direction the fold pointed.
+
+_Avoid_: "the plugin name" for either, since it names neither; and the display name in anything a machine parses.
+
 ### Config root / data root
 
 The two directories the plugin's own persisted state lives in, both under the **user's** home directory rather than
