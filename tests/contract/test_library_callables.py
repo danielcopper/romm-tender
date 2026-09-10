@@ -20,8 +20,8 @@ from typing import Any
 
 
 def _read_settings(harness) -> dict[str, Any]:
-    """Read the real on-disk ``settings.json`` the bootstrap wrote under tmp_path."""
-    path = os.path.join(str(harness.tmp_path / "settings"), "settings.json")
+    """Read the real on-disk ``settings.json`` the bootstrap wrote under the user home."""
+    path = os.path.join(harness.settings_dir, "settings.json")
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 

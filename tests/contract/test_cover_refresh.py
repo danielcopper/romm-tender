@@ -19,6 +19,7 @@ no-changes preview keeps its zero-everything shape.
 from __future__ import annotations
 
 import asyncio
+import pathlib
 
 from domain.rom import Rom
 from domain.sync_run_kind import SyncRunKind
@@ -84,7 +85,7 @@ def _make_grid_resolvable(harness) -> None:
 
 
 def _cache_file(harness):
-    return harness.tmp_path / "runtime" / "covers" / "10.png"
+    return pathlib.Path(harness.data_dir) / "covers" / "10.png"
 
 
 def _apply_unit_events(harness):

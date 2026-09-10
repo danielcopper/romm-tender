@@ -35,6 +35,16 @@ declare var SteamClient: {
   };
   System: {
     GetSystemInfo(): Promise<{ sHostname: string; [key: string]: any }>;
+    // Restart the DEVICE — a full reboot, not a client restart. Takes no
+    // arguments. Optional because a future Steam build may not carry it, and
+    // every call site feature-detects rather than offering a button that would
+    // do nothing.
+    //
+    // The data-location notice needs it and `User.StartRestart` will not do:
+    // restarting the Steam client reloads the frontend but does not start the
+    // plugin's backend again, and the move that notice is about happens on the
+    // plugin's next start.
+    RestartPC?: () => void;
   };
   User: {
     // Restart the whole Steam client (closes and reopens Steam). `force` skips the

@@ -44,6 +44,7 @@ import { DownloadProgressRow } from "./DownloadProgressRow";
 import { MigrationBlockedPage } from "./MigrationBlockedPage";
 import { SettingsResetBanner } from "./SettingsResetBanner";
 import { LegacyInstallNotice } from "./LegacyInstallBanner";
+import { DataLocationNotice } from "./DataLocationNotice";
 import { PlaytimeScopeBanner } from "./PlaytimeScopeBanner";
 import type { SyncPreview, SyncProgress, SyncRunKind, SyncStats, Page } from "../types";
 import { detach } from "../utils/detach";
@@ -595,9 +596,9 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
         {retrodeckBanner && (
           <PanelSectionRow>
             {/* WarningCard is shared with the game-detail context, so it carries no
-                focusable child of its own — wrap it here (QAM-only) so gamepad focus
-                can reach it. */}
-            <Focusable>
+                focus contract of its own. This QAM-only wrapper's no-op activation
+                makes the notice itself a stop for focus-driven scrolling. */}
+            <Focusable onActivate={() => {}}>
               <WarningCard title={retrodeckBanner.title} message={retrodeckBanner.message} compact />
             </Focusable>
           </PanelSectionRow>
@@ -752,7 +753,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
         {saveSortMigration.pending && (
           <>
             <PanelSectionRow>
-              <Focusable>
+              <Focusable onActivate={() => {}}>
                 <div
                   style={{
                     padding: "8px 12px",
@@ -783,7 +784,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
         {lastRunPaused && (
           <>
             <PanelSectionRow>
-              <Focusable>
+              <Focusable onActivate={() => {}}>
                 <div
                   data-testid="sync-paused-notice"
                   style={{
@@ -809,6 +810,11 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
             </PanelSectionRow>
           </>
         )}
+        {/* Last of the button-carrying notices: nothing is lost either way and
+            the plugin is running, so what is outstanding is only where its data
+            ends up. Its button opens a modal rather than a page, because the
+            condition is answered once and for all. */}
+        <DataLocationNotice />
         <BlockSeparator />
       </PanelSection>
 

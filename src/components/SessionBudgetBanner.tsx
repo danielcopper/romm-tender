@@ -1,7 +1,7 @@
 import { FC, ReactNode } from "react";
 import { PanelSectionRow, ButtonItem, Focusable } from "@decky/ui";
-import { showToast } from "../utils/toast";
 import { isAnyAppRunning } from "../utils/runningApps";
+import { restartSteam } from "../utils/steamRestart";
 
 /**
  * Live renderer RSS (KB) above which a completed run recommends a Steam restart.
@@ -42,29 +42,12 @@ export function memoryLevelColor(rssKb: number, warnKb: number, ceilingKb: numbe
   return "#59bf40";
 }
 
-/**
- * Restart the Steam client — the deterministic "free memory" action. A full client
- * restart resets the renderer's per-session heap budget.
- * Fire-and-forget frontend-side — ``StartRestart`` tears the client down
- * and back up. Hard-guarded on a running game so a click can NEVER kill one
- * mid-session; the button is also disabled while a game runs, but this guard covers
- * the race where a game started between render and click.
- */
-function restartSteam(): void {
-  if (isAnyAppRunning()) {
-    showToast("Close your running game before restarting Steam.");
-    return;
-  }
-  SteamClient.User.StartRestart(false);
-}
-
 function bannerCard(accent: string, background: string, testId: string, title: string, body: string): ReactNode {
   return (
     <PanelSectionRow>
-      {/* Focusable so Steam's gamepad focus engine can reach and scroll the banner
-          into view — this component is QAM-only. The card div keeps the testId +
-          styling; the wrapper adds only the focus highlight. */}
-      <Focusable>
+      {/* This component is QAM-only. The no-op activation makes the banner a
+          focus stop for scrolling; the card div keeps the testId and styling. */}
+      <Focusable onActivate={() => {}}>
         <div
           data-testid={testId}
           style={{

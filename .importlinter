@@ -119,6 +119,7 @@ modules =
     services.artwork
     services.connection
     services.cores
+    services.data_location
     services.disc
     services.disc_launch_resolver
     services.downloads

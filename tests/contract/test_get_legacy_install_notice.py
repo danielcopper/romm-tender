@@ -22,6 +22,8 @@ ours does not exist" would be green in every unit test and dead on every device.
 
 from __future__ import annotations
 
+import pathlib
+
 from tests.contract._seed import seed_rom
 
 _DB_FILENAME = "romm_sync.db"
@@ -52,7 +54,7 @@ async def test_a_legacy_database_is_reported_though_ours_exists_too(harness):
     _stage_legacy_install(harness, with_database=True)
     # bootstrap already made ours, which is exactly why "ours is absent" cannot
     # be the question.
-    assert (harness.tmp_path / "runtime" / _DB_FILENAME).exists()
+    assert (pathlib.Path(harness.data_dir) / _DB_FILENAME).exists()
 
     result = await harness.plugin.get_legacy_install_notice()
     assert result == {"pending": True, "legacy_data_present": True}

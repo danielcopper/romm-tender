@@ -231,6 +231,17 @@ Format: **invariant** — tier — enforced by.
 - **Every backend `emit` event name has a frontend listener, and vice versa** — check — `scripts/check_event_parity.py`
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
   `scripts/check_settings_owner.py`
+- **Where the user's data lives is read only from `WiringConfig.locations`; `RuntimeBundle.runtime_dir` is the
+  Decky-assigned directory and answers Decky's own layout question, nothing else** — prompt-only — the two are different
+  questions and each half of the mix-up is silent. Five call sites read the data root, all in `bootstrap/`: the
+  `db_path` the schema runner and the UoW factory open, `PersistenceAdapter`'s two arguments, `PruneArtifactAdapter`,
+  `SgdbArtworkCacheAdapter`, and `services.py`'s `cover_cache_dir`. One reads `runtime_dir`: `LegacyInstallService`,
+  which asks whether the pre-rename plugin folder still stands beside ours by taking that directory's PARENT. Hand it
+  `locations.data_dir` and it computes `~/.local/share/decky-romm-sync`, a directory Decky never created — the card's
+  second sentence goes quiet and nothing fails, which is exactly the card that keeps a user from removing the install
+  their every shortcut launches through. The other direction is worse and equally quiet: a new consumer of the data root
+  reaching for `runtime_dir` writes into Decky's tree, where the next release's folder name moves it. Nothing mechanical
+  tells the two apart — both are plain `str` fields on structs the composition root hands around
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
 - **A library-sync seam is held only by the module owning the job it belongs to: `active_core` / `disc_resolver` by
@@ -802,11 +813,14 @@ Format: **invariant** — tier — enforced by.
   (`src/components/RomMGameInfoPanel.test.tsx`); the store side and every new write site on either are prompt-only,
   because a checker scoped to the store's own function bodies would be green on the case this rule was written for. The
   reasons behind the two writer mechanisms live at `writerForRom` and `RomBinding` — do not restate them here
-- **Every row a reader must be able to reach on a wide QAM page is a row Steam can focus — a toggle, a button, or a
+- **Every row a reader must be able to reach on a QAM page is a row Steam can focus — a toggle, a button, or a
   `Focusable` carrying an activate handler, including a table row with no action of its own, so the reader can walk the
-  table** — prompt-only — nothing checks it, and the frontend suite cannot see it: happy-dom has no nav tree, so a page
-  whose rows are unreachable renders exactly like one whose rows are not, and a mouse-driven dev loop never meets the
-  problem either. A region scrolls only by moving focus — Steam's plain `ScrollPanel` binds no gamepad direction — so an
+  table** — check + prompt-only — `tender/qam-focusable-row` checks the narrow syntactic slice where an `@decky/ui`
+  `Focusable` in the QAM module map has no self-focus prop, static focusable descendant, opaque child, or unknown
+  spread; focus order, runtime reachability, edge revelation, scrolling geometry, and controller behaviour remain
+  prompt-only. The frontend suite cannot see those runtime properties: happy-dom has no nav tree, so a page whose rows
+  are unreachable renders exactly like one whose rows are not, and a mouse-driven dev loop never meets the problem
+  either. A region scrolls only by moving focus — Steam's plain `ScrollPanel` binds no gamepad direction — so an
   unreachable row is also an unscrollable one, and everything below the fold is simply out of reach with a controller.
   The trap is that a bare `Focusable` is a container rather than a focus stop: the base panel sets `focusable` only from
   a caller prop or an `onActivate`/`onOKButton`, and `GetFocusable()` answers `"none"` for a node with neither and no

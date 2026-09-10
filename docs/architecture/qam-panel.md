@@ -120,10 +120,17 @@ the rows inside it take focus directly and Steam scrolls the focused row into vi
 
 **Every row a reader must be able to reach is a focusable row.** A toggle, a button, or — where a table row carries no
 action of its own, so the reader can still walk the table — a `Focusable` with an `onActivate` handler. The handler is
-what makes it a stop: `FocusableProps` exposes no `focusable` prop, an activate handler is what sets one, and a bare
-`Focusable` is a container that passes focus on to its children rather than taking it. Plain text that only accompanies
-a row, a hint under a group, scrolls with its neighbours and need not be reachable itself. This is what focus-driven
-scrolling costs: content nobody can focus cannot be scrolled to.
+what makes the current action-less rows stops; a bare `Focusable` is a container that passes focus on to its children
+rather than taking it. Plain text that only accompanies a row, a hint under a group, scrolls with its neighbours and
+need not be reachable itself. This is what focus-driven scrolling costs: content nobody can focus cannot be scrolled to.
+
+The repository ESLint rule `tender/qam-focusable-row` checks one syntactic slice of that rule in the QAM modules listed
+above. A `Focusable` imported from `@decky/ui` must declare `onActivate` or `onOKButton`, contain a static focus stop,
+or contain a child/spread whose focusability cannot be established statically. The matcher also recognises the
+underlying control's `focusable` prop, but `@decky/ui` does not expose that prop in `FocusableProps`, so authored
+TypeScript rows use an activate handler. This catches an action-less row written as a static wrapper while leaving
+structural containers and opaque children alone. It does not check focus order, runtime reachability, edge revelation,
+scrolling geometry, or controller behaviour; those parts remain a device and review invariant.
 
 **The one place a page cannot buy its way out of that is the content OUTSIDE its focusable rows**, and the frame handles
 it rather than each page: a heading, a counts line or a column header sitting over the topmost row, and a legend, a
@@ -345,7 +352,9 @@ backup-or-confirm rule in the invariant register.
 ### Notices and homes
 
 A notice on Main names a condition and jumps to its home; the action exists only there. A condition with no home in the
-plugin stays a card without a jump, with Dismiss where the condition has a sensible end.
+plugin stays a card without a jump, with Dismiss where the condition has a sensible end. A condition answered **once and
+for all** — the user picks between named outcomes and the answering ends it — has no page to return to, so its home is a
+modal opened from the notice; that modal _is_ the home, not an exception to the rule.
 
 | Condition                                   | On Main                             | Home                                                  |
 | ------------------------------------------- | ----------------------------------- | ----------------------------------------------------- |
@@ -353,6 +362,8 @@ plugin stays a card without a jump, with Dismiss where the condition has a sensi
 | Cross-device playtime needs a fresh sign-in | text, **Open Connections**, Dismiss | Settings › Connections, where the accounts are        |
 | RetroDECK paths missing or unreadable       | warning card, no action             | none — the fix is outside the plugin                  |
 | "RomM Sync" is still installed              | warning card, no action             | none — a future version does the move                 |
+| Two copies of the library were found        | text, **Choose a copy**             | the choice modal — answered once, so nothing to open  |
+| Moving the data did not work                | warning card, no action             | none — the next start tries again                     |
 | RetroArch `input_driver` is wrong           | text, **Open Controller**           | Settings › Controller, which holds the Fix button     |
 | Save-file sorting changed                   | text, **Open Save Sync**            | Settings › Save Sync, which holds Migrate and Dismiss |
 | Sync paused on the session budget           | text, **Open Sync**                 | Sync, which holds Restart Steam now and Resume        |
@@ -362,27 +373,61 @@ session-budget card with **Restart Steam now** sits on Main, and the playtime no
 full-page states — a version error and a pending RetroDECK migration — are not notices; they replace the page, and
 exactly one condition is carried inside them (below).
 
-Four of the seven conditions above carry no Dismiss anywhere — RetroDECK paths, `"RomM Sync"` still installed, the
-`input_driver` fix and the session budget — so the absence is ordinary. What is particular to
-`"RomM Sync" is still installed` is the reason: the condition ends when a future version moves the older install's data
-across and removes its folder, so a Dismiss would only hide a warning that is still true. Its backend read
+**The two data-location conditions are one card in one component** (`src/components/DataLocationNotice.tsx`), because
+they are two outcomes of the same start-up step and only ever one of them stands. The choice's modal
+(`DataLocationModal.tsx`) shows both candidates with path, size and last-changed date — with the **year**, which
+`formatTimestamp` drops and which is the whole difference between two copies a year apart — and **records** the answer
+rather than acting on it: the plugin is running from one of the two candidates with its database open, so the copy
+happens at the plugin's next start. A candidate that has gone since the question was raised is still listed, saying so
+and offering no button, because a choice shown with one option is not the question that was asked. Cancel is a pure UI
+close and the condition re-fires. Neither condition carries a Dismiss, and for a reason of their own: each ends when a
+start has completed the move, not when the user has acknowledged it.
+[Backend Architecture → Where user data lives](backend-architecture.md#where-user-data-lives) has the ladder behind
+both.
+
+**The restart it offers is `SteamClient.System.RestartPC`, not the session budget's client restart** — and the two are
+different mechanisms rather than one shared helper, because restarting the Steam client reloads the frontend and does
+**not** start the plugin's backend again (`services/library/_state.py` states the same fact from the backend side),
+while this move runs before the database is opened. Both live in `src/utils/steamRestart.ts` so the distinction is
+visible at the point of choosing between them, and both refuse while a game is running. The button is feature-detected
+at render (`canRestartDevice`): where a Steam build carries no `RestartPC` the sentence stands on its own rather than a
+button that would do nothing.
+
+**Restart device now** asks before it acts — the press opens a `ConfirmModal` and only its OK reboots, the modal shape
+the destructive-action rule above names, here on a button that takes the whole machine down. A label cannot settle on
+its own which of the two restarts it means, and this panel offers both. Declining does nothing at all: the confirm
+carries no cancel handler, so the recorded answer stands and the choice modal is exactly where it was. The second button
+says the same thing once a copy has been picked — **Later**, not Close, because the answer is already recorded and only
+the restart is being put off.
+
+**Both conditions are also carried by the RetroDECK-migration full-page state**, which makes the pre-rename install no
+longer the only condition to reach it. What earns it here is stronger than what earns it there: leaving that page needs
+a user action, so a condition invisible on it is invisible for however long the user takes — and one of these two is
+itself a question only the user can answer, so it would be unanswerable as well as unseen.
+
+Six of the nine conditions above carry no Dismiss anywhere — RetroDECK paths, `"RomM Sync"` still installed, the two
+data-location conditions, the `input_driver` fix and the session budget — so the absence is ordinary. What is particular
+to `"RomM Sync" is still installed` is the reason: the condition ends when a future version moves the older install's
+data across and removes its folder, so a Dismiss would only hide a warning that is still true. Its backend read
 (`get_legacy_install_notice`) is computed live on every call with no persisted marker for the same reason, and asks only
 about two directories: the card's optional second sentence — "this version starts empty" — needs a fact the panel
 already holds, the `roms` count from `get_sync_stats`, so `LegacyInstallNotice`
 (`src/components/LegacyInstallBanner.tsx`) joins the two frontend stores rather than having the backend read a library.
 That keeps the half that prevents the irreversible removal independent of any database read.
 
-**It is also the one condition both full-page states carry inside their own content**, and the only one they carry at
-all. That is not a card stacked on top of them — each renders it below the explanation it exists to give, after its own
-actions where it has any, and Main's two early returns are unchanged: the page is still replaced. What earns the
-exception is the path this warning exists for — the user updates across the folder rename, opens a Tender whose library
-looks empty, enters a server below the minimum, and is told the plugin cannot work, which is when they tidy the older
-plugin out of Decky while every one of their games is still launching through it. Nothing else earns it: the test is an
-irreversible action the user is most likely to take _because_ the plugin looks broken. Of the two, the version-error
-card is also what the game detail page shows for the same condition — out of scope here — so the warning reaches that
-page too. The condition itself lives in `LegacyInstallNotice` and not at the three call sites, which would drift apart.
-See [Updating from a release before 0.31.0](../user-guide/getting-started.md#updating-from-a-release-before-0310) for
-what the user is being told and why removing the older plugin stops their games from starting.
+**It is also the one condition BOTH full-page states carry inside their own content** — the version error and the
+pending RetroDECK migration; the data-location pair above reaches only the second of the two. That is not a card stacked
+on top of them — each renders it below the explanation it exists to give, after its own actions where it has any, and
+Main's two early returns are unchanged: the page is still replaced. What earns the exception is the path this warning
+exists for — the user updates across the folder rename, opens a Tender whose library looks empty, enters a server below
+the minimum, and is told the plugin cannot work, which is when they tidy the older plugin out of Decky while every one
+of their games is still launching through it. What earns a place on BOTH is an irreversible action the user is most
+likely to take _because_ the plugin looks broken; a condition the user cannot even see until they have finished
+something else earns the migration page alone. Of the two, the version-error card is also what the game detail page
+shows for the same condition — out of scope here — so the warning reaches that page too. The condition itself lives in
+`LegacyInstallNotice` and not at the three call sites, which would drift apart. See
+[Updating from a release before 0.31.0](../user-guide/getting-started.md#updating-from-a-release-before-0310) for what
+the user is being told and why removing the older plugin stops their games from starting.
 
 ## Main
 
@@ -391,10 +436,12 @@ settings-reset and playtime-scope notices, each a titled section of its own, all
 block — the RetroDECK warning, then Connection, Last sync, Library, then the conditional slot and, while a run is going,
 Cancel Sync, then the transient line a just-ended run leaves behind (and a cancel whose call failed), and under all of
 those the three notices that carry a button (the RetroArch input driver, the save-file sorting, a run paused on the
-session budget); the download summary (up to two rows, an overflow count, a completed count, View All); the menu — Sync,
-Library, Settings, Data Management. **Those last three blocks carry no section title at all** — what separates one from
-the next is a hairline (`BlockSeparator`), which costs one pixel of height where a heading would cost a whole row. The
-layout study it was chosen from is [main-layouts.html](../assets/main-layouts.html).
+session budget) and, last, the data-location notice — last because the plugin is running either way and only where its
+data ends up is outstanding; it carries a button only in its choice variant, and that button opens a modal rather than a
+page; the download summary (up to two rows, an overflow count, a completed count, View All); the menu — Sync, Library,
+Settings, Data Management. **Those last three blocks carry no section title at all** — what separates one from the next
+is a hairline (`BlockSeparator`), which costs one pixel of height where a heading would cost a whole row. The layout
+study it was chosen from is [main-layouts.html](../assets/main-layouts.html).
 
 **The menu is the navigation that is always there — complete, and always in the same place. The status rows state and do
 nothing. The single exception is one conditional slot that exists only while the Sync page has something to report; a

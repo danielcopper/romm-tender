@@ -829,6 +829,19 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # pending; that the card actually gets there is pinned in
     # src/components/MigrationBlockedPage.test.tsx, not by this whitelist entry.
     "get_legacy_install_notice",
+    # Where the plugin's OWN data lives — the notice, the two candidates behind
+    # it, and the answer. None of the three touches RetroDECK state. The notice
+    # reads nothing at all: it hands back what the start already decided. The
+    # candidate listing reads DECKY's own directories, and the answer is a small
+    # file written into Decky's runtime directory that the NEXT start acts on.
+    # All three have to answer while a migration is pending, because the
+    # migration-blocked page carries this notice — and one of its two conditions
+    # is a question only the user can answer, which is what a block would make
+    # unanswerable as well as invisible (src/components/MigrationBlockedPage.tsx
+    # pins that it gets there).
+    "get_data_location_notice",
+    "get_data_location_candidates",
+    "choose_data_location",
     # Read-only RetroDECK path-resolution health probe (for the frontend banner).
     "get_retrodeck_status",
     # Cancel / pause operations — must remain callable mid-operation when
@@ -1055,6 +1068,7 @@ class TestMainStartupOrdering:
             RuntimeAdaptersBundle,
             StateBundle,
         )
+        from models.data_location import UserDataLocations
 
         from main import Plugin
 
@@ -1116,6 +1130,7 @@ class TestMainStartupOrdering:
             "connection_service": connection_service,
             "startup_healing_service": startup_healing_service,
             "legacy_install_service": MagicMock(),
+            "data_location_service": MagicMock(),
             "launch_gate_service": MagicMock(),
             "session_lifecycle_service": MagicMock(),
             "game_process_service": MagicMock(),
@@ -1150,6 +1165,7 @@ class TestMainStartupOrdering:
                 recovery_store=MagicMock(),
                 prune_artifacts=MagicMock(),
                 steam_recovery=MagicMock(),
+                data_location_store=MagicMock(),
             ),
             stores=StateBundle(
                 settings={},
@@ -1178,6 +1194,12 @@ class TestMainStartupOrdering:
                 machine_id_provider=MagicMock(),
             ),
             handles=BootstrapHandles(debug_logger=MagicMock(), persistence=MagicMock()),
+            locations=UserDataLocations(
+                settings_dir="/fake/config",
+                data_dir="/fake/data",
+                choice_required=False,
+                failure=None,
+            ),
         )
 
         with (

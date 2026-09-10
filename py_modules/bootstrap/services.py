@@ -21,6 +21,7 @@ from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolver
 from services.artwork import ArtworkService, ArtworkServiceConfig
 from services.connection import ConnectionService, ConnectionServiceConfig
 from services.cores import CoreService, CoreServiceConfig
+from services.data_location import DataLocationService, DataLocationServiceConfig
 from services.disc import DiscService, DiscServiceConfig
 from services.disc_launch_resolver import DiscLaunchResolver, DiscLaunchResolverConfig
 from services.downloads import DownloadService, DownloadServiceConfig
@@ -51,6 +52,8 @@ from .adapters import DB_FILENAME
 if TYPE_CHECKING:
     from typing import Any
 
+    from models.data_location import UserDataLocations
+
     from services.protocols import InstalledRomRemoverFn, SiblingSupersedeFn
 
     from .adapters import AdapterBundle, CallbackBundle, RuntimeBundle, StateBundle
@@ -62,7 +65,11 @@ class WiringConfig:
 
     Four bundles carry the wiring; ``min_required_version`` sits at the
     top level — it's plugin metadata, not a runtime seam, and only
-    ConnectionService consumes it.
+    ConnectionService consumes it. ``locations`` sits beside it for the
+    same reason: it is what the start-up migration settled, not a seam
+    anything calls, and it is the ONLY place the user's data directory
+    is read from — ``runtime.runtime_dir`` is Decky's own directory and
+    answers a different question.
     """
 
     adapters: AdapterBundle
@@ -70,6 +77,7 @@ class WiringConfig:
     runtime: RuntimeBundle
     callbacks: CallbackBundle
     min_required_version: tuple[int, ...]
+    locations: UserDataLocations
 
 
 def wire_services(cfg: WiringConfig) -> dict[str, Any]:
@@ -242,7 +250,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
             romm_api=cfg.adapters.romm_api,
             steam_config=cfg.adapters.steam_config,
             cover_art_file_store=cfg.adapters.cover_art_file_store,
-            cover_cache_dir=os.path.join(cfg.runtime.runtime_dir, "covers"),
+            cover_cache_dir=os.path.join(cfg.locations.data_dir, "covers"),
             loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
             get_pending_sync=pending_sync_binding.get,
@@ -478,6 +486,18 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         ),
     )
 
+    data_location_service = DataLocationService(
+        config=DataLocationServiceConfig(
+            locations=cfg.locations,
+            store=cfg.adapters.data_location_store,
+            loop=cfg.runtime.loop,
+            logger=cfg.runtime.logger,
+        ),
+    )
+
+    # Asks about Decky's own layout, so it is handed Decky's own directories —
+    # the data root the migration may have moved everything to is a directory
+    # Decky never created, and this probe would answer about nothing.
     legacy_install_service = LegacyInstallService(
         config=LegacyInstallServiceConfig(
             plugin_dir=cfg.runtime.plugin_dir,
@@ -594,6 +614,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         "connection_service": connection_service,
         "startup_healing_service": startup_healing_service,
         "legacy_install_service": legacy_install_service,
+        "data_location_service": data_location_service,
         "launch_gate_service": launch_gate_service,
         "session_lifecycle_service": session_lifecycle_service,
         "game_process_service": game_process_service,
