@@ -38,9 +38,12 @@ import { formatRelativeTime } from "./helpers";
 // two plus room for a three-digit minor version. Under-sizing it clips the
 // VERSION, which is the only part of the column that differs between rows.
 //
-// `Last seen` holds `just now` at 44px — the longest thing `formatRelativeTime`
-// answers, the rest being `59m ago`, `23h ago`, `15 Jun`, `unknown` and
-// `never`.
+// `Last seen` holds every answer `formatRelativeTime` gives — `never`,
+// `unknown`, `just now`, `59m ago` at the widest of its minute forms, `23h ago`
+// at the widest of its hour forms, and a date like `15 Jun`. The widest of them
+// measured the same way is `unknown` at 48px in Noto Sans and 50px in DejaVu,
+// which is character count and glyph width disagreeing: it is a character
+// shorter than `just now` and wider on screen.
 const TABLE_COLUMNS = "1fr 144px 72px";
 
 /** Digits that sit under each other down the column rather than shifting with
