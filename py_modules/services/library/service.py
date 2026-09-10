@@ -84,6 +84,7 @@ class LibraryServiceConfig:
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
     plugin_dir: str
+    launcher_exe: str
     emit: EventEmitter
     clock: Clock
     uuid_gen: UuidGen
@@ -226,7 +227,7 @@ class LibraryService:
                 settings=config.settings,
                 loop=config.loop,
                 logger=config.logger,
-                plugin_dir=config.plugin_dir,
+                launcher_exe=config.launcher_exe,
                 emit=config.emit,
                 clock=config.clock,
                 uuid_gen=config.uuid_gen,

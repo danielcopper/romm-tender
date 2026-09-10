@@ -136,8 +136,13 @@ vi.mock("./components/MainPage", () => ({
 vi.mock("./components/DownloadQueue", () => ({
   DownloadQueue: () => createElement("div", null, "downloads page"),
 }));
+const relocateShortcutsToLauncher = vi.fn().mockResolvedValue({ status: "relocated" });
+vi.mock("./utils/launcherRelocation", () => ({
+  relocateShortcutsToLauncher: () => relocateShortcutsToLauncher(),
+}));
 
 import { applyAllPlaytime, registerMetadataPatches, applyAllMetadata } from "./patches/metadataPatches";
+import { getLauncherState, setLauncherRelocated } from "./utils/launcherStore";
 import { registerRomMAppId, unregisterRomMAppId } from "./patches/gameDetailPatch";
 import definePluginResult from "./index";
 
@@ -173,6 +178,43 @@ beforeEach(() => {
   // appStore, so default them to no-ops here.
   vi.stubGlobal("SteamClient", { Apps: {} });
   vi.stubGlobal("appStore", { GetAppOverviewByAppID: () => null, allApps: [] });
+});
+
+describe("index.tsx — launcher relocation at plugin load", () => {
+  beforeEach(() => {
+    setLauncherRelocated(false);
+    relocateShortcutsToLauncher.mockReset().mockResolvedValue({ status: "relocated" });
+  });
+
+  it("points the shortcuts at the launcher without the panel being opened", async () => {
+    const plugin = pluginFactory();
+    await act(flush);
+
+    expect(relocateShortcutsToLauncher).toHaveBeenCalledTimes(1);
+    expect(getLauncherState().relocated).toBe(true);
+    plugin.onDismount();
+  });
+
+  it("leaves the relocation unestablished when the backend blocked the rewrite", async () => {
+    relocateShortcutsToLauncher.mockResolvedValue({ status: "blocked" });
+
+    const plugin = pluginFactory();
+    await act(flush);
+
+    expect(getLauncherState().relocated).toBe(false);
+    plugin.onDismount();
+  });
+
+  it("leaves the relocation unestablished when the pass throws", async () => {
+    relocateShortcutsToLauncher.mockRejectedValue(new Error("shortcut store exploded"));
+
+    const plugin = pluginFactory();
+    await act(flush);
+
+    expect(getLauncherState().relocated).toBe(false);
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining("shortcut store exploded"));
+    plugin.onDismount();
+  });
 });
 
 describe("index.tsx — persistent prune listeners", () => {

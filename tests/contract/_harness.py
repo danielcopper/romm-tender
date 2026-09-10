@@ -88,6 +88,7 @@ _BOUND_SERVICE_ATTRS = {
     "_connection_service": "connection_service",
     "_startup_healing_service": "startup_healing_service",
     "_legacy_install_service": "legacy_install_service",
+    "_shortcut_relocation_service": "shortcut_relocation_service",
     "_data_location_service": "data_location_service",
     "_launch_gate_service": "launch_gate_service",
     "_session_lifecycle_service": "session_lifecycle_service",
@@ -145,6 +146,11 @@ def _single_attempt_pass_through(fn: Callable[..., Any], *args: Any, **kwargs: A
     return fn(*args, **kwargs)
 
 
+# The real ``bin/rom-launcher`` is a bash exec wrapper; what the installer does
+# with it is byte-for-byte, so the contents only have to be stable.
+_SHIPPED_LAUNCHER = b'#!/bin/bash\nexec "$@"\n'
+
+
 def build_contract_harness(tmp_path: Any) -> ContractHarness:
     """Build the real ``Plugin`` over the real ``bootstrap()``, faking only the edges.
 
@@ -155,6 +161,14 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
     from main import Plugin
 
     logger = logging.getLogger("contract")
+
+    # The launcher the release ships, staged where a real install has it: the
+    # start-up install copies it to the data root, and without it every contract
+    # test would run against the one state a real device never has — a plugin
+    # package with no launcher in it.
+    shipped_launcher = tmp_path / "plugin" / "bin" / "rom-launcher"
+    shipped_launcher.parent.mkdir(parents=True, exist_ok=True)
+    shipped_launcher.write_bytes(_SHIPPED_LAUNCHER)
 
     # 1. Real bootstrap — real settings dict, real SQLite + migrations, real
     #    file-store adapters, all rooted under tmp_path.
@@ -230,6 +244,7 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
         callbacks=result.callbacks,
         min_required_version=Plugin._MIN_REQUIRED_VERSION,
         locations=result.locations,
+        launcher=result.launcher,
     )
     services = wire_services(cfg)
 

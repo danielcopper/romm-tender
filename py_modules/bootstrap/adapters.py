@@ -18,6 +18,8 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from models.shortcut_launcher import ShortcutLauncher
+
 from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.asyncio_sleeper import AsyncioSleeper
 from adapters.atlas_catalogue import AtlasCatalogueAdapter, first_detected_installation
@@ -32,6 +34,7 @@ from adapters.firmware_file import FirmwareFileAdapter
 from adapters.game_process import GameProcessAdapter
 from adapters.gavel_native import GavelNativeAdapter
 from adapters.hostname import HostnameAdapter
+from adapters.launcher_install import LauncherInstallAdapter
 from adapters.machine_id import MachineIdAdapter
 from adapters.migration_file import MigrationFileAdapter
 from adapters.path_probe import PathProbeAdapter, ResolvedPathAdapter
@@ -63,7 +66,7 @@ from adapters.system_clock import SystemClock
 from adapters.system_uuid_gen import SystemUuidGen
 from adapters.user_data_migration import SourceLocation, UserDataMigrationAdapter
 from domain.state_migrations import fold_legacy_save_sync_settings, migrate_settings
-from domain.user_data_location import SOURCE_FOLDER_NAMES, config_root, data_root
+from domain.user_data_location import SOURCE_FOLDER_NAMES, config_root, data_root, launcher_path
 
 if TYPE_CHECKING:
     import asyncio
@@ -262,8 +265,10 @@ class BootstrapResult:
     raw outputs only ``main.py`` itself binds (debug logger); and
     :attr:`locations` says which two directories this run ended up
     reading and writing, which nothing else can answer because the
-    start-up migration decides it. Together they replace the historical
-    untyped ``dict`` return so every consumer is caught by basedpyright
+    start-up migration decides it; :attr:`launcher` says where the
+    shortcut launcher lives beneath the data half and whether this
+    start got it there. Together they replace the historical untyped
+    ``dict`` return so every consumer is caught by basedpyright
     instead of failing silently at runtime on a typo.
     """
 
@@ -273,6 +278,7 @@ class BootstrapResult:
     runtime_adapters: RuntimeAdaptersBundle
     handles: BootstrapHandles
     locations: UserDataLocations
+    launcher: ShortcutLauncher
 
 
 def bootstrap(
@@ -328,9 +334,10 @@ def bootstrap(
     # Each older location's two halves are found by taking the parent of the
     # directory Decky assigned US and looking for the folder name beside it,
     # which asserts one layout fact less than composing ``DECKY_HOME`` here.
+    data_home = data_root(user_home)
     data_location_store = UserDataMigrationAdapter(
         settings_root=config_root(user_home),
-        data_root=data_root(user_home),
+        data_root=data_home,
         fallback_settings_dir=settings_dir,
         fallback_data_dir=runtime_dir,
         sources=[
@@ -348,6 +355,42 @@ def bootstrap(
         logger=logger,
     )
     locations = data_location_store.migrate()
+
+    # Then the launcher, which is code rather than data and moves for the other
+    # reason: Decky deletes the whole plugin folder before it unpacks an update,
+    # and every shortcut's ``exe`` used to name a file inside it. It is written
+    # on every start rather than once, so the launcher a shortcut runs is always
+    # the one this release ships — a launcher installed once would freeze at
+    # whatever version the day of the move happened to bring.
+    #
+    # IT MUST NOT RUN BEFORE THE DATA HALF HAS LANDED, and the reason is not
+    # tidiness. ``UserDataMigrationAdapter._probe_root`` (adapters/
+    # user_data_migration.py:332-334) reads a target root as already migrated the
+    # moment ``os.scandir`` yields ANY entry, so a launcher written into an empty
+    # data root would settle the migration's first rung for the life of the
+    # install and the user's library would never come across — with no failure,
+    # no notice and nothing in the log. Whether the half landed is read off what
+    # the migration just decided, never by probing the directory a second time.
+    # A start that has not got there installs nothing and creates nothing.
+    #
+    # The path a new shortcut is built against follows the INSTALL, not the
+    # migration: it is the home only where this start actually got the launcher
+    # into it, and the copy the release ships otherwise — a start whose write
+    # failed is the second case, and pointing a shortcut at a home the write
+    # never reached would name a file that is not there.
+    data_settled = locations.data_dir == data_home
+    launcher_at_home = (
+        data_settled
+        and LauncherInstallAdapter(
+            source=launcher_path(plugin_dir),
+            destination=launcher_path(locations.data_dir),
+            logger=logger,
+        ).install()
+    )
+    launcher = ShortcutLauncher(
+        path=launcher_path(locations.data_dir) if launcher_at_home else launcher_path(plugin_dir),
+        at_home=launcher_at_home,
+    )
 
     # Bring the on-disk SQLite schema up to date before any service is wired —
     # the composition root owns startup infra. Post-cutover (#784) SQLite is the
@@ -532,4 +575,5 @@ def bootstrap(
         runtime_adapters=runtime_adapters,
         handles=handles,
         locations=locations,
+        launcher=launcher,
     )

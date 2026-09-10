@@ -69,6 +69,20 @@ def to_signed_app_id(app_id: int) -> int:
     return struct.unpack("i", struct.pack("I", app_id & 0xFFFFFFFF))[0]
 
 
+def to_unsigned_app_id(app_id: int) -> int:
+    """Convert a signed int32 Steam shortcut app ID back to its unsigned form.
+
+    The inverse of :func:`to_signed_app_id`, and the direction anything reading
+    ``shortcuts.vdf`` needs: the file stores the id signed, while every id the
+    frontend handles — ``AddShortcut``'s return, ``collectionStore``'s keys, the
+    argument every ``SteamClient.Apps.Set*`` takes — is unsigned. A negative id
+    would therefore name no shortcut; that it fails silently rather than
+    throwing is inferred from those APIs returning ``void`` with no success
+    signal, and has not been measured.
+    """
+    return struct.unpack("I", struct.pack("i", app_id))[0]
+
+
 def build_autocomplete_path(term: str) -> str:
     """Build the SGDB autocomplete search path for a free-text *term*.
 

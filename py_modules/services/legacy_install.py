@@ -14,8 +14,9 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import logging
+    from typing import Any
 
-    from services.protocols import PathExistsReader, ResolvedPathFn
+    from services.protocols import PathExistsReader, ResolvedPathFn, SettingsPersister
 
 # The folder releases up to 0.30.1 unpack into. Decky's CLI names the package
 # after the directory CI checked the repository out into
@@ -25,6 +26,12 @@ if TYPE_CHECKING:
 # same folder name (``decky_loader/plugin/sandboxed_plugin.py``), which is why
 # the runtime directory below is asked the same question.
 _LEGACY_PLUGIN_FOLDER = "decky-romm-sync"
+
+# The user's answer to the one statement this card makes that they are free to
+# ignore. User intent, so ``settings.json`` rather than ``kv_config``
+# (CONTEXT.md, persistence boundary) — and no ``DEFAULT_SETTINGS`` entry or
+# schema bump, because an absent key already means the only sensible default.
+DISMISSED_KEY = "legacy_install_notice_dismissed"
 
 
 @dataclass(frozen=True)
@@ -45,6 +52,8 @@ class LegacyInstallServiceConfig:
     db_filename: str
     path_exists: PathExistsReader
     resolve_path: ResolvedPathFn
+    settings: dict[str, Any]
+    settings_persister: SettingsPersister
     logger: logging.Logger
 
 
@@ -57,12 +66,35 @@ class LegacyInstallService:
         self._db_filename = config.db_filename
         self._path_exists = config.path_exists
         self._resolve_path = config.resolve_path
+        self._settings = config.settings
+        self._settings_persister = config.settings_persister
         self._logger = config.logger
+
+    def dismiss_legacy_install_notice(self) -> dict[str, Any]:
+        """Record that the user has answered the card, and keep it down for good.
+
+        The one thing a Dismiss is allowed to do here: it hides a card whose
+        condition is STILL TRUE. Every other notice in the panel ends when its
+        condition does, and this one's condition — the older install standing
+        beside ours — ends only when the user removes that folder. Keeping it is
+        a legitimate end state, so the answer has to outlive the session; a card
+        that came back at every Steam start is exactly the standing warning the
+        Dismiss exists to prevent.
+
+        It answers the removable statement alone. The card is shown regardless
+        while the shortcuts still point into the older install, because nothing
+        about that statement is optional and it is not what was dismissed.
+
+        Idempotent — a second call re-writes the same value.
+        """
+        self._settings[DISMISSED_KEY] = True
+        self._settings_persister.save_settings()
+        return {"success": True}
 
     def get_legacy_install_notice(self) -> dict[str, bool]:
         """Report the older install the user must not remove.
 
-        Returns ``{"pending": bool, "legacy_data_present": bool}``. ``pending``
+        Returns ``{"pending": bool, "legacy_data_present": bool, "dismissed": bool}``. ``pending``
         is the notice: the legacy plugin folder is on disk and is not the folder
         this plugin runs from. Every Steam shortcut's ``exe`` names a launcher
         inside the folder it was written from, so removing that install stops the
@@ -75,12 +107,21 @@ class LegacyInstallService:
         this answer stays a question about two directories and the warning that
         prevents the irreversible action cannot be taken down by a library read.
 
-        Computed on every call and persisted nowhere — the condition ends when
-        the folder does, and a marker would outlive it.
+        ``dismissed`` is the user's own answer, and the only part of this that IS
+        persisted: it says they have chosen to keep the older install, which is
+        a legitimate end state the panel must stop asking about.
+
+        The two directory answers are computed on every call and persisted
+        nowhere — that condition ends when the folder does, and a marker would
+        outlive it.
         """
         if not self._stands_apart(self._legacy_twin(self._plugin_dir), self._plugin_dir):
-            return {"pending": False, "legacy_data_present": False}
-        return {"pending": True, "legacy_data_present": self._legacy_data_present()}
+            return {"pending": False, "legacy_data_present": False, "dismissed": False}
+        return {
+            "pending": True,
+            "legacy_data_present": self._legacy_data_present(),
+            "dismissed": bool(self._settings.get(DISMISSED_KEY, False)),
+        }
 
     def _legacy_data_present(self) -> bool:
         """Answer whether the older install's runtime directory still holds a database.

@@ -101,8 +101,13 @@ locally with `mise run docs`.
   in the apply loop.
 - **Shortcut appId is assigned, not derived**: Steam assigns it at creation and it is stable for the shortcut's
   lifetime; the plugin records it in `roms.shortcut_app_id` and detects ownership by the exe path. Never re-derive it
-  (the `CRC32(exe + appName)` formula is disproven). `launchOptions`/`startDir` changes are appId-safe; **exe/name**
-  changes require delete + recreate.
+  (the `CRC32(exe + appName)` formula is disproven). `launchOptions`, `startDir` **and `exe`** changes are appId-safe,
+  and each rests on its own measurement: `launchOptions` on #827's hardware runs, and `exe` on rewriting every one of a
+  826-shortcut library and finding every appId still there, against a `shortcuts.vdf` backup taken before it (0 new, 0
+  lost, names unchanged). "They are all `Set*` calls on an existing shortcut" is a description of the three, not
+  evidence about any of them — it is equally true of `SetShortcutName`, which is the one that has **never** been
+  measured. The sync writes the name in place too (`rewriteShortcutIdentity`), and nothing has established what that
+  does to the appId; do not read the exe measurement as covering it.
 - **Frontend API**: `@decky/ui` + `@decky/api` (NOT deprecated `decky-frontend-lib`). Use `callable()` (NOT
   `ServerAPI.callPluginMethod()`).
 - **Decky callables must be async**: Even if the body is synchronous, Decky's callable framework requires `async def`.
@@ -236,15 +241,23 @@ Format: **invariant** — tier — enforced by.
   `scripts/check_settings_owner.py`
 - **Where the user's data lives is read only from `WiringConfig.locations`; `RuntimeBundle.runtime_dir` is the
   Decky-assigned directory and answers Decky's own layout question, nothing else** — prompt-only — the two are different
-  questions and each half of the mix-up is silent. Five call sites read the data root, all in `bootstrap/`: the
-  `db_path` the schema runner and the UoW factory open, `PersistenceAdapter`'s two arguments, `PruneArtifactAdapter`,
-  `SgdbArtworkCacheAdapter`, and `services.py`'s `cover_cache_dir`. One reads `runtime_dir`: `LegacyInstallService`,
-  which asks whether the pre-rename plugin folder still stands beside ours by taking that directory's PARENT. Hand it
-  `locations.data_dir` and it computes `~/.local/share/decky-romm-sync`, a directory Decky never created — the card's
-  second sentence goes quiet and nothing fails, which is exactly the card that keeps a user from removing the install
-  their every shortcut launches through. The other direction is worse and equally quiet: a new consumer of the data root
-  reaching for `runtime_dir` writes into Decky's tree, where the next release's folder name moves it. Nothing mechanical
-  tells the two apart — both are plain `str` fields on structs the composition root hands around
+  questions and each half of the mix-up is silent. Six call sites read the data root, all in `bootstrap/`: the `db_path`
+  the schema runner and the UoW factory open, `PersistenceAdapter`'s two arguments, `PruneArtifactAdapter`,
+  `SgdbArtworkCacheAdapter`, `services.py`'s `cover_cache_dir`, and the launcher's home
+  (`launcher_path(locations.data_dir)`, carried on as `ShortcutLauncher.path` and baked into every shortcut's `exe`) —
+  the one whose mix-up would be visible to the user rather than only to the next start, since a shortcut's `exe` names a
+  directory Decky renames. That sixth site is also **ordered against the migration rather than merely reading its
+  answer**: the launcher is installed only where `locations.data_dir` IS the new root, because the migration reads a
+  target root holding anything at all as already migrated (`adapters/user_data_migration.py::_probe_root`), so writing a
+  launcher into an empty data root would settle that rung for the life of the install and strand the user's library —
+  with no failure, no notice and nothing in the log. Nothing mechanical holds that ordering either; it is stated at the
+  call in `bootstrap/adapters.py`. One reads `runtime_dir`: `LegacyInstallService`, which asks whether the pre-rename
+  plugin folder still stands beside ours by taking that directory's PARENT. Hand it `locations.data_dir` and it computes
+  `~/.local/share/decky-romm-sync`, a directory Decky never created — the card's second sentence goes quiet and nothing
+  fails, which is exactly the card that keeps a user from removing the install their every shortcut launches through.
+  The other direction is worse and equally quiet: a new consumer of the data root reaching for `runtime_dir` writes into
+  Decky's tree, where the next release's folder name moves it. Nothing mechanical tells the two apart — both are plain
+  `str` fields on structs the composition root hands around
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
 - **A library-sync seam is held only by the module owning the job it belongs to: `active_core` / `disc_resolver` by
@@ -397,21 +410,27 @@ Format: **invariant** — tier — enforced by.
   mid-session is seen), `SandboxLauncherFn` (re-probes the flatpak roots for `es_find_rules.xml` and re-stats it before
   it may use the parse cache), `SystemResolver` (parses the plugin's **own** bundled `config.json`, not RetroDECK's
   `retrodeck.json`, and does no network work despite living on the RomM HTTP adapter), `SystemSupportedExtensionsFn` /
-  `SystemKnownFn` (two more questions to the same catalogue, through the same adapter cache), and
-  `FirmwareFolderVerdictFn` (lists one core's declared folder and reads every candidate inside it the way the core does
-  — 0.26 s for LRPS2 on the reference machine), the save answer — `resolve_save_answer` and the saves package's own
-  `save_answer` wrapper, 170 ms warm and 490 ms cold per ROM, which makes it the most expensive entry in the list — the
-  two path resolvers — `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker, a directory that may
-  sit on the SD card the marker is pending a migration away from) and `ResolvedPathFn` (the same walk, but on **both**
-  sides of a comparison, so a call site costs what the rows it checks cost, not what it checks them against) — and the
-  `RetroDeckPaths` getters that answer with a root: `bios_path`, `roms_path`, `saves_path`, `states_path` and
-  `retrodeck_home`, five of the Protocol's six path getters, each resolving on every call. The sixth, `config_path`,
-  stays out because it resolves nothing — it is `os.path.join` over the user home, so calling it costs no I/O. Those two
-  timings are the only entries a cost was measured for; every other one is listed from reading its implementation. One
-  other real I/O seam was weighed and kept out — the reason is in the script's docstring, and it is not an exemption;
-  nor is it an inventory of what else touches the disk. **"It's only a read" is the reasoning this rule exists to
-  refuse**: `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the write lock. The
-  database is in WAL, so readers are unaffected — but every other **writer** waits on the lock for up to
+  `SystemKnownFn` (two more questions to the same catalogue, through the same adapter cache),
+  `SteamConfigStore.read_shortcut_exes` (parses Steam's whole `shortcuts.vdf` — 315 KB and 828 entries on the reference
+  machine — for the one-time shortcut relocation. **Listing it changes nothing at its only call site**: the service
+  reaches it through `run_in_executor` as a bound method, which is this checker's documented blind spot, so the entry is
+  a statement of the rule rather than an enforcement of it. It is also not the store's only real I/O — `grid_dir()` is
+  called from `services/artwork.py` (six sites), `services/shortcut_removal.py` and `services/library/reporter.py`, and
+  `check_retroarch_input_driver()` from `services/settings.py` — those are unlisted, and their being unlisted is a gap,
+  not a judgement) and `FirmwareFolderVerdictFn` (lists one core's declared folder and reads every candidate inside it
+  the way the core does — 0.26 s for LRPS2 on the reference machine), the save answer — `resolve_save_answer` and the
+  saves package's own `save_answer` wrapper, 170 ms warm and 490 ms cold per ROM, which makes it the most expensive
+  entry in the list — the two path resolvers — `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker,
+  a directory that may sit on the SD card the marker is pending a migration away from) and `ResolvedPathFn` (the same
+  walk, but on **both** sides of a comparison, so a call site costs what the rows it checks cost, not what it checks
+  them against) — and the `RetroDeckPaths` getters that answer with a root: `bios_path`, `roms_path`, `saves_path`,
+  `states_path` and `retrodeck_home`, five of the Protocol's six path getters, each resolving on every call. The sixth,
+  `config_path`, stays out because it resolves nothing — it is `os.path.join` over the user home, so calling it costs no
+  I/O. Those two timings are the only entries a cost was measured for; every other one is listed from reading its
+  implementation. One other real I/O seam was weighed and kept out — the reason is in the script's docstring, and it is
+  not an exemption; nor is it an inventory of what else touches the disk. **"It's only a read" is the reasoning this
+  rule exists to refuse**: `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the
+  write lock. The database is in WAL, so readers are unaffected — but every other **writer** waits on the lock for up to
   `busy_timeout=5000` and fails with `SQLITE_BUSY` if it is still held then, and `FakeUnitOfWork` shares no connection,
   so no unit test notices. Six call sites had drifted across the rule before anything looked (#1779), for the reason the
   check exists: nothing at a call site reveals that an injected seam touches the disk. **The rule and the gate come from

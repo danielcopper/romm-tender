@@ -388,7 +388,7 @@ src/                                 # Frontend TypeScript
   api/backend.ts                     # callable() wrappers (typed)
   types/                             # TypeScript interfaces and Steam API declarations
   utils/                             # Shortcut CRUD, sync, downloads, collections, session manager
-bin/rom-launcher                     # Pure exec wrapper — runs the launch command baked into the shortcut
+bin/rom-launcher                     # Pure exec wrapper — installed to <data root>/bin at every start, and run from there
 defaults/config.json                 # platform_map: 153 platform slug -> RetroDECK system mappings
 tests/                               # Backend unit tests, mirroring py_modules/ layout
 ```

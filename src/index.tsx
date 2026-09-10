@@ -57,6 +57,8 @@ import {
 import { setMigrationStatus } from "./utils/migrationStore";
 import { fetchSettingsResetState } from "./utils/settingsResetStore";
 import { fetchLegacyInstallState } from "./utils/legacyInstallStore";
+import { relocateShortcutsToLauncher } from "./utils/launcherRelocation";
+import { setLauncherRelocated } from "./utils/launcherStore";
 import { fetchDataLocationState } from "./utils/dataLocationStore";
 import { resetSyncDelta, recordSyncRemoved, getSyncDelta } from "./utils/syncDeltaStore";
 import { attachRunUnitsMirror, seedRunUnits } from "./utils/runUnitsStore";
@@ -498,6 +500,21 @@ export default definePlugin(() => {
         await fetchSettingsResetState();
       } catch (e) {
         logError(`Failed to check settings reset notice: ${e}`);
+      }
+    })(),
+  );
+
+  // Point every shortcut at the launcher's home outside the plugin folder.
+  // Runs here rather than on panel mount because a user can launch a game
+  // without ever opening the QAM, and a shortcut still naming a file inside the
+  // plugin folder is one failed update away from not starting at all.
+  detach(
+    (async () => {
+      try {
+        const relocation = await relocateShortcutsToLauncher();
+        setLauncherRelocated(relocation.status === "relocated");
+      } catch (e) {
+        logError(`Failed to point the shortcuts at the launcher: ${e}`);
       }
     })(),
   );

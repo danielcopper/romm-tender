@@ -2083,7 +2083,54 @@ empty new root while the data sits in a source is the one outcome that would be 
 **Two directories, two questions.** `RuntimeBundle.runtime_dir` stays the **Decky-assigned** runtime directory and is
 not where data lives: `LegacyInstallService` asks it about Decky's own layout (is the pre-rename plugin folder still
 beside ours), which is answered by taking its parent. Everything that follows the data reads `WiringConfig.locations`
-instead — the cover cache, the SteamGridDB artwork cache, the prune artifact store, and the persistence adapter.
+instead — the cover cache, the SteamGridDB artwork cache, the prune artifact store, the persistence adapter, and the
+launcher's home below.
+
+### The launcher's home
+
+`<data root>/bin/rom-launcher` is the file every Steam shortcut's `exe` names, and `bootstrap()` puts this release's
+copy there on **every** start ([ADR-0032](../adr/0032-shortcuts-are-rewritten-in-place.md)).
+`adapters/launcher_install.py` owns the write; `domain/user_data_location.py::launcher_path` owns where it goes, and
+answers for the shipped copy under the plugin folder as well, so the two components that make up `/bin/rom-launcher`
+have one spelling — the suffix ownership detection matches is derived from that same tuple.
+
+The reason it left the plugin folder is that Decky deletes that folder whole before unpacking an update. The reason it
+is written on every start rather than once is that a launcher installed once would freeze at whatever version the day of
+the move brought. The reason it is written through a staging file that is renamed on — never in place — is that a game
+running right now is executing that file, and bash reads a script as it runs it.
+
+**It runs after the migration above, and only where the data half landed.** The migration reads a target root holding
+anything at all as already migrated, so a launcher written into an empty data root would settle that rung for the life
+of the install and the user's library would never come across, silently. Whether the half landed is read off what the
+migration just returned — `locations.data_dir` IS the new root — rather than by probing the directory a second time. A
+start that has not got there installs nothing and creates nothing, and `ShortcutLauncher.path` is then the copy the
+release ships inside the plugin folder: a real file, so a sync in that state still produces shortcuts that launch.
+
+`ShortcutLauncher` carries the two answers apart on purpose. `path` is what a newly built shortcut names, and follows
+the INSTALL rather than the migration: the home where this start actually got the launcher into it, the shipped copy
+otherwise — including the start whose write failed, whose home is empty. The one case where even the shipped copy is not
+a real file is a package shipped without its launcher, which is the same reason the install failed. `at_home` is the
+narrower question — `path` is the home under the data root, with this release's launcher in it — and it is what
+repointing an EXISTING shortcut turns on: pointing one at a launcher nothing put there stops its game from starting, and
+no part of this plugin could put it back.
+
+### Repointing the shortcuts that already exist
+
+`services/shortcut_relocation.py` answers which of Steam's non-Steam shortcuts still name a launcher inside a plugin
+folder. It reads them out of `shortcuts.vdf` through `SteamConfigStore.read_shortcut_exes` — one parse for all of them,
+where the frontend's own route to the same fact is a `RegisterForAppDetails` per shortcut — and hands the frontend a
+list of app IDs plus the `exe` and `start_dir` to write. Two shapes in that file are matched carefully because both fail
+quietly: the keys case-insensitively (Steam has written more than one case), and the app id converted out of the
+**signed** int32 form the file stores, since every `SteamClient` API takes the unsigned one.
+
+It is a one-time transition with a recorded completion (`kv_config`, `shortcut_launcher_relocated`), and the reading is
+its only writer: a call that finds nothing of ours outside the launcher's home stamps it, and no later start reads the
+file again. The frontend writes and reports; it records nothing, so a completed rewrite is stamped on the FOLLOWING
+start — Steam writes its in-memory shortcuts to the file when it chooses, and the file is what the stamp rests on. Every
+uncertainty answers `blocked` instead — the launcher is not at its home, or the file could not be read — and a blocked
+answer is never stamped, so the next start asks again. The gap that leaves is named at `get_shortcut_relocation`:
+nothing clears the stamp, so a shortcut that turns up later on the old path keeps launching but loses the panel's
+agreement, since the card reads the stamp as "nothing points into the pre-rename install any more".
 
 **The choice the plugin will not make.** Two libraries is the one case with no safe automatic answer, so the panel
 raises a notice whose button opens a modal showing both candidates with their path, size and last-changed date. The
@@ -2103,12 +2150,13 @@ only — consumers write `from bootstrap import …` and never deep-import a sub
    and loads + migrates `settings.json` (folding in the one-time legacy `save_sync_state.json` settings) so the settings
    persister binds the live mutable `settings` dict at construction. Returns a typed `BootstrapResult` carrying four
    bundles (`adapters`, `stores`, `callbacks`, `runtime_adapters`), a small `handles` struct for Plugin-only outputs,
-   and `locations` — the two directories the migration settled on. The bundle dataclasses are defined here too — they
-   are the vocabulary the second half consumes.
+   `locations` — the two directories the migration settled on — and `launcher`, where the shortcut launcher lives
+   beneath the data half and whether this start got it there. The bundle dataclasses are defined here too — they are the
+   vocabulary the second half consumes.
 
 2. **`services.py`** — owns `WiringConfig` and `wire_services()`, which takes the four bundles plus
-   `min_required_version` and `locations`, and constructs every service, injecting each one's `*ServiceConfig`. Returns
-   a dict of named service instances.
+   `min_required_version`, `locations` and `launcher`, and constructs every service, injecting each one's
+   `*ServiceConfig`. Returns a dict of named service instances.
 
 The two-phase split exists because adapter instantiation and state loading happen first (`bootstrap()`), then `main.py`
 composes the runtime bundle (event loop, `decky.emit`) and calls `wire_services()`. Services receive the `settings` dict

@@ -42,6 +42,7 @@ from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
 from services.saves import SaveService, SaveServiceConfig
 from services.session_lifecycle import SessionLifecycleService, SessionLifecycleServiceConfig
 from services.settings import SettingsService, SettingsServiceConfig
+from services.shortcut_relocation import ShortcutRelocationService, ShortcutRelocationServiceConfig
 from services.shortcut_removal import ShortcutRemovalService, ShortcutRemovalServiceConfig
 from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
@@ -53,6 +54,7 @@ if TYPE_CHECKING:
     from typing import Any
 
     from models.data_location import UserDataLocations
+    from models.shortcut_launcher import ShortcutLauncher
 
     from services.protocols import InstalledRomRemoverFn, SiblingSupersedeFn
 
@@ -69,7 +71,11 @@ class WiringConfig:
     same reason: it is what the start-up migration settled, not a seam
     anything calls, and it is the ONLY place the user's data directory
     is read from — ``runtime.runtime_dir`` is Decky's own directory and
-    answers a different question.
+    answers a different question. ``launcher`` sits beside it for the
+    same reason: it says where the launcher a Steam shortcut runs
+    through lives, and whether this start got it there. Its path is the
+    data directory's only where this start actually put the launcher
+    under it — otherwise it is the copy the release ships.
     """
 
     adapters: AdapterBundle
@@ -78,6 +84,7 @@ class WiringConfig:
     callbacks: CallbackBundle
     min_required_version: tuple[int, ...]
     locations: UserDataLocations
+    launcher: ShortcutLauncher
 
 
 def wire_services(cfg: WiringConfig) -> dict[str, Any]:
@@ -276,6 +283,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
             loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
             plugin_dir=cfg.runtime.plugin_dir,
+            launcher_exe=cfg.launcher.path,
             emit=cfg.runtime.emit,
             clock=cfg.runtime.clock,
             uuid_gen=cfg.runtime.uuid_gen,
@@ -505,6 +513,19 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
             db_filename=DB_FILENAME,
             path_exists=cfg.adapters.path_probe,
             resolve_path=cfg.adapters.resolve_path,
+            settings=cfg.stores.settings,
+            settings_persister=cfg.callbacks.settings_persister,
+            logger=cfg.runtime.logger,
+        ),
+    )
+
+    shortcut_relocation_service = ShortcutRelocationService(
+        config=ShortcutRelocationServiceConfig(
+            launcher_exe=cfg.launcher.path,
+            launcher_at_home=cfg.launcher.at_home,
+            steam_config=cfg.adapters.steam_config,
+            uow_factory=cfg.callbacks.uow_factory,
+            loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
         ),
     )
@@ -614,6 +635,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         "connection_service": connection_service,
         "startup_healing_service": startup_healing_service,
         "legacy_install_service": legacy_install_service,
+        "shortcut_relocation_service": shortcut_relocation_service,
         "data_location_service": data_location_service,
         "launch_gate_service": launch_gate_service,
         "session_lifecycle_service": session_lifecycle_service,

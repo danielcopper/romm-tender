@@ -12,6 +12,7 @@ import logging
 import os
 import shutil
 import sqlite3
+import time
 from datetime import UTC, datetime
 
 import pytest
@@ -23,6 +24,22 @@ _OLD = "decky-romm-sync"
 _NEW = "romm-tender"
 _DB = "romm_sync.db"
 _SETTINGS = "settings.json"
+
+
+@pytest.fixture
+def berlin_clock_zone(monkeypatch):
+    """Run the test in a zone two hours off UTC, so a local stamp cannot pass as a UTC one.
+
+    ``tzset`` is what the C library reads ``TZ`` through, and it has to be
+    called again on the way out: ``monkeypatch`` restores the variable, and
+    without a second call the process would keep the zone for every test after
+    this one.
+    """
+    monkeypatch.setenv("TZ", "Europe/Berlin")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
 
 
 def _seed_library(data_dir, *, roms: int) -> None:
@@ -105,6 +122,35 @@ class TestOneLibraryWins:
         assert (tmp_path / "home" / ".config" / "romm-tender" / _SETTINGS).is_file()
         assert locations.failure is None
 
+    def test_the_copy_says_what_it_copied_and_where_to(self, tmp_path, caplog):
+        """268 MB moved in silence on the device the first cut shipped to.
+
+        A failure and a pending choice already logged; the one outcome that
+        actually relocates the user's library said nothing at all, so a support
+        log could not tell a migration that ran from one that never had to.
+        """
+        _seed_library(tmp_path / "data" / _OLD, roms=1)
+        _seed_settings(tmp_path / "settings" / _OLD)
+
+        with caplog.at_level(logging.INFO, logger="test"):
+            _make(tmp_path).migrate()
+
+        copied = [record for record in caplog.records if "Copied the plugin's data" in record.message]
+        assert len(copied) == 1
+        assert copied[0].levelno == logging.INFO
+        assert str(tmp_path / "data" / _OLD) in copied[0].message
+        assert str(tmp_path / "home" / ".local" / "share" / "romm-tender") in copied[0].message
+        assert str(tmp_path / "settings" / _OLD) in copied[0].message
+        assert str(tmp_path / "home" / ".config" / "romm-tender") in copied[0].message
+
+    def test_a_fresh_install_reports_no_copy(self, tmp_path, caplog):
+        """Nothing was moved, so the line that says something was would be a lie."""
+        with caplog.at_level(logging.INFO, logger="test"):
+            _make(tmp_path).migrate()
+
+        assert not [record for record in caplog.records if "Copied the plugin's data" in record.message]
+        assert (tmp_path / "home" / ".local" / "share" / "romm-tender").is_dir()
+
     def test_the_source_is_left_untouched(self, tmp_path):
         _seed_library(tmp_path / "data" / _OLD, roms=1)
 
@@ -112,17 +158,32 @@ class TestOneLibraryWins:
 
         assert (tmp_path / "data" / _OLD / _DB).is_file()
 
-    def test_a_note_is_left_in_each_directory_that_was_copied(self, tmp_path):
+    def test_a_note_is_left_in_each_directory_that_was_copied(self, tmp_path, berlin_clock_zone):
         _seed_library(tmp_path / "data" / _OLD, roms=1)
         _seed_settings(tmp_path / "settings" / _OLD)
 
         _make(tmp_path, clock=FakeClock(now=datetime(2026, 9, 4, 12, 0, tzinfo=UTC))).migrate()
 
         note = (tmp_path / "data" / _OLD / "README.txt").read_text(encoding="utf-8")
-        assert "2026-09-04" in note
+        assert "4 September 2026 at 14:00" in note
         assert str(tmp_path / "home" / ".local" / "share" / "romm-tender") in note
         assert "safe to delete" in note
         assert (tmp_path / "settings" / _OLD / "README.txt").is_file()
+
+    def test_the_note_dates_the_copy_by_the_clock_the_reader_just_looked_at(self, tmp_path, berlin_clock_zone):
+        """The note is opened in a file manager, so the stamp is local and readable.
+
+        It carried the raw ISO instant until it was seen on a device: UTC with
+        microseconds, two hours behind the clock in the corner of the same
+        screen, in a file whose every other line is a sentence.
+        """
+        _seed_library(tmp_path / "data" / _OLD, roms=1)
+
+        _make(tmp_path, clock=FakeClock(now=datetime(2026, 9, 4, 12, 0, tzinfo=UTC))).migrate()
+
+        note = (tmp_path / "data" / _OLD / "README.txt").read_text(encoding="utf-8")
+        assert "  Copied on: 4 September 2026 at 14:00\n" in note
+        assert "2026-09-04T" not in note
 
     def test_a_note_already_in_the_source_is_left_alone(self, tmp_path):
         """A file of that name is the user's, and this move modifies a source nowhere."""

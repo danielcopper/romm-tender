@@ -84,6 +84,7 @@ def plugin(clock):
             loop=asyncio.get_event_loop(),
             logger=decky.logger,
             plugin_dir=decky.DECKY_PLUGIN_DIR,
+            launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/rom-launcher",
             emit=decky.emit,
             clock=clock,
             uuid_gen=FakeUuidGen(),

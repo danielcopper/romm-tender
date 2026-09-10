@@ -22,19 +22,19 @@ vi.mock("react", async (importOriginal) => {
 
 describe("legacyInstallStore", () => {
   beforeEach(() => {
-    setLegacyInstallState({ pending: false, legacyDataPresent: false });
+    setLegacyInstallState({ pending: false, legacyDataPresent: false, dismissed: false });
     vi.mocked(getLegacyInstallNotice).mockReset();
   });
 
   it("starts not-pending", () => {
-    expect(getLegacyInstallState()).toEqual({ pending: false, legacyDataPresent: false });
+    expect(getLegacyInstallState()).toEqual({ pending: false, legacyDataPresent: false, dismissed: false });
   });
 
   it("setLegacyInstallState updates the state and notifies subscribers", () => {
     const fn = vi.fn();
     onLegacyInstallChange(fn);
-    setLegacyInstallState({ pending: true, legacyDataPresent: true });
-    expect(getLegacyInstallState()).toEqual({ pending: true, legacyDataPresent: true });
+    setLegacyInstallState({ pending: true, legacyDataPresent: true, dismissed: false });
+    expect(getLegacyInstallState()).toEqual({ pending: true, legacyDataPresent: true, dismissed: false });
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
@@ -42,23 +42,27 @@ describe("legacyInstallStore", () => {
     const fn = vi.fn();
     const unsub = onLegacyInstallChange(fn);
     unsub();
-    setLegacyInstallState({ pending: true, legacyDataPresent: false });
+    setLegacyInstallState({ pending: true, legacyDataPresent: false, dismissed: false });
     expect(fn).not.toHaveBeenCalled();
   });
 
   it("fetchLegacyInstallState maps the backend shape and updates the store", async () => {
-    vi.mocked(getLegacyInstallNotice).mockResolvedValue({ pending: true, legacy_data_present: true });
+    vi.mocked(getLegacyInstallNotice).mockResolvedValue({ pending: true, legacy_data_present: true, dismissed: false });
     const result = await fetchLegacyInstallState();
-    expect(result).toEqual({ pending: true, legacyDataPresent: true });
-    expect(getLegacyInstallState()).toEqual({ pending: true, legacyDataPresent: true });
+    expect(result).toEqual({ pending: true, legacyDataPresent: true, dismissed: false });
+    expect(getLegacyInstallState()).toEqual({ pending: true, legacyDataPresent: true, dismissed: false });
   });
 
   it("fetchLegacyInstallState clears the store when the backend reports not-pending", async () => {
-    setLegacyInstallState({ pending: true, legacyDataPresent: true });
-    vi.mocked(getLegacyInstallNotice).mockResolvedValue({ pending: false, legacy_data_present: false });
+    setLegacyInstallState({ pending: true, legacyDataPresent: true, dismissed: false });
+    vi.mocked(getLegacyInstallNotice).mockResolvedValue({
+      pending: false,
+      legacy_data_present: false,
+      dismissed: false,
+    });
     const result = await fetchLegacyInstallState();
-    expect(result).toEqual({ pending: false, legacyDataPresent: false });
-    expect(getLegacyInstallState()).toEqual({ pending: false, legacyDataPresent: false });
+    expect(result).toEqual({ pending: false, legacyDataPresent: false, dismissed: false });
+    expect(getLegacyInstallState()).toEqual({ pending: false, legacyDataPresent: false, dismissed: false });
   });
 
   it("leaves the store untouched when the backend read rejects", async () => {
@@ -71,30 +75,30 @@ describe("legacyInstallStore", () => {
     // so the caller's own catch (index.tsx logs it) is the whole handling. The
     // snapshot is the SAME object, which is what a subscriber would compare.
     expect(getLegacyInstallState()).toBe(before);
-    expect(getLegacyInstallState()).toEqual({ pending: false, legacyDataPresent: false });
+    expect(getLegacyInstallState()).toEqual({ pending: false, legacyDataPresent: false, dismissed: false });
   });
 
   it("keeps a notice already shown when a later read rejects", async () => {
-    setLegacyInstallState({ pending: true, legacyDataPresent: true });
+    setLegacyInstallState({ pending: true, legacyDataPresent: true, dismissed: false });
     vi.mocked(getLegacyInstallNotice).mockRejectedValue(new Error("backend down"));
 
     await expect(fetchLegacyInstallState()).rejects.toThrow("backend down");
 
     // A failed read is not an answer — retracting the launcher warning on one
     // would be the worst possible reading of it.
-    expect(getLegacyInstallState()).toEqual({ pending: true, legacyDataPresent: true });
+    expect(getLegacyInstallState()).toEqual({ pending: true, legacyDataPresent: true, dismissed: false });
   });
 
   describe("snapshot identity", () => {
     it("returns the same object reference while nothing changes", () => {
-      setLegacyInstallState({ pending: true, legacyDataPresent: false });
+      setLegacyInstallState({ pending: true, legacyDataPresent: false, dismissed: false });
       expect(getLegacyInstallState()).toBe(getLegacyInstallState());
     });
 
     it("returns a different object reference after a real change", () => {
-      setLegacyInstallState({ pending: true, legacyDataPresent: false });
+      setLegacyInstallState({ pending: true, legacyDataPresent: false, dismissed: false });
       const before = getLegacyInstallState();
-      setLegacyInstallState({ pending: true, legacyDataPresent: true });
+      setLegacyInstallState({ pending: true, legacyDataPresent: true, dismissed: false });
       expect(getLegacyInstallState()).not.toBe(before);
       // The old snapshot is untouched — the write did not go in place.
       expect(before.legacyDataPresent).toBe(false);
@@ -103,14 +107,14 @@ describe("legacyInstallStore", () => {
 
   describe("useLegacyInstallState", () => {
     it("renders the current notice and re-renders on a real change", () => {
-      setLegacyInstallState({ pending: true, legacyDataPresent: false });
+      setLegacyInstallState({ pending: true, legacyDataPresent: false, dismissed: false });
       const { result, unmount } = renderHook(() => useLegacyInstallState());
-      expect(result.current).toEqual({ pending: true, legacyDataPresent: false });
+      expect(result.current).toEqual({ pending: true, legacyDataPresent: false, dismissed: false });
 
       act(() => {
-        setLegacyInstallState({ pending: true, legacyDataPresent: true });
+        setLegacyInstallState({ pending: true, legacyDataPresent: true, dismissed: false });
       });
-      expect(result.current).toEqual({ pending: true, legacyDataPresent: true });
+      expect(result.current).toEqual({ pending: true, legacyDataPresent: true, dismissed: false });
       unmount();
     });
 
@@ -123,7 +127,7 @@ describe("legacyInstallStore", () => {
       unmount();
       const afterUnmount = renders;
       act(() => {
-        setLegacyInstallState({ pending: true, legacyDataPresent: false });
+        setLegacyInstallState({ pending: true, legacyDataPresent: false, dismissed: false });
       });
       expect(renders).toBe(afterUnmount);
     });

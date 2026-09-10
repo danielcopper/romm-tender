@@ -41,6 +41,34 @@ instead of a blind 500ms, and the 1000ms ceiling keeps the old wait's safety net
 launch-options write for the (majority) uninstalled case also avoids `setLaunchOptionsConfirmed`'s
 `RegisterForAppDetails` poll, which forces Steam to load and cache a fat `AppDetails` object per call.
 
+### Where the exe points
+
+Every shortcut's `exe` is `<data root>/bin/rom-launcher` — under the user's own home, not in the plugin folder, because
+Decky deletes that folder whole before it unpacks an update
+([ADR-0032](../adr/0032-shortcuts-are-rewritten-in-place.md); the roots themselves are
+[ADR-0031](../adr/0031-user-data-lives-outside-the-plugin-directory.md)). The backend installs this release's launcher
+there on every start, once the data migration's own half has landed.
+
+Shortcuts written before that move are repointed once, at plugin load. The **backend** decides which: it parses
+`shortcuts.vdf` and returns the app IDs whose `exe` still ends in `/bin/rom-launcher` but is not the launcher's home,
+plus the `exe` and `startDir` to write (`get_shortcut_relocation`). The frontend writes exactly those and reports; it
+records nothing (`src/utils/launcherRelocation.ts`). The transition is stamped by the NEXT start's own reading of that
+file, once Steam has written its in-memory shortcuts out — after which no start reads it again. An app **overview**
+carries no `exe`, so the frontend's own route to the same fact would be a `RegisterForAppDetails` per shortcut at every
+start.
+
+Three properties of that path are load-bearing:
+
+- **It ends in `/bin/rom-launcher`.** Ownership is decided by that suffix and nothing else (`isRomMShortcutDetails`,
+  `domain/shortcut_data.py::select_shortcuts_to_relocate`, and `py_modules/services/prune/requests.py`), so a launcher
+  kept under any other last two components makes every shortcut written before the move stop being recognised as ours.
+- **A shortcut nobody has repointed still launches.** The package still ships `bin/rom-launcher`, so the old path stays
+  a real file; the rewrite is a repair, not a cutover, and nothing is written at all while the backend reports the
+  launcher as not at its home.
+- **The app id in the file is signed.** `shortcuts.vdf` stores it as a signed int32 (`to_signed_app_id`) while every
+  `SteamClient.Apps.Set*` takes the unsigned form, so anything reading ids back out of the file converts them
+  (`to_unsigned_app_id`). A negative id names no shortcut and fails silently.
+
 ### Exe quoting
 
 **Do NOT pass quoted exe paths to `AddShortcut` or `SetShortcutExe`.** The API handles quoting internally. Passing
@@ -49,7 +77,7 @@ launch-options write for the (majority) uninstalled case also avoids `setLaunchO
 Pass the raw path:
 
 ```typescript
-SteamClient.Apps.SetShortcutExe(appId, "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher");
+SteamClient.Apps.SetShortcutExe(appId, "/home/deck/.local/share/romm-tender/bin/rom-launcher");
 ```
 
 ### Updating existing shortcuts
@@ -65,10 +93,16 @@ formula does not hold on current Steam — see [App IDs and Artwork](#app-ids-an
   [#827](https://github.com/danielcopper/decky-romm-sync/issues/827) across in-session writes, a Steam restart, and
   removal-churn re-syncs. The plugin uses it directly to bake the launch command in at download-complete and to
   re-resolve paths after a RetroDECK-home migration.
-- **`exe` and the display name are applied by delete + recreate.** A launch-config change that touches `exe` or the name
-  is handled by removing the shortcut and re-syncing it, which yields a **new** `appId` (a fresh shortcut); a
-  `launchOptions`-only change is not. This delete + recreate behavior is unchanged; the original rationale — that
-  changing `exe`/name re-hashes to a different `appId` — rests on the CRC derivation above and is no longer verified.
+- **`exe` is appId-safe too, and that is now measured.** Every one of a 826-shortcut library had its `exe` and
+  `startDir` rewritten in one pass — the launcher relocation at plugin start (ADR-0032) — and the appId set afterwards
+  was identical to a `shortcuts.vdf` backup taken before it: 0 new, 0 lost, names unchanged, and the 826 `Set*` calls
+  cost 12 ms of renderer time. Earlier revisions of this page said an `exe` change had to be applied by delete +
+  recreate; that rested on the CRC derivation disproven in [App IDs and Artwork](#app-ids-and-artwork), and this
+  measurement replaces it.
+- **The display name is the one nobody has measured.** The sync writes it in place as well — `rewriteShortcutIdentity`
+  sets name, exe, start dir and launch options together for a rom that already holds a binding — and nothing has
+  established what a `SetShortcutName` does to the appId, in either direction. Do not read the `exe` measurement above
+  as covering it: it says nothing about the name, and no delete + recreate path exists for one to fall back on.
 
 Because `SetAppLaunchOptions` returns `void` with no success signal, the plugin **fires the set then polls**
 `RegisterForAppDetails` until the read-back `strLaunchOptions` matches (`setLaunchOptionsConfirmed`). Setting `""` — the
@@ -486,7 +520,7 @@ immediate remount cannot let the old chain write launch options or invoke `RunGa
 | `py_modules/adapters/steam_config.py`     | `SteamConfigAdapter` — VDF read/write, grid dir, shortcut icon write, Steam Input config                                                                                                                                                                                                                                                       |
 | `py_modules/services/library/`            | LibraryService — builds shortcut data, drives per-unit sync apply                                                                                                                                                                                                                                                                              |
 | `py_modules/domain/sgdb_artwork.py`       | `to_signed_app_id`, SGDB asset-type/endpoint maps                                                                                                                                                                                                                                                                                              |
-| `bin/rom-launcher`                        | Pure `exec "$@"` wrapper invoked by Steam — runs the full launch command baked into the shortcut's launch options; owns no state, no path resolution, no emulator knowledge                                                                                                                                                                    |
+| `bin/rom-launcher`                        | Pure `exec "$@"` wrapper invoked by Steam — runs the full launch command baked into the shortcut's launch options; owns no state, no path resolution, no emulator knowledge. Shipped here, **run from `<data root>/bin/rom-launcher`**: `bootstrap()` installs this copy there at every start (ADR-0032)                                       |
 
 ## Common Pitfalls
 

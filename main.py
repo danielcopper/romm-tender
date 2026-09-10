@@ -154,6 +154,7 @@ class Plugin:
                 callbacks=result.callbacks,
                 min_required_version=self._MIN_REQUIRED_VERSION,
                 locations=result.locations,
+                launcher=result.launcher,
             )
         )
         self._save_sync_service = services["save_sync_service"]
@@ -178,6 +179,7 @@ class Plugin:
         self._connection_service = services["connection_service"]
         self._startup_healing_service = services["startup_healing_service"]
         self._legacy_install_service = services["legacy_install_service"]
+        self._shortcut_relocation_service = services["shortcut_relocation_service"]
         self._data_location_service = services["data_location_service"]
         self._launch_gate_service = services["launch_gate_service"]
         self._session_lifecycle_service = services["session_lifecycle_service"]
@@ -1004,14 +1006,17 @@ class Plugin:
     async def get_legacy_install_notice(self):
         """Report the pre-rename install still sitting beside this one.
 
-        Returns ``{"pending": bool, "legacy_data_present": bool}``. ``pending``
-        means the plugin folder releases used before 0.31.0 is on disk and is not
+        Returns ``{"pending": bool, "legacy_data_present": bool, "dismissed": bool}``.
+        ``pending`` means the plugin folder releases used before 0.31.0 is on disk and is not
         the one this plugin runs from — a shortcut launches through a launcher
         inside the folder it was written from, so the frontend warns against
         removing it.
         ``legacy_data_present`` means that older install still has a database;
         the panel pairs it with the ROM count it already reads to decide whether
         to add "this version starts empty". False whenever ``pending`` is.
+        ``dismissed`` is the user's own answer to the card's removable statement,
+        the only persisted part of this: they have chosen to keep the older
+        install and the panel stops offering to be rid of it.
 
         Two directory questions and nothing else — no database of ours is opened,
         so the warning cannot be taken down by a library read, and a path error
@@ -1020,6 +1025,37 @@ class Plugin:
         condition ends when the folder does, and a marker would outlive it.
         """
         return self._legacy_install_service.get_legacy_install_notice()
+
+    async def get_shortcut_relocation(self):
+        """Report which Steam shortcuts still have to be pointed at the launcher.
+
+        Returns a discriminated status union: ``{"status": "done"}`` when no
+        shortcut of ours names a plugin folder any more;
+        ``{"status": "outstanding", "exe", "start_dir", "app_ids"}`` naming
+        exactly the shortcuts to rewrite and what to write on them; or
+        ``{"status": "blocked", "message"}`` when nothing may be rewritten yet,
+        which is the answer to every uncertainty — pointing a shortcut at a
+        launcher that is not there stops its game from starting.
+
+        The reading is the backend's because ``shortcuts.vdf`` holds every
+        shortcut's ``exe`` and one 315 KB parse answers for all of them; the
+        frontend's own route to the same fact is a ``RegisterForAppDetails``
+        per shortcut, which loads and caches a fat details object each time
+        (ADR-0032). Answered without reading anything at all once the transition
+        is stamped complete.
+        """
+        return await self._shortcut_relocation_service.get_shortcut_relocation()
+
+    async def dismiss_legacy_install_notice(self):
+        """Acknowledge the pre-rename install for good, keeping its card down.
+
+        The user's explicit answer to the one statement that card makes which
+        they are free to ignore — that the older install can now be removed.
+        Persisted as user intent, so it survives restarts; the card is still
+        shown while the shortcuts point into that install, because nothing about
+        that statement is optional. Returns ``{"success": True}``.
+        """
+        return self._legacy_install_service.dismiss_legacy_install_notice()
 
     async def get_data_location_notice(self):
         """Report what this start's data-location migration left standing.

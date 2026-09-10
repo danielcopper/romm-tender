@@ -8,9 +8,13 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 from domain.sibling_group import compute_sibling_group_key
+from domain.user_data_location import LAUNCHER_EXE_SUFFIX
 
 # RetroDECK's flatpak application id — the single source of the string across the
 # plugin. Its plain ``flatpak run <app>`` form is the emulator invocation prefix
@@ -200,13 +204,46 @@ def extract_version_metadata(rom: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def select_shortcuts_to_relocate(exes: Mapping[int, str], launcher_exe: str) -> list[int]:
+    """Pick the app IDs whose ``exe`` is ours but is not *launcher_exe* yet.
+
+    *exes* maps a live shortcut's app ID to the ``exe`` it currently carries —
+    every non-Steam shortcut, ours and foreign. Ownership is the
+    :data:`~domain.user_data_location.LAUNCHER_EXE_SUFFIX` ending and nothing
+    else, which is what lets a shortcut written by either plugin folder name be
+    recognised and repointed without anything having recorded where it came
+    from.
+
+    Surrounding quotes are stripped before both tests. ``AddShortcut`` stores
+    the path unquoted, so ours are bare; a hand-added shortcut can be quoted,
+    and reading one as foreign would leave it behind while counting the run
+    complete.
+
+    Sorted, so two readings of one unchanged library produce the same plan in
+    the same order — the app IDs cross to the frontend as a list it writes in
+    order, and neither log line prints them, so nothing else would show a
+    difference.
+    """
+    selected = []
+    for app_id, exe in exes.items():
+        bare = exe.strip('"')
+        if bare.endswith(LAUNCHER_EXE_SUFFIX) and bare != launcher_exe:
+            selected.append(app_id)
+    return sorted(selected)
+
+
 def build_shortcuts_data(
     roms: list[dict[str, Any]],
-    plugin_dir: str,
+    launcher_exe: str,
     installed_paths: dict[int, str],
     core_overrides: dict[int, EmulatorInvocation],
 ) -> list[dict[str, Any]]:
     """Transform ROM list into shortcut data dicts for frontend AddShortcut calls.
+
+    *launcher_exe* is the launcher every built shortcut's ``exe`` names, and the
+    directory holding it is the ``start_dir`` written beside it. It is handed in
+    rather than composed here because its home is under the user's data root,
+    which one start's migration settles and only the composition root knows.
 
     *installed_paths* maps ``rom_id`` to the resolved on-disk launch path. An
     installed ROM gets a full launch command in ``launch_options``; a ROM absent
@@ -231,8 +268,7 @@ def build_shortcuts_data(
     on the ``Rom`` aggregate. ``is_main_sibling`` sits under ``rom_user``; the
     lookup is guarded so a missing or ``null`` ``rom_user`` degrades to ``False``.
     """
-    exe = os.path.join(plugin_dir, "bin", "rom-launcher")
-    start_dir = os.path.join(plugin_dir, "bin")
+    start_dir = os.path.dirname(launcher_exe)
     return [
         {
             "rom_id": rom["id"],
@@ -243,7 +279,7 @@ def build_shortcuts_data(
             # back to the filename stem when absent. No DB column — carried only
             # through the sync pipeline, never persisted.
             "fs_name_no_ext": rom.get("fs_name_no_ext") or os.path.splitext(rom.get("fs_name", ""))[0],
-            "exe": exe,
+            "exe": launcher_exe,
             "start_dir": start_dir,
             "launch_options": (
                 build_launch_options(

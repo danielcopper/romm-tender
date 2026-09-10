@@ -21,8 +21,8 @@ from typing import TYPE_CHECKING, Protocol
 
 from models.data_location import UserDataLocations
 
-from domain.iso_time import epoch_to_iso
-from domain.user_data_location import DATA_HALF, SETTINGS_HALF, SourceFacts, plan_migration
+from domain.iso_time import epoch_to_iso, epoch_to_local_stamp
+from domain.user_data_location import DATA_HALF, SETTINGS_HALF, MigrationPlan, SourceFacts, plan_migration
 
 if TYPE_CHECKING:
     import logging
@@ -150,15 +150,9 @@ class UserDataMigrationAdapter:
         if plan.choice_required:
             self._logger.info("Two older installs both hold a library; waiting for the user to pick one")
         elif plan.outstanding:
-            source = self._source_named(plan.source_name)
-            for half in plan.outstanding:
-                try:
-                    self._fill(half, source)
-                except OSError as e:
-                    self._logger.warning(f"Could not move the {half} half of the plugin's data: {e}")
-                    failures.append(str(e))
-                    continue
-                done.add(half)
+            filled, errors = self._carry_out(plan)
+            done |= filled
+            failures.extend(errors)
         # An answer is dropped only once nothing is left for it to name: while
         # any half is still outstanding the next start needs it to reach the
         # same location this one was heading for.
@@ -170,6 +164,36 @@ class UserDataMigrationAdapter:
             choice_required=plan.choice_required,
             failure="; ".join(failures) or None,
         )
+
+    def _carry_out(self, plan: MigrationPlan) -> tuple[set[str], list[str]]:
+        """Fill each of *plan*'s outstanding halves from its source.
+
+        Returns the halves that ended up at their root and the errors of those
+        that did not — a half that could not be filled takes only itself down,
+        which is why each is attempted on its own and the failure is collected
+        rather than raised.
+
+        The line this logs is the only place a completed move is reported at
+        all; it names both ends of each half and is written once for the run,
+        never per half.
+        """
+        source = self._source_named(plan.source_name)
+        filled: set[str] = set()
+        errors: list[str] = []
+        copied: list[str] = []
+        for half in plan.outstanding:
+            try:
+                copied_from = self._fill(half, source)
+            except OSError as e:
+                self._logger.warning(f"Could not move the {half} half of the plugin's data: {e}")
+                errors.append(str(e))
+                continue
+            filled.add(half)
+            if copied_from is not None:
+                copied.append(f"{half} from {copied_from} to {self._root_for(half)}")
+        if copied:
+            self._logger.info(f"Copied the plugin's data to its own directories: {'; '.join(copied)}")
+        return filled, errors
 
     def _degraded(self, failure: str | None) -> UserDataLocations:
         """Fall back to the Decky-assigned directory for both halves.
@@ -188,15 +212,22 @@ class UserDataMigrationAdapter:
     def _source_named(self, name: str | None) -> SourceLocation | None:
         return next((source for source in self._sources if source.name == name), None)
 
-    def _fill(self, half: str, source: SourceLocation | None) -> None:
-        """Put one half at its root, copying from *source* when there is one."""
-        root = self._settings_root if half == SETTINGS_HALF else self._data_root
+    def _root_for(self, half: str) -> str:
+        return self._settings_root if half == SETTINGS_HALF else self._data_root
+
+    def _fill(self, half: str, source: SourceLocation | None) -> str | None:
+        """Put one half at its root, copying from *source* when there is one.
+
+        Returns the directory the half was copied FROM, or ``None`` where there
+        was nothing to copy and the root was simply created — which is what
+        separates a real move, worth a line in the log, from a fresh install.
+        """
         origin = None
         if source is not None:
             origin = source.settings_dir if half == SETTINGS_HALF else source.data_dir
-        self._copy_into_place(origin, root)
+        return self._copy_into_place(origin, self._root_for(half))
 
-    def _copy_into_place(self, origin: str | None, root: str) -> None:
+    def _copy_into_place(self, origin: str | None, root: str) -> str | None:
         """Copy *origin* into a staging directory beside *root*, then rename it on.
 
         The whole directory comes along — every backup, every cache, every file
@@ -220,6 +251,7 @@ class UserDataMigrationAdapter:
         os.rename(staging, root)
         if copied_from is not None:
             self._leave_note(copied_from, root)
+        return copied_from
 
     def _ignore_our_own_files(self, origin: str) -> Callable[[str, list[str]], set[str]]:
         """Keep the two files this adapter writes itself out of the copy of *origin*.
@@ -282,7 +314,7 @@ class UserDataMigrationAdapter:
             "folders after the plugin's own folder — so renaming the plugin moved\n"
             "your data with it.\n"
             "\n"
-            f"  Copied on: {epoch_to_iso(self._clock.time())}\n"
+            f"  Copied on: {epoch_to_local_stamp(self._clock.time())}\n"
             f"  Copied to: {root}\n"
             "\n"
             "Nothing was removed: this folder is the copy left behind. Tender no\n"

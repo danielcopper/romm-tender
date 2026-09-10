@@ -2,10 +2,10 @@
 
 Tender keeps everything it knows about your library in two folders under your own home directory:
 
-| Folder                        | What is in it                                                                        |
-| ----------------------------- | ------------------------------------------------------------------------------------ |
-| `~/.config/romm-tender/`      | Your settings — server address, sign-in, which platforms and collections you sync    |
-| `~/.local/share/romm-tender/` | The library database, cached cover art and artwork, and playtime and save-sync state |
+| Folder                        | What is in it                                                                                                                                                             |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `~/.config/romm-tender/`      | Your settings — server address, sign-in, which platforms and collections you sync                                                                                         |
+| `~/.local/share/romm-tender/` | The library database, cached cover art and artwork, playtime and save-sync state — and the small `bin/rom-launcher` file every one of your Steam shortcuts starts through |
 
 Your **games** are not in either of them. Downloaded ROMs, BIOS files and save files live in RetroDECK's own folders,
 exactly as before, and nothing on this page moves them.
@@ -44,10 +44,9 @@ in a folder, it did not copy from it, and there is nothing there it moved.
 
 !!! warning "This is not the same as the old plugin"
 
-    If Decky still lists an older **"RomM Sync"** plugin, leave that _plugin_ installed. Every Steam shortcut Tender
-    wrote launches through a file inside it, so removing it stops your games from starting. That is a separate warning
-    with its own card in the panel — see
-    [Updating from a release before 0.31.0](getting-started.md#updating-from-a-release-before-0310).
+    If Decky still lists an older **"RomM Sync"** plugin, that is a separate thing from the folders above, with its own
+    card in the panel — and the card is what says whether it can go yet. Removing it before it does can stop your games
+    from starting. See [Updating from a release before 0.31.0](getting-started.md#updating-from-a-release-before-0310).
 
 ## "Tender found two copies of your library"
 

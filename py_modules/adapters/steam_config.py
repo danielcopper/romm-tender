@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from _vendor import vdf
 
+from domain.sgdb_artwork import to_unsigned_app_id
 from lib.errors import SteamGridDirMissingError
 
 if TYPE_CHECKING:
@@ -68,6 +69,66 @@ class SteamConfigAdapter:
             return {"shortcuts": {}}
         with open(path, "rb") as f:
             return vdf.binary_loads(f.read())
+
+    def read_shortcut_exes(self) -> dict[int, str] | None:
+        """Every non-Steam shortcut's app ID and current ``exe``, read off ``shortcuts.vdf``.
+
+        ``None`` means the reading could not be done — Steam's userdata
+        directory could not be located, or the file would not parse — and is
+        deliberately not the same answer as ``{}``, which is a completed reading
+        of a machine that has no non-Steam shortcuts. A caller that recorded a
+        one-time task as finished on a reading that never happened would leave
+        every shortcut on its old path for the life of the install, silently.
+
+        Two shapes in the file are not obvious and both fail quietly if missed.
+        Both are measured, on the maintainer's own file (828 records, 2026-09-10).
+
+        The keys are mixed-case **within one record**, from one client: that
+        file's are ``appid``, ``AppName``, ``Exe``, ``StartDir``, ``icon``,
+        ``ShortcutPath``, ``LaunchOptions``, ``IsHidden``, ``AllowDesktopConfig``,
+        ``AllowOverlay``, ``OpenVR``, ``Devkit``, ``DevkitGameID``,
+        ``DevkitOverrideAppID``, ``LastPlayTime``, ``FlatpakAppID``, ``sortas``,
+        ``tags``, under a lower-case top-level ``shortcuts``. So they are matched
+        case-insensitively; a read that spelled ``Exe`` or ``appid`` exactly
+        would find zero of the 828, not half.
+
+        And every app id is stored **signed**: 828 of 828 negative, e.g.
+        ``-1875952762``. The conversion below is what every record needs, not an
+        edge case, because every ``SteamClient`` API takes the unsigned form.
+
+        This is a read of the file, not of Steam's memory: while Steam runs the
+        file is a snapshot it rewrites from memory mid-session and on exit (see
+        docs/architecture/steam-non-steam-shortcuts.md), so a shortcut created
+        in this session may not be in it yet. Every caller here is asking about
+        shortcuts written by earlier sessions.
+        """
+        path = self.shortcuts_vdf_path()
+        if not path:
+            self._logger.warning("Could not locate Steam's userdata directory; no shortcut was read")
+            return None
+        if not os.path.exists(path):
+            # A machine that has never had a non-Steam shortcut has no file, and
+            # that is a finished reading of nothing rather than a failed one.
+            return {}
+        try:
+            with open(path, "rb") as handle:
+                raw = vdf.binary_loads(handle.read())
+        except Exception as e:
+            self._logger.warning(f"Could not read {path}: {e}")
+            return None
+        entries = raw.get("shortcuts")
+        if not isinstance(entries, dict):
+            self._logger.warning(f"{path} holds no shortcut list")
+            return None
+        exes: dict[int, str] = {}
+        for entry in entries.values():
+            if not isinstance(entry, dict):
+                continue
+            fields = {key.lower(): value for key, value in entry.items()}
+            app_id, exe = fields.get("appid"), fields.get("exe")
+            if isinstance(app_id, int) and isinstance(exe, str):
+                exes[to_unsigned_app_id(app_id)] = exe
+        return exes
 
     def write_shortcuts(self, data: dict[str, Any]) -> None:
         path = self.shortcuts_vdf_path()

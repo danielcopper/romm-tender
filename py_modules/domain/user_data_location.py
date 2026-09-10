@@ -1,9 +1,9 @@
 """Where the plugin's user data lives, and which older copy it comes from.
 
 Contract: the pure half of the data-location question — the two roots the
-plugin's own data lives under, and the ladder that picks which older location a
-start-up migration copies from. Every fact the ladder reasons over is handed in;
-nothing here touches the filesystem.
+plugin's own data lives under, the launcher's place beneath one of them, and the
+ladder that picks which older location a start-up migration copies from. Every
+fact the ladder reasons over is handed in; nothing here touches the filesystem.
 """
 
 from __future__ import annotations
@@ -49,6 +49,35 @@ def config_root(user_home: str) -> str:
 def data_root(user_home: str) -> str:
     """The root holding the database, covers, artwork and the legacy state file."""
     return os.path.join(user_home, ".local", "share", APP_DIR_NAME)
+
+
+# The two path components the launcher sits under, and the suffix a shortcut is
+# recognised by. Derived from one tuple rather than written twice: the suffix IS
+# the components, and a second spelling of them is exactly how ownership
+# detection would drift away from where the file is put.
+_LAUNCHER_COMPONENTS = ("bin", "rom-launcher")
+LAUNCHER_EXE_SUFFIX = "/" + "/".join(_LAUNCHER_COMPONENTS)
+
+
+def launcher_path(root: str) -> str:
+    """The launcher's place beneath *root* — the data root, or the plugin folder it ships in.
+
+    Its home is under the data root, outside the plugin folder, because Decky
+    deletes that folder whole before it unpacks an update: a shortcut's ``exe``
+    is the one thing about it this plugin cannot repair from inside, so an
+    update that failed to unpack would leave every game pointing at a file
+    nothing is going to put back. The release's own copy is still shipped, at
+    the same two components below the plugin folder, which is why one function
+    answers for both.
+
+    Those two components are not free. A shortcut is recognised as ours by its
+    ``exe`` ENDING in :data:`LAUNCHER_EXE_SUFFIX` — ``src/utils/steamShortcuts.ts``
+    and ``services/prune/requests.py`` both match that suffix as their own
+    literal — so a launcher kept anywhere but a ``bin`` directory, or under any
+    other name, makes every shortcut written before the move stop being
+    recognised as ours.
+    """
+    return os.path.join(root, *_LAUNCHER_COMPONENTS)
 
 
 @dataclass(frozen=True)

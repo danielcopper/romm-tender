@@ -108,8 +108,8 @@ class SyncOrchestratorConfig:
     Holds runtime infrastructure (loop, logger), event emitter, the
     Clock/UuidGen test seams, the SQLite Unit-of-Work factory
     (which opens exactly one transaction from this module: the platform
-    stamp's DELETE at a unit's apply start), the plugin-dir reference for
-    shortcut data construction, the shared
+    stamp's DELETE at a unit's apply start), the launcher path every built
+    shortcut's ``exe`` names, the shared
     :class:`LibrarySyncStateBox`, and the :class:`LibraryFetcher` peer the
     orchestrator delegates per-unit fetches to. The ``reporter``
     field is a :class:`LateBinding` because :class:`LibraryService`
@@ -142,7 +142,7 @@ class SyncOrchestratorConfig:
     settings: dict[str, Any]
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
-    plugin_dir: str
+    launcher_exe: str
     emit: EventEmitter
     clock: Clock
     uuid_gen: UuidGen
@@ -183,7 +183,7 @@ class SyncOrchestrator:
         self._settings = config.settings
         self._loop = config.loop
         self._logger = config.logger
-        self._plugin_dir = config.plugin_dir
+        self._launcher_exe = config.launcher_exe
         self._emit = config.emit
         self._clock = config.clock
         self._uuid_gen = config.uuid_gen
@@ -302,7 +302,7 @@ class SyncOrchestrator:
                 None, self._local_library_reader.do_read_resident_group_keys
             )
             self._stamp_component_group_keys(all_roms, resident_keys)
-            shortcuts_data = build_shortcuts_data(all_roms, self._plugin_dir, installed_paths, core_overrides)
+            shortcuts_data = build_shortcuts_data(all_roms, self._launcher_exe, installed_paths, core_overrides)
             platform_name_set = {u.name for u in work_queue if u.type == "platform"}
             slug_to_name = {u.slug: u.name for u in work_queue if u.type == "platform" and u.slug}
             registry, last_synced_platforms, last_synced_collections = await self._loop.run_in_executor(
@@ -1006,7 +1006,7 @@ class SyncOrchestrator:
             if entry["sibling_group_key"] is not None
         }
         self._stamp_component_group_keys(unit_roms, resident_keys)
-        shortcuts_data = build_shortcuts_data(unit_roms, self._plugin_dir, installed_paths, core_overrides)
+        shortcuts_data = build_shortcuts_data(unit_roms, self._launcher_exe, installed_paths, core_overrides)
 
         # Collapse to one Steam shortcut per sibling group (ADR-0021): only the
         # representative (plus any grandfathered bound siblings) is emitted; a

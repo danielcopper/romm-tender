@@ -148,36 +148,42 @@ class TestShortcutDataFormat:
     Steam shortcuts. These tests ensure the data is well-formed.
     """
 
-    def test_exe_path_points_to_rom_launcher(self, plugin):
-        """Exe path must point to bin/rom-launcher inside the plugin directory."""
-        import decky
+    def test_exe_path_is_the_launcher_it_was_handed(self, plugin):
+        """The exe is the launcher path handed in, verbatim.
 
+        Where that path comes from is the composition root's answer (the user's
+        data root, ``tests/test_bootstrap.py``) — this builder composes none of
+        it, so that a launcher living outside the plugin folder needs no second
+        spelling here.
+        """
         from domain.shortcut_data import build_shortcuts_data
 
-        result = build_shortcuts_data([{"id": 1, "name": "Game"}], decky.DECKY_PLUGIN_DIR, {}, {})
-        exe = result[0]["exe"]
-        assert exe.endswith("/bin/rom-launcher"), f"Exe path should end with /bin/rom-launcher, got: {exe}"
-        # Anchored to the directory it was handed, not to a name: DECKY_PLUGIN_DIR
-        # is the checkout root under test, so asserting a literal name here pins
-        # whatever the working copy happens to be called.
-        assert exe.startswith(f"{decky.DECKY_PLUGIN_DIR}/"), (
-            f"Exe path should sit inside the plugin directory it was given, got: {exe}"
-        )
+        launcher = "/home/deck/.local/share/romm-tender/bin/rom-launcher"
+
+        result = build_shortcuts_data([{"id": 1, "name": "Game"}], launcher, {}, {})
+
+        assert result[0]["exe"] == launcher
 
     def test_installed_rom_gets_launch_command(self, plugin):
         """An installed ROM's launch_options is the full RetroDECK launch command."""
         from domain.shortcut_data import build_shortcuts_data
 
-        result = build_shortcuts_data([{"id": 42, "name": "Game"}], "/plugin", {42: "/roms/n64/game.z64"}, {})
+        result = build_shortcuts_data(
+            [{"id": 42, "name": "Game"}],
+            "/data/bin/rom-launcher",
+            {42: "/roms/n64/game.z64"},
+            {},
+        )
         assert result[0]["launch_options"] == 'flatpak run net.retrodeck.retrodeck "/roms/n64/game.z64"'
 
     def test_start_dir_is_parent_of_exe(self, plugin):
         """Start dir must be the directory containing the launcher."""
-        import decky
-
         from domain.shortcut_data import build_shortcuts_data
 
-        result = build_shortcuts_data([{"id": 1, "name": "Game"}], decky.DECKY_PLUGIN_DIR, {}, {})
+        launcher = "/home/deck/.local/share/romm-tender/bin/rom-launcher"
+
+        result = build_shortcuts_data([{"id": 1, "name": "Game"}], launcher, {}, {})
+
         assert result[0]["start_dir"] == os.path.dirname(result[0]["exe"])
 
 

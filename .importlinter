@@ -140,6 +140,7 @@ modules =
     services.saves
     services.session_lifecycle
     services.settings
+    services.shortcut_relocation
     services.shortcut_removal
     services.startup_healing
     services.steamgrid
