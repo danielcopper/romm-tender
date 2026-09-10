@@ -188,8 +188,10 @@ the deploy succeeds, so you can deploy and eyeball the result in one command. Wi
 and never opens a window. A bad display name is rejected up front, before the loader is stopped.
 
 If you deployed before the rename, the old `~/homebrew/plugins/decky-romm-sync` is still there and `dev` deploys beside
-it rather than over it. Decky loads both, and both manifests carry the same plugin name (`Tender`), so its own lookup
-returns whichever the filesystem lists first — which is not reliably the one you just built. Remove the old folder once:
+it rather than over it. Decky loads both. If that old deploy is from 0.31.0 or later its manifest carries the same
+plugin name, and the loader keys a plugin by its name — so the folder it happens to import last is the one left running,
+which is not reliably the one you just built. An older deploy carries the name `RomM Sync`, and Decky then runs the two
+side by side. Remove the old folder once:
 `sudo rm -rf ~/homebrew/plugins/decky-romm-sync && sudo systemctl restart plugin_loader`. It holds only the old deploy's
 files; your library and settings live under `~/.local/share/romm-tender` and `~/.config/romm-tender`. Let the new plugin
 start at least once first, though — until it has, your Steam shortcuts may still launch through `bin/rom-launcher`

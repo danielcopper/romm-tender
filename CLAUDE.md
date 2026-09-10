@@ -120,11 +120,12 @@ locally with `mise run docs`.
 - **User-Agent on outgoing HTTP**: SteamGridDB **and** RomM behind Cloudflare Tunnel reject the default `Python-urllib`
   UA with 403. Both adapters that talk to a server off this machine (`adapters/romm/http.py`, `adapters/steamgriddb.py`)
   take a `user_agent: str` ctor param; bootstrap threads `<package name>/<version>`, both halves from one `package.json`
-  read — no hardcoded name and no hardcoded version, so the UA can never disagree with the recovery root, which
-  bootstrap builds out of that same read. Those two are everything `package.json`'s `name` reaches; the folder the
-  plugin ships as is decided by the release workflow's build directory, not by this file. A missing or malformed
-  `package.json` degrades to the metadata adapter's documented fallback, `decky-plugin/0.0.0`. `adapters/renderer_gc.py`
-  also speaks HTTP — to Steam's debugger on `localhost` — and takes none.
+  read — no hardcoded name and no hardcoded version, so it and the recovery root come from that one read rather than
+  from two literals that could drift (the root additionally through `sanitize_package_name`, which is the identity for a
+  name shaped like this one). Those two are everything `package.json`'s `name` reaches; the folder the plugin ships as
+  is decided by the release workflow's build directory, not by this file. A missing or malformed `package.json` degrades
+  to the metadata adapter's documented fallback, `decky-plugin/0.0.0`. `adapters/renderer_gc.py` also speaks HTTP — to
+  Steam's debugger on `localhost` — and takes none.
 - **Large payloads**: Never send bulk base64 through `decky.emit()` — the WebSocket bridge has size limits. Use per-item
   callables, and chunk bulk lists (the library apply emits shortcuts in batches; the metadata cache loads page-by-page).
 - **No `BIsModOrShortcut` bypass**: the bypass counter was removed deliberately. Shortcuts return `true` (natural

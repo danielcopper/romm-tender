@@ -26,8 +26,8 @@ if TYPE_CHECKING:
 # the delivered folder follow the GitHub repository: the rename to
 # ``romm-tender`` at 0.31.0 moved every user's data with nothing in the plugin
 # asking for it. ``.github/workflows/release.yml`` now builds from a copy at a
-# fixed name and asserts it, so the delivered spelling is chosen here — but this
-# one is finished history and follows nothing.
+# fixed name and asserts it, so the delivered spelling is chosen in that
+# workflow — but this one is finished history and follows nothing.
 _LEGACY_PLUGIN_FOLDER = "decky-romm-sync"
 
 # The user's answer to the one statement this card makes that they are free to
@@ -99,12 +99,13 @@ class LegacyInstallService:
 
         Returns ``{"pending": bool, "legacy_data_present": bool, "dismissed": bool}``. ``pending``
         is the notice: the legacy plugin folder is on disk and is not the folder
-        this plugin runs from. Every Steam shortcut's ``exe`` names a launcher
-        inside the folder it was written from, so until the relocation has
-        re-pointed them at this install's own copy, removing that install stops
-        the games from starting and nothing here can put the launcher back.
-        Which of those two the reader is in is not this flag's answer — the card
-        joins it with the relocation's own, and words itself accordingly.
+        this plugin runs from. A shortcut written before the launcher moved out
+        of the plugin folder names one INSIDE the folder it was written from, so
+        until the relocation has re-pointed it at this install's own copy under
+        the data root, removing that install stops that game from starting and
+        nothing here can put the launcher back. Which of those two the reader is
+        in is not this flag's answer — the card joins it with the relocation's
+        own, and words itself accordingly.
 
         ``legacy_data_present`` is half of the second sentence — the older
         install still has a database — and is False whenever ``pending`` is. The

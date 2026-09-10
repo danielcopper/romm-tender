@@ -63,9 +63,9 @@ the headline of a README they open by hand, the row Decky shows in its plugin li
 the one a machine spends — folder names, the outgoing `User-Agent`, the `localStorage` breadcrumb key, `package.json`'s
 `name`. A new string picks by its reader, never by which one looks better in place.
 
-**`plugin.json`'s `name` is the display name; `package.json`'s `name` is the identifier.** The two files differ by one
-letter and carry different values, which is the confusion this entry exists to prevent. `plugin.json`'s is also the one
-place a machine reads the display name: Decky matches it against each installed manifest to decide whether a plugin is
+**`plugin.json`'s `name` is the display name; `package.json`'s `name` is the identifier.** Two manifests side by side,
+alike enough to be read past, carrying different values — which is the confusion this entry exists to prevent. And
+`plugin.json`'s is read by a machine: Decky compares it against each installed manifest to decide whether a plugin is
 already installed, which is what ties the release asset's `Tender.zip` name to it — `.github/workflows/release.yml`
 records that chain in full. So being machine-read does not make a name the identifier, and this is the display name that
 cannot be changed casually.
@@ -76,17 +76,21 @@ The display name has **three** homes, and nothing checks that they agree: `DISPL
 **heading** is not a sentence: a headline and the rule under it are one thing, so the headline is interpolated and the
 underline derived from its length.
 
-The identifier has **four** homes, separate because they answer four questions that must stay free to disagree:
+The identifier has **five** homes, separate because they answer five questions that must stay free to disagree:
 
 - `APP_DIR_NAME` (`domain/user_data_location.py`) — where the user's own data lives.
 - `package.json`'s `name` — the recovery root and the `User-Agent`, both through bootstrap, and nothing else.
+- `BUILD_ROOT` (`.github/workflows/release.yml`) — the folder a release unpacks into, and therefore the one Decky
+  derives its settings, data, log and plugin directories from. The packaging smoke test beside it guards that answer; it
+  does not decide it.
 - `_LEGACY_PLUGIN_FOLDER` (`services/legacy_install.py`) — the folder releases up to 0.30.1 unpacked into.
 - `SESSION_BREADCRUMB_KEY` (`src/utils/sessionManager.ts`) — the `localStorage` key naming the open-session breadcrumb,
   so a rename orphans every row written under the old one.
 
-`SOURCE_FOLDER_NAMES`, beside `APP_DIR_NAME`, spells the first and third out again as the migration's search list rather
-than composing them from either. Why the four stay apart is argued once, in `py_modules/domain/identity.py`'s module
-docstring.
+Two places restate a home rather than being one: `SOURCE_FOLDER_NAMES`, beside `APP_DIR_NAME`, spells the first and the
+fourth out again as the migration's search list rather than composing them from either, and `mise.toml`'s deploy target
+is a hand-kept copy of the third that has to agree with it. Why the five stay apart is argued once, in
+`py_modules/domain/identity.py`'s module docstring.
 
 _Avoid_: "the plugin name" for either, since it names neither; and reading "a machine parses it" as "so it is the
 identifier" — `plugin.json`'s `name` is the counter-example.
