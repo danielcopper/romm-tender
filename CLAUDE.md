@@ -144,6 +144,25 @@ locally with `mise run docs`.
   green gate, quietly poorer answers: `bootstrap/adapters.py` logs which interpreter a probe would run under because
   that line is the only place the **cause** is named — the caveat itself reaches the debug log and the wire, but nothing
   in it separates "no interpreter" from "the core would not load".
+- **An empty collection in a resolver answer is a statement about PROVENANCE, never about need** — and Python spells it
+  the same as an absence, which is what makes this the trap it is. The verdict on a catalogue entry is
+  `requirements_met`, three-valued: `True`, `False`, `None` for "could not be established". It narrows only and is never
+  `True` out of ignorance — with `verify=False` an entry whose required files are **present** still answers `None`,
+  because presence is not the question that field asks. What an empty `requirements` list means is decided by
+  `declaration` and by nothing else: `read` and empty is the only pairing that means "this emulator needs no firmware";
+  `packaged` and empty means a card exists and this query established nothing (a card may identify its image by
+  **content**, so it names no file until the bytes are read); `unsupported` means the emulator is installed and the
+  resolver has no source for what it wants. Reading a length where the verdict was asked produced a green "needs
+  nothing" over a console that does not boot without an image, twice in one hour, and the second time with
+  `requirements_met: None` already on screen. The same shape recurs across the answer: `system_firmware: None` is
+  nothing recorded rather than nothing needed, and `core_so: None` is a standalone emulator's entry rather than no
+  entry. **The answer is entry-shaped**, and `answer.requirements` is a flattening that has already discarded
+  `declaration`, `requirements_met`, `caveats`, `unread` and `refused` — so an entry-level question answered from it is
+  answered from evidence that was thrown away before the question was put. Related and separate: `description` is
+  deliberately outside the resolver's contract (it is the packager's prose from a core's `.info`), so it is not a field
+  to render as a row's headline. Nothing mechanical carries any of this; the vocabulary overlaps ours almost exactly
+  (`satisfied`, `required`, `present`, `cores`, `description` all exist on both sides and name different types), which
+  is what makes a wrong reading look like a correct one.
 
 ## Current State
 
