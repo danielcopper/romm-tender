@@ -43,7 +43,7 @@
 # a warning and BPM still opens.
 set -euo pipefail
 
-SCRIPT_NAME="decky-romm-sync-bpm-place"
+SCRIPT_NAME="romm-tender-bpm-place"
 
 enabled_outputs() {
   # connected AND enabled: KWin only exposes enabled outputs as screens, so a

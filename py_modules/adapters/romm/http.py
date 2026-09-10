@@ -51,7 +51,8 @@ class RommHttpAdapter:
     logger:
         Logger instance (replaces ``decky.logger``).
     user_agent:
-        Outgoing ``User-Agent`` header value (e.g. ``"decky-romm-sync/0.17.1"``).
+        Outgoing ``User-Agent`` header value — ``"<package name>/<version>"``,
+        both read from ``package.json`` (e.g. ``"romm-tender/1.2.3"``).
         Required because Cloudflare's Bot Fight Mode 403s the default
         ``Python-urllib`` UA before requests reach self-hosted RomM origins.
     on_retry:

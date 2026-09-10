@@ -16,6 +16,7 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any
 
+from domain.identity import DISPLAY_NAME
 from lib.errors import RommNotFoundError, classify_error
 from lib.list_result import ErrorCode
 from services.saves._settings import save_sync_enabled
@@ -302,7 +303,7 @@ class DeviceRegistry:
                 lambda: self._romm_api.register_device(
                     name=hostname,
                     platform="linux",
-                    client="decky-romm-sync",
+                    client=DISPLAY_NAME,
                     client_version=self._plugin_version,
                     hostname=machine_id,
                 ),

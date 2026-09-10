@@ -38,6 +38,12 @@ from main import Plugin
 from services.connection import ConnectionService, ConnectionServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
 
+# The UA every adapter in this file is constructed with, and the value its
+# outgoing header is then asserted against — this file pins the pass-through,
+# not the string. Production builds the real one from ``package.json``
+# (``bootstrap/adapters.py``); the version here is deliberately not a real one.
+_USER_AGENT = "romm-tender/9.9.9"
+
 
 def _http_error(
     code: int,
@@ -67,9 +73,7 @@ def plugin():
     p.settings = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
     import decky
 
-    p._http_adapter = RommHttpAdapter(
-        p.settings, decky.DECKY_PLUGIN_DIR, logging.getLogger("test"), "decky-romm-sync/9.9.9"
-    )
+    p._http_adapter = RommHttpAdapter(p.settings, decky.DECKY_PLUGIN_DIR, logging.getLogger("test"), _USER_AGENT)
     p._romm_api = MagicMock()
     p._prune_service = MagicMock()
     p._prune_service.is_active.return_value = False
@@ -338,7 +342,7 @@ class TestRommBasicAuthRequest:
             plugin._http_adapter.basic_auth_request("/api/client-tokens", "u", "p", method="POST", data={"name": "x"})
 
         req = mock_open.call_args[0][0]
-        assert req.get_header("User-agent") == "decky-romm-sync/9.9.9"
+        assert req.get_header("User-agent") == _USER_AGENT
 
     def test_does_not_retry_on_server_error(self, plugin):
         """Mint/delete are not retry-safe — a 500 raises immediately, no retry."""
@@ -395,7 +399,7 @@ class TestUnauthenticatedPostJson:
         assert result == {"raw_token": "rmm_paired"}
         req = mock_open.call_args[0][0]
         assert req.get_header("Authorization") is None
-        assert req.get_header("User-agent") == "decky-romm-sync/9.9.9"
+        assert req.get_header("User-agent") == _USER_AGENT
         assert req.get_header("Content-type") == "application/json"
         assert req.get_method() == "POST"
         assert json.loads(req.data.decode()) == {"code": "ABCD2345"}
@@ -490,7 +494,7 @@ class TestRommRequest:
             plugin._http_adapter.request("/api/test")
 
         req = mock_open.call_args[0][0]
-        assert req.get_header("User-agent") == "decky-romm-sync/9.9.9"
+        assert req.get_header("User-agent") == _USER_AGENT
 
     def test_omits_authorization_when_no_token(self, plugin):
         """A pre-mint probe (no stored token) must not send an empty ``Bearer ``
@@ -512,7 +516,7 @@ class TestRommRequest:
 
         req = mock_open.call_args[0][0]
         assert req.get_header("Authorization") is None
-        assert req.get_header("User-agent") == "decky-romm-sync/9.9.9"
+        assert req.get_header("User-agent") == _USER_AGENT
 
     def test_sends_authorization_when_token_present(self, plugin):
         """With a stored token, the Bearer header is sent alongside the UA."""
@@ -533,7 +537,7 @@ class TestRommRequest:
 
         req = mock_open.call_args[0][0]
         assert req.get_header("Authorization") == "Bearer rmm_runtime"
-        assert req.get_header("User-agent") == "decky-romm-sync/9.9.9"
+        assert req.get_header("User-agent") == _USER_AGENT
 
 
 class TestRommRequestOnce:
@@ -600,7 +604,7 @@ class TestRommJsonRequest:
         assert req.get_method() == "POST"
         assert req.get_header("Content-type") == "application/json"
         assert req.get_header("Authorization") == "Bearer rmm_runtime"
-        assert req.get_header("User-agent") == "decky-romm-sync/9.9.9"
+        assert req.get_header("User-agent") == _USER_AGENT
 
     def test_put_json(self, plugin):
         import json as _json
@@ -640,7 +644,7 @@ class TestRommJsonRequest:
 
         req = mock_open.call_args[0][0]
         assert req.get_header("Authorization") is None
-        assert req.get_header("User-agent") == "decky-romm-sync/9.9.9"
+        assert req.get_header("User-agent") == _USER_AGENT
 
     def test_post_json_attaches_detail_from_400(self, plugin):
         """A 400 with a JSON ``{"detail": ...}`` body surfaces the detail on the raised error (#1489)."""
@@ -697,7 +701,7 @@ class TestRommUploadMultipart:
         assert "multipart/form-data" in req.get_header("Content-type")
         assert b"save data here" in req.data
         assert req.get_header("Authorization") == "Bearer rmm_runtime"
-        assert req.get_header("User-agent") == "decky-romm-sync/9.9.9"
+        assert req.get_header("User-agent") == _USER_AGENT
 
     def test_upload_strips_control_chars_from_filename(self, plugin, tmp_path):
         """Filenames with CRLF/null bytes must not inject multipart headers."""
@@ -790,7 +794,7 @@ class TestPlatformMap:
         """
         import logging
 
-        adapter = RommHttpAdapter({}, str(tmp_path), logging.getLogger("test"), "decky-romm-sync/9.9.9")
+        adapter = RommHttpAdapter({}, str(tmp_path), logging.getLogger("test"), _USER_AGENT)
         assert adapter.load_platform_map() == {}
         # resolve_system survives the empty map and passes the slug through unchanged.
         assert adapter.resolve_system("dc") == "dc"
@@ -800,7 +804,7 @@ class TestPlatformMap:
         import logging
 
         (tmp_path / "config.json").write_text("{ this is not valid json")
-        adapter = RommHttpAdapter({}, str(tmp_path), logging.getLogger("test"), "decky-romm-sync/9.9.9")
+        adapter = RommHttpAdapter({}, str(tmp_path), logging.getLogger("test"), _USER_AGENT)
         assert adapter.load_platform_map() == {}
         assert adapter.resolve_system("dc") == "dc"
 
@@ -1534,7 +1538,7 @@ class TestTranslateHttpStatus:
             {"romm_url": "http://test", "romm_user": "u", "romm_pass": "p"},
             "/tmp",
             logging.getLogger("test"),
-            "decky-romm-sync/9.9.9",
+            _USER_AGENT,
         )
 
     def test_400_bad_request(self):
@@ -1688,7 +1692,7 @@ class TestDownloadTimeout:
         import logging
 
         settings = {"romm_url": "http://romm.local", "romm_user": "user", "romm_pass": "pass"}
-        return RommHttpAdapter(settings, "/fake/plugin_dir", logging.getLogger("test"), "decky-romm-sync/9.9.9")
+        return RommHttpAdapter(settings, "/fake/plugin_dir", logging.getLogger("test"), _USER_AGENT)
 
     # ------------------------------------------------------------------
     # _stream_to_file direct tests
@@ -1829,7 +1833,7 @@ class TestDownloadTimeout:
             adapter.download("/roms/game.zip", dest)
 
         req = mock_open.call_args[0][0]
-        assert req.get_header("User-agent") == "decky-romm-sync/9.9.9"
+        assert req.get_header("User-agent") == _USER_AGENT
 
     def test_download_omits_authorization_when_no_token(self, tmp_path):
         """A token-less download omits the Authorization header (no empty Bearer)."""
@@ -1852,7 +1856,7 @@ class TestDownloadTimeout:
 
         req = mock_open.call_args[0][0]
         assert req.get_header("Authorization") is None
-        assert req.get_header("User-agent") == "decky-romm-sync/9.9.9"
+        assert req.get_header("User-agent") == _USER_AGENT
 
     def test_connection_timeout_still_works(self, tmp_path):
         """socket.timeout raised by urlopen (connection phase) -> RommTimeoutError."""
@@ -1949,7 +1953,7 @@ def _resume_adapter():
     import logging
 
     settings = {"romm_url": "http://romm.local", "romm_user": "u", "romm_pass": "p"}
-    return RommHttpAdapter(settings, "/fake/plugin_dir", logging.getLogger("test"), "decky-romm-sync/9.9.9")
+    return RommHttpAdapter(settings, "/fake/plugin_dir", logging.getLogger("test"), _USER_AGENT)
 
 
 class TestIsCloudflare:
@@ -2144,7 +2148,7 @@ class TestDownloadExternal:
             "romm_api_token": "rmm_secret",
             "romm_api_token_origin": "http://romm.local",
         }
-        return RommHttpAdapter(settings, "/fake/plugin_dir", logging.getLogger("test"), "decky-romm-sync/9.9.9")
+        return RommHttpAdapter(settings, "/fake/plugin_dir", logging.getLogger("test"), _USER_AGENT)
 
     def test_omits_authorization_even_with_stored_token(self, tmp_path):
         """The host-bound RomM bearer must NEVER reach the external url_cover host."""
@@ -2158,7 +2162,7 @@ class TestDownloadExternal:
 
         req = mock_open.call_args[0][0]
         assert req.get_header("Authorization") is None
-        assert req.get_header("User-agent") == "decky-romm-sync/9.9.9"
+        assert req.get_header("User-agent") == _USER_AGENT
         with open(dest, "rb") as f:
             assert f.read() == data
 
@@ -2334,14 +2338,14 @@ class TestDownloadConditional:
             "romm_api_token": "rmm_secret",
             "romm_api_token_origin": "http://romm.local",
         }
-        adapter = RommHttpAdapter(settings, "/fake/plugin_dir", logging.getLogger("test"), "decky-romm-sync/9.9.9")
+        adapter = RommHttpAdapter(settings, "/fake/plugin_dir", logging.getLogger("test"), _USER_AGENT)
         dest = str(tmp_path / "c.png")
         resp = _make_resp(200, {"Content-Length": "1"}, b"x")
         with patch("urllib.request.urlopen", return_value=resp) as mock_open:
             adapter.download_conditional("/c.png?ts=1", dest, etag='"v1"')
         req = mock_open.call_args[0][0]
         assert req.get_header("Authorization") == "Bearer rmm_secret"
-        assert req.get_header("User-agent") == "decky-romm-sync/9.9.9"
+        assert req.get_header("User-agent") == _USER_AGENT
 
     def test_404_raises_not_found(self, tmp_path):
         adapter = _resume_adapter()

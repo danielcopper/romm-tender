@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from domain.identity import DISPLAY_NAME
 from domain.prune import (
     _READABLE_KINDS,
     recovery_bundle_id,
@@ -89,6 +90,20 @@ def test_readable_kinds_match_the_kinds_the_producers_emit():
     # produces outlived its producer. Both drift silently, because the README is
     # only ever read months later by a person restoring by hand.
     assert set(_READABLE_KINDS) == _PRODUCED_KINDS
+
+
+def test_readme_headline_is_the_display_name_and_its_underline_fits():
+    """The two lines are one heading, and only the second can be wrong.
+
+    A hand-typed underline is right exactly once — at the next word the headline
+    gains or loses it is a heading with a ragged rule under it, in a file whose
+    whole job is to be read by hand months later, and no test that checks for
+    substrings would notice.
+    """
+    headline, underline, _blank = render_bundle_readme(_readme_context(), []).splitlines()[:3]
+
+    assert headline == f"{DISPLAY_NAME} recovery bundle"
+    assert underline == "=" * len(headline)
 
 
 def test_readme_names_every_artifact_kind_in_plain_words():

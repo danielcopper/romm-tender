@@ -42,7 +42,7 @@ class TestPluginMetadataAdapter:
         """A package.json without a ``version`` key falls back to ``0.0.0``."""
         plugin_dir = tmp_path / "plugin"
         plugin_dir.mkdir()
-        (plugin_dir / "package.json").write_text(json.dumps({"name": "decky-romm-sync"}))
+        (plugin_dir / "package.json").write_text(json.dumps({"name": "romm-tender"}))
 
         adapter = PluginMetadataAdapter()
         assert adapter.read_version(str(plugin_dir)) == "0.0.0"

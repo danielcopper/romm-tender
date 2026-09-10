@@ -185,7 +185,7 @@ export const LibraryPage: FC<LibraryPageProps> = ({ onBack }) => {
     if (favs.length === 0) return null;
     if (favs.length > 1) {
       console.warn(
-        `decky-romm-sync: expected at most one favorites collection, got ${favs.length}. ` +
+        `romm-tender: expected at most one favorites collection, got ${favs.length}. ` +
           `Falling back to listing them in the Standard sub-tab.`,
       );
       return null;

@@ -292,22 +292,23 @@ every exact-id check also verifies the same server/user namespace captured by th
 before retrying those actions. This reciprocal block prevents newly downloaded content or recovered state from appearing
 after recovery was captured and then being removed by finalization.
 
-Recovery bundles are under `~/decky-romm-sync-recovery/bundles/`. A directory appears there only after every required
-copy and checksum succeeds, directory durability succeeds where supported, and the staging directory is atomically
-sealed. A post-rename durability failure preserves the directory with a `.durability-uncertain` suffix instead of making
-it look successfully sealed. Before the Steam action and again before local finalization, the backend verifies the seal,
-manifest/checksums, bundle-bound source claims, source root/descendant identities, mount IDs and bytes, expected absence
-of currently missing saves, database state, save ownership, and captured Steam/controller state. Filesystem mutation
-then holds kernel writer-exclusion leases through descriptor-relative removal; replacing a path, keeping a writable file
-descriptor open, crossing a nested mount, or creating a previously absent save after sealing does not authorize
-deletion. Save quarantine publishes with atomic no-replace semantics, so a backup created concurrently is preserved
-rather than overwritten. Recovery destination directories and files stay attached to held descriptors through metadata
-updates, hashing, sealing, and validation, so a swapped symlink is not re-authorized. A failed attempt may report
-`recovery_failed`; it leaves the local game unchanged. Incomplete staging is removed only when descriptor-relative,
-mount-aware cleanup proves the tree safe. Otherwise the error names the full path of that preserved staging so mounted
-or uncertain data is never traversed recursively. Free-space blocking in the modal covers the installed ROM content you
-selected. The backend checks actual source size and free space again at copy time, so a later disk-space change can
-still stop the group safely.
+Recovery bundles are under `~/romm-tender-recovery/bundles/`. Older bundles sealed under
+`~/decky-romm-sync-recovery/bundles/` stay where they are — nothing moves them, and both folders are yours to keep or
+delete. A directory appears there only after every required copy and checksum succeeds, directory durability succeeds
+where supported, and the staging directory is atomically sealed. A post-rename durability failure preserves the
+directory with a `.durability-uncertain` suffix instead of making it look successfully sealed. Before the Steam action
+and again before local finalization, the backend verifies the seal, manifest/checksums, bundle-bound source claims,
+source root/descendant identities, mount IDs and bytes, expected absence of currently missing saves, database state,
+save ownership, and captured Steam/controller state. Filesystem mutation then holds kernel writer-exclusion leases
+through descriptor-relative removal; replacing a path, keeping a writable file descriptor open, crossing a nested mount,
+or creating a previously absent save after sealing does not authorize deletion. Save quarantine publishes with atomic
+no-replace semantics, so a backup created concurrently is preserved rather than overwritten. Recovery destination
+directories and files stay attached to held descriptors through metadata updates, hashing, sealing, and validation, so a
+swapped symlink is not re-authorized. A failed attempt may report `recovery_failed`; it leaves the local game unchanged.
+Incomplete staging is removed only when descriptor-relative, mount-aware cleanup proves the tree safe. Otherwise the
+error names the full path of that preserved staging so mounted or uncertain data is never traversed recursively.
+Free-space blocking in the modal covers the installed ROM content you selected. The backend checks actual source size
+and free space again at copy time, so a later disk-space change can still stop the group safely.
 
 The cleanup report is per group: unrelated groups continue after a skip or failure. Large runs deliver terminal details
 in serialized-byte-bounded chunks, which the UI assembles only after every earlier chunk arrives. A **partial** result

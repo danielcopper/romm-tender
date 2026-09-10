@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
+from domain.identity import DISPLAY_NAME
 from domain.sibling_resolution import fs_name_stem, resolve_group_representative
 
 
@@ -96,9 +97,12 @@ def render_bundle_readme(context: BundleReadmeContext, records: Sequence[Mapping
     restore that exists.
     """
     games = context["games"]
+    headline = f"{DISPLAY_NAME} recovery bundle"
     lines = [
-        "decky-romm-sync recovery bundle",
-        "===============================",
+        headline,
+        # Derived, never typed: the two lines are one heading, and a hand-sized
+        # underline drifts on the next word the headline gains or loses.
+        "=" * len(headline),
         "",
         f"Bundle:  {context['bundle_id']}",
         f"Created: {context['created_at']}",

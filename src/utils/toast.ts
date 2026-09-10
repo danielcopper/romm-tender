@@ -2,9 +2,10 @@ import { toaster } from "@decky/api";
 import type { ToastData, ToastNotification } from "@decky/api";
 import type { ReactNode } from "react";
 
-// Must match `plugin.json`'s `name` and the `name` returned from `definePlugin`
-// — Decky reads those two for the plugin list and the QAM header, and nothing
-// checks that the three agree.
+// Must match `plugin.json`'s `name` and the backend's `DISPLAY_NAME`
+// (`py_modules/domain/identity.py`) — Decky reads plugin.json for its plugin
+// list and this value, handed back by `definePlugin`, for the QAM header.
+// Nothing checks that the three agree.
 export const PLUGIN_NAME = "Tender";
 
 /**

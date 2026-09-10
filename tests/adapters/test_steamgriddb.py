@@ -18,7 +18,7 @@ def adapter():
     return SteamGridDbAdapter(
         settings=settings,
         logger=logging.getLogger("test"),
-        user_agent="decky-romm-sync/9.9.9",
+        user_agent="romm-tender/9.9.9",
     )
 
 
@@ -27,7 +27,7 @@ class TestRequest:
         adapter = SteamGridDbAdapter(
             settings={},
             logger=logging.getLogger("test"),
-            user_agent="decky-romm-sync/9.9.9",
+            user_agent="romm-tender/9.9.9",
         )
         assert adapter.request("/games/igdb/123") is None
 
@@ -49,7 +49,7 @@ class TestRequest:
         with patch("urllib.request.urlopen", return_value=mock_resp) as mock_open:
             adapter.request("/test")
             req = mock_open.call_args[0][0]
-            assert req.get_header("User-agent") == "decky-romm-sync/9.9.9"
+            assert req.get_header("User-agent") == "romm-tender/9.9.9"
 
     def test_uses_ssl_context(self, adapter):
         mock_resp = MagicMock()
@@ -103,7 +103,7 @@ class TestDownloadImage:
         with patch("urllib.request.urlopen", return_value=mock_resp) as mock_open:
             adapter.download_image("https://example.com/img.png", dest)
             req = mock_open.call_args[0][0]
-            assert req.get_header("User-agent") == "decky-romm-sync/9.9.9"
+            assert req.get_header("User-agent") == "romm-tender/9.9.9"
 
     def test_atomic_write_cleans_tmp_on_failure(self, adapter, tmp_path):
         dest = str(tmp_path / "test.png")
@@ -142,7 +142,7 @@ class TestVerifyApiKey:
         with patch("urllib.request.urlopen", return_value=mock_resp) as mock_open:
             adapter.verify_api_key("any-key")
             req = mock_open.call_args[0][0]
-            assert req.get_header("User-agent") == "decky-romm-sync/9.9.9"
+            assert req.get_header("User-agent") == "romm-tender/9.9.9"
 
     def test_http_error_raises_sgdb_api_error(self, adapter):
         http_error = urllib.error.HTTPError(

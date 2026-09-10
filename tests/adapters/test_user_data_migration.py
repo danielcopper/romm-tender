@@ -19,6 +19,7 @@ import pytest
 from fakes.system_time import FakeClock
 
 from adapters.user_data_migration import SourceLocation, UserDataMigrationAdapter
+from domain.identity import DISPLAY_NAME
 
 _OLD = "decky-romm-sync"
 _NEW = "romm-tender"
@@ -169,6 +170,24 @@ class TestOneLibraryWins:
         assert str(tmp_path / "home" / ".local" / "share" / "romm-tender") in note
         assert "safe to delete" in note
         assert (tmp_path / "settings" / _OLD / "README.txt").is_file()
+
+    def test_the_note_headline_is_the_display_name_and_its_underline_fits(self, tmp_path):
+        """The two lines are one heading, and only the second can be wrong.
+
+        A hand-typed underline is right exactly once — at the next word the
+        headline gains or loses it is a heading with a ragged rule under it, in
+        a file the user opens by hand, and no test that checks for substrings
+        would notice.
+        """
+        _seed_library(tmp_path / "data" / _OLD, roms=1)
+
+        _make(tmp_path).migrate()
+
+        note = (tmp_path / "data" / _OLD / "README.txt").read_text(encoding="utf-8")
+        headline, underline, _blank = note.splitlines()[:3]
+
+        assert headline == f"{DISPLAY_NAME} moved your data"
+        assert underline == "=" * len(headline)
 
     def test_the_note_dates_the_copy_by_the_clock_the_reader_just_looked_at(self, tmp_path, berlin_clock_zone):
         """The note is opened in a file manager, so the stamp is local and readable.

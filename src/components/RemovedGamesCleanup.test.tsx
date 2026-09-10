@@ -46,7 +46,7 @@ const preview: backend.PrunePreviewResult = {
   limit: 50,
   total: 1,
   free_bytes: 100,
-  recovery_root: "/home/deck/decky-romm-sync-recovery",
+  recovery_root: "/home/deck/romm-tender-recovery",
 };
 
 function shownModal(): ReactElement {
@@ -1335,7 +1335,7 @@ describe("RemovedGamesCleanup", () => {
             rom_ids: [7],
             status: "removed",
             message: "Cancelled after the backup sealed.",
-            bundle_path: "/home/deck/decky-romm-sync-recovery/bundles/Shenmue-II_2026-07-31_07f4953b",
+            bundle_path: "/home/deck/romm-tender-recovery/bundles/Shenmue-II_2026-07-31_07f4953b",
             removed_rom_ids: [],
           },
         ],

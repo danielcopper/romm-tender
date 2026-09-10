@@ -67,9 +67,9 @@ Any direct URL to the zip file works (GitHub releases, a self-hosted mirror, etc
 
 ### Updating from a release before 0.31.0
 
-Releases up to 0.30.1 install into a folder named `decky-romm-sync`; from 0.31.0 on the folder is named after the
-renamed repository. Decky treats a differently-named folder as a different plugin, so updating across that boundary
-leaves you with **two** entries: the older one still shown as **RomM Sync**, and the new one as **Tender**.
+Releases up to 0.30.1 install into a folder named `decky-romm-sync`; from 0.31.0 on the folder is named `romm-tender`.
+Decky treats a differently-named folder as a different plugin, so updating across that boundary leaves you with **two**
+entries: the older one still shown as **RomM Sync**, and the new one as **Tender**.
 
 **Wait for Tender to say the older plugin can go.** Every Steam shortcut this plugin created used to launch through a
 file inside that older plugin's folder. Tender now keeps its own copy of that file outside any plugin folder and points

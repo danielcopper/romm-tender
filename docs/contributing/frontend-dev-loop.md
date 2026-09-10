@@ -32,7 +32,7 @@ This changes the system so the daily loop can run without `sudo`:
 - Writes the systemd drop-in `/etc/systemd/system/plugin_loader.service.d/10-dev-loop.conf` with
   `Environment=CHOWN_PLUGIN_PATH=0`. This disables Decky's tamper guard, which otherwise re-owns the plugin dir and
   `plugin.json` back to root on every plugin load — with the guard off, the deck user can write straight into
-  `~/homebrew/plugins/decky-romm-sync`. Drop-ins survive Decky self-updates (those rewrite only the unit file).
+  `~/homebrew/plugins/romm-tender`. Drop-ins survive Decky self-updates (those rewrite only the unit file).
 - Runs `systemctl daemon-reload` and restarts `plugin_loader`.
 - Chowns an existing plugin dir back to the deck user.
 - Warns (without failing) if `~/.steam/steam/.cef-enable-remote-debugging` is missing — see [DevTools](#devtools).

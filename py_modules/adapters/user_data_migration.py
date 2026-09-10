@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from models.data_location import UserDataLocations
 
+from domain.identity import DISPLAY_NAME
 from domain.iso_time import epoch_to_iso, epoch_to_local_stamp
 from domain.user_data_location import DATA_HALF, SETTINGS_HALF, MigrationPlan, SourceFacts, plan_migration
 
@@ -306,9 +307,13 @@ class UserDataMigrationAdapter:
         Best effort throughout: a note that cannot be written never fails a
         migration that has already succeeded.
         """
+        # Derived, never typed: the two lines are one heading, and a hand-sized
+        # underline is right exactly once — at the next word the headline gains
+        # or loses it is a ragged rule, in a file the user opens by hand.
+        headline = f"{DISPLAY_NAME} moved your data"
         text = (
-            "Tender moved your data\n"
-            "======================\n"
+            f"{headline}\n"
+            f"{'=' * len(headline)}\n"
             "\n"
             "Tender used to keep this data here, because Decky names a plugin's\n"
             "folders after the plugin's own folder — so renaming the plugin moved\n"

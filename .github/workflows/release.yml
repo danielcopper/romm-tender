@@ -80,8 +80,22 @@ jobs:
 
       - name: Package plugin
         run: |
-          sudo $(which decky) plugin build -o /tmp/output -s directory $GITHUB_WORKSPACE
-          sudo chown -R $(whoami) .
+          # Build from a copy at a fixed name, never from $GITHUB_WORKSPACE. The
+          # Decky CLI names the package after the directory it builds from
+          # (`FilenameSource::Directory`, selected by `-s directory`), that name
+          # becomes the zip's top-level folder, and Decky derives all four of its
+          # per-plugin directories from it — plugin, settings, data, logs. Built
+          # from the workspace, the delivered folder is named after the GitHub
+          # REPOSITORY: the rename to romm-tender moved every user's data at
+          # 0.31.0 and nothing in here said so. Pinned here, a future repository
+          # rename cannot move it again. The smoke test below asserts the name.
+          BUILD_ROOT="$RUNNER_TEMP/romm-tender"
+          cp -a "$GITHUB_WORKSPACE" "$BUILD_ROOT"
+          sudo $(which decky) plugin build -o /tmp/output -s directory "$BUILD_ROOT"
+          # The CLI builds as root inside a container mounted on the build tree,
+          # so the artifacts it leaves behind are root-owned. That is the copy
+          # now, not the workspace.
+          sudo chown -R $(whoami) "$BUILD_ROOT"
 
       - name: Determine tag name
         id: tag
@@ -98,6 +112,19 @@ jobs:
       - name: Smoke-test release zip
         run: |
           BUILT_ZIP=$(ls /tmp/output/*.zip | head -1)
+          # The delivered folder name. Decky unpacks the zip's top-level folder
+          # into ~/homebrew/plugins/ and derives its settings, data and logs
+          # directories from that same name, so a wrong one silently moves every
+          # user's library and settings. This workflow never runs on a pull
+          # request, so this assertion is the only thing between a wrong pin in
+          # "Package plugin" above and a wrong release. It also settles what the
+          # loop below cannot: `/$required` matches any top-level folder.
+          TOP_LEVEL=$(unzip -Z1 "$BUILT_ZIP" | cut -d/ -f1 | sort -u)
+          if [ "$TOP_LEVEL" != "romm-tender" ]; then
+            echo "ERROR: release zip's top-level directory is not exactly 'romm-tender':"
+            echo "$TOP_LEVEL"
+            exit 1
+          fi
           echo "Checking $BUILT_ZIP for required entries..."
           # bootstrap RAISES without 001_initial.sql (plugin fully inert).
           # Emulator resolution reads the live es_systems.xml directly (#1210) and

@@ -175,10 +175,10 @@ mise run dev          # build frontend, deploy to the plugin dir, restart plugin
 mise run dev dp2      # ...and also open windowed Big Picture on that display after deploying
 ```
 
-This builds the frontend, copies the plugin files into `~/homebrew/plugins/decky-romm-sync`, and restarts
-`plugin_loader` to pick up the changes. It **stops** `plugin_loader` around the file copy on purpose: the loader runs as
-root and continuously re-owns the plugin dir back to root within ~1–2s as a tamper guard, so copying while it runs races
-against that re-own and fails with `permission denied`. With the loader stopped, the copy is uncontested; it restarts
+This builds the frontend, copies the plugin files into `~/homebrew/plugins/romm-tender`, and restarts `plugin_loader` to
+pick up the changes. It **stops** `plugin_loader` around the file copy on purpose: the loader runs as root and
+continuously re-owns the plugin dir back to root within ~1–2s as a tamper guard, so copying while it runs races against
+that re-own and fails with `permission denied`. With the loader stopped, the copy is uncontested; it restarts
 automatically when the task finishes — even if the build or copy fails, so a failure never leaves the plugin dead. For
 backend-only changes, restarting the plugin loader is sufficient without rebuilding.
 
@@ -186,6 +186,17 @@ Passing a display target (`internal`, or an output name like `dp2` / `DP-3` — 
 [`dev:watch`](frontend-dev-loop.md#choosing-the-display) takes) also opens a windowed Big Picture on that display once
 the deploy succeeds, so you can deploy and eyeball the result in one command. With no argument, `dev` stays deploy-only
 and never opens a window. A bad display name is rejected up front, before the loader is stopped.
+
+If you deployed before the rename, the old `~/homebrew/plugins/decky-romm-sync` is still there and `dev` deploys beside
+it rather than over it. Decky loads both. If that old deploy is from 0.31.0 or later its manifest carries the same
+plugin name, and the loader keys a plugin by its name — so the folder it happens to import last is the one left running,
+which is not reliably the one you just built. An older deploy carries the name `RomM Sync`, and Decky then runs the two
+side by side. Remove the old folder once:
+`sudo rm -rf ~/homebrew/plugins/decky-romm-sync && sudo systemctl restart plugin_loader`. It holds only the old deploy's
+files; your library and settings live under `~/.local/share/romm-tender` and `~/.config/romm-tender`. Let the new plugin
+start at least once first, though — until it has, your Steam shortcuts may still launch through `bin/rom-launcher`
+**inside** that folder, and the start-up relocation is what moves them off it. The QAM says the same thing, and switches
+to "can be removed now" once the move is done.
 
 For frontend iteration there is a much faster loop: after a one-time `mise run dev:setup`,
 `mise run dev:watch [display]` hot-reloads the **frontend** into a windowed Big Picture on the desktop as you save, with
@@ -199,7 +210,7 @@ Mode's. See [Frontend dev loop](frontend-dev-loop.md) for the full workflow, key
 For development, symlink the repo into the plugins directory:
 
 ```bash
-sudo ln -sf "$(pwd)" ~/homebrew/plugins/decky-romm-sync
+sudo ln -sf "$(pwd)" ~/homebrew/plugins/romm-tender
 sudo systemctl restart plugin_loader
 ```
 

@@ -100,7 +100,7 @@ description = "Deploy plugin files to Decky plugin directory"
 depends = ["build"]
 raw = true
 run = '''
-DEST="$HOME/homebrew/plugins/decky-romm-sync"
+DEST="$HOME/homebrew/plugins/romm-tender"
 # The plugin dir is root-owned: Decky's root plugin_loader continuously re-owns the
 # dir + plugin.json back to root within ~1-2s as a tamper guard, so a plain
 # deck-owned rsync/cp hits "permission denied". The `dev` task makes this safe by
@@ -173,7 +173,7 @@ if [ -n "${usage_display:-}" ]; then
   bash scripts/dev_open_bpm.sh --resolve "$usage_display" >/dev/null
 fi
 sudo -v
-DEST="$HOME/homebrew/plugins/decky-romm-sync"
+DEST="$HOME/homebrew/plugins/romm-tender"
 # plugin_loader runs as root and continuously re-owns the plugin dir + plugin.json
 # back to root within ~1-2s (Decky's tamper guard). A chown-then-deploy loses that
 # race: the rollup build between the chown and the cp is ~8s, so the dir is
@@ -183,7 +183,13 @@ DEST="$HOME/homebrew/plugins/decky-romm-sync"
 # code) even if the build/deploy fails, so a failure never leaves the plugin dead.
 sudo systemctl stop plugin_loader
 trap 'sudo systemctl start plugin_loader' EXIT
-[ -d "$DEST" ] && sudo chown -R "$(id -un):$(id -gn)" "$DEST"
+# The directory is made HERE rather than by the deploy: `~/homebrew/plugins` is
+# root-owned 0755, so `deck` cannot create anything in it, and since the
+# delivered folder name is pinned rather than inherited there may be no
+# Decky-installed directory of this name to fall into. sudo creates it, the
+# chown hands it over, and both are idempotent.
+sudo mkdir -p "$DEST"
+sudo chown -R "$(id -un):$(id -gn)" "$DEST"
 mise run deploy
 # With a display target, open windowed Big Picture on it after the deploy — plain
 # bash (not exec) so the EXIT trap still fires and restarts plugin_loader. The
@@ -198,7 +204,7 @@ description = "One-time host setup for the live frontend dev loop (systemd drop-
 raw = true
 run = '''
 sudo -v
-DEST="$HOME/homebrew/plugins/decky-romm-sync"
+DEST="$HOME/homebrew/plugins/romm-tender"
 # Decky's tamper guard (env CHOWN_PLUGIN_PATH, default "1") re-owns the plugin
 # dir + plugin.json back to root on every plugin load, so the deck user can't
 # write deploys into it while the loader runs. The drop-in turns the guard off
@@ -208,9 +214,12 @@ sudo install -d /etc/systemd/system/plugin_loader.service.d
 printf '[Service]\nEnvironment=CHOWN_PLUGIN_PATH=0\n' | sudo tee /etc/systemd/system/plugin_loader.service.d/10-dev-loop.conf >/dev/null
 sudo systemctl daemon-reload
 sudo systemctl restart plugin_loader
-# Hand an existing (root-owned) plugin dir back to the deck user so the watch
-# loop's plain cp works without sudo from here on.
-if [ -d "$DEST" ]; then sudo chown -R "$(id -un):$(id -gn)" "$DEST"; fi
+# Create the plugin dir if this machine has never deployed under this name —
+# `~/homebrew/plugins` is root-owned 0755, so `deck` cannot — and hand it (or an
+# existing root-owned one) to the deck user, so the watch loop's plain cp works
+# without sudo from here on.
+sudo mkdir -p "$DEST"
+sudo chown -R "$(id -un):$(id -gn)" "$DEST"
 # CEF DevTools (http://localhost:8080) need this marker file; warn, don't fail —
 # the hot-reload loop itself works without it.
 if [ ! -e "$HOME/.steam/steam/.cef-enable-remote-debugging" ]; then
@@ -231,15 +240,15 @@ arg "[display]" help="Monitor for the Big Picture window: 'internal' or an outpu
 complete "display" run="bash scripts/dev_open_bpm.sh --list"
 '''
 run = '''
-DEST="$HOME/homebrew/plugins/decky-romm-sync"
+DEST="$HOME/homebrew/plugins/romm-tender"
 # Preflight: without the dev:setup drop-in, plugin_loader re-owns the plugin dir
 # back to root within ~1-2s and every cp below dies with "permission denied".
 if ! systemctl show plugin_loader -p Environment | grep -q CHOWN_PLUGIN_PATH=0; then
   echo "plugin_loader still runs Decky's tamper guard — run: mise run dev:setup" >&2
   exit 1
 fi
-if [ -d "$DEST" ] && [ ! -w "$DEST" ]; then
-  echo "$DEST is not writable — run: mise run dev:setup" >&2
+if [ ! -d "$DEST" ] || [ ! -w "$DEST" ]; then
+  echo "$DEST is missing or not writable — run: mise run dev:setup" >&2
   exit 1
 fi
 # Fail fast on a typo'd display target before paying for the full deploy.
@@ -265,7 +274,7 @@ exec pnpm exec rollup -c rollup.dev.config.js -w --watch.onEnd="cp -f dist/index
 description = "Push backend changes (py_modules/ + main.py) into the deployed plugin during a dev:watch session"
 raw = true
 run = '''
-DEST="$HOME/homebrew/plugins/decky-romm-sync"
+DEST="$HOME/homebrew/plugins/romm-tender"
 # decky-loader's watcher matches only dist/index.js and main.py, so a
 # py_modules-only rsync never triggers a reload — that's why the cp of main.py
 # comes LAST: it's the modify event that makes the watcher reload the plugin

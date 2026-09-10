@@ -36,7 +36,7 @@ def adapter():
         {"romm_url": "http://romm.local"},
         "/tmp",
         logging.getLogger("test"),
-        "decky-romm-sync/9.9.9",
+        "romm-tender/9.9.9",
     )
 
 
@@ -77,7 +77,7 @@ class TestWithRetryOnRetryListener:
             {"romm_url": ""},
             "/tmp",
             logging.getLogger("test"),
-            "decky-romm-sync/9.9.9",
+            "romm-tender/9.9.9",
             on_retry=on_retry,
         )
 
