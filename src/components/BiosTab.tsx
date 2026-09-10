@@ -52,15 +52,43 @@ interface BiosTabProps {
   isActive: boolean;
 }
 
+/**
+ * What one core's line says about this file — its own word, or its console's.
+ *
+ * `required` / `optional` is the core's `.info` and nothing else, and it is
+ * never rewritten here. A libretro declaration can mark a file needed or
+ * optional and can say nothing more, so an author who knows the console will not
+ * start without one of the images the core lists has only those two words to
+ * reach for, and the deployed catalogue goes both ways over one PlayStation:
+ * SwanStation marks all five of its images optional, Beetle PSX marks three of
+ * its own required.
+ *
+ * `needs_one_of` is the backend's answer to exactly that first shape — a console
+ * that needs an image under a core that marks nothing required — and it carries
+ * the count, so the line states the whole requirement in the core's own terms:
+ * "needs one of its 5 BIOS files". It is the ONE line that can, because the
+ * headline above says "at least one" without a number and the file rows each
+ * describe one file. A core that already marks the file required is untouched:
+ * its console's demand reaches the reader as that word, and annotating it as
+ * well would be one requirement written twice — which is what the annotation
+ * this replaced did to Beetle PSX under `ps1_rom.bin`, a file it marks optional
+ * while hard-requiring three others.
+ */
+function coreLineSuffix(core: { required: boolean; needs_one_of?: number | null }): string {
+  if (core.required) return " (required)";
+  if (core.needs_one_of != null) return ` (needs one of its ${core.needs_one_of} BIOS files)`;
+  return " (optional)";
+}
+
 /** Render the per-core lines under a BIOS file — one row per core that uses it. */
 function buildBiosCoreLines(
-  cores: Record<string, { required: boolean }>,
+  cores: Record<string, { required: boolean; needs_one_of?: number | null }>,
   coreLabelMap: Record<string, string>,
   activeCore: string | null | undefined,
 ): ReactElement[] {
   return Object.entries(cores).map(([coreSo, coreData]) => {
     const label = coreLabelMap[coreSo] || coreSo.replace(/_libretro$/, "");
-    const suffix = coreData.required ? " (required)" : " (optional)";
+    const suffix = coreLineSuffix(coreData);
     // Highlight the resolved active core's line (#955). active_core is the
     // core's `.so`, same identifier space as the cores keys; a null/undefined
     // active core matches nothing.
@@ -95,33 +123,57 @@ function buildBiosCoreLines(
  * (#1660). What is true there is that nothing is required; the ratio is then
  * inventory, and says so. "Optional" would be the wrong word for it — those
  * files may be required by a core the user is not launching with.
+ *
+ * The **console's own demand** (`system_image`) is a third shape and comes first
+ * among the answers, because it is the one no count can be relied on to state:
+ * the console needs ONE of these images, and a libretro declaration marks each
+ * file required or optional and can say nothing else. Which of the two an author
+ * reaches for is their choice, and over one PlayStation the deployed catalogue
+ * goes both ways — SwanStation marks all five of its images optional, Beetle PSX
+ * marks three of its own required. So this says "at least one" and never a
+ * required-file ratio — under SwanStation the pane read a green "Nothing
+ * required (0/20 files held)" while no game on it would start. It names no core:
+ * which core the sentence is about is the highlighted line in the list below,
+ * and repeating it here would be the same fact twice on one pane.
+ *
+ * It also names no SET. "one of these" pointed at the list underneath, where
+ * only the files the active core declares can answer the demand — a reader who
+ * fetched one of the others saw the sentence stand. The ratio beside it is the
+ * library's inventory, a third set again, which is why the sentence states a
+ * requirement and the counter stays what it always was.
  */
 function buildBiosHeader(bios: BiosStatus, biosLevel: BiosTabProps["biosLevel"]): ReactElement[] {
   const localCount = bios.local_count ?? 0;
   const serverCount = bios.server_count ?? 0;
   const reqCount = bios.required_count ?? 0;
   const reqDone = bios.required_downloaded ?? 0;
+  const heldRatio = serverCount > 0 ? ` (${localCount}/${serverCount} files held)` : "";
 
   // Color is sourced from the backend unknown/ok/partial/missing verdict via the
   // shared helper — never re-derived here. The verbose phrasing below stays this
   // surface's own concern (per-surface wording).
   const biosColor = biosColorForLevel(biosLevel);
   let biosLabel: string;
-  if (biosLevel === "unknown") {
-    // Two ignorances behind one grey dot, and they are not the same sentence.
-    // With a required row nothing could judge, the requirement IS known — a
-    // folder whose contents could not be read, say — and it is the readiness
-    // that cannot be stated. Without one, nothing installed could say whether
-    // these files are wanted at all.
+  if (bios.system_image === "absent") {
+    biosLabel = `Needs at least one BIOS file${heldRatio}`;
+  } else if (biosLevel === "unknown") {
+    // Three ignorances behind one grey dot, and they are not the same sentence.
+    // With a required row nothing could judge — or with the console's own image
+    // unsettled — the requirement IS known and it is the readiness that cannot
+    // be stated. Otherwise nothing installed could say whether these files are
+    // wanted at all.
     // Neither is the "Nothing required" below, which is an answer.
-    biosLabel = (bios.required_withheld ?? 0) > 0 ? "BIOS readiness unknown" : "BIOS requirement unknown";
+    biosLabel =
+      (bios.required_withheld ?? 0) > 0 || bios.system_image === "unsettled"
+        ? "BIOS readiness unknown"
+        : "BIOS requirement unknown";
   } else if (reqCount > 0) {
     biosLabel =
       reqDone >= reqCount
         ? `All required ready (${reqDone}/${reqCount})`
         : `${reqDone}/${reqCount} required files ready`;
   } else {
-    biosLabel = serverCount > 0 ? `Nothing required (${localCount}/${serverCount} files held)` : "Nothing required";
+    biosLabel = `Nothing required${heldRatio}`;
   }
 
   return [

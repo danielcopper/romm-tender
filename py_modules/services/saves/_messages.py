@@ -6,6 +6,7 @@ consistent across modules. Add to this file rather than inlining new
 literals in service code.
 """
 
+from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON
 from domain.save_layout import SAVE_SYNC_CONTENT_DIR_REASON
 
 SAVE_SYNC_DISABLED = "Save sync is disabled"
@@ -40,3 +41,8 @@ SAVE_SYNC_IN_CONTENT_DIR = "Save sync is unavailable: RetroArch is set to write 
 # source of truth is ``domain.save_layout`` — re-exported here so the saves
 # service code keeps importing it from its own message module.
 SAVE_SYNC_IN_CONTENT_DIR_REASON = SAVE_SYNC_CONTENT_DIR_REASON
+# The emulator's save is not a per-game file set this plugin can carry — a
+# shared card, a save inside the game file, a name with a hole in it, or a shape
+# nobody has established. Like the content-dir slug above this is a benign skip
+# and not an error, and the single source of truth is ``domain.save_answer``.
+SAVE_SHAPE_UNSUPPORTED = SAVE_SHAPE_UNSUPPORTED_REASON

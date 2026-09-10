@@ -17,7 +17,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.save_extensions import get_save_extensions
+from domain.save_answer import UNESTABLISHED_NOT_ASKED, unestablished_answer
 from domain.save_layout import InSaveDir
 from domain.save_path import resolve_save_dir
 
@@ -33,11 +33,14 @@ if TYPE_CHECKING:
 
     from models.state import SaveSortSettings
 
+    from domain.save_answer import SaveAnswer
     from services.protocols import (
         ActiveCoreReader,
         CoreNameProviderFn,
         RetroDeckPaths,
         SaveFileStore,
+        SaveLocationReader,
+        SystemResolver,
         UnitOfWorkFactory,
     )
 
@@ -50,13 +53,20 @@ class RomInfoServiceConfig:
     source of truth for installed-ROM file records — WS3 — and ``kv_config``
     holds the save-sort markers), the Protocol-typed filesystem adapter, the
     RetroDECK runtime-path accessor, the per-ROM active-core resolver, the
-    RetroArch core-name provider, and the standard-library logger.
+    save-location reader that answers what a game's save consists of, the
+    platform-slug-to-system resolver (which, with ``roms.fs_name``, builds the
+    path a ROM the library knows but has not installed WOULD occupy — a save
+    answer turns on the content file's extension, so omitting the path asks a
+    different question), the RetroArch core-name provider, and the
+    standard-library logger.
     """
 
     uow_factory: UnitOfWorkFactory
     save_file_store: SaveFileStore
     retrodeck_paths: RetroDeckPaths
     active_core: ActiveCoreReader
+    save_locations: SaveLocationReader
+    resolve_system: SystemResolver
     get_core_name: CoreNameProviderFn
     logger: logging.Logger
 
@@ -70,6 +80,8 @@ class RomInfoService:
         self._save_file_store = config.save_file_store
         self._retrodeck_paths = config.retrodeck_paths
         self._active_core = config.active_core
+        self._save_locations = config.save_locations
+        self._resolve_system = config.resolve_system
         self._get_core_name = config.get_core_name
         self._logger = config.logger
 
@@ -139,6 +151,19 @@ class RomInfoService:
             "file_path": file_path,
         }
 
+    def is_content_installed(self, rom_id: int) -> bool:
+        """Whether this ROM's content is on disk, without resolving where its saves go.
+
+        The same install-row question :meth:`get_rom_save_info` asks first, minus
+        the save-directory math behind it — which under ``sort_by_core`` parses a
+        core's ``.info`` file. Callers that need only ``content_installed`` for a
+        :class:`~domain.save_answer.SaveAnswer` they fabricate themselves ask
+        here, so stating an honest install state costs one row read.
+        """
+        with self._uow_factory() as uow:
+            installed = uow.rom_installs.get(int(rom_id))
+        return bool(installed and installed.system and installed.file_path)
+
     def current_save_sorting(self) -> InSaveDir:
         """The subdirectory sorting savefile paths are resolved with right now.
 
@@ -196,38 +221,141 @@ class RomInfoService:
         corename = self._get_core_name(core_so)
         return (corename or None, core_so)
 
-    def find_save_files(self, rom_id: int) -> list[dict[str, str]]:
-        """Find local save files for a ROM.
+    def save_answer(self, rom_id: int) -> SaveAnswer:
+        """What this ROM's save consists of and whether it may be synced at all.
 
-        Returns list of ``{"path": str, "filename": str}``.
+        Read live off the machine on every call, through the emulator this ROM
+        would launch with, and always against the ROM's own content path — the
+        answer turns on the content file's EXTENSION, so it is a property of the
+        ROM and never of its platform. On this machine PUAE answers
+        ``save-inside-content`` for an Amiga ``.adf`` and states nothing at all
+        for an ``.hdf``, and Genesis Plus GX answers a shared ``scd_*.brm`` for a
+        Sega CD ``.chd`` and a per-game ``.srm`` for a ``.bin``. Asking without
+        the real path would answer a different question and look like an answer
+        to this one.
+
+        An installed ROM is asked about its ``file_path``; a ROM the library
+        knows but has not installed is asked about the path it WOULD occupy,
+        built from ``roms.fs_name``. Where no path can be formed at all — no
+        row, no name, no platform — the answer is ``unestablished``, which is a
+        refusal and never a guess.
+        """
+        info = self.get_rom_save_info(rom_id)
+        if info:
+            return self._installed_answer(rom_id, info)
+        return self._uninstalled_answer(rom_id)
+
+    def _uninstalled_answer(self, rom_id: int) -> SaveAnswer:
+        """The answer for a ROM the library holds but the disk does not.
+
+        Its ``fs_name`` carries the extension the answer turns on, so the
+        question can still be put — about the path the ROM would occupy once
+        installed. Nothing is probed for either way: :meth:`synced_save_names`
+        pairs an uninstalled ROM with no directory, because a state is a
+        statement about an emulator and a probe needs a file.
+        """
+        with self._uow_factory() as uow:
+            rom = uow.roms.get(int(rom_id))
+        if rom is None or not rom.fs_name or not rom.platform_slug:
+            # No name, so no extension, so no question — not a statement about
+            # any emulator.
+            return unestablished_answer(shape=UNESTABLISHED_NOT_ASKED)
+        system = self._resolve_system(rom.platform_slug)
+        content_path = os.path.join(self._retrodeck_paths.roms_path(), system, rom.fs_name)
+        return self._ask_resolver(rom_id, system, content_path, installed=False)
+
+    def _installed_answer(self, rom_id: int, info: dict[str, Any]) -> SaveAnswer:
+        """The answer for an installed ROM, asked about the file on disk.
+
+        The system is the NORMALIZED one the install record carries, never the
+        raw RomM ``platform_slug`` beside it (ADR-0010): the slug names no
+        system any emulator declares, so asking with it answers about nothing.
+        One of the two places in THIS service that decide a system and a path —
+        :meth:`_uninstalled_answer` is the other — so the leak has two sites to
+        guard here rather than one per caller. ``services/migration/save_sort.py`` decides
+        its own, off the install record, and is the third site the rule holds at.
+        """
+        return self._ask_resolver(rom_id, info["system"], info["file_path"], installed=True)
+
+    def _ask_resolver(self, rom_id: int, system: str, content_path: str, *, installed: bool) -> SaveAnswer:
+        """Put the question to the emulator this ROM would launch with.
+
+        *installed* says whether *content_path* is a file on disk or the path
+        the ROM would occupy, and rides onto the answer so a surface never
+        renders a prediction as an observation.
+        """
+        emulator = self._active_core.active_emulator_for_rom(int(rom_id))
+        return self._save_locations.resolve_save_answer(
+            system=system,
+            content_path=content_path,
+            emulator_label=emulator.label if emulator is not None else None,
+            content_installed=installed,
+        )
+
+    def synced_save_names(self, rom_id: int, *, save_answer: SaveAnswer | None = None) -> tuple[list[str], str | None]:
+        """The basenames a sync may carry for this ROM, and the directory they sit in.
+
+        Empty names with a ``None`` directory whenever the ROM's save may not be
+        synced — every refusing state, and an uninstalled ROM. That pairing is
+        what makes a refusal cost no probe: there is nothing to look for and
+        nowhere to look.
+
+        *save_answer* is this ROM's reading where the caller already took one in
+        the same operation, and it is used instead of taking a second. Live is a
+        property of operations rather than of layers, and a reading costs real
+        machine I/O on a path that runs at every launch and every exit.
+
+        The directory is still the plugin's own ``resolve_save_dir`` answer
+        rather than the resolver's, because retiring that path math is its own
+        change; what has moved here is the NAMES, which used to come from a
+        hand-maintained per-system extension table.
         """
         info = self.get_rom_save_info(rom_id)
         if not info:
-            return []
-        rom_name = info["rom_name"]
-        saves_dir = info["saves_dir"]
-        system = info["system"]
-        if not self._save_file_store.is_dir(saves_dir):
+            return ([], None)
+        answer = save_answer if save_answer is not None else self._installed_answer(rom_id, info)
+        return (list(answer.synced_names), info["saves_dir"] if answer.syncable else None)
+
+    def find_save_files(self, rom_id: int, *, save_answer: SaveAnswer | None = None) -> list[dict[str, str]]:
+        """Find local save files for a ROM.
+
+        Returns list of ``{"path": str, "filename": str}``. *save_answer* passes
+        a reading the caller already holds through to :meth:`synced_save_names`.
+        """
+        return self.probe_save_files(*self.synced_save_names(rom_id, save_answer=save_answer))
+
+    def probe_save_files(self, names: list[str], saves_dir: str | None) -> list[dict[str, str]]:
+        """Which of *names* are actually on disk under *saves_dir*.
+
+        Public (peer-called): the sync matrix already holds the answer's names —
+        it needs them to group server saves onto their canonical targets — and
+        asking the resolver a second time for the same ROM costs a live reading
+        of the machine. A ``None`` directory is the refusing answer's pairing and
+        probes nothing.
+
+        Returns a list of ``{"path", "filename"}``.
+        """
+        if saves_dir is None or not self._save_file_store.is_dir(saves_dir):
             return []
         results = []
-        for ext in get_save_extensions(system):
-            save_path = os.path.join(saves_dir, rom_name + ext)
+        for name in names:
+            save_path = os.path.join(saves_dir, name)
             if self._save_file_store.is_file(save_path):
-                results.append({"path": save_path, "filename": rom_name + ext})
+                results.append({"path": save_path, "filename": name})
         return results
 
     def expected_save_files(self, rom_id: int) -> list[dict[str, str]]:
         """Project exact save paths for one installed ROM without broad scanning."""
-        info = self.get_rom_save_info(rom_id)
-        if not info:
+        names, saves_dir = self.synced_save_names(rom_id)
+        if saves_dir is None:
             return []
         return [
             {
-                "path": os.path.join(info["saves_dir"], info["rom_name"] + ext),
-                "filename": info["rom_name"] + ext,
-                "saves_dir": info["saves_dir"],
+                "path": os.path.join(saves_dir, name),
+                "filename": name,
+                "saves_dir": saves_dir,
             }
-            for ext in get_save_extensions(info["system"])
+            for name in names
         ]
 
     def pending_sort_settings(self) -> SaveSortSettings | None:

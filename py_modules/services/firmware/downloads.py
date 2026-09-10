@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain import firmware_paths
 from domain.bios_file import BiosFile
+from domain.emulator_commands import resolve_platform_option
 from lib.errors import error_response
 from lib.path_safety import PathTraversalError
 
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
         Clock,
         CoreInfoProvider,
         FirmwareFileStore,
+        PlatformCoreReader,
         RommFirmwareApi,
         SystemResolver,
         UnitOfWorkFactory,
@@ -42,10 +44,10 @@ class FirmwareDownloaderConfig:
 
     Holds the RomM API adapter the bytes come from, the two peer sub-services
     (the listing a platform's rows are picked out of, the demand each
-    destination is resolved through), the ES-DE core reads the required-only
-    filter keys on, the file store, the clock the download timestamp is taken
-    from, the Unit-of-Work factory the record is written through, and runtime
-    infrastructure.
+    destination is resolved through), the ES-DE core reads and the per-platform
+    emulator override the required-only filter resolves its core from, the file
+    store, the clock the download timestamp is taken from, the Unit-of-Work
+    factory the record is written through, and runtime infrastructure.
     """
 
     romm_api: RommFirmwareApi
@@ -53,6 +55,7 @@ class FirmwareDownloaderConfig:
     demand: FirmwareDemand
     core_info: CoreInfoProvider
     resolve_system: SystemResolver
+    platform_core_reader: PlatformCoreReader
     firmware_file_store: FirmwareFileStore
     clock: Clock
     uow_factory: UnitOfWorkFactory
@@ -69,6 +72,7 @@ class FirmwareDownloader:
         self._demand = config.demand
         self._core_info = config.core_info
         self._resolve_system = config.resolve_system
+        self._platform_core_reader = config.platform_core_reader
         self._firmware_file_store = config.firmware_file_store
         self._clock = config.clock
         self._uow_factory = config.uow_factory
@@ -304,12 +308,19 @@ class FirmwareDownloader:
         return {**result, "message": f"Downloaded {file_name}", "downloaded": 1}
 
     async def download_required_firmware(self, platform_slug) -> dict[str, Any]:
-        """Download only the firmware the platform's launching core will not run without."""
+        """Download only the firmware the platform's launching core will not run without.
+
+        The core is the platform's own pick — the per-platform override when it
+        still resolves, else the es_systems default — which is the same pick the
+        status surfaces judge by, so the button fetches the set the pane above it
+        called required. A pick that is a standalone emulator names no core and
+        falls back to "any emulator requires it" (:func:`_required_by`).
+        """
         rows, failure = await self._platform_firmware_rows(platform_slug)
         if failure is not None:
             return failure
 
-        core_so, _ = self._core_info.get_active_core(self._resolve_system(platform_slug))
+        core_so = self._platform_core(platform_slug)
         placements = await self._loop.run_in_executor(None, self._demand.placement_index)
         platform_firmware = [fw for fw in rows if _required_by(placements.get(fw.get("file_name", "")), core_so)]
 
@@ -319,6 +330,21 @@ class FirmwareDownloader:
         if errors:
             msg += f" ({len(errors)} failed: {', '.join(errors)})"
         return {"success": True, "message": msg, "downloaded": downloaded}
+
+    def _platform_core(self, platform_slug: str) -> str | None:
+        """The ``.so`` the platform's resolved emulator names, or ``None``.
+
+        The same resolution the status surfaces read
+        (:func:`domain.emulator_commands.resolve_platform_option`), asked here
+        rather than taken off a status payload because this path never builds
+        one — and asked the same way, so a third answer to "which emulator is
+        this platform about" cannot appear behind a download button.
+        """
+        options = self._core_info.get_emulator_options(self._resolve_system(platform_slug))
+        emulator = resolve_platform_option(
+            options["options"], self._platform_core_reader.get_platform_core(platform_slug)
+        )
+        return emulator.core_so if emulator is not None else None
 
 
 def _required_by(placement: FirmwarePlacement | None, core_so: str | None) -> bool:

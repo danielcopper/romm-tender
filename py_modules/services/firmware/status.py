@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING, Any
 from domain import firmware_paths
 from domain.bios_status import (
     BIOS_LEVEL_UNKNOWN,
+    SYSTEM_IMAGE_NOT_DEMANDED,
+    classify_system_image,
     collect_firmware_status,
     compute_bios_label,
     compute_bios_level,
@@ -27,7 +29,7 @@ from domain.bios_status import (
     count_wanted,
     format_bios_status,
 )
-from domain.emulator_commands import options_to_payload, resolve_platform_label
+from domain.emulator_commands import options_to_payload, resolve_platform_option
 from domain.firmware_wants import DECLARED_DIRECTORY
 
 if TYPE_CHECKING:
@@ -36,6 +38,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from domain.bios_file import BiosFile
+    from domain.emulator_commands import EmulatorOption
     from domain.firmware_wants import FirmwareCatalogue, FirmwarePlacement, FolderVerdict
     from services.firmware.demand import FirmwareDemand
     from services.firmware.listing import FirmwareListing
@@ -112,20 +115,39 @@ class FirmwareStatusReader:
             )
         return items
 
-    def _resolve_bios_filter_core(self, system: str, active_core_so: str | None) -> str | None:
+    def _platform_emulator(self, platform_slug: str, options: dict[str, Any]) -> EmulatorOption | None:
+        """The emulator this platform resolves to — the one pick every surface here reads.
+
+        :func:`resolve_platform_option` over the emulators ES-DE lists and the
+        per-platform override, which is the read-path precedence minus the
+        per-game layer. Both projections of it are taken from this one call: the
+        label a pane displays and the ``.so`` its BIOS answers key on.
+
+        Takes the already-read *options* rather than the system name, because
+        every caller needs the emulator list anyway and reading it costs a
+        catalogue read plus a glob per bakeable standalone entry.
+        """
+        return resolve_platform_option(options["options"], self._platform_core_reader.get_platform_core(platform_slug))
+
+    def _resolve_bios_filter_core(
+        self, platform_slug: str, options: dict[str, Any], active_core_so: str | None
+    ) -> str | None:
         """Return the ``.so`` to filter the firmware list against.
 
         A non-``None`` ``active_core_so`` is the pre-resolved per-game core (the
-        game-detail path runs ``ActiveCoreReader`` upstream) and is used as-is.
-        ``None`` is the platform-level callers' "use the system default" signal —
-        resolved here via the system-layer ``get_active_core(system)``.
+        game-detail path runs ``ActiveCoreResolver`` upstream) and is used as-is.
+        ``None`` is the platform-level callers' "use the platform's own pick"
+        signal — and it is also what the per-game path passes when the ROM
+        resolves to a **standalone** emulator, which names no core. Both are
+        answered by :meth:`_platform_emulator`, so the game page and the platform
+        pane cannot key their answers on two different emulators.
         """
         if active_core_so is not None:
             return active_core_so
-        core_so, _ = self._core_info.get_active_core(system)
-        return core_so
+        emulator = self._platform_emulator(platform_slug, options)
+        return emulator.core_so if emulator is not None else None
 
-    def _bios_aggregates(self, files, platform_slug: str, complete: bool) -> dict[str, Any]:
+    def _bios_aggregates(self, files, platform_slug: str, complete: bool, system_image: str) -> dict[str, Any]:
         """The counts, level and label every surface reads off one classified file list.
 
         One derivation for the per-game paths and the overview, so a platform
@@ -147,6 +169,13 @@ class FirmwareStatusReader:
         answer about the files themselves, and are the library's set too — they
         are weighed against ``server_count``, so a row it does not hold would
         raise the numerator of a ratio it is not in.
+
+        *system_image* is a fourth axis beside those three counted sets, and the
+        only one of the four that is not a count at all
+        (:func:`classify_system_image`): the console's own demand on the
+        launching core is disjunctive — one of these images, not each of them —
+        so it travels as a value and every surface words it rather than printing
+        it as a ratio.
         """
         on_server = [f for f in files if f.on_server]
         server_count = len(on_server)
@@ -164,6 +193,7 @@ class FirmwareStatusReader:
             "required_withheld": count_required_withheld(files),
             "unknown_count": unknown_count,
             "known_count": known_count,
+            "system_image": system_image,
         }
         # The bios_level state ("unknown" / "ok" / "partial" / "missing") and the
         # compact bios_label beside it, so every consumer reads the verdict
@@ -181,14 +211,19 @@ class FirmwareStatusReader:
         # The rows travel with the counts here because one of those two shapes
         # turns on there being no row; ``result`` itself stays row-free, because
         # it is the aggregate half of a payload that carries them separately.
-        status = format_bios_status({**result, "files": files}, platform_slug, reading_complete=complete)
+        status = format_bios_status(
+            {**result, "files": files}, platform_slug, reading_complete=complete, system_image=system_image
+        )
         result["bios_level"] = compute_bios_level(status)
         result["bios_label"] = compute_bios_label(status)
         return result
 
-    def _bios_payload(self, files, platform_slug: str, complete: bool) -> dict[str, Any]:
+    def _bios_payload(self, files, platform_slug: str, complete: bool, system_image: str) -> dict[str, Any]:
         """The aggregates plus the per-file rows — what the per-game surfaces read."""
-        return {**self._bios_aggregates(files, platform_slug, complete), "files": [asdict(f) for f in files]}
+        return {
+            **self._bios_aggregates(files, platform_slug, complete, system_image),
+            "files": [asdict(f) for f in files],
+        }
 
     # ── The whole-library overview ───────────────────────────
 
@@ -319,16 +354,15 @@ class FirmwareStatusReader:
 
         The core read seams key by the resolved RetroDECK ``system`` (ADR-0010
         §2), so each entry's raw RomM/BIOS-folder slug is normalized before the
-        ``get_active_core`` / ``get_emulator_options`` calls; ``has_games`` and
-        the BIOS-folder file lookups stay on the raw slug (their own vocabulary).
-        ``active_core`` stays the libretro system default *core_so* (the BIOS
-        filter keys on it — the standalone-default BIOS accuracy work is deferred
-        by ADR-0020). ``active_core_label`` is the resolved **display** label
-        (:func:`resolve_platform_label`) — the per-platform override
+        ``get_emulator_options`` call; ``has_games`` and the BIOS-folder file
+        lookups stay on the raw slug (their own vocabulary). ``active_core`` and
+        ``active_core_label`` are the two projections of ONE pick
+        (:meth:`_platform_emulator`) — the per-platform override
         (``platform_cores``) when set and still resolvable, else the es_systems
-        default emulator label, so it reflects a just-applied per-platform pick
-        (libretro OR standalone) the same way the game-detail menu does, instead
-        of always showing the libretro system default. The ``emulators`` list is
+        default — so the pane cannot name one emulator and judge by another.
+        ``active_core`` is ``None`` where that pick is a **standalone** emulator,
+        which names no core: the BIOS filter then falls back to every declaring
+        emulator, the degraded answer ADR-0020 defers. The ``emulators`` list is
         the full classified picker payload and ``emulator_data_available`` flags
         whether ``es_systems.xml`` was readable.
 
@@ -344,16 +378,16 @@ class FirmwareStatusReader:
         are the platform's, the answer is the core's.
         """
         index = catalogue.by_file_name()
+        disjunctive_cores = catalogue.cores_needing_one_of_their_files()
         asked: dict[str, Mapping[str, FolderVerdict]] = {}
         for plat in platforms_map.values():
             slug = plat["platform_slug"]
             system = self._resolve_system(slug)
-            core_so, _core_label = self._core_info.get_active_core(system)
             options = self._core_info.get_emulator_options(system)
+            emulator = self._platform_emulator(slug, options)
+            core_so = emulator.core_so if emulator is not None else None
             plat["active_core"] = core_so
-            plat["active_core_label"] = resolve_platform_label(
-                options["options"], self._platform_core_reader.get_platform_core(slug)
-            )
+            plat["active_core_label"] = emulator.label if emulator is not None else None
             plat["emulators"] = options_to_payload(options["options"])
             plat["emulator_data_available"] = options["available"]
             scope = _core_scope(options)
@@ -375,6 +409,7 @@ class FirmwareStatusReader:
                 placements,
                 complete,
                 core_so,
+                disjunctive_cores,
             )
             plat["files"] = [{**raw, **_wanted_fields(entry)} for raw, entry in zip(plat["files"], files, strict=True)]
             # Alphabetical, and only here: the two halves arrive in their own
@@ -393,14 +428,18 @@ class FirmwareStatusReader:
             plat["has_games"] = slug in synced_slugs
             plat["all_downloaded"] = all(f["downloaded"] for f in plat["files"])
             self._stamp_deletable(plat, slug, records)
-            self._set_platform_bios_aggregates(plat, slug, files, complete)
+            system_image = classify_system_image(catalogue.verdict_for(core_so), files, core_so)
+            self._set_platform_bios_aggregates(plat, slug, files, complete, system_image)
 
-    def _set_platform_bios_aggregates(self, plat: dict[str, Any], slug: str, files, complete: bool) -> None:
+    def _set_platform_bios_aggregates(
+        self, plat: dict[str, Any], slug: str, files, complete: bool, system_image: str
+    ) -> None:
         """Stamp the per-platform BIOS aggregates onto a ``get_firmware_status`` entry.
 
         Adds ``server_count`` / ``local_count`` / ``required_count`` /
-        ``required_downloaded`` / ``required_withheld`` and the ``bios_level``
-        state (``"unknown"`` / ``"ok"`` / ``"partial"`` / ``"missing"``) so the
+        ``required_downloaded`` / ``required_withheld`` / ``system_image`` and the
+        ``bios_level`` state (``"unknown"`` / ``"ok"`` / ``"partial"`` /
+        ``"missing"``) so the
         platform detail reads the decision and the display counts straight off
         this payload instead of re-deriving the threshold logic in the frontend. The
         whole payload comes from the same builder the per-game path uses, so the
@@ -414,14 +453,19 @@ class FirmwareStatusReader:
         *complete* is the reading state for the platform's own emulators, and it
         is what stops a platform with no file at all from reading a green "all
         ready" it could not have established.
+
+        *system_image* is the console's own demand on the launching core, and it
+        travels beside the counts rather than in them: the pane words it and the
+        list's tooltip words it, and neither may state it as a ratio.
         """
-        payload = self._bios_aggregates(files, slug, complete)
+        payload = self._bios_aggregates(files, slug, complete, system_image)
         plat["server_count"] = payload["server_count"]
         plat["local_count"] = payload["local_count"]
         plat["required_count"] = payload["required_count"]
         plat["required_downloaded"] = payload["required_downloaded"]
         plat["required_withheld"] = payload["required_withheld"]
         plat["bios_level"] = payload["bios_level"]
+        plat["system_image"] = payload["system_image"]
 
     async def get_firmware_status(self) -> dict[str, Any]:
         """Return BIOS/firmware status for every platform the page can speak for.
@@ -479,15 +523,16 @@ class FirmwareStatusReader:
         to filter the firmware list by what THIS core needs (an INPUT to
         ``collect_firmware_status`` so ``required_count`` / the missing-BIOS badge
         stay core-aware); it is never served back to the UI. ``None`` means "use
-        the system default" (resolved here via ``get_active_core(system)``); the
+        the platform's own pick" (:meth:`_resolve_bios_filter_core`); the
         per-game game-detail path passes the ROM's resolved ``.so``. Core info
         reaches the frontend through the dedicated ``get_platform_core_info``
         path, not this payload (#923).
 
         An unreachable server costs the files only it knows about, not the
         answer: what the platform's emulators want is read locally either way.
-        The one payload that still says nothing is a platform with no requirement
-        AND no complete reading — that ``needs_bios: False`` carries
+        The one payload that still says nothing is a platform with no row to show
+        AND either no complete reading or a console whose own firmware demand
+        this list cannot speak for — that ``needs_bios: False`` carries
         ``bios_status_unknown: True`` and no consumer may read it as "this
         platform needs none" (#1693).
         """
@@ -495,7 +540,7 @@ class FirmwareStatusReader:
         fw_slugs = firmware_paths.resolve_firmware_slugs(platform_slug)
         options = self._core_info.get_emulator_options(system)
         scope = _core_scope(options)
-        active_core_so = self._resolve_bios_filter_core(system, active_core_so)
+        active_core_so = self._resolve_bios_filter_core(platform_slug, options, active_core_so)
 
         try:
             firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
@@ -515,12 +560,16 @@ class FirmwareStatusReader:
             self._demand.wanted_beyond_server(placements, scope, {fw.get("file_name", "") for fw in firmware_list})
         )
         complete = catalogue.reading_complete_for(scope)
-        files = collect_firmware_status(items, placements, complete, active_core_so)
+        files = collect_firmware_status(
+            items, placements, complete, active_core_so, catalogue.cores_needing_one_of_their_files()
+        )
+        system_image = classify_system_image(catalogue.verdict_for(active_core_so), files, active_core_so)
 
         if not files:
-            return {"needs_bios": False} if complete else {"needs_bios": False, "bios_status_unknown": True}
+            settled = complete and system_image == SYSTEM_IMAGE_NOT_DEMANDED
+            return {"needs_bios": False} if settled else {"needs_bios": False, "bios_status_unknown": True}
 
-        return self._bios_payload(files, platform_slug, complete)
+        return self._bios_payload(files, platform_slug, complete, system_image)
 
 
 def _core_scope(options: dict[str, Any]) -> list[str] | None:
@@ -545,8 +594,9 @@ def _core_scope(options: dict[str, Any]) -> list[str] | None:
 
     Standalone entries are out of the scope by that deferral rather than by
     oversight: ADR-0020 defers standalone BIOS accuracy (inheriting
-    ADR-0012's), and ``get_active_core`` is libretro-only for the same
-    reason. Widening the scope is not the whole of lifting it — the resolver
+    ADR-0012's), which is also why a platform resolving to a standalone
+    emulator names no filter core (:meth:`FirmwareStatusReader._platform_emulator`).
+    Widening the scope is not the whole of lifting it — the resolver
     does answer per-system for standalone emulators, but
     ``_vendor/atlas/data/standalone_firmware.json`` holds cards for five of
     them (CEMU, DUCKSTATION, MELONDS, PCSX2, XEMU), and those five answer
@@ -613,6 +663,7 @@ def _wanted_fields(entry) -> dict[str, Any]:
         "description": entry.description,
         "wanted": entry.wanted,
         "required_by_active": entry.required_by_active,
+        "system_image_candidate": entry.system_image_candidate,
         "supplied_by": entry.supplied_by,
         "satisfied": entry.satisfied,
         "declared_kind": entry.declared_kind,

@@ -21,11 +21,25 @@ claim can be made either way).
 Collapsing the last two into one value is the defect this vocabulary exists to
 prevent: a file nothing wants is a finished answer, and a file we could not ask
 about is not.
+
+A second axis runs beside that one and is not a property of any file: what is
+recorded about the **system** an emulator declares for. A libretro ``.info`` can
+mark a slot required or optional and nothing else — no way to say "one of
+these", and no way to say the console does not start without one. An author who
+knows a PlayStation needs a BIOS image therefore has two lossy moves, and the
+deployed catalogue takes both: SwanStation marks all five of its images
+optional, which reads per file as a finished answer that nothing is missing,
+while Beetle PSX marks three of its own required, which reads as three separate
+prerequisites where the console asks for one. Neither states the console's
+demand, so no reading of the declaration can be relied on to carry it. The
+resolver answers that half from a packaged table
+(:class:`CoreFirmwareVerdict`), and its ``None`` means nobody has looked at the
+system, never that the system needs nothing.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -37,6 +51,22 @@ WANTED_NOT_NEEDED = "not_needed"
 WANTED_UNKNOWN = "unknown"
 
 WANTED_VALUES = (WANTED_NEEDED, WANTED_OPTIONAL, WANTED_NOT_NEEDED, WANTED_UNKNOWN)
+
+# What is recorded about the SYSTEM one core declares firmware for — the half a
+# libretro ``.info`` has no way to state, so it can never be read off a file
+# list. Spelled here the way the resolver spells them, and held equal to its
+# constants by ``tests/adapters/test_atlas_firmware.py``.
+SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT = "cannot-run-without-firmware"
+SYSTEM_FIRMWARE_CORE_ALTERNATIVE = "core-supplies-an-alternative"
+SYSTEM_FIRMWARE_RUNS_WITHOUT = "runs-without-firmware"
+SYSTEM_FIRMWARE_OPEN = "open"
+
+SYSTEM_FIRMWARE_STATES = (
+    SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
+    SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
+    SYSTEM_FIRMWARE_RUNS_WITHOUT,
+    SYSTEM_FIRMWARE_OPEN,
+)
 
 # What the emulator opens the declaration AT — a file it reads, or a folder it
 # lists. A property of the DECLARATION, so it survives an empty destination:
@@ -78,6 +108,45 @@ class FolderVerdict:
     satisfied: bool | None
     images: tuple[str, ...] = ()
     caveats: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class CoreFirmwareVerdict:
+    """What the resolver says about one core BEYOND the files it declares.
+
+    ``system_firmware`` is world knowledge about the console — one of
+    :data:`SYSTEM_FIRMWARE_STATES`, or ``None`` where the packaged table records
+    nothing about the system at all. **``None`` is not "nothing is needed"**: the
+    table covers the systems somebody has looked at, so an absent entry is an
+    unasked question, and the same rule holds for it that holds for
+    :data:`WANTED_UNKNOWN`.
+
+    ``requirements_met`` is the resolver's own three-valued verdict over that
+    core's whole declaration weighed against what is on disk and against the
+    system entry. It is **carried and not read**, and that is a decision rather
+    than an omission: it folds the per-file conjunction and the system's own
+    disjunction into one answer, so it can say *this core will not start* and
+    cannot say which of the two is why — while both of the things it can be
+    saying (a required file absent, or one present with the wrong bytes) already
+    reach the surfaces through the file rows, by name. Reading it as a second
+    opinion on a question the rows have answered is the misreading it exists to
+    prevent: ignorance here is ``None``, so a ``False`` is a demonstrated
+    statement and never a doubt.
+    """
+
+    system_firmware: str | None = None
+    requirements_met: bool | None = None
+
+    @property
+    def system_needs_an_image(self) -> bool:
+        """Does the console need a firmware image this core does not carry itself?
+
+        True for exactly one of the four states. The other three are recorded
+        answers that leave the file rows to speak for themselves — the core
+        supplies its own substitute, the system was established to start without
+        one, or nobody has established which.
+        """
+        return self.system_firmware == SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT
 
 
 @dataclass(frozen=True)
@@ -189,12 +258,77 @@ class FirmwareCatalogue:
 
     ``caveats`` carries the resolver's stable degradation codes, never its human
     messages: the codes are the contract, the messages are prose.
+
+    ``core_verdicts`` is the per-core half — keyed by the core's ``.so`` stem, in
+    the plugin's own identifier space — and it is deliberately separate from
+    ``placements``: a placement is one file every surface reads the same way,
+    while a verdict is about the emulator a particular game will launch with.
+    Empty for a reading that did not happen, and a core it holds no entry for is
+    a core nothing was recorded about (:meth:`verdict_for`).
     """
 
     placements: tuple[FirmwarePlacement, ...]
     unread_cores: frozenset[str]
     resolved: bool
     caveats: tuple[str, ...] = ()
+    core_verdicts: Mapping[str, CoreFirmwareVerdict] = field(default_factory=dict)
+
+    def verdict_for(self, core_so: str | None) -> CoreFirmwareVerdict | None:
+        """What was recorded about *core_so*, or ``None`` where nothing was.
+
+        ``None`` for a core with no entry, and for a caller with no core to name
+        — an unresolvable active core is not a licence to answer for one.
+        """
+        return self.core_verdicts.get(core_so) if core_so is not None else None
+
+    def cores_needing_a_system_image(self) -> frozenset[str]:
+        """The cores whose CONSOLE the table says will not start without an image.
+
+        The per-core half of :meth:`verdict_for`, read over every core at once —
+        the widest form of the answer, and the set
+        :meth:`cores_needing_one_of_their_files` narrows to the cores that state
+        the demand as a disjunction. Every other recording is left out, including
+        the absent entry: a core the table says nothing about is an unasked
+        question, and this set answers only where something was recorded.
+        """
+        return frozenset(core_so for core_so, verdict in self.core_verdicts.items() if verdict.system_needs_an_image)
+
+    def cores_needing_one_of_their_files(self) -> dict[str, int]:
+        """Core → how many files it declares, for the cores that state a DISJUNCTION.
+
+        The narrower half of :meth:`cores_needing_a_system_image`, and the one a
+        surface can word on a row. A core is here only where its console needs an
+        image **and** the core marks nothing required anywhere in the catalogue,
+        because that is the only shape in which "one of these" is the whole of
+        what the core says. Where a core does mark files required, the console's
+        demand already reaches every surface as those rows' own requirement, and
+        a second statement of it beside them would say the same thing twice in
+        weaker words. The deployed catalogue has both shapes over one
+        PlayStation: SwanStation marks all five of its images optional, Beetle
+        PSX marks three of its own required.
+
+        The count is the core's whole declaration, machine-wide, rather than a
+        platform's row set — it is the number a surface says "one of its N BIOS
+        files" with, and a platform whose list happens to carry four of the five
+        would otherwise word the core's demand as a number the core never stated.
+        A core with no entry here is silent, which is also every core the
+        packaged table records nothing about.
+        """
+        demanding = self.cores_needing_a_system_image()
+        declared: dict[str, int] = {}
+        requires_something: set[str] = set()
+        for placement in self.placements:
+            for want in placement.wants:
+                if want.core_so is None:
+                    continue
+                declared[want.core_so] = declared.get(want.core_so, 0) + 1
+                if want.required:
+                    requires_something.add(want.core_so)
+        return {
+            core_so: count
+            for core_so, count in declared.items()
+            if core_so in demanding and core_so not in requires_something
+        }
 
     def by_file_name(self) -> dict[str, FirmwarePlacement]:
         """The placements indexed by file name — the shape every lookup wants.

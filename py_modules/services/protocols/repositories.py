@@ -153,7 +153,7 @@ class RomInstallRepository(Protocol):
         ...
 
     def iter_all(self) -> Iterator[RomInstall]:
-        """Iterate every install record. (migration.py, saves/sync_engine/engine.py)"""
+        """Iterate every install record. (migration/, saves/sync_engine/engine.py)"""
         ...
 
 
@@ -260,7 +260,7 @@ class BiosFileRepository(Protocol):
     """
 
     def get(self, platform_slug: str, file_name: str) -> BiosFile | None:
-        """Return the BIOS record for the composite key, or ``None``. (migration.py existence check)"""
+        """Return the BIOS record for the composite key, or ``None``. (no consumer today)"""
         ...
 
     def save(self, bios_file: BiosFile) -> None:
@@ -272,7 +272,7 @@ class BiosFileRepository(Protocol):
         ...
 
     def iter_all(self) -> Iterator[BiosFile]:
-        """Iterate every downloaded BIOS record. (migration.py sweep, firmware/status.py delete count)"""
+        """Iterate every downloaded BIOS record. (migration/service.py sweep, firmware/status.py delete count)"""
         ...
 
     def iter_by_platform(self, platform_slug: str) -> Iterator[BiosFile]:
@@ -466,13 +466,13 @@ class KvConfigRepository(Protocol):
     """
 
     def get(self, key: str) -> str | None:
-        """Return the value for *key*, or ``None`` when absent. (migration.py)"""
+        """Return the value for *key*, or ``None`` when absent. (migration/)"""
         ...
 
     def set(self, key: str, value: str) -> None:
-        """Insert-or-replace *value* under *key*; value is always TEXT. (migration.py)"""
+        """Insert-or-replace *value* under *key*; value is always TEXT. (migration/)"""
         ...
 
     def delete(self, key: str) -> None:
-        """Remove *key*. Idempotent. (migration.py)"""
+        """Remove *key*. Idempotent. (migration/)"""
         ...

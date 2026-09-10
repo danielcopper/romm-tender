@@ -172,6 +172,7 @@ class RollbackOrchestrator:
             }
 
         core_so = await loop.run_in_executor(None, self._resolve_core, rom_id)
+        save_names = await loop.run_in_executor(None, lambda: self._rom_info.save_answer(rom_id).synced_names)
 
         try:
             if action == "use_server":
@@ -184,6 +185,7 @@ class RollbackOrchestrator:
                     saves_dir,
                     system,
                     info["rom_name"],
+                    save_names,
                 )
             else:
                 # keep_local — resolve on-disk name via the same canonical
@@ -202,6 +204,7 @@ class RollbackOrchestrator:
                     saves_dir,
                     system,
                     info["rom_name"],
+                    save_names,
                 )
             await loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
             self._logger.info(
@@ -260,6 +263,7 @@ class RollbackOrchestrator:
         saves_dir: str,
         system: str,
         rom_name: str,
+        save_names: tuple[str, ...],
     ) -> None:
         """Download *server* into the canonical local save file and update *save_state*.
 
@@ -268,7 +272,7 @@ class RollbackOrchestrator:
         ``update_file_sync_state`` receives the same target name the file
         lands at. Mutates *save_state* in memory; ``resolve`` owns the write UoW.
         """
-        target = local_save_target(server, rom_name)
+        target = local_save_target(server, rom_name, known_names=save_names)
         default_slot = resolve_default_slot(self._settings)
         self._matrix.do_download_save(server, saves_dir, target, save_state, device_id, system, default_slot)
 
@@ -282,6 +286,7 @@ class RollbackOrchestrator:
         saves_dir: str,
         system: str,
         rom_name: str,
+        save_names: tuple[str, ...],
     ) -> None:
         """Push the local file to *server* (POST overwrite=true). Adopt-without-upload
         when the local content already matches the server's content hash.
@@ -297,7 +302,7 @@ class RollbackOrchestrator:
         :class:`FileNotFoundError` is raised — we never silently rename across
         extensions. Mutates *save_state* in memory; ``resolve`` owns the write UoW.
         """
-        target = local_save_target(server, rom_name)
+        target = local_save_target(server, rom_name, known_names=save_names)
         local_path = os.path.join(saves_dir, target)
         if not self._save_file_store.is_file(local_path):
             raise FileNotFoundError(f"Local save not found: {local_path}")

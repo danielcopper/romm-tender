@@ -24,19 +24,26 @@ questions to every detected installation at once and answers each labelled with
 the handle it came from, so a machine carrying two arrangements gives two true
 answers instead of a silently chosen winner.
 
-One thing here is the host's to grant rather than atlas's to require. The zstd
-codec that opens an AppImage is discovered, never depended on:
-:func:`atlas.register_zstd_provider` hands over the module a host already has,
-which is what a host that vendors it under its own root needs, and
-:func:`atlas.zstd_provider` says which provider a zstd image would go through
-here and whether a host handed it over (:class:`atlas.ZstdProvider`). All three
-are re-exported here from ``atlas.squashfs``; none adds a dependency.
+Two things here are the host's to grant rather than atlas's to require, and
+both follow the same shape: atlas discovers what it can, states plainly when it
+found nothing, and takes what a host hands over ahead of anything it found. The
+zstd codec that opens an AppImage is one — :func:`atlas.register_zstd_provider`
+hands over the module a host already has, which is what a host that vendors it
+under its own root needs, and :func:`atlas.zstd_provider` says which provider a
+zstd image would go through here (:class:`atlas.ZstdProvider`). The interpreter
+the core probe runs under is the other — a frozen host has no interpreter to
+offer as ``sys.executable``, so :func:`atlas.register_core_probe_interpreter`
+names a real one and :func:`atlas.core_probe_interpreter` says which one a
+probe would run under, or that none would and every core comes back unknown
+(:class:`atlas.CoreProbeInterpreter`). Neither grant is a dependency, and where
+one is missing the answers it would have carried state the limit in a caveat
+instead of hiding it.
 
 **What this namespace is.** Everything below is the consumer API: the two entry
 points, the handles they answer with, every answer type, the vocabularies those
-answers speak, the serializers that turn an answer into plain data, and the one
-capability a host grants rather than atlas requiring it. If you are writing a
-client, you never need to import from a submodule.
+answers speak, the serializers that turn an answer into plain data, and the two
+capabilities a host grants rather than atlas requiring them. If you are writing
+a client, you never need to import from a submodule.
 
 **What it deliberately is not.** The machine seam, the config and catalogue
 parsers, the packaged-data loaders and the module-level resolver functions are
@@ -57,16 +64,24 @@ from __future__ import annotations
 # tests/test_version.py holds it equal to pyproject — CI's package job holds
 # dist-info to pyproject in a clean venv — so drift is a red test, not a
 # silent fork.
-__version__ = "0.12.0"  # x-release-please-version
+__version__ = "0.15.0"  # x-release-please-version
 
 # --- The two entry points, and the aggregate over them -----------------------
 from .detect import detect
 from .every_installation import EveryInstallation, InstallationAnswer, every_installation
 
-# --- The one capability a host grants, rather than atlas requiring it --------
+# --- The capabilities a host grants, rather than atlas requiring them --------
 # The zstd codec an AppImage read may need is discovered, never imported as a
 # dependency; a host whose own packaging holds it hands the module over here.
 from .squashfs import ZstdProvider, register_zstd_provider, zstd_provider
+
+# The interpreter the core probe runs under is the running one only where the
+# running program is plainly an interpreter; a frozen host names a real one here.
+from .machine import (
+    CoreProbeInterpreter,
+    core_probe_interpreter,
+    register_core_probe_interpreter,
+)
 
 # --- The vocabulary those questions take -------------------------------------
 # ES-DE's system names, and the two ways to check a name against them. A
@@ -253,6 +268,7 @@ from .firmware import (
     CAVEAT_STANDALONE_UNSUPPORTED,
     CAVEAT_SYSTEM_ASSIGNMENT_DERIVED,
     CAVEAT_SYSTEM_ASSIGNMENT_MAY_HIDE_CORES,
+    CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE,
     CAVEAT_SYSTEM_NOT_IN_CATALOGUE,
     CAVEAT_SYSTEM_UNKNOWN,
     CHECKED_MISMATCH,
@@ -260,6 +276,7 @@ from .firmware import (
     CHECKED_UNCHECKED,
     CHECKED_UNKNOWN,
     CHECKED_VERIFIED,
+    CORE_SYSTEM_FIRMWARE_STATES,
     DECLARATION_ABSENT,
     DECLARATION_PACKAGED,
     DECLARATION_READ,
@@ -277,13 +294,29 @@ from .firmware import (
     SOURCE_SLUG,
     SOURCE_SYSTEMNAME,
     SYSTEMS_WITHOUT_CATALOGUE_ID,
+    SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
+    SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
+    SYSTEM_FIRMWARE_OPEN,
+    SYSTEM_FIRMWARE_RUNS_WITHOUT,
     ArchiveReason,
     CoreDeclarationState,
+    CoreSystemFirmware,
     DeclaredKind,
     FirmwareChecked,
     FirmwareIdentityKind,
     FirmwareNeed,
     SystemSource,
+)
+
+# The evidence scale the world-knowledge mark's `evidence` comes from, as the
+# CONTRACT spells it. The bracket forms beside these in `atlas.system_firmware`
+# ([V], [D], [O]) are this repository's documentation notation and stay inside
+# the package; a client renders the word.
+from .system_firmware import (
+    EVIDENCE_WORD_DERIVED,
+    EVIDENCE_WORD_OPEN,
+    EVIDENCE_WORD_VERIFIED,
+    STATED_EVIDENCE_WORDS,
 )
 from .content_tree_wiring import (
     ArrangementWiring,
@@ -420,6 +453,12 @@ from .placement import (
     ESTABLISHED_FOR_UNPACKED_GAME_DIRECTORY,
     FILES_ESTABLISHED_FOR_TOKENS,
     REASON_ACTIVE_USER_UNRECORDED,
+    REASON_ARCHIVE_CONTENT_AMBIGUOUS,
+    REASON_ARCHIVE_CONTENT_MIXED,
+    REASON_ARCHIVE_CONTENT_UNRECOGNISED,
+    REASON_ARCHIVE_MEMBER_PINNED,
+    REASON_ARCHIVE_FORMAT_UNREAD,
+    REASON_ARCHIVE_UNREAD,
     REASON_CARD_INDEX_OUTSIDE_RECORDED_NAMES,
     REASON_CONFIGURED_USER_HAS_NO_TREE,
     REASON_CONFIGURED_USER_ID_UNREAD,
@@ -428,6 +467,8 @@ from .placement import (
     REASON_CONFIGURED_USER_SETUP_UNESTABLISHED,
     REASON_CONTENT_CLASS_UNNAMED,
     REASON_CONTENT_CLASS_UNRECORDED,
+    REASON_HD_BOOT_ABSENT,
+    REASON_HD_IMAGE_UNREAD,
     REASON_DATA_ROOT_DECIDED_BY_LAUNCH,
     REASON_EMULATED_MODEL_UNRECORDED,
     REASON_HDD_PATH_UNSET,
@@ -443,10 +484,13 @@ from .placement import (
     REASON_REGION_DECIDED_BY_DISC,
     REASON_SAVEPATH_CONFIG_UNREADABLE,
     REASON_SAVEPATH_UNTRANSLATABLE,
+    REASON_WHDLOAD_PREFS_UNREAD,
+    REASON_WHDLOAD_SAVEPATH_UNRECORDED,
     REASON_SESSION_OVERRIDE_SET,
     REASON_SLOT_DEVICE_UNINTERPRETED,
     REASON_SLOT_HOLDS_AGP_DEVICE,
     REASON_USER_LISTING_UNESTABLISHED,
+    REASON_VOLUME_BOOTS_ITSELF,
     REASON_VIRTUAL_SD_DISABLED,
     ROLE_BATTERY,
     ROLE_NOTES,
@@ -454,6 +498,7 @@ from .placement import (
     ROLE_HIGH_SCORE,
     ROLE_MEMORY_CARD,
     ROLE_SETTINGS,
+    ROLE_UNKNOWN,
     ROLES,
     ROOT_CONTENT_DIRECTORY,
     ROOT_EMULATOR_DIRECTORY,
@@ -490,10 +535,14 @@ __all__ = [
     # Entry points
     "detect",
     "every_installation",
-    # The one capability a host grants: which zstd provider opens an AppImage
+    # The two capabilities a host grants: which zstd provider opens an
+    # AppImage, and which interpreter the core probe runs under
     "register_zstd_provider",
     "zstd_provider",
     "ZstdProvider",
+    "register_core_probe_interpreter",
+    "core_probe_interpreter",
+    "CoreProbeInterpreter",
     # The vocabulary the questions take, and how to check a name against it
     "from_esde_system",
     "known_systems",
@@ -613,6 +662,7 @@ __all__ = [
     "FirmwareIdentityKind",
     "ArchiveReason",
     "CoreDeclarationState",
+    "CoreSystemFirmware",
     "SystemSource",
     # Vocabulary values — path kinds and read statuses (answers carry both)
     "KIND_FILE",
@@ -661,6 +711,15 @@ __all__ = [
     "SOURCE_SLUG",
     "SOURCE_NONE",
     "SOURCE_CARD",
+    "SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT",
+    "SYSTEM_FIRMWARE_CORE_ALTERNATIVE",
+    "SYSTEM_FIRMWARE_RUNS_WITHOUT",
+    "SYSTEM_FIRMWARE_OPEN",
+    "CORE_SYSTEM_FIRMWARE_STATES",
+    "EVIDENCE_WORD_VERIFIED",
+    "EVIDENCE_WORD_DERIVED",
+    "EVIDENCE_WORD_OPEN",
+    "STATED_EVIDENCE_WORDS",
     "SYSTEMS_WITHOUT_CATALOGUE_ID",
     # Vocabulary values — the holes a caller fills, and the closed sets the
     # contract serializes them beside. A client branches on `needs` and reads
@@ -684,6 +743,12 @@ __all__ = [
     "ESTABLISHED_FOR_UNPACKED_GAME_DIRECTORY",
     "FILES_ESTABLISHED_FOR_TOKENS",
     "REASON_ACTIVE_USER_UNRECORDED",
+    "REASON_ARCHIVE_CONTENT_AMBIGUOUS",
+    "REASON_ARCHIVE_CONTENT_MIXED",
+    "REASON_ARCHIVE_CONTENT_UNRECOGNISED",
+    "REASON_ARCHIVE_MEMBER_PINNED",
+    "REASON_ARCHIVE_FORMAT_UNREAD",
+    "REASON_ARCHIVE_UNREAD",
     "REASON_CARD_INDEX_OUTSIDE_RECORDED_NAMES",
     "REASON_CONFIGURED_USER_HAS_NO_TREE",
     "REASON_CONFIGURED_USER_ID_UNREAD",
@@ -692,6 +757,8 @@ __all__ = [
     "REASON_CONFIGURED_USER_SETUP_UNESTABLISHED",
     "REASON_CONTENT_CLASS_UNNAMED",
     "REASON_CONTENT_CLASS_UNRECORDED",
+    "REASON_HD_BOOT_ABSENT",
+    "REASON_HD_IMAGE_UNREAD",
     "REASON_DATA_ROOT_DECIDED_BY_LAUNCH",
     "REASON_EMULATED_MODEL_UNRECORDED",
     "REASON_HDD_PATH_UNSET",
@@ -707,10 +774,13 @@ __all__ = [
     "REASON_REGION_DECIDED_BY_DISC",
     "REASON_SAVEPATH_CONFIG_UNREADABLE",
     "REASON_SAVEPATH_UNTRANSLATABLE",
+    "REASON_WHDLOAD_PREFS_UNREAD",
+    "REASON_WHDLOAD_SAVEPATH_UNRECORDED",
     "REASON_SESSION_OVERRIDE_SET",
     "REASON_SLOT_DEVICE_UNINTERPRETED",
     "REASON_SLOT_HOLDS_AGP_DEVICE",
     "REASON_USER_LISTING_UNESTABLISHED",
+    "REASON_VOLUME_BOOTS_ITSELF",
     "REASON_VIRTUAL_SD_DISABLED",
     "CFG_LAYER_CONTENT_DIR_OVERRIDE",
     "CFG_LAYER_CORE_OVERRIDE",
@@ -737,6 +807,7 @@ __all__ = [
     "ROLE_DISK_DIFF",
     "ROLE_HIGH_SCORE",
     "ROLE_SETTINGS",
+    "ROLE_UNKNOWN",
     "ROLES",
     "KEYING_GAME_ID",
     "KEYING_SERIAL",
@@ -888,6 +959,7 @@ __all__ = [
     "CAVEAT_STANDALONE_UNSUPPORTED",
     "CAVEAT_SYMLINK_LOOP",
     "CAVEAT_SYSTEM_ASSIGNMENT_DERIVED",
+    "CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE",
     "CAVEAT_SYSTEM_NOT_IN_CATALOGUE",
     "CAVEAT_SYSTEM_ASSIGNMENT_MAY_HIDE_CORES",
     "CAVEAT_SYSTEM_DIRECTORY_CLEARED",

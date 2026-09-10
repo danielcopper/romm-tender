@@ -195,9 +195,9 @@ class TestSyncRomSaves:
 
         orig_sync = svc._sync_engine.do_sync_rom_saves
 
-        def wrapped_sync(rom_id, *args):
+        def wrapped_sync(rom_id, *args, **kwargs):
             call_order.append("sync")
-            return orig_sync(rom_id, *args)
+            return orig_sync(rom_id, *args, **kwargs)
 
         svc._sync_engine.do_sync_rom_saves = wrapped_sync  # type: ignore[method-assign]
 
@@ -222,7 +222,7 @@ class TestSyncRomSaves:
         _install_rom(svc, tmp_path)
 
         # Stub do_sync_rom_saves to return 1 conflict, 0 synced, 0 errors
-        def stub_sync(rom_id, *args):
+        def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, [], [{"type": "newer_in_slot", "rom_id": rom_id}])
 
         svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
@@ -353,9 +353,9 @@ class TestSyncAllSaves:
         # do_sync_rom_saves, wrapped to record call ordering.
         orig_sync = svc._sync_engine.do_sync_rom_saves
 
-        def wrapped_sync(rom_id, *args):
+        def wrapped_sync(rom_id, *args, **kwargs):
             call_order.append("sync")
-            return orig_sync(rom_id, *args)
+            return orig_sync(rom_id, *args, **kwargs)
 
         svc._sync_engine.do_sync_rom_saves = wrapped_sync  # type: ignore[method-assign]
 
@@ -382,7 +382,7 @@ class TestSyncAllSaves:
 
         # Stub the matrix worker to produce conflicts but no errors (every ROM
         # decides via do_sync_rom_saves now, ADR-0017).
-        def stub_sync(rom_id, *args):
+        def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, [], [{"type": "newer_in_slot", "rom_id": rom_id}])
 
         svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
@@ -592,9 +592,9 @@ class TestPostExitSync:
         # Patch do_sync_rom_saves to record call ordering.
         orig_sync = svc._sync_engine.do_sync_rom_saves
 
-        def wrapped_sync(rom_id, *args):
+        def wrapped_sync(rom_id, *args, **kwargs):
             call_order.append("sync")
-            return orig_sync(rom_id, *args)
+            return orig_sync(rom_id, *args, **kwargs)
 
         svc._sync_engine.do_sync_rom_saves = wrapped_sync  # type: ignore[method-assign]
 
@@ -639,7 +639,7 @@ class TestPostExitSync:
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
 
-        def stub_sync(rom_id, *args):
+        def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, [], [{"type": "newer_in_slot", "rom_id": rom_id}])
 
         svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
@@ -1092,7 +1092,7 @@ class TestSyncCallableErrorMessages:
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
 
-        def stub_sync(rom_id, *args):
+        def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, ["pokemon.srm: bad gateway"], [])
 
         svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
@@ -1110,7 +1110,7 @@ class TestSyncCallableErrorMessages:
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
 
-        def stub_sync(rom_id, *args):
+        def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, ["pokemon.srm: timeout"], [])
 
         svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
@@ -1128,7 +1128,7 @@ class TestSyncCallableErrorMessages:
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
 
-        def stub_sync(rom_id, *args):
+        def stub_sync(rom_id, *args, **kwargs):
             return (2, 0, ["pokemon.srm: timeout"], [])
 
         svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
@@ -1145,7 +1145,7 @@ class TestSyncCallableErrorMessages:
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
 
-        def stub_sync(rom_id, *args):
+        def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, ["a.srm: timeout", "b.srm: timeout", "c.srm: timeout"], [])
 
         svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
@@ -1161,7 +1161,7 @@ class TestSyncCallableErrorMessages:
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
 
-        def stub_sync(rom_id, *args):
+        def stub_sync(rom_id, *args, **kwargs):
             return (0, 0, ["pokemon.srm: 502 bad gateway"], [])
 
         svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
@@ -1186,7 +1186,7 @@ class TestSyncCallablesSurfaceDirectionCounts:
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
 
-        def stub_sync(rom_id, *args):
+        def stub_sync(rom_id, *args, **kwargs):
             return (0, 2, [], [])  # two downloads, no upload
 
         svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
@@ -1205,7 +1205,7 @@ class TestSyncCallablesSurfaceDirectionCounts:
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
 
-        def stub_sync(rom_id, *args):
+        def stub_sync(rom_id, *args, **kwargs):
             return (3, 0, [], [])  # three uploads, no download
 
         svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
@@ -1224,7 +1224,7 @@ class TestSyncCallablesSurfaceDirectionCounts:
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path)
 
-        def stub_sync(rom_id, *args):
+        def stub_sync(rom_id, *args, **kwargs):
             return (1, 2, [], [])  # one up, two down
 
         svc._sync_engine.do_sync_rom_saves = stub_sync  # type: ignore[method-assign]
@@ -1732,7 +1732,7 @@ class TestSaveSyncDeviceGate:
         counter_lock = threading.Lock()
         state = {"active": 0, "peak": 0}
 
-        def slow_sync(rom_id, *args):
+        def slow_sync(rom_id, *args, **kwargs):
             with counter_lock:
                 state["active"] += 1
                 state["peak"] = max(state["peak"], state["active"])

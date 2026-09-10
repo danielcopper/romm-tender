@@ -48,8 +48,8 @@ The [emu-atlas](https://github.com/danielcopper/emu-atlas) resolver — the conf
 extracted from this plugin.
 
 - **Upstream:** <https://github.com/danielcopper/emu-atlas>
-- **Version:** 0.12.0 — tag `v0.12.0`, from the release's `emu_atlas-0.12.0-py3-none-any.whl`
-  (`sha256:ddd5286e12d7c13f68b14aeef4ce35b1bfa83ec1aebbd797ae07c40b7ff04a3c`)
+- **Version:** 0.15.0 — tag `v0.15.0`, from the release's `emu_atlas-0.15.0-py3-none-any.whl`
+  (`sha256:07b8aa8c2d46e9716d714d4e4e485785b706e43775145084b3ab056ec28fe289`)
 - **License:** MIT — see [`atlas.LICENSE`](atlas.LICENSE)
 - **Local patches:** none. Upstream made the package relocatable in
   [emu-atlas#327](https://github.com/danielcopper/emu-atlas/issues/327) — no absolute self-imports, no `files("atlas")`
@@ -62,11 +62,12 @@ verbatim as `atlas.SHA256SUMS`. That keeps `atlas/` exactly equal to the manifes
 exceptions. The equality half is not optional: `sha256sum -c --ignore-missing` exits 0 after a vendored file is deleted,
 so a plain checksum sweep would pass a half-copied tree.
 
-`_vendor.atlas` is consumed by two adapters: `adapters/atlas_firmware.py` (the firmware seams behind
-`services.protocols.FirmwareResolver` and `FirmwareFolderVerdictFn`) and `adapters/atlas_catalogue.py` (the emulator
-catalogue behind `CoreInfoProvider`, `SystemSupportedExtensionsFn`, `SystemM3uSupportFn` and `SystemKnownFn`).
+`_vendor.atlas` is consumed by three adapters: `adapters/atlas_firmware.py` (the firmware seams behind
+`services.protocols.FirmwareResolver` and `FirmwareFolderVerdictFn`), `adapters/atlas_catalogue.py` (the emulator
+catalogue behind `CoreInfoProvider`, `SystemSupportedExtensionsFn`, `SystemM3uSupportFn` and `SystemKnownFn`), and
+`adapters/atlas_saves.py` (where one ROM's save lives and what it consists of, behind `SaveLocationReader`).
 `tests/test_vendored_atlas.py` additionally imports it and asserts the pinned version, so the copy is proven to resolve
-and not merely to hash correctly even if both adapters ever stop importing it. That test also imports the tree with
+and not merely to hash correctly even if all three adapters ever stop importing it. That test also imports the tree with
 `xml.etree` blocked at `sys.meta_path`: Decky Loader's PyInstaller runtime does not ship that module, upstream answers
 it with `atlas/_xml.py` (ElementTree's shape on expat directly), and nothing about a release states which parser it
 reaches for — so a version bump that reintroduces `xml.etree` would import cleanly in CI and kill the backend at
@@ -135,9 +136,12 @@ licence, and the update procedure below has to put it back by hand for exactly t
 
 Decky Loader ships a **frozen Python** (a PyInstaller bundle), and nothing in this repo runs it — the venv,
 `mise run test`, basedpyright and the linters are all ordinary CPython. A vendored package's assumptions about the
-standard library, and about its own name, are therefore invisible here and surface at plugin load on a device. Both
-shapes below are emu-atlas's own history and are fixed upstream in the release vendored today — but the first one is
-this plugin's history too, it predates any vendoring at all, and the first atlas release vendored here still carried it.
+standard library, about its own name, and about the program it is running inside are therefore invisible here and
+surface on a device — at plugin load, or the first time a question reaches the assumption. All three shapes below are
+emu-atlas's own history, and the first one is this plugin's history too: it predates any vendoring at all, and the first
+atlas release vendored here still carried it. The first two are fixed upstream in the release vendored today and ask
+nothing of this host. The third is fixed upstream **only halfway, by design** — the other half is a grant this repo has
+to make, so read that bullet before concluding there is nothing to do here.
 
 - **A frozen build drops the stdlib wrapper and keeps the extension it wraps.** `xml.etree` is Python source over the
   expat extension, and PyInstaller bundles only the modules its analysis reached: on Decky's bundle
@@ -167,17 +171,35 @@ this plugin's history too, it predates any vendoring at all, and the first atlas
   the copy resolves under whatever parent it is given
   ([emu-atlas#327](https://github.com/danielcopper/emu-atlas/issues/327)); `atlas/_data.py` is the single place every
   packaged table is read through.
+- **A package that spawns `sys.executable`, which on a frozen host is not an interpreter but the application.** atlas
+  answers "what does this core save" by loading the core in a child process — up to 0.13.0 a `subprocess.run` of
+  `sys.executable -m atlas._core_probe <so>`, with `capture_output=True` and a 15-second timeout — which is a probe only
+  where `sys.executable` really is a Python. In the plugin process it is `~/homebrew/services/PluginLoader`, and a
+  PyInstaller bootloader ignores the `-m` arguments: the spawn started a **second Decky Loader, as root**, which
+  restarted `steamwebhelper` — the whole Steam UI went down and came back some twelve seconds later — and reloaded every
+  plugin, whereupon the reloaded backend's startup cleanup deleted the in-flight ROM download's `.tmp` file. Reproduced
+  four times from a script on the device. Both the count and that duration are observations from that device session,
+  timed and counted by hand; nothing in this repo records either, so do not go looking for the artifact.
+  `capture_output=True` is why it left no trace: the second loader's entire output was swallowed, so nothing about any
+  of it reached a log. A device test found it and no gate here would have said a word — under the venv's ordinary
+  CPython that same line is a working probe. **Fixed in 0.14.0, and deliberately only halfway**: atlas now derives an
+  interpreter only where the running program plainly is one, and takes a host-registered path ahead of that, so this
+  host has to name one — which is [`adapters/atlas_host.py`](../adapters/atlas_host.py)'s whole job. Where none is named
+  nothing is spawned and every core atlas is asked about comes back unknown, which is quiet: the answers get poorer — a
+  libretro entry's save answer first, since that is the only question this plugin puts that reaches the probe — and
+  nothing fails.
 
 Neither artifact can see any of this, and each says less than it looks like it does. The checksum gate says the copy is
 the bytes we pinned; it never imports anything. What says the copy imports is the test suite — most directly
 [`tests/test_vendored_atlas.py`](../../tests/test_vendored_atlas.py), whose whole job that is, and alongside it every
 test that reaches the firmware adapter — and all of it only under the venv's ordinary CPython. **Vendoring or bumping a
-package is therefore a device test**, and what it guards against is a load-time failure — the plugin does not come up at
-all, rather than one feature misbehaving, since `main.py` reaches the vendored resolver through a chain of module-level
-imports. That matters most for what comes next: #1735 names `backports.zstd` as the next package expected here, vendored
-so that Decky Loader's embedded Python 3.11 gains a zstd codec it does not ship. How that one behaves on a frozen
-interpreter is not known yet — it is worth finding out on a device rather than inferring, which is the whole point of
-the entries above.
+package is therefore a device test**, and what it guards against runs from a load-time failure to damage done at the
+first question that reaches the assumption. `main.py` reaches the vendored resolver through a chain of module-level
+imports, so an import that raises takes the whole plugin down rather than one feature; the spawn shape above waited for
+the first save question and then took the Steam UI down with it. That matters most for what comes next: #1735 names
+`backports.zstd` as the next package expected here, vendored so that Decky Loader's embedded Python 3.11 gains a zstd
+codec it does not ship. How that one behaves on a frozen interpreter is not known yet — it is worth finding out on a
+device rather than inferring, which is the whole point of the entries above.
 
 ## Formatters and vendored copies
 

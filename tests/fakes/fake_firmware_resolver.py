@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from domain.firmware_wants import (
     DECLARED_DIRECTORY,
     DECLARED_FILE,
+    CoreFirmwareVerdict,
     FirmwareCatalogue,
     FirmwarePlacement,
     FirmwareWant,
@@ -41,6 +42,10 @@ class FakeFirmwareResolver:
     otherwise, and a test pins a reading the files would not give by passing
     ``present`` there.
 
+    :meth:`record_system` states the second axis — what the packaged table says
+    about the console one core declares for. It is per core rather than per file
+    because the same images read differently under two cores of one system.
+
     ``calls`` counts invocations so a test can pin that a whole-machine question
     costing hundreds of milliseconds on a real device is asked once per query
     rather than once per platform.
@@ -62,7 +67,24 @@ class FakeFirmwareResolver:
         self.caveats = caveats
         self.bios_root = bios_root
         self.present_probe = present_probe
+        self.core_verdicts: dict[str, CoreFirmwareVerdict] = {}
         self.calls = 0
+
+    def record_system(
+        self,
+        core_so: str,
+        *,
+        system_firmware: str | None,
+        requirements_met: bool | None = None,
+    ) -> None:
+        """State what the packaged table records about *core_so*'s console.
+
+        A core no test records anything for is a core the table holds no entry
+        for, which is the ordinary case and the one that must change nothing.
+        """
+        self.core_verdicts[core_so] = CoreFirmwareVerdict(
+            system_firmware=system_firmware, requirements_met=requirements_met
+        )
 
     def declare(
         self,
@@ -136,6 +158,7 @@ class FakeFirmwareResolver:
             unread_cores=self.unread_cores,
             resolved=self.resolved,
             caveats=self.caveats,
+            core_verdicts=dict(self.core_verdicts),
         )
 
 

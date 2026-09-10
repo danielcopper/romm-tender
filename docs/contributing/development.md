@@ -346,7 +346,7 @@ py_modules/
     downloads.py                     # DownloadService — ROM downloads, ZIP/M3U, fcntl queue
     firmware/                        # FirmwareService façade — listing, demand, status, downloads, deletion
     session_lifecycle.py             # SessionLifecycleService — post-exit orchestration
-    migration.py                     # MigrationService — RetroDECK path + save-sort migration
+    migration/                       # MigrationService — RetroDECK home migration; SaveSortMigrator — save-sort migration
     steamgrid.py                     # SteamGridService — SteamGridDB artwork
     artwork.py                       # ArtworkService — cover art staging/cleanup
     game_detail.py / playtime.py / achievements.py / settings.py / cores.py
@@ -362,7 +362,7 @@ py_modules/
     sqlite_migrations.py / machine_id.py  # schema migration runner (PRAGMA user_version) + machine-id reader
     download_file.py / firmware_file.py / migration_file.py / rom_files.py / save_file.py
     retrodeck_paths.py / retroarch_config.py / retroarch_core_info.py / es_find_rules.py
-    atlas_catalogue.py / atlas_firmware.py  # the two adapters over the vendored emu-atlas resolver
+    atlas_catalogue.py / atlas_firmware.py / atlas_saves.py  # the adapters over the vendored emu-atlas resolver
     system_clock.py / system_uuid_gen.py / asyncio_sleeper.py / hostname.py / path_probe.py / plugin_metadata.py / debug_logger.py
   db/
     migrations/001_initial.sql       # SQLite schema DDL
@@ -371,7 +371,7 @@ py_modules/
     rom.py / rom_install.py / rom_metadata.py / rom_metadata_mapping.py / playtime.py
     rom_save_sync_state.py / bios_file.py / firmware_cache.py / sync_run.py
     sync_action.py / sync_diff.py / preview_delta.py / work_unit.py
-    save_path.py / save_status*.py / save_attribution.py / save_extensions.py
+    save_path.py / save_status*.py / save_attribution.py / save_answer.py
     firmware_paths.py / bios.py / achievements.py / shortcut_data.py / steam_categories.py
     sgdb_artwork.py / installed_roms.py / rom_files.py / retroarch_core_info.py
     state_migrations.py / sync_state.py / emulator_tag.py / version.py

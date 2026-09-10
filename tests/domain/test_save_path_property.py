@@ -24,24 +24,29 @@ from typing import Any
 from hypothesis import given
 from hypothesis import strategies as st
 
-from domain.save_extensions import get_save_extensions
 from domain.save_path import compute_local_save_target
 
-# Every extension the generators draw from — the union across all systems in
-# domain.save_extensions, leading dot stripped to match the file_extension shape.
-_SYSTEMS: tuple[str | None, ...] = (
-    None,
-    "nds",
-    "segacd",
-    "saturn",
-    "ngp",
-    "ngpc",
-    "pokemini",
-    "amiga",
-    "amigacd32",
-)
-_ALL_EXTENSIONS: tuple[str, ...] = tuple(
-    sorted({ext.lstrip(".") for system in _SYSTEMS for ext in get_save_extensions(system)})
+# The extension space the generators draw from, leading dot stripped to match
+# the ``file_extension`` shape a server row carries. It is an INPUT to a
+# property about the grouping key, not a claim about what any emulator writes —
+# which emulator writes what is the save resolver's answer now
+# (``domain.save_answer``), read live off the machine. These twelve are the ones
+# real cores were observed writing when the plugin still held its own table, and
+# they stay here because a realistic spread of extensions is what makes the
+# property meaningful; adding one never changes what the plugin syncs.
+_ALL_EXTENSIONS: tuple[str, ...] = (
+    "bcr",
+    "bkr",
+    "brm",
+    "dsv",
+    "eep",
+    "flash",
+    "ngf",
+    "nvr",
+    "rtc",
+    "sav",
+    "smpc",
+    "srm",
 )
 
 # A safe rom_name space: plain identifiers plus a couple of realistic names

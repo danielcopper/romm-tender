@@ -129,10 +129,40 @@ locally with `mise run docs`.
   the constructor from the node — `el.ownerDocument.defaultView` — as `WidePage` and `ScrollRegion` do. **The frontend
   suite cannot see this**: happy-dom has one realm, so the wrong global and the right one are the same object and every
   test passes.
-- **A vendored package's stdlib assumptions are invisible to every check here**: nothing in this repo's toolchain runs
-  Decky Loader's frozen Python, so vendoring or bumping anything under `_vendor/` is a device-test trigger, and what it
-  risks is the plugin not loading at all rather than one feature misbehaving —
-  [`.claude/rules/vendored-assets.md`](.claude/rules/vendored-assets.md).
+- **A vendored package's assumptions about the runtime it loads in are invisible to every check here**: nothing in this
+  repo's toolchain runs Decky Loader's frozen Python, so vendoring or bumping anything under `_vendor/` is a device-test
+  trigger, and what it risks is not confined to load — the plugin may fail to come up at all, or a question may reach
+  the assumption later and do its damage then: the spawn shape the grant below answers took the whole Steam UI down at
+  the first save question — [`.claude/rules/vendored-assets.md`](.claude/rules/vendored-assets.md). That assumption is
+  answered by a **grant this repo makes and nothing enforces**: `adapters/atlas_host.py` hands the resolver an
+  interpreter for its core probe, because frozen, `sys.executable` is the loader binary rather than a Python. Removing
+  or forgetting the grant fails nothing — atlas probes no core, so every core it is asked about comes back unknown, and
+  the one question this plugin puts that reaches the probe degrades: a **libretro** entry's save answer, which loses the
+  core's recorded save behaviour (`core-generation-unestablished`, `core-unqueryable`) and then usually establishes
+  nothing and names no file. Usually, not always — an answer that comes from a per-game override still names its files —
+  and a standalone emulator's save answer never probes at all, so what is lost is a subset nothing counts. Green suite,
+  green gate, quietly poorer answers: `bootstrap/adapters.py` logs which interpreter a probe would run under because
+  that line is the only place the **cause** is named — the caveat itself reaches the debug log and the wire, but nothing
+  in it separates "no interpreter" from "the core would not load".
+- **An empty collection in a resolver answer is a statement about PROVENANCE, never about need** — and Python spells it
+  the same as an absence, which is what makes this the trap it is. The verdict on a catalogue entry is
+  `requirements_met`, three-valued: `True`, `False`, `None` for "could not be established". It narrows only and is never
+  `True` out of ignorance — with `verify=False` an entry whose required files are **present** still answers `None`,
+  because presence is not the question that field asks. What an empty `requirements` list means is decided by
+  `declaration` and by nothing else: `read` and empty is the only pairing that means "this emulator needs no firmware";
+  `packaged` and empty means a card exists and this query established nothing (a card may identify its image by
+  **content**, so it names no file until the bytes are read); `unsupported` means the emulator is installed and the
+  resolver has no source for what it wants. Reading a length where the verdict was asked produced a green "needs
+  nothing" over a console that does not boot without an image, twice in one hour, and the second time with
+  `requirements_met: None` already on screen. The same shape recurs across the answer: `system_firmware: None` is
+  nothing recorded rather than nothing needed, and `core_so: None` is a standalone emulator's entry rather than no
+  entry. **The answer is entry-shaped**, and `answer.requirements` is a flattening that has already discarded
+  `declaration`, `requirements_met`, `caveats`, `unread` and `refused` — so an entry-level question answered from it is
+  answered from evidence that was thrown away before the question was put. Related and separate: `description` is
+  deliberately outside the resolver's contract (it is the packager's prose from a core's `.info`), so it is not a field
+  to render as a row's headline. Nothing mechanical carries any of this; the vocabulary overlaps ours almost exactly
+  (`satisfied`, `required`, `present`, `cores`, `description` all exist on both sides and name different types), which
+  is what makes a wrong reading look like a correct one.
 
 ## Current State
 
@@ -369,26 +399,28 @@ Format: **invariant** — tier — enforced by.
   `retrodeck.json`, and does no network work despite living on the RomM HTTP adapter), `SystemSupportedExtensionsFn` /
   `SystemKnownFn` (two more questions to the same catalogue, through the same adapter cache), and
   `FirmwareFolderVerdictFn` (lists one core's declared folder and reads every candidate inside it the way the core does
-  — 0.26 s for LRPS2 on the reference machine, the one seam here a cost was measured for), the two path resolvers —
-  `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker, a directory that may sit on the SD card the
-  marker is pending a migration away from) and `ResolvedPathFn` (the same walk, but on **both** sides of a comparison,
-  so a call site costs what the rows it checks cost, not what it checks them against) — and the `RetroDeckPaths` getters
-  that answer with a root: `bios_path`, `roms_path`, `saves_path`, `states_path` and `retrodeck_home`, five of the
-  Protocol's six path getters, each resolving on every call. The sixth, `config_path`, stays out because it resolves
-  nothing — it is `os.path.join` over the user home, so calling it costs no I/O. One other real I/O seam was weighed and
-  kept out — the reason is in the script's docstring, and it is not an exemption; nor is it an inventory of what else
-  touches the disk. **"It's only a read" is the reasoning this rule exists to refuse**: `SqliteUnitOfWork.__enter__`
-  issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the write lock. The database is in WAL, so readers are
-  unaffected — but every other **writer** waits on the lock for up to `busy_timeout=5000` and fails with `SQLITE_BUSY`
-  if it is still held then, and `FakeUnitOfWork` shares no connection, so no unit test notices. Six call sites had
-  drifted across the rule before anything looked (#1779), for the reason the check exists: nothing at a call site
-  reveals that an injected seam touches the disk. **The rule and the gate come from reading code — no measurement of how
-  long any of those transactions actually held the lock exists, and nothing here should be read as one.** What the check
-  sees is the deadlock rule's matcher unchanged — an **attribute** call naming a listed seam, lexically inside a
-  `with <...>uow_factory()` block in the same function scope — so it inherits every blind spot of that half: a seam
-  behind a helper one level down, an alias to a local, a factory attribute whose name does not end in `uow_factory`, a
-  nested `def`/`lambda` (which resets the scope by design), a seam **passed as a bound method**
-  (`run_in_executor(None, self._disc_resolver.enumerate_discs, install)` — an attribute, not a call, and
+  — 0.26 s for LRPS2 on the reference machine), the save answer — `resolve_save_answer` and the saves package's own
+  `save_answer` wrapper, 170 ms warm and 490 ms cold per ROM, which makes it the most expensive entry in the list — the
+  two path resolvers — `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker, a directory that may
+  sit on the SD card the marker is pending a migration away from) and `ResolvedPathFn` (the same walk, but on **both**
+  sides of a comparison, so a call site costs what the rows it checks cost, not what it checks them against) — and the
+  `RetroDeckPaths` getters that answer with a root: `bios_path`, `roms_path`, `saves_path`, `states_path` and
+  `retrodeck_home`, five of the Protocol's six path getters, each resolving on every call. The sixth, `config_path`,
+  stays out because it resolves nothing — it is `os.path.join` over the user home, so calling it costs no I/O. Those two
+  timings are the only entries a cost was measured for; every other one is listed from reading its implementation. One
+  other real I/O seam was weighed and kept out — the reason is in the script's docstring, and it is not an exemption;
+  nor is it an inventory of what else touches the disk. **"It's only a read" is the reasoning this rule exists to
+  refuse**: `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the write lock. The
+  database is in WAL, so readers are unaffected — but every other **writer** waits on the lock for up to
+  `busy_timeout=5000` and fails with `SQLITE_BUSY` if it is still held then, and `FakeUnitOfWork` shares no connection,
+  so no unit test notices. Six call sites had drifted across the rule before anything looked (#1779), for the reason the
+  check exists: nothing at a call site reveals that an injected seam touches the disk. **The rule and the gate come from
+  reading code — no measurement of how long any of those transactions actually held the lock exists, and nothing here
+  should be read as one.** What the check sees is the deadlock rule's matcher unchanged — an **attribute** call naming a
+  listed seam, lexically inside a `with <...>uow_factory()` block in the same function scope — so it inherits every
+  blind spot of that half: a seam behind a helper one level down, an alias to a local, a factory attribute whose name
+  does not end in `uow_factory`, a nested `def`/`lambda` (which resets the scope by design), a seam **passed as a bound
+  method** (`run_in_executor(None, self._disc_resolver.enumerate_discs, install)` — an attribute, not a call, and
   `run_in_executor` is exactly how `disc.py` and `cores.py` reach their `_io` bodies; the same shape
   `check_read_only_module.py` records for its own gate), and the hand-maintained list itself, which cannot notice a seam
   whose implementation _grows_ a file read later. Matching only attribute calls is deliberate: the pure
@@ -491,6 +523,92 @@ Format: **invariant** — tier — enforced by.
   `FirmwareDownloader.download_platform_firmware_file`, which answers one named file and so refuses with a reason where
   the batch simply passes the row over); `FirmwareDownloader.download_firmware(firmware_id)` still does not. It is the
   DECLARATION's kind, so it survives an absent folder, which is exactly the case a presence check would let through
+- **The console's own firmware demand is a value of its own (`system_image`) and is never folded into a count, and the
+  resolver's `system_firmware: null` reaches it as a claim about nothing** — test + prompt-only —
+  `tests/domain/test_bios_status.py::TestClassifySystemImage` pins all four answers and the precedence over them,
+  `::TestTheVerdictOverTheSystemImage` pins what the level and the token do with each, and
+  `tests/services/test_firmware.py::TestTheConsolesOwnFirmwareDemand` pins the PlayStation case end to end including
+  that the overview and the game page stamp one answer. The frontend halves are pinned per surface
+  (`src/components/BiosTab.test.tsx`, `src/components/library/PlatformsTab.test.tsx`). **The rule spans eight modules
+  and nothing joins them** — counted one per file the answer passes through, four backend and four frontend: the adapter
+  (`adapters/atlas_firmware.py`) carries `CoreFirmware.system_firmware` and `requirements_met` per core,
+  `domain/firmware_wants.py::CoreFirmwareVerdict` holds the four spellings apart from the absence,
+  `domain/bios_status.py::classify_system_image` decides, `services/firmware/status.py` stamps it beside the counts,
+  three frontend surfaces word it (`BiosTab.tsx`, `library/PlatformDetail.tsx`, `library/PlatformsTab.tsx`) and a fourth
+  reads it without wording it (below). A libretro `.info` can mark a file required or optional and nothing else — no way
+  to say "one of these", none to say the console will not start without one — so an author who knows it will not has two
+  lossy moves, and the deployed catalogue takes both: SwanStation marks all five of its PlayStation images **optional**,
+  Beetle PSX marks three of its own **required**. Which is why no count can be relied on to carry this: it is ONE
+  requirement over the whole list, and putting it in `required_count` reports every image the core declares as required
+  — `0 / 5 required files ready` under the SwanStation this was observed on. The twenty in that page's own
+  `0/20 files held` is the library's inventory for the platform, a different set again, and reading the two as one is
+  how the wrong ratio gets written. Each fold fails its own way and all of them silently. Fold it into the counts and
+  the page states a ratio over the wrong set. Read `system_firmware: null` as "this console needs nothing" — a
+  truthiness test, a `!= "runs-without-firmware"` bucket, a default — and the plugin claims an all-clear over a console
+  nobody has looked at, which is the collapse the `unknown`/`not_needed` entry above is about, one axis over. **The
+  demand comes from the table and the presence from our rows, and `requirements_met` is not consulted at all** — weigh
+  the two against each other and you have made the misreading that field exists to prevent, because ignorance there is
+  always `None` and a `False` is therefore a demonstrated statement rather than a disagreement. Its two causes (a
+  DIFFERENT required file absent, or one present with the wrong bytes) each leave one of our own required rows unmet, so
+  the counts already report them by name; the second needs a content check to arise, and the inventory is asked
+  **unverified** (the entry below), so it cannot occur here. What the presence half actually resolves to — a row's
+  `satisfied` is presence, `null` in two shapes, and both read as not held — is written once, at
+  `classify_system_image`, because an outside reader took that field for the resolver's usability answer and drew a
+  false finding from it. And on the frontend, `system_image: "unsettled"` joins `required_withheld` on the KEEPING side
+  of `PlatformDetail`'s `nothingEstablished`: its rows were answered, so withdrawing the downloads there takes away the
+  one action that still moves the platform along. **A fourth frontend reader is the play row's BIOS badge**
+  (`src/utils/playSection.ts::extractBiosInfo`), where `"absent"` is a second established absence beside the required
+  count. Whether the count sees the same thing is the core author's choice, which is why the badge may not be left to
+  it: under SwanStation every image is optional, `required_count` is 0 and the comparison beside it is vacuously false,
+  while under Beetle PSX three of the same images are required and the count raises the badge by itself. One console,
+  one BIOS folder, two answers — and `"absent"` is the same under both. `"unsettled"` deliberately raises no badge, the
+  same reading a withheld required row gets: the badge claims a file is NOT THERE, and nothing established that. **Where
+  BOTH ignorances hold** — a console needing an image whose required folder row could not be judged, the LRPS2 shape and
+  a reachable one — `getUnknownSummary` names the withheld ROW rather than the console. They are not two gaps over two
+  different file sets: a `required_by_active` row always carries the active core, so it is always one of the rows the
+  disjunction is read over. It is always one of the unjudged rows that verdict is read over rather than a finding beside
+  it — the decline needs at least one such row, and this is one — and need not be the only one, since another image the
+  core declares can be unjudged too; it is the only half of the pair that can name a file, and naming it points at the
+  file list, where its caveat explains itself. **All three wording surfaces test `"absent"` BEFORE the level's
+  decline**, and they agree today only because the backend guarantees `absent ⟹ missing`, so the state never arrives: a
+  decline added ahead of that test in `compute_bios_level` would have `PlatformDetail` alone say "Nothing installed
+  could answer for this system" and withdraw every download button while the other two read "Needs at least one BIOS
+  file". Each surface pins its own order (`BiosTab.test.tsx`, `PlatformsTab.test.tsx`) and nothing joins them. **A
+  narrower form of the same answer is read PER CORE onto every row**
+  (`FirmwareCatalogue.cores_needing_one_of_their_files` → `build_file_entry`'s `cores[<core_so>]["needs_one_of"]` and
+  the row's own `system_image_candidate`, worded by `BiosTab.tsx`'s `coreLineSuffix` and marked by
+  `library/PlatformDetail.tsx`'s `diskMark`), and there the rule is that the two keys on that entry are two SPEAKERS:
+  `required` is the core's own `.info`, the other is the packaged table about that core's console counted over the
+  core's whole declaration, and `optional` beside `needs_one_of: 5` is the informative pair rather than a contradiction
+  to resolve. Rewriting the declaration off the demand — printing "required" where the core said optional — puts words
+  in the emulator's mouth and loses the only fact the row had to add; folding the pair the other way loses the demand.
+  **A core is in that narrower answer only where it marks NOTHING required**, which is deliberate and is the second
+  thing nothing checks: a core whose console needs an image and that does state required files says so through those
+  rows' `required_by_active`, so annotating its optional rows too states one requirement twice — it put "the console
+  will not start without one" under `ps1_rom.bin`, which Beetle PSX marks optional while hard-requiring three other
+  images. The same narrowing makes `system_image_candidate` a strict subset of the rows `classify_system_image` weighs,
+  and widening either to match the other is the fix that reintroduces one of those two defects. Nothing checks any of
+  it: `needs_one_of` is a plain int-or-null on a dict a surface may read either key of, and the candidate flag is a
+  plain bool beside a `required_by_active` that reads like its sibling
+- **Which emulator a PLATFORM's answers are about is one pick, and every platform-scoped answer is a projection of it**
+  — test + prompt-only — `tests/services/test_firmware.py::TestOnePlatformOneEmulator` asserts the two surfaces AGREE
+  across every way a platform arrives at an emulator (no pick, each of the three ES-DE offers, a pin naming an emulator
+  the catalogue no longer lists, a pin whose command cannot be baked) rather than pinning today's value, because a value
+  test would pass for a third resolution that diverges on some other configuration;
+  `::TestDownloadRequiredFirmware::test_it_fetches_what_the_platforms_own_pick_calls_required` holds the download button
+  to the same pick. The pick is `domain/emulator_commands.py::resolve_platform_option` — the per-platform override
+  (`settings.json` `platform_cores`) when its label still names a bakeable emulator, else the es_systems default — and
+  it is the read-path precedence `ActiveCoreResolver` applies minus the per-game layer. Three call sites read it today:
+  `FirmwareStatusReader._platform_emulator` (which serves BOTH the overview's `active_core` / `active_core_label` and
+  `check_platform_bios`'s `active_core_so=None` fallback) and `FirmwareDownloader._platform_core`. **Nothing joins
+  them**, and a fourth resolution is exactly what this entry is about: the pane displayed a just-picked PCSX ReARMed and
+  judged the platform by the libretro system default beside it, so one PlayStation read `not_demanded` / `ok` on the
+  game page and `absent` / `missing` on the pane, and the write's own response carried the wrong verdict. `.label` and
+  `.core_so` must come off ONE call — two calls agree by coincidence, which is what the old pair did until an override
+  was set. A **standalone** pick names no core, so `active_core` is `None` and the file rows fall back to every
+  declaring emulator: that is ADR-0020's deferred degradation and it must not be repaired by reaching for a libretro
+  reading of the catalogue instead, which is the disagreement this removed. `CoreInfoProvider.get_active_core` — the
+  "first libretro entry, bakeable or not" reading these sites used — has no production caller left
 - **The whole-machine firmware inventory is never asked with content verification** — prompt-only —
   `firmware_inventory()` is asked unverified and the verified question goes through `FirmwareFolderVerdictFn`, one core
   per call, only for the folder rows `unanswered_folder_cores` reports still open. `verify=True` on the inventory sweeps
@@ -552,6 +670,55 @@ Format: **invariant** — tier — enforced by.
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — prompt-only — sync
   paths, `get_save_status`, and the four slot mutations hold the lock; mechanize via a `rom_save_sync_states.save`
   call-site audit
+- **Which files a game's save consists of is the EMULATOR's answer, read live, and four of its five states refuse the
+  sync — no probe, no state written** — test + prompt-only — `tests/adapters/test_atlas_saves.py` pins the five states
+  and every way the question cannot be put, `tests/domain/test_save_answer.py` pins the precedence that makes "exactly
+  one" well defined, and `tests/services/saves/test_save_shape_gate.py` pins the absences **each beside a control that
+  asserts the same probe DOES happen for a syncable answer** — without those controls a service that had stopped probing
+  entirely would pass. The rule spans seven modules and no diff-scoped review sees it whole: `AtlasSaveLocationAdapter`
+  reads the machine, `domain/save_answer.py` decides what the reading means, `RomInfoService.save_answer` turns it into
+  names, `SyncEngine`'s three per-ROM entry points refuse on it through `sync_engine/_shape_refusal.py`, which holds the
+  reading and the skip shape, `MatrixExecutor.sync_rom_saves` is the backstop every sync path crosses, and
+  `services/saves/status/service.py` puts it on the wire. **Four halves have no mechanical check at all.** (1) The
+  refusal is enforced at four call sites — the three per-ROM entry points, which report the skip via
+  `sync_engine/_shape_refusal.py`'s `live_save_answer` / `save_shape_skip`, and `MatrixExecutor.sync_rom_saves` (reached
+  through `SyncEngine.do_sync_rom_saves`), the backstop that covers the whole-library sweep, whose single result has no
+  room to name the ROM it passed over. A fifth entry point added without either goes green, and its failure is silent
+  because a per-game probe for a shared card finds nothing and reports "no saves". The backstop is pinned by the ABSENCE
+  of a server round-trip, because everything downstream of it is redundantly safe — a refusing answer carries no names,
+  so nothing is probed or grouped even without it. (2) A configuration-role file is excluded by
+  `SaveAnswer.synced_files` and included by `owned_files`, which is what a directory move must carry — a caller reading
+  `components` directly gets neither rule, and syncing Saturn's `.smpc` overwrites the console settings the user chose
+  on the other device. Saturn is the only example that actually reaches the rule on a stock RetroDECK: MAME states a
+  per-game `.cfg` too, but its answer classifies as not-established, so the sync refuses before any role is consulted.
+  The rule is a DENIAL — `CONFIGURATION_ROLES` names what to hold back — and turning it into an allow-list of the roles
+  known today is the one change here that fails in silence and in the expensive direction: the resolver's own `unknown`
+  role (a file on the machine no declaration describes) and a component with no role at all are both carried today, and
+  an allow-list drops them, along with every role upstream names next. `tests/domain/test_save_answer.py` and
+  `tests/adapters/test_atlas_saves.py` pin both directions; nothing else would notice, because a dropped file is simply
+  a file the page does not mention. (3) The two axes a rendering must read alongside the state are single fields nothing
+  forces a consumer to touch. `SaveAnswer.unestablished` holds three shapes, and a truthiness test on
+  `state == "unestablished"` collapses "nobody has audited this core" into "the folder is known and the names are not"
+  and into "the question was never put". `content_installed` is worse, because ignoring it is invisible: an uninstalled
+  ROM answers with a state, a directory and a full file list, every name a prediction about the path the game WOULD
+  occupy, so a surface that renders them tells a user their uninstalled game already has three save files. The wire flag
+  beside each name is `carried`, not `synced`, for the same reason — it names the RULE applied to a file, never that
+  file's sync state. (4) **The question must carry the ROM's REAL content path**, because the answer turns on the
+  content file's own EXTENSION — PUAE answers `save-inside-content` for an Amiga `.adf` and establishes nothing for an
+  `.hdf`; Genesis Plus GX answers a shared `scd_*.brm` for a Sega CD `.chd` and a per-game `.srm` for a `.bin`. Within
+  `RomInfoService` the system and the path are decided in exactly two places — `_installed_answer` for a ROM on disk and
+  `_uninstalled_answer` for one the library only knows about — so ADR-0010's slug leak has two sites to guard there
+  rather than one per caller. A **third** site exists outside it: `services/migration/save_sort.py` asks the resolver
+  directly for each ROM its walk sees, taking both the system and the path off the install record, which is the source
+  ADR-0010 says to use — so it cannot leak the slug, and it is a site the same rule has to hold at. A synthetic stem
+  passed anywhere else answers a different question in a shape that looks like an answer to this one, and nothing would
+  say so. It is also why every per-system pin in `tests/adapters/test_atlas_saves.py` is keyed by `(system, extension)`:
+  a pin that does not name the extension it asked with is pinning nothing, which is how two independent measurements of
+  the same systems produced contradictory fact lists. **Every path asks live and nothing caches an answer** — only the
+  installation handle is memoised — because the user changes a core's options in the emulator's own quick menu between a
+  launch and the next sync; a display cache added without invalidating it on every sync entry is the one change that
+  makes this rule fail silently and expensively. Detail: `docs/architecture/save-sync-coverage.md`, CONTEXT.md → Save
+  state / Save scope
 - **Per-slot server reads/deletes go through `domain/save_slot.py` (legacy omits `&slot=`, client-filters)** —
   prompt-only — `get_slot_saves` / `get_slot_delete_info` / `delete_slot` / `list_file_versions` / `rollback_to_version`
   use `slot_query_param` + `save_in_slot`; RomM can't address `slot:null` via the param, so legacy MUST omit it + filter

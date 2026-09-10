@@ -15,6 +15,7 @@ from tests.services.saves._helpers import (
     _file_md5,
     _get_save_state,
     _install_rom,
+    _seed_rom,
     _seed_save_state,
     _seed_save_state_dict,
     _server_save,
@@ -194,6 +195,32 @@ class TestSaveStatusContentDir:
         # Rollback is explicitly unsupported in content-dir mode (#239) — not
         # left to ``files == []`` to suppress the UI.
         assert result["rollback_supported"] is False
+
+    @pytest.mark.asyncio
+    async def test_the_refusal_still_says_the_game_is_on_disk(self, tmp_path):
+        """``content_installed`` describes the content path, not the save answer.
+
+        The content-dir refusal fabricates its own answer rather than asking the
+        resolver, so the field has to be filled in from the install row. Left at
+        its default an installed game reads as not installed, and the next cut
+        would word every row as a prediction about a game the user is playing.
+        """
+        svc, _ = make_service(tmp_path, get_save_layout=lambda: ContentDir())
+        _install_rom(svc, tmp_path)
+
+        result = await svc.get_save_status(42)
+
+        assert result["save_resolution"]["content_installed"] is True
+
+    @pytest.mark.asyncio
+    async def test_the_refusal_says_an_uninstalled_game_is_not(self, tmp_path):
+        # The other direction, so the field is not just hardcoded true.
+        svc, _ = make_service(tmp_path, get_save_layout=lambda: ContentDir())
+        _seed_rom(svc, 42)
+
+        result = await svc.get_save_status(42)
+
+        assert result["save_resolution"]["content_installed"] is False
 
     @pytest.mark.asyncio
     async def test_in_save_dir_rollback_supported_true(self, tmp_path):

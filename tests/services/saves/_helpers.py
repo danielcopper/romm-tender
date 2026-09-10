@@ -13,6 +13,7 @@ from fakes.fake_machine_id_reader import FakeMachineIdReader
 from fakes.fake_plugin_metadata_reader import FakePluginMetadataReader
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_save_api import FakeSaveApi
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
@@ -28,6 +29,11 @@ from services.saves import SaveService, SaveServiceConfig
 # One ctypes load for the whole SaveService suite — the adapter is stateless,
 # so every service built here can share the same instance.
 _GAVEL = GavelNativeAdapter()
+
+
+# RomM slugs whose normalized system is a different string. Anything else is
+# its own system here, which keeps the bulk of these tests reading plainly.
+_TEST_SYSTEMS = {"sega-saturn": "saturn", "commodore-amiga": "amiga"}
 
 
 async def _noop_emit(_event: str, /, *_args: object) -> None:
@@ -59,6 +65,11 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
             roms=str(tmp_path / "retrodeck" / "roms"),
         ),
         "active_core": FakeActiveCoreResolver(default=(None, None)),
+        "save_locations": FakeSaveLocationReader(),
+        # A slug that DIFFERS from its system for the two the tests use, so a
+        # site that leaks the raw RomM slug is caught rather than hidden behind
+        # an identity map. The real mapping is the RomM adapter's own.
+        "resolve_system": lambda platform_slug, platform_fs_slug=None: _TEST_SYSTEMS.get(platform_slug, platform_slug),
         "hostname_provider": FakeHostnameReader(),
         "machine_id_provider": FakeMachineIdReader(),
         "log_debug": lambda _msg: None,

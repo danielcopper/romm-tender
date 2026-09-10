@@ -1156,6 +1156,7 @@ class TestMainStartupOrdering:
                 path_probe=MagicMock(),
                 resolve_path=MagicMock(),
                 core_info_provider=MagicMock(),
+                save_locations=MagicMock(),
                 renderer_rss=FakeRendererRss(),
                 renderer_gc=FakeRendererGc(),
                 game_process=FakeGameProcessControlAdapter(),

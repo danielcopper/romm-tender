@@ -898,6 +898,40 @@ describe("CustomPlayButton — pre-launch savefiles_in_content_dir benign skip (
     // No fallback-launch confirm modal was opened (would mean we treated it as failure).
     expect(vi.mocked(backend.preLaunchSync)).toHaveBeenCalledWith(42);
   });
+
+  it("treats an unsupported save shape the same way — no toast, and the game still launches", async () => {
+    // #1858: the emulator keeps a shared card, a save inside the game file, a
+    // name with a hole, or a shape nobody established. Sync did not run and
+    // nothing is wrong, so the launch must not be interrupted.
+    vi.mocked(getCachedGameDetail).mockResolvedValue({
+      found: true,
+      rom_id: 42,
+      rom_name: "Test ROM",
+      installed: true,
+    });
+    vi.mocked(backend.preLaunchSync).mockResolvedValue({
+      success: false,
+      reason: "save_shape_unsupported",
+      message: "Save sync is unavailable: this emulator keeps one save card that all games share. (PCSX2 (Standalone))",
+      synced: 0,
+      errors: [],
+      conflicts: [],
+    });
+
+    const { findByText } = render(<CustomPlayButton appId={100} />);
+    const playBtn = await findByText("Play");
+
+    await act(async () => {
+      playBtn.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(vi.mocked(SteamClient.Apps.RunGame)).toHaveBeenCalledWith("gid-1", "", -1, 100);
+    expect(vi.mocked(toaster.toast)).not.toHaveBeenCalled();
+  });
 });
 
 // #1148 round 2: the Play button is the sibling of the launch interceptor's
