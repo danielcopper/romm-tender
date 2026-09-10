@@ -67,6 +67,13 @@ interface FirmwareFile extends FirmwareVerdict {
    *  axis the "BIOS needed" badge and the required counts key off, distinct
    *  from `wanted`, which is about every installed emulator. */
   required_by_active: boolean;
+  /** Whether this row is one of the images that would answer the platform's
+   *  launching core CONSOLE on its own — see {@link SystemImage}. Set only where
+   *  that core marks nothing required, which is the only shape in which "one of
+   *  these" is the whole of what the core says; a core that does state required
+   *  files carries the same demand on those rows as `required_by_active`.
+   *  Absent claims nothing. */
+  system_image_candidate?: boolean;
   on_server: boolean;
   supplied_by?: string | null;
   /** How many of the plugin's own downloads a delete on THIS row would remove:
@@ -222,14 +229,19 @@ export interface BiosFileStatus extends FirmwareVerdict {
    *  machine's answer about the file; this one is the launch's. */
   required_by_active: boolean;
   /** Per core that declares the file: what that core's own `.info` says about
-   *  it (`required`), and what the packaged table says about that core's
-   *  CONSOLE (`system_image_demanded` — it will not start without one of the
-   *  images the core declares). Two speakers, so the pair `optional` +
-   *  `system_image_demanded` is not a contradiction and is the case a surface
-   *  has to be able to word. `system_image_demanded` is optional because a
-   *  payload from before the field existed carries none, and absent claims
-   *  nothing. */
-  cores?: Record<string, { required: boolean; system_image_demanded?: boolean }>;
+   *  it (`required`), and — where that core's CONSOLE needs an image and the
+   *  core marks nothing required — how many files that one demand is spread over
+   *  (`needs_one_of`). Two speakers, so the pair `optional` + `needs_one_of` is
+   *  not a contradiction: it is a core saying "any one of my five will do", and
+   *  it is the case a surface has to be able to word. `needs_one_of` is null or
+   *  absent for every other core, including one whose console demands an image
+   *  and that marks files required — there the demand reaches the reader as
+   *  those rows' own `required`. */
+  cores?: Record<string, { required: boolean; needs_one_of?: number | null }>;
+  /** Whether this row is one of the images that would answer the launching
+   *  core's CONSOLE on its own — the row-level read of the same `needs_one_of`
+   *  answer. Absent claims nothing. */
+  system_image_candidate?: boolean;
   used_by_active?: boolean;
   /** False for a file an emulator asks for that the RomM library does not hold.
    *  It still counts as missing — it just cannot be fetched from the plugin. */

@@ -2193,6 +2193,139 @@ class TestTheConsolesOwnFirmwareDemand:
         assert platform["required_count"] == 0
 
 
+# The four PlayStation cores as the pinned resolver answers for them on the
+# reference device. Two of them mark files required and two mark nothing
+# required; three of the four declare for a console that will not start without
+# an image. Only one core is in both halves at once, and that is the shape the
+# disjunction is about.
+_PSX_HW_CORE = "mednafen_psx_hw_libretro"
+_PSX_REQUIRING_CORE = "mednafen_psx_libretro"
+_PSX_DECLARED_IMAGES = ("ps1_rom.bin", "psxonpsp660.bin", "scph5500.bin", "scph5501.bin", "scph5502.bin")
+_PSX_HARD_REQUIRED = ("scph5500.bin", "scph5501.bin", "scph5502.bin")
+
+
+def _psx_four_core_service(active_core_so: str) -> FirmwareService:
+    """One PlayStation, four cores, and the launching one decides what a row is.
+
+    Measured from the pinned resolver: Beetle PSX and Beetle PSX HW both declare
+    all five images and mark the three ``scph`` dumps required; SwanStation
+    declares the same five and marks every one of them optional; PCSX ReARMed
+    declares them and carries its own substitute. Three of the four are for a
+    console that will not start without an image, and only SwanStation states
+    that as a disjunction, because it is the only one whose declaration says
+    nothing else.
+    """
+    romm_api = MagicMock()
+    romm_api.list_firmware.return_value = [
+        {
+            "id": index,
+            "file_name": name,
+            "file_path": f"bios/psx/{name}",
+            "file_size_bytes": 100,
+            "md5_hash": "",
+        }
+        for index, name in enumerate(_PSX_DECLARED_IMAGES, start=1)
+    ]
+    resolver = FakeFirmwareResolver()
+    for name in _PSX_DECLARED_IMAGES:
+        hard = name in _PSX_HARD_REQUIRED
+        resolver.declare(
+            name,
+            required_by=[_PSX_REQUIRING_CORE, _PSX_HW_CORE] if hard else [],
+            optional_for=[_PSX_CORE, _PSX_ALTERNATIVE_CORE] + ([] if hard else [_PSX_REQUIRING_CORE, _PSX_HW_CORE]),
+        )
+    for core_so in (_PSX_CORE, _PSX_REQUIRING_CORE, _PSX_HW_CORE):
+        resolver.record_system(core_so, system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT, requirements_met=False)
+    resolver.record_system(
+        _PSX_ALTERNATIVE_CORE, system_firmware=SYSTEM_FIRMWARE_CORE_ALTERNATIVE, requirements_met=True
+    )
+    fw = _make_firmware_service(
+        romm_api=romm_api,
+        firmware_resolver=resolver,
+        core_info=FakeCoreInfoProvider(
+            active_core=(active_core_so, active_core_so),
+            options=[libretro_option(core_so, core_so) for core_so in (active_core_so,)],
+        ),
+    )
+    _inline_executor(fw)
+    return fw
+
+
+class TestWhichRowsCanAnswerTheConsole:
+    """Which rows are marked as ways to satisfy the console's own demand.
+
+    The device pass this comes from: with SwanStation launching, no row was
+    ``required_by_active`` — the core marks all five images optional — so every
+    row in the PlayStation table drew the muted "missing, not required" mark
+    under a red headline saying the console needs at least one. The mark now has
+    a state for it, and it is set only where "one of these" is the whole of what
+    the core says.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("core_so", "marked"),
+        [
+            (_PSX_CORE, True),
+            (_PSX_REQUIRING_CORE, False),
+            (_PSX_HW_CORE, False),
+            (_PSX_ALTERNATIVE_CORE, False),
+        ],
+    )
+    async def test_only_a_core_that_states_the_disjunction_marks_its_rows(self, core_so: str, marked: bool):
+        page = await _psx_four_core_service(core_so).check_platform_bios("psx")
+
+        assert {f["file_name"]: f["system_image_candidate"] for f in page["files"]} == dict.fromkeys(
+            _PSX_DECLARED_IMAGES, marked
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_core_that_does_require_files_states_the_demand_on_those_rows_instead(self):
+        """Beetle PSX, and why the flag is silent for it rather than missing.
+
+        Its console needs an image too. What it says about that is three
+        required rows, which every count and every surface already carries — so
+        a second mark beside them would state one requirement twice.
+        """
+        page = await _psx_four_core_service(_PSX_REQUIRING_CORE).check_platform_bios("psx")
+
+        assert {f["file_name"] for f in page["files"] if f["required_by_active"]} == set(_PSX_HARD_REQUIRED)
+        assert not any(f["system_image_candidate"] for f in page["files"])
+
+    @pytest.mark.asyncio
+    async def test_a_row_carries_each_cores_own_answer_side_by_side(self):
+        """``ps1_rom.bin``: optional to all four, and a disjunction for one of them.
+
+        The row the misworded annotation landed on. Beetle PSX marks this file
+        optional while hard-requiring three others, so its entry says exactly
+        that and nothing about the console — which is what stopped the line
+        reading "the console will not start without one" under a core that
+        demands three named files.
+        """
+        page = await _psx_four_core_service(_PSX_CORE).check_platform_bios("psx")
+
+        cores = next(f for f in page["files"] if f["file_name"] == "ps1_rom.bin")["cores"]
+        assert cores[_PSX_CORE] == {"required": False, "needs_one_of": len(_PSX_DECLARED_IMAGES)}
+        assert cores[_PSX_REQUIRING_CORE] == {"required": False, "needs_one_of": None}
+        assert cores[_PSX_HW_CORE] == {"required": False, "needs_one_of": None}
+        assert cores[_PSX_ALTERNATIVE_CORE] == {"required": False, "needs_one_of": None}
+
+    @pytest.mark.asyncio
+    async def test_the_overview_stamps_the_same_marks_the_game_page_reads(self):
+        """One builder, so the platform table and the game page cannot disagree."""
+        fw = _psx_four_core_service(_PSX_CORE)
+
+        overview = await fw.get_firmware_status()
+        page = await fw.check_platform_bios("psx")
+
+        platform = next(p for p in overview["platforms"] if p["platform_slug"] == "psx")
+        assert {f["file_name"]: f["system_image_candidate"] for f in platform["files"]} == {
+            f["file_name"]: f["system_image_candidate"] for f in page["files"]
+        }
+        assert all(f["system_image_candidate"] for f in platform["files"])
+        assert platform["system_image"] == "absent"
+
+
 _PSX_DEFAULT_LABEL = "SwanStation"
 _PSX_ALTERNATIVE_LABEL = "PCSX ReARMed"
 _PSX_STANDALONE_LABEL = "DuckStation (Standalone)"
@@ -2375,13 +2508,14 @@ class TestOnePlatformOneEmulator:
         The pair is the informative case and the reason it cannot be folded:
         both cores mark every image ``optional`` — a libretro ``.info`` has
         nothing else to say — and only one of the two consoles will not start
-        without one.
+        without one. The count is that core's whole declaration, which is what a
+        surface says "one of its N BIOS files" with.
         """
         _, page = await self._both(None)
 
         cores = next(f for f in page["files"] if f["file_name"] == _PSX_IMAGES[0])["cores"]
-        assert cores[_PSX_CORE] == {"required": False, "system_image_demanded": True}
-        assert cores[_PSX_ALTERNATIVE_CORE] == {"required": False, "system_image_demanded": False}
+        assert cores[_PSX_CORE] == {"required": False, "needs_one_of": len(_PSX_IMAGES)}
+        assert cores[_PSX_ALTERNATIVE_CORE] == {"required": False, "needs_one_of": None}
 
 
 class TestDownloadFirmware:
@@ -4180,8 +4314,8 @@ class TestPerCoreFiltering:
         # Each core's entry states both halves: its own declaration, and whether
         # its console is one that will not start without an image (#1858).
         assert gb_file["cores"] == {
-            "gambatte_libretro": {"required": False, "system_image_demanded": False},
-            "mgba_libretro": {"required": False, "system_image_demanded": False},
+            "gambatte_libretro": {"required": False, "needs_one_of": None},
+            "mgba_libretro": {"required": False, "needs_one_of": None},
         }
 
         assert result["required_count"] == 1

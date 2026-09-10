@@ -840,6 +840,16 @@ it, for the focused platform:
   the glyph on a need-axis fact and throw the verdict away, on exactly the platform made entirely of such rows.
   `optional` and `not_needed` do share the muted branch: for the core about to launch, neither is a gap.
 
+  **A fifth state replaces the muted answer where the row is one of several images any one of which starts the console**
+  (`BiosFileEntry.system_image_candidate`). Such a row is never `required_by_active` — its core marks every one of them
+  optional, which is all a libretro `.info` can say about a disjunction — so the four-way scheme drew five grey
+  "missing, not required" marks under a red headline saying the console needs one, and a reader took the grey marks at
+  their word. What is true of the row comes from the PLATFORM's `system_image` rather than from the row: `absent` makes
+  each of them a way to fix it (red `✗`), `held` makes the rest genuinely spare (grey `✗`), and anything else passes the
+  doubt on (amber `✗`). A candidate whose verdict is met is the console's held image and is drawn green — the candidates
+  are a subset of the rows `classify_system_image` weighs, so it cannot be anything else. The two amber states above are
+  tested FIRST and are not displaced: an unestablished verdict is still `?`, and an unestablished need is still amber.
+
   **Mark 2, `⊘` in violet, appears beside mark 1 wherever `on_server` is `false` and the declaration is a file** — the
   RomM library does not hold this one. A declared **folder** is excluded, and not as a special case: no library holds a
   folder, so the backend stamps every folder row `on_server: False` unconditionally and the mark would say "your library
@@ -853,7 +863,10 @@ it, for the focused platform:
 
   A legend under the table names the marks it actually contains, **one entry per line** — an entry for a state no row is
   in explains nothing and costs a row, and mark 2 is inside that filter with one line of its own rather than one per
-  verdict it can stand beside. The legend is the only one of the three wordings a controller user can reach (the others
+  verdict it can stand beside. **An entry's identity is its sentence**, which is also the row's own `title`: since the
+  console's own demand became a state, glyph plus colour names two different sentences at once (red `✗`, green `✓`, grey
+  `✗` and amber `✗` each mean two things), so a legend filtered or keyed on the pair would show one of each and hand the
+  other React's duplicate key. The legend is the only one of the three wordings a controller user can reach (the others
   are `title` attributes), so it words the amber rows as what they are — nothing could say whether the file is wanted —
   and never as "nothing asked for it", which is the `not_needed` claim and a synonym of the grey "missing, not required"
   two lines below it.

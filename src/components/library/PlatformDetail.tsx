@@ -64,6 +64,30 @@ const scopedStatus = (status: DetailStatus | null): ScopedStatus<StatusScope> | 
 const LIBRARY_MARK = { glyph: "⊘", color: VIOLET, title: "not in your RomM library" } as const;
 
 /**
+ * What each mark means — the row's own tooltip AND the legend's line for it, one
+ * string serving both.
+ *
+ * They are the mark's IDENTITY, which is what the legend filters and keys on.
+ * Glyph plus colour cannot be: since the console's own demand became a state of
+ * its own, red `✗` is two different sentences (a required file that is absent, a
+ * console with none of its images) and so are green `✓`, muted `✗` and amber
+ * `✗`. Keyed on the pair, the legend would have shown one of each and given the
+ * second one React's duplicate key; keyed on the sentence, it shows exactly the
+ * ones the table is in.
+ */
+const MARK_REQUIRED_MISSING = "required, missing";
+const MARK_REQUIRED_HERE = "required, here";
+const MARK_HERE = "here, not required";
+const MARK_MISSING = "missing, not required";
+const MARK_UNCHECKED = "could not be checked";
+const MARK_HERE_NEED_UNKNOWN = "here; nothing could say whether this is wanted";
+const MARK_MISSING_NEED_UNKNOWN = "missing; nothing could say whether this is wanted";
+const MARK_STARTS_THE_SYSTEM = "this starts the system";
+const MARK_ONE_OF_THESE_MISSING = "one of these — any one starts the system";
+const MARK_ONE_OF_THESE_SPARE = "not needed — one of these is already in place";
+const MARK_ONE_OF_THESE_UNSETTLED = "one of these — whether one is in place could not be checked";
+
+/**
  * The core picker's button in the header line — the game page's icon button, at
  * this line's scale.
  *
@@ -234,10 +258,23 @@ function getUnknownSummary(requiredWithheld: number, systemImage: SystemImage) {
  * `not_needed` and `optional` share the muted branch on purpose: for the core
  * about to launch, a file it does not require is not a gap either way.
  *
+ * **A `system_image_candidate` row is the one need the two channels above cannot
+ * carry**, and it is the fifth state rather than a shade of the fourth. Its core
+ * marks every such file optional — that is all a libretro `.info` can say about
+ * one of five images any of which starts the console — so `required_by_active`
+ * is false for all of them and the muted branch would draw five grey "missing,
+ * not required" marks under a red headline saying the console needs one. What is
+ * true of such a row depends on the PLATFORM's `system_image`, not on the row:
+ * with none of them in place each is a way to fix it (red), with one in place the
+ * rest are genuinely spare (muted), and where nothing could be established the
+ * row inherits that doubt (amber). Only the muted answer is replaced — an
+ * unestablished verdict is still `?`, and an unestablished NEED is still amber,
+ * both tested first.
+ *
  * The `Contents` cell reads the same `satisfied`, so the two columns are two
  * renderings of one field and cannot contradict each other.
  */
-function diskMark(file: FirmwareRow): { glyph: string; color: string; title: string } {
+function diskMark(file: FirmwareRow, systemImage: SystemImage): { glyph: string; color: string; title: string } {
   // A folder's verdict is what it HOLDS, never that the folder is there — the
   // register's rule — so a payload carrying no verdict for one leaves the row
   // unestablished rather than falling back to presence. For a declared file
@@ -245,16 +282,26 @@ function diskMark(file: FirmwareRow): { glyph: string; color: string; title: str
   const declaredFolder = file.declared_kind === "directory";
   const fallback = declaredFolder ? null : file.downloaded;
   const verdict = file.satisfied !== undefined ? file.satisfied : fallback;
-  if (verdict === null) return { glyph: "?", color: AMBER, title: "nothing could check this" };
+  if (verdict === null) return { glyph: "?", color: AMBER, title: MARK_UNCHECKED };
 
   const needUnknown = file.wanted === "unknown";
   const required = file.required_by_active;
+  const candidate = file.system_image_candidate === true;
   if (verdict) {
-    if (needUnknown) return { glyph: "✓", color: AMBER, title: "here; nothing could say whether it is wanted" };
-    return { glyph: "✓", color: required ? GREEN : PALE_GREEN, title: required ? "required, here" : "here" };
+    if (needUnknown) return { glyph: "✓", color: AMBER, title: MARK_HERE_NEED_UNKNOWN };
+    // A candidate whose verdict is true IS the console's held image: the
+    // candidates are a subset of the rows `classify_system_image` reads, so the
+    // platform is `held` and this row is why.
+    if (candidate) return { glyph: "✓", color: GREEN, title: MARK_STARTS_THE_SYSTEM };
+    return { glyph: "✓", color: required ? GREEN : PALE_GREEN, title: required ? MARK_REQUIRED_HERE : MARK_HERE };
   }
-  if (needUnknown) return { glyph: "✗", color: AMBER, title: "missing; nothing could say whether it is wanted" };
-  return { glyph: "✗", color: required ? RED : MUTED, title: required ? "required, missing" : "missing" };
+  if (needUnknown) return { glyph: "✗", color: AMBER, title: MARK_MISSING_NEED_UNKNOWN };
+  if (candidate) {
+    if (systemImage === "absent") return { glyph: "✗", color: RED, title: MARK_ONE_OF_THESE_MISSING };
+    if (systemImage === "held") return { glyph: "✗", color: MUTED, title: MARK_ONE_OF_THESE_SPARE };
+    return { glyph: "✗", color: AMBER, title: MARK_ONE_OF_THESE_UNSETTLED };
+  }
+  return { glyph: "✗", color: required ? RED : MUTED, title: required ? MARK_REQUIRED_MISSING : MARK_MISSING };
 }
 
 /**
@@ -454,19 +501,28 @@ function declaredFolder(file: FirmwareRow): string | null {
  * a platform whose library holds every file shows no line for it — and gets one
  * line rather than one per pairing, since it means the same beside every
  * verdict. The order is the order a reader cares about: what is wrong first,
- * then the second channel.
+ * then the second channel — and each of the console's own four states sits
+ * beside the ordinary mark it shares a colour with, since a reader meeting two
+ * red `✗` lines is being told what separates them.
+ *
+ * The entries carry the same strings the rows' tooltips do, and match on them:
+ * see the `MARK_*` block for why the glyph and colour cannot be the identity.
  */
-const BiosLegend: FC<{ files: FirmwareRow[] }> = ({ files }) => {
-  const marks = files.map(diskMark);
+const BiosLegend: FC<{ files: FirmwareRow[]; systemImage: SystemImage }> = ({ files, systemImage }) => {
+  const marks = files.map((file) => diskMark(file, systemImage));
   const shown = [
-    { glyph: "✗", color: RED, text: "required, missing" },
-    { glyph: "✓", color: GREEN, text: "required, here" },
-    { glyph: "✗", color: AMBER, text: "missing; nothing could say whether this is wanted" },
-    { glyph: "✓", color: AMBER, text: "here; nothing could say whether this is wanted" },
-    { glyph: "?", color: AMBER, text: "could not be checked" },
-    { glyph: "✓", color: PALE_GREEN, text: "here, not required" },
-    { glyph: "✗", color: MUTED, text: "missing, not required" },
-  ].filter((entry) => marks.some((mark) => mark.glyph === entry.glyph && mark.color === entry.color));
+    { glyph: "✗", color: RED, text: MARK_REQUIRED_MISSING },
+    { glyph: "✗", color: RED, text: MARK_ONE_OF_THESE_MISSING },
+    { glyph: "✓", color: GREEN, text: MARK_REQUIRED_HERE },
+    { glyph: "✓", color: GREEN, text: MARK_STARTS_THE_SYSTEM },
+    { glyph: "✗", color: AMBER, text: MARK_MISSING_NEED_UNKNOWN },
+    { glyph: "✗", color: AMBER, text: MARK_ONE_OF_THESE_UNSETTLED },
+    { glyph: "✓", color: AMBER, text: MARK_HERE_NEED_UNKNOWN },
+    { glyph: "?", color: AMBER, text: MARK_UNCHECKED },
+    { glyph: "✓", color: PALE_GREEN, text: MARK_HERE },
+    { glyph: "✗", color: MUTED, text: MARK_MISSING },
+    { glyph: "✗", color: MUTED, text: MARK_ONE_OF_THESE_SPARE },
+  ].filter((entry) => marks.some((mark) => mark.title === entry.text));
   if (files.some((file) => libraryMark(file) !== null)) {
     shown.push({ glyph: LIBRARY_MARK.glyph, color: LIBRARY_MARK.color, text: LIBRARY_MARK.title });
   }
@@ -483,7 +539,7 @@ const BiosLegend: FC<{ files: FirmwareRow[] }> = ({ files }) => {
       }}
     >
       {shown.map((entry) => (
-        <span key={`${entry.glyph}${entry.color}`} style={{ color: MUTED }}>
+        <span key={entry.text} style={{ color: MUTED }}>
           <span style={{ color: entry.color }}>{entry.glyph}</span> {entry.text}
         </span>
       ))}
@@ -491,9 +547,13 @@ const BiosLegend: FC<{ files: FirmwareRow[] }> = ({ files }) => {
   );
 };
 
-const BiosFileRow: FC<{ file: FirmwareRow; action: ReactNode }> = ({ file, action }) => {
+const BiosFileRow: FC<{ file: FirmwareRow; systemImage: SystemImage; action: ReactNode }> = ({
+  file,
+  systemImage,
+  action,
+}) => {
   const { note, lines, fromLibrary } = biosFileNote(file);
-  const mark = diskMark(file);
+  const mark = diskMark(file, systemImage);
   const library = libraryMark(file);
   const description = fileDescription(file);
   const folder = declaredFolder(file);
@@ -907,9 +967,14 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
       {nothingEstablished && <Muted>You can still put BIOS files in your BIOS folder by hand.</Muted>}
       {files.length > 0 && <BiosTableHeader />}
       {files.map((file) => (
-        <BiosFileRow key={file.file_name} file={file} action={rowAction(row, state, file, fetchable)} />
+        <BiosFileRow
+          key={file.file_name}
+          file={file}
+          systemImage={systemImage}
+          action={rowAction(row, state, file, fetchable)}
+        />
       ))}
-      {files.length > 0 && <BiosLegend files={files} />}
+      {files.length > 0 && <BiosLegend files={files} systemImage={systemImage} />}
       {unanswered > 0 && (
         <Muted>
           {unanswered === 1 ? "1 file" : `${unanswered} files`} nothing installed could answer for. Report at

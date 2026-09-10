@@ -378,7 +378,7 @@ class FirmwareStatusReader:
         are the platform's, the answer is the core's.
         """
         index = catalogue.by_file_name()
-        image_cores = catalogue.cores_needing_a_system_image()
+        disjunctive_cores = catalogue.cores_needing_one_of_their_files()
         asked: dict[str, Mapping[str, FolderVerdict]] = {}
         for plat in platforms_map.values():
             slug = plat["platform_slug"]
@@ -409,7 +409,7 @@ class FirmwareStatusReader:
                 placements,
                 complete,
                 core_so,
-                image_cores,
+                disjunctive_cores,
             )
             plat["files"] = [{**raw, **_wanted_fields(entry)} for raw, entry in zip(plat["files"], files, strict=True)]
             # Alphabetical, and only here: the two halves arrive in their own
@@ -561,7 +561,7 @@ class FirmwareStatusReader:
         )
         complete = catalogue.reading_complete_for(scope)
         files = collect_firmware_status(
-            items, placements, complete, active_core_so, catalogue.cores_needing_a_system_image()
+            items, placements, complete, active_core_so, catalogue.cores_needing_one_of_their_files()
         )
         system_image = classify_system_image(catalogue.verdict_for(active_core_so), files, active_core_so)
 
@@ -663,6 +663,7 @@ def _wanted_fields(entry) -> dict[str, Any]:
         "description": entry.description,
         "wanted": entry.wanted,
         "required_by_active": entry.required_by_active,
+        "system_image_candidate": entry.system_image_candidate,
         "supplied_by": entry.supplied_by,
         "satisfied": entry.satisfied,
         "declared_kind": entry.declared_kind,

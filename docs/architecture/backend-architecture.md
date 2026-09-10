@@ -1871,12 +1871,19 @@ both — SwanStation marks all five of its images **optional**, Beetle PSX marks
 file counts alone report a green "Nothing required (0/20 files held)" under the one core and three separate
 prerequisites under the other, over one PlayStation on which no game starts. The resolver answers the missing half from
 a packaged, source-cited table about the **system** (`CoreFirmware.system_firmware`), carried through the adapter per
-core as `FirmwareCatalogue.core_verdicts` and turned into `domain/bios_status.py`'s `classify_system_image`. The same
-per-core answer is read over every core at once (`cores_needing_a_system_image`) and stamped on each row's own `cores`
-entry beside that core's `required` flag, which is what lets a surface listing several emulators say which of them
-declare for such a console. The two keys are two speakers — the core's `.info` and the packaged table — so `optional`
-with `system_image_demanded` is the informative pair rather than a contradiction, and neither is ever rewritten into the
-other.
+core as `FirmwareCatalogue.core_verdicts` and turned into `domain/bios_status.py`'s `classify_system_image`. The
+narrower half of that per-core answer is read over every core at once (`cores_needing_one_of_their_files`) and stamped
+on each row's own `cores` entry beside that core's `required` flag, as the NUMBER of files the core declares. The two
+keys are two speakers — the core's `.info` and the packaged table — so `optional` with `needs_one_of: 5` is the
+informative pair rather than a contradiction, and neither is ever rewritten into the other.
+
+**A core is in that narrower half only where it marks nothing required**, which is the one shape in which "one of these"
+is the whole of what the core says. Beetle PSX's console needs an image too, and what that core says about it is three
+required rows — already carried by every count and every surface — so annotating its optional rows as well stated one
+requirement twice, and put "the console will not start without one" under `ps1_rom.bin`, a file it marks optional while
+hard-requiring three others. `BiosFileEntry.system_image_candidate` is the same map read for the ACTIVE core onto the
+row, which is how the platform table marks the rows that can answer the demand; it is deliberately narrower than the set
+`classify_system_image` weighs, and the reason is stated at `build_file_entry`.
 
 - **It is not folded into `required_count`.** The console asks for _one_ of the images the core declares, so it is one
   requirement over the whole list rather than one requirement per file; put into that count it would read

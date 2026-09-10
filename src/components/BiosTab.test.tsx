@@ -388,13 +388,14 @@ describe("BiosTab", () => {
   });
 
   describe("a core's line", () => {
-    // Two speakers on one line. What a core marks the file is its own `.info`
-    // and is printed unaltered; what its CONSOLE needs comes from the packaged
-    // table beside it. A libretro declaration has only "needed" and "optional"
-    // to reach for, so an author who knows the console will not start without
-    // one of these images writes "optional" and the row read as a flat
-    // contradiction of the headline above it.
-    const psxRow = (cores: Record<string, { required: boolean; system_image_demanded?: boolean }>) => ({
+    // Two speakers, and the line prints whichever of them has something to say.
+    // What a core marks the file is its own `.info` and is never rewritten;
+    // what its CONSOLE needs comes from the packaged table beside it. A libretro
+    // declaration has only "needed" and "optional" to reach for, so an author
+    // who knows the console will not start without one of these images writes
+    // "optional" and the row read as a flat contradiction of the headline above
+    // it.
+    const psxRow = (cores: Record<string, { required: boolean; needs_one_of?: number | null }>) => ({
       needs_bios: true,
       server_count: 1,
       local_count: 0,
@@ -420,7 +421,7 @@ describe("BiosTab", () => {
     });
 
     const lineFor = (
-      cores: Record<string, { required: boolean; system_image_demanded?: boolean }>,
+      cores: Record<string, { required: boolean; needs_one_of?: number | null }>,
       label: string,
     ): string | undefined => {
       const { container } = render(
@@ -434,9 +435,12 @@ describe("BiosTab", () => {
         .find((text) => text.startsWith(label));
     };
 
-    it("says what the console needs where the core that declared the file says optional", () => {
-      expect(lineFor({ swanstation_libretro: { required: false, system_image_demanded: true } }, "swanstation")).toBe(
-        "swanstation (optional — the console will not start without one)",
+    it("states the whole requirement where the core marks each of its files optional", () => {
+      // The count is what makes this line the only one that can: the headline
+      // above says "at least one" without a number, and each row below
+      // describes one file.
+      expect(lineFor({ swanstation_libretro: { required: false, needs_one_of: 5 } }, "swanstation")).toBe(
+        "swanstation (needs one of its 5 BIOS files)",
       );
     });
 
@@ -445,7 +449,7 @@ describe("BiosTab", () => {
       // adds nothing a reader would act on differently, so the line is
       // unchanged. Reading the pair as licence to print "required" over an
       // "optional" declaration is the misreading this shape exists to prevent.
-      expect(lineFor({ beetle_psx_libretro: { required: true, system_image_demanded: true } }, "beetle_psx")).toBe(
+      expect(lineFor({ beetle_psx_libretro: { required: true, needs_one_of: null } }, "beetle_psx")).toBe(
         "beetle_psx (required)",
       );
     });
@@ -456,14 +460,22 @@ describe("BiosTab", () => {
       expect(lineFor({ mgba_libretro: { required: false } }, "mgba")).toBe("mgba (optional)");
     });
 
-    it("annotates each core on its own, over one file two of them declare", () => {
+    it("leaves a file a demanding core marks optional beside required ones plain", () => {
+      // `ps1_rom.bin` under Beetle PSX, and the line the annotation this
+      // replaced got wrong. That console does not start without an image, and
+      // what the core says about it is three OTHER files marked required — so
+      // this row carries no disjunction and the line is the declaration alone.
+      expect(lineFor({ beetle_psx_libretro: { required: false } }, "beetle_psx")).toBe("beetle_psx (optional)");
+    });
+
+    it("answers each core on its own, over one file two of them declare", () => {
       // One row, two emulators, two different consoles' answers: the pane lists
       // both lines and neither may take the other's.
       const cores = {
-        swanstation_libretro: { required: false, system_image_demanded: true },
-        pcsx_rearmed_libretro: { required: false, system_image_demanded: false },
+        swanstation_libretro: { required: false, needs_one_of: 5 },
+        pcsx_rearmed_libretro: { required: false, needs_one_of: null },
       };
-      expect(lineFor(cores, "swanstation")).toBe("swanstation (optional — the console will not start without one)");
+      expect(lineFor(cores, "swanstation")).toBe("swanstation (needs one of its 5 BIOS files)");
       expect(lineFor(cores, "pcsx_rearmed")).toBe("pcsx_rearmed (optional)");
     });
   });

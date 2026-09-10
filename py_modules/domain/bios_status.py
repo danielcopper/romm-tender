@@ -26,6 +26,7 @@ sentence, and it can only ever make the verdict less green.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from domain.firmware_wants import (
@@ -38,7 +39,7 @@ from domain.firmware_wants import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Mapping
+    from collections.abc import Mapping
 
     from domain.firmware_wants import CoreFirmwareVerdict, FirmwarePlacement
 
@@ -141,12 +142,18 @@ class BiosFileEntry:
     description: str
     wanted: str
     required_by_active: bool
-    # {core_so: {"required": bool, "system_image_demanded": bool}} — per core, what
-    # its own declaration says about this file and what the packaged table says
-    # about its console. Two speakers, two keys, never folded into one.
+    # {core_so: {"required": bool, "needs_one_of": int | None}} — per core, what
+    # its own declaration says about this file and, where that core states a
+    # disjunction, how many files the demand is spread over. Two speakers, two
+    # keys, never folded into one.
     cores: dict[str, dict[str, Any]]
     used_by_active: bool
     on_server: bool = True
+    # Is this row one of the images that would answer the launching core's
+    # console on its own? Set only where that core states a DISJUNCTION — see
+    # :func:`build_file_entry`, which explains why it is silent for a core that
+    # does state required files.
+    system_image_candidate: bool = False
     supplied_by: str | None = None
     satisfied: bool | None = None
     declared_kind: str = DECLARED_FILE
@@ -210,6 +217,7 @@ def format_bios_status(
                 cores=f.get("cores", {}),
                 used_by_active=f.get("used_by_active", True),
                 on_server=f.get("on_server", True),
+                system_image_candidate=f.get("system_image_candidate", False),
                 supplied_by=f.get("supplied_by"),
                 satisfied=f.get("satisfied"),
                 declared_kind=f.get("declared_kind", DECLARED_FILE),
@@ -250,6 +258,12 @@ def format_bios_status(
     )
 
 
+# The answer for a caller that has not asked which cores state a disjunctive
+# demand: nothing is claimed for any core. Read-only, so the shared default
+# cannot be written through.
+_NO_DISJUNCTIVE_CORES: Mapping[str, int] = MappingProxyType({})
+
+
 def build_file_entry(
     file_name: str,
     downloaded: bool,
@@ -259,7 +273,7 @@ def build_file_entry(
     active_core_so: str | None,
     *,
     on_server: bool = True,
-    image_demanding_cores: Collection[str] = (),
+    cores_needing_one_of: Mapping[str, int] = _NO_DISJUNCTIVE_CORES,
 ) -> BiosFileEntry:
     """Build a single file status entry from the machine's answer about it.
 
@@ -270,30 +284,48 @@ def build_file_entry(
     every declaring core stands in for it, which is the same permissive default
     the platform has always fallen back to.
 
-    ``image_demanding_cores`` is
-    :meth:`~domain.firmware_wants.FirmwareCatalogue.cores_needing_a_system_image`
-    — the cores whose console will not start without one of the images they
-    declare. It rides on each core's own entry in ``cores`` because the two
-    statements there belong to different speakers: ``required`` is what that
-    core's ``.info`` says about this file, ``system_image_demanded`` is what the
-    packaged table says about that core's console. A core can say ``optional``
-    while the console cannot start without one, and that pair is exactly what a
-    surface listing the core has to be able to show. Nothing is folded: the
-    declaration is carried unaltered.
+    ``cores_needing_one_of`` is
+    :meth:`~domain.firmware_wants.FirmwareCatalogue.cores_needing_one_of_their_files`
+    — the cores whose console needs an image and that mark nothing required, each
+    with the number of files it declares. It rides on each core's own entry in
+    ``cores`` because the two statements there belong to different speakers:
+    ``required`` is what that core's ``.info`` says about this file,
+    ``needs_one_of`` is what the packaged table says about that core's console,
+    counted over the core's whole declaration. A core can say ``optional`` about
+    every one of five files while the console cannot start without one of them,
+    and that pair is exactly what a surface listing the core has to be able to
+    show. Nothing is folded: the declaration is carried unaltered.
+
+    ``system_image_candidate`` is the same map read for the ACTIVE core, so the
+    row and the per-core entries cannot disagree about which cores state a
+    disjunction: this row is one of the images that would answer the launching
+    core's console on its own.
+
+    **It is deliberately narrower than the set**
+    :func:`classify_system_image` **reads**, and the asymmetry is the point. That
+    function weighs every image the active core declares; this flag marks those
+    rows only where the core marks NOTHING required. Where a core does state
+    required files — Beetle PSX declares three of the same PlayStation images
+    ``required`` — those rows already carry the console's demand as plain
+    ``required_by_active``, and marking them again would say one thing twice in
+    two vocabularies. The flag is the DISPLAY axis for the disjunction, not a
+    second readiness rule, so widening it to every image-demanding core would add
+    no answer and would put two marks on one requirement.
     """
     folder = placement.folder if placement is not None else None
     wants = placement.wants if placement is not None else ()
     cores = {
-        want.core_so: {"required": want.required, "system_image_demanded": want.core_so in image_demanding_cores}
+        want.core_so: {"required": want.required, "needs_one_of": cores_needing_one_of.get(want.core_so)}
         for want in wants
         if want.core_so is not None
     }
+    active_entry = cores.get(active_core_so) if active_core_so is not None else None
     if active_core_so is None:
         used_by_active = True
         required_by_active = placement.required_by_any if placement is not None else False
     else:
         used_by_active = active_core_so in cores if cores else True
-        required_by_active = cores.get(active_core_so, {}).get("required", False)
+        required_by_active = active_entry["required"] if active_entry is not None else False
     return BiosFileEntry(
         file_name=file_name,
         downloaded=downloaded,
@@ -305,6 +337,7 @@ def build_file_entry(
         cores=cores,
         used_by_active=used_by_active,
         on_server=on_server,
+        system_image_candidate=active_entry is not None and active_entry["needs_one_of"] is not None,
         supplied_by=placement.supplied_by if placement is not None else None,
         satisfied=_row_verdict(placement, downloaded),
         declared_kind=placement.declared_kind if placement is not None else DECLARED_FILE,
@@ -345,13 +378,13 @@ def collect_firmware_status(
     placements: Mapping[str, FirmwarePlacement],
     complete: bool,
     active_core_so: str | None,
-    image_demanding_cores: Collection[str] = (),
+    cores_needing_one_of: Mapping[str, int] = _NO_DISJUNCTIVE_CORES,
 ) -> tuple[BiosFileEntry, ...]:
     """Build BiosFileEntry objects for a list of pre-resolved firmware items.
 
     Each item must have keys: file_name, downloaded, dest; ``on_server``
     defaults to ``True`` for the items that came off the RomM listing.
-    ``image_demanding_cores`` is machine-wide and is read per row, so one core's
+    ``cores_needing_one_of`` is machine-wide and is read per row, so one core's
     console answers the same way on every file it declares.
     """
     return tuple(
@@ -363,7 +396,7 @@ def collect_firmware_status(
             complete,
             active_core_so,
             on_server=item.get("on_server", True),
-            image_demanding_cores=image_demanding_cores,
+            cores_needing_one_of=cores_needing_one_of,
         )
         for item in items
     )
@@ -462,6 +495,13 @@ def classify_system_image(
     declares machine-wide; the two sets come apart only for a core serving
     several systems, and upstream states that no core in its vector corpus or on
     its reference machine reaches this state while declaring for more than one.
+
+    That set is WIDER than the rows ``BiosFileEntry.system_image_candidate``
+    marks, and the difference is deliberate rather than a gap to close: the flag
+    is silent for a core that states required files, whose rows already carry the
+    same demand as ``required_by_active``, while this answer is the console's and
+    weighs every image the core declares whatever the core called it. The reason
+    lives in full at :func:`build_file_entry`.
     """
     if verdict is None or active_core_so is None or not verdict.system_needs_an_image:
         return SYSTEM_IMAGE_NOT_DEMANDED

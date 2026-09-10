@@ -53,31 +53,36 @@ interface BiosTabProps {
 }
 
 /**
- * What one core's line says about this file — its own word, then the console's.
+ * What one core's line says about this file — its own word, or its console's.
  *
- * The two are different speakers and the line shows both, because on their own
- * either one misleads. `required` / `optional` is the core's `.info` and nothing
- * else, and it is never rewritten here: a libretro declaration can mark a file
- * needed or optional and can say nothing more, so an author who knows the
- * console will not start without one of these images has only those two words to
- * reach for. The deployed catalogue goes both ways over one PlayStation —
+ * `required` / `optional` is the core's `.info` and nothing else, and it is
+ * never rewritten here. A libretro declaration can mark a file needed or
+ * optional and can say nothing more, so an author who knows the console will not
+ * start without one of the images the core lists has only those two words to
+ * reach for, and the deployed catalogue goes both ways over one PlayStation:
  * SwanStation marks all five of its images optional, Beetle PSX marks three of
- * its own required — so a reader shown "optional" alone under a headline saying
- * the console needs one is reading a contradiction that is not there.
+ * its own required.
  *
- * Only the optional case is annotated, and that is the whole of the informative
- * case: where the core already says required, the console's demand adds nothing
- * a reader would act on differently.
+ * `needs_one_of` is the backend's answer to exactly that first shape — a console
+ * that needs an image under a core that marks nothing required — and it carries
+ * the count, so the line states the whole requirement in the core's own terms:
+ * "needs one of its 5 BIOS files". It is the ONE line that can, because the
+ * headline above says "at least one" without a number and the file rows each
+ * describe one file. A core that already marks the file required is untouched:
+ * its console's demand reaches the reader as that word, and annotating it as
+ * well would be one requirement written twice — which is what the annotation
+ * this replaced did to Beetle PSX under `ps1_rom.bin`, a file it marks optional
+ * while hard-requiring three others.
  */
-function coreLineSuffix(core: { required: boolean; system_image_demanded?: boolean }): string {
+function coreLineSuffix(core: { required: boolean; needs_one_of?: number | null }): string {
   if (core.required) return " (required)";
-  if (core.system_image_demanded) return " (optional — the console will not start without one)";
+  if (core.needs_one_of != null) return ` (needs one of its ${core.needs_one_of} BIOS files)`;
   return " (optional)";
 }
 
 /** Render the per-core lines under a BIOS file — one row per core that uses it. */
 function buildBiosCoreLines(
-  cores: Record<string, { required: boolean; system_image_demanded?: boolean }>,
+  cores: Record<string, { required: boolean; needs_one_of?: number | null }>,
   coreLabelMap: Record<string, string>,
   activeCore: string | null | undefined,
 ): ReactElement[] {

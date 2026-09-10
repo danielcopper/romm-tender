@@ -292,8 +292,8 @@ class TestWhatACoresEntryOnARowSays:
 
     Two speakers, two keys, and the pair is what a surface listing several
     emulators has to be able to word — a core that marks the file ``optional``
-    while its console will not start without one of the images it declares is
-    the informative case, and it is the deployed catalogue's SwanStation.
+    while its console will not start without one of the five images it declares
+    is the informative case, and it is the deployed catalogue's SwanStation.
     """
 
     _PLACEMENT = FirmwarePlacement(
@@ -307,32 +307,93 @@ class TestWhatACoresEntryOnARowSays:
         ),
     )
 
-    def _cores(self, image_demanding_cores=()) -> dict[str, dict[str, object]]:
+    def _entry(self, cores_needing_one_of=None, *, active_core_so: str | None = _CORE) -> BiosFileEntry:
         return build_file_entry(
             "scph5501.bin",
             False,
             "/bios/scph5501.bin",
             self._PLACEMENT,
             True,
-            _CORE,
-            image_demanding_cores=image_demanding_cores,
-        ).cores
+            active_core_so,
+            cores_needing_one_of=cores_needing_one_of if cores_needing_one_of is not None else {},
+        )
+
+    def _cores(self, cores_needing_one_of=None) -> dict[str, dict[str, object]]:
+        return self._entry(cores_needing_one_of).cores
 
     def test_the_declaration_and_the_consoles_demand_ride_side_by_side(self):
-        cores = self._cores(frozenset({_CORE}))
+        cores = self._cores({_CORE: 5})
 
-        assert cores[_CORE] == {"required": False, "system_image_demanded": True}
-        assert cores[_ALTERNATIVE_CORE] == {"required": False, "system_image_demanded": False}
+        assert cores[_CORE] == {"required": False, "needs_one_of": 5}
+        assert cores[_ALTERNATIVE_CORE] == {"required": False, "needs_one_of": None}
 
     def test_the_declaration_is_carried_unaltered(self):
         """The core's own word never moves with the console's demand."""
-        for image_demanding_cores in ((), frozenset({_CORE})):
-            assert self._cores(image_demanding_cores)[_CORE]["required"] is False
+        for cores_needing_one_of in ({}, {_CORE: 5}):
+            assert self._cores(cores_needing_one_of)[_CORE]["required"] is False
 
     def test_a_caller_that_names_no_core_claims_nothing_for_any_of_them(self):
         """The default is silence, not a demand — an unasked question is not an answer."""
-        assert all(core["system_image_demanded"] is False for core in self._cores().values())
+        assert all(core["needs_one_of"] is None for core in self._cores().values())
 
     def test_an_emulator_with_no_core_of_its_own_keeps_its_row_out(self):
         """A standalone emulator names no ``.so``, so there is no key to answer under."""
-        assert set(self._cores(frozenset({_CORE}))) == {_CORE, _ALTERNATIVE_CORE}
+        assert set(self._cores({_CORE: 5})) == {_CORE, _ALTERNATIVE_CORE}
+
+    def test_the_row_is_a_candidate_where_the_launching_core_states_the_disjunction(self):
+        """The row flag and the per-core entry are one answer read twice."""
+        entry = self._entry({_CORE: 5})
+
+        assert entry.system_image_candidate is True
+        assert entry.cores[_CORE]["needs_one_of"] == 5
+
+    def test_a_row_the_launching_core_does_not_state_a_disjunction_for_is_not_a_candidate(self):
+        """PCSX ReARMed declares the same file and carries its own substitute."""
+        entry = self._entry({_CORE: 5}, active_core_so=_ALTERNATIVE_CORE)
+
+        assert entry.system_image_candidate is False
+        assert entry.cores[_ALTERNATIVE_CORE]["needs_one_of"] is None
+
+    def test_a_caller_with_no_core_to_name_claims_no_candidate(self):
+        """An unresolvable active core is not a licence to answer for one."""
+        assert self._entry({_CORE: 5}, active_core_so=None).system_image_candidate is False
+
+    def test_a_candidate_that_is_there_answers_the_console(self):
+        """Candidate + met implies ``held``, which is what lets a row say so alone.
+
+        The candidates are a subset of the rows :func:`classify_system_image`
+        weighs, so a satisfied one cannot leave the console's own answer
+        anywhere else — a surface may therefore draw such a row "this starts the
+        system" without consulting the platform value beside it.
+        """
+        rows = tuple(
+            build_file_entry(
+                name,
+                downloaded,
+                f"/bios/{name}",
+                self._PLACEMENT,
+                True,
+                _CORE,
+                cores_needing_one_of={_CORE: 5},
+            )
+            for name, downloaded in (("scph5500.bin", False), ("scph5501.bin", True))
+        )
+
+        assert all(row.system_image_candidate for row in rows)
+        assert classify_system_image(CoreFirmwareVerdict(SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT), rows, _CORE) == (
+            SYSTEM_IMAGE_HELD
+        )
+
+    def test_a_row_the_launching_core_does_not_declare_is_not_a_candidate(self):
+        """Only the images that core opens can answer its console."""
+        entry = build_file_entry(
+            "gba_bios.bin",
+            False,
+            "/bios/gba_bios.bin",
+            None,
+            True,
+            _CORE,
+            cores_needing_one_of={_CORE: 5},
+        )
+
+        assert entry.system_image_candidate is False

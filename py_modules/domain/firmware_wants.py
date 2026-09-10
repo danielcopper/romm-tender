@@ -284,13 +284,51 @@ class FirmwareCatalogue:
     def cores_needing_a_system_image(self) -> frozenset[str]:
         """The cores whose CONSOLE the table says will not start without an image.
 
-        The per-core half of :meth:`verdict_for`, read over every core at once so
-        a surface listing several emulators beside one file can say which of them
-        declare for such a console. Every other recording is left out, including
+        The per-core half of :meth:`verdict_for`, read over every core at once —
+        the widest form of the answer, and the set
+        :meth:`cores_needing_one_of_their_files` narrows to the cores that state
+        the demand as a disjunction. Every other recording is left out, including
         the absent entry: a core the table says nothing about is an unasked
         question, and this set answers only where something was recorded.
         """
         return frozenset(core_so for core_so, verdict in self.core_verdicts.items() if verdict.system_needs_an_image)
+
+    def cores_needing_one_of_their_files(self) -> dict[str, int]:
+        """Core → how many files it declares, for the cores that state a DISJUNCTION.
+
+        The narrower half of :meth:`cores_needing_a_system_image`, and the one a
+        surface can word on a row. A core is here only where its console needs an
+        image **and** the core marks nothing required anywhere in the catalogue,
+        because that is the only shape in which "one of these" is the whole of
+        what the core says. Where a core does mark files required, the console's
+        demand already reaches every surface as those rows' own requirement, and
+        a second statement of it beside them would say the same thing twice in
+        weaker words. The deployed catalogue has both shapes over one
+        PlayStation: SwanStation marks all five of its images optional, Beetle
+        PSX marks three of its own required.
+
+        The count is the core's whole declaration, machine-wide, rather than a
+        platform's row set — it is the number a surface says "one of its N BIOS
+        files" with, and a platform whose list happens to carry four of the five
+        would otherwise word the core's demand as a number the core never stated.
+        A core with no entry here is silent, which is also every core the
+        packaged table records nothing about.
+        """
+        demanding = self.cores_needing_a_system_image()
+        declared: dict[str, int] = {}
+        requires_something: set[str] = set()
+        for placement in self.placements:
+            for want in placement.wants:
+                if want.core_so is None:
+                    continue
+                declared[want.core_so] = declared.get(want.core_so, 0) + 1
+                if want.required:
+                    requires_something.add(want.core_so)
+        return {
+            core_so: count
+            for core_so, count in declared.items()
+            if core_so in demanding and core_so not in requires_something
+        }
 
     def by_file_name(self) -> dict[str, FirmwarePlacement]:
         """The placements indexed by file name — the shape every lookup wants.

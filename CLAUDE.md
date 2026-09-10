@@ -540,14 +540,23 @@ Format: **invariant** — tier — enforced by.
   decline**, and they agree today only because the backend guarantees `absent ⟹ missing`, so the state never arrives: a
   decline added ahead of that test in `compute_bios_level` would have `PlatformDetail` alone say "Nothing installed
   could answer for this system" and withdraw every download button while the other two read "Needs at least one BIOS
-  file". Each surface pins its own order (`BiosTab.test.tsx`, `PlatformsTab.test.tsx`) and nothing joins them. **The
-  same answer is read PER CORE onto every row** (`FirmwareCatalogue.cores_needing_a_system_image` → `build_file_entry`'s
-  `cores[<core_so>]["system_image_demanded"]`, worded by `BiosTab.tsx`'s `coreLineSuffix`), and there the rule is that
-  the two keys on that entry are two SPEAKERS: `required` is the core's own `.info`, the other is the packaged table
-  about that core's console, and `optional` beside a demanded image is the informative pair rather than a contradiction
+  file". Each surface pins its own order (`BiosTab.test.tsx`, `PlatformsTab.test.tsx`) and nothing joins them. **A
+  narrower form of the same answer is read PER CORE onto every row**
+  (`FirmwareCatalogue.cores_needing_one_of_their_files` → `build_file_entry`'s `cores[<core_so>]["needs_one_of"]` and
+  the row's own `system_image_candidate`, worded by `BiosTab.tsx`'s `coreLineSuffix` and marked by
+  `library/PlatformDetail.tsx`'s `diskMark`), and there the rule is that the two keys on that entry are two SPEAKERS:
+  `required` is the core's own `.info`, the other is the packaged table about that core's console counted over the
+  core's whole declaration, and `optional` beside `needs_one_of: 5` is the informative pair rather than a contradiction
   to resolve. Rewriting the declaration off the demand — printing "required" where the core said optional — puts words
   in the emulator's mouth and loses the only fact the row had to add; folding the pair the other way loses the demand.
-  Nothing checks it: both keys are plain booleans on a dict a surface may read either of
+  **A core is in that narrower answer only where it marks NOTHING required**, which is deliberate and is the second
+  thing nothing checks: a core whose console needs an image and that does state required files says so through those
+  rows' `required_by_active`, so annotating its optional rows too states one requirement twice — it put "the console
+  will not start without one" under `ps1_rom.bin`, which Beetle PSX marks optional while hard-requiring three other
+  images. The same narrowing makes `system_image_candidate` a strict subset of the rows `classify_system_image` weighs,
+  and widening either to match the other is the fix that reintroduces one of those two defects. Nothing checks any of
+  it: `needs_one_of` is a plain int-or-null on a dict a surface may read either key of, and the candidate flag is a
+  plain bool beside a `required_by_active` that reads like its sibling
 - **Which emulator a PLATFORM's answers are about is one pick, and every platform-scoped answer is a projection of it**
   — test + prompt-only — `tests/services/test_firmware.py::TestOnePlatformOneEmulator` asserts the two surfaces AGREE
   across every way a platform arrives at an emulator (no pick, each of the three ES-DE offers, a pin naming an emulator

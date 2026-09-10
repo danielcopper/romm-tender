@@ -352,9 +352,22 @@ page's `0 / 20 files held` is a different set again: the library's own inventory
   one axis over.
 
 The same table answers **per core**, and a file row carries that answer on each core's own entry beside that core's
-`required` flag: what the core's `.info` says about this file, and what the table says about that core's console. Two
-speakers, so a core marking the file _optional_ while its console will not start without one of the images it declares
-is the informative pair rather than a contradiction — and neither half is ever rewritten into the other.
+`required` flag: what the core's `.info` says about this file, and — where that core states the demand as a
+**disjunction** — how many files it is spread over. Two speakers, so a core marking the file _optional_ while its
+console will not start without one of the five images it declares is the informative pair rather than a contradiction —
+and neither half is ever rewritten into the other.
+
+A core states the demand as a disjunction only where it marks **nothing** required: that is the one shape in which "one
+of these" is the whole of what the core says. A core whose console needs an image and that does mark files required —
+Beetle PSX marks three of the same five — says what it has to say through those rows' **required by active core**, so
+its entries carry no count and its rows are not marked. The **system image candidate** flag is the same answer read for
+the launching core onto the row: this row is one of the images that would start the console on its own.
+
+That candidate set is deliberately **narrower** than the set the **system image** value is read over, which is every
+image the launching core declares whatever the core called it. The two answer different questions — one is the console's
+verdict, the other is which rows a surface may mark as ways to reach it — so widening the flag to every image-demanding
+core would put a second mark on a requirement already stated, and narrowing the verdict to the marked rows would stop
+answering for the cores that state required files.
 
 Scoped to the **active core**, like **required by active core** and unlike **wanted**: one unchanged PlayStation reads
 `absent` under SwanStation, whose five declared images the console needs one of, and `not demanded` under PCSX ReARMed,
