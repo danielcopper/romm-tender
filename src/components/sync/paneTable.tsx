@@ -25,12 +25,13 @@ import {
   PaneTableHeader,
   PaneTableRow,
   SECONDARY_FONT,
-  TABLE_LINE,
   type TableCell,
   type TableRegister,
 } from "../qam/pane";
 
-export { TABLE_LINE };
+/** The rule this page draws over a total row, which is the pane's own — passed
+ *  straight through so a caller reaches it beside the table it belongs to. */
+export { TABLE_LINE } from "../qam/pane";
 
 /**
  * The register both tables are set in. The type size and leading are the layout

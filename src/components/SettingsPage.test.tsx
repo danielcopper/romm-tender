@@ -1954,7 +1954,7 @@ describe("SettingsPage", () => {
       renderPage();
       await flushAsync();
       expect(capturedController.length).toBeGreaterThan(0);
-      expect(capturedConnection.length).toBe(0);
+      expect(capturedConnection).toHaveLength(0);
     });
 
     it("opens on the first section when a navigation names none", async () => {
@@ -1970,9 +1970,7 @@ describe("SettingsPage", () => {
       expect(queryByTestId("advanced-section")).toBeNull();
       // The wrapper the layout puts round each row is what carries the activate
       // handler; the press on the row's own content bubbles to it.
-      await act(async () => {
-        fireEvent.click(getByTestId("settings-section-advanced"));
-      });
+      fireEvent.click(getByTestId("settings-section-advanced"));
       expect(queryByTestId("advanced-section")).not.toBeNull();
       expect(queryByTestId("connection-section")).toBeNull();
     });
@@ -1980,9 +1978,7 @@ describe("SettingsPage", () => {
     it("moving focus onto a row selects it, without a press", async () => {
       const { getByTestId, queryByTestId } = renderPage();
       await flushAsync();
-      await act(async () => {
-        fireEvent.focus(getByTestId("settings-section-steam-library"));
-      });
+      fireEvent.focus(getByTestId("settings-section-steam-library"));
       expect(queryByTestId("library-section")).not.toBeNull();
     });
 
@@ -1995,9 +1991,7 @@ describe("SettingsPage", () => {
     ] as const)("reaches every section's content: %s", async (section, testId) => {
       const { getByTestId, queryByTestId } = renderPage();
       await flushAsync();
-      await act(async () => {
-        fireEvent.click(getByTestId(`settings-section-${section}`));
-      });
+      fireEvent.click(getByTestId(`settings-section-${section}`));
       expect(queryByTestId(testId)).not.toBeNull();
     });
 

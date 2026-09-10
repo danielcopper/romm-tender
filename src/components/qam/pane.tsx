@@ -137,9 +137,23 @@ const COLUMN_GAP = "8px";
 const Cells: FC<{ cells: readonly TableCell[] }> = ({ cells }) => (
   <>
     {cells.map((cell, index) => (
-      // The index IS the identity: a cell is the column it sits in, and the
-      // columns of one table never reorder.
-      <span key={index} style={cellStyle(cell)} {...(cell.title === undefined ? {} : { title: cell.title })}>
+      <span
+        // The index IS the identity: a cell is the column it sits in. A table's
+        // columns are fixed by the `columns` declaration it is drawn from — they
+        // never reorder, none is inserted or removed while the table is mounted,
+        // and a cell is a `span` holding no state, no ref and no uncontrolled
+        // input. So there is nothing a stable key would preserve that this does
+        // not, and content changing in place is what an index key handles best.
+        //
+        // A caller-supplied key was weighed and is not better HERE: it would be
+        // a real name for the two tables whose cells have one, and `col-${index}`
+        // for the Sync page's, which passes its cells positionally beside a
+        // `numericFrom` split — the same information, laundered into a string.
+        // Any of those three conditions changing is what makes this wrong again.
+        key={index} // NOSONAR(typescript:S6479) — fixed, non-reordering columns of stateless cells; see above.
+        style={cellStyle(cell)}
+        {...(cell.title === undefined ? {} : { title: cell.title })}
+      >
         {cell.content}
       </span>
     ))}
