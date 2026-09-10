@@ -183,7 +183,13 @@ DEST="$HOME/homebrew/plugins/romm-tender"
 # code) even if the build/deploy fails, so a failure never leaves the plugin dead.
 sudo systemctl stop plugin_loader
 trap 'sudo systemctl start plugin_loader' EXIT
-[ -d "$DEST" ] && sudo chown -R "$(id -un):$(id -gn)" "$DEST"
+# The directory is made HERE rather than by the deploy: `~/homebrew/plugins` is
+# root-owned 0755, so `deck` cannot create anything in it, and since the
+# delivered folder name is pinned rather than inherited there may be no
+# Decky-installed directory of this name to fall into. sudo creates it, the
+# chown hands it over, and both are idempotent.
+sudo mkdir -p "$DEST"
+sudo chown -R "$(id -un):$(id -gn)" "$DEST"
 mise run deploy
 # With a display target, open windowed Big Picture on it after the deploy — plain
 # bash (not exec) so the EXIT trap still fires and restarts plugin_loader. The
@@ -208,9 +214,12 @@ sudo install -d /etc/systemd/system/plugin_loader.service.d
 printf '[Service]\nEnvironment=CHOWN_PLUGIN_PATH=0\n' | sudo tee /etc/systemd/system/plugin_loader.service.d/10-dev-loop.conf >/dev/null
 sudo systemctl daemon-reload
 sudo systemctl restart plugin_loader
-# Hand an existing (root-owned) plugin dir back to the deck user so the watch
-# loop's plain cp works without sudo from here on.
-if [ -d "$DEST" ]; then sudo chown -R "$(id -un):$(id -gn)" "$DEST"; fi
+# Create the plugin dir if this machine has never deployed under this name —
+# `~/homebrew/plugins` is root-owned 0755, so `deck` cannot — and hand it (or an
+# existing root-owned one) to the deck user, so the watch loop's plain cp works
+# without sudo from here on.
+sudo mkdir -p "$DEST"
+sudo chown -R "$(id -un):$(id -gn)" "$DEST"
 # CEF DevTools (http://localhost:8080) need this marker file; warn, don't fail —
 # the hot-reload loop itself works without it.
 if [ ! -e "$HOME/.steam/steam/.cef-enable-remote-debugging" ]; then
@@ -238,8 +247,8 @@ if ! systemctl show plugin_loader -p Environment | grep -q CHOWN_PLUGIN_PATH=0; 
   echo "plugin_loader still runs Decky's tamper guard — run: mise run dev:setup" >&2
   exit 1
 fi
-if [ -d "$DEST" ] && [ ! -w "$DEST" ]; then
-  echo "$DEST is not writable — run: mise run dev:setup" >&2
+if [ ! -d "$DEST" ] || [ ! -w "$DEST" ]; then
+  echo "$DEST is missing or not writable — run: mise run dev:setup" >&2
   exit 1
 fi
 # Fail fast on a typo'd display target before paying for the full deploy.
