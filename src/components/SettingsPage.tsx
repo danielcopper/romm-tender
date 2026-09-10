@@ -53,6 +53,7 @@ import {
   clearSaveSortMigration,
   useSaveSortMigrationState,
 } from "../utils/saveSortMigrationStore";
+import { setUpdateCheckSwitch, useUpdateNoticeState } from "../utils/updateNoticeStore";
 import { detach } from "../utils/detach";
 import { trimServerUrl, isValidServerUrl } from "../utils/serverUrl";
 import { WidePage } from "./qam/WidePage";
@@ -134,6 +135,9 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
 
   // Save sort migration state
   const saveSortMigration = useSaveSortMigrationState();
+  // The switch's position is on the notice payload, so the store is the one
+  // place it is held; this page neither loads nor persists it itself.
+  const updateNotice = useUpdateNoticeState();
   const [saveSortMigrating, setSaveSortMigrating] = useState(false);
   const [saveSortResult, setSaveSortResult] = useState("");
 
@@ -469,6 +473,10 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
     detach(saveLogLevel(level));
   };
 
+  const handleUpdateCheckEnabledChange = (enabled: boolean) => {
+    setUpdateCheckSwitch(enabled).catch((e) => logError(`Failed to change the update check: ${e}`));
+  };
+
   // --- Library handlers ---
   const regionLabel = (value: string) => (value === AUTO_REGION ? DEFAULT_REGION_LABEL : value);
 
@@ -640,7 +648,14 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
           />
         );
       case "advanced":
-        return <AdvancedSection logLevel={logLevel} onLogLevelChange={handleLogLevelChange} />;
+        return (
+          <AdvancedSection
+            logLevel={logLevel}
+            onLogLevelChange={handleLogLevelChange}
+            updateCheckEnabled={updateNotice.enabled}
+            onUpdateCheckEnabledChange={handleUpdateCheckEnabledChange}
+          />
+        );
     }
   };
 

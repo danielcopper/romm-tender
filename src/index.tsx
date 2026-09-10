@@ -57,6 +57,7 @@ import {
 import { setMigrationStatus } from "./utils/migrationStore";
 import { fetchSettingsResetState } from "./utils/settingsResetStore";
 import { fetchLegacyInstallState } from "./utils/legacyInstallStore";
+import { fetchUpdateNotice } from "./utils/updateNoticeStore";
 import { relocateShortcutsToLauncher } from "./utils/launcherRelocation";
 import { setLauncherRelocated } from "./utils/launcherStore";
 import { fetchDataLocationState } from "./utils/dataLocationStore";
@@ -552,6 +553,19 @@ export default definePlugin(() => {
         await fetchLegacyInstallState();
       } catch (e) {
         logError(`Failed to check for a legacy install: ${e}`);
+      }
+    })(),
+  );
+
+  // Whether a newer release is out. Started here and never awaited by a
+  // surface: on the one day the check is due this call sits on a GitHub request,
+  // and the panel must open at its usual speed whichever day that is.
+  detach(
+    (async () => {
+      try {
+        await fetchUpdateNotice();
+      } catch (e) {
+        logError(`Failed to check for a newer release: ${e}`);
       }
     })(),
   );
