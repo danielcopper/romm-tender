@@ -112,7 +112,10 @@ much more to scroll, and nothing re-measures. It reached a device as a page that
 Measured live in the QAM over the mounted page, at panel offsets 0 / 200 / 500 / 634 px, `window.innerHeight - top`
 answers 648 / 848 / 1148 / 1283 — and so does `scroller.getBoundingClientRect().bottom - top`, because the panel's rect
 bottom is 764.3 against an `innerHeight` of 764. **Bounding to the panel instead of the window is therefore not the
-fix**; it changes no number at any offset. The layout-relative form answers 648 at all four. What makes a non-zero
+fix**; it changes no number at any offset. The layout-relative form answers 648 at all four. Those four come from an
+earlier round, before the Back row and the title shared a line, so the body sat at offset 102 where it now sits at 89.8
+— which is why they are 12 short of the 660 above rather than the height of the gap this frame no longer keeps. What the
+passage is about survives the difference: the same form answers the same number at every offset. What makes a non-zero
 offset reachable at all is that `QAMPanel` resets the panel's scroll inside a `requestAnimationFrame`, a frame after the
 page's own layout effect has already measured.
 
@@ -124,8 +127,8 @@ overhang (`ancestorOverhang`, summed over each ancestor up to the scroller) and 
 margin on the page root** rather than taking it out of the height: a margin changes what the box claims after itself,
 not where it paints, so the ancestors end where the scroller's box does and nothing on the page moves. The height and
 that pull-up are one measured value applied in one render, because **each half alone is measurably useless**: applied
-live to the running panel, the height without the margin overflows the scroller (`scrollHeight` 788 against a
-`clientHeight` of 750 — 38 px of scroll, which is what takes the Back row off the top), and the margin without the
+live to the running panel, the height without the margin overflows the scroller (`scrollHeight` 800 against a
+`clientHeight` of 750 — 50 px of scroll, which is what takes the Back row off the top), and the margin without the
 height moves nothing a reader sees, the page still ending on the same line with the same band under it.
 
 **What makes the pull-up cancel anything is a structural assumption, and it is worth stating on its own**, because the
@@ -143,11 +146,11 @@ the reader meets as the Back row leaving the top. The check is one reading: the 
 should equal the body's own with the margin applied, and sit an overhang below it without.
 
 Buying the room instead of cancelling it is what the first cut did, and it cost the bottom of every wide page: the body
-gave up 50 px of its own so the wrapper's empty 50 would fit, which left the wrapper ending at the panel's box and our
-content a further 50 px above that — an empty band across Settings, Library and Sync, with content that would have
-fitted clipped out of the difference. Measured live — on Settings when it was reported, and again on Library, which
-answers the same because the scroller is the panel's rather than the page's — the scroller's box ran to y=764.3
-(`clientHeight` 750, unscrollable) while the page root ended at y=702.
+gave up 50 px of its own so the wrapper's empty 50 would fit, which left the wrapper ending 12 px short of the panel's
+box — the gap the frame kept — and our content a further 50 px above that — an empty band across Settings, Library and
+Sync, with content that would have fitted clipped out of the difference. Measured live — on Settings when it was
+reported, and again on Library, which answers the same because the scroller is the panel's rather than the page's — the
+scroller's box ran to y=764.3 (`clientHeight` 750, unscrollable) while the page root ended at y=702.
 
 **Two further gaps stood under a wide page after that, and neither was earned.** The first was ours: the frame kept 12
 px of breathing room off its own measurement, which is why a page ended at y=752 inside a panel whose box runs to 764.3.

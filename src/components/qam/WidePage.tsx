@@ -157,16 +157,17 @@ function scrollingAncestor(body: HTMLElement, view: Window): HTMLElement | null 
  *
  * **This is what the root's negative bottom margin cancels, not what the body
  * gives up.** Subtracting it from the height instead is what left a band of the
- * panel empty across every wide page: the wrapper then ended at the scroller's
- * box and our own content an overhang above that, with content that would have
- * fitted clipped out of the difference. Cancelling it costs the page nothing,
+ * panel empty across every wide page: the wrapper then ended just short of the
+ * scroller's box and our own content an overhang above that, with content that
+ * would have fitted clipped out of the difference. Cancelling it costs the page nothing,
  * because the pixels were never ours to paint in.
  *
  * **Measured, never a constant.** The overhang comes from someone else's markup,
  * and a constant would pin every wide page to today's value of it. That it has
  * so far read the same 50 px in every environment tried — it is Decky's inset
  * and padding in CSS pixels, so it does not scale with the viewport, and a
- * 1.5-scale panel a third the height reports it unchanged — is evidence for the
+ * 1.5-scale panel three fifths the height (440 against 750) reports it
+ * unchanged — is evidence for the
  * arithmetic, **not a value to hardcode**: the smaller the panel, the larger the
  * same 50 px looms in it.
  *

@@ -69,9 +69,10 @@ const TAB_PANEL_SELECTOR = quickAccessMenuClasses?.TabGroupPanel
 // being untabbed and rendering no such scroller at all. Measured at the dev
 // window's metrics: our body ran to y=752 inside a panel box ending at 764.3
 // while the tab's content stopped at 712, and the tab's own scrolling region
-// went from a `clientHeight` of 550 to 602 with the rule applied. What
-// overriding it is worth is that difference: 40 px of content back on every
-// tabbed wide page.
+// went from a `clientHeight` of 550 to 590 with this rule alone. What overriding
+// it is worth is that difference: 40 px of content back on every tabbed wide
+// page. The 602 the page reaches today is this rule and the frame's own gap
+// going together — two changes, and only one of them is this one.
 //
 // It is ours to override because the box is ours: the scroller is rendered
 // inside a page of ours at a height of our own measuring, and that measurement
