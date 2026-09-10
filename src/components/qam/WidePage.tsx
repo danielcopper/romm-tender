@@ -93,6 +93,30 @@ const MIN_BODY_HEIGHT = 240;
 const BODY_BOTTOM_GAP = 12;
 
 /**
+ * The two halves of one measurement: how tall the body may be, and how far the
+ * root has to be pulled up for that height to fit.
+ *
+ * They are a pair because each half alone is measurably useless. `height`
+ * counts the space the frame's own ancestors hang into, so paying it out
+ * without the pull-up overflows the scroller by exactly `overhang` — live, a
+ * `scrollHeight` of 788 against a `clientHeight` of 750 — and 38 px of scroll
+ * is what takes the Back row off the top. The pull-up without the height moves
+ * nothing at all: live, the page still ends on the same line and the band under
+ * it is the same 62 px, because the room the ancestors stop claiming goes to
+ * nobody. So they travel as one value and are applied in one render.
+ */
+interface BodyFit {
+  height: number;
+  /**
+   * What the root's negative bottom margin cancels — the measured overhang,
+   * never a constant, for the reason `ancestorOverhang` states. A margin
+   * changes what the box claims after itself, not where it paints, so the
+   * ancestors stop where the scroller does and nothing on the page moves.
+   */
+  overhang: number;
+}
+
+/**
  * What the Back chip reads: the button's own glyph and the word.
  *
  * The glyph is Steam's, drawn for whatever controller is connected, so the chip
@@ -134,8 +158,14 @@ function scrollingAncestor(body: HTMLElement, view: Window): HTMLElement | null 
  * lands 50 px past that parent's. Nothing of ours is in those 50 px — but the
  * panel scrolls by them, and a 38 px scroll (50 less this frame's gap) moves
  * everything up by 38, which is exactly enough to take the Back row off the
- * top. So the space the body may occupy is smaller than the panel's by whatever
- * its ancestors overhang.
+ * top.
+ *
+ * **This is what the root's negative bottom margin cancels, not what the body
+ * gives up.** Subtracting it from the height instead is what left a band of the
+ * panel empty across every wide page: the wrapper then ended a gap above the
+ * scroller's box and our own content a further 50 px above that, with content
+ * that would have fitted clipped out of the difference. Cancelling it costs the
+ * page nothing, because the pixels were never ours to paint in.
  *
  * **Measured, never a constant.** The overhang comes from someone else's
  * markup, and a constant would pin every wide page to today's value of it. It
@@ -156,7 +186,15 @@ function ancestorOverhang(body: HTMLElement, scroller: HTMLElement): number {
 /**
  * The space left below `body` inside whatever scrolls it — the height a wide
  * page gets to work with, because Steam's tabbed page fills its parent rather
- * than growing and nothing in the QAM chain hands the plugin's panel a height.
+ * than growing and nothing in the QAM chain hands the plugin's panel a height —
+ * paired with the pull-up that makes room for it.
+ *
+ * The height is the whole of the scroller below the body's own top, less this
+ * frame's gap. The ancestors' overhang is not taken out of it: it rides along
+ * as the second half of the pair, and the caller spends it as a negative bottom
+ * margin on the root. Measured live, that is the difference between a page
+ * ending 62 px above the panel's box and one ending flush with the gap, with
+ * the scroller unscrollable either way (`scrollHeight` 750 == `clientHeight`).
  *
  * **The quantity has to be free of the scroller's own offset, and only a
  * layout-relative one is.** Every viewport-relative form grows as the panel
@@ -182,18 +220,23 @@ function ancestorOverhang(body: HTMLElement, scroller: HTMLElement): number {
  * from the QAM, where the panel is an ordinary element and Steam's own document
  * does not scroll.
  */
-function remainingBodyHeight(body: HTMLElement, view: Window): number {
+function measureBodyFit(body: HTMLElement, view: Window): BodyFit {
   const scroller = scrollingAncestor(body, view);
   const remaining = scroller
-    ? scroller.clientHeight - offsetWithinScroller(body, scroller) - ancestorOverhang(body, scroller)
+    ? scroller.clientHeight - offsetWithinScroller(body, scroller)
     : view.innerHeight - body.getBoundingClientRect().top;
-  return Math.max(MIN_BODY_HEIGHT, remaining - BODY_BOTTOM_GAP);
+  return {
+    height: Math.max(MIN_BODY_HEIGHT, remaining - BODY_BOTTOM_GAP),
+    // Nothing to cancel where the walk has no scroller to stop at — the
+    // fallback's height is viewport-relative and counts no ancestor box.
+    overhang: scroller ? ancestorOverhang(body, scroller) : 0,
+  };
 }
 
 export const WidePage: FC<WidePageProps> = ({ title, onBack, tabs, activeTab, onShowTab, children, ownRegions }) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
-  const [bodyHeight, setBodyHeight] = useState<number | null>(null);
+  const [fit, setFit] = useState<BodyFit | null>(null);
 
   useWideQamPanel(rootRef);
 
@@ -202,7 +245,14 @@ export const WidePage: FC<WidePageProps> = ({ title, onBack, tabs, activeTab, on
     const view = body?.ownerDocument.defaultView;
     if (!body || !view) return;
 
-    const measure = () => setBodyHeight(remainingBodyHeight(body, view));
+    // A re-measure that answers the same pair keeps the previous object, the
+    // bail-out an equal number used to get for free: the observers below fire
+    // on layout, and a fresh object every time would re-render on each one.
+    const measure = () =>
+      setFit((previous) => {
+        const next = measureBodyFit(body, view);
+        return previous?.height === next.height && previous.overhang === next.overhang ? previous : next;
+      });
     measure();
     // The view's own constructor, not the module's: plugin code runs in the
     // SharedJSContext window and these nodes are the QAM's.
@@ -246,8 +296,11 @@ export const WidePage: FC<WidePageProps> = ({ title, onBack, tabs, activeTab, on
   }, [steamPlacesFocus]);
 
   // A `min-height` is not enough here — Steam's tabbed page fills its parent and
-  // clips instead of growing, so the body needs a definite height.
-  const bodyStyle = { height: bodyHeight === null ? undefined : `${bodyHeight}px`, overflow: "hidden" };
+  // clips instead of growing, so the body needs a definite height. Its pull-up
+  // is read off the same value in the same render, which is the whole guard
+  // against the two drifting apart: there is no second thing to forget to set.
+  const bodyStyle = { height: fit === null ? undefined : `${fit.height}px`, overflow: "hidden" };
+  const rootStyle = fit === null ? undefined : { marginBottom: `${-fit.overhang}px` };
 
   // The frame's region is for a body of rows in one column, and nothing else
   // gets one. Steam's tabbed page already wraps each tab's content in this same
@@ -269,7 +322,7 @@ export const WidePage: FC<WidePageProps> = ({ title, onBack, tabs, activeTab, on
   }
 
   return (
-    <div className={WIDE_ROOT_CLASS} ref={rootRef} {...{ [OWNS_ENTRY_FOCUS_ATTR]: "" }}>
+    <div className={WIDE_ROOT_CLASS} ref={rootRef} style={rootStyle} {...{ [OWNS_ENTRY_FOCUS_ATTR]: "" }}>
       {/* One line, not three: the full-width Back row and the title on its own
           line cost two of the four rows the Deck's body has to spend. */}
       <Focusable style={{ display: "flex", alignItems: "center", gap: "10px", padding: "4px 16px 6px" }}>

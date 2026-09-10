@@ -113,6 +113,30 @@ fix**; it changes no number at any offset. The layout-relative form answers 648 
 offset reachable at all is that `QAMPanel` resets the panel's scroll inside a `requestAnimationFrame`, a frame after the
 page's own layout effect has already measured.
 
+**The height alone is not the whole fit, because the frame's own ancestors hang below it.** Decky wraps a plugin's
+content in a box that sits 34 px below the panel top — its plugin title — and takes `height: 100%` of a parent it is
+already inset within, so its bottom lands 50 px past our content's. Nothing of ours is painted in those 50 px, but the
+panel scrolls by them, and a scroll of that size takes the frame's Back row off the top. `WidePage` measures the
+overhang (`ancestorOverhang`, summed over each ancestor up to the scroller) and **cancels it with a negative bottom
+margin on the page root** rather than taking it out of the height: a margin changes what the box claims after itself,
+not where it paints, so the ancestors end where the scroller's box does and nothing on the page moves. The height and
+that pull-up are one measured value applied in one render, because **each half alone is measurably useless**: applied
+live to the running panel, the height without the margin overflows the scroller (`scrollHeight` 788 against a
+`clientHeight` of 750 — 38 px of scroll, which is what takes the Back row off the top), and the margin without the
+height moves nothing a reader sees, the page still ending on the same line with the same band under it.
+
+Buying the room instead of cancelling it is what the first cut did, and it cost the bottom of every wide page: the body
+gave up 50 px of its own so the wrapper's empty 50 would fit, which left the wrapper ending a gap above the panel's box
+and our content a further 50 px above that — an empty band across Settings, Library and Sync, with content that would
+have fitted clipped out of the difference. Measured live — on Settings when it was reported, and again on Library, which
+answers the same because the scroller is the panel's rather than the page's — the scroller's box ran to y=764.3
+(`clientHeight` 750, unscrollable) while the page root ended at y=702. The 12 px that remain under the page are
+`BODY_BOTTOM_GAP` and are deliberate — breathing room, not overhang, and not a knob for absorbing leftover scroll.
+
+**No test here can see any of that.** happy-dom performs no layout, so `WidePage.test.tsx` pins the arithmetic — the
+height, and that the pull-up equals whatever overhang was measured — and nothing more. That the panel does not scroll,
+and that the band is gone, is a device observation each time.
+
 A region scrolls the way the rest of the QAM scrolls: by moving focus. Every scrolling region goes through
 `ScrollRegion`, which renders Steam's plain `ScrollPanel` — the container the QAM's own tab panel is built from, and the
 one Steam's tabbed page wraps each tab's content in. It is an `overflow-y: auto` box that takes no focus of its own, so
@@ -268,10 +292,11 @@ where the first button IS the first row — true of Main only while Main had a S
 first stop and the first button, so the router's default already opens them there. Settings left that group when it
 became a wide page — the frame owns its entry focus now, and lands it on the first section row. Whatever the rule, the
 root it searches is the plugin's own content and nothing above it — Decky renders its panel title and the back arrow
-beside it outside that box, 34 px above it (`WidePage`'s `ancestorOverhang` measures the gap) — so no rule here could
-reach Decky's own chrome. The declaration, the finder, the shared set of shapes and the `.focus()` + `gpfocus` pair are
-`src/utils/entryFocus.ts`. It is a second attribute rather than a second use of the wide frame's `OWNS_ENTRY_FOCUS_ATTR`
-because the two say opposite things: that one tells the router to place nothing, this one tells it where.
+beside it outside that box, 34 px above it (the same inset whose bottom `WidePage`'s `ancestorOverhang` measures) — so
+no rule here could reach Decky's own chrome. The declaration, the finder, the shared set of shapes and the `.focus()` +
+`gpfocus` pair are `src/utils/entryFocus.ts`. It is a second attribute rather than a second use of the wide frame's
+`OWNS_ENTRY_FOCUS_ATTR` because the two say opposite things: that one tells the router to place nothing, this one tells
+it where.
 
 **A tab's content is the page's business, not the frame's.** The frame wraps an untabbed body in a `ScrollRegion` and a
 tabbed one in nothing: Steam's tabbed page already wraps each tab's content in this same plain scroll panel, so a region
