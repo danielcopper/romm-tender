@@ -75,8 +75,10 @@ def to_unsigned_app_id(app_id: int) -> int:
     The inverse of :func:`to_signed_app_id`, and the direction anything reading
     ``shortcuts.vdf`` needs: the file stores the id signed, while every id the
     frontend handles — ``AddShortcut``'s return, ``collectionStore``'s keys, the
-    argument every ``SteamClient.Apps.Set*`` takes — is unsigned. Handing a
-    negative id to those APIs names no shortcut and fails silently.
+    argument every ``SteamClient.Apps.Set*`` takes — is unsigned. A negative id
+    would therefore name no shortcut; that it fails silently rather than
+    throwing is inferred from those APIs returning ``void`` with no success
+    signal, and has not been measured.
     """
     return struct.unpack("I", struct.pack("i", app_id))[0]
 

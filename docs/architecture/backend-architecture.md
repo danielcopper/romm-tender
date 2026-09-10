@@ -2019,10 +2019,13 @@ migration just returned — `locations.data_dir` IS the new root — rather than
 start that has not got there installs nothing and creates nothing, and `ShortcutLauncher.path` is then the copy the
 release ships inside the plugin folder: a real file, so a sync in that state still produces shortcuts that launch.
 
-`ShortcutLauncher` carries the two answers apart on purpose. `path` is what a newly built shortcut names, and is always
-a launcher that exists. `at_home` is the narrower question — `path` is the home under the data root, with this release's
-launcher in it — and it is what repointing an EXISTING shortcut turns on: pointing one at a launcher nothing put there
-stops its game from starting, and no part of this plugin could put it back.
+`ShortcutLauncher` carries the two answers apart on purpose. `path` is what a newly built shortcut names, and follows
+the INSTALL rather than the migration: the home where this start actually got the launcher into it, the shipped copy
+otherwise — including the start whose write failed, whose home is empty. The one case where even the shipped copy is not
+a real file is a package shipped without its launcher, which is the same reason the install failed. `at_home` is the
+narrower question — `path` is the home under the data root, with this release's launcher in it — and it is what
+repointing an EXISTING shortcut turns on: pointing one at a launcher nothing put there stops its game from starting, and
+no part of this plugin could put it back.
 
 ### Repointing the shortcuts that already exist
 
@@ -2039,6 +2042,14 @@ the launcher is not at its home, or the file could not be read — and a blocked
 start asks again. The gap that leaves is named at `complete_shortcut_relocation`: nothing clears the stamp, so a
 shortcut that turns up later on the old path stays there, which is harmless while the package still ships
 `bin/rom-launcher`.
+
+**The choice the plugin will not make.** Two libraries is the one case with no safe automatic answer, so the panel
+raises a notice whose button opens a modal showing both candidates with their path, size and last-changed date. The
+answer is **recorded, not executed**: the plugin is running from one of the two candidates with its database open, and
+copying a live SQLite file risks a torn copy — so the choice lands in a small file in the Decky-assigned runtime
+directory and the plugin's next start acts on it, which is why the modal offers to restart the DEVICE — restarting the
+Steam client reloads the frontend and does not start the backend again, so it would not reach that start.
+`DataLocationService` owns that surface; the file is deleted once the migration it named has completed.
 
 ## Composition Root (`bootstrap/`)
 

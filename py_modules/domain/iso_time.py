@@ -37,8 +37,9 @@ def epoch_to_local_stamp(epoch: float) -> str:
 
     For text a user opens rather than anything that parses it back, so it drops
     the seconds and the offset that make :func:`epoch_to_iso` a round-trip. The
-    zone is the machine's because the alternative — UTC — is an hour or two off
-    the clock the reader just looked at, with nothing on the line saying so.
+    zone is the machine's because the alternative — UTC — is up to fourteen
+    hours off the clock the reader just looked at, with nothing on the line
+    saying so.
     """
     moment = datetime.fromtimestamp(epoch)
     return f"{moment.day} {moment:%B %Y at %H:%M}"

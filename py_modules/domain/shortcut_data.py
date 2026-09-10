@@ -219,7 +219,10 @@ def select_shortcuts_to_relocate(exes: Mapping[int, str], launcher_exe: str) -> 
     and reading one as foreign would leave it behind while counting the run
     complete.
 
-    Sorted, so a run's plan and its log line are the same on every start.
+    Sorted, so two readings of one unchanged library produce the same plan in
+    the same order — the app IDs cross to the frontend as a list it writes in
+    order, and neither log line prints them, so nothing else would show a
+    difference.
     """
     selected = []
     for app_id, exe in exes.items():

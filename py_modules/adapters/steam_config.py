@@ -81,12 +81,20 @@ class SteamConfigAdapter:
         every shortcut on its old path for the life of the install, silently.
 
         Two shapes in the file are not obvious and both fail quietly if missed.
-        The keys are matched **case-insensitively**: Steam has written them as
-        ``appid``/``exe`` and as ``AppName``/``Exe`` across versions, and this
-        repository has no measurement of which a given client writes, so a
-        case-sensitive read would come back empty on half of them. And the id is
-        stored as a **signed** int32 while every ``SteamClient`` API takes the
-        unsigned form, so it is converted here rather than at the call site.
+        Both are measured, on the maintainer's own file (828 records, 2026-09-10).
+
+        The keys are mixed-case **within one record**, from one client: that
+        file's are ``appid``, ``AppName``, ``Exe``, ``StartDir``, ``icon``,
+        ``ShortcutPath``, ``LaunchOptions``, ``IsHidden``, ``AllowDesktopConfig``,
+        ``AllowOverlay``, ``OpenVR``, ``Devkit``, ``DevkitGameID``,
+        ``DevkitOverrideAppID``, ``LastPlayTime``, ``FlatpakAppID``, ``sortas``,
+        ``tags``, under a lower-case top-level ``shortcuts``. So they are matched
+        case-insensitively; a read that spelled ``Exe`` or ``appid`` exactly
+        would find zero of the 828, not half.
+
+        And every app id is stored **signed**: 828 of 828 negative, e.g.
+        ``-1875952762``. The conversion below is what every record needs, not an
+        edge case, because every ``SteamClient`` API takes the unsigned form.
 
         This is a read of the file, not of Steam's memory: while Steam runs the
         file is a snapshot it rewrites from memory mid-session and on exit (see

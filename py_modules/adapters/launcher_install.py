@@ -49,10 +49,11 @@ class LauncherInstallAdapter:
         release's launcher is at that path, executable" is reported as not
         installed rather than assumed.
 
-        A launcher already matching the shipped copy is left alone — untouched
-        down to its inode, because a game running right now is executing that
-        file and a replacement written over it would be read out from under the
-        interpreter mid-line.
+        A launcher already matching the shipped copy is left alone, and the
+        reason is only that there is nothing to gain from writing it again: a
+        running game is protected by the staging rename in :meth:`_write`, not
+        by this skip. What the skip does keep is the inode, which is worth
+        having but is not what makes a replacement safe.
         """
         try:
             shipped = self._read(self._source)

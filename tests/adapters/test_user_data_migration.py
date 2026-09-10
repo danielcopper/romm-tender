@@ -122,7 +122,7 @@ class TestOneLibraryWins:
         assert (tmp_path / "home" / ".config" / "romm-tender" / _SETTINGS).is_file()
         assert locations.failure is None
 
-    def test_the_move_says_what_it_moved_and_where_to(self, tmp_path, caplog):
+    def test_the_copy_says_what_it_copied_and_where_to(self, tmp_path, caplog):
         """268 MB moved in silence on the device the first cut shipped to.
 
         A failure and a pending choice already logged; the one outcome that
@@ -135,20 +135,20 @@ class TestOneLibraryWins:
         with caplog.at_level(logging.INFO, logger="test"):
             _make(tmp_path).migrate()
 
-        moved = [record for record in caplog.records if "Moved the plugin's data" in record.message]
-        assert len(moved) == 1
-        assert moved[0].levelno == logging.INFO
-        assert str(tmp_path / "data" / _OLD) in moved[0].message
-        assert str(tmp_path / "home" / ".local" / "share" / "romm-tender") in moved[0].message
-        assert str(tmp_path / "settings" / _OLD) in moved[0].message
-        assert str(tmp_path / "home" / ".config" / "romm-tender") in moved[0].message
+        copied = [record for record in caplog.records if "Copied the plugin's data" in record.message]
+        assert len(copied) == 1
+        assert copied[0].levelno == logging.INFO
+        assert str(tmp_path / "data" / _OLD) in copied[0].message
+        assert str(tmp_path / "home" / ".local" / "share" / "romm-tender") in copied[0].message
+        assert str(tmp_path / "settings" / _OLD) in copied[0].message
+        assert str(tmp_path / "home" / ".config" / "romm-tender") in copied[0].message
 
-    def test_a_fresh_install_reports_no_move(self, tmp_path, caplog):
+    def test_a_fresh_install_reports_no_copy(self, tmp_path, caplog):
         """Nothing was moved, so the line that says something was would be a lie."""
         with caplog.at_level(logging.INFO, logger="test"):
             _make(tmp_path).migrate()
 
-        assert not [record for record in caplog.records if "Moved the plugin's data" in record.message]
+        assert not [record for record in caplog.records if "Copied the plugin's data" in record.message]
         assert (tmp_path / "home" / ".local" / "share" / "romm-tender").is_dir()
 
     def test_the_source_is_left_untouched(self, tmp_path):

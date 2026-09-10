@@ -136,7 +136,7 @@ vi.mock("./components/MainPage", () => ({
 vi.mock("./components/DownloadQueue", () => ({
   DownloadQueue: () => createElement("div", null, "downloads page"),
 }));
-const relocateShortcutsToLauncher = vi.fn().mockResolvedValue({ status: "relocated", rewritten: 0 });
+const relocateShortcutsToLauncher = vi.fn().mockResolvedValue({ status: "relocated" });
 vi.mock("./utils/launcherRelocation", () => ({
   relocateShortcutsToLauncher: () => relocateShortcutsToLauncher(),
 }));
@@ -183,7 +183,7 @@ beforeEach(() => {
 describe("index.tsx — launcher relocation at plugin load", () => {
   beforeEach(() => {
     setLauncherRelocated(false);
-    relocateShortcutsToLauncher.mockReset().mockResolvedValue({ status: "relocated", rewritten: 3 });
+    relocateShortcutsToLauncher.mockReset().mockResolvedValue({ status: "relocated" });
   });
 
   it("points the shortcuts at the launcher without the panel being opened", async () => {
@@ -195,8 +195,8 @@ describe("index.tsx — launcher relocation at plugin load", () => {
     plugin.onDismount();
   });
 
-  it("leaves the relocation unestablished when this start could not place the launcher", async () => {
-    relocateShortcutsToLauncher.mockResolvedValue({ status: "not_installed" });
+  it("leaves the relocation unestablished when the backend blocked the rewrite", async () => {
+    relocateShortcutsToLauncher.mockResolvedValue({ status: "blocked" });
 
     const plugin = pluginFactory();
     await act(flush);

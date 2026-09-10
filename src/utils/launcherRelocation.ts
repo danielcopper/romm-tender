@@ -22,6 +22,7 @@
  */
 
 import { completeShortcutRelocation, getShortcutRelocation, logError, logInfo } from "../api/backend";
+import { getAppDetails } from "./steamShortcuts";
 
 /**
  * Whether the library now points at the launcher's home.
@@ -62,7 +63,37 @@ export async function relocateShortcutsToLauncher(): Promise<LauncherRelocation>
     return { status: "blocked" };
   }
 
+  // An outstanding plan is never empty — the backend answers `done` for that —
+  // so the undefined branch is the type system, not a case.
+  const [confirmed] = plan.app_ids;
+  if (confirmed === undefined || !(await landed(confirmed, plan.exe))) {
+    logError(`launcher relocation: Steam does not report ${plan.exe} back; leaving it for the next start`);
+    return { status: "blocked" };
+  }
+
   await completeShortcutRelocation();
   logInfo(`launcher relocation: pointed ${plan.app_ids.length} shortcut(s) at ${plan.exe}`);
   return { status: "relocated" };
+}
+
+/**
+ * Ask Steam what one rewritten shortcut's exe now is, and whether it is *exe*.
+ *
+ * The stamp is permanent and the panel turns it into "you may remove the
+ * pre-rename install", so it may not rest on writes nobody looked at.
+ * `SetShortcutExe` returns nothing, and the backend planned the run off
+ * `shortcuts.vdf` — a file Steam rewrites from its own memory, and one that
+ * `find_steam_user_dir` picks by modification time where a machine has more
+ * than one Steam account. Both routes end with a run that wrote to the wrong
+ * place, or to nothing, and reported success.
+ *
+ * ONE shortcut, not all of them: every write in the loop above came from one
+ * list, through one API, in one pass, so the failures worth catching here are
+ * the ones that take the whole run with them. Confirming each would cost 826
+ * `RegisterForAppDetails` calls and the fat details object each one caches —
+ * exactly the renderer cost the backend-side planning removed.
+ */
+async function landed(appId: number, exe: string): Promise<boolean> {
+  const details = await getAppDetails(appId);
+  return details?.strShortcutExe?.replace(/^"|"$/g, "") === exe;
 }

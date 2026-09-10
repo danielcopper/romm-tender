@@ -147,7 +147,7 @@ class UserDataMigrationAdapter:
         done = {half for half, probe in probes.items() if probe.settled}
         failures = [error for half in (SETTINGS_HALF, DATA_HALF) if (error := probes[half].error) is not None]
 
-        moved: list[str] = []
+        copied: list[str] = []
         if plan.choice_required:
             self._logger.info("Two older installs both hold a library; waiting for the user to pick one")
         elif plan.outstanding:
@@ -161,9 +161,9 @@ class UserDataMigrationAdapter:
                     continue
                 done.add(half)
                 if copied_from is not None:
-                    moved.append(f"{half} from {copied_from} to {self._root_for(half)}")
-        if moved:
-            self._logger.info(f"Moved the plugin's data to its own directories: {'; '.join(moved)}")
+                    copied.append(f"{half} from {copied_from} to {self._root_for(half)}")
+        if copied:
+            self._logger.info(f"Copied the plugin's data to its own directories: {'; '.join(copied)}")
         # An answer is dropped only once nothing is left for it to name: while
         # any half is still outstanding the next start needs it to reach the
         # same location this one was heading for.

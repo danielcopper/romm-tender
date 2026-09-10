@@ -2,10 +2,10 @@
 
 Tender keeps everything it knows about your library in two folders under your own home directory:
 
-| Folder                        | What is in it                                                                        |
-| ----------------------------- | ------------------------------------------------------------------------------------ |
-| `~/.config/romm-tender/`      | Your settings — server address, sign-in, which platforms and collections you sync    |
-| `~/.local/share/romm-tender/` | The library database, cached cover art and artwork, and playtime and save-sync state |
+| Folder                        | What is in it                                                                                                                                                             |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `~/.config/romm-tender/`      | Your settings — server address, sign-in, which platforms and collections you sync                                                                                         |
+| `~/.local/share/romm-tender/` | The library database, cached cover art and artwork, playtime and save-sync state — and the small `bin/rom-launcher` file every one of your Steam shortcuts starts through |
 
 Your **games** are not in either of them. Downloaded ROMs, BIOS files and save files live in RetroDECK's own folders,
 exactly as before, and nothing on this page moves them.

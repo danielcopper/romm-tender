@@ -241,11 +241,16 @@ class TestBootstrapInstallsTheLauncher:
         assert str(tmp_path / "plugin") not in result.launcher.path
 
     def test_a_launcher_the_release_did_not_ship_leaves_the_start_running(self, tmp_path):
-        """The one thing that must not happen is the plugin failing to start over it."""
+        """The one thing that must not happen is the plugin failing to start over it.
+
+        The path falls back to the copy the release ships, which in this one case
+        is the file that is missing — there is nowhere honest left to point, and
+        naming the home would claim a launcher no start ever wrote.
+        """
         result = _bootstrap_for(tmp_path)
 
         assert result.launcher.at_home is False
-        assert result.launcher.path == str(self._home(tmp_path))
+        assert result.launcher.path == str(tmp_path / "plugin" / "bin" / "rom-launcher")
 
 
 class TestTheLauncherWaitsForTheDataMigration:
@@ -345,10 +350,27 @@ class TestTheLauncherWaitsForTheDataMigration:
             blocked.chmod(0o700)
 
         assert result.launcher.at_home is False
-        assert result.launcher.path == str(
-            tmp_path / "home" / ".local" / "share" / "romm-tender" / "bin" / "rom-launcher"
-        )
         assert result.adapters.romm_api is not None
+
+    def test_a_failed_write_does_not_leave_new_shortcuts_naming_the_home(self, tmp_path):
+        """The path follows the INSTALL, not the migration.
+
+        A settled start whose write failed has an empty home, and a shortcut
+        built against it would name a file that is not there — for the whole
+        library, since every shortcut this run writes takes the same path.
+        """
+        self._ship(tmp_path)
+        blocked = tmp_path / "home" / ".local" / "share" / "romm-tender" / "bin"
+        blocked.mkdir(parents=True)
+        blocked.chmod(0o500)
+        try:
+            result = _bootstrap_for(tmp_path)
+        finally:
+            blocked.chmod(0o700)
+
+        assert result.launcher.path == str(tmp_path / "plugin" / "bin" / "rom-launcher")
+        assert pathlib.Path(result.launcher.path).is_file()
+        assert not (tmp_path / "home" / ".local" / "share" / "romm-tender" / "bin" / "rom-launcher").exists()
 
 
 class TestBootstrapSettingsResetMarker:

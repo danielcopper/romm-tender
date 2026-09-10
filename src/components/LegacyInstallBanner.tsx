@@ -31,15 +31,15 @@ export function legacyInstallStatement(relocated: boolean, dataStranded: boolean
       title: LEGACY_REMOVABLE_TITLE,
       body:
         "Your games no longer launch through it — Tender keeps its own copy of the file they need, outside any " +
-        "plugin folder. Nothing here depends on the older install any more, so you can remove it from Decky's " +
-        "settings, under Plugins. Keeping it is fine too; it costs disk space and nothing else.",
+        "plugin folder. Nothing here depends on the older install any more, so you can remove it wherever Decky " +
+        "lists your installed plugins. Keeping it is fine too; it costs disk space and nothing else.",
       dismissible: true,
     };
   }
   const launcher =
     "Every Steam shortcut launches through a file in that older plugin's folder, so removing it from Decky stops " +
     "your games from starting. Leave it in place until Tender has moved them onto its own copy of that file — it " +
-    "tries at every start, so restarting Steam is usually all it takes.";
+    "tries every time it starts up, which is when your device does.";
   return {
     title: LEGACY_INSTALL_TITLE,
     body: dataStranded

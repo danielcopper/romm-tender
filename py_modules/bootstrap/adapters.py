@@ -367,19 +367,25 @@ def bootstrap(
     # install and the user's library would never come across — with no failure,
     # no notice and nothing in the log. Whether the half landed is read off what
     # the migration just decided, never by probing the directory a second time.
-    # A start that has not got there installs nothing, creates nothing, and
-    # points new shortcuts at the copy the release ships, which is where they
-    # pointed before the move and still runs.
+    # A start that has not got there installs nothing and creates nothing.
+    #
+    # The path a new shortcut is built against follows the INSTALL, not the
+    # migration: it is the home only where this start actually got the launcher
+    # into it, and the copy the release ships otherwise — a start whose write
+    # failed is the second case, and pointing a shortcut at a home the write
+    # never reached would name a file that is not there.
     data_settled = locations.data_dir == data_home
-    launcher_home = launcher_path(locations.data_dir) if data_settled else launcher_path(plugin_dir)
-    launcher = ShortcutLauncher(
-        path=launcher_home,
-        at_home=data_settled
+    launcher_at_home = (
+        data_settled
         and LauncherInstallAdapter(
             source=launcher_path(plugin_dir),
-            destination=launcher_home,
+            destination=launcher_path(locations.data_dir),
             logger=logger,
-        ).install(),
+        ).install()
+    )
+    launcher = ShortcutLauncher(
+        path=launcher_path(locations.data_dir) if launcher_at_home else launcher_path(plugin_dir),
+        at_home=launcher_at_home,
     )
 
     # Bring the on-disk SQLite schema up to date before any service is wired —

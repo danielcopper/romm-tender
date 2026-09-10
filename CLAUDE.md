@@ -101,12 +101,13 @@ locally with `mise run docs`.
   in the apply loop.
 - **Shortcut appId is assigned, not derived**: Steam assigns it at creation and it is stable for the shortcut's
   lifetime; the plugin records it in `roms.shortcut_app_id` and detects ownership by the exe path. Never re-derive it
-  (the `CRC32(exe + appName)` formula is disproven). `launchOptions`, `startDir` **and `exe`** changes are all
-  appId-safe: all three are `Set*` calls on an existing shortcut, and rewriting the `exe` of every one of a 826-shortcut
-  library kept every appId — verified against a `shortcuts.vdf` backup taken before the rewrite (0 new, 0 lost, names
-  unchanged). The **name** is the one that has never been measured: the sync writes it in place too
-  (`rewriteShortcutIdentity`), and nothing has established what that does to the appId — do not read the exe measurement
-  as covering it.
+  (the `CRC32(exe + appName)` formula is disproven). `launchOptions`, `startDir` **and `exe`** changes are appId-safe,
+  and each rests on its own measurement: `launchOptions` on #827's hardware runs, and `exe` on rewriting every one of a
+  826-shortcut library and finding every appId still there, against a `shortcuts.vdf` backup taken before it (0 new, 0
+  lost, names unchanged). "They are all `Set*` calls on an existing shortcut" is a description of the three, not
+  evidence about any of them — it is equally true of `SetShortcutName`, which is the one that has **never** been
+  measured. The sync writes the name in place too (`rewriteShortcutIdentity`), and nothing has established what that
+  does to the appId; do not read the exe measurement as covering it.
 - **Frontend API**: `@decky/ui` + `@decky/api` (NOT deprecated `decky-frontend-lib`). Use `callable()` (NOT
   `ServerAPI.callPluginMethod()`).
 - **Decky callables must be async**: Even if the body is synchronous, Decky's callable framework requires `async def`.
@@ -378,27 +379,31 @@ Format: **invariant** — tier — enforced by.
   `retrodeck.json`, and does no network work despite living on the RomM HTTP adapter), `SystemSupportedExtensionsFn` /
   `SystemKnownFn` (two more questions to the same catalogue, through the same adapter cache),
   `SteamConfigStore.read_shortcut_exes` (parses Steam's whole `shortcuts.vdf` — 315 KB and 828 entries on the reference
-  machine — for the one-time shortcut relocation; the store's other reads are not listed because no service calls them)
-  and `FirmwareFolderVerdictFn` (lists one core's declared folder and reads every candidate inside it the way the core
-  does — 0.26 s for LRPS2 on the reference machine, the one seam here a cost was measured for), the two path resolvers —
-  `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker, a directory that may sit on the SD card the
-  marker is pending a migration away from) and `ResolvedPathFn` (the same walk, but on **both** sides of a comparison,
-  so a call site costs what the rows it checks cost, not what it checks them against) — and the `RetroDeckPaths` getters
-  that answer with a root: `bios_path`, `roms_path`, `saves_path`, `states_path` and `retrodeck_home`, five of the
-  Protocol's six path getters, each resolving on every call. The sixth, `config_path`, stays out because it resolves
-  nothing — it is `os.path.join` over the user home, so calling it costs no I/O. One other real I/O seam was weighed and
-  kept out — the reason is in the script's docstring, and it is not an exemption; nor is it an inventory of what else
-  touches the disk. **"It's only a read" is the reasoning this rule exists to refuse**: `SqliteUnitOfWork.__enter__`
-  issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the write lock. The database is in WAL, so readers are
-  unaffected — but every other **writer** waits on the lock for up to `busy_timeout=5000` and fails with `SQLITE_BUSY`
-  if it is still held then, and `FakeUnitOfWork` shares no connection, so no unit test notices. Six call sites had
-  drifted across the rule before anything looked (#1779), for the reason the check exists: nothing at a call site
-  reveals that an injected seam touches the disk. **The rule and the gate come from reading code — no measurement of how
-  long any of those transactions actually held the lock exists, and nothing here should be read as one.** What the check
-  sees is the deadlock rule's matcher unchanged — an **attribute** call naming a listed seam, lexically inside a
-  `with <...>uow_factory()` block in the same function scope — so it inherits every blind spot of that half: a seam
-  behind a helper one level down, an alias to a local, a factory attribute whose name does not end in `uow_factory`, a
-  nested `def`/`lambda` (which resets the scope by design), a seam **passed as a bound method**
+  machine — for the one-time shortcut relocation. **Listing it changes nothing at its only call site**: the service
+  reaches it through `run_in_executor` as a bound method, which is this checker's documented blind spot, so the entry is
+  a statement of the rule rather than an enforcement of it. It is also not the store's only real I/O — `grid_dir()` is
+  called from `services/artwork.py` (six sites), `services/shortcut_removal.py` and `services/library/reporter.py`, and
+  `check_retroarch_input_driver()` from `services/settings.py` — those are unlisted, and their being unlisted is a gap,
+  not a judgement) and `FirmwareFolderVerdictFn` (lists one core's declared folder and reads every candidate inside it
+  the way the core does — 0.26 s for LRPS2 on the reference machine, the one seam here a cost was measured for), the two
+  path resolvers — `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker, a directory that may sit on
+  the SD card the marker is pending a migration away from) and `ResolvedPathFn` (the same walk, but on **both** sides of
+  a comparison, so a call site costs what the rows it checks cost, not what it checks them against) — and the
+  `RetroDeckPaths` getters that answer with a root: `bios_path`, `roms_path`, `saves_path`, `states_path` and
+  `retrodeck_home`, five of the Protocol's six path getters, each resolving on every call. The sixth, `config_path`,
+  stays out because it resolves nothing — it is `os.path.join` over the user home, so calling it costs no I/O. One other
+  real I/O seam was weighed and kept out — the reason is in the script's docstring, and it is not an exemption; nor is
+  it an inventory of what else touches the disk. **"It's only a read" is the reasoning this rule exists to refuse**:
+  `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the write lock. The database is
+  in WAL, so readers are unaffected — but every other **writer** waits on the lock for up to `busy_timeout=5000` and
+  fails with `SQLITE_BUSY` if it is still held then, and `FakeUnitOfWork` shares no connection, so no unit test notices.
+  Six call sites had drifted across the rule before anything looked (#1779), for the reason the check exists: nothing at
+  a call site reveals that an injected seam touches the disk. **The rule and the gate come from reading code — no
+  measurement of how long any of those transactions actually held the lock exists, and nothing here should be read as
+  one.** What the check sees is the deadlock rule's matcher unchanged — an **attribute** call naming a listed seam,
+  lexically inside a `with <...>uow_factory()` block in the same function scope — so it inherits every blind spot of
+  that half: a seam behind a helper one level down, an alias to a local, a factory attribute whose name does not end in
+  `uow_factory`, a nested `def`/`lambda` (which resets the scope by design), a seam **passed as a bound method**
   (`run_in_executor(None, self._disc_resolver.enumerate_discs, install)` — an attribute, not a call, and
   `run_in_executor` is exactly how `disc.py` and `cores.py` reach their `_io` bodies; the same shape
   `check_read_only_module.py` records for its own gate), and the hand-maintained list itself, which cannot notice a seam

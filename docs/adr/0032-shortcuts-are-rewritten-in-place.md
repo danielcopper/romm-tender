@@ -19,7 +19,8 @@ back is the one that is not there. The same holds the moment a user removes the 
 first (Decky's per-plugin data directories) by taking the data out of them. The second was this one, and it rested on a
 belief about Steam: that changing a shortcut's `exe` re-derives its `appId`, because the `appId` was thought to be
 `CRC32(exe + appName)`. That derivation was disproven on device in 2026-07 — 68 live shortcuts matched no CRC32
-candidate, and the ids are spread uniformly across the signed-int32 space, consistent with assignment at creation. What
+candidate, and the ids are spread uniformly across `[0x80000000, 0xFFFFFFFF]` — the half that is negative read as a
+signed int32, which is also what all 828 of this device's shortcuts are — consistent with assignment at creation. What
 survived in the docs was the conclusion without its premise: "an `exe` change is applied by delete + recreate", marked
 as no longer verified and believed anyway.
 
@@ -64,9 +65,9 @@ Steam Input profiles and the `roms.shortcut_app_id` binding all survive untouche
 
 **Measured, not assumed.** On the maintainer's device: 828 non-Steam shortcuts, 826 of them ours, every one rewritten in
 a single pass. The `appId` set afterwards was identical to a `shortcuts.vdf` backup taken before it — 0 new, 0 lost,
-names unchanged — the 826 calls cost 12 ms of renderer time, and all 826 landed on disk within seconds. No delay is
-paced between them: the 50 ms the apply loop uses belongs to a **newly added** shortcut waiting for its overview to
-register, and an in-place `Set*` on a shortcut that already exists waits for nothing.
+names unchanged — and the 826 calls cost 12 ms of renderer time. No delay is paced between them: the 50 ms the apply
+loop uses belongs to a **newly added** shortcut waiting for its overview to register, and an in-place `Set*` on a
+shortcut that already exists waits for nothing.
 
 The rewrite runs at frontend start rather than when the QAM panel is opened, because a user can launch a game without
 ever opening the panel.
@@ -90,10 +91,11 @@ every write it was given; a reading that could not be done, or a pass that stopp
 for the next start.
 
 **Nothing clears the stamp, deliberately.** A shortcut that turns up later carrying the old path — restored from a
-backup, written by a downgraded build — stays on it, and no start will look again. That is harmless while the package
-still ships `bin/rom-launcher`: the old path is a real file that still launches. Clearing the stamp on Force Full Sync
-was considered and rejected — it would only ever reach a user who had already diagnosed the shortcut, and that button
-carries enough meanings already.
+backup, written by a downgraded build — stays on it, and no start will look again. It keeps launching, because the
+package still ships `bin/rom-launcher` and the old path is a real file; what it does not keep is the panel's agreement,
+since the card reads this stamp as "nothing points into the pre-rename install any more" and offers its removal on the
+strength of it. Clearing the stamp on Force Full Sync was considered and rejected — it would only ever reach a user who
+had already diagnosed the shortcut, and that button carries enough meanings already.
 
 ### 4. The shipped copy stays, and the old path keeps working
 
@@ -109,8 +111,11 @@ launches. Nothing about the old path becomes an error.
   the card that asked the user not to remove it tells them they now can, and where — and that statement, alone among the
   panel's notices, carries a Dismiss that hides a condition which is still true, because keeping the older install is a
   legitimate end state.
-- **A start that cannot migrate the data changes nothing at all.** No launcher is installed, no shortcut is rewritten,
-  and the card keeps its first statement. New shortcuts name the copy the release ships, exactly as before this cut.
+- **Two kinds of start install nothing, and they differ.** One cannot migrate the data, so nothing is attempted at all;
+  the other is settled and its write failed. Neither rewrites a shortcut and both keep the card on its first statement,
+  but only the first leaves the home untouched — the second leaves it empty, which is why the path a new shortcut is
+  built against follows the install rather than the migration. Both name the copy the release ships, exactly as before
+  this cut.
 - **The display name is still unmeasured.** The `exe` measurement above says nothing about what `SetShortcutName` does
   to an `appId`, and the sync writes the name in place alongside the exe. Do not read one as covering the other.
 - **A Steam client that never runs this frontend keeps its old shortcuts.** The rewrite is a frontend action; a library

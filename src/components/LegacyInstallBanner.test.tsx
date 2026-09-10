@@ -14,7 +14,7 @@ import { resetLauncherStoreForTests, setLauncherRelocated } from "../utils/launc
 import { refreshSyncStats, resetSyncStatsStoreForTests } from "../utils/syncStatsStore";
 import type { SyncStats } from "../types";
 
-const STRANDED_SENTENCE = "still in that older install";
+const STRANDED_SENTENCE = "Your library and settings are still in that older install too";
 
 const flushAsync = () =>
   act(async () => {
@@ -77,8 +77,10 @@ describe("legacyInstallStatement", () => {
     expect(statement.dismissible).toBe(true);
   });
 
-  it("tells the reader where to remove it", () => {
-    expect(legacyInstallStatement(true, false).body).toContain("Decky's settings, under Plugins");
+  it("points at Decky's plugin list without naming a menu path", () => {
+    // The path is unverified against Decky's own UI, so the sentence has to be
+    // true whatever that menu turns out to be called.
+    expect(legacyInstallStatement(true, false).body).toContain("wherever Decky lists your installed plugins");
   });
 });
 

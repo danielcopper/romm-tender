@@ -408,9 +408,9 @@ itself a question only the user can answer, so it would be unanswerable as well 
 Five of the nine conditions above carry no Dismiss anywhere — RetroDECK paths, the two data-location conditions, the
 `input_driver` fix and the session budget — so the absence is ordinary.
 
-`"RomM Sync" is still installed` is the sixth, and it is the one card that says two different things as its reason
-clears. Its condition is unchanged — the pre-rename plugin folder stands beside ours — and it still ends only when that
-folder does; what changes is what there is to say about it:
+`"RomM Sync" is still installed` is not one of the five, and it is the one card that says two different things as its
+reason clears. Its condition is unchanged — the pre-rename plugin folder stands beside ours — and it still ends only
+when that folder does; what changes is what there is to say about it:
 
 1. **The shortcuts still point into it.** The launcher warning, no Dismiss: removing the folder stops every game from
    starting, and nothing about that is optional. Since [ADR-0032](../adr/0032-shortcuts-are-rewritten-in-place.md) this

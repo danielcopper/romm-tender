@@ -72,9 +72,10 @@ class WiringConfig:
     anything calls, and it is the ONLY place the user's data directory
     is read from — ``runtime.runtime_dir`` is Decky's own directory and
     answers a different question. ``launcher`` sits beside it for the
-    same reason and is derived from that same data directory: it says
-    where the launcher a Steam shortcut runs through lives, and whether
-    this start got it there.
+    same reason: it says where the launcher a Steam shortcut runs
+    through lives, and whether this start got it there. Its path is the
+    data directory's only where this start actually put the launcher
+    under it — otherwise it is the copy the release ships.
     """
 
     adapters: AdapterBundle

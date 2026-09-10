@@ -73,18 +73,19 @@ leaves you with **two** entries: the older one still shown as **RomM Sync**, and
 
 **Wait for Tender to say the older plugin can go.** Every Steam shortcut this plugin created used to launch through a
 file inside that older plugin's folder. Tender now keeps its own copy of that file outside any plugin folder and points
-your shortcuts at it, which it does a few seconds after Steam starts — but until it has, removing "RomM Sync" stops all
-of your games from starting, and nothing in Tender can put the file back.
+your shortcuts at it, which it does shortly after Steam starts — but until it has, removing "RomM Sync" stops all of
+your games from starting, and nothing in Tender can put the file back.
 
 While both are installed, Tender's QAM panel carries a card that tells you which of those it is — including when the
 panel is showing a server-version error or a pending RetroDECK migration instead of its usual contents, the two states
 in which the older plugin looks most like something to clear away. The card says one of two things:
 
 - **"RomM Sync" is still installed, and your games need it** — the move has not happened yet on this device. Leave the
-  older plugin alone; restarting Steam is usually all it takes.
-- **"RomM Sync" can be removed now** — nothing in Tender depends on it any more. Remove it from Decky's settings, under
-  Plugins, or keep it: it costs disk space and nothing else. This one has a **Dismiss**, and dismissing it is remembered
-  — the card does not come back at the next start.
+  older plugin alone. Tender tries again every time it starts up, which is when your device does — restarting Steam
+  itself is not enough, because that reloads the panel without starting Tender's own half again.
+- **"RomM Sync" can be removed now** — nothing in Tender depends on it any more. Remove it wherever Decky lists your
+  installed plugins, or keep it: it costs disk space and nothing else. This one has a **Dismiss**, and dismissing it is
+  remembered — the card does not come back at the next start.
 
 The new install also starts with its own empty settings and library, because Decky gave each plugin folder its own data
 location — your existing settings and synced library are in the older install until Tender brings them across.

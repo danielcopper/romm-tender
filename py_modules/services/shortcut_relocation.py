@@ -110,21 +110,25 @@ class ShortcutRelocationService:
     async def complete_shortcut_relocation(self) -> dict[str, Any]:
         """Record that a run repointed everything the reading found.
 
-        Called by the frontend once its writes are done. Idempotent, and
-        deliberately trusting: ``SetShortcutExe`` returns nothing, so what is
-        being recorded is that the frontend issued every write it was given —
-        confirming each one would cost a per-shortcut read-back of the very
-        object this cut moved the question off, and a wrong stamp costs a
-        shortcut that keeps working on the old path.
+        Called by the frontend once its writes are done AND one of them has been
+        read back from Steam carrying the launcher's home
+        (``src/utils/launcherRelocation.ts``). That read-back is what this stamp
+        rests on: ``SetShortcutExe`` returns nothing, and the run was planned off
+        ``shortcuts.vdf`` — which Steam rewrites from its own memory, and which
+        ``find_steam_user_dir`` picks by modification time where a machine has
+        more than one Steam account — so a run that wrote to the wrong place, or
+        to nothing, would otherwise report success. Idempotent.
 
         **The gap this leaves, deliberately.** The stamp is permanent and
         nothing clears it: a shortcut that turns up later carrying the old path
         — restored from a backup, written by a downgraded build — stays on it,
-        and no start will look again. That is harmless while the package still
-        ships ``bin/rom-launcher``, because the old path is a real file that
-        still launches. Clearing the stamp on Force Full Sync was considered and
-        rejected: it would only ever reach a user who had already diagnosed the
-        shortcut, and that button carries enough meanings already.
+        and no start will look again. It keeps launching, because the package
+        still ships ``bin/rom-launcher`` at that path; what it does NOT keep is
+        the panel's agreement, since the card reads this stamp as "nothing points
+        into the pre-rename install any more" and offers its removal. Clearing
+        the stamp on Force Full Sync was considered and rejected: it would only
+        ever reach a user who had already diagnosed the shortcut, and that button
+        carries enough meanings already.
         """
         await self._stamp_done()
         return {"success": True}

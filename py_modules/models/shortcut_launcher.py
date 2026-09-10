@@ -14,19 +14,21 @@ from dataclasses import dataclass
 class ShortcutLauncher:
     """The launcher a shortcut built this run names, and whether that path is its home.
 
-    ``path`` is always a launcher that exists. On an ordinary start it is the
-    home under the user's data root; on a start whose data half has not landed
-    it is the copy the release ships inside the plugin folder, which is where
-    every shortcut pointed before the move and still works. Something real is
-    named either way, because a shortcut built against a path nothing put a file
-    at cannot start its game.
+    ``path`` follows the INSTALL rather than the migration, and has three cases.
+    Where this start got the launcher into its home under the data root, it is
+    that home. Where it did not — the data half has not landed, or the write
+    failed — it is the copy the release ships inside the plugin folder, which is
+    where every shortcut pointed before the move and still works. The third case
+    is the one where even that is not a real file: a package shipped without its
+    launcher, which is also the reason the install failed. There is nowhere
+    honest left to point then, and naming the home would claim a launcher no
+    start ever wrote.
 
     ``at_home`` is the narrower question: is ``path`` the home under the data
     root, with this release's launcher in it. It is what repointing an EXISTING
-    shortcut turns on, and the two come apart in exactly the case that matters —
-    the shipped copy is a real file, so the first question says yes about it
-    while this one says no, and a rewrite onto the plugin folder is the very
-    fragility the move exists to remove.
+    shortcut turns on, and the two answers come apart wherever the first is the
+    shipped copy — a rewrite onto a plugin folder is the very fragility the move
+    exists to remove.
     """
 
     path: str
