@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Protocol
 from models.data_location import UserDataLocations
 
 from domain.iso_time import epoch_to_iso, epoch_to_local_stamp
-from domain.user_data_location import DATA_HALF, SETTINGS_HALF, SourceFacts, plan_migration
+from domain.user_data_location import DATA_HALF, SETTINGS_HALF, MigrationPlan, SourceFacts, plan_migration
 
 if TYPE_CHECKING:
     import logging
@@ -147,23 +147,12 @@ class UserDataMigrationAdapter:
         done = {half for half, probe in probes.items() if probe.settled}
         failures = [error for half in (SETTINGS_HALF, DATA_HALF) if (error := probes[half].error) is not None]
 
-        copied: list[str] = []
         if plan.choice_required:
             self._logger.info("Two older installs both hold a library; waiting for the user to pick one")
         elif plan.outstanding:
-            source = self._source_named(plan.source_name)
-            for half in plan.outstanding:
-                try:
-                    copied_from = self._fill(half, source)
-                except OSError as e:
-                    self._logger.warning(f"Could not move the {half} half of the plugin's data: {e}")
-                    failures.append(str(e))
-                    continue
-                done.add(half)
-                if copied_from is not None:
-                    copied.append(f"{half} from {copied_from} to {self._root_for(half)}")
-        if copied:
-            self._logger.info(f"Copied the plugin's data to its own directories: {'; '.join(copied)}")
+            filled, errors = self._carry_out(plan)
+            done |= filled
+            failures.extend(errors)
         # An answer is dropped only once nothing is left for it to name: while
         # any half is still outstanding the next start needs it to reach the
         # same location this one was heading for.
@@ -175,6 +164,36 @@ class UserDataMigrationAdapter:
             choice_required=plan.choice_required,
             failure="; ".join(failures) or None,
         )
+
+    def _carry_out(self, plan: MigrationPlan) -> tuple[set[str], list[str]]:
+        """Fill each of *plan*'s outstanding halves from its source.
+
+        Returns the halves that ended up at their root and the errors of those
+        that did not — a half that could not be filled takes only itself down,
+        which is why each is attempted on its own and the failure is collected
+        rather than raised.
+
+        The line this logs is the only place a completed move is reported at
+        all; it names both ends of each half and is written once for the run,
+        never per half.
+        """
+        source = self._source_named(plan.source_name)
+        filled: set[str] = set()
+        errors: list[str] = []
+        copied: list[str] = []
+        for half in plan.outstanding:
+            try:
+                copied_from = self._fill(half, source)
+            except OSError as e:
+                self._logger.warning(f"Could not move the {half} half of the plugin's data: {e}")
+                errors.append(str(e))
+                continue
+            filled.add(half)
+            if copied_from is not None:
+                copied.append(f"{half} from {copied_from} to {self._root_for(half)}")
+        if copied:
+            self._logger.info(f"Copied the plugin's data to its own directories: {'; '.join(copied)}")
+        return filled, errors
 
     def _degraded(self, failure: str | None) -> UserDataLocations:
         """Fall back to the Decky-assigned directory for both halves.

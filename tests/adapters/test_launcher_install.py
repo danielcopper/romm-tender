@@ -41,14 +41,53 @@ class TestInstallingIt:
         installed = tmp_path / "data" / "bin" / "rom-launcher"
         assert installed.read_bytes() == _SHIPPED
 
-    def test_the_installed_launcher_is_executable(self, tmp_path):
-        """Steam runs it as the shortcut's exe, so the bit is the whole point of the file."""
+    def test_the_installed_launcher_is_executable_by_its_owner_and_nobody_else(self, tmp_path):
+        """Steam runs it as the shortcut's exe, and no other account has any business with it.
+
+        Under the user's own data root, executed by the account that owns that
+        root — so group and other are granted nothing (python:S2612).
+        """
         _ship(tmp_path)
 
         _make(tmp_path).install()
 
-        mode = (tmp_path / "data" / "bin" / "rom-launcher").stat().st_mode
-        assert mode & stat.S_IXUSR
+        mode = stat.S_IMODE((tmp_path / "data" / "bin" / "rom-launcher").stat().st_mode)
+        assert mode == 0o700
+
+    def test_the_directory_it_creates_is_owner_only_too(self, tmp_path):
+        _ship(tmp_path)
+
+        _make(tmp_path).install()
+
+        assert stat.S_IMODE((tmp_path / "data" / "bin").stat().st_mode) == 0o700
+
+    def test_the_staging_file_is_never_wider_than_the_launcher_it_becomes(self, tmp_path, monkeypatch):
+        """There is no window in which the launcher is readable by anyone the final one is not."""
+        _ship(tmp_path)
+        seen: list[int] = []
+        real_replace = os.replace
+
+        def capture(source, destination):
+            seen.append(stat.S_IMODE(os.stat(source).st_mode))
+            real_replace(source, destination)
+
+        monkeypatch.setattr(os, "replace", capture)
+
+        _make(tmp_path).install()
+
+        assert seen == [0o700]
+
+    def test_a_launcher_an_older_release_left_wider_is_narrowed(self, tmp_path):
+        """Same bytes, wrong mode: the ordinary write is the only path that narrows it."""
+        _ship(tmp_path)
+        installed = tmp_path / "data" / "bin" / "rom-launcher"
+        installed.parent.mkdir(parents=True)
+        installed.write_bytes(_SHIPPED)
+        installed.chmod(0o755)
+
+        assert _make(tmp_path).install() is True
+
+        assert stat.S_IMODE(installed.stat().st_mode) == 0o700
 
     def test_it_leaves_no_staging_file_behind(self, tmp_path):
         _ship(tmp_path)
@@ -87,7 +126,7 @@ class TestInstallingIt:
         assert installed.stat().st_ino != running
 
     def test_it_rewrites_a_launcher_that_lost_its_executable_bit(self, tmp_path):
-        """Right bytes, wrong mode fails every game exactly as a missing file does."""
+        """Right bytes, no execute fails every game exactly as a missing file does."""
         _ship(tmp_path)
         installed = tmp_path / "data" / "bin" / "rom-launcher"
         installed.parent.mkdir(parents=True)
@@ -96,7 +135,7 @@ class TestInstallingIt:
 
         assert _make(tmp_path).install() is True
 
-        assert installed.stat().st_mode & stat.S_IXUSR
+        assert stat.S_IMODE(installed.stat().st_mode) == 0o700
 
 
 class TestLeavingItAlone:

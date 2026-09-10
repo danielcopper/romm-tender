@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import stat
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -22,7 +23,11 @@ if TYPE_CHECKING:
 # filesystem, which is what makes it atomic.
 _STAGING_SUFFIX = ".installing"
 
-_EXECUTABLE_MODE = 0o755
+# Owner-only, and executable because Steam runs it as the shortcut's exe.
+# Nothing outside the owner has any business with it: it sits under the user's
+# own data root and is executed by the account that owns that root, so group and
+# other are granted nothing (python:S2612).
+_LAUNCHER_MODE = 0o700
 
 
 class LauncherInstallAdapter:
@@ -76,35 +81,51 @@ class LauncherInstallAdapter:
             return handle.read()
 
     def _already_in_place(self, shipped: bytes) -> bool:
-        """Whether the destination already holds this release's launcher, runnable.
+        """Whether the destination already holds this release's launcher, at the mode it wants.
 
-        The executable bit is asked as well as the bytes: a launcher whose
-        content is right but whose mode is not fails every game the same way a
-        missing one does, and rewriting is the same cheap write either way.
+        The mode is compared exactly, not just for the executable bit, and it
+        answers two different questions in one. A launcher whose content is
+        right but which is not executable fails every game the same way a
+        missing one does. A launcher left WIDER than :data:`_LAUNCHER_MODE` —
+        every install written before this file was narrowed to owner-only — is
+        not broken, and is rewritten anyway, because the ordinary write is the
+        only path that narrows it and it costs the same read either way.
+
+        Deliberately not ``os.access(..., X_OK)``: that answers for the account
+        this plugin runs as, and the account that matters is the one Steam
+        launches under. Where those differ no mode would help, and where they
+        are the same the mode comparison already says it.
         """
         try:
             with open(self._destination, "rb") as handle:
                 current = handle.read()
+            mode = stat.S_IMODE(os.stat(self._destination).st_mode)
         except OSError:
             return False
-        return current == shipped and os.access(self._destination, os.X_OK)
+        return current == shipped and mode == _LAUNCHER_MODE
 
     def _write(self, content: bytes) -> None:
         """Write *content* beside the destination, then rename it on.
 
         The mode is set on the staging file rather than after the rename, so the
         launcher is never visible at its own path in a state a shortcut could
-        catch it in — it arrives complete and executable or not at all.
-        ``os.open``'s mode argument is masked by the process umask, which is
-        root's here and not ours to assume, so the bit is set explicitly.
+        catch it in — it arrives complete and at its mode or not at all. The
+        staging file is never wider than the file it becomes, so there is no
+        window in which the launcher is readable by anyone the final one is not.
+        ``os.open``'s mode argument is masked by the process umask, which is not
+        ours to assume, so the mode is set explicitly afterwards.
+
+        The directory is created owner-only for the same reason. An existing one
+        keeps whatever mode it has — ``exist_ok`` does not restate it, and this
+        adapter owns the launcher rather than the tree around it.
         """
         staging = self._destination + _STAGING_SUFFIX
-        os.makedirs(os.path.dirname(self._destination), exist_ok=True)
+        os.makedirs(os.path.dirname(self._destination), mode=_LAUNCHER_MODE, exist_ok=True)
         try:
-            handle = os.open(staging, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, _EXECUTABLE_MODE)
+            handle = os.open(staging, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, _LAUNCHER_MODE)
             with os.fdopen(handle, "wb") as launcher:
                 launcher.write(content)
-            os.chmod(staging, _EXECUTABLE_MODE)
+            os.chmod(staging, _LAUNCHER_MODE)
             os.replace(staging, self._destination)
         except OSError:
             with contextlib.suppress(OSError):
