@@ -95,8 +95,11 @@ literal `"https://steamloopback.host"` — which is what `window.origin` is in t
 
 Steam's tabbed page fills its parent instead of growing, and nothing in the QAM chain provides a height. A wide page
 therefore measures the space left below its header and takes that as its height; its regions scroll inside it. A
-`min-height` is not enough — it clips. Under Decky's title bar, the frame's Back row, its title and a tab bar, that
-leaves a body of roughly 260 px inside the 454 px view.
+`min-height` is not enough — it clips. What is left after Decky's own title bar and the frame's Back-and-title row is
+the panel's `clientHeight` less the body's offset within it, so it follows the view rather than any recorded number:
+measured through CEF on the dev window's 764 px view, with the change below applied to the running panel, that is a body
+of **660 px** ending flush with the panel's box. A tabbed page spends 58 px of it on Steam's tab row, which is drawn
+over the top of the content pane rather than above it.
 
 **That measurement has to be free of the scrolling panel's own offset, and only a layout-relative one is**: the body's
 position inside the scroller's content — its viewport top minus the scroller's, plus the scroller's `scrollTop` —
@@ -115,8 +118,8 @@ page's own layout effect has already measured.
 
 **The height alone is not the whole fit, because the frame's own ancestors hang below it.** Decky wraps a plugin's
 content in a box that sits 34 px below the panel top — its plugin title — and takes `height: 100%` of a parent it is
-already inset within, so its bottom lands 50 px past our content's. Nothing of ours is painted in those 50 px, but the
-panel scrolls by them, and a scroll of that size takes the frame's Back row off the top. `WidePage` measures the
+already inset within, so its bottom lands **50 px past that parent's**. Nothing of ours is painted in those 50 px, but
+the panel scrolls by them, and a scroll of that size takes the frame's Back row off the top. `WidePage` measures the
 overhang (`ancestorOverhang`, summed over each ancestor up to the scroller) and **cancels it with a negative bottom
 margin on the page root** rather than taking it out of the height: a margin changes what the box claims after itself,
 not where it paints, so the ancestors end where the scroller's box does and nothing on the page moves. The height and
@@ -125,17 +128,48 @@ live to the running panel, the height without the margin overflows the scroller 
 `clientHeight` of 750 — 38 px of scroll, which is what takes the Back row off the top), and the margin without the
 height moves nothing a reader sees, the page still ending on the same line with the same band under it.
 
+**What makes the pull-up cancel anything is a structural assumption, and it is worth stating on its own**, because the
+overhang is measured against a PARENT and the margin is applied to our root. The boxes between our root and the scroller
+are content-sized: the wrapper's bottom is our body's plus its own inset, at every body height. So pulling our root's
+margin box up carries those bottoms up with it, and the chain stops claiming exactly the overhang the margin names. The
+assumption is a SHAPE rather than a value — every number is re-measured, so a Decky release that merely overhangs by a
+different amount is already handled — and it holds because the overhang is the wrapper's own inset and padding rather
+than anything derived from what we put inside. It was checked at several body heights in two panel geometries.
+
+**If it ever stops holding, this is what it looks like.** A wrapper pinned to a height of its own — a future Decky or
+Steam nesting the plugin differently — would not follow our body up: growing the body would overflow the wrapper instead
+of the wrapper's parent, the margin would cancel nothing that was in the way, and the panel would scroll again, which
+the reader meets as the Back row leaving the top. The check is one reading: the lowest ancestor bottom in the chain
+should equal the body's own with the margin applied, and sit an overhang below it without.
+
 Buying the room instead of cancelling it is what the first cut did, and it cost the bottom of every wide page: the body
-gave up 50 px of its own so the wrapper's empty 50 would fit, which left the wrapper ending a gap above the panel's box
-and our content a further 50 px above that — an empty band across Settings, Library and Sync, with content that would
-have fitted clipped out of the difference. Measured live — on Settings when it was reported, and again on Library, which
+gave up 50 px of its own so the wrapper's empty 50 would fit, which left the wrapper ending at the panel's box and our
+content a further 50 px above that — an empty band across Settings, Library and Sync, with content that would have
+fitted clipped out of the difference. Measured live — on Settings when it was reported, and again on Library, which
 answers the same because the scroller is the panel's rather than the page's — the scroller's box ran to y=764.3
-(`clientHeight` 750, unscrollable) while the page root ended at y=702. The 12 px that remain under the page are
-`BODY_BOTTOM_GAP` and are deliberate — breathing room, not overhang, and not a knob for absorbing leftover scroll.
+(`clientHeight` 750, unscrollable) while the page root ended at y=702.
+
+**Two further gaps stood under a wide page after that, and neither was earned.** The first was ours: the frame kept 12
+px of breathing room off its own measurement, which is why a page ended at y=752 inside a panel whose box runs to 764.3.
+A QAM panel of Steam's own, measured in the same document, runs its content to its box with a gap of 0, so the constant
+went rather than being set to zero — room under a page belongs to that page's layout, where it can be seen and adjusted,
+not to a number the frame takes off every page's height. The second is Steam's, and it is **cancelled by an override
+rather than absorbed**: a tabbed page's content scroller carries `padding-bottom: 40px` (rule
+`._1X4dtbZ_AMX_DXT-SGiK01`), and that scroller sits inside the box `WidePage` measured and handed the tab as its height
+— so on Library the content stopped at y=712 inside a body of ours that ran to 752, a 40 px reserve taken out of a
+height the frame had already paid for. An untabbed page renders no such scroller and keeps none of it, which is why
+Library read as having a deeper band than Settings and Sync — the difference that was reported and could not be
+explained. The injected sheet zeroes the padding for a wide page of ours (`qamExpansion.ts`, written against the
+readable `_TabContentsScroll` rather than the hashed class, and degrading to Steam's padding if either name goes). With
+both gaps gone, Library's body measured 660 px and its content ran to y=764.0 against a panel box of 764.3,
+`scrollHeight` still equal to `clientHeight`. What the reader gets is 52 px on the tab's own scrolling region — the box
+the rows live in — measured on Library at 161.8 → 712 before and 161.8 → 764 after, a `clientHeight` of 550 against 602
+over the same 1570 px of content.
 
 **No test here can see any of that.** happy-dom performs no layout, so `WidePage.test.tsx` pins the arithmetic — the
-height, and that the pull-up equals whatever overhang was measured — and nothing more. That the panel does not scroll,
-and that the band is gone, is a device observation each time.
+height, and that the pull-up equals whatever overhang was measured — and `qamExpansion.test.tsx` pins that the override
+is in the sheet and scoped to our root. That the panel does not scroll, and that the band is gone, is a device
+observation each time.
 
 A region scrolls the way the rest of the QAM scrolls: by moving focus. Every scrolling region goes through
 `ScrollRegion`, which renders Steam's plain `ScrollPanel` — the container the QAM's own tab panel is built from, and the
