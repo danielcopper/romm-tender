@@ -329,24 +329,32 @@ Three distinct notions in core selection, kept separate because they have differ
   the launched core never diverges from what those reads assume.
 - **Platform pick** — the same resolution asked of a PLATFORM rather than a ROM, so with no per-game layer to apply: the
   per-platform override when its label still names a bakeable emulator, else the default emulator. It is one pick with
-  two projections — the name a surface displays, and the `.so` its BIOS answers key on (none, where the pick is a
-  standalone emulator) — and resolving those separately is what let one pane name an emulator and judge by another.
+  two projections — the name a surface displays, and the **emulator identity** its BIOS answers key on — and resolving
+  those separately is what let one pane name an emulator and judge by another.
+- **Emulator identity** — which emulator an answer is about, in the spelling its own launch command uses: a libretro
+  entry's core file basename (`dolphin_libretro.so`), a standalone entry's own command name (`DUCKSTATION`, `PCSX2`).
+  The resolver states it on both the emulator catalogue and the firmware answer, which is what lets a pick be matched
+  against the firmware answer it should be judged by. It is not the **label** — ES-DE lists one `pcsx2_libretro.so` as
+  both `LRPS2` and `PCSX2`, so a label names a launch row and two rows can be one emulator — and it is not `core_so`,
+  which no standalone emulator has. Absent where the resolver could not identify the emulator behind a row, and nothing
+  may be scoped to it then.
 
 ### Wanted (firmware): needed / optional / not needed / unknown
 
 What the machine says about one firmware file on a platform's list. The first two are the resolver's per-file answer —
 an installed emulator will not run without it (**needed**), or can use it and will run without it (**optional**). The
-last two are not properties of the file at all but of the **reading**: every libretro core the platform offers stated
-what it wants and none named this file (**not needed**), versus the reading was not complete (**unknown**) — one of
-those cores could not be asked, or the platform offers no libretro core to ask at all, standalone emulators being
-outside the scope.
+last two are not properties of the file at all but of the **reading**, and the reading is scoped to the ONE emulator the
+game will launch with: it stated what it wants and did not name this file (**not needed**), versus it could not be asked
+(**unknown**) — a core shipping without its declaration, a standalone emulator the resolver has no card for, an
+**emulator identity** it could not establish, or a configuration it could not read. An emulator the platform also offers
+and this launch does not use never makes the answer doubtful.
 
 Keeping the last two apart is the whole point of the vocabulary — "nothing wants this" is a finished answer and "nothing
 could be established" is the absence of one, and a single boolean called both _not required_. **Wanted** is a property
-of the machine and does not move with the core the user picked; the launch-scoped question is **required by active
-core**, which is what the missing-BIOS badge counts — beside **system image**, the console's own demand, which no count
-carries and which raises that same badge. The foil to **BIOS level** (the platform-wide readiness verdict: unknown / ok
-/ partial / missing).
+of the platform's own emulators and does not move with which of them the user picked; the launch-scoped question is
+**required by active core**, which is what the missing-BIOS badge counts — beside **system image**, the console's own
+demand, which no count carries and which raises that same badge. The foil to **BIOS level** (the platform-wide readiness
+verdict: unknown / ok / partial / missing).
 
 A wanted file need not be one the RomM library holds — the two sets overlap without either containing the other, and a
 platform's list is their **union**. A row the library does not hold is marked **not on server**: it counts towards

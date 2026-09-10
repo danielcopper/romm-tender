@@ -190,9 +190,10 @@ and the row you focus is the one the right-hand pane describes.
    required row the plugin could not judge — a declared folder it could not read, say — reads "BIOS readiness unknown"
    instead — see [When readiness cannot be stated](#when-readiness-cannot-be-stated). Everything here is about the
    emulator named on line 4: pick a different one from the chip button and the numbers, the dot and the file rows are
-   answered for it, so this pane and a game's BIOS tab tell you the same thing about one platform. Where the platform
-   launches with a **standalone** emulator the plugin has no way to ask what that emulator wants — it reads RetroArch
-   cores' own declarations — so the files are shown against every emulator that declares them instead of against one
+   answered for it, so this pane and a game's BIOS tab tell you the same thing about one platform. That holds for a
+   **standalone** emulator too — PCSX2, DuckStation, Cemu and melonDS are asked like any RetroArch core. Where the
+   plugin has no source for the emulator, the files are shown against every emulator that declares them instead of
+   against one
 7. Below it, a table lists the files themselves: the **file**, whether it is **on disk**, and its **contents**. Where
    the emulator asks for the file in a subfolder, the folder is shown in front of the name (`dc/` **`dc_boot.bin`**) —
    that is where it has to go, and it is the one thing you need when placing a file by hand. The description in
@@ -289,9 +290,11 @@ silent.
 
 ### Where the plugin gets its answers
 
-The plugin asks your **installed RetroArch cores** what they want. Every core ships a small description file next to it
-declaring the firmware it needs and where each file goes, and the plugin reads those live — so the answers follow your
-RetroDECK install, including cores that were added after the plugin was released.
+The plugin asks the **emulators RetroDECK offers for that system** what they want — every one it lists, RetroArch cores
+and standalone emulators alike. A RetroArch core ships a small description file next to it declaring the firmware it
+needs and where each file goes. A standalone emulator (PCSX2, DuckStation, Cemu, melonDS, xemu) states its firmware in
+its own format instead, and for those the plugin uses a packaged rule card that reads the emulator's own settings. Both
+are read live, so the answers follow your RetroDECK install, including emulators added after the plugin was released.
 
 That same reading also answers whether a **declared** file is already sitting where the emulator will look for it, and
 for those the plugin takes its answer rather than checking the path itself. The difference matters on a stock RetroDECK:
@@ -300,23 +303,22 @@ loses the folder the emulator actually opens. Following the emulator's own spell
 plugin looks up itself, because there is no reading to take: files in your library that nothing asks for, and files an
 emulator keeps somewhere outside your BIOS folder entirely.
 
-Where a core asks for a **folder** rather than a file, that reading is not enough — a folder is satisfied by what is in
-it — so the plugin asks a second, narrower question for just that core, and it opens the candidate files and reads them
-the way the core does. It only asks it where there is something left to settle — a folder that is not there, one with a
-file sitting where it belongs, and one holding nothing even the right size are all answered without opening anything.
-Asking it for your whole BIOS folder every time a game page opened would mean reading every file in it, which is why it
-is scoped this tightly.
+The reading **opens files and reads them**, which is what two answers need. Where an emulator asks for a **folder**
+rather than a file, the folder being there settles nothing — a folder is satisfied by what is in it — so the candidates
+inside it are read the way the emulator reads them. And a rule card may identify its BIOS image by its contents rather
+than by name, so until the bytes are read it names no file at all. This is why the question is asked one system at a
+time: reading your whole BIOS folder every time a game page opened would be far more work than reading the handful of
+files one system's emulators care about.
 
-**Standalone emulators are not asked.** RetroDECK also offers emulators that are not RetroArch cores — RPCS3, Vita3K,
-Cemu, xemu and others — and they state their firmware in their own formats rather than in that one description file.
-Reading them accurately is a separate piece of work, so rather than guess, the plugin says it does not know: a system
-whose only emulators are standalone reads **unknown** (below), never "not needed".
+**Not every standalone emulator can be answered for.** The packaged cards cover five of them today; the rest are
+installed emulators the plugin has no source for, and it says so rather than guessing — a system launching one of those
+reads **unknown** (below), never "not needed".
 
 Each file on your server therefore gets one of four answers:
 
-- **Needed** — an installed core will not run without it
-- **Optional** — an installed core can use it but does not require it
-- **Not needed** — every RetroArch core this system offers was asked, and none of them wants this file
+- **Needed** — the emulator this system launches with will not run without it
+- **Optional** — that emulator can use it but does not require it
+- **Not needed** — the emulator was asked, and it does not want this file
 - **Unknown** — the plugin could not work out an answer (see below)
 
 ### When the requirement is unknown
@@ -324,37 +326,35 @@ Each file on your server therefore gets one of four answers:
 "Not needed" and "unknown" are deliberately kept apart. The first is an answer; the second is the absence of one, and
 the plugin will not present it as an all-clear.
 
-A **file** reads unknown when the plugin could not ask every core the system offers — one of them ships without its
-description file, or RetroDECK's configuration could not be read at all.
+The doubt is scoped to **the emulator your games will actually launch with** — the one named at the top of the platform
+page. An emulator RetroDECK also offers, that the plugin could not read, says nothing about a launch that does not use
+it, so it does not grey out the answer. The other side of that: switching a platform to an emulator the plugin has no
+source for moves it from a finished answer to **unknown**, which is the truth about the new emulator rather than
+anything having gone wrong with the old one.
+
+A **file** reads unknown when that emulator could not be asked — a RetroArch core shipping without its description file,
+a standalone emulator with no packaged card, or RetroDECK's configuration not being readable at all.
 
 A whole **system** reads unknown, showing a neutral grey status and the text **"BIOS requirement unknown"** instead of a
 green all-clear, in either of two situations.
 
 The first is a system with files on the page, not one of which could be answered for. Every row on the platform is
-unknown, which is what leaves nothing to base a readiness claim on. A single answered row is enough to keep the normal
-green/amber/red status: if the system offers two cores and only one is unreadable, the other core's answers still stand
-and only the unanswered rows read unknown. A system whose every file was answered with _not needed_ is not this case at
-all — that is a finished answer, and it reads green.
+unknown, which is what leaves nothing to base a readiness claim on. A system whose every file was answered with _not
+needed_ is not this case at all — that is a finished answer, and it reads green.
 
-The second is a system with **no files on the page at all**, where the plugin also could not ask every core the system
-offers. An empty list means "nothing here wants anything" only when every core was asked; with even one of them unread
-it means nothing, and reporting it as ready would be an all-clear over firmware nobody checked. This is the shape a PS3
-page has when your RomM library holds no PS3 firmware: no rows, no cores to ask, and a grey "BIOS requirement unknown".
-The system keeps its place in the platform list for the same reason — dropping it would say there is nothing to manage.
+The second is a system with **no files on the page at all**, where the launching emulator could not be asked either. An
+empty list means "nothing here wants anything" only when the emulator was asked; with it unread the list means nothing,
+and reporting it as ready would be an all-clear over firmware nobody checked. The system keeps its place in the platform
+list for the same reason — dropping it would say there is nothing to manage.
 
-Note that the two shapes weigh an unread core differently, and deliberately: with files on the page one unreadable core
-costs only its own rows, while with no files at all there is nothing left for the readable cores to have answered, so
-the same gap takes the whole system to unknown.
-
-Three causes reach these shapes. The common one is a system whose emulators are all standalone — PS3 through RPCS3, for
-instance — where there is no core to ask in the first place. The second is a system all of whose cores are unreadable;
-on a stock RetroDECK that is rare, since only a handful of bundled cores ship without a description file and just one of
-them is offered for any system. The third only reaches the empty-list shape: a system with several cores, one of them
-unreadable, whose page happens to have no rows.
+Three causes reach these shapes. A system whose launching emulator is a standalone one with no packaged card. A system
+whose launching RetroArch core ships without a description file; on a stock RetroDECK that is rare, since only a handful
+of bundled cores are in that state. And a configuration the plugin could not read at all, which leaves it unable to name
+the launching emulator in the first place.
 
 This is informational, not an error: your files may be perfectly fine, the plugin simply can't confirm what is needed.
-Genuinely BIOS-free systems (such as the NES) are unaffected — every core answers, none of them wants anything, and the
-system reads as ready.
+Genuinely BIOS-free systems (such as the NES) are unaffected — the emulator answers, it wants nothing, and the system
+reads as ready.
 
 #### Such a system offers no downloads
 
@@ -488,15 +488,14 @@ The active core name appears on the game detail page (the **Emulator** column) a
 2. If no per-game core, the plugin checks for a **per-platform core** you set in Library › Platforms — stored by the
    plugin in its own settings, not in ES-DE.
 3. The plugin reads RetroDECK's ES-DE configuration (`es_systems.xml`) from the flatpak installation to find the default
-   emulator for each platform — for BIOS filtering it uses the platform's first RetroArch core. This live file is the
+   emulator for each platform — the first one it can launch with, RetroArch core or standalone. This live file is the
    only source; there is no bundled fallback snapshot.
-4. If a platform offers **only standalone emulators** (no RetroArch core at all), or the live configuration can't be
-   read, the plugin has nothing to filter with — so it does not filter, and it does not guess either. Every BIOS file
-   the platform has is listed, each marked _unknown_, and the platform's summary reads **BIOS requirement unknown** with
-   a grey dot and no download buttons — including when the platform has no files to list, which is where saying nothing
-   at all would have read as "nothing needed". That is the honest answer for a platform like PS3, whose emulators the
-   plugin cannot yet ask: saying nothing is needed would report it ready over firmware the emulator will not boot
-   without.
+4. If the live configuration can't be read, or the plugin has no source for whatever that platform launches with, it has
+   nothing to filter with — so it does not filter, and it does not guess either. Every BIOS file the platform has is
+   listed, each marked _unknown_, and the platform's summary reads **BIOS requirement unknown** with a grey dot and no
+   download buttons — including when the platform has no files to list, which is where saying nothing at all would have
+   read as "nothing needed". That is the honest answer for a platform like PS3, whose emulator the plugin has no card
+   for: saying nothing is needed would report it ready over firmware the emulator will not boot without.
 
 Whatever this chain resolves to is the **same core the game launches on** — the plugin bakes the resolved core into the
 Steam shortcut, so the core shown for BIOS, saves, and the core badge always matches the core that runs.
