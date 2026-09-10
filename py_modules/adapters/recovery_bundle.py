@@ -19,6 +19,7 @@ from adapters.descriptor_paths import (
     raise_if_aborted,
     remove_current,
 )
+from domain.identity import DISPLAY_NAME
 from domain.prune import render_bundle_readme, sanitize_package_name
 
 if TYPE_CHECKING:
@@ -36,9 +37,13 @@ if TYPE_CHECKING:
 
 _SAFE_BUNDLE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*_\d{4}-\d{2}-\d{2}_[A-Za-z0-9]{4,32}$", re.ASCII)
 _ROOT_README_NAME = "README.txt"
-_ROOT_README_TEXT = """Tender recovery bundles
-=======================
-
+_ROOT_README_HEADLINE = f"{DISPLAY_NAME} recovery bundles"
+# Derived, never typed: the two lines are one heading, and a hand-sized
+# underline is right exactly once — at the next word the headline gains or
+# loses it is a ragged rule, in a file whose whole job is to be read by hand.
+_ROOT_README_TEXT = (
+    f"{_ROOT_README_HEADLINE}\n{'=' * len(_ROOT_README_HEADLINE)}\n"
+    + """
 This folder holds snapshots the Tender plugin took immediately BEFORE it
 deleted a game's local data, during "Clean Up Removed RomM Games".
 
@@ -52,6 +57,7 @@ Nothing here is ever read back automatically — there is no restore button. The
 plugin only writes to this folder, so it is safe to move, archive, or delete a
 bundle once you are sure you no longer need it.
 """
+)
 
 
 class RecoveryBundleAdapter:

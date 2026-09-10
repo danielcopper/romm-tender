@@ -187,6 +187,15 @@ Passing a display target (`internal`, or an output name like `dp2` / `DP-3` — 
 the deploy succeeds, so you can deploy and eyeball the result in one command. With no argument, `dev` stays deploy-only
 and never opens a window. A bad display name is rejected up front, before the loader is stopped.
 
+If you deployed before the rename, the old `~/homebrew/plugins/decky-romm-sync` is still there and `dev` deploys beside
+it rather than over it. Decky loads both, and both manifests carry the same plugin name (`Tender`), so its own lookup
+returns whichever the filesystem lists first — which is not reliably the one you just built. Remove the old folder once:
+`sudo rm -rf ~/homebrew/plugins/decky-romm-sync && sudo systemctl restart plugin_loader`. It holds only the old deploy's
+files; your library and settings live under `~/.local/share/romm-tender` and `~/.config/romm-tender`. Let the new plugin
+start at least once first, though — until it has, your Steam shortcuts may still launch through `bin/rom-launcher`
+**inside** that folder, and the start-up relocation is what moves them off it. The QAM says the same thing, and switches
+to "can be removed now" once the move is done.
+
 For frontend iteration there is a much faster loop: after a one-time `mise run dev:setup`,
 `mise run dev:watch [display]` hot-reloads the **frontend** into a windowed Big Picture on the desktop as you save, with
 no loader restarts at all — put it on a second monitor with a display target like `dp2`. Backend changes are pushed on

@@ -15,16 +15,23 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-# The directory name both roots carry.
+# The directory name both roots carry. Never derived from ``package.json``'s
+# ``name``, which happens to spell it identically: read from the manifest, a
+# one-line edit there would move every user's library on the next start, with
+# nothing failing and nothing said. ``domain/identity.py`` carries the rest of
+# that split.
 APP_DIR_NAME = "romm-tender"
 
 # The folder names Decky has derived this plugin's data locations from. Decky's
-# CLI names a package after the directory CI checked the repository out into
+# CLI names a package after the directory it builds from
 # (``FilenameSource::Directory``) and Decky derives every per-plugin directory
-# from that package name (``decky_loader/plugin/sandboxed_plugin.py``), so the
-# GitHub rename at 0.31.0 moved every user's data without anything in the plugin
-# asking for it. Both spellings are searched, and the order is what breaks a tie
-# in the last rung of the ladder below.
+# from that package name (``decky_loader/plugin/sandboxed_plugin.py``). Built
+# from the checkout, that made the delivered folder follow the GitHub
+# repository, so the rename at 0.31.0 moved every user's data without anything
+# in the plugin asking for it; ``.github/workflows/release.yml`` now builds from
+# a copy at a fixed name, so a repository rename cannot move it again. Both
+# spellings are searched, and the order is what breaks a tie in the last rung of
+# the ladder below.
 SOURCE_FOLDER_NAMES = ("decky-romm-sync", "romm-tender")
 
 # The two halves of a location, kept apart because their targets are guarded

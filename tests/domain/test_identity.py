@@ -10,12 +10,19 @@ class TestTheDisplayName:
     def test_it_is_the_name_decky_and_the_frontend_show(self):
         """The value itself, pinned where it lives rather than only where it is spent.
 
-        Every other assertion on this name is incidental to something else — a
-        toast's sender in ``test_launch_gate.py``, a bundle README's heading in
-        ``test_prune.py`` — so deleting any of those for its own reasons would
-        leave the constant with no pin at all. It is what a user sees in Decky's
-        plugin list, in the QAM header, on a token in their own RomM server and
-        at the top of a file they open by hand, and those four have to agree.
+        Three other files assert this name against something the code produced,
+        and each is incidental to the surface it belongs to rather than about
+        the name itself: the toast sender
+        (``tests/services/test_launch_gate.py``), the RomM token label
+        (``tests/services/test_connection.py``) and the registered-device client
+        (``tests/services/saves/test_service.py``). The three heading tests read
+        like pins and are not — they derive their expectation from this constant
+        in order to hold an underline to its headline, and say nothing about
+        what either one spells.
+
+        Decky reads the same name out of ``plugin.json``, the QAM header out of
+        the frontend's ``PLUGIN_NAME``, and everything the backend writes out of
+        here. Nothing checks that those three agree.
         """
         assert DISPLAY_NAME == "Tender"
 
@@ -30,8 +37,13 @@ class TestTheDisplayName:
         rebrand would then move a library, and nothing would fail.
 
         Both ends are pinned by value elsewhere, so this asserts the seam
-        between them: it is the one that fails when the fold is written as a
-        derivation rather than as a new literal.
+        between them — and only the fold written as an identity,
+        ``APP_DIR_NAME = DISPLAY_NAME``. Both assertions compare values, so a
+        fold through a transform passes: ``DISPLAY_NAME.lower()``, and
+        ``f"romm-{DISPLAY_NAME.lower()}"``, which reproduces today's value
+        exactly and is for that reason the likeliest of the three to be written.
+        The rule those two need is stated at ``APP_DIR_NAME`` itself, where such
+        a diff would land.
         """
         assert DISPLAY_NAME != APP_DIR_NAME
         assert DISPLAY_NAME not in SOURCE_FOLDER_NAMES

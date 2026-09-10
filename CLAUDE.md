@@ -118,10 +118,13 @@ locally with `mise run docs`.
 - **RomM minimum version**: Requires RomM >= 4.9.0, hard-rejected in `test_connection()` (`_MIN_REQUIRED_VERSION` in
   `main.py`) — the plugin is inert until the server is updated.
 - **User-Agent on outgoing HTTP**: SteamGridDB **and** RomM behind Cloudflare Tunnel reject the default `Python-urllib`
-  UA with 403. Every HTTP-talking adapter takes a `user_agent: str` ctor param; bootstrap threads
-  `<package name>/<version>`, both halves from one `package.json` read — no hardcoded name and no hardcoded version, so
-  the UA can never name the plugin something other than the folder it ships as. A missing or malformed `package.json`
-  degrades to the metadata adapter's documented fallback, `decky-plugin/0.0.0`.
+  UA with 403. Both adapters that talk to a server off this machine (`adapters/romm/http.py`, `adapters/steamgriddb.py`)
+  take a `user_agent: str` ctor param; bootstrap threads `<package name>/<version>`, both halves from one `package.json`
+  read — no hardcoded name and no hardcoded version, so the UA can never disagree with the recovery root, which
+  bootstrap builds out of that same read. Those two are everything `package.json`'s `name` reaches; the folder the
+  plugin ships as is decided by the release workflow's build directory, not by this file. A missing or malformed
+  `package.json` degrades to the metadata adapter's documented fallback, `decky-plugin/0.0.0`. `adapters/renderer_gc.py`
+  also speaks HTTP — to Steam's debugger on `localhost` — and takes none.
 - **Large payloads**: Never send bulk base64 through `decky.emit()` — the WebSocket bridge has size limits. Use per-item
   callables, and chunk bulk lists (the library apply emits shortcuts in batches; the metadata cache loads page-by-page).
 - **No `BIsModOrShortcut` bypass**: the bypass counter was removed deliberately. Shortcuts return `true` (natural
@@ -260,6 +263,14 @@ Format: **invariant** — tier — enforced by.
   The other direction is worse and equally quiet: a new consumer of the data root reaching for `runtime_dir` writes into
   Decky's tree, where the next release's folder name moves it. Nothing mechanical tells the two apart — both are plain
   `str` fields on structs the composition root hands around
+- **The identifier's four homes are never derived from one another — in particular `APP_DIR_NAME`
+  (`domain/user_data_location.py`) is never read from `package.json`** — prompt-only — the four homes and the question
+  each answers are enumerated in `py_modules/domain/identity.py`'s module docstring, and nothing mechanical detects a
+  fold. `APP_DIR_NAME` and `package.json`'s `name` spell the same string today, so `APP_DIR_NAME = package_name`
+  reproduces every current path exactly and the whole suite stays green; the cost arrives at the next manifest edit,
+  which then moves every user's library on the following start with nothing failing and nothing said. The rule is stated
+  at `APP_DIR_NAME` itself, because a diff that folds it opens neither the docstring nor this file.
+  `tests/domain/test_identity.py` pins only the seam between the DISPLAY name and the identifier, a different fold
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
 - **A library-sync seam is held only by the module owning the job it belongs to: `active_core` / `disc_resolver` by

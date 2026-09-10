@@ -59,16 +59,21 @@ class TestSourceFolderNames:
     def test_the_pre_rename_spelling_never_follows_a_rename(self):
         """Both folder names Decky has derived a data location from, oldest first.
 
-        ``romm-tender`` is what the plugin ships as today, so a sweep renaming
-        every ``decky-romm-sync`` in this tree reaches this tuple too — and the
-        ladder's own tests would stay green, because the two names are fixture
-        values there. What breaks is a user updating from 0.30.1 or earlier: the
-        location holding their library is no longer among the ones searched, so
-        the start finds nothing to copy and the plugin comes up empty, with
-        nothing failing and nothing said. The order carries the ladder's last
-        rung, where a tie goes to the first source probed.
+        What breaks if the older spelling is edited away: a user updating from
+        0.30.1 or earlier, whose library is no longer among the locations
+        searched, so the start finds nothing to copy and the plugin comes up
+        empty — nothing failing and nothing said. The order carries the ladder's
+        last rung, where a tie goes to the first source probed.
+
+        The value assertion catches a targeted edit of the constant and nothing
+        wider: a tree-wide rename of ``decky-romm-sync`` rewrites this line too,
+        and the ladder's own tests carry the two names as fixture values, so
+        they would be swept as well and stay green. The inequality is what
+        survives that sweep: the tuple's whole content is two distinct
+        locations, and a sweep collapses it onto one.
         """
         assert SOURCE_FOLDER_NAMES == ("decky-romm-sync", "romm-tender")
+        assert SOURCE_FOLDER_NAMES[0] != SOURCE_FOLDER_NAMES[1]
 
 
 class TestRoots:

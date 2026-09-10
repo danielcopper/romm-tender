@@ -438,11 +438,13 @@ def bootstrap(
     platform_core_reader = PlatformCoreReaderAdapter(settings)
     plugin_metadata = PluginMetadataAdapter()
     # Single source of truth for outgoing User-Agent — read package.json once at
-    # boot and thread the string to every HTTP-talking adapter. Bot Fight Mode on
-    # Cloudflare blocks the default ``Python-urllib`` UA before requests reach
+    # boot and thread the string to the two adapters that talk to a server off
+    # this machine (RomM and SteamGridDB). ``RendererGcAdapter`` also speaks
+    # HTTP, to Steam's own debugger on localhost, and takes no UA. Bot Fight Mode
+    # on Cloudflare blocks the default ``Python-urllib`` UA before requests reach
     # self-hosted RomM (#249). Both halves come from that one read: a literal
     # name here would be a second spelling of the package, free to drift away
-    # from the folder the plugin actually ships as.
+    # from the recovery root built out of the same value below.
     package_name, plugin_version = plugin_metadata.read_metadata(plugin_dir)
     user_agent = f"{package_name}/{plugin_version}"
     recovery_store = RecoveryBundleAdapter(

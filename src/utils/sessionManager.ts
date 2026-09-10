@@ -120,6 +120,13 @@ function toSessionEntry(value: unknown): ActiveSession | null {
  * indistinguishable from "no attestation", so the live session's pre-upgrade
  * span would be silently discarded on the first reload after an upgrade.
  *
+ * A KEY rename is outside what versioning can carry: a row under another key is
+ * not read at all, so no branch here can lift it. This release performs one —
+ * v1 and v2 both shipped under `decky-romm-sync:active-session` — so every row
+ * written before it is orphaned, and nothing this plugin has ever written can
+ * reach the `v === 1` branch below. It stays because the argument above is
+ * about the next format change, not this one.
+ *
  * Entries are read individually: one malformed entry never voids its siblings.
  */
 function readSessionBreadcrumbs(): ActiveSession[] {
@@ -134,8 +141,9 @@ function readSessionBreadcrumbs(): ActiveSession[] {
       return crumb.sessions.map(toSessionEntry).filter((s) => s !== null);
     }
     if (crumb.v === 1) {
-      // v1 carried a single session inline — lift it into a one-entry list. No
-      // writer emits v1 any more; the next persist rewrites the row as v2.
+      // v1 carried a single session inline — lift it into a one-entry list.
+      // Nothing this plugin wrote reaches here any more: the key rename above
+      // orphaned every v1 row. Kept as the shape the next format change takes.
       const lifted = toSessionEntry(crumb);
       return lifted === null ? [] : [lifted];
     }

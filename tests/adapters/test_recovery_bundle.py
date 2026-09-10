@@ -14,6 +14,7 @@ import pytest
 
 from adapters import descriptor_paths, recovery_bundle
 from adapters.recovery_bundle import RecoveryBundleAdapter
+from domain.identity import DISPLAY_NAME
 from lib.errors import OperationAbortedError
 
 if TYPE_CHECKING:
@@ -122,14 +123,32 @@ def test_the_recovery_root_is_named_after_the_package(tmp_path):
 
     Two names rather than one: the plugin's own name is what a literal here
     would spell, so a test using only that would pass either way. The name
-    reaches this adapter from ``package.json`` through bootstrap, and it also
-    decides the folder the plugin ships as — so a literal is free to drift away
-    from it, and the drift lands on the one surface a destructive cleanup leaves
-    behind.
+    reaches this adapter from ``package.json`` through bootstrap, and that one
+    read also builds the outgoing User-Agent — so a literal is free to drift
+    away from the package, and the drift lands on the one surface a destructive
+    cleanup leaves behind.
     """
     for package_name in ("romm-tender", "some-other-plugin"):
         adapter = RecoveryBundleAdapter(user_home=str(tmp_path), package_name=package_name, plugin_version="1.2.3")
         assert adapter.root() == str(tmp_path / f"{package_name}-recovery")
+
+
+def test_the_root_readme_headline_is_the_display_name_and_its_underline_fits(tmp_path):
+    """The two lines are one heading, and only the second can be wrong.
+
+    A hand-typed underline is right exactly once — at the next word the headline
+    gains or loses it is a heading with a ragged rule under it, in a file whose
+    whole job is to be read by hand, and no test that checks for substrings
+    would notice.
+    """
+    adapter = _adapter(tmp_path)
+
+    adapter.seal_bundle("TestGame_2026-07-24_root01", _snapshot(), [], _readme_context(), "none\n")
+
+    headline, underline, _blank = (Path(adapter.root()) / "README.txt").read_text().splitlines()[:3]
+
+    assert headline == f"{DISPLAY_NAME} recovery bundles"
+    assert underline == "=" * len(headline)
 
 
 def test_recovery_root_explains_itself_once_it_exists(tmp_path):

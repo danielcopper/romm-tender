@@ -9,6 +9,7 @@ import pytest
 from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_resolved_path import FakeResolvedPath
 
+from domain.user_data_location import APP_DIR_NAME
 from services.legacy_install import _LEGACY_PLUGIN_FOLDER, LegacyInstallService, LegacyInstallServiceConfig
 
 _PLUGINS = "/home/deck/homebrew/plugins"
@@ -225,14 +226,23 @@ class TestTheFolderItLooksFor:
     def test_the_pre_rename_spelling_never_follows_a_rename(self):
         """The name releases up to 0.30.1 unpacked into, and only ever that one.
 
-        The plugin ships as ``romm-tender``, so a sweep that renamed every
-        ``decky-romm-sync`` in this tree would take this constant with it — and
-        the tests below would go green again, because their own fixtures spell
-        the folder out and would be swept too. Nothing else fails: the card
-        simply stops firing, and the user removes the older install every one of
-        their Steam shortcuts still launches through.
+        Edited to this install's own folder, ``pending`` is False on every call
+        and the card never appears — in EITHER of its two states, and nothing
+        else fails. Before the launcher relocation has run, the user is never
+        told that removing the older install stops their games from starting,
+        which is the expensive half; after it has, they are never told the
+        install they are keeping is now free to go.
+
+        The value assertion catches a targeted edit of the constant and nothing
+        wider: a tree-wide rename of ``decky-romm-sync`` rewrites this line too,
+        and the tests below spell the folder out in their own fixtures, so they
+        would be swept as well and stay green. The inequality is what survives
+        it: a sweep rewrites the old spelling into the new one and leaves
+        ``APP_DIR_NAME``, which already holds it, alone — so the two collapse
+        onto one string and the comparison between them is what says so.
         """
         assert _LEGACY_PLUGIN_FOLDER == "decky-romm-sync"
+        assert _LEGACY_PLUGIN_FOLDER != APP_DIR_NAME
 
 
 class TestProbeDiscipline:

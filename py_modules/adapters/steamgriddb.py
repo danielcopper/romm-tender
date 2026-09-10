@@ -30,7 +30,7 @@ class SteamGridDbAdapter:
         Logger instance.
     user_agent:
         Outgoing ``User-Agent`` header value — ``"<package name>/<version>"``,
-        both read from ``package.json`` (e.g. ``"romm-tender/0.32.0"``).
+        both read from ``package.json`` (e.g. ``"romm-tender/1.2.3"``).
         SteamGridDB rejects the default ``Python-urllib`` UA with 403.
     """
 

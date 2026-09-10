@@ -193,12 +193,13 @@ class TestBootstrap:
     def test_user_agent_names_the_package_rather_than_a_literal(self, tmp_path):
         """Both halves of the UA come from ``package.json``, name included.
 
-        A hardcoded name passes every assertion above — the plugin's own name is
-        what those write — so the rule is stated with a name the plugin will
-        never carry. What it protects: the package name also decides the folder
-        the plugin ships as and the recovery root beside it, so a literal here is
-        free to drift away from both and the drift shows up on a server's token
-        list, not in CI.
+        The two assertions above write the plugin's own name, so a literal
+        ``"romm-tender"`` in bootstrap would satisfy them; this one asks with a
+        name the plugin will never carry, so only the read can answer it. What
+        it protects: bootstrap spends that same read on the recovery root the
+        cleanup writes its bundles into, so a literal here is free to drift away
+        from it, and the drift shows up on a server's token list rather than in
+        CI.
         """
         result = self._bootstrap_with_package(tmp_path, {"name": "not-the-plugins-name", "version": "1.2.3"})
         assert result.adapters.http_adapter._user_agent == "not-the-plugins-name/1.2.3"
