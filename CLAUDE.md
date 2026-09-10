@@ -190,7 +190,10 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
   after editing a source or bumping a pin.
 - **Pre-commit hook** (`.githooks/pre-commit`): formats staged files — `ruff format` + `ruff check` (Python),
   `prettier --write` (TS/TSX), `deno fmt` (Markdown). Stays fast (<2s); heavy validation is CI-only. Do not re-introduce
-  heavy checks here.
+  heavy checks here. It re-stages what it formatted, but **only for a file with no unstaged changes**: `git add` stages
+  the whole worktree file, so re-adding one you staged in part with `git add -p` would commit the hunks you left out.
+  Such a file is named on stdout and its index entry left alone, which means the commit can carry unformatted content —
+  loudly, and CI says so, where the other direction was silent.
 
 ## Code Quality
 
