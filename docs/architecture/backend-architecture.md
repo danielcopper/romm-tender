@@ -1883,7 +1883,8 @@ required rows — already carried by every count and every surface — so annota
 requirement twice, and put "the console will not start without one" under `ps1_rom.bin`, a file it marks optional while
 hard-requiring three others. `BiosFileEntry.system_image_candidate` is the same map read for the ACTIVE core onto the
 row, which is how the platform table marks the rows that can answer the demand; it is deliberately narrower than the set
-`classify_system_image` weighs, and the reason is stated at `build_file_entry`.
+`classify_system_image` weighs, and the reason is stated at `_active_core_answer`, the module-private helper that reads
+the flag for the launching core.
 
 - **It is not folded into `required_count`.** The console asks for _one_ of the images the core declares, so it is one
   requirement over the whole list rather than one requirement per file; put into that count it would read

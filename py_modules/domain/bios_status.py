@@ -151,8 +151,8 @@ class BiosFileEntry:
     on_server: bool = True
     # Is this row one of the images that would answer the launching core's
     # console on its own? Set only where that core states a DISJUNCTION — see
-    # :func:`build_file_entry`, which explains why it is silent for a core that
-    # does state required files.
+    # :func:`_active_core_answer`, which explains why it is silent for a core
+    # that does state required files.
     system_image_candidate: bool = False
     supplied_by: str | None = None
     satisfied: bool | None = None
@@ -279,10 +279,9 @@ def build_file_entry(
 
     ``placement`` is the catalogue's entry for the file (``None`` when nothing
     declares it) and ``complete`` the reading state for the platform's own
-    emulators — together they decide ``wanted``. ``active_core_so`` is the core
-    the game will launch with, or ``None`` when it could not be resolved; then
-    every declaring core stands in for it, which is the same permissive default
-    the platform has always fallen back to.
+    emulators — together they decide ``wanted``. What the core the game will
+    launch with says about the row is :func:`_active_core_answer`'s, and
+    ``active_core_so`` is passed straight through to it.
 
     ``cores_needing_one_of`` is
     :meth:`~domain.firmware_wants.FirmwareCatalogue.cores_needing_one_of_their_files`
@@ -295,11 +294,64 @@ def build_file_entry(
     every one of five files while the console cannot start without one of them,
     and that pair is exactly what a surface listing the core has to be able to
     show. Nothing is folded: the declaration is carried unaltered.
+    """
+    folder = placement.folder if placement is not None else None
+    wants = placement.wants if placement is not None else ()
+    cores = {
+        want.core_so: {"required": want.required, "needs_one_of": cores_needing_one_of.get(want.core_so)}
+        for want in wants
+        if want.core_so is not None
+    }
+    active = _active_core_answer(cores, placement, active_core_so)
+    return BiosFileEntry(
+        file_name=file_name,
+        downloaded=downloaded,
+        local_path=dest,
+        declared_path=placement.destination if placement is not None else file_name,
+        description=placement.description if placement is not None else file_name,
+        wanted=classify_wanted(placement, complete),
+        required_by_active=active.required_by_active,
+        cores=cores,
+        used_by_active=active.used_by_active,
+        on_server=on_server,
+        system_image_candidate=active.system_image_candidate,
+        supplied_by=placement.supplied_by if placement is not None else None,
+        satisfied=_row_verdict(placement, downloaded),
+        declared_kind=placement.declared_kind if placement is not None else DECLARED_FILE,
+        caveats=placement.caveats if placement is not None else (),
+        images=folder.images if folder is not None else (),
+    )
 
-    ``system_image_candidate`` is the same map read for the ACTIVE core, so the
-    row and the per-core entries cannot disagree about which cores state a
-    disjunction: this row is one of the images that would answer the launching
-    core's console on its own.
+
+@dataclass(frozen=True)
+class _ActiveCoreAnswer:
+    """The launching core's say about one row — the three launch-scoped fields.
+
+    ``wanted`` is the machine's answer about a file and reads the same on every
+    surface; these three are the core the game will launch with speaking about
+    the same row, and :class:`BiosFileEntry` carries each of them.
+    """
+
+    used_by_active: bool
+    required_by_active: bool
+    system_image_candidate: bool
+
+
+def _active_core_answer(
+    cores: Mapping[str, dict[str, Any]],
+    placement: FirmwarePlacement | None,
+    active_core_so: str | None,
+) -> _ActiveCoreAnswer:
+    """What the core the game will launch with says about one row.
+
+    ``active_core_so`` is that core, or ``None`` when it could not be resolved;
+    then every declaring core stands in for it, which is the same permissive
+    default the platform has always fallen back to.
+
+    ``system_image_candidate`` reads the active core's own ``needs_one_of`` off
+    its entry in ``cores``, so the row and the per-core entries cannot disagree
+    about which cores state a disjunction: this row is one of the images that
+    would answer the launching core's console on its own.
 
     **It is deliberately narrower than the set**
     :func:`classify_system_image` **reads**, and the asymmetry is the point. That
@@ -312,13 +364,6 @@ def build_file_entry(
     second readiness rule, so widening it to every image-demanding core would add
     no answer and would put two marks on one requirement.
     """
-    folder = placement.folder if placement is not None else None
-    wants = placement.wants if placement is not None else ()
-    cores = {
-        want.core_so: {"required": want.required, "needs_one_of": cores_needing_one_of.get(want.core_so)}
-        for want in wants
-        if want.core_so is not None
-    }
     active_entry = cores.get(active_core_so) if active_core_so is not None else None
     if active_core_so is None:
         used_by_active = True
@@ -326,23 +371,10 @@ def build_file_entry(
     else:
         used_by_active = active_core_so in cores if cores else True
         required_by_active = active_entry["required"] if active_entry is not None else False
-    return BiosFileEntry(
-        file_name=file_name,
-        downloaded=downloaded,
-        local_path=dest,
-        declared_path=placement.destination if placement is not None else file_name,
-        description=placement.description if placement is not None else file_name,
-        wanted=classify_wanted(placement, complete),
-        required_by_active=required_by_active,
-        cores=cores,
+    return _ActiveCoreAnswer(
         used_by_active=used_by_active,
-        on_server=on_server,
+        required_by_active=required_by_active,
         system_image_candidate=active_entry is not None and active_entry["needs_one_of"] is not None,
-        supplied_by=placement.supplied_by if placement is not None else None,
-        satisfied=_row_verdict(placement, downloaded),
-        declared_kind=placement.declared_kind if placement is not None else DECLARED_FILE,
-        caveats=placement.caveats if placement is not None else (),
-        images=folder.images if folder is not None else (),
     )
 
 
@@ -501,7 +533,7 @@ def classify_system_image(
     is silent for a core that states required files, whose rows already carry the
     same demand as ``required_by_active``, while this answer is the console's and
     weighs every image the core declares whatever the core called it. The reason
-    lives in full at :func:`build_file_entry`.
+    lives in full at :func:`_active_core_answer`.
     """
     if verdict is None or active_core_so is None or not verdict.system_needs_an_image:
         return SYSTEM_IMAGE_NOT_DEMANDED
