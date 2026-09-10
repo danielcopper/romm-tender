@@ -123,6 +123,7 @@ class FirmwareService:
                 demand=self._demand,
                 core_info=config.core_info,
                 resolve_system=config.resolve_system,
+                platform_core_reader=config.platform_core_reader,
                 firmware_file_store=config.firmware_file_store,
                 clock=config.clock,
                 uow_factory=config.uow_factory,

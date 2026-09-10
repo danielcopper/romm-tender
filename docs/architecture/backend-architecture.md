@@ -1733,9 +1733,23 @@ is a finished reading of nobody: every server file classifies `not_needed`, `req
 platform reports a green "Nothing required" over firmware RPCS3 will not boot without. Grey `unknown` is what the
 deferral below actually licenses.
 
+**One platform, one emulator.** Which emulator a platform's BIOS answers are ABOUT is resolved once, by
+`domain/emulator_commands.py`'s `resolve_platform_option` — the per-platform override (`settings.json` `platform_cores`)
+when its label still names a bakeable emulator, else the es_systems default — and every platform-scoped answer takes a
+projection of that one pick: the pane's `active_core_label` is its `.label`, the BIOS filter's `.so` is its `.core_so`,
+and `download_required_firmware` asks the same function so the button fetches the set the pane called required. It is
+the read-path precedence `ActiveCoreResolver` applies minus the per-game layer, which is what lets `check_platform_bios`
+answer `active_core_so=None` from it — that is the platform-level callers' signal, and also what the game-detail path
+passes for a ROM resolving to a standalone emulator, and a second resolution behind it would put the two surfaces on two
+emulators. Which is what a device pass found: with the PlayStation's emulator set to PCSX ReARMed the pane displayed
+that name and judged the platform by the system default beside it, so one platform read `not_demanded` / `ok` on the
+game page and `absent` / `missing` on the pane. A **standalone** pick names no core, so `active_core` is `None` and the
+filter falls back to every declaring emulator — the degradation the deferral below keeps, reached now by the same route
+on both surfaces rather than by a libretro-only reading that could disagree with the name above it.
+
 **Standalone emulators are outside the scope by deferral.** ADR-0020 defers standalone BIOS accuracy (inheriting
-ADR-0012's) and `get_active_core` is libretro-only for that reason. Widening `_core_scope` is not by itself the lifting
-of it: the resolver does answer for standalone emulators through its per-system route — it is only
+ADR-0012's), which is also why the pick above answers no core for one. Widening `_core_scope` is not by itself the
+lifting of it: the resolver does answer for standalone emulators through its per-system route — it is only
 `firmware_inventory()`, the one whole-machine call this service makes, that enumerates libretro cores — but
 `_vendor/atlas/data/standalone_firmware.json` carries cards for five emulators (CEMU, DUCKSTATION, MELONDS, PCSX2, XEMU)
 — those five answer `declaration="packaged"`, and every standalone emulator without a card answers

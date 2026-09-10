@@ -261,6 +261,10 @@ Three distinct notions in core selection, kept separate because they have differ
 - **Active core** — the core a ROM actually launches with: the override when one exists, the default otherwise. One
   resolver answers it for both the launch and every read consumer (BIOS requirement, save path, game-detail badge), so
   the launched core never diverges from what those reads assume.
+- **Platform pick** — the same resolution asked of a PLATFORM rather than a ROM, so with no per-game layer to apply: the
+  per-platform override when its label still names a bakeable emulator, else the default emulator. It is one pick with
+  two projections — the name a surface displays, and the `.so` its BIOS answers key on (none, where the pick is a
+  standalone emulator) — and resolving those separately is what let one pane name an emulator and judge by another.
 
 ### Wanted (firmware): needed / optional / not needed / unknown
 

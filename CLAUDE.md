@@ -541,6 +541,25 @@ Format: **invariant** — tier — enforced by.
   decline added ahead of that test in `compute_bios_level` would have `PlatformDetail` alone say "Nothing installed
   could answer for this system" and withdraw every download button while the other two read "Needs one of these BIOS
   files". Each surface pins its own order (`BiosTab.test.tsx`, `PlatformsTab.test.tsx`) and nothing joins them
+- **Which emulator a PLATFORM's answers are about is one pick, and every platform-scoped answer is a projection of it**
+  — test + prompt-only — `tests/services/test_firmware.py::TestOnePlatformOneEmulator` asserts the two surfaces AGREE
+  across every way a platform arrives at an emulator (no pick, each of the three ES-DE offers, a pin naming an emulator
+  the catalogue no longer lists, a pin whose command cannot be baked) rather than pinning today's value, because a value
+  test would pass for a third resolution that diverges on some other configuration;
+  `::TestDownloadRequiredFirmware::test_it_fetches_what_the_platforms_own_pick_calls_required` holds the download button
+  to the same pick. The pick is `domain/emulator_commands.py::resolve_platform_option` — the per-platform override
+  (`settings.json` `platform_cores`) when its label still names a bakeable emulator, else the es_systems default — and
+  it is the read-path precedence `ActiveCoreResolver` applies minus the per-game layer. Three call sites read it today:
+  `FirmwareStatusReader._platform_emulator` (which serves BOTH the overview's `active_core` / `active_core_label` and
+  `check_platform_bios`'s `active_core_so=None` fallback) and `FirmwareDownloader._platform_core`. **Nothing joins
+  them**, and a fourth resolution is exactly what this entry is about: the pane displayed a just-picked PCSX ReARMed and
+  judged the platform by the libretro system default beside it, so one PlayStation read `not_demanded` / `ok` on the
+  game page and `absent` / `missing` on the pane, and the write's own response carried the wrong verdict. `.label` and
+  `.core_so` must come off ONE call — two calls agree by coincidence, which is what the old pair did until an override
+  was set. A **standalone** pick names no core, so `active_core` is `None` and the file rows fall back to every
+  declaring emulator: that is ADR-0020's deferred degradation and it must not be repaired by reaching for a libretro
+  reading of the catalogue instead, which is the disagreement this removed. `CoreInfoProvider.get_active_core` — the
+  "first libretro entry, bakeable or not" reading these sites used — has no production caller left
 - **The whole-machine firmware inventory is never asked with content verification** — prompt-only —
   `firmware_inventory()` is asked unverified and the verified question goes through `FirmwareFolderVerdictFn`, one core
   per call, only for the folder rows `unanswered_folder_cores` reports still open. `verify=True` on the inventory sweeps

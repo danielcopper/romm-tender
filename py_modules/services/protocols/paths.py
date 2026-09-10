@@ -131,10 +131,13 @@ class CoreInfoProvider(Protocol):
     reads and may cache answers; ``reset_cache`` lets writers invalidate the
     cache after a per-platform core write.
 
-    ``get_active_core`` stays libretro-only — it feeds the firmware layer's
-    system-level BIOS filter, which keys on a RetroArch core. The launch-layer
-    default (``get_default_emulator``) and the full picker
-    (``get_emulator_options``) are emulator-kind-aware (libretro OR standalone).
+    ``get_active_core`` stays libretro-only — the first libretro command a
+    system declares, bakeable or not. It is carried and currently read by nothing
+    in production: the firmware layer's BIOS filter used to key on it and now
+    takes the platform's own pick, so the emulator a surface names and the core
+    it judges by come off one choice. The launch-layer default
+    (``get_default_emulator``) and the full picker (``get_emulator_options``) are
+    emulator-kind-aware (libretro OR standalone).
 
     Resolving an emulator to its sandbox launcher path is a different question
     and is :class:`SandboxLauncherFn`'s: this one is answered out of the

@@ -175,7 +175,11 @@ and the row you focus is the one the right-hand pane describes.
    console that will not start without one of the listed images, with none of them in place, reads **"Needs one of
    these"** — see [When the console needs a BIOS image](#when-the-console-needs-a-bios-image). A system with a required
    row the plugin could not judge — a declared folder it could not read, say — reads "BIOS readiness unknown" instead —
-   see [When readiness cannot be stated](#when-readiness-cannot-be-stated)
+   see [When readiness cannot be stated](#when-readiness-cannot-be-stated). Everything here is about the emulator named
+   on line 4: pick a different one from the chip button and the numbers, the dot and the file rows are answered for it,
+   so this pane and a game's BIOS tab tell you the same thing about one platform. Where the platform launches with a
+   **standalone** emulator the plugin has no way to ask what that emulator wants — it reads RetroArch cores' own
+   declarations — so the files are shown against every emulator that declares them instead of against one
 7. Below it, a table lists the files themselves: the **file**, whether it is **on disk**, and its **contents**. Where
    the emulator asks for the file in a subfolder, the folder is shown in front of the name (`dc/` **`dc_boot.bin`**) —
    that is where it has to go, and it is the one thing you need when placing a file by hand. The description in

@@ -10,7 +10,7 @@ import pytest
 # conftest.py patches decky before this import; use _make_testable_plugin for test-only attrs
 from _factories import _make_testable_plugin
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
-from fakes.fake_core_info_provider import FakeCoreInfoProvider, libretro_option
+from fakes.fake_core_info_provider import FakeCoreInfoProvider, libretro_option, standalone_option
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_firmware_file_store import FakeFirmwareFileStore
 from fakes.fake_firmware_resolver import FakeFirmwareResolver, FakeFolderVerdicts
@@ -26,6 +26,7 @@ from adapters.firmware_file import FirmwareFileAdapter
 from adapters.steam_config import SteamConfigAdapter
 from domain.bios_file import BiosFile
 from domain.bios_status import BiosFileEntry
+from domain.emulator_commands import EmulatorOption
 from domain.firmware_cache import FirmwareCacheEntry
 from domain.firmware_wants import (
     SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
@@ -172,6 +173,27 @@ def _inline_executor(fw: FirmwareService) -> None:
     loop = MagicMock()
     loop.run_in_executor = run
     _set_loop(fw, loop)
+
+
+def _core_info(fw: FirmwareService) -> FakeCoreInfoProvider:
+    """The fake core-info provider behind *fw*, for tests that seed or read it after construction."""
+    core_info = fw._config.core_info
+    assert isinstance(core_info, FakeCoreInfoProvider)
+    return core_info
+
+
+def _set_platform_emulator(fw: FirmwareService, core_so: str, label: str) -> None:
+    """Make *core_so* the one emulator ES-DE offers for every system, on the fake behind *fw*.
+
+    Seeds both of the fake's inputs: ``options``, which the platform's own pick
+    is resolved from, and ``active_core``, the libretro-only system reading. They
+    are separate seeds answering different questions, so a test that means "this
+    platform launches with mGBA" has to state it in the list rather than in the
+    system reading alone.
+    """
+    core_info = _core_info(fw)
+    core_info.options = [libretro_option(core_so, label)]
+    core_info.active_core = (core_so, label)
 
 
 def _resolver(fw: FirmwareService) -> FakeFirmwareResolver:
@@ -1073,8 +1095,7 @@ class TestGetFirmwareStatus:
                 "reason": None,
             }
         ]
-        # Both core read seams received the NORMALIZED system, not the raw slug.
-        assert core_info.active_core_calls == ["dreamcast"]
+        # The core read seam received the NORMALIZED system, not the raw slug.
         assert core_info.emulator_options_calls == ["dreamcast"]
         assert resolver.calls == [("dc", None)]
 
@@ -2170,6 +2191,182 @@ class TestTheConsolesOwnFirmwareDemand:
         assert platform["system_image"] == page["system_image"] == "absent"
         assert platform["bios_level"] == page["bios_level"] == "missing"
         assert platform["required_count"] == 0
+
+
+_PSX_DEFAULT_LABEL = "SwanStation"
+_PSX_ALTERNATIVE_LABEL = "PCSX ReARMed"
+_PSX_STANDALONE_LABEL = "DuckStation (Standalone)"
+
+
+def _psx_emulators() -> list[EmulatorOption]:
+    """The three ES-DE lists for a PlayStation, in document order."""
+    return [
+        libretro_option(_PSX_CORE, _PSX_DEFAULT_LABEL),
+        libretro_option(_PSX_ALTERNATIVE_CORE, _PSX_ALTERNATIVE_LABEL),
+        standalone_option("%EMULATOR_DUCKSTATION% %ROM%", _PSX_STANDALONE_LABEL),
+    ]
+
+
+def _psx_platform_service(
+    *, platform_core: str | None = None, options: list[EmulatorOption] | None = None
+) -> FirmwareService:
+    """A PlayStation ES-DE lists three emulators for, one of them standalone.
+
+    SwanStation is the es_systems default — first bakeable in document order —
+    and its console will not start without one of the images it declares. PCSX
+    ReARMed declares the same three and carries its own substitute. DuckStation
+    is standalone, so it names no core and nothing here can answer for it. The
+    files, the empty BIOS directory and the reading are identical under all
+    three: the only thing that moves is which emulator the platform resolves to,
+    which is what makes a disagreement between two surfaces attributable.
+
+    *options* replaces the emulator list for a test about a pin that no longer
+    bakes; every other caller takes ES-DE's three.
+
+    The listing is filed under ``bios/psx/`` so the overview's entry is keyed by
+    the same slug the game page asks about. A RomM firmware directory named
+    differently from the platform slug puts the two on different keys, which is
+    a separate defect and not what these tests are about.
+    """
+    romm_api = MagicMock()
+    romm_api.list_firmware.return_value = [
+        {
+            "id": index,
+            "file_name": name,
+            "file_path": f"bios/psx/{name}",
+            "file_size_bytes": 100,
+            "md5_hash": "",
+        }
+        for index, name in enumerate(_PSX_IMAGES, start=1)
+    ]
+    resolver = FakeFirmwareResolver()
+    for name in _PSX_IMAGES:
+        resolver.declare(name, optional_for=[_PSX_CORE, _PSX_ALTERNATIVE_CORE])
+    resolver.record_system(_PSX_CORE, system_firmware=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT, requirements_met=False)
+    resolver.record_system(
+        _PSX_ALTERNATIVE_CORE, system_firmware=SYSTEM_FIRMWARE_CORE_ALTERNATIVE, requirements_met=True
+    )
+    fw = _make_firmware_service(
+        romm_api=romm_api,
+        firmware_resolver=resolver,
+        core_info=FakeCoreInfoProvider(
+            active_core=(_PSX_CORE, _PSX_DEFAULT_LABEL),
+            options=options if options is not None else _psx_emulators(),
+        ),
+        platform_core_reader=FakePlatformCoreReader({"psx": platform_core} if platform_core is not None else None),
+    )
+    _inline_executor(fw)
+    return fw
+
+
+def _emulator_dependent(payload: dict[str, Any]) -> dict[str, Any]:
+    """The part of a BIOS answer that moves with the emulator the platform is about."""
+    return {
+        "system_image": payload["system_image"],
+        "bios_level": payload["bios_level"],
+        "required_count": payload["required_count"],
+        "required_by_active": {f["file_name"]: f["required_by_active"] for f in payload["files"]},
+    }
+
+
+# Every way a platform can arrive at an emulator: no pick at all, a pick that is
+# each of the three ES-DE offers, and the two pins that no longer resolve — one
+# naming an emulator the catalogue does not list, one naming an installed
+# emulator whose command cannot be baked. The last two degrade to the default,
+# and the whole point is that they degrade the same way on both surfaces.
+_PLATFORM_PICKS = [
+    None,
+    _PSX_DEFAULT_LABEL,
+    _PSX_ALTERNATIVE_LABEL,
+    _PSX_STANDALONE_LABEL,
+    "An emulator ES-DE no longer lists",
+]
+
+
+class TestOnePlatformOneEmulator:
+    """A platform's surfaces answer for ONE emulator, whichever way it was picked.
+
+    The device pass that found this: with the PlayStation's emulator set to PCSX
+    ReARMed, the game page read ``not_demanded`` / ``ok`` — the core carries its
+    own HLE BIOS — while the platform pane read ``absent`` / ``missing`` and
+    displayed "PCSX ReARMed" in its own header. One platform, two surfaces,
+    opposite answers, because the pane named the resolved pick and judged by the
+    system default beside it.
+
+    Pinning the corrected value alone would not hold: a third resolution added
+    anywhere here would answer today's value for today's configuration and
+    diverge on some other one. So each case is asserted as an AGREEMENT — every
+    way of arriving at an emulator, both surfaces, one answer — and the pane is
+    additionally held to judging by the emulator it names.
+    """
+
+    @staticmethod
+    async def _both(platform_core: str | None) -> tuple[dict[str, Any], dict[str, Any]]:
+        """The overview's entry for the platform, and the game page's answer for it."""
+        fw = _psx_platform_service(platform_core=platform_core)
+        overview = await fw.get_firmware_status()
+        page = await fw.check_platform_bios("psx")
+        return next(p for p in overview["platforms"] if p["platform_slug"] == "psx"), page
+
+    @pytest.mark.parametrize("platform_core", _PLATFORM_PICKS)
+    @pytest.mark.asyncio
+    async def test_the_pane_and_the_game_page_answer_for_one_emulator(self, platform_core):
+        platform, page = await self._both(platform_core)
+
+        assert _emulator_dependent(platform) == _emulator_dependent(page)
+
+    @pytest.mark.parametrize("platform_core", _PLATFORM_PICKS)
+    @pytest.mark.asyncio
+    async def test_the_pane_judges_by_the_emulator_it_names(self, platform_core):
+        """The header's name and the filter's ``.so`` are two projections of one pick.
+
+        Read off the pane's own emulator list rather than off a constant, so the
+        assertion is the RELATION — a standalone pick names no core and answers
+        ``None``, which is the degradation ADR-0020 defers, not a special case
+        to be exempted here.
+        """
+        platform, _ = await self._both(platform_core)
+
+        named = next(e for e in platform["emulators"] if e["label"] == platform["active_core_label"])
+        assert platform["active_core"] == named["core_so"]
+
+    @pytest.mark.asyncio
+    async def test_the_pick_moves_the_answer_on_both_surfaces(self):
+        """The measurement itself: picking PCSX ReARMed clears the console's demand.
+
+        Without it the platform resolves to SwanStation, whose console will not
+        start without an image and holds none. Both surfaces have to move
+        together, and the pane moving alone is what a green agreement over an
+        unmoved answer would hide.
+        """
+        default_platform, default_page = await self._both(None)
+        picked_platform, picked_page = await self._both(_PSX_ALTERNATIVE_LABEL)
+
+        for payload in (default_platform, default_page):
+            assert (payload["system_image"], payload["bios_level"]) == ("absent", "missing")
+        for payload in (picked_platform, picked_page):
+            assert (payload["system_image"], payload["bios_level"]) == ("not_demanded", "ok")
+
+    @pytest.mark.asyncio
+    async def test_a_pin_that_no_longer_bakes_degrades_rather_than_answering_for_it(self):
+        """A ``needs_setup`` emulator is not a pick — the platform falls back to its default."""
+        fw = _psx_platform_service(
+            platform_core="Vita3K (Standalone)",
+            options=[
+                libretro_option(_PSX_CORE, _PSX_DEFAULT_LABEL),
+                standalone_option(
+                    "%EMULATOR_VITA3K% %INJECT%", "Vita3K (Standalone)", status="needs_setup", reason="inject"
+                ),
+            ],
+        )
+
+        overview = await fw.get_firmware_status()
+        page = await fw.check_platform_bios("psx")
+
+        platform = next(p for p in overview["platforms"] if p["platform_slug"] == "psx")
+        assert platform["active_core_label"] == _PSX_DEFAULT_LABEL
+        assert platform["active_core"] == _PSX_CORE
+        assert _emulator_dependent(platform) == _emulator_dependent(page)
 
 
 class TestDownloadFirmware:
@@ -3478,8 +3675,7 @@ class TestCheckPlatformBiosSlugNormalization:
         # RAW slug matched the firmware file_path, so a file is found.
         assert result["needs_bios"] is True
         assert result["server_count"] == 1
-        # Both core read seams received the NORMALIZED system.
-        assert core_info.active_core_calls == [system]
+        # The core read seam received the NORMALIZED system.
         assert core_info.emulator_options_calls == [system]
         assert resolver.calls == [(slug, None)]
 
@@ -3621,14 +3817,68 @@ class TestDownloadRequiredFirmware:
         assert 1 in download_called_ids
         assert 2 not in download_called_ids
 
+    @staticmethod
+    async def _download_under(platform_core: str | None) -> tuple[list[int], int]:
+        """Fetch the required set for a gba platform picked *platform_core*, and the pane's count.
+
+        gpSP will not run without the GBA BIOS and mGBA will, so which of the two
+        the platform resolves to decides the whole answer.
+        """
+        romm_api = MagicMock()
+        romm_api.list_firmware.return_value = [
+            {
+                "id": 1,
+                "file_name": "gba_bios.bin",
+                "file_path": "bios/gba/gba_bios.bin",
+                "file_size_bytes": 100,
+                "md5_hash": "",
+            },
+        ]
+        resolver = FakeFirmwareResolver()
+        resolver.declare(
+            "gba_bios.bin", required_by=["gpsp_libretro"], optional_for=["mgba_libretro"], description="GBA BIOS"
+        )
+        fw = _make_firmware_service(
+            romm_api=romm_api,
+            firmware_resolver=resolver,
+            core_info=FakeCoreInfoProvider(
+                options=[libretro_option("gpsp_libretro", "gpSP"), libretro_option("mgba_libretro", "mGBA")],
+            ),
+            platform_core_reader=FakePlatformCoreReader({"gba": platform_core} if platform_core is not None else None),
+        )
+        _inline_executor(fw)
+
+        asked: list[int] = []
+
+        async def fake_download_firmware(fw_id, _placements):
+            asked.append(fw_id)
+            return {"success": True}
+
+        with patch.object(fw._downloads, "_download_one", side_effect=fake_download_firmware):
+            await fw.download_required_firmware("gba")
+        page = await fw.check_platform_bios("gba")
+        return asked, page["required_count"]
+
+    @pytest.mark.asyncio
+    async def test_it_fetches_what_the_platforms_own_pick_calls_required(self):
+        """The button and the count above it read one emulator.
+
+        The button sits on the pane that states the requirement, so a resolution
+        of its own would offer to fetch a set the page never showed — or, under
+        the pick that needs nothing, offer to fetch anything at all.
+        """
+        assert await self._download_under(None) == ([1], 1)
+        assert await self._download_under("gpSP") == ([1], 1)
+        assert await self._download_under("mGBA") == ([], 0)
+
     @pytest.mark.asyncio
     async def test_resolves_system_for_active_core_keeps_raw_slug_for_filter(self):
         """Active-core read gets the NORMALIZED system; the firmware filter stays raw.
 
         ``download_required_firmware`` keys the firmware-slug filter on the raw
         RomM/BIOS-folder slug (ADR-0010 §4) but must resolve the slug to a
-        RetroDECK system before the ``get_active_core`` read (ADR-0010 §2) so the
-        per-core required flags use the correct active core.
+        RetroDECK system before reading the platform's emulators (ADR-0010 §2) so
+        the per-core required flags use the correct active core.
         """
         core_info = FakeCoreInfoProvider(active_core=("flycast_libretro", "Flycast"))
         resolver = FakeSystemResolver(mapping={"dc": "dreamcast"})
@@ -3663,8 +3913,9 @@ class TestDownloadRequiredFirmware:
         # system) marked it required, so it was downloaded.
         assert result["downloaded"] == 1
         assert download_called_ids == [1]
-        # get_active_core received the NORMALIZED system, not the raw slug.
-        assert core_info.active_core_calls == ["dreamcast"]
+        # The core read the required-only filter resolves through received the
+        # NORMALIZED system, not the raw slug.
+        assert core_info.emulator_options_calls == ["dreamcast"]
         assert resolver.calls == [("dc", None)]
 
     @pytest.mark.asyncio
@@ -3868,13 +4119,24 @@ class TestPerCoreFiltering:
             for i, name in enumerate(("gba_bios.bin", "gb_bios.bin", "sgb_bios.bin"))
         ]
 
-    def _service(self, active_core: tuple[str | None, str | None]) -> FirmwareService:
+    def _service(self, active_core: tuple[str, str] | tuple[None, None]) -> FirmwareService:
+        """A gba platform whose one emulator is *active_core*, or none at all.
+
+        Seeded on both of the fake's inputs, because the service reads both and
+        they answer different questions: ``options`` is the emulator list the
+        platform's own pick is resolved from, ``active_core`` the libretro-only
+        system reading. A test meaning "this platform launches with gpSP" has to
+        say it in the list. ``(None, None)`` is the platform ES-DE offers nothing
+        bakeable for, which is an empty list rather than a named emulator.
+        """
         romm_api = MagicMock()
         romm_api.list_firmware.return_value = self._gba_firmware()
+        core_so, label = active_core
+        options = [libretro_option(core_so, label)] if core_so is not None and label is not None else []
         fw = _make_firmware_service(
             romm_api=romm_api,
             firmware_resolver=self._gba_resolver(),
-            core_info=FakeCoreInfoProvider(active_core=active_core),
+            core_info=FakeCoreInfoProvider(active_core=active_core, options=options),
         )
         _inline_executor(fw)
         return fw
@@ -4011,25 +4273,25 @@ class TestCheckPlatformBiosPreResolvedCore:
 
     @pytest.mark.asyncio
     async def test_none_falls_back_to_system_default(self, fw, tmp_path):
-        """``active_core_so=None`` resolves the system default via ``get_active_core``.
+        """``active_core_so=None`` resolves the platform's own emulator.
 
-        Same declarations, no per-game core: the platform-level path reads the system
-        default (mGBA → optional) so ``required_count`` is 0 — the opposite of the
-        override case, locking in the result-flip.
+        Same declarations, no per-game core: the platform-level path resolves the
+        platform's pick (mGBA → optional) so ``required_count`` is 0 — the
+        opposite of the override case, locking in the result-flip.
         """
         firmware_list = [
             {"id": 1, "file_name": "gba_bios.bin", "file_path": "bios/gba/gba_bios.bin", "md5_hash": ""},
         ]
         self._gba_two_core_service(fw, firmware_list)
-        fw._config.core_info.active_core = ("mgba_libretro", "mGBA")
+        _set_platform_emulator(fw, "mgba_libretro", "mGBA")
 
         with patch.object(fw._demand, "_retrodeck_paths", FakeRetroDeckPaths(bios=str(tmp_path / "bios"))):
             result = await fw.check_platform_bios("gba")
 
         assert result["needs_bios"] is True
         assert result["required_count"] == 0  # mGBA treats gba_bios.bin as optional
-        # None → the system default was read once for the system "gba".
-        assert fw._config.core_info.active_core_calls == ["gba"]
+        # None → the platform's emulators were read once, for the system "gba".
+        assert _core_info(fw).emulator_options_calls == ["gba"]
 
 
 class TestDownloadFirmwareErrors:
