@@ -1,10 +1,13 @@
-"""MigrationService — RetroDECK path and save-sort migration orchestration.
+"""MigrationService — the home migration, and the whole package's public surface.
 
-Owns the runtime decisions for relocating ROMs, BIOS, and save files
-when the RetroDECK home path changes or RetroArch save sorting flips.
-All raw filesystem I/O is delegated to the ``MigrationFileStore``
-Protocol; conflict resolution, state mutations, and event emission
-remain the service's responsibility.
+Owns the runtime decisions for relocating ROMs, BIOS and save files when the
+RetroDECK home path changes. All raw filesystem I/O is delegated to the
+``MigrationFileStore`` Protocol; conflict resolution, state mutations and event
+emission remain the service's responsibility.
+
+The save-sort migration is a separate trigger with its own source of truth and
+its own conflict rule, so it lives in :mod:`services.migration.save_sort` and is
+re-exposed here — callers reach one service, not two.
 """
 
 from __future__ import annotations
@@ -22,18 +25,14 @@ from domain.migration_paths import (
     remap_under_current,
     stranded_source_candidates,
 )
-from domain.save_extensions import get_save_extensions
-from domain.save_layout import ContentDir
-from domain.save_path import resolve_save_dir
+from services.migration._moves import FileMover
+from services.migration.save_sort import SaveSortMigrator
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
 
-    from models.state import SaveSortSettings
-
-    from domain.rom_install import RomInstall
-    from domain.save_layout import InSaveDir, SaveLayout
+    from domain.save_layout import SaveLayout
     from services.protocols import (
         ActiveCoreReader,
         CoreNameProviderFn,
@@ -43,22 +42,22 @@ if TYPE_CHECKING:
         RelaunchOptionsReader,
         RetroArchSaveLayoutProvider,
         RetroDeckPaths,
+        SaveLocationReader,
         SettingsPersister,
         UnitOfWorkFactory,
     )
 
-# kv_config keys for the cross-run change-detection markers MigrationService
-# diffs (ADR-0003 Bucket 2): the last-seen RetroDECK home and RetroArch
-# save-sort observation, each with a ``_previous`` companion that exists only
-# while a migration is awaiting user confirmation. ``_HOPS`` holds the JSON
-# array of *additional* pending homes (oldest→newest) accumulated when the
-# user changes the RetroDECK home again before migrating (#1042); it is absent
-# in the common single-hop case and deleted wherever ``_PREVIOUS`` is.
+# kv_config keys for the cross-run home-change markers this module diffs
+# (ADR-0003 Bucket 2): the last-seen RetroDECK home, with a ``_previous``
+# companion that exists only while a migration is awaiting user confirmation.
+# ``_HOPS`` holds the JSON array of *additional* pending homes (oldest→newest)
+# accumulated when the user changes the RetroDECK home again before migrating
+# (#1042); it is absent in the common single-hop case and deleted wherever
+# ``_PREVIOUS`` is. The save-sort keys live with the half that reads them,
+# in ``save_sort.py`` — one key, one definition.
 _KV_RETRODECK_HOME = "retrodeck_home_path"
 _KV_RETRODECK_HOME_PREVIOUS = "retrodeck_home_path_previous"
 _KV_RETRODECK_HOME_HOPS = "retrodeck_home_path_hops"
-_KV_SAVE_SORT = "save_sort_settings"
-_KV_SAVE_SORT_PREVIOUS = "save_sort_settings_previous"
 
 
 @dataclass(frozen=True)
@@ -69,10 +68,12 @@ class MigrationServiceConfig:
     dict, runtime infrastructure, persistence callbacks, event emitter,
     and the provider callables MigrationService needs at construction
     time. The shared ``active_core`` resolver answers which RetroArch core a
-    ROM launches with when re-deriving the save-sort subdirectory name. The
-    ``relaunch_options`` seam re-bakes every relocated ROM's full Steam
-    ``launch_options`` (active core + selected disc) from its moved path so the
-    pick survives the home migration. ``firmware_resolver`` names which files in
+    ROM launches with when re-deriving the save-sort subdirectory name, and
+    ``save_locations`` answers which files that ROM's save actually consists of,
+    so a sort-change move carries the emulator's own file set rather than a
+    guessed list of extensions. The ``relaunch_options`` seam re-bakes every
+    relocated ROM's full Steam ``launch_options`` (active core + selected disc)
+    from its moved path so the pick survives the home migration. ``firmware_resolver`` names which files in
     a pending home are firmware at all, so the untracked-BIOS sweep moves those
     and leaves everything else alone. Relational migration state (ROM installs,
     BIOS records, change markers) is read through the injected ``uow_factory``.
@@ -88,6 +89,7 @@ class MigrationServiceConfig:
     retrodeck_paths: RetroDeckPaths
     get_save_layout: RetroArchSaveLayoutProvider
     active_core: ActiveCoreReader
+    save_locations: SaveLocationReader
     relaunch_options: RelaunchOptionsReader
     get_core_name: CoreNameProviderFn
     uow_factory: UnitOfWorkFactory
@@ -107,13 +109,24 @@ class MigrationService:
         self._retrodeck_paths = config.retrodeck_paths
         self._get_save_layout = config.get_save_layout
         self._active_core = config.active_core
+        self._save_locations = config.save_locations
         self._relaunch_options = config.relaunch_options
         self._get_core_name = config.get_core_name
         self._uow_factory = config.uow_factory
-        # One-shot guard so the ContentDir "save sync unsupported" warning is
-        # logged at most once per process rather than on every save-sort detect
-        # pass (which runs at the entry of every sync flow).
-        self._content_dir_warned = False
+        self._mover = FileMover(file_store=config.migration_file_store, logger=config.logger)
+        self._save_sort = SaveSortMigrator(
+            uow_factory=config.uow_factory,
+            migration_file_store=config.migration_file_store,
+            retrodeck_paths=config.retrodeck_paths,
+            get_save_layout=config.get_save_layout,
+            active_core=config.active_core,
+            save_locations=config.save_locations,
+            get_core_name=config.get_core_name,
+            mover=self._mover,
+            emit=config.emit,
+            loop=config.loop,
+            logger=config.logger,
+        )
         # Strong refs to in-flight background tasks. ``loop.create_task``
         # alone is not enough — without a strong ref, the loop is free to
         # garbage-collect the task before it completes. ``add_done_callback``
@@ -480,10 +493,8 @@ class MigrationService:
         Scans ``<home>/saves`` for each pending home (#1042) and deduplicates by
         relative path, newest mtime winning — the same save can exist under
         several homes if the user played while a change was pending, and only
-        the freshest copy should survive. Hidden directories (those whose name
-        begins with ``.``) and the files they contain are skipped: the RomM
-        plugin's ``.romm-backup`` sidecars and any ad-hoc user dotdirs must not
-        be migrated.
+        the freshest copy should survive. Which files a scan is willing to see
+        at all is :meth:`_migratable_saves`'s contract, not this one's.
         """
         new_saves = self._retrodeck_paths.saves_path()
         # rel path -> (source path, mtime); newest mtime wins across homes.
@@ -492,26 +503,35 @@ class MigrationService:
             old_saves = os.path.join(home, "saves")
             if not self._migration_file_store.is_dir(old_saves):
                 continue
-            for dirpath, _dirs, filenames in self._migration_file_store.walk_files(old_saves):
-                rel_dir = os.path.relpath(dirpath, old_saves)
-                # Skip any descendant of a hidden directory by inspecting the
-                # relative-path segments. ``rel_dir == "."`` for the saves
-                # root itself, which is never hidden.
-                if rel_dir != "." and any(part.startswith(".") for part in rel_dir.split(os.sep)):
-                    continue
-                for fname in filenames:
-                    if fname.startswith("."):
-                        continue
-                    old_file = os.path.join(dirpath, fname)
-                    rel = os.path.relpath(old_file, old_saves)
-                    mtime = self._safe_mtime(old_file)
-                    existing = best.get(rel)
-                    if existing is None or mtime >= existing[1]:
-                        best[rel] = (old_file, mtime)
+            for rel, old_file in self._migratable_saves(old_saves):
+                mtime = self._safe_mtime(old_file)
+                existing = best.get(rel)
+                if existing is None or mtime >= existing[1]:
+                    best[rel] = (old_file, mtime)
         return [
             (rel, old_file, os.path.join(new_saves, rel), lambda: None, "save")
             for rel, (old_file, _mtime) in best.items()
         ]
+
+    def _migratable_saves(self, old_saves: str) -> Iterator[tuple[str, str]]:
+        """Yield ``(path relative to old_saves, absolute path)`` for each file a migration may move.
+
+        Hidden directories (those whose name begins with ``.``) and the files
+        they contain are skipped, as is any hidden file: the RomM plugin's
+        ``.romm-backup`` sidecars and any ad-hoc user dotdirs must not be
+        migrated.
+        """
+        for dirpath, _dirs, filenames in self._migration_file_store.walk_files(old_saves):
+            rel_dir = os.path.relpath(dirpath, old_saves)
+            # ``rel_dir == "."`` for the saves root itself, which is never
+            # hidden.
+            if rel_dir != "." and any(part.startswith(".") for part in rel_dir.split(os.sep)):
+                continue
+            for fname in filenames:
+                if fname.startswith("."):
+                    continue
+                old_file = os.path.join(dirpath, fname)
+                yield os.path.relpath(old_file, old_saves), old_file
 
     def _safe_mtime(self, path: str) -> float:
         """Return *path*'s mtime, or ``0.0`` when it cannot be read.
@@ -554,116 +574,6 @@ class MigrationService:
                 conflict_set.add(label)
         return sorted(conflict_set)
 
-    def _migrate_single_item(self, label, old_path, new_path, state_updater, kind, conflict_strategy, counts, errors):
-        """Migrate a single file/directory item. Updates counts and errors in place."""
-        # A moved per-ROM directory ("rom_dir") counts as one migrated ROM, same
-        # as a single-file ROM ("rom") — both fold into the "rom" counter.
-        count_key = "rom" if kind in ("rom", "rom_dir") else kind
-
-        if not self._migration_file_store.exists(old_path):
-            if self._migration_file_store.exists(new_path):
-                state_updater()
-                if count_key:
-                    counts[count_key] = counts.get(count_key, 0) + 1
-            else:
-                # The record's file exists at no known location and no
-                # destination — a lost install/BIOS, surfaced in the result
-                # so a chained migration never silently reports "nothing to do"
-                # while data is gone (#1042).
-                counts["missing"] = counts.get("missing", 0) + 1
-            return
-
-        if self._migration_file_store.exists(new_path):
-            self._migrate_conflict_item(
-                label,
-                old_path,
-                new_path,
-                state_updater,
-                conflict_strategy,
-                count_key,
-                counts,
-                errors,
-            )
-            return
-
-        try:
-            self._migration_file_store.make_dirs(os.path.dirname(new_path))
-            self._migration_file_store.move(old_path, new_path)
-            state_updater()
-            if count_key:
-                counts[count_key] = counts.get(count_key, 0) + 1
-            self._logger.info(f"Migrated {kind}: {old_path} -> {new_path}")
-        except OSError as e:
-            errors.append(f"{label}: {e}")
-            self._logger.error(f"Migration failed: {old_path}: {e}")
-
-    def _migrate_conflict_item(
-        self,
-        label,
-        old_path,
-        new_path,
-        state_updater,
-        conflict_strategy,
-        count_key,
-        counts,
-        errors,
-    ):
-        """Handle migration when destination already exists."""
-        if conflict_strategy == "overwrite":
-            try:
-                if self._migration_file_store.is_dir(new_path):
-                    self._migration_file_store.remove_tree(new_path)
-                else:
-                    self._migration_file_store.remove_file(new_path)
-                self._migration_file_store.make_dirs(os.path.dirname(new_path))
-                self._migration_file_store.move(old_path, new_path)
-                state_updater()
-                if count_key:
-                    counts[count_key] = counts.get(count_key, 0) + 1
-                self._logger.info(f"Migration overwrite: {old_path} -> {new_path}")
-            except OSError as e:
-                errors.append(f"{label}: {e}")
-                self._logger.error(f"Migration overwrite failed: {old_path}: {e}")
-        else:
-            # skip — keep destination, update state
-            state_updater()
-            if count_key:
-                counts[count_key] = counts.get(count_key, 0) + 1
-            self._logger.info(f"Migration skip (exists): {new_path}")
-
-    @staticmethod
-    def _build_migration_result(counts, errors):
-        """Build the result dict from migration counts and errors.
-
-        ``missing`` (records whose file was found at no known location — see
-        ``_migrate_single_item``) is surfaced additively in both the message
-        and the ``missing_count`` field so a chained migration reports lost
-        files honestly instead of a bare "No files to migrate" success; it does
-        not, on its own, make the migration a failure (only ``errors`` do).
-        """
-        parts = []
-        if counts["rom"]:
-            parts.append(f"{counts['rom']} ROM(s)")
-        if counts["bios"]:
-            parts.append(f"{counts['bios']} BIOS")
-        if counts["save"]:
-            parts.append(f"{counts['save']} save(s)")
-        msg = f"Migrated {', '.join(parts)}" if parts else "No files to migrate"
-        missing = counts.get("missing", 0)
-        if missing:
-            msg += f"; {missing} file(s) missing (not found at any known location)"
-        if errors:
-            msg += f" ({len(errors)} error(s))"
-        return {
-            "success": len(errors) == 0,
-            "message": msg,
-            "roms_moved": counts["rom"],
-            "bios_moved": counts["bios"],
-            "saves_moved": counts["save"],
-            "missing_count": missing,
-            "errors": errors,
-        }
-
     def _migrate_retrodeck_files_io(self, pending_homes, new_home, conflict_strategy):
         """Sync helper for migrate_retrodeck_files — FS traversal + moves in executor.
 
@@ -695,7 +605,7 @@ class MigrationService:
         errors = []
 
         for label, old_path, new_path, state_updater, kind in items:
-            self._migrate_single_item(
+            self._mover.migrate_single_item(
                 label,
                 old_path,
                 new_path,
@@ -710,7 +620,7 @@ class MigrationService:
         # previous-path marker, all in one short write UoW after the file moves.
         self._apply_relocations(installs, relocations, bios_files, bios_relocations, clear_marker=not errors)
 
-        result = self._build_migration_result(counts, errors)
+        result = self._mover.build_migration_result(counts, errors)
         # Re-resolve the launch command for every installed+bound ROM AFTER the
         # write UoW above has persisted the new paths (ADR-0005/0006): the path
         # is baked into the Steam shortcut's launch_options, so a relocated ROM
@@ -850,222 +760,8 @@ class MigrationService:
         return await self._loop.run_in_executor(None, self._get_migration_status_io, pending, new_home)
 
     # ---------------------------------------------------------------------------
-    # Save sort change detection and migration
+    # Both migrations at once
     # ---------------------------------------------------------------------------
-
-    @staticmethod
-    def _read_save_sort_settings(uow) -> SaveSortSettings | None:
-        """Decode the last-seen save-sort observation from kv_config, ``None`` when absent."""
-        raw = uow.kv_config.get(_KV_SAVE_SORT)
-        return json.loads(raw) if raw is not None else None
-
-    @staticmethod
-    def _read_save_sort_settings_previous(uow) -> SaveSortSettings | None:
-        """Decode the pending pre-change save-sort snapshot from kv_config, ``None`` when absent."""
-        raw = uow.kv_config.get(_KV_SAVE_SORT_PREVIOUS)
-        return json.loads(raw) if raw is not None else None
-
-    def detect_save_sort_change(self) -> SaveLayout:
-        """Refresh save-sort state from the live RetroArch config; return the layout.
-
-        Reads the live ``SaveLayout`` and returns it so the SyncEngine can
-        hard-gate save sync when it is ``ContentDir`` (#239). When the
-        layout is ``ContentDir`` the kv_config save-sort change-detection
-        markers are never touched — content-dir saves live next to the ROM,
-        outside the saves tree the plugin syncs, so there is no sort layout
-        to migrate. A single per-process warning is logged so the unsupported
-        state is visible without spamming every sync.
-
-        For the supported ``InSaveDir`` case, runs the cross-run change
-        detection against the stored observation, writing the
-        ``_KV_SAVE_SORT`` / ``_KV_SAVE_SORT_PREVIOUS`` markers and emitting
-        ``save_sort_changed`` when the layout flips (#238).
-
-        May be called from a worker thread (via
-        ``SyncEngine._refresh_save_sort_state`` → ``run_in_executor``) or
-        from the loop thread. Use ``asyncio.run_coroutine_threadsafe`` to
-        schedule the emit coroutine: it is explicitly thread-safe and
-        also works correctly when invoked from the loop thread itself.
-        ``loop.create_task`` is NOT thread-safe and races with loop
-        internals on CPython (#238 review).
-        """
-        layout = self._get_save_layout()
-        if isinstance(layout, ContentDir):
-            if not self._content_dir_warned:
-                self._logger.warning(
-                    "RetroArch savefiles_in_content_dir is enabled — saves are written "
-                    "next to the ROM, so plugin save sync is unsupported and is disabled."
-                )
-                self._content_dir_warned = True
-        else:
-            self._detect_in_save_dir_change(layout)
-        return layout
-
-    def _detect_in_save_dir_change(self, layout: InSaveDir) -> None:
-        """Run the cross-run save-sort change detection for a supported ``InSaveDir`` layout.
-
-        Records the current sort settings as the ``_KV_SAVE_SORT`` observation; when they
-        differ from the stored one, sets the ``_KV_SAVE_SORT_PREVIOUS`` pending-migration
-        marker and emits ``save_sort_changed`` so the frontend can offer the migration (#238).
-        """
-        current: SaveSortSettings = {"sort_by_content": layout.sort_by_content, "sort_by_core": layout.sort_by_core}
-        with self._uow_factory() as uow:
-            stored = self._read_save_sort_settings(uow)
-        if stored is None:
-            with self._uow_factory() as uow:
-                uow.kv_config.set(_KV_SAVE_SORT, json.dumps(current))
-            return
-        if stored == current:
-            return
-        with self._uow_factory() as uow:
-            uow.kv_config.set(_KV_SAVE_SORT_PREVIOUS, json.dumps(stored))
-            uow.kv_config.set(_KV_SAVE_SORT, json.dumps(current))
-        self._logger.warning(f"RetroArch save sorting changed: {stored} -> {current}")
-        # Fire-and-forget: thread-safe schedule of the emit coroutine on
-        # the plugin event loop. We deliberately do not await or .result()
-        # the future — this mirrors the previous create_task semantics.
-        asyncio.run_coroutine_threadsafe(
-            self._emit(
-                "save_sort_changed",
-                {"old_settings": stored, "new_settings": current},
-            ),
-            self._loop,
-        )
-
-    def _resolve_retroarch_corename(self, rom_id: int) -> tuple[str | None, str | None]:
-        """Resolve the RetroArch save subdirectory name for a ROM by ``rom_id``.
-
-        Asks the per-ROM ``ActiveCoreReader`` **which** core is active (the
-        per-game ``emulator_override`` pin folded over the system default),
-        then asks the RetroArch ``.info`` parser (via ``get_core_name``)
-        **what** RetroArch calls that core in its own subsystem — which
-        is what ``sort_savefiles_enable`` uses when naming save
-        subdirectories.
-
-        Returns a ``(corename, core_so)`` tuple. ``corename`` is ``None``
-        (fail loud, no ES-DE label fallback) when the resolver cannot
-        resolve a core for this ROM. ``core_so`` is the underlying
-        ES-DE core ``.so`` basename when known (useful for diagnostics
-        when ``corename`` is ``None``), otherwise ``None``.
-        """
-        core_so, _label = self._active_core.active_core_for_rom(rom_id)
-        if not core_so:
-            return (None, None)
-        corename = self._get_core_name(core_so)
-        return (corename or None, core_so)
-
-    def _collect_save_sorting_items(
-        self,
-        old_settings: SaveSortSettings,
-        new_settings: SaveSortSettings,
-        installs: list[RomInstall],
-    ) -> list[tuple[str, str, str, object, str]]:
-        """Collect save files that need migration due to sort setting change.
-
-        ``installs`` is the pre-snapshotted ``RomInstall`` list (the caller opens
-        the read UoW); this method is pure compute over it.
-        """
-        saves_base = self._retrodeck_paths.saves_path()
-        roms_base = self._retrodeck_paths.roms_path()
-        need_core = bool(old_settings.get("sort_by_core") or new_settings.get("sort_by_core"))
-        items: list[tuple[str, str, str, object, str]] = []
-        for install in installs:
-            self._collect_rom_sort_items(
-                install,
-                saves_base,
-                roms_base,
-                old_settings,
-                new_settings,
-                need_core,
-                items,
-            )
-        return items
-
-    def _collect_rom_sort_items(
-        self,
-        install: RomInstall,
-        saves_base: str,
-        roms_base: str,
-        old_settings: SaveSortSettings,
-        new_settings: SaveSortSettings,
-        need_core: bool,
-        items: list[tuple[str, str, str, object, str]],
-    ) -> None:
-        """Collect migration items for a single ROM's save files."""
-        system = install.system
-        file_path = install.file_path
-        if not system or not file_path:
-            return
-        core_name: str | None = None
-        if need_core:
-            core_name, core_so = self._resolve_retroarch_corename(install.rom_id)
-            if core_name is None:
-                # Fail loud — cannot resolve the RetroArch corename for this ROM's
-                # active core, so we can't build the correct sort-by-core path.
-                # Skip this item and warn the user rather than silently corrupting
-                # the migration with the wrong destination directory.
-                self._logger.warning(
-                    "Skipping save sort migration for %s/%s: unable to resolve "
-                    "RetroArch corename from .info (core_so=%s)",
-                    system,
-                    os.path.basename(file_path),
-                    core_so,
-                )
-                return
-        old_dir = resolve_save_dir(
-            file_path,
-            saves_base,
-            system,
-            roms_base=roms_base,
-            sort_by_content=old_settings["sort_by_content"],
-            sort_by_core=old_settings["sort_by_core"],
-            core_name=core_name,
-        )
-        new_dir = resolve_save_dir(
-            file_path,
-            saves_base,
-            system,
-            roms_base=roms_base,
-            sort_by_content=new_settings["sort_by_content"],
-            sort_by_core=new_settings["sort_by_core"],
-            core_name=core_name,
-        )
-        if old_dir == new_dir:
-            return
-        rom_name = os.path.splitext(os.path.basename(file_path))[0]
-        for ext in get_save_extensions(system):
-            filename = rom_name + ext
-            old_file = os.path.join(old_dir, filename)
-            new_file = os.path.join(new_dir, filename)
-            if self._migration_file_store.exists(old_file):
-                items.append((filename, old_file, new_file, lambda: None, "save"))
-
-    def _get_save_sort_migration_status_io(
-        self, old_settings: SaveSortSettings, new_settings: SaveSortSettings
-    ) -> dict[str, Any]:
-        with self._uow_factory() as uow:
-            installs = list(uow.rom_installs.iter_all())
-        items = self._collect_save_sorting_items(old_settings, new_settings, installs)
-        return {
-            "pending": True,
-            "old_settings": old_settings,
-            "new_settings": new_settings,
-            "saves_count": len(items),
-        }
-
-    def dismiss_save_sort_migration(self) -> dict[str, Any]:
-        """Dismiss the save sort migration warning without migrating files."""
-        with self._uow_factory() as uow:
-            uow.kv_config.delete(_KV_SAVE_SORT_PREVIOUS)
-        return {"success": True}
-
-    async def get_save_sort_migration_status(self) -> dict[str, Any]:
-        with self._uow_factory() as uow:
-            old = self._read_save_sort_settings_previous(uow)
-            new = self._read_save_sort_settings(uow)
-        if not old or not new or old == new:
-            return {"pending": False}
-        return await self._loop.run_in_executor(None, self._get_save_sort_migration_status_io, old, new)
 
     async def refresh_state(self) -> dict[str, Any]:
         """Run both detection passes and return combined migration state.
@@ -1080,88 +776,23 @@ class MigrationService:
             "save_sort": await self.get_save_sort_migration_status(),
         }
 
-    def _resolve_save_sort_conflict(
-        self,
-        label: str,
-        old_path: str,
-        new_path: str,
-        state_updater,
-        counts: dict[str, int],
-        count_key: str,
-        errors: list[str],
-    ) -> None:
-        """Newest-wins resolution for a save-sort conflict.
+    # ------------------------------------------------------------------
+    # Save-sort migration — delegated to SaveSortMigrator
+    #
+    # The save-sort half is a separate trigger with its own conflict rule, but
+    # one service is the surface every caller already reaches, so it is exposed
+    # here rather than wired in a second place. Each method is the migrator's
+    # own contract; the docstring that states it lives with the implementation.
+    # ------------------------------------------------------------------
 
-        RetroArch does not migrate saves when its sort setting changes. If a
-        user flips ``sort_savefiles_enable`` mid-game via the Quick Menu and
-        then saves in-game, the new progress is written to the new layout
-        while the old location still holds pre-change content. The file at
-        the newer mtime contains actual user progress; the older one is
-        stale and must be cleaned up. Save-sync has already uploaded the
-        newest version to RomM before this runs, so even if local migration
-        fails the server still holds the authoritative copy.
-        """
-        try:
-            old_mtime = self._migration_file_store.get_mtime(old_path)
-            new_mtime = self._migration_file_store.get_mtime(new_path)
-        except OSError as e:
-            errors.append(f"{label}: {e}")
-            self._logger.error(f"Save-sort conflict mtime read failed: {old_path}: {e}")
-            return
+    def detect_save_sort_change(self) -> SaveLayout:
+        return self._save_sort.detect_save_sort_change()
 
-        if new_mtime >= old_mtime:
-            # Destination is newer — keep it, delete the stale orphan at old_path.
-            try:
-                self._migration_file_store.remove_file(old_path)
-                state_updater()
-                counts[count_key] = counts.get(count_key, 0) + 1
-                self._logger.info(f"Save-sort conflict: kept newer {new_path}, removed stale {old_path}")
-            except OSError as e:
-                errors.append(f"{label}: {e}")
-                self._logger.error(f"Save-sort orphan cleanup failed: {old_path}: {e}")
-            return
+    def dismiss_save_sort_migration(self) -> dict[str, Any]:
+        return self._save_sort.dismiss_save_sort_migration()
 
-        # Source is newer — atomically overwrite destination.
-        try:
-            self._migration_file_store.make_dirs(os.path.dirname(new_path))
-            self._migration_file_store.rename(old_path, new_path)
-            state_updater()
-            counts[count_key] = counts.get(count_key, 0) + 1
-            self._logger.info(f"Save-sort conflict: moved newer {old_path} -> {new_path}")
-        except OSError as e:
-            errors.append(f"{label}: {e}")
-            self._logger.error(f"Save-sort overwrite failed: {old_path}: {e}")
-
-    def _migrate_save_sort_files_io(
-        self, old_settings: SaveSortSettings, new_settings: SaveSortSettings, conflict_strategy: str | None
-    ) -> dict[str, Any]:
-        # conflict_strategy is retained for backwards-compatibility with the
-        # callable signature but is unused for save-sort migration — conflicts
-        # are resolved in place via newest-wins (see _resolve_save_sort_conflict).
-        del conflict_strategy
-        with self._uow_factory() as uow:
-            installs = list(uow.rom_installs.iter_all())
-        items = self._collect_save_sorting_items(old_settings, new_settings, installs)
-        if not items:
-            with self._uow_factory() as uow:
-                uow.kv_config.delete(_KV_SAVE_SORT_PREVIOUS)
-            return {"success": True, "message": "No save files to migrate", "saves_moved": 0}
-        counts: dict[str, int] = {"rom": 0, "bios": 0, "save": 0}
-        errors: list[str] = []
-        for label, old_path, new_path, updater, _kind in items:
-            if self._migration_file_store.exists(old_path) and self._migration_file_store.exists(new_path):
-                self._resolve_save_sort_conflict(label, old_path, new_path, updater, counts, "save", errors)
-            else:
-                self._migrate_single_item(label, old_path, new_path, updater, "save", None, counts, errors)
-        if not errors:
-            with self._uow_factory() as uow:
-                uow.kv_config.delete(_KV_SAVE_SORT_PREVIOUS)
-        return self._build_migration_result(counts, errors)
+    async def get_save_sort_migration_status(self) -> dict[str, Any]:
+        return await self._save_sort.get_save_sort_migration_status()
 
     async def migrate_save_sort_files(self, conflict_strategy: str | None = None) -> dict[str, Any]:
-        with self._uow_factory() as uow:
-            old = self._read_save_sort_settings_previous(uow)
-            new = self._read_save_sort_settings(uow)
-        if not old or not new or old == new:
-            return {"success": False, "reason": "no_migration_needed", "message": "No save sorting migration needed"}
-        return await self._loop.run_in_executor(None, self._migrate_save_sort_files_io, old, new, conflict_strategy)
+        return await self._save_sort.migrate_save_sort_files(conflict_strategy)

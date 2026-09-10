@@ -38,9 +38,10 @@ from typing import (
     runtime_checkable,
 )
 
-from dataclasses import dataclass, replace as _dc_replace
+from dataclasses import dataclass, field, replace as _dc_replace
 
 from . import _xml as _ET
+from . import whdload
 from .content_path import (
     content_basename,
     content_file_name,
@@ -109,6 +110,7 @@ from .firmware import firmware_for_system as _resolve_for_system
 from .firmware import firmware_inventory as _resolve_inventory
 from .firmware import identify_firmware as _resolve_identification
 from .machine import (
+    ARCHIVE_MISSING,
     GLOB_COMPLETE,
     GLOB_INCOMPLETE,
     KIND_DIRECTORY,
@@ -118,12 +120,15 @@ from .machine import (
     READ_MISSING,
     READ_OK,
     SYMLINK_HOPS,
+    WHDLOAD_MISSING,
+    ArchiveListResult,
     CoreInfo,
     CoreOption,
     GlobResult,
     Machine,
     ReadResult,
     ReadStatus,
+    WhdloadSlaveResult,
 )
 from .mods import (
     ModCard,
@@ -146,6 +151,7 @@ from .oddities import (
     MODE_ALWAYS,
     CoreCard,
     RetiredOption,
+    SaveGroup,
     SaveMode,
     VerifiedOn,
     lookup_audit,
@@ -224,6 +230,7 @@ from .placement import (
     ROLE_BATTERY,
     ROLE_MEMORY_CARD,
     ROLE_SETTINGS,
+    ROLE_UNKNOWN,
     ROOT_CONTENT_DIRECTORY,
     ROOT_EMULATOR_DIRECTORY,
     ROOT_SAVEFILE_DIRECTORY,
@@ -234,6 +241,7 @@ from .placement import (
     STATE_ROOT_KINDS,
     STATE_ROOT_WORKING_DIRECTORY,
     StateRootKind,
+    RULE_FILLED_TEMPLATES,
     SUBDIR_TEMPLATE_HOLES,
     TEMPLATE_CONTENT_DIR,
     TEMPLATE_CONTENT_DIR_NAME,
@@ -1161,6 +1169,11 @@ class _Content:
     dir_name: str | None = None
     rom_stem: str | None = None
     system_dir: str | None = None
+    # The content path exactly as the question spelled it — the one coordinate
+    # that is not derived, and the only value that tells "no content was
+    # named" from "content whose name derives nothing". A rule reads inside
+    # the content through it (PUAE classifies an archive by its members).
+    path: str | None = None
     # The content's extension, lowered and without the dot — the coordinate a
     # selection rule classifies content by (hatari: floppy image or hard-disk
     # image). ``None`` where no content was named or the name carries no dot.
@@ -1181,7 +1194,12 @@ def _content_coordinates(content_path: str | None) -> _Content:
     dir_path, dir_name, rom_stem = split_content_path(content_path)
     extension = os.path.splitext(content_path)[1].removeprefix(".").lower() or None
     return _Content(
-        dir_path, dir_name, rom_stem or None, content_system_dir(content_path), extension
+        dir_path=dir_path,
+        dir_name=dir_name,
+        rom_stem=rom_stem or None,
+        system_dir=content_system_dir(content_path),
+        path=content_path,
+        extension=extension,
     )
 
 
@@ -2353,6 +2371,103 @@ def _rule_entries(machine: Machine, base: str | None, name: str) -> tuple[str, .
     return tuple(os.path.basename(match) for match in listing.matches)
 
 
+@dataclass(slots=True)
+class _SystemReads:
+    """The files a rule reads under the core's system directory, each read once.
+
+    The directory itself is resolved lazily and kept, because a machine that
+    cannot say where it is answers that once rather than once per file; and
+    each file is kept under its own name, for the reason the content reads
+    are — a rule that consults one file from several branches, which the
+    alternatives do by asking what each switch value would select, asks the
+    machine once. One object serves one question, so nothing kept here
+    outlives the machine it was read from.
+    """
+
+    machine: Machine
+    resolve_base: Callable[[], "str | None"]
+    _base: "str | None" = None
+    _base_resolved: bool = False
+    _files: "dict[str, FileLookup]" = field(default_factory=dict)
+
+    def base(self) -> "str | None":
+        """The core's system directory, or ``None`` where nothing on the machine states one."""
+        if not self._base_resolved:
+            self._base = self.resolve_base()
+            self._base_resolved = True
+        return self._base
+
+    def file(self, name: str) -> FileLookup:
+        """One file under that directory, read at most once for this reading."""
+        if name not in self._files:
+            self._files[name] = _rule_file_lookup(self.machine, self.base(), name)
+        return self._files[name]
+
+
+@dataclass(slots=True)
+class _ContentReads:
+    """The three reads a rule can make of the loaded content, each deferred and each made once.
+
+    The content path is the caller's own spelling of a host path: it comes
+    from the question rather than from a config an emulator wrote inside its
+    sandbox, so it takes no translation — every other content-path read in
+    this module treats it the same way. Nothing here runs until a rule asks,
+    so a card that never looks inside content pays nothing for these; and a
+    rule that asks the same question from several branches — which the
+    alternatives do, by asking what each switch value would select — pays for
+    it once, because each answer is kept. One object serves one question, so
+    what is kept cannot outlive the machine it was read from.
+    """
+
+    machine: Machine
+    path: str | None
+    _directory: bool | None = None
+    _members: ArchiveListResult | None = None
+    _slave: WhdloadSlaveResult | None = None
+
+    def is_directory(self) -> bool:
+        """What the emulator's own ``path_is_directory`` answers about the launch path.
+
+        A path whose ``stat`` fails is not a directory there — the call is a
+        ``stat`` plus a mode test — so an unreachable path answers false here
+        too rather than becoming a third state no dispatch has.
+        """
+        if self._directory is None:
+            self._directory = (
+                self.path is not None and self.machine.path_kind(self.path) == KIND_DIRECTORY
+            )
+        return self._directory
+
+    def members(self) -> ArchiveListResult:
+        """What the container the core mounts holds — the drawer, not the launch file.
+
+        The mount is resolved first, the way the seam resolves it before its
+        own listing (:func:`atlas.whdload.mounted_container`), so a rule and
+        the seam are looking at one volume rather than two.
+        """
+        if self._members is None:
+            self._members = (
+                ArchiveListResult(ARCHIVE_MISSING)
+                if self.path is None
+                else self.machine.list_archive(
+                    whdload.mounted_container(self.path, self.is_directory_at)
+                )
+            )
+        return self._members
+
+    def is_directory_at(self, path: str) -> bool:
+        return self.machine.path_kind(path) == KIND_DIRECTORY
+
+    def slave(self) -> WhdloadSlaveResult:
+        if self._slave is None:
+            self._slave = (
+                WhdloadSlaveResult(WHDLOAD_MISSING)
+                if self.path is None
+                else self.machine.read_whdload_slave(self.path)
+            )
+        return self._slave
+
+
 def _rule_reading(
     machine: Machine,
     *,
@@ -2371,7 +2486,7 @@ def _rule_reading(
     *can* decide on stays enumerable in one place.
     """
 
-    def _system_base() -> str | None:
+    def _resolve_system_base() -> str | None:
         root = _core_system_root(
             sandbox=sandbox,
             cfg_label=cfg_label,
@@ -2379,21 +2494,18 @@ def _rule_reading(
             content=content,
             retroarch_config_dir=retroarch_config_dir,
         )
-        if root.needs or not root.reachable:
-            return None
-        return root.base
+        return None if root.needs or not root.reachable else root.base
+
+    system = _SystemReads(machine, _resolve_system_base)
 
     # The home the emulator's own ``$HOME`` expands to is the sandbox
     # environment's HOME, which is shared with the host — so a rule's
     # home-relative read follows the emulator's expansion, not atlas's.
-    def system_file(name: str) -> FileLookup:
-        return _rule_file_lookup(machine, _system_base(), name)
-
     def home_file(name: str) -> FileLookup:
         return _rule_file_lookup(machine, sandbox.expansion_home, name)
 
     def system_entries(name: str) -> tuple[str, ...] | None:
-        return _rule_entries(machine, _system_base(), name)
+        return _rule_entries(machine, system.base(), name)
 
     def home_entries(name: str) -> tuple[str, ...] | None:
         return _rule_entries(machine, sandbox.expansion_home, name)
@@ -2414,18 +2526,23 @@ def _rule_reading(
         for segment in (content.dir_name, content.rom_stem):
             if segment:
                 save_dirs.append(os.path.join(layout.directory, segment))
+    reads = _ContentReads(machine, content.path)
     recorder = _ConsultedOptions(values)
     return (
         RuleReading(
             option_values=recorder,
             content_extension=content.extension,
             content_stem=content.rom_stem,
-            system_file=system_file,
+            system_file=system.file,
             home_file=home_file,
             system_entries=system_entries,
             home_entries=home_entries,
             save_dirs=tuple(save_dirs),
             is_directory=is_directory,
+            content_path=content.path,
+            content_is_directory=reads.is_directory,
+            archive_members=reads.members,
+            whdload_slave=reads.slave,
         ),
         recorder,
     )
@@ -2487,6 +2604,7 @@ def _apply_rule_card(
             f"the rule for card {card.key!r} selected mode {choice.mode!r}, which the card does "
             "not state — the rule and the card shipped out of step"
         )
+    mode = _fill_rule_templates(card.key, choice.mode, mode, choice.fills)
     unknown = [name for name, _ in choice.alternatives if name not in card.modes]
     if unknown:
         raise ValueError(
@@ -2511,6 +2629,106 @@ def _apply_rule_card(
         ),
     )
     return _CardApplication(card=card, mode=mode, granularity=granularity, caveats=tuple(caveats))
+
+
+def _fill_rule_templates(
+    card_key: str, mode_name: str, mode: SaveMode, fills: Mapping[str, tuple[str, ...]]
+) -> SaveMode:
+    """Substitute the templates the card's own rule fills, once, before anything reads the mode.
+
+    Everything downstream then sees a mode whose names are concrete, so the
+    placement machinery needs to know nothing about these tokens: they are a
+    card-and-rule affair, not a hole a caller ever sees
+    (:data:`~atlas.placement.RULE_FILLED_TEMPLATES`).
+    """
+    if not any(_carries_rule_template(group) for group in mode.groups):
+        return mode
+    where = f"card {card_key!r} mode {mode_name!r}"
+    groups = tuple(_fill_rule_group(where, group, fills) for group in mode.groups)
+    return cast(SaveMode, _dc_replace(mode, groups=groups))
+
+
+def _carries_rule_template(group: SaveGroup) -> bool:
+    """Does this group name a template its card's rule has to fill?
+
+    ``observe`` counts beside ``files``: the fill reaches it, the card loader
+    accepts a template there, and a group whose only template sat in
+    ``observe`` would otherwise carry the token into an observation glob.
+    """
+    return any(
+        token in (group.subdir or "")
+        or any(token in name for name in (*(group.files or ()), *(group.observe or ())))
+        for token in RULE_FILLED_TEMPLATES
+    )
+
+
+def _fill_rule_group(
+    where: str, group: SaveGroup, fills: Mapping[str, tuple[str, ...]]
+) -> SaveGroup:
+    return cast(
+        SaveGroup,
+        _dc_replace(
+            group,
+            subdir=_fill_rule_subdir(where, group.subdir, fills),
+            files=_fill_rule_names(where, group.files, fills),
+            observe=_fill_rule_names(where, group.observe, fills),
+        ),
+    )
+
+
+def _fill_rule_subdir(
+    where: str, subdir: str | None, fills: Mapping[str, tuple[str, ...]]
+) -> str | None:
+    """A templated subdir segment takes exactly one value — a directory is one directory."""
+    if subdir is None:
+        return None
+    segments: list[str] = []
+    for segment in subdir.split("/"):
+        if segment not in RULE_FILLED_TEMPLATES:
+            segments.append(segment)
+            continue
+        values = fills.get(segment, ())
+        if len(values) != 1:
+            raise ValueError(
+                f"{where}: the rule filled {segment!r} with {len(values)} values and a subdir "
+                "segment is one directory — the rule and the card shipped out of step"
+            )
+        segments.append(values[0])
+    return "/".join(segments)
+
+
+def _fill_rule_names(
+    where: str, names: tuple[str, ...] | None, fills: Mapping[str, tuple[str, ...]]
+) -> tuple[str, ...] | None:
+    """A templated file name expands in place, once per value the rule filled."""
+    if names is None:
+        return None
+    filled: list[str] = []
+    for name in names:
+        carried = [token for token in RULE_FILLED_TEMPLATES if token in name]
+        if not carried:
+            filled.append(name)
+            continue
+        filled.extend(_expand_name(where, name, carried, fills))
+    return tuple(filled)
+
+
+def _expand_name(
+    where: str, name: str, carried: list[str], fills: Mapping[str, tuple[str, ...]]
+) -> list[str]:
+    if len(carried) != 1:
+        raise ValueError(
+            f"{where}: file name {name!r} carries {carried}, and one name expands over one "
+            "template — the rule and the card shipped out of step"
+        )
+    token = carried[0]
+    values = fills.get(token, ())
+    if not values:
+        raise ValueError(
+            f"{where}: file name {name!r} carries {token!r} and the rule filled it with nothing "
+            "— the rule and the card shipped out of step"
+        )
+    return [name.replace(token, value) for value in values]
 
 
 def _card_file_set(
@@ -2554,7 +2772,16 @@ def _card_file_set(
     candidates = tuple(f for f in (observe if observe is not None else declared) if f not in excluded)
     present = tuple(f for f in candidates if machine.path_kind(os.path.join(directory, f)) == KIND_FILE)
     if present:
-        return FileSet("observed", present, f"observed on the machine: {directory}", complete=mode.complete)
+        return FileSet(
+            "observed",
+            present,
+            f"observed on the machine: {directory}",
+            complete=mode.complete,
+            # Every candidate came from a group of this mode, so the found ones
+            # keep the role and grouping that group states — the declaration is
+            # not worth less for having been confirmed.
+            groups=_observed_groups(present, directory=directory, rom_stem=rom_stem, mode=mode),
+        )
     return FileSet(
         "declared",
         declared,
@@ -2810,8 +3037,11 @@ def _with_cross_parts(file_set: FileSet, cross_parts: "_CrossParts") -> FileSet:
     """The declared decomposition gains the parts under the other roots.
 
     The flat ``files`` stays the answer's own directory, as it always was. An
-    observed or unknown set keeps its shape — no decomposition exists there to
-    extend, and the spans-roots caveats carry the parts instead.
+    unknown set has nothing to extend, and an observed one's groups are what was
+    found in the directory this answer read: a part under another root was never
+    looked at, so appending its declared names would state files nobody saw
+    inside an answer whose state says *seen*. The spans-roots caveat carries
+    those parts for both, which is the carrier that survives an observation.
     """
     if cross_parts.groups and file_set.state == FILE_SET_DECLARED and file_set.groups:
         return FileSet(
@@ -3272,8 +3502,10 @@ def _declared_groups(
 
     **Every group the card knows about**, including the ones whose file names
     follow from nothing atlas reads — those carry ``files=None``. That is what
-    makes one walk over ``groups`` reach every place a save lives, rather than a
-    walk plus a scan of the caveats for the directories the walk left out. The
+    makes one walk over a declared answer's ``groups`` reach every place a save
+    lives, rather than a walk plus a scan of the caveats for the directories the
+    walk left out; the observed decomposition beside this one covers the
+    directory it read and no other (:func:`_observed_groups`). The
     caveat still travels, because it carries the citation and the sentence a
     person reads; it is no longer the only carrier.
 
@@ -3308,6 +3540,136 @@ def _declared_groups(
     return tuple(groups)
 
 
+def _observation_names(group: SaveGroup, rom_stem: str | None) -> frozenset[str]:
+    """The names a card group would recognise in its own directory, resolved.
+
+    A group's observation candidates where it states them (Flycast's slot-2
+    VMUs), otherwise its declared list. A name whose ``<rom_stem>`` hole this
+    content cannot fill recognises nothing: the group's own answer would be
+    unknown there, so it may not claim a file either.
+    """
+    names = group.observe if group.observe is not None else group.files
+    if names is None:
+        return frozenset()
+    return frozenset(_card_files(names, rom_stem) or ())
+
+
+def _unnamed_here(mode: SaveMode | None) -> SaveGroup | None:
+    """The group that states this directory's role and refuses its file names.
+
+    Such a group is a claim about the directory, not about a list: ScummVM
+    names its slot files per engine from the launcher target, and WHDLoad gives
+    a program its own drawer that the running game then fills under names of
+    its own. The card still says
+    what lies there — that is why its ``file-names-unestablished`` caveat
+    carries a ``role`` — so a file found there is that group's data, and the
+    only thing missing was ever the name.
+
+    ``None`` where no such group covers the answer's own directory, and
+    deliberately ``None`` where two would: a name two groups both claim has no
+    role atlas read, which is what :data:`~atlas.placement.ROLE_UNKNOWN` says.
+    No shipped card has two in one directory; the arm exists so that the day
+    one does, the answer degrades to the honest value instead of picking.
+    """
+    if mode is None or mode.stated is not None:
+        # A mode that states no separate save file declares no groups at all,
+        # so there is no claim over a directory to find. The walk below would
+        # answer the same by running over an empty tuple — this says it up
+        # front rather than leaving it to be inferred from that.
+        return None
+    here = [
+        group
+        for group in mode.unnamed
+        if group.root is None and group.subdir == mode.primary.subdir
+    ]
+    return here[0] if len(here) == 1 else None
+
+
+def _observed_groups(
+    observed: tuple[str, ...], *, directory: str, rom_stem: str | None, mode: SaveMode | None
+) -> tuple[FileGroup, ...]:
+    """Every observed name in a group, carrying the role its declaration knows.
+
+    The declaration is in scope while the observation is being answered, and
+    dropping it there was the whole defect: the same question about the same
+    game answered with roles while the directory was empty and without them
+    once the game had run once, and a save-syncing client read the absence as
+    "ordinary progress" and copied a console settings file between devices.
+
+    Groups come in the card's own order and hold the names in the answer's,
+    which is what the two states can each honestly say. Three passes, most
+    specific first:
+
+    1. the named groups take the names they declare or watch for;
+    2. the group that states this directory's role without its names — see
+       :func:`_unnamed_here` — takes what is left, because the card did say
+       what lies here and only refused to spell it;
+    3. whatever no group covers is a group of its own with
+       :data:`~atlas.placement.ROLE_UNKNOWN`, rather than being left out.
+
+    The third is a statement, and it is the one a caller must not be able to
+    mistake for "nothing is here". Its granularity is read off the names like
+    every other fact here: the observation matched the content's own stem, so
+    these are this game's files rather than every game's, and one or several of
+    them the way a card counts its own group's. The second pass keeps that value
+    for what it is for: without it, a file found in such a directory came back
+    roleless beside a caveat naming that directory's role, an answer
+    contradicting itself in one envelope.
+
+    Both cards reach that observation the same narrow way, and for the same
+    reason their groups are nameless at all. The glob is the content's own stem,
+    while a ScummVM slot file is named from the launcher's target and a file in
+    a WHDLoad drawer by the game that wrote it — neither of which atlas reads.
+    So a slot file arrives only where the target happens to equal the content's
+    stem, and a file in the drawer only where the game's own name does;
+    otherwise nothing matches and the answer stays declared.
+
+    What this does *not* produce is the card's other directories. Every pass
+    above is about the answer's own directory, because that is the one the
+    observation read, so a mode with groups in sibling subdirectories
+    (``kronos/stv`` beside ``kronos/saturn``) states them while the set is
+    declared and not once it is observed. Those keep their
+    ``file-names-unestablished`` caveat where they are unnamed and travel
+    nowhere where they state files. The type's own docstring states that limit
+    for callers, and closing it is a decision about what an observed answer may
+    carry, not a change to this function's shape.
+    """
+    unclaimed = list(observed)
+    groups: list[FileGroup] = []
+    for group in mode.here if mode is not None and mode.stated is None else ():
+        names = _observation_names(group, rom_stem)
+        mine = tuple(name for name in unclaimed if name in names)
+        if not mine:
+            continue
+        unclaimed = [name for name in unclaimed if name not in names]
+        groups.append(
+            FileGroup(dir=directory, files=mine, granularity=group.granularity, role=group.role)
+        )
+    catchall = _unnamed_here(mode) if unclaimed else None
+    if catchall is not None:
+        groups.append(
+            FileGroup(
+                dir=directory,
+                files=tuple(unclaimed),
+                granularity=catchall.granularity,
+                role=catchall.role,
+            )
+        )
+        unclaimed = []
+    if unclaimed:
+        groups.append(
+            FileGroup(
+                dir=directory,
+                files=tuple(unclaimed),
+                granularity=(
+                    GRANULARITY_PER_GAME_FILE if len(unclaimed) == 1 else GRANULARITY_PER_GAME_FILES
+                ),
+                role=ROLE_UNKNOWN,
+            )
+        )
+    return tuple(groups)
+
+
 def _file_set_of(
     matches: list[str],
     *,
@@ -3331,6 +3693,7 @@ def _file_set_of(
             files=observed,
             provenance=f"observed on the machine: {directory}",
             complete=complete,
+            groups=_observed_groups(observed, directory=directory, rom_stem=rom_stem, mode=mode),
         )
     if declared is not None and card is not None:
         return FileSet(

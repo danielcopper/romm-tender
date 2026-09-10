@@ -23,7 +23,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.save_layout import SAVE_SYNC_CONTENT_DIR_REASON
+from domain.save_answer import BENIGN_SYNC_SKIP_REASONS
 
 if TYPE_CHECKING:
     import logging
@@ -317,10 +317,12 @@ class SessionLifecycleService:
                 conflicts_toast=None,
             )
 
-        if result.get("reason") == SAVE_SYNC_CONTENT_DIR_REASON:
-            # #239 benign skip: RetroArch writes saves to the content dir, so post-exit
-            # sync correctly did nothing. Suppress the failure toast — the game-detail
-            # play section already shows the persistent banner.
+        if result.get("reason") in BENIGN_SYNC_SKIP_REASONS:
+            # A benign skip: post-exit sync correctly did nothing. Either RetroArch
+            # writes saves to the content dir (#239), or this game's emulator keeps
+            # no per-game save set the plugin can carry (#1858). Suppress the failure
+            # toast — nothing went wrong, and toasting on every exit of a PS2 or MAME
+            # game would be pure noise.
             return SessionFinalizeSyncResult(
                 offline=False,
                 success=False,

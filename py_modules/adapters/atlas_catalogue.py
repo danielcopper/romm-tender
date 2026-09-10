@@ -232,6 +232,15 @@ class AtlasCatalogueAdapter:
         command loads a core is a fact about the command, where bakeability is a
         fact about this plugin's ``-e`` override. A libretro command the plugin
         cannot bake still names the core the BIOS filter is about.
+
+        **Carried, and currently read by nothing in production.** The firmware
+        surfaces used to key on it and now take the platform's own pick instead
+        (:func:`domain.emulator_commands.resolve_platform_option`), so what a
+        pane names and what it judges by come off one choice. The silence is
+        deliberate rather than an oversight: this is the only reading that
+        answers with a libretro core where the platform's pick is a standalone
+        emulator, and that is a different question from "which emulator is this
+        platform about".
         """
         answer = self._catalogue_answer(system_name)
         if answer is None or _refused(answer):

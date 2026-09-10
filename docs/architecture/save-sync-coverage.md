@@ -8,8 +8,8 @@ files the per-game model can and cannot reach — and the strategy for the gaps.
 ## The per-game discovery model
 
 Save discovery is **exact-name probing**, not a directory scan. For an installed ROM whose file stem is `rom_name`, the
-sync looks for exactly `<saves_dir>/<rom_name><ext>` for each extension in a fixed list, and uploads the ones that
-exist. There is no glob, no `listdir`, no pattern match.
+sync looks for exactly the files the save answer names for this ROM's emulator, and uploads the ones that exist. There
+is no glob, no `listdir`, no pattern match.
 
 This is a deliberate bijection: **one ROM → one set of `<rom_name>.<ext>` files in the save folder.** It maps perfectly
 onto libretro's own SRAM convention, where the save file mirrors the ROM name. Everything that doesn't fit that shape is
@@ -29,11 +29,116 @@ save states are left physically untouched and recorded as warnings where applica
 the same canonical current-save path, that path is shared ownership; purging one owner may copy it into recovery but
 cannot remove it while another owner remains.
 
-The extension list is a small static map keyed by the **RetroDECK system** (the normalized value from `resolve_system` /
-`platform_map`, not the raw RomM platform slug — keying by system keeps the lookup aligned with the save directory,
-cores, and gamelists, which are all system-keyed): a default of `.srm` / `.rtc` / `.sav`, plus per-system overrides
-(`nds` → `.dsv`, `segacd` → `.brm`, `saturn` → `.bkr`/`.bcr`/`.smpc`, `ngp`/`ngpc` → `.flash`/`.ngf`, `pokemini` →
-`.eep`, and `amiga`/`amigacd32` → `.nvr`).
+The names come from the **save answer**, read live off the machine per ROM and per the emulator that would launch it
+(`services/protocols/paths.py` → `SaveLocationReader`, implemented by `adapters/atlas_saves.py` over the vendored
+resolver). They used to come from a static per-system extension table this repo maintained by hand; that table is
+retired, and nothing replaces it — for every system it covered the machine's answer is at least as good, and for four it
+is better in one of two ways. For Amiga, Sega CD and Saturn the machine names something the table got wrong: a save
+inside the disk image, a shared BRAM card, a `.smpc` that is configuration rather than progress. For Amiga CD32 the
+machine agrees with the table on a `.chd` and REFUSES on a `.bin`, where the table answered `.nvr` for both — a refusal
+replacing a guess, which is the smaller of the two improvements and the easier one to mistake for a regression. The
+reasoning is in [ADR-0031](../adr/0031-a-save-is-answered-by-the-emulator-that-writes-it.md).
+
+## The answer is per ROM, never per platform
+
+**The answer turns on the content file's own extension**, so it is a property of the ROM and not of its system. Measured
+on a stock RetroDECK at emu-atlas 0.14.0:
+
+| System     | Content | Answer                                              |
+| ---------- | ------- | --------------------------------------------------- |
+| Amiga      | `.adf`  | the save is inside the disk image                   |
+| Amiga      | `.lha`  | a directory is known, its file names are not        |
+| Amiga      | `.hdf`  | nothing established — PUAE's mode could not be read |
+| Amiga CD32 | `.chd`  | `<stem>.nvr`                                        |
+| Amiga CD32 | `.bin`  | nothing established                                 |
+| Sega CD    | `.chd`  | a shared BRAM card (`scd_E.brm`, …)                 |
+| Sega CD    | `.bin`  | per-game `<stem>.srm`                               |
+
+That is why every question carries the ROM's **real** content path: `RomInstall.file_path` for an installed ROM, and the
+path built from `roms.fs_name` for one the library holds but has not installed. A synthetic stem would answer a
+different question and look like an answer to this one. Where no path can be formed at all, the answer is "not
+established", never a guess.
+
+### Named right, looked for in the wrong place
+
+A per-game answer is not yet a save the plugin **finds**. The names now come from the resolver; the DIRECTORY still
+comes from this repo's own `resolve_save_dir`, and for two systems the two disagree:
+
+| System  | The emulator's directory   | Where the plugin looks |
+| ------- | -------------------------- | ---------------------- |
+| 3DO     | `saves/3do/opera/per_game` | `saves/3do`            |
+| Neo Geo | `saves/neogeo/fbneo`       | `saves/neogeo`         |
+
+So **3DO and Neo Geo saves are still not found**, exactly as before this change — what improved is that the plugin now
+knows their names. Neither is a regression, and neither is fixed until the path math is retired. That is deliberately a
+separate change: discovery and the save-sort migration must agree on the directory, and moving one without the other
+reopens the race the migration's markers exist to prevent. The
+[Save sync support matrix](../user-guide/save-sync-support-matrix.md) reports both as not syncing.
+
+**Cost.** A live reading is roughly 170 ms warm and 490 ms cold per ROM on the reference device. A single-ROM sync and a
+status read each take one, whether or not the ROM's slot is confirmed: the sync's entry gate reads the answer to decide
+whether to refuse at all, and hands that same reading both to the matrix and to the negotiate session's inventory rather
+than letting either take a second. "Ask live" is a rule about operations, not about layers.
+
+The whole-library sweep is the exception, at **two per ROM**. It posts one device-wide inventory before its per-ROM loop
+begins, and that inventory walks each confirmed ROM's save files — so it reads every answer once before any ROM's run
+exists to hand one to, and each run then takes its own. Reusing the inventory's readings would mean carrying a per-run
+map of them across the loop, which is a cache in everything but name on the one path where nothing is launched
+afterwards; the sweep is a background operation and pays the second reading instead.
+
+The two per-platform loops — `count_platform_saves` and `delete_platform_saves` — take one per **installed** ROM on that
+platform, so four installed games is well under a second and fifty is several. Nothing is cached: the correctness rule
+is that every sync path asks live, and the count exists so the number the button offers equals the number the delete
+removes.
+
+## The five save states
+
+The answer classifies every ROM into **exactly one** of five states. Only the first is a save this plugin can carry; the
+other four are refusals, and each says something different about why. A refusal costs nothing: no path is probed, no
+sync state is written, and the sync returns the benign-skip shape (`reason: "save_shape_unsupported"`) rather than a
+failure — the same shape the `savefiles_in_content_dir` skip returns.
+
+| State                  | What it means                                                                 | Example on a stock RetroDECK        |
+| ---------------------- | ----------------------------------------------------------------------------- | ----------------------------------- |
+| **per-game files**     | The answer names concrete files with no hole. Sync as usual, any number.      | Game Boy Advance, Saturn            |
+| **shared**             | One card or file that many games write, so per-game sync would overwrite.     | PS2, and a Sega CD disc image       |
+| **inside the content** | The save is written into the game file itself; there is nothing separate.     | an Amiga `.adf`                     |
+| **hole**               | The shape is known, but part of the path or name is the game's own identity.  | Dreamcast, GameCube, 3DS, Wii U     |
+| **not established**    | Nobody established what this emulator writes, or the names in a known folder. | MAME, PSP, ScummVM, unaudited cores |
+
+**The hole is not always in a file name.** Flycast's Dreamcast cards need the game's `save_id` in the filename;
+Dolphin's GameCube memory cards need the game's `region` in the DIRECTORY. Either way the plugin cannot complete the
+path, which is what the state is about.
+
+**The last state has three shapes and they are kept apart**, because they are three different sentences to a reader.
+`nothing_established` — nobody has established what this emulator writes. `directory_known` — the directory is known and
+the file names in it are not, and telling a user "nothing is known" about a folder we can point at would be wrong.
+`not_asked` — no question ever reached the resolver, because RetroArch writes saves to the content directory or no
+emulator resolved for this ROM at all; the emulator is not implicated, and saying it is would be wrong too.
+
+**Scope is the emulator, never the platform.** PS2 is not unsupported — standalone PCSX2 is, and a libretro core for the
+same platform can answer differently. Every state the payload carries names the emulator it is about.
+
+## Progress and configuration
+
+The answer states each file's **role**, and a file whose role is the emulator's configuration rather than the player's
+progress is **never synced**: it is machine-local by nature, so carrying it to another device would overwrite settings
+the user chose there. On a stock RetroDECK the only one that reaches this rule is Saturn's `.smpc` console-settings
+file: MAME states a per-game `.cfg` as well, but its answer is not-established, so the sync refuses that ROM before any
+role is consulted.
+
+Such a file is still named on the wire, flagged `carried: false`, so a page can say "this file exists and we
+deliberately leave it alone" rather than simply not showing it. A **directory move** — the save-sort migration — does
+carry it, because splitting one save across two directories breaks the game as surely as leaving the battery file
+behind.
+
+**The rule names the roles to hold back, never the roles to carry**, and that is a decision rather than the shape it
+happens to have. The resolver has a value for a file on the machine that no declaration describes (`unknown`), and a
+component carries no role at all where no group claimed it — two ways of saying nobody said what this file is, and both
+are carried. The two failures are not symmetric: a settings file carried onto another device costs a setting the user
+can make again, and a battery file left behind costs a save nothing can restore. An allow-list of the roles known today
+inverts exactly that, and it fails silently — on the day upstream names a new role, every file carrying it is dropped
+and nothing says so.
 
 ## How RomM stores saves
 
@@ -82,7 +187,7 @@ decides on ambiguity" stance:
 
 ## Roadmap mapping
 
-- **(a)** — extension-map additions, candidate for incremental delivery; research/verification tracked in
+- **(a)** — nothing to add: the resolver names these files already. Verification tracked in
   [#237](https://github.com/danielcopper/decky-romm-sync/issues/237).
 - **(b)** — infix-aware per-game discovery (PS1 multi-card, Flycast per-game VMU, 3DO NVRAM); research in
   [#237](https://github.com/danielcopper/decky-romm-sync/issues/237), implementation under the save-format epic
@@ -105,7 +210,7 @@ Every core the atlas audit has reached and disagreed with, corrected here:
 | --------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `opera`   | ✅ `.srm`     | Wrong. `RETRO_MEMORY_SAVE_RAM` returns NULL — there is no RetroArch-side `.srm` at all. NVRAM goes to `<save_dir>/opera/per_game/<rom_stem>.<version>.srm`, the version coming from `opera_nvram_version`. Per-game, but subdir + infix → class (b). |
 | `flycast` | 🔴 (c) shared | Shared is the shipped default (`reicast_per_content_vmus=disabled` → `<system_dir>/dc/vmu_save_A1.bin` …). The core is **per-game capable**: the `VMU A1` / `All VMUs` modes root at `savefile_directory`; their filename scheme is unestablished.   |
-| `pcsx2`   | 🔴 (c) shared | Shared is the shipped default (`pcsx2_shared_memory_cards=enabled` → `<system_dir>/pcsx2/memcards/Mcd00{1,2}.ps2`). Disabled, slot 1 is `<save_dir>/<rom_stem>.ps2` — **class (a)**, reachable by an extension-map entry alone.                      |
+| `pcsx2`   | 🔴 (c) shared | Shared is the shipped default (`pcsx2_shared_memory_cards=enabled` → `<system_dir>/pcsx2/memcards/Mcd00{1,2}.ps2`). Disabled, slot 1 is `<save_dir>/<rom_stem>.ps2` — **class (a)**, which the resolver answers on its own.                          |
 | `neocd`   | 🔴 (c) shared | Per-game capable: `path.cpp:137-168` proves a per-content mode alongside the frontend save RAM path. Load precedence between the two is unobserved.                                                                                                  |
 | `ppsspp`  | 🔴 (c) shared | Not established. The shipped sort override is known; the save subtree and its granularity are not.                                                                                                                                                   |
 | `dolphin` | 🔴 (c) `.gci` | Not established. RetroDECK's prepared `dolphin-emu` subtree suggests a different root, but no core-written save has been observed.                                                                                                                   |
@@ -119,9 +224,10 @@ The row set below is also a 2026-06-04 snapshot of RetroDECK's core list and has
 
 ## Full core reference
 
-Per-core classification from the audit of every RetroArch core RetroDECK can launch. `✅` syncs today · `🟡 (a)`
-per-game, extension not listed yet · `🟠 (b)` per-game with a slot/unit infix · `🔴 (c)` shared / out-of-folder · `⚪`
-no battery save · `❓` unverified. Non-`.srm` rows are libretro-documented and await on-device confirmation. Snapshot:
+Per-core classification from the audit of every RetroArch core RetroDECK can launch. **This table predates the live
+resolver and is background reading — your machine's own answer governs.** `✅` per-game, in the save folder · `🟡 (a)`
+per-game, needing verification · `🟠 (b)` per-game with a slot/unit infix · `🔴 (c)` shared / out-of-folder · `⚪` no
+battery save · `❓` unverified. Non-`.srm` rows are libretro-documented and await on-device confirmation. Snapshot:
 2026-06-04, with the rows above revised 2026-08-02.
 
 ??? note "All 156 cores, classified"

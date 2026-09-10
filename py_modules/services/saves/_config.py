@@ -31,8 +31,10 @@ if TYPE_CHECKING:
         RetryStrategy,
         RommSyncApi,
         SaveFileStore,
+        SaveLocationReader,
         SaveSortChangeFn,
         SettingsPersister,
+        SystemResolver,
         UnitOfWorkFactory,
     )
 
@@ -161,6 +163,8 @@ class SaveServiceConfig:
     clock: Clock
     retrodeck_paths: RetroDeckPaths
     active_core: ActiveCoreReader
+    save_locations: SaveLocationReader
+    resolve_system: SystemResolver
     hostname_provider: HostnameReader
     machine_id_provider: MachineIdReader
     log_debug: DebugLogger

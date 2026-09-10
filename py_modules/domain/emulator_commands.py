@@ -193,6 +193,24 @@ def option_to_invocation(option: EmulatorOption | None) -> EmulatorInvocation | 
     return None
 
 
+def _pinned_option(options: list[EmulatorOption], label: str) -> EmulatorOption | None:
+    """The option a pinned *label* still names, or ``None`` where it no longer does.
+
+    The first option carrying *label*, and only while that option can be baked —
+    a label no option carries and one whose option is not bakeable both answer
+    ``None``, and a caller treats both as "this pin no longer resolves". The
+    search stops at the first label match rather than looking past it for a
+    bakeable namesake: two
+    commands sharing a display label are one emulator to the user, and picking the
+    second because the first is un-bakeable would resolve a pin to something the
+    picker never offered under that name.
+    """
+    for option in options:
+        if option.label == label:
+            return option if option_to_invocation(option) is not None else None
+    return None
+
+
 def label_to_invocation(options: list[EmulatorOption], label: str) -> EmulatorInvocation | None:
     """Resolve a picked *label* to its :class:`EmulatorInvocation`, else ``None``.
 
@@ -201,35 +219,47 @@ def label_to_invocation(options: list[EmulatorOption], label: str) -> EmulatorIn
     label OR the matched option is not bakeable — the caller treats both as
     "this pin no longer resolves" and degrades to the next layer.
     """
-    for option in options:
-        if option.label == label:
-            return option_to_invocation(option)
-    return None
+    return option_to_invocation(_pinned_option(options, label))
+
+
+def resolve_platform_option(options: list[EmulatorOption], override: str | None) -> EmulatorOption | None:
+    """Return the emulator a platform resolves to, or ``None``.
+
+    The platform-level projection of the read-path precedence
+    (``ActiveCoreResolver`` without the per-game layer): the per-platform
+    override (``settings.json`` ``platform_cores``) when its label is set and
+    still names a bakeable emulator, else the es_systems default (the first
+    bakeable command). A stale / no-longer-installed override degrades to the
+    default — never fatal — mirroring the launch-bake resolver so what a surface
+    shows and what actually launches agree. ``None`` when the platform has no
+    BAKEABLE option — which is not the same as having none, and not a failure:
+    an empty menu, an unreadable ``es_systems.xml``, and a menu whose only
+    entries are ``needs_setup`` or uninstalled standalone emulators all answer
+    ``None`` alike. What follows is written at :func:`select_default_option`:
+    the caller bakes the plain RetroDECK launch and RetroDECK resolves the
+    emulator itself, so the games still start.
+
+    **One pick, because a platform's surfaces must not be able to answer for two
+    emulators.** The option is returned rather than one projection of it so that
+    the name a pane displays (:func:`resolve_platform_label`) and the ``.so`` its
+    BIOS answers key on (``EmulatorOption.core_so``, ``None`` for a standalone
+    emulator) come off the same choice. Resolving them separately is what let a
+    pane name PCSX ReARMed and judge the platform by the system default beside
+    it.
+    """
+    pinned = _pinned_option(options, override) if override is not None else None
+    return pinned if pinned is not None else select_default_option(options)
 
 
 def resolve_platform_label(options: list[EmulatorOption], override: str | None) -> str | None:
     """Return the platform-layer active-emulator display label, or ``None``.
 
-    The platform-level projection of the read-path precedence
-    (``ActiveCoreResolver`` without the per-game layer): the per-platform
-    override label (``settings.json`` ``platform_cores``) when it is set and
-    still resolves to a bakeable emulator, else the es_systems default emulator
-    label (the first bakeable command). A stale / no-longer-installed override
-    degrades to the default — never fatal — mirroring the launch-bake resolver so
-    the label a surface shows and the actual launch agree. ``None`` when the
-    platform has no BAKEABLE option — which is not the same as having none, and
-    not a failure: an empty menu, an unreadable ``es_systems.xml``, and a menu
-    whose only entries are ``needs_setup`` or uninstalled standalone emulators
-    all answer ``None`` alike. What follows is written at
-    :func:`select_default_option`: the caller bakes the plain RetroDECK launch
-    and RetroDECK resolves the emulator itself, so the games still start. A
-    surface states THAT; it is never a name, and least of all "Default", which
-    says the plugin picked one.
+    The name half of :func:`resolve_platform_option`. ``None`` where the platform
+    resolves to no bakeable emulator at all — a surface states THAT; it is never
+    a name, and least of all "Default", which says the plugin picked one.
     """
-    if override is not None and label_to_invocation(options, override) is not None:
-        return override
-    default = select_default_option(options)
-    return default.label if default is not None else None
+    option = resolve_platform_option(options, override)
+    return option.label if option is not None else None
 
 
 def options_to_payload(options: list[EmulatorOption]) -> list[dict[str, Any]]:

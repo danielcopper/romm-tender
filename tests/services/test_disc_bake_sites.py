@@ -13,7 +13,7 @@ Bake sites covered:
   * ``services.rom_install_recorder`` — ``do_resolve_launch_bake``, which both a
     completed download and an adoption re-bake through.
 
-The migration relaunch path (``services.migration._build_relaunch_items``) and
+The migration relaunch path (``services.migration.service._build_relaunch_items``) and
 the startup reconcile both bake through the shared ``RelaunchOptionsResolver``;
 its disc-pin behavior is pinned in ``test_relaunch_options_resolver.py``.
 """

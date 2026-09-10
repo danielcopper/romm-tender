@@ -474,7 +474,9 @@ class SetupWizard:
         if not legacy_saves:
             return {"status": "no_op"}
 
-        targets = newest_server_saves_by_target(legacy_saves, rom_name)
+        targets = newest_server_saves_by_target(
+            legacy_saves, rom_name, known_names=self._rom_info.save_answer(rom_id).synced_names
+        )
         core_so = self._resolve_core(rom_id)
         default_slot = resolve_default_slot(self._settings)
         cleanup_limit = autocleanup_limit(self._settings)

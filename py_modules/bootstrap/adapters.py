@@ -22,6 +22,8 @@ from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.asyncio_sleeper import AsyncioSleeper
 from adapters.atlas_catalogue import AtlasCatalogueAdapter, first_detected_installation
 from adapters.atlas_firmware import AtlasFirmwareAdapter, AtlasFolderVerdictAdapter
+from adapters.atlas_host import grant_core_probe_interpreter
+from adapters.atlas_saves import AtlasSaveLocationAdapter
 from adapters.cover_art_file_store import CoverArtFileStoreAdapter
 from adapters.debug_logger import SettingsAwareDebugLogger
 from adapters.download_file import DownloadFileAdapter
@@ -105,6 +107,7 @@ if TYPE_CHECKING:
         RommApi,
         SandboxLauncherFn,
         SaveFileStore,
+        SaveLocationReader,
         SettingsPersister,
         SgdbArtworkCache,
         Sleeper,
@@ -153,6 +156,7 @@ class AdapterBundle:
     path_probe: PathExistsReader
     resolve_path: ResolvedPathFn
     core_info_provider: CoreInfoProvider
+    save_locations: SaveLocationReader
     renderer_rss: RendererRssFn
     renderer_gc: RendererGcFn
     game_process: GameProcessControl
@@ -431,6 +435,17 @@ def bootstrap(
     hostname_provider = HostnameAdapter()
     machine_id_provider = MachineIdAdapter()
     debug_logger = SettingsAwareDebugLogger(settings=settings, logger=logger)
+    # Without this grant the resolver probes no core here — Decky Loader's
+    # frozen runtime is no interpreter to spawn — so every core it is asked
+    # about answers unknown and a libretro save answer usually establishes
+    # nothing. That fails nothing and no test notices, which is why the answer
+    # is logged rather than discarded. Granted before the first atlas adapter:
+    # any question one of them puts can probe. The call stands on its own line
+    # because it is the grant, not the diagnostic: nested inside the log it
+    # would leave with a demoted or deleted log line, and everything would stay
+    # green.
+    core_probe_report = grant_core_probe_interpreter()
+    logger.info(core_probe_report)
     # Built after the debug logger because the resolver never logs on its own:
     # its caveats are the whole degradation channel and reach the log through
     # this seam or not at all. That holds for both firmware questions and for
@@ -444,6 +459,12 @@ def bootstrap(
     emulator_catalogue = AtlasCatalogueAdapter(
         choose_installation=functools.partial(first_detected_installation, user_home),
         emulator_installed=es_find_rules.command_emulator_installed,
+        log_debug=debug_logger,
+    )
+    # Same chooser, its own handle: this one caches no answer at all, because a
+    # save answer has to be live on every sync path.
+    save_locations = AtlasSaveLocationAdapter(
+        choose_installation=functools.partial(first_detected_installation, user_home),
         log_debug=debug_logger,
     )
 
@@ -465,6 +486,7 @@ def bootstrap(
         path_probe=path_probe,
         resolve_path=resolve_path,
         core_info_provider=emulator_catalogue,
+        save_locations=save_locations,
         renderer_rss=renderer_rss,
         renderer_gc=renderer_gc,
         game_process=game_process,

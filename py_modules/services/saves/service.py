@@ -36,6 +36,7 @@ from services.saves.versions import VersionsService, VersionsServiceConfig
 if TYPE_CHECKING:
     from models.sync import ClientSaveState
 
+    from domain.save_answer import SaveAnswer
     from domain.save_layout import InSaveDir
     from services.protocols import UnitOfWorkFactory
 
@@ -96,6 +97,8 @@ class SaveService:
                 save_file_store=config.save_file_store,
                 retrodeck_paths=config.retrodeck_paths,
                 active_core=config.active_core,
+                save_locations=config.save_locations,
+                resolve_system=config.resolve_system,
                 get_core_name=config.get_core_name,
                 logger=config.logger,
             ),
@@ -478,7 +481,9 @@ class SaveService:
     # Negotiate inventory (Phase 1c)
     # ------------------------------------------------------------------
 
-    def build_save_inventory(self, rom_id: int | None = None) -> list[ClientSaveState]:
+    def build_save_inventory(
+        self, rom_id: int | None = None, *, save_answer: SaveAnswer | None = None
+    ) -> list[ClientSaveState]:
         """Build the negotiate inventory of this device's local save files.
 
         Gathers one :class:`ClientSaveState` per local save file belonging to a
@@ -492,6 +497,12 @@ class SaveService:
         whole-device inventory for the bulk ``sync_all_saves`` pre-negotiate; a
         concrete id restricts it to that one ROM for the single-ROM negotiate
         trigger. The in-scope predicate is unchanged either way.
+
+        ``save_answer`` is that one ROM's save reading where the caller already
+        took one, and it spares this build a second live reading of the machine.
+        It applies to the scoped form only: the whole-device inventory runs
+        BEFORE the sweep's per-ROM loop, so no answer exists yet for any of the
+        ROMs it walks, and one ROM's answer says nothing about another's.
 
         ``content_hash`` is always set via :meth:`SaveFileStore.content_hash`
         (the zip-aware RomM-parity hash — never ``checksum_md5``), and
@@ -510,7 +521,8 @@ class SaveService:
 
         inventory: list[ClientSaveState] = []
         for rid, state in confirmed:
-            for f in self._rom_info.find_save_files(rid):
+            scoped_answer = save_answer if rom_id is not None and rid == rom_id else None
+            for f in self._rom_info.find_save_files(rid, save_answer=scoped_answer):
                 path = f["path"]
                 entry: ClientSaveState = {
                     "rom_id": rid,
@@ -605,6 +617,14 @@ class SaveService:
         button disables at zero rather than disappearing, so a platform whose
         shortcuts are gone and whose saves remain still offers the one action
         that can reach them.
+
+        **The walk is per INSTALLED ROM and each one asks the save resolver**,
+        which reads the machine — roughly 170 ms warm on the reference device.
+        Four installed games on a platform is well under a second; fifty is
+        several. The answer is deliberately not cached: this count exists so the
+        number the button offers equals the number the delete removes, and
+        caching one side of that pair breaks the guarantee the sentence above
+        makes. A cached answer on a destructive path is worse than a slow one.
         """
         return await self._loop.run_in_executor(None, self._count_platform_saves_io, platform_slug)
 

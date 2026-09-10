@@ -841,16 +841,19 @@ it, for the focused platform:
   and the acting pane says `Switching to <emulator>…` in the same status line the outcome lands in — a success takes
   that line back, a refusal replaces it, and a continuation cancelled by leaving the page takes it back too, because
   such a switch either committed or never ran and there is no pane left to report to either way.
-- **BIOS files** — the summary (required, or files, and the two unknown states), then a table: File, On disk, Contents,
-  and a **Download** button on every row that is missing and in the RomM library (#164) — never on a folder declaration,
-  whatever its state, because the emulator opens that name as a directory — and a **Delete** button on every row a
-  download record of ours still holds. That covers a declared **folder** too, where no record carries the row's name and
-  the button counts the distinct files our records name underneath it (`Delete (N)`): a folder is never a download,
-  which says nothing about the files already inside one. Same authority as `Delete BIOS`, described below. Below the
-  table one row of buttons: Download required (_N_), Download all, Delete BIOS behind a `ConfirmModal`. **All three are
-  always rendered and disable when there is nothing to do**, the ruling the Remove group already had: on PS2 all three
-  vanished at once, and a button that disappears is a state the reader has to work out. A disabled `DialogButton` is
-  still a focus stop, so the row stays walkable.
+- **BIOS files** — the summary (required, or files, the console's own demand where it has one, and the three shapes that
+  make no readiness claim — `system_image: "absent"` reads "Needs at least one BIOS file" and outranks the counts and
+  the decline alike, tested before either, because the console asks for one of the images and no count can state that;
+  `"unsettled"` joins `required_withheld` on the keeping side of `nothingEstablished`, so its downloads stay), then a
+  table: File, On disk, Contents, and a **Download** button on every row that is missing and in the RomM library (#164)
+  — never on a folder declaration, whatever its state, because the emulator opens that name as a directory — and a
+  **Delete** button on every row a download record of ours still holds. That covers a declared **folder** too, where no
+  record carries the row's name and the button counts the distinct files our records name underneath it (`Delete (N)`):
+  a folder is never a download, which says nothing about the files already inside one. Same authority as `Delete BIOS`,
+  described below. Below the table one row of buttons: Download required (_N_), Download all, Delete BIOS behind a
+  `ConfirmModal`. **All three are always rendered and disable when there is nothing to do**, the ruling the Remove group
+  already had: on PS2 all three vanished at once, and a button that disappears is a state the reader has to work out. A
+  disabled `DialogButton` is still a focus stop, so the row stays walkable.
 
   **A running download is said by the button that started it.** The pressed button — bulk or per-row — becomes a
   spinner, every other download button on the pane disables, and when it finishes the rows re-read. There is no
@@ -884,6 +887,16 @@ it, for the focused platform:
   the glyph on a need-axis fact and throw the verdict away, on exactly the platform made entirely of such rows.
   `optional` and `not_needed` do share the muted branch: for the core about to launch, neither is a gap.
 
+  **A fifth state replaces the muted answer where the row is one of several images any one of which starts the console**
+  (`BiosFileEntry.system_image_candidate`). Such a row is never `required_by_active` — its core marks every one of them
+  optional, which is all a libretro `.info` can say about a disjunction — so the four-way scheme drew five grey
+  "missing, not required" marks under a red headline saying the console needs one, and a reader took the grey marks at
+  their word. What is true of the row comes from the PLATFORM's `system_image` rather than from the row: `absent` makes
+  each of them a way to fix it (red `✗`), `held` makes the rest genuinely spare (grey `✗`), and anything else passes the
+  doubt on (amber `✗`). A candidate whose verdict is met is the console's held image and is drawn green — the candidates
+  are a subset of the rows `classify_system_image` weighs, so it cannot be anything else. The two amber states above are
+  tested FIRST and are not displaced: an unestablished verdict is still `?`, and an unestablished need is still amber.
+
   **Mark 2, `⊘` in violet, appears beside mark 1 wherever `on_server` is `false` and the declaration is a file** — the
   RomM library does not hold this one. A declared **folder** is excluded, and not as a special case: no library holds a
   folder, so the backend stamps every folder row `on_server: False` unconditionally and the mark would say "your library
@@ -897,7 +910,10 @@ it, for the focused platform:
 
   A legend under the table names the marks it actually contains, **one entry per line** — an entry for a state no row is
   in explains nothing and costs a row, and mark 2 is inside that filter with one line of its own rather than one per
-  verdict it can stand beside. The legend is the only one of the three wordings a controller user can reach (the others
+  verdict it can stand beside. **An entry's identity is its sentence**, which is also the row's own `title`: since the
+  console's own demand became a state, glyph plus colour names two different sentences at once (red `✗`, green `✓`, grey
+  `✗` and amber `✗` each mean two things), so a legend filtered or keyed on the pair would show one of each and hand the
+  other React's duplicate key. The legend is the only one of the three wordings a controller user can reach (the others
   are `title` attributes), so it words the amber rows as what they are — nothing could say whether the file is wanted —
   and never as "nothing asked for it", which is the `not_needed` claim and a synonym of the grey "missing, not required"
   two lines below it.

@@ -651,8 +651,15 @@ class TestFinalizeSyncToasts:
 
 
 class TestFinalizeContentDirBenignSkip:
-    """#239: when post-exit sync returns the ``savefiles_in_content_dir`` reason,
-    the sync correctly did nothing — suppress the false-failure toast."""
+    """A benign skip is not a failure, so leaving a game raises no toast.
+
+    Two reasons qualify: RetroArch writes saves to the content dir (#239), and
+    this game's emulator keeps no per-game save set the plugin can carry
+    (#1858). Both are standing facts about the machine, so a toast on every exit
+    would be noise — and for the second one that is roughly half the mapped
+    systems on a stock RetroDECK. The control below keeps the set from becoming
+    a blanket pass.
+    """
 
     def test_content_dir_reason_suppresses_failure_toast(self, event_loop, logger):
         """benign-skip dict → no toast (title/body None), conflicts empty, no false failure."""
@@ -687,6 +694,35 @@ class TestFinalizeContentDirBenignSkip:
         assert result.sync.success is False
         assert result.sync.synced == 0
         assert result.sync.conflicts == []
+
+    def test_unsupported_save_shape_suppresses_failure_toast(self, event_loop, logger):
+        """#1858: the emulator keeps no per-game save set, so the sync correctly did nothing."""
+        post = FakePostExitSync(
+            payload={
+                "success": False,
+                "reason": "save_shape_unsupported",
+                "message": "Save sync is unavailable: this emulator keeps one save card that all games share.",
+                "synced": 0,
+                "errors": [],
+                "conflicts": [],
+            }
+        )
+        service = _make_service(
+            playtime_recorder=FakePlaytimeRecorder(),
+            post_exit_sync=post,
+            achievement_sync=FakeAchievementSync(),
+            migration_reader=FakeMigrationReader(),
+            logger=logger,
+        )
+
+        result = event_loop.run_until_complete(service.finalize(99))
+        event_loop.run_until_complete(_drain_background_tasks(service))
+
+        assert post.calls == [99]
+        assert result.sync.failure_toast is None
+        assert result.sync.conflicts_toast is None
+        assert result.sync.success is False
+        assert result.sync.synced == 0
 
     def test_failure_without_content_dir_reason_still_renders_failure_toast(self, event_loop, logger):
         """Control: a plain ``success=False`` (no content-dir reason) keeps the failure toast."""

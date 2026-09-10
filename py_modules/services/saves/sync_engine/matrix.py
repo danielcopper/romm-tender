@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Iterator
 
+    from domain.save_answer import SaveAnswer
     from services.protocols import (
         Clock,
         ComputeSyncActionFn,
@@ -129,6 +130,7 @@ class RomDispatchContext:
     save_state: RomSaveSyncState
     device_id: str | None
     rom_name: str
+    save_names: tuple[str, ...]
     saves_dir: str
     system: str
     core_so: str | None
@@ -669,7 +671,9 @@ class MatrixExecutor:
         """
         server_saves = self._retry.with_retry(lambda: self._romm_api.list_saves(ctx.rom_id, device_id=ctx.device_id))
         server_in_slot = filter_saves_to_slot(server_saves, ctx.save_state.active_slot)
-        group = [ss for ss in server_in_slot if local_save_target(ss, ctx.rom_name) == filename]
+        group = [
+            ss for ss in server_in_slot if local_save_target(ss, ctx.rom_name, known_names=ctx.save_names) == filename
+        ]
         if not group:
             self._logger.warning(
                 f"_handle_upload_409({ctx.rom_id}): {filename}: 409 on POST but no server save in slot on re-fetch"
@@ -783,14 +787,20 @@ class MatrixExecutor:
 
     def iter_matrix_outcomes(
         self,
-        rom_id: int,
         server_in_slot: list[dict[str, Any]],
         *,
         save_state: RomSaveSyncState | None,
         device_id: str | None,
         info: dict[str, Any],
+        save_names: tuple[str, ...],
+        saves_dir: str | None,
     ) -> Iterator[MatrixOutcome]:
         """Yield one :class:`MatrixOutcome` per save file in the ROM's active slot.
+
+        *save_names* and *saves_dir* are the save answer's, resolved once by the
+        caller: reading them again here would put a second live reading of the
+        machine on every ROM of a whole-library sweep. A ``None`` directory is
+        the refusing answer's pairing — nothing local is probed for.
 
         Walks the local saves directory + server-only canonical targets,
         runs ``compute_sync_action`` against the per-filename inputs, and
@@ -803,7 +813,7 @@ class MatrixExecutor:
         files_state: dict[str, FileSyncState] = save_state.files if save_state else {}
         device_id_str = device_id or ""
 
-        local_files = self._rom_info.find_save_files(rom_id)
+        local_files = self._rom_info.probe_save_files(list(save_names), saves_dir)
 
         handled_filenames: set[str] = set()
         for lf in local_files:
@@ -827,7 +837,7 @@ class MatrixExecutor:
             # cross-contaminates extensions (#1006). Without this, a sibling
             # extension's newer server record would win max(updated_at) and the
             # file would be evaluated/dispatched against the wrong save.
-            group = [ss for ss in server_in_slot if local_save_target(ss, rom_name) == filename]
+            group = [ss for ss in server_in_slot if local_save_target(ss, rom_name, known_names=save_names) == filename]
             action = self._compute_sync_action(
                 local_file=self._build_local_input(local_path, filename),
                 server_saves_in_slot=group,
@@ -849,10 +859,27 @@ class MatrixExecutor:
         # Group server saves by canonical local target filename. Server-only
         # groups (no local file) get matrix-evaluated against their own group;
         # compute_sync_action picks newest-in-group internally.
+        #
+        # A target the answer does not name is passed over in BOTH directions.
+        # Nothing local was probed for it — the probe walks the answer's names —
+        # so without this it would look server-only, and the matrix would
+        # download it over a local file it never looked at. Two shapes reach
+        # here: a configuration file the rule says is never carried (a Saturn
+        # ``.smpc`` this plugin uploaded before the resolver decided the role),
+        # and a save whose extension this emulator no longer writes at all. The
+        # server copy is left exactly as it is; deleting it is not this cut's
+        # business, and it is the only copy of something a user may want back.
+        carried = frozenset(save_names)
         server_only_groups: dict[str, list[dict[str, Any]]] = {}
         for ss in server_in_slot:
-            target = local_save_target(ss, rom_name)
+            target = local_save_target(ss, rom_name, known_names=save_names)
             if target in handled_filenames:
+                continue
+            if target not in carried:
+                self._log_debug(
+                    f"iter_matrix_outcomes({rom_name!r}): server save {target!r} is not a file this emulator's "
+                    f"answer carries — leaving both copies alone"
+                )
                 continue
             server_only_groups.setdefault(target, []).append(ss)
 
@@ -884,8 +911,17 @@ class MatrixExecutor:
         core_so: str | None,
         default_slot: str | None = None,
         autocleanup_limit: int | None = None,
+        save_answer: SaveAnswer | None = None,
     ) -> tuple[int, int, list[str], list[dict[str, Any]]]:
         """Sync saves for a single ROM, mutating *save_state* in memory.
+
+        *save_answer* is the live reading a caller already took for THIS sync —
+        the entry points take one to decide whether to refuse at all, and
+        handing it down is what keeps a single-ROM sync to one reading of the
+        machine rather than one per layer. It is never carried between
+        operations: absent it (the whole-library sweep), this takes its own, on
+        top of the one that ROM's row already cost the sweep's device-wide
+        negotiate inventory.
 
         Drives :meth:`iter_matrix_outcomes` and dispatches each emitted
         outcome through :meth:`_dispatch_sync_action`. Returns
@@ -906,6 +942,21 @@ class MatrixExecutor:
             self._log_debug(f"do_sync_rom_saves({rom_id}): no save info, skipping")
             return 0, 0, [], []
         system = info["system"]
+        # One live reading of the machine for the whole run: the names group the
+        # server's saves onto their canonical targets AND say which files to
+        # probe for. Asking here as well as above would add a third reading to
+        # every ROM in a whole-library sweep, which already pays two — one for
+        # the device-wide negotiate inventory and one here.
+        answer = save_answer if save_answer is not None else self._rom_info.save_answer(rom_id)
+        save_names = answer.synced_names
+        answer_dir = info["saves_dir"] if answer.syncable else None
+        # The backstop every sync path crosses. A refusing answer pairs its names
+        # with a ``None`` directory, so nothing is probed and no state is written
+        # — the sweep has no room in its one result to say which ROM was passed
+        # over, and the per-ROM entry points have already named the skip.
+        if answer_dir is None:
+            self._log_debug(f"do_sync_rom_saves({rom_id}): no per-game save set for this emulator, skipping")
+            return 0, 0, [], []
         saves_dir = info["saves_dir"]
 
         t0 = self._clock.time()
@@ -934,6 +985,7 @@ class MatrixExecutor:
             save_state=save_state,
             device_id=device_id,
             rom_name=info["rom_name"],
+            save_names=save_names,
             saves_dir=saves_dir,
             system=system,
             core_so=core_so,
@@ -943,7 +995,14 @@ class MatrixExecutor:
 
         pending_migration = self._rom_info.is_save_sort_changed()
         for outcome in self.iter_matrix_outcomes(
-            rom_id, server_in_slot, save_state=save_state, device_id=device_id, info=info
+            server_in_slot,
+            save_state=save_state,
+            device_id=device_id,
+            info=info,
+            save_names=save_names,
+            # The ANSWER's directory, which is None wherever the answer refuses,
+            # so the pairing that makes a refusal probe nothing survives here too.
+            saves_dir=answer_dir,
         ):
             origin = "local" if outcome.local_path is not None else "server-only"
             self._log_debug(

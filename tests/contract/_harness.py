@@ -50,6 +50,7 @@ from fakes.fake_game_process_control import FakeGameProcessControlAdapter
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_romm_api import FakeRommApi
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_steamgrid_db_api import FakeSteamGridDbApi
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
@@ -181,6 +182,13 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
     # adapter reads the dev box's flatpak instance registry and would SIGTERM the
     # developer's actually-running game.
     fake_game_process = FakeGameProcessControlAdapter()
+    # The save-location seam is swapped for the same reason, and it is the one
+    # edge no seeding can stand in for: the vendored resolver LOADS a core's own
+    # .so to ask what it writes, so a fabricated tree answers ``core-unqueryable``
+    # and every save in this tier would classify as "nothing established" — a
+    # refusal, which is exactly what these tests are not about. What the fake
+    # states is the plain per-game file set; that the real adapter refuses on a
+    # machine it cannot read is pinned in ``tests/adapters/test_atlas_saves.py``.
     patched_adapters = dataclasses.replace(
         result.adapters,
         romm_api=fake_romm,
@@ -188,6 +196,7 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
         renderer_rss=FakeRendererRss(),
         renderer_gc=FakeRendererGc(),
         game_process=fake_game_process,
+        save_locations=FakeSaveLocationReader(),
     )
 
     # Deterministic time/uuid/sleep seams so timestamped responses assert cleanly.

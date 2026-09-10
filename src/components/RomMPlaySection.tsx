@@ -1005,17 +1005,22 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     );
   }
 
-  // BIOS warning. One local fact decides it: a file the active core requires is
-  // not on disk. Everything else the BIOS answer says — a platform whose
-  // emulators could not be asked, optional files nobody launching this game
-  // needs — is non-actionable here and lives in the BIOS tab.
+  // BIOS warning. What decides it is one question with two established
+  // absences behind it (`extractBiosInfo`): a file the active core requires is
+  // not on disk, or the console cannot start without one of the images the core
+  // declares and none of them is there. Everything else the BIOS answer says —
+  // a platform whose emulators could not be asked, optional files nobody
+  // launching this game needs — is non-actionable here and lives in the BIOS
+  // tab.
   //
   // One appearance, always red. This badge is not rendering the four-valued
   // verdict — the BIOS tab is, off `biosColorForLevel` — it is a warning that
   // shows only for a state that is never anything but bad. Amber for "1 of 3
   // required present" would suggest a degree where there is none: a file the
   // core asks for is absent either way, and how many of its siblings are there
-  // does not soften that.
+  // does not soften that. The console's own demand is the same kind of state —
+  // the game does not start — which is why it earns the same red badge rather
+  // than a softer one of its own.
   if (detail.biosRequiredMissing) {
     infoItems.push(
       // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- pointer-only shortcut into the BIOS tab, which the tab bar's DialogButton already reaches from the focus ring; a role/tabIndex here would add a gamepad focus stop to the play row.

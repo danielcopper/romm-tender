@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 from domain.emulator_tag import detect_core_change
 from domain.iso_time import parse_iso_to_epoch
 from domain.rom_save_sync_state import RomSaveSyncState
+from domain.save_answer import UNESTABLISHED_NOT_ASKED, unestablished_answer
 from domain.save_attribution import compute_uploaded_by_us
 from domain.save_layout import ContentDir
 from domain.save_slot import filter_saves_to_slot
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
     import asyncio
     import logging
 
+    from domain.save_answer import SaveAnswer
     from services.protocols import (
         ActiveCoreReader,
         DebugLogger,
@@ -128,11 +130,11 @@ class StatusService:
 
     def _partition_outcomes(
         self,
-        rom_id: int,
         save_state: RomSaveSyncState,
         device_id: str | None,
         server_in_slot: list[dict[str, Any]],
         info: dict[str, Any],
+        save_answer: SaveAnswer,
     ) -> tuple[list[MatrixOutcome], list[MatrixOutcome], bool, list[str]]:
         """Iterate matrix outcomes for the active slot, splitting them into local/server-only buckets.
 
@@ -154,7 +156,12 @@ class StatusService:
         baseline_adopted = False
         all_filenames: list[str] = []
         for outcome in self._sync_engine.iter_matrix_outcomes(
-            rom_id, server_in_slot, save_state=save_state, device_id=device_id, info=info
+            server_in_slot,
+            save_state=save_state,
+            device_id=device_id,
+            info=info,
+            save_names=save_answer.synced_names,
+            saves_dir=info["saves_dir"],
         ):
             all_filenames.append(outcome.filename)
             if isinstance(outcome.action, Skip) and outcome.action.adopt_baseline and outcome.local_hash:
@@ -216,7 +223,21 @@ class StatusService:
         # but keep playtime / device_id / last_sync_check_at intact (#239).
         savefiles_in_content_dir = isinstance(self._get_save_layout(), ContentDir)
 
-        info = None if savefiles_in_content_dir else self._rom_info.get_rom_save_info(rom_id)
+        # What this ROM's emulator actually writes, read live. Four of the five
+        # states refuse the sync, and the refusal is the same one the content-dir
+        # gate performs: no ``info`` means no local probe and no baseline-adopt
+        # write, so nothing is looked for and nothing is recorded.
+        save_answer = (
+            unestablished_answer(
+                shape=UNESTABLISHED_NOT_ASKED,
+                content_installed=self._rom_info.is_content_installed(rom_id),
+            )
+            if savefiles_in_content_dir
+            else self._rom_info.save_answer(rom_id)
+        )
+
+        skip_probe = savefiles_in_content_dir or not save_answer.syncable
+        info = None if skip_probe else self._rom_info.get_rom_save_info(rom_id)
 
         with self._uow_factory() as uow:
             save_state = uow.rom_save_sync_states.get(rom_id)
@@ -237,7 +258,7 @@ class StatusService:
             # starts from a fresh default so the matrix can evaluate against it.
             working_state = save_state if save_state is not None else RomSaveSyncState()
             local_outcomes, server_only_outcomes, baseline_adopted, all_filenames = self._partition_outcomes(
-                rom_id, working_state, device_id, server_in_slot, info
+                working_state, device_id, server_in_slot, info, save_answer
             )
             multi_file = compute_multi_file_slot(all_filenames)
             if baseline_adopted:
@@ -310,6 +331,7 @@ class StatusService:
             "conflicts": conflicts,
             "save_sort_changed": self._rom_info.is_save_sort_changed(),
             "savefiles_in_content_dir": savefiles_in_content_dir,
+            "save_resolution": _save_resolution_payload(save_answer),
             "save_sync_display": save_sync_display,
             "server_query_failed": server_query_failed,
             # Why the query failed, as a :func:`classify_error` slug (None when
@@ -452,6 +474,46 @@ def _outcome_server_sort_key(outcome: MatrixOutcome) -> float:
         return 0.0
     newest = max(candidates, key=lambda s: parse_iso_to_epoch(s.get("updated_at")) or 0.0)
     return parse_iso_to_epoch(newest.get("updated_at")) or 0.0
+
+
+def _save_resolution_payload(answer: SaveAnswer) -> dict[str, Any]:
+    """Project one :class:`SaveAnswer` onto the wire.
+
+    Every file the answer names is carried, configuration included, each with
+    its own ``carried`` flag — a page has to be able to say "this file exists
+    and we deliberately leave it alone" rather than simply not showing it. The
+    flag is named for the RULE and not for the file: it says save sync carries
+    this name, which is a different claim from "this file is in sync", and a
+    field called ``synced`` invited the second reading for a file that may not
+    exist at all.
+
+    ``content_installed`` is why that matters. For a ROM the library holds but
+    has not installed, every name here is a prediction about the path the game
+    WOULD occupy — the answer is real, the files are not — so a surface must
+    say "would use" rather than "uses". ``unestablished`` is carried beside
+    ``state`` for the same reason: its three shapes are three different
+    sentences to a reader.
+    """
+    return {
+        "state": answer.state,
+        "unestablished": answer.unestablished,
+        "content_installed": answer.content_installed,
+        "emulator": answer.emulator,
+        "directory": answer.directory,
+        "backing_directory": answer.backing_directory,
+        "granularity": answer.granularity,
+        "needs": list(answer.needs),
+        "caveats": list(answer.caveats),
+        "files": [
+            {
+                "name": component.name,
+                "role": component.role,
+                "granularity": component.granularity,
+                "carried": answer.syncable and component.is_progress,
+            }
+            for component in answer.components
+        ],
+    }
 
 
 def _playtime_to_dict(playtime) -> dict[str, Any]:

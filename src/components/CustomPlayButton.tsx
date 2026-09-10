@@ -76,7 +76,7 @@ import type {
   CollisionChoice,
   UninstallProgressEvent,
 } from "../types";
-import { SAVEFILES_IN_CONTENT_DIR_REASON } from "../types";
+import { BENIGN_SYNC_SKIP_REASONS } from "../types";
 import { detach } from "../utils/detach";
 import { setLaunchOptionsConfirmed } from "../utils/steamShortcuts";
 import {
@@ -619,13 +619,15 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       ),
     );
 
-    // Benign skip (#239): RetroArch writes saves to the content dir, so sync
-    // is unsupported. NOT a failure — proceed to launch silently (no toast,
-    // no fallback-launch confirm). The "Save sync off" banner in
-    // RomMPlaySection already informs the user; nagging on every launch would
-    // be noise.
-    if (result.reason === SAVEFILES_IN_CONTENT_DIR_REASON) {
-      detach(debugLog("CustomPlayButton: pre-launch sync skipped (savefiles_in_content_dir) — launching"));
+    // Benign skip: either RetroArch writes saves to the content dir (#239), or
+    // this game's emulator keeps no per-game save file set the plugin can carry
+    // (#1858). NOT a failure — proceed to launch silently (no toast, no
+    // fallback-launch confirm). Both are standing facts about the machine, so a
+    // confirm on every single launch would be pure noise. The content-dir case
+    // already has its banner in RomMPlaySection; rendering the save-state cases
+    // is #1858's follow-up, so until then this path is silent.
+    if (result.reason !== undefined && BENIGN_SYNC_SKIP_REASONS.includes(result.reason)) {
+      detach(debugLog(`CustomPlayButton: pre-launch sync skipped (${result.reason}) — launching`));
       return { success: true, message: result.message };
     }
 

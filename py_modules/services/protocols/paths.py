@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from domain.firmware_wants import FirmwareCatalogue, FolderVerdict
+    from domain.save_answer import SaveAnswer
     from domain.save_layout import SaveLayout
     from domain.shortcut_data import EmulatorInvocation
     from lib.retrodeck_health import RetroDeckConfigHealth
@@ -130,10 +131,13 @@ class CoreInfoProvider(Protocol):
     reads and may cache answers; ``reset_cache`` lets writers invalidate the
     cache after a per-platform core write.
 
-    ``get_active_core`` stays libretro-only — it feeds the firmware layer's
-    system-level BIOS filter, which keys on a RetroArch core. The launch-layer
-    default (``get_default_emulator``) and the full picker
-    (``get_emulator_options``) are emulator-kind-aware (libretro OR standalone).
+    ``get_active_core`` stays libretro-only — the first libretro command a
+    system declares, bakeable or not. It is carried and currently read by nothing
+    in production: the firmware layer's BIOS filter used to key on it and now
+    takes the platform's own pick, so the emulator a surface names and the core
+    it judges by come off one choice. The launch-layer default
+    (``get_default_emulator``) and the full picker (``get_emulator_options``) are
+    emulator-kind-aware (libretro OR standalone).
 
     Resolving an emulator to its sandbox launcher path is a different question
     and is :class:`SandboxLauncherFn`'s: this one is answered out of the
@@ -149,6 +153,43 @@ class CoreInfoProvider(Protocol):
     def get_emulator_options(self, system_name: str) -> dict[str, Any]: ...
 
     def reset_cache(self) -> None: ...
+
+
+class SaveLocationReader(Protocol):
+    """Where one ROM's save lives, what it consists of, and whether it may be synced.
+
+    The read seam behind every save-file question this plugin used to answer
+    from its own per-system extension table. It is asked per ROM and per the
+    emulator that would launch it, because a save location is a property of the
+    emulator and not of the platform: the same PS2 game is two shared memory
+    cards under standalone PCSX2 and could be a file per game under a libretro
+    core.
+
+    Implementations never raise and never guess. Every way the question cannot
+    be put — no emulator resolved, no installation, the catalogue not offering
+    the label, the entry declining, the reader failing — comes back as a
+    :class:`domain.save_answer.SaveAnswer` in the ``unestablished`` state, which
+    refuses the sync. The one thing an implementation may never do is answer
+    "nothing to sync", which a caller reads as a green light.
+
+    Every call is a live reading. A remembered granularity is the failure this
+    seam exists to avoid: the user changes a core's options in the emulator's
+    own quick menu between one launch and the next sync, and a stale answer
+    would have the plugin carry a shared card as though it were one game's.
+    Within one sync operation the entry gate's reading is handed down rather
+    than taken again — live is a property of operations, not of layers.
+
+    Named ``…Reader`` although it has a single method, which the suffix
+    convention reserves for object-shaped Protocols with several. It is not
+    ``__call__``-only, so ``…Fn`` would be the wrong half of that rule, and the
+    named method is load-bearing: `scripts/check_uow_seam_nesting.py` matches
+    this seam by ``resolve_save_answer``, where a call-shaped seam is matchable
+    only by whatever attribute a consumer happens to bind it to.
+    """
+
+    def resolve_save_answer(
+        self, *, system: str, content_path: str, emulator_label: str | None, content_installed: bool
+    ) -> SaveAnswer: ...
 
 
 class SandboxLauncherFn(Protocol):

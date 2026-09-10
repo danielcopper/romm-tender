@@ -76,7 +76,7 @@ import json
 import os
 import tomllib
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from glob import escape as _glob_escape
 from typing import Any, Iterable, Literal, Mapping, Protocol, Sequence, TypeAlias, cast
 
@@ -112,7 +112,7 @@ from .machine import (
 )
 from . import duckstation, emulator_settings, melonds, qt_ini
 from .ps2_bios import Ps2BiosHeader
-from .oddities import SaveMode, load_oddities
+from .oddities import SO_SUFFIX, SaveMode, load_oddities
 from .standalone_firmware import (
     StandaloneFirmwareCard,
     StandaloneFirmwareConfigFile,
@@ -132,6 +132,15 @@ from .placement import (
     Caveat,
 )
 from .retroarch_cfg import cfg_uint
+from .system_firmware import (
+    CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE,
+    EVIDENCE_WORDS,
+    VERDICT_CANNOT_RUN_WITHOUT,
+    VERDICT_OPEN,
+    VERDICT_RUNS_WITHOUT,
+    SystemFirmware,
+    load_system_firmware,
+)
 
 
 class SandboxTranslation(Protocol):
@@ -2001,6 +2010,53 @@ DECLARATION_PACKAGED: CoreDeclarationState = "packaged"
 CORE_DECLARATION_STATES = ("read", "unreadable", "absent", "unsupported", "packaged")
 
 
+# What atlas knows about the SYSTEM behind one emulator's declaration — the
+# half a libretro ``.info`` cannot state, read off the packaged table
+# (:mod:`atlas.system_firmware`) rather than off this machine.
+#
+# The three verdicts that table records are spelled here the way it spells
+# them, because they are the same facts; the fourth value is the one this
+# answer adds, and it is about the core rather than about the system.
+CoreSystemFirmware = Literal[
+    "cannot-run-without-firmware",
+    "core-supplies-an-alternative",
+    "runs-without-firmware",
+    "open",
+]
+
+# The system does not start without a firmware image, and this core needs one
+# of the ones it declares. The state SwanStation is in over a machine with no
+# PlayStation BIOS: its five images all read ``optional``, because that is what
+# its ``.info`` says, and the system still will not boot.
+SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT: CoreSystemFirmware = "cannot-run-without-firmware"
+# The system does not start without an image, and this core carries its own
+# substitute, so its all-optional declaration is correct. PCSX ReARMed's HLE
+# BIOS is the recorded case; the table names such cores per system, each with
+# the evidence for it.
+SYSTEM_FIRMWARE_CORE_ALTERNATIVE: CoreSystemFirmware = "core-supplies-an-alternative"
+# Somebody established that the system starts with no image present. Recorded
+# knowledge like the other two, and the reason it is a value of its own: it is
+# emphatically not the same claim as ``None``.
+SYSTEM_FIRMWARE_RUNS_WITHOUT: CoreSystemFirmware = "runs-without-firmware"
+# Nobody has established which. A value, not an absence — the table records a
+# system whose cores contradict each other so that the open question is
+# visible instead of merely unrecorded.
+SYSTEM_FIRMWARE_OPEN: CoreSystemFirmware = "open"
+
+CORE_SYSTEM_FIRMWARE_STATES = (
+    SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
+    SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
+    SYSTEM_FIRMWARE_RUNS_WITHOUT,
+    SYSTEM_FIRMWARE_OPEN,
+)
+
+# The provenance of that state rides on :data:`CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE`,
+# which is defined beside the table it marks (:mod:`atlas.system_firmware`)
+# and imported above: which system was spoken about, and at what evidence
+# level. Deliberately not where a client learns the verdict — that is
+# :attr:`CoreFirmware.system_firmware`'s job.
+
+
 @dataclass(frozen=True, slots=True)
 class CoreFirmware:
     """What one emulator wants, resolved against the live firmware root.
@@ -2032,6 +2088,16 @@ class CoreFirmware:
     requirement stands only inside a group; a plain entry carrying
     ``regions`` would smuggle a condition into the conjunction, so it is
     refused here.
+
+    **Two of these fields answer to different owners, and the difference is
+    the point.** ``requirements`` is the *emulator's* statement, reproduced:
+    every entry and every ``need`` on it is what this core's own declaration
+    said, read off this machine and never overwritten. ``requirements_met`` is
+    *atlas's* verdict about that declaration, and since it began reading
+    ``system_firmware`` it rests on world knowledge as well — a packaged,
+    source-cited table about the system, not a reading of the machine. The
+    caveat :data:`CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE` marks the cores
+    where that second source *stated* something.
     """
 
     core_so: str | None
@@ -2047,12 +2113,49 @@ class CoreFirmware:
     ``read`` makes it mean this emulator needs no firmware.
     """
     requirements: tuple[FirmwareRequirement | FirmwareAlternatives, ...]
-    """A conjunction: every entry is needed, and where one is an alternatives group what
-    is needed is exactly one of its options.
+    """What this emulator itself declared, reproduced: a conjunction, every entry needed,
+    and where one is an alternatives group what is needed is exactly one of its options.
+
+    Nothing here is atlas's own judgement. Every ``need`` is the value the
+    core's declaration carries, so a core that marks a file it cannot start
+    without ``optional`` still reads ``optional`` — what the machine says is
+    never overwritten. The verdict about it is
+    :attr:`requirements_met`, which is a different field with a different
+    owner.
     """
     caveats: tuple[Caveat, ...]
     """Every degradation of this core's answer, and on any declaration but ``read`` the
     statement of why the list is not the whole story.
+    """
+    system_firmware: CoreSystemFirmware | None = None
+    """What is recorded about the SYSTEM this core declares firmware for — world
+    knowledge, not a reading of this machine; ``null`` means nothing is recorded about
+    this system and never that nothing is needed.
+
+    That ``null`` is the misreading this field exists to prevent: the packaged
+    table covers the systems somebody has looked at, so a system missing from
+    it is a system nobody has looked at, and rendering it as an all-clear
+    reports something nobody checked. It is also what a core whose system
+    could not be established answers — one whose declaration was never read
+    has no system on this answer at all.
+
+    The four stated values are :data:`CORE_SYSTEM_FIRMWARE_STATES`:
+    ``cannot-run-without-firmware`` (the system needs an image and this core
+    needs one of the ones it declares), ``core-supplies-an-alternative`` (it
+    needs one and this core carries its own substitute),
+    ``runs-without-firmware`` (somebody established that it starts with none
+    present), and ``open`` (nobody has established which).
+
+    :data:`CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE` is stated per *system*
+    rather than per value: one mark for each system whose entry states
+    something, carrying that system and the level it rests on, and none for a
+    system recorded ``open``. So a core reaching two systems, one open and one
+    established, answers a value derived from both and carries a mark for the
+    established one alone. An open entry's whole content is that nobody
+    established the answer, which is what the value ``open`` already says on
+    this same core — the word means the same thing as a value here and as an
+    evidence level, and for that reason never reaches a client as an evidence
+    level at all.
     """
     refused: tuple[RefusedDeclaration, ...] = ()
     """The declarations atlas would not follow, each with its reason, so a dropped file
@@ -2110,6 +2213,11 @@ class CoreFirmware:
             )
         if self.refused and not self.caveats:
             raise ValueError("CoreFirmware: a refused declaration must state why, or it vanishes")
+        if self.system_firmware is not None and self.system_firmware not in CORE_SYSTEM_FIRMWARE_STATES:
+            raise ValueError(
+                f"CoreFirmware: system_firmware must be one of {CORE_SYSTEM_FIRMWARE_STATES} or None, "
+                f"got {self.system_firmware!r}"
+            )
         for entry in self.requirements:
             if isinstance(entry, FirmwareRequirement) and entry.regions is not None:
                 raise ValueError(
@@ -2156,15 +2264,89 @@ class CoreFirmware:
         return tuple(out)
 
     @property
+    def _system_image_in_place(self) -> bool | None:
+        """Does this core have the image its SYSTEM cannot start without? Three-valued.
+
+        ``True`` wherever the question does not arise — no recorded need, or a
+        core carrying its own substitute — so the only way this narrows an
+        answer is on a core that really is in the state
+        :data:`SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT` names.
+
+        There the declared images are read as a **disjunction**: one of them
+        being usable is what the system asks for, and which image serves which
+        console region is a separate question this does not answer. So ``True``
+        the moment any declared image is satisfied, ``False`` only when every
+        one of them is demonstrably not, and ``None`` in between — an
+        undetermined image might be the one that would serve, and a refused
+        declaration is an image atlas would not follow to a destination, so
+        neither leaves the absence established.
+
+        **Which set is asked, and the limit of that.** The disjunction spans
+        every image the core declares, not the images filed under the system
+        that needs one. Those two sets coincide exactly while a core in this
+        state declares for a single system, and a **multi-system** core would
+        pull them apart: mGBA declares Game Boy boot ROMs beside its GBA BIOS,
+        so an *established usable* Game Boy dump would answer for a Game Boy
+        Advance that needs a BIOS. A merely present dump would not — it leaves
+        the verdict unsaid, and wrong bytes make it ``False``; only a
+        satisfied image reads as the system's need met.
+
+        No core reaches that combination today — mGBA declares the spread,
+        it simply never reaches ``cannot-run-without-firmware`` while doing
+        so. What follows is the measurement behind that sentence, with the
+        rule it was counted by.
+        Counting rule: over every ``expected.firmware.cores[]`` block in
+        ``vectors/machines/*.json`` whose ``system_firmware`` is
+        ``cannot-run-without-firmware``, the distinct ``system`` values of its
+        ``requirements[]`` and their ``alternatives[]``; and the same reading
+        over :func:`firmware_inventory` on the reference machine. **37** corpus
+        blocks, every one of them one system; **3** cores on the machine
+        (``mednafen_psx``, ``mednafen_psx_hw`` and ``swanstation``), all
+        ``psx``.
+
+        That is a floor on what has been looked at, not a proof that no such
+        core can appear: the day one does, this reading is wrong for it and
+        the fix is to scope the disjunction by system — a second decision,
+        about which of a multi-system core's images serve which machine, that
+        is not taken here and is related to issue #375.
+        """
+        if self.system_firmware != SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT:
+            return True
+        images = [
+            option
+            for entry in self.requirements
+            for option in (entry.options if isinstance(entry, FirmwareAlternatives) else (entry,))
+        ]
+        if any(image.satisfied is True for image in images):
+            return True
+        if images and not self.refused and all(image.satisfied is False for image in images):
+            return False
+        return None
+
+    @property
     def requirements_met(self) -> bool | None:
         """Are all *required* files in place and right? ``None`` when atlas cannot say.
+        Atlas's own verdict rather than a reproduction of what the emulator declared:
+        where :attr:`requirements` is that declaration, this weighs it against what is on
+        disk *and* against world knowledge about the system (:attr:`system_firmware`).
+
+        That second source is what lets this field be right where the
+        declaration alone cannot be: a ``.info`` has no way to say "this
+        machine does not start without one of these", so a core that knows its
+        system needs a BIOS can only mark every image optional — and the
+        honest reading of that declaration on its own is that nothing is
+        missing. :data:`CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE` marks the
+        cores where the table stated something, so the crossing is never
+        silent.
 
         The tri-state is the point, and it is the one number a client renders:
         ``None`` when the declaration could not be read, when a required file
         could not be judged — including one that was simply never verified — or
         when a required declaration was refused for leaving the firmware root.
         ``True`` is never reached out of ignorance, and never with a required
-        file whose bytes are known to be wrong.
+        file whose bytes are known to be wrong. The system-level reading only
+        ever narrows this: it can turn a ``True`` into ``False`` or ``None``,
+        and it makes nothing true that was not true before.
 
         Note what follows for ``verify=False``: a core whose required files have
         known identities answers ``None``, not ``True``. Presence alone is not
@@ -2175,15 +2357,38 @@ class CoreFirmware:
         boots), a mixed group leaves ``None`` (whether THIS launch is served
         is the run-time fact atlas cannot read), and only an all-satisfied
         group lets ``True`` through.
+
+        A system that cannot run without an image folds in at the same two
+        precedences, and for the same reason: a demonstrated absence is a
+        demonstration, so it lands with :attr:`unmet` ahead of anything merely
+        unjudged, and an absence that is not demonstrated lands with
+        :attr:`undetermined`. Beetle PSX and SwanStation see the identical
+        five files over the identical machine, and the only thing that ever
+        separated their answers was a flag in a text file that cannot express
+        the requirement.
+
+        What that system-level need asks for is **one** of the images this
+        core declares — all of them, not the ones filed under the needing
+        system. The two sets coincide exactly while such a core declares for a
+        single system, which is the case for every core reaching that state in
+        the vector corpus (37 blocks) and on the reference machine (3 cores);
+        the counting rule is in :attr:`_system_image_in_place`. That is a
+        floor on what has been looked at rather than a proof that no other
+        core can appear. A multi-system core would pull the two sets apart —
+        an established usable Game Boy dump answering for a Game Boy Advance —
+        and scoping the set by system is a second decision, about which image
+        serves which machine, that is not taken here and is related to issue
+        #375.
         """
         if self.declaration != DECLARATION_READ:
             return None
         group_verdicts = [
             entry.satisfied for entry in self.requirements if isinstance(entry, FirmwareAlternatives)
         ]
-        if self.unmet or any(verdict is False for verdict in group_verdicts):
+        system_image = self._system_image_in_place
+        if self.unmet or any(verdict is False for verdict in group_verdicts) or system_image is False:
             return False
-        if self.undetermined or any(verdict is None for verdict in group_verdicts):
+        if self.undetermined or any(verdict is None for verdict in group_verdicts) or system_image is None:
             return None
         return None if any(r.need == NEED_REQUIRED for r in self.refused) else True
 
@@ -2305,11 +2510,24 @@ class FirmwareContext:
     than being fetched where it is used, so the evidence an answer states and
     the configs it was derived from come from one snapshot — and so a handle
     that assembles a context cannot leave it out by forgetting.
+
+    Two of these fields are not reads of the machine at all but the packaged
+    world knowledge an answer is weighed against — ``hashes``, what a correct
+    file's bytes are, and ``system_firmware``, which systems do not start
+    without one. They ride here for the same reason as the rest: one answer,
+    one snapshot of everything it rests on.
     """
 
     root: str | None
     cores: tuple[CoreDeclarations, ...]
     hashes: FirmwareHashes
+    # The packaged table of which systems cannot run without a firmware image
+    # (:mod:`atlas.system_firmware`), keyed by libretro ``systemname``. It has
+    # a default because it is packaged rather than read off the machine — no
+    # handle has anything to look up for it — and it is a field rather than a
+    # module-level load so a test can answer a question about a verdict this
+    # shipped table does not carry.
+    system_firmware: "Mapping[str, SystemFirmware]" = field(default_factory=load_system_firmware)
     cores_read: bool = True
     sources: tuple[str, ...] = ()
     caveats: tuple[Caveat, ...] = ()
@@ -3928,6 +4146,168 @@ def _undeclarable_core(core: CoreDeclarations, label: str | None) -> CoreFirmwar
     )
 
 
+def system_firmware_system(systemname: str) -> str:
+    """A ``system_firmware`` table key in the vocabulary an answer speaks.
+
+    The table is keyed by libretro ``systemname`` verbatim, because that is
+    the unit the ``.info`` catalogue groups firmware by and therefore the unit
+    its tripwire derives; an answer speaks atlas's own system ids. The join is
+    the one :func:`system_decision` already makes from a ``systemname``, asked
+    with no file name — a per-file override says which machine one *dump*
+    belongs to, and this key is about the machine itself, so no override
+    applies to it.
+
+    Two keys can land on one id (``Sega - Dreamcast`` and ``Sega Dreamcast``
+    both answer ``dreamcast``), which is why the lookup below groups rather
+    than assuming one entry per id. And a key naming several machines lands on
+    the one id :data:`SYSTEMNAME_TO_SLUG` rules for it — ``Game Boy/Game Boy
+    Color`` answers ``gb`` — so such an entry reaches that id and not its
+    siblings. Narrower than the entry rather than wider, deliberately: widening
+    it would state a recorded verdict about a machine nobody recorded it for.
+    """
+    return system_for("", systemname)
+
+
+def _recorded_by_system(
+    recorded: Mapping[str, SystemFirmware],
+) -> dict[str, tuple[SystemFirmware, ...]]:
+    """The packaged table, grouped by the system id an answer's requirements carry."""
+    grouped: dict[str, list[SystemFirmware]] = {}
+    for entry in recorded.values():
+        grouped.setdefault(system_firmware_system(entry.system), []).append(entry)
+    return {system: tuple(entries) for system, entries in grouped.items()}
+
+
+def _core_alternative_key(core_so: str | None) -> str | None:
+    """The name the table's exemption list spells this core under, if it has one.
+
+    The table names cores the way the catalogue does — the ``.info`` stem
+    without ``_libretro`` — so the join is that suffix, taken off the ``.so``
+    (:data:`atlas.oddities.SO_SUFFIX`, the same spelling the rule cards use).
+    A standalone emulator has no ``.so`` and can therefore never be exempted:
+    the table has no way to name one, and inventing a spelling here would be
+    atlas deciding an exemption nobody recorded.
+    """
+    if core_so is None or not core_so.endswith(SO_SUFFIX):
+        return None
+    return core_so[: -len(SO_SUFFIX)]
+
+
+def _system_firmware_state(
+    core: CoreFirmware, recorded: Mapping[str, tuple[SystemFirmware, ...]]
+) -> tuple[CoreSystemFirmware | None, tuple[Caveat, ...]]:
+    """What the table says about the systems *core* declares firmware for.
+
+    The systems come off the requirements already on the answer
+    (:attr:`FirmwareRequirement.system`, alternatives flattened) rather than
+    being derived again here: a second derivation is a second thing to keep in
+    step, and a core with no requirement has no system on this answer at all —
+    which is one of the ways the state is ``None``.
+
+    A core can reach more than one recorded system, either by declaring files
+    filed under several (mGBA declares Game Boy boot ROMs beside its GBA BIOS)
+    or through two table keys landing on one id. The state is then the
+    strongest thing recorded about any of them, in the order below: an
+    unexcused need outranks an excused one, a need outranks an open question,
+    and an open question outranks a system established to run without.
+
+    The provenance caveat rides only the entries that **state** something,
+    never an ``open`` one — one mark per distinct ``(system, level)`` reading,
+    so two entries landing on one system id are two marks where they rest on
+    different levels and one where they repeat each other. An open entry's
+    whole content is that nobody has established the answer, which is exactly
+    what the field value ``open`` already says on this same core; a caveat
+    there would restate the field rather than degrade the answer, and a note
+    that adds nothing devalues the notes a client has to act on.
+    """
+    systems = sorted(
+        {
+            option.system
+            for entry in core.requirements
+            for option in (entry.options if isinstance(entry, FirmwareAlternatives) else (entry,))
+        }
+    )
+    hits = [(system, entry) for system in systems for entry in recorded.get(system, ())]
+    if not hits:
+        return None, ()
+    # One mark per stated (system, evidence) pair rather than per entry: two
+    # table keys can land on one system id, and where they also rest on the
+    # same level the second mark would repeat the first word for word. The
+    # de-duplication is here, over these marks alone — the core's own caveat
+    # list belongs to that entry and :func:`stated_once` says so of itself.
+    readings = tuple(
+        dict.fromkeys(
+            (system, EVIDENCE_WORDS[entry.evidence])
+            for system, entry in hits
+            if entry.verdict != VERDICT_OPEN
+        )
+    )
+    caveats = tuple(
+        Caveat(
+            CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE,
+            f"what atlas states about the system {system!r} beside this emulator's own declaration "
+            f"is world knowledge, {evidence} away from this machine and cited "
+            "in docs/research/system-firmware.md rather than read off it",
+            {"system": system, "evidence": evidence},
+        )
+        for system, evidence in readings
+    )
+    alternative = _core_alternative_key(core.core_so)
+    needs = [entry for _, entry in hits if entry.verdict == VERDICT_CANNOT_RUN_WITHOUT]
+    excused = [
+        entry
+        for entry in needs
+        if any(candidate.core == alternative for candidate in entry.alternatives)
+    ]
+    if len(excused) < len(needs):
+        return SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT, caveats
+    if needs:
+        return SYSTEM_FIRMWARE_CORE_ALTERNATIVE, caveats
+    if any(entry.verdict == VERDICT_OPEN for _, entry in hits):
+        return SYSTEM_FIRMWARE_OPEN, caveats
+    if any(entry.verdict == VERDICT_RUNS_WITHOUT for _, entry in hits):
+        return SYSTEM_FIRMWARE_RUNS_WITHOUT, caveats
+    # Unreachable while this vocabulary is total over the table's verdicts,
+    # and it refuses rather than answering ``None`` precisely because the day
+    # it stops being total is the day a recorded verdict would silently become
+    # "nothing is recorded about this system" — the one misreading this whole
+    # field exists to prevent. A test holds the totality
+    # (tests/test_firmware.py::TestTheSystemBehindTheCoreReachesTheAnswer).
+    raise ValueError(
+        f"system_firmware: no answer state for the recorded verdict(s) "
+        f"{sorted({entry.verdict for _, entry in hits})} — the table records a verdict this answer "
+        f"has no word for, and reporting it as 'nothing recorded' would be a lie"
+    )
+
+
+def _stating_system_firmware(
+    cores: tuple[CoreFirmware, ...], recorded: "Mapping[str, SystemFirmware]"
+) -> tuple[CoreFirmware, ...]:
+    """Every core with what the packaged table adds to it, and the mark that it did.
+
+    The one place world knowledge enters a firmware answer. Every route that
+    builds a :class:`FirmwareAnswer` with cores passes through here, so the
+    crossing of this repository's first rule — read what is on the machine,
+    *mark* what is written nowhere on it — happens at a single seam that can
+    be read in one sitting, rather than at each of the sites that build a
+    core. A test reads this module's own source to hold that
+    (``tests/test_firmware.py::TestTheSystemBehindTheCoreReachesTheAnswer``).
+
+    *recorded* is the context's snapshot of the packaged table, so one answer
+    can never mix two revisions of it.
+    """
+    table = _recorded_by_system(recorded)
+    stated: list[CoreFirmware] = []
+    for core in cores:
+        state, caveats = _system_firmware_state(core, table)
+        stated.append(
+            core
+            if state is None
+            else replace(core, system_firmware=state, caveats=(*core.caveats, *caveats))
+        )
+    return tuple(stated)
+
+
 def firmware_for_core(
     machine: Machine, context: FirmwareContext, *, core_so: str, verify: bool = False
 ) -> FirmwareAnswer:
@@ -3964,14 +4344,17 @@ def firmware_for_core(
         )
         return FirmwareAnswer(
             root=context.root,
-            cores=(
-                CoreFirmware(
-                    core_so=f"{stem}.so",
-                    label=None,
-                    declaration=DECLARATION_ABSENT,
-                    requirements=(),
-                    caveats=(reason,),
+            cores=_stating_system_firmware(
+                (
+                    CoreFirmware(
+                        core_so=f"{stem}.so",
+                        label=None,
+                        declaration=DECLARATION_ABSENT,
+                        requirements=(),
+                        caveats=(reason,),
+                    ),
                 ),
+                context.system_firmware,
             ),
             unclaimed=(),
             hash_checked=verify,
@@ -3981,7 +4364,7 @@ def firmware_for_core(
     cores, caveats = _resolve_cores(machine, context, (match,), verify=verify)
     return FirmwareAnswer(
         root=context.root,
-        cores=cores,
+        cores=_stating_system_firmware(cores, context.system_firmware),
         unclaimed=(),
         hash_checked=verify,
         sources=context.sources,
@@ -5750,7 +6133,7 @@ def firmware_for_system(
 
     return FirmwareAnswer(
         root=context.root,
-        cores=tuple(resolved),
+        cores=_stating_system_firmware(tuple(resolved), context.system_firmware),
         unclaimed=(),
         hash_checked=verify,
         sources=context.sources,
@@ -5959,7 +6342,7 @@ def firmware_inventory(machine: Machine, context: FirmwareContext, *, verify: bo
         )
     return FirmwareAnswer(
         root=context.root,
-        cores=cores,
+        cores=_stating_system_firmware(cores, context.system_firmware),
         unclaimed=unclaimed,
         hash_checked=verify,
         sources=context.sources,

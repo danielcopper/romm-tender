@@ -42,7 +42,7 @@ import type { GateVerdict, LaunchGateOps, PreLaunchSyncOutcome } from "./launchG
 import { reconfirmLaunchOptions } from "./launchOptionsReconcile";
 import { capturePruneLeaseAdmission, isPruneLeaseAdmissionCurrent, type PruneLeaseAdmission } from "./pruneLease";
 import { applyLaunchGateSetupOutcome, resolveSaveSetupOutcome } from "./saveSetup";
-import { SAVEFILES_IN_CONTENT_DIR_REASON, type SyncConflict } from "../types";
+import { BENIGN_SYNC_SKIP_REASONS, type SyncConflict } from "../types";
 import { detach } from "./detach";
 
 /**
@@ -133,9 +133,12 @@ const PRE_LAUNCH_SYNC_TIMEOUT_MS = 15000;
 
 /**
  * Online pre-launch sync, mapped onto the gate's {@link PreLaunchSyncOutcome}.
- * The benign `savefiles_in_content_dir` skip is treated as a successful proceed
- * (no conflict, no failure) — exactly as the Play button does — so it never
- * surfaces a fallback confirm.
+ * A benign skip is treated as a successful proceed (no conflict, no failure) —
+ * exactly as the Play button does — so it never surfaces a fallback confirm.
+ * Two slugs are benign: saves written to the content directory, and an emulator
+ * whose save is not a per-game file set this plugin can carry. Both mean sync
+ * did not run and nothing is wrong, which is a different thing from sync
+ * failing.
  *
  * Critically, this MUST NOT fail open: a throw or a hang in `preLaunchSync`
  * would otherwise propagate to the gate's blanket catch → `allow` → a silent
@@ -155,7 +158,7 @@ async function preLaunchSyncWatcher(romId: number): Promise<PreLaunchSyncOutcome
     logError(`Watcher pre-launch sync failed (surfacing fallback confirm): ${e}`);
     return { success: false, message: "Couldn't sync saves with RomM server." };
   }
-  if (result.reason === SAVEFILES_IN_CONTENT_DIR_REASON) {
+  if (result.reason !== undefined && BENIGN_SYNC_SKIP_REASONS.includes(result.reason)) {
     return { success: true, message: result.message };
   }
   const outcome: PreLaunchSyncOutcome = { success: result.success, message: result.message };
