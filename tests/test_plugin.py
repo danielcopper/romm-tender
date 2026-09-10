@@ -841,12 +841,21 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # condition that card exists to warn about.
     "get_shortcut_relocation",
     "dismiss_legacy_install_notice",
-    # Whether a newer release of this plugin exists, the user's answer to that
-    # card, and the switch that governs the check. None of the three touches
-    # RetroDECK state: the read talks to GitHub and one kv_config row, and the
-    # two writes are settings keys. Blocking them would be backwards — an
-    # install stuck behind a migration is exactly the one whose user most needs
-    # to hear that a newer version exists.
+    # Whether a newer release exists, the user's answer to that card, and the
+    # switch behind the check. None of the three touches RetroDECK state — the
+    # read talks to GitHub and one kv_config row, the two writes are settings
+    # keys — so a pending migration has nothing to protect from them.
+    #
+    # Only the read is certainly exercised while the page is replaced: the panel
+    # fetches at mount whatever page it shows. The card is NOT rendered on
+    # MigrationBlockedPage, which carries the pre-rename install and the
+    # data-location conditions; that slot is earned by an irreversible action the
+    # user takes BECAUSE the plugin looks broken, and an update notice is not one.
+    # The two writes are reachable only where Settings survived the state
+    # flipping mid-session (`currentPage` is module-level in src/index.tsx and
+    # SettingsPage holds no migration guard of its own) — whitelisted for that
+    # window rather than decorated, because refusing a settings.json-only write
+    # there would fail a toggle the user can see and press.
     "get_update_notice",
     "dismiss_update_notice",
     "set_update_check_enabled",
