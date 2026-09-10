@@ -293,10 +293,11 @@ follow, because Steam draws them only while gamepad focus is within the tabbed p
 **Entry focus belongs to the frame, on every wide page.** `WidePage` marks its root as placing its own, so the panel's
 router leaves the page alone rather than placing focus of its own, which would land on the Back chip above the body.
 Where Steam's tabbed page renders, its `autoFocusContents` does the placing; everywhere else — an untabbed page, and a
-tabbed one whose `Tabs` probe missed — the frame focuses the first stop inside the body itself, on the same 50 ms delay
-the router uses, because Steam's navigation resolves a focus pointer it retained across the page swap after the mount.
-Opening a page is the frame's moment and its only one: a page whose body changes while it stays open answers for that
-swap itself, by the same rule and under a condition of its own — the Sync page's left column is the one that does.
+tabbed one whose `Tabs` probe missed — the frame places focus inside the body itself, by the router's own rule and on
+the same 50 ms delay: the area the body declared, or its first stop where it declared none. The delay is there because
+Steam's navigation resolves a focus pointer it retained across the page swap after the mount. Opening a page is the
+frame's moment and its only one: a page whose body changes while it stays open answers for that swap itself, by the same
+rule and under a condition of its own — the Sync page's left column is the one that does.
 
 **The stop it picks is the first enabled focus stop in document order that contains no focus stop at all** — one rule,
 both widths. Document order rather than "the first button", because a page's first button is not its first row, and it
@@ -315,25 +316,36 @@ inner stop is disabled is stepped over, which no body's first column produces to
 enabled stop that is free of stops inside it — nothing is placed and the page keeps whatever Steam's retained pointer
 resolves to.
 
-**The narrow pages the router covers take the same rule, unless the page names somewhere better.** A page marks the area
-entry focus belongs in (`ENTRY_STOP_ATTR`) and the router picks the stop inside it with the same rule, so what a
-declaration changes is WHERE the rule is applied and never which element it picks. **Main is the only page that declares
-one**, on the menu's **Sync** entry: its three status rows act on nothing, so opening on the first of them — Connection,
-which is where the panel opened before — spends the reader's first press on a move to what they came for. The
-declaration is what makes that stable. Main's first BUTTON is not the menu whenever a notice carrying an action is on
-screen, so a button-first rule would open the panel wherever the day's conditions put one; that rule was tried and
-dropped for the same reason, back when its argument was that a narrow page is one column of Steam's own full-width rows
-where the first button IS the first row — true of Main only while Main had a Sync button near the top.
+**Every page takes the same rule, unless it names somewhere better.** A page marks the area entry focus belongs in
+(`ENTRY_STOP_ATTR`) and whichever placer opens it — the router, or the frame — picks the stop inside that area with the
+same rule, so what a declaration changes is WHERE the rule is applied and never which element it picks. **Two things
+declare, for two different reasons.** Main declares on the menu's **Sync** entry: its three status rows act on nothing,
+so opening on the first of them — Connection, which is where the panel opened before — spends the reader's first press
+on a move to what they came for. The declaration is what makes that stable. Main's first BUTTON is not the menu whenever
+a notice carrying an action is on screen, so a button-first rule would open the panel wherever the day's conditions put
+one; that rule was tried and dropped for the same reason, back when its argument was that a narrow page is one column of
+Steam's own full-width rows where the first button IS the first row — true of Main only while Main had a Sync button
+near the top.
+
+**A list-and-detail page declares on its SELECTED row**, and there the declaration is not a preference about where to
+land but what makes the page keep the state it was opened with: focus selects on that layout, so entry focus landing on
+the first row selects the first row. Settings is opened on a named section by three of Main's notices, and before the
+row was declared each of those jumps mounted the right section and then had it overwritten about 50 ms later — Open
+Controller landed on Connections. A list opened with no section named loses nothing: it either selects its own first
+row, which is what the fallback would have picked, or selects nothing and so declares nothing (the Library page's
+platforms, which additionally are tabbed, so Steam places that focus and the frame places none).
 
 **Data Management and Downloads are unmoved**, and declare nothing: each leads with its Back button, which is both the
-first stop and the first button, so the router's default already opens them there. Settings left that group when it
-became a wide page — the frame owns its entry focus now, and lands it on the first section row. Whatever the rule, the
-root it searches is the plugin's own content and nothing above it — Decky renders its panel title and the back arrow
-beside it outside that box, 34 px above it (the same inset whose bottom `WidePage`'s `ancestorOverhang` measures) — so
-no rule here could reach Decky's own chrome. The declaration, the finder, the shared set of shapes and the `.focus()` +
+first stop and the first button, so the router's default already opens them there. Whatever the rule, the root it
+searches is the plugin's own content and nothing above it — Decky renders its panel title and the back arrow beside it
+outside that box, 34 px above it (the same inset whose bottom `WidePage`'s `ancestorOverhang` measures) — so no rule
+here could reach Decky's own chrome. The declaration, the finder, the shared set of shapes and the `.focus()` +
 `gpfocus` pair are `src/utils/entryFocus.ts`. It is a second attribute rather than a second use of the wide frame's
-`OWNS_ENTRY_FOCUS_ATTR` because the two say opposite things: that one tells the router to place nothing, this one tells
-it where.
+`OWNS_ENTRY_FOCUS_ATTR` because the two answer different questions: that one says WHO places entry focus — it tells the
+router to place none, because the frame places its own — and this one says WHERE, for whichever of them places it. **So
+a wide page carries both**, Settings being one: the root says "I place my own" and the list's selected row says "here".
+The router never reaches the second, because it looks for `OWNS_ENTRY_FOCUS_ATTR` first and, finding it, sets no timer
+at all.
 
 **A tab's content is the page's business, not the frame's.** The frame wraps an untabbed body in a `ScrollRegion` and a
 tabbed one in nothing: Steam's tabbed page already wraps each tab's content in this same plain scroll panel, so a region

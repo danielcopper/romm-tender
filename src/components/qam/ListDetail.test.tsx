@@ -9,6 +9,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { useState, type CSSProperties, type FC, type ReactNode } from "react";
+import { ENTRY_STOP_ATTR } from "../../utils/entryFocus";
 import { ListDetail, type ListDetailItem, type ListDetailProps } from "./ListDetail";
 
 const PLATFORMS = [
@@ -234,6 +235,86 @@ describe("ListDetail", () => {
 
     const row = screen.getByRole("button", { name: /PlayStation/ }).closest("[data-testid='focusable']");
     expect((row as HTMLElement).dataset.activate).toBeUndefined();
+  });
+
+  it("declares the selected row the area entry focus belongs in, and moves the mark with it", () => {
+    // Focus selects here, so a page opened on a section other than its first
+    // would have that section overwritten by entry focus landing on row one.
+    // The mark is what the placer reads; that Steam then puts focus there, and
+    // that the row's own onFocus finds the selection already matching, is the
+    // device's to show — happy-dom has no nav tree and nothing here runs the
+    // frame's timer.
+    const { rerender } = render(
+      <ListDetail
+        items={platformItems(() => {})}
+        selectedId="psx"
+        onSelect={vi.fn()}
+        renderDetail={(id) => <div>detail for {id ?? "nothing"}</div>}
+      />,
+    );
+    const declared = () => document.querySelectorAll(`[${ENTRY_STOP_ATTR}]`);
+    const rowOf = (name: RegExp) => screen.getByRole("button", { name }).closest(`[${ENTRY_STOP_ATTR}]`);
+
+    // Not the first row: that is the whole point, and asserting on the first
+    // would pass on the accident this fixes.
+    expect(declared()).toHaveLength(1);
+    expect(rowOf(/PlayStation/)).not.toBeNull();
+    expect(rowOf(/Nintendo 64/)).toBeNull();
+
+    rerender(
+      <ListDetail
+        items={platformItems(() => {})}
+        selectedId="n64"
+        onSelect={vi.fn()}
+        renderDetail={(id) => <div>detail for {id ?? "nothing"}</div>}
+      />,
+    );
+
+    expect(declared()).toHaveLength(1);
+    expect(rowOf(/Nintendo 64/)).not.toBeNull();
+    expect(rowOf(/PlayStation/)).toBeNull();
+  });
+
+  it("declares nothing where nothing is selected", () => {
+    // A list that opens with no selection — the Library page's platforms —
+    // names no area, so the frame falls back to the body's first stop and the
+    // page opens exactly where it did before.
+    render(
+      <ListDetail
+        items={platformItems(() => {})}
+        selectedId={null}
+        onSelect={vi.fn()}
+        renderDetail={() => <div>pick one</div>}
+      />,
+    );
+
+    expect(document.querySelectorAll(`[${ENTRY_STOP_ATTR}]`)).toHaveLength(0);
+  });
+
+  it("keeps the row a stable element as the selection moves through it", () => {
+    // The mark rides a wrapper every row has, marked or not: a wrapper that
+    // appeared when a row became selected would remount the row Steam is
+    // standing on, mid-navigation.
+    const { rerender } = render(
+      <ListDetail
+        items={platformItems(() => {})}
+        selectedId="n64"
+        onSelect={vi.fn()}
+        renderDetail={() => <div>detail</div>}
+      />,
+    );
+    const row = screen.getByRole("button", { name: /Nintendo 64/ });
+
+    rerender(
+      <ListDetail
+        items={platformItems(() => {})}
+        selectedId="psx"
+        onSelect={vi.fn()}
+        renderDetail={() => <div>detail</div>}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /Nintendo 64/ })).toBe(row);
   });
 
   it("renders a detail for an empty selection", () => {

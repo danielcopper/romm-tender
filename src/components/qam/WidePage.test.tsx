@@ -14,6 +14,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import type { FC, ReactNode } from "react";
+import { ENTRY_STOP_ATTR } from "../../utils/entryFocus";
 import { WIDE_ROOT_CLASS } from "../../utils/qamExpansion";
 import { OWNS_ENTRY_FOCUS_ATTR, type WidePageProps, type WidePageTab } from "./WidePage";
 
@@ -445,6 +446,32 @@ describe("WidePage", () => {
       expect(row).toHaveClass("gpfocus");
       expect(screen.getByRole("button", { name: "‹ Back" })).not.toHaveFocus();
       expect(container.firstElementChild).toHaveAttribute(OWNS_ENTRY_FOCUS_ATTR);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("opens on the area the body declared rather than on its first stop", async () => {
+    const WidePage = await loadWidePage(StubTabs);
+    vi.useFakeTimers();
+    try {
+      render(
+        <WidePage title="Settings" onBack={vi.fn()}>
+          <button>Connections</button>
+          <div {...{ [ENTRY_STOP_ATTR]: "" }}>
+            <button>Controller</button>
+          </div>
+        </WidePage>,
+      );
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+
+      // A NON-first declaration, because the first one passes whether the frame
+      // reads the declaration or not — which is exactly how Settings shipped
+      // opening on Connections whatever section it was sent to.
+      expect(screen.getByRole("button", { name: "Controller" })).toHaveFocus();
+      expect(screen.getByRole("button", { name: "Connections" })).not.toHaveFocus();
     } finally {
       vi.useRealTimers();
     }

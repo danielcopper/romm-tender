@@ -10,6 +10,7 @@ import { render, fireEvent, act } from "@testing-library/react";
 import { createElement, useSyncExternalStore, type ComponentProps, type ReactElement } from "react";
 import { SettingsPage } from "./SettingsPage";
 import * as backend from "../api/backend";
+import { ENTRY_STOP_ATTR } from "../utils/entryFocus";
 import type { SaveSortMigrationStatus, RegisteredDevice, SettingsSection } from "../types";
 import { showModal } from "@decky/ui";
 import { toaster } from "@decky/api";
@@ -1955,6 +1956,24 @@ describe("SettingsPage", () => {
       await flushAsync();
       expect(capturedController.length).toBeGreaterThan(0);
       expect(capturedConnection).toHaveLength(0);
+    });
+
+    it("declares that section's row the area entry focus belongs in, so the open is not undone", async () => {
+      // Mounting on the section is only half of it: focus selects on this
+      // layout, so entry focus landing on row one would select Connections a
+      // moment later — which is what a notice's Open Controller did on the
+      // device. The declaration is what the frame places focus on instead.
+      //
+      // **The undoing itself is not reachable here.** It needs Steam's focus
+      // resolution after the mount and the frame's timer; happy-dom has no nav
+      // tree, so what this pins is the mark, and the frame reading it is pinned
+      // in `qam/WidePage.test.tsx`.
+      openOn = "controller";
+      const { getByTestId } = renderPage();
+      await flushAsync();
+
+      expect(getByTestId("settings-section-controller").closest(`[${ENTRY_STOP_ATTR}]`)).not.toBeNull();
+      expect(getByTestId("settings-section-connections").closest(`[${ENTRY_STOP_ATTR}]`)).toBeNull();
     });
 
     it("opens on the first section when a navigation names none", async () => {

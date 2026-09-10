@@ -22,7 +22,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FC, type ReactNode } from "react";
 import { DialogButton, Focusable } from "@decky/ui";
 import { ControllerGlyph, GLYPH_BUTTON_B, Tabs } from "../../utils/deckyUiInternals";
-import { ENTRY_FOCUS_DELAY_MS, firstBodyStop, placeEntryFocus } from "../../utils/entryFocus";
+import { ENTRY_FOCUS_DELAY_MS, pageEntryStop, placeEntryFocus } from "../../utils/entryFocus";
 import { WIDE_ROOT_CLASS, useWideQamPanel } from "../../utils/qamExpansion";
 import { offsetWithinScroller } from "../../utils/scrollHelpers";
 import { ScrollRegion } from "./ScrollRegion";
@@ -338,7 +338,13 @@ export const WidePage: FC<WidePageProps> = ({ title, onBack, tabs, activeTab, on
     // The same delay the panel's router uses for the pages it still covers:
     // Steam's navigation resolves its retained focus pointer after the mount,
     // and a focus placed before that is taken back.
-    const timer = setTimeout(() => placeEntryFocus(body, firstBodyStop), ENTRY_FOCUS_DELAY_MS);
+    //
+    // And the same rule as the router's: the area the body declared, or its
+    // first stop where it declared none. A page opened on something other than
+    // its first row has to be able to say so, because on a list-and-detail page
+    // focus is what selects — landing on the first row would select it and
+    // discard the section the reader was sent to.
+    const timer = setTimeout(() => placeEntryFocus(body, pageEntryStop), ENTRY_FOCUS_DELAY_MS);
     return () => clearTimeout(timer);
   }, [steamPlacesFocus]);
 
