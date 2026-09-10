@@ -1146,6 +1146,43 @@ export const getShortcutRelocation = callable<[], ShortcutRelocation>("get_short
 /** Persist the user's answer that they are keeping the pre-rename install. */
 export const dismissLegacyInstallNotice = callable<[], { success: boolean }>("dismiss_legacy_install_notice");
 
+/**
+ * What the backend knows about a newer release of this plugin.
+ *
+ * Tender is not in Decky's plugin catalogue and cannot be — Decky finds an
+ * installed plugin by looking its name up there — so this is the only channel
+ * through which a user ever learns a new release exists.
+ *
+ * `available` is the whole notice: a newer release exists, this exact version
+ * was not dismissed, and the check is switched on. The rest is what an install
+ * needs. `plugin_name` is what Decky matches the existing installation
+ * against — hand an install-from-URL anything else and the old installation is
+ * never replaced, leaving a second plugin folder beside it. `digest` is the
+ * asset's bare sha256 hex (no `sha256:` prefix — Decky compares it against
+ * `sha256(zip).hexdigest()`), `null` where the release carried none.
+ *
+ * Every failure is silent: with no network, an unreadable answer, or an
+ * unexpected shape, `available` is false and there is nothing to show.
+ */
+export interface UpdateNotice {
+  available: boolean;
+  /** The bare version, `tender-v` stripped. `null` until a check has succeeded. */
+  latest_version: string | null;
+  current_version: string;
+  download_url: string;
+  plugin_name: string;
+  digest: string | null;
+  enabled: boolean;
+}
+
+export const getUpdateNotice = callable<[], UpdateNotice>("get_update_notice");
+
+/** Wave away the card for one release version; the next release asks again. */
+export const dismissUpdateNotice = callable<[string], { success: boolean }>("dismiss_update_notice");
+
+/** Switch the once-a-day GitHub release check on or off. On by default. */
+export const setUpdateCheckEnabled = callable<[boolean], { success: boolean }>("set_update_check_enabled");
+
 /** What kind of data-location condition the last start left standing. */
 export type DataLocationKind = "choice" | "failed";
 

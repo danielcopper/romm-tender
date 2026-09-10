@@ -23,6 +23,7 @@ from fakes.fake_firmware_file_store import FakeFirmwareFileStore
 from fakes.fake_firmware_resolver import FakeFirmwareResolver, FakeFolderVerdicts
 from fakes.fake_game_process_control import FakeGameProcessControlAdapter
 from fakes.fake_hostname_reader import FakeHostnameReader
+from fakes.fake_latest_release import FakeLatestRelease
 from fakes.fake_machine_id_reader import FakeMachineIdReader
 from fakes.fake_migration_file_store import FakeMigrationFileStore
 from fakes.fake_path_exists_reader import FakePathExistsReader
@@ -451,6 +452,7 @@ class TestWireServices:
             "prune_artifacts": MagicMock(),
             "steam_recovery": MagicMock(),
             "data_location_store": MagicMock(),
+            "latest_release": FakeLatestRelease(),
             "settings": settings,
             "loop": asyncio.new_event_loop(),
             "logger": logger,
@@ -527,6 +529,7 @@ class TestWireServices:
                 prune_artifacts=deps["prune_artifacts"],
                 steam_recovery=deps["steam_recovery"],
                 data_location_store=deps["data_location_store"],
+                latest_release=deps["latest_release"],
             ),
             stores=StateBundle(
                 settings=deps["settings"],
@@ -615,7 +618,7 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(result) == 28
+        assert len(result) == 29
         assert "migration_service" in result
         assert "game_detail_service" in result
         assert "rom_removal_service" in result
@@ -630,6 +633,7 @@ class TestWireServices:
         assert "connection_service" in result
         assert "startup_healing_service" in result
         assert "legacy_install_service" in result
+        assert "update_check_service" in result
         assert "data_location_service" in result
         assert "launch_gate_service" in result
         assert "session_lifecycle_service" in result

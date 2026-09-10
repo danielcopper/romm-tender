@@ -144,4 +144,5 @@ modules =
     services.shortcut_removal
     services.startup_healing
     services.steamgrid
+    services.update_check
     services.version_switch

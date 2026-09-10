@@ -33,6 +33,7 @@ from adapters.es_find_rules import EsFindRulesAdapter
 from adapters.firmware_file import FirmwareFileAdapter
 from adapters.game_process import GameProcessAdapter
 from adapters.gavel_native import GavelNativeAdapter
+from adapters.github_releases import GithubReleaseAdapter
 from adapters.hostname import HostnameAdapter
 from adapters.launcher_install import LauncherInstallAdapter
 from adapters.machine_id import MachineIdAdapter
@@ -92,6 +93,7 @@ if TYPE_CHECKING:
         FirmwareResolver,
         GameProcessControl,
         HostnameReader,
+        LatestReleaseFn,
         MachineIdReader,
         MigrationFileStore,
         PathExistsReader,
@@ -169,6 +171,7 @@ class AdapterBundle:
     prune_artifacts: PruneArtifactStore
     steam_recovery: SteamRecoveryStore
     data_location_store: DataLocationStore
+    latest_release: LatestReleaseFn
 
 
 @dataclass(frozen=True)
@@ -482,6 +485,11 @@ def bootstrap(
     hostname_provider = HostnameAdapter()
     machine_id_provider = MachineIdAdapter()
     debug_logger = SettingsAwareDebugLogger(settings=settings, logger=logger)
+    # The one outgoing request that goes to neither RomM nor SteamGridDB. It
+    # takes the same User-Agent — GitHub's API refuses a request without one —
+    # and reports its failures only into the debug sink, because a check that
+    # reached nothing is a non-event the user is never shown.
+    github_releases = GithubReleaseAdapter(user_agent=user_agent, log_debug=debug_logger)
     # Without this grant the resolver probes no core here — Decky Loader's
     # frozen runtime is no interpreter to spawn — so every core it is asked
     # about answers unknown and a libretro save answer usually establishes
@@ -543,6 +551,7 @@ def bootstrap(
         prune_artifacts=prune_artifacts,
         steam_recovery=steam_recovery,
         data_location_store=data_location_store,
+        latest_release=github_releases.get_latest_release,
     )
     stores = StateBundle(
         settings=settings,

@@ -841,6 +841,15 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # condition that card exists to warn about.
     "get_shortcut_relocation",
     "dismiss_legacy_install_notice",
+    # Whether a newer release of this plugin exists, the user's answer to that
+    # card, and the switch that governs the check. None of the three touches
+    # RetroDECK state: the read talks to GitHub and one kv_config row, and the
+    # two writes are settings keys. Blocking them would be backwards — an
+    # install stuck behind a migration is exactly the one whose user most needs
+    # to hear that a newer version exists.
+    "get_update_notice",
+    "dismiss_update_notice",
+    "set_update_check_enabled",
     # Where the plugin's OWN data lives — the notice, the two candidates behind
     # it, and the answer. None of the three touches RetroDECK state. The notice
     # reads nothing at all: it hands back what the start already decided. The
@@ -1143,6 +1152,7 @@ class TestMainStartupOrdering:
             "connection_service": connection_service,
             "startup_healing_service": startup_healing_service,
             "legacy_install_service": MagicMock(),
+            "update_check_service": MagicMock(),
             "shortcut_relocation_service": MagicMock(),
             "data_location_service": MagicMock(),
             "launch_gate_service": MagicMock(),
@@ -1180,6 +1190,7 @@ class TestMainStartupOrdering:
                 prune_artifacts=MagicMock(),
                 steam_recovery=MagicMock(),
                 data_location_store=MagicMock(),
+                latest_release=MagicMock(),
             ),
             stores=StateBundle(
                 settings={},
