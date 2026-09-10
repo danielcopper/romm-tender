@@ -100,8 +100,11 @@ class LegacyInstallService:
         Returns ``{"pending": bool, "legacy_data_present": bool, "dismissed": bool}``. ``pending``
         is the notice: the legacy plugin folder is on disk and is not the folder
         this plugin runs from. Every Steam shortcut's ``exe`` names a launcher
-        inside the folder it was written from, so removing that install stops the
-        games from starting and nothing here can put the launcher back.
+        inside the folder it was written from, so until the relocation has
+        re-pointed them at this install's own copy, removing that install stops
+        the games from starting and nothing here can put the launcher back.
+        Which of those two the reader is in is not this flag's answer — the card
+        joins it with the relocation's own, and words itself accordingly.
 
         ``legacy_data_present`` is half of the second sentence — the older
         install still has a database — and is False whenever ``pending`` is. The

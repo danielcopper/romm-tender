@@ -32,9 +32,9 @@ moves.
 
 Fold any two together and one question's answer starts deciding another's, in
 whichever direction the fold happened to point — and each of those failures is
-silent: a library the plugin cannot find, a recovery folder under a name it
-never shipped as, a warning card that simply stops firing, a running game whose
-session is forgotten at the next reload.
+silent: a library the plugin cannot find, a recovery folder that no longer
+matches the package that wrote it, a warning card that simply stops firing, a
+running game whose session is forgotten at the next reload.
 """
 
 from __future__ import annotations
