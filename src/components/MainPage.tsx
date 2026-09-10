@@ -703,7 +703,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
           </PanelSectionRow>
         )}
         {/* A notice, not the fix: the button that rewrites the RetroArch config
-            is in Settings \u203A Controller and nowhere else. */}
+            is in Settings › Controller and nowhere else. */}
         {retroarchWarning?.warning && (
           <>
             <PanelSectionRow>
