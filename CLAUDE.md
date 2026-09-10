@@ -264,8 +264,8 @@ Format: **invariant** — tier — enforced by.
   The other direction is worse and equally quiet: a new consumer of the data root reaching for `runtime_dir` writes into
   Decky's tree, where the next release's folder name moves it. Nothing mechanical tells the two apart — both are plain
   `str` fields on structs the composition root hands around
-- **The identifier's four homes are never derived from one another — in particular `APP_DIR_NAME`
-  (`domain/user_data_location.py`) is never read from `package.json`** — prompt-only — the four homes and the question
+- **The identifier's five homes are never derived from one another — in particular `APP_DIR_NAME`
+  (`domain/user_data_location.py`) is never read from `package.json`** — prompt-only — the five homes and the question
   each answers are enumerated in `py_modules/domain/identity.py`'s module docstring, and nothing mechanical detects a
   fold. `APP_DIR_NAME` and `package.json`'s `name` spell the same string today, so `APP_DIR_NAME = package_name`
   reproduces every current path exactly and the whole suite stays green; the cost arrives at the next manifest edit,

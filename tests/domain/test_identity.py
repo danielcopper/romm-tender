@@ -39,8 +39,8 @@ class TestTheDisplayName:
         Both ends are pinned by value elsewhere, so this asserts the seam
         between them — and only a fold written as an identity, onto
         ``APP_DIR_NAME`` or into ``SOURCE_FOLDER_NAMES``. Both assertions
-        compare values, so a
-        fold through a transform passes: ``DISPLAY_NAME.lower()``, and
+        compare values, so a fold through a transform passes:
+        ``DISPLAY_NAME.lower()``, and
         ``f"romm-{DISPLAY_NAME.lower()}"``, which reproduces today's value
         exactly and is for that reason the likeliest of the three to be written.
         The rule those two need is stated at ``APP_DIR_NAME`` itself, where such
