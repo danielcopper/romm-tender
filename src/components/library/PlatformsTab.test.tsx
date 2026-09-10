@@ -2377,11 +2377,12 @@ describe("Library › Platforms", () => {
       expect(buttonByText(container, "Download all")).toBeDisabled();
     });
 
-    it("says the console needs one of these where the counts would say nothing is required", async () => {
+    it("says the console needs at least one file where the counts would say nothing is required", async () => {
       // The PlayStation state under SwanStation: every image that core declares
       // is `optional`, so the counts read "Nothing required" over a console that
       // will not boot. One requirement over the images the core declares — so no
-      // ratio, here or in the list's own words.
+      // ratio, here or in the list's own words, and no pointer at a file list
+      // where most rows cannot answer it.
       vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
         success: true,
         platforms: [
@@ -2399,18 +2400,18 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("Needs one of these");
-      expect(container.textContent).toContain("This system needs one of these BIOS files and none of them is in place");
+      expect(container.textContent).toContain("Needs at least one BIOS file");
+      expect(container.textContent).toContain("This system needs at least one BIOS file and none is in place");
       expect(container.textContent).not.toContain("Nothing required");
       const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
         el.textContent.includes("Game Boy Advance"),
       );
-      expect(row?.title).toBe("Needs one of these BIOS files");
+      expect(row?.title).toBe("Needs at least one BIOS file");
       // The rows were answered, so what the library still holds stays fetchable.
       expect(buttonByText(container, "Download all")).not.toBeDisabled();
     });
 
-    it("says the console needs one of these even where the level declines", async () => {
+    it("says the console needs at least one file even where the level declines", async () => {
       // The order the pane, the row tooltip and the game page's BIOS headline
       // have to share. Today the backend never sends this pair — `absent` lands
       // on `missing` — but nothing joins the three surfaces, so each pins its
@@ -2435,13 +2436,13 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("Needs one of these");
+      expect(container.textContent).toContain("Needs at least one BIOS file");
       expect(container.textContent).not.toContain("BIOS readiness unknown");
       expect(container.textContent).not.toContain("Nothing installed could answer for this system");
       const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
         el.textContent.includes("Game Boy Advance"),
       );
-      expect(row?.title).toBe("Needs one of these BIOS files");
+      expect(row?.title).toBe("Needs at least one BIOS file");
       // The rows were answered, so the downloads are not withdrawn either.
       expect(buttonByText(container, "Download all")).not.toBeDisabled();
     });

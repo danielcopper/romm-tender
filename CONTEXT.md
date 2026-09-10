@@ -333,10 +333,9 @@ is world knowledge rather than a reading of the machine — the resolver keeps a
 It is a **disjunction**, and that is what keeps it out of the counts. The console asks for _one_ of the images the core
 declares, not for each of them, so it is a single requirement over the whole list rather than one requirement per file.
 Folded into **required by active core** it would report every image the core declares as required —
-`0 / 5 required
-files ready` under SwanStation, which declares five; carried as its own axis it is worded "one of these"
-and never as a ratio. The twenty in the same page's `0 / 20 files held` is a different set again: the library's own
-inventory for the platform.
+`0 / 5 required files ready` under SwanStation, which declares five; carried as its own axis it is worded "at least one"
+and never as a ratio, nor as a pointer at the file list, most of whose rows cannot answer it. The twenty in the same
+page's `0 / 20 files held` is a different set again: the library's own inventory for the platform.
 
 - **held** — one of the images is at its destination. Which one is not asked: any of them answers the whole requirement.
 - **absent** — the console needs one and every row the launching core declares was established to be absent. The **BIOS
@@ -351,6 +350,11 @@ inventory for the platform.
   question is recorded as open, or **nothing is recorded about the console at all**. The last is an unasked question and
   may never be read as "this console needs no firmware" — the same rule that keeps **unknown** apart from **not needed**
   one axis over.
+
+The same table answers **per core**, and a file row carries that answer on each core's own entry beside that core's
+`required` flag: what the core's `.info` says about this file, and what the table says about that core's console. Two
+speakers, so a core marking the file _optional_ while its console will not start without one of the images it declares
+is the informative pair rather than a contradiction — and neither half is ever rewritten into the other.
 
 Scoped to the **active core**, like **required by active core** and unlike **wanted**: one unchanged PlayStation reads
 `absent` under SwanStation, whose five declared images the console needs one of, and `not demanded` under PCSX ReARMed,

@@ -1871,13 +1871,20 @@ both — SwanStation marks all five of its images **optional**, Beetle PSX marks
 file counts alone report a green "Nothing required (0/20 files held)" under the one core and three separate
 prerequisites under the other, over one PlayStation on which no game starts. The resolver answers the missing half from
 a packaged, source-cited table about the **system** (`CoreFirmware.system_firmware`), carried through the adapter per
-core as `FirmwareCatalogue.core_verdicts` and turned into `domain/bios_status.py`'s `classify_system_image`.
+core as `FirmwareCatalogue.core_verdicts` and turned into `domain/bios_status.py`'s `classify_system_image`. The same
+per-core answer is read over every core at once (`cores_needing_a_system_image`) and stamped on each row's own `cores`
+entry beside that core's `required` flag, which is what lets a surface listing several emulators say which of them
+declare for such a console. The two keys are two speakers — the core's `.info` and the packaged table — so `optional`
+with `system_image_demanded` is the informative pair rather than a contradiction, and neither is ever rewritten into the
+other.
 
 - **It is not folded into `required_count`.** The console asks for _one_ of the images the core declares, so it is one
   requirement over the whole list rather than one requirement per file; put into that count it would read
   `0 / 5 required files ready` under the SwanStation this was observed on, five being what that core declares. The
   twenty in the page's own `0/20 files held` is a different set again — the RomM library's inventory for the platform,
-  which this axis neither counts nor is scoped to. Every surface words it "one of these" and none states it as a ratio.
+  which this axis neither counts nor is scoped to. Every surface words it "at least one" and none states it as a ratio,
+  and none of them points at the file list either — only the images the launching core declares can answer the demand,
+  and the rows beside them cannot.
 - **Whether an image is held is read off the rows, and `requirements_met` is not consulted at all.** The demand comes
   from the system table, the presence from the file rows, and nothing weighs one against the other — which is the shape
   upstream intends for a consumer here. Reading that field as a second opinion would be the misreading it exists to

@@ -6,10 +6,15 @@ import pytest
 
 from domain.firmware_wants import (
     DECLARED_DIRECTORY,
+    SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
+    SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
+    SYSTEM_FIRMWARE_OPEN,
+    SYSTEM_FIRMWARE_RUNS_WITHOUT,
     WANTED_NEEDED,
     WANTED_NOT_NEEDED,
     WANTED_OPTIONAL,
     WANTED_UNKNOWN,
+    CoreFirmwareVerdict,
     FirmwareCatalogue,
     FirmwarePlacement,
     FirmwareWant,
@@ -111,6 +116,59 @@ class TestReadingCompleteFor:
         """
         catalogue = _catalogue(unread=frozenset({"fbalpha_libretro"}))
         assert catalogue.reading_complete_for([]) is False
+
+
+class TestCoresNeedingASystemImage:
+    """Which cores declare for a console that will not start without an image.
+
+    The per-core half read over every core at once, for a surface that lists
+    several emulators beside one file and has to say which of them are in that
+    state. ``verdict_for`` answers the same question one core at a time, and the
+    two must not be able to disagree about a core.
+    """
+
+    @staticmethod
+    def _with(**verdicts: str | None) -> FirmwareCatalogue:
+        return FirmwareCatalogue(
+            placements=(),
+            unread_cores=frozenset(),
+            resolved=True,
+            core_verdicts={core_so: CoreFirmwareVerdict(system_firmware=state) for core_so, state in verdicts.items()},
+        )
+
+    def test_only_the_console_that_will_not_start_is_named(self):
+        catalogue = self._with(
+            swanstation_libretro=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
+            pcsx_rearmed_libretro=SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
+            snes9x_libretro=SYSTEM_FIRMWARE_RUNS_WITHOUT,
+            mgba_libretro=SYSTEM_FIRMWARE_OPEN,
+        )
+
+        assert catalogue.cores_needing_a_system_image() == frozenset({"swanstation_libretro"})
+
+    def test_a_core_the_table_says_nothing_about_is_left_out(self):
+        """An absent entry is an unasked question, and this set answers only where something was recorded."""
+        catalogue = self._with(swanstation_libretro=None)
+
+        assert catalogue.cores_needing_a_system_image() == frozenset()
+        assert catalogue.verdict_for("gpsp_libretro") is None
+
+    def test_a_reading_that_did_not_happen_names_nobody(self):
+        assert _catalogue(resolved=False).cores_needing_a_system_image() == frozenset()
+
+    def test_it_agrees_with_the_per_core_answer_for_every_core(self):
+        """One question, two shapes — asked over all cores or one at a time."""
+        catalogue = self._with(
+            swanstation_libretro=SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
+            pcsx_rearmed_libretro=SYSTEM_FIRMWARE_CORE_ALTERNATIVE,
+        )
+
+        named = catalogue.cores_needing_a_system_image()
+
+        for core_so in ("swanstation_libretro", "pcsx_rearmed_libretro"):
+            verdict = catalogue.verdict_for(core_so)
+            assert verdict is not None
+            assert (core_so in named) is verdict.system_needs_an_image
 
 
 class TestByFileName:

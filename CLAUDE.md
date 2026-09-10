@@ -539,8 +539,15 @@ Format: **invariant** — tier — enforced by.
   file list, where its caveat explains itself. **All three wording surfaces test `"absent"` BEFORE the level's
   decline**, and they agree today only because the backend guarantees `absent ⟹ missing`, so the state never arrives: a
   decline added ahead of that test in `compute_bios_level` would have `PlatformDetail` alone say "Nothing installed
-  could answer for this system" and withdraw every download button while the other two read "Needs one of these BIOS
-  files". Each surface pins its own order (`BiosTab.test.tsx`, `PlatformsTab.test.tsx`) and nothing joins them
+  could answer for this system" and withdraw every download button while the other two read "Needs at least one BIOS
+  file". Each surface pins its own order (`BiosTab.test.tsx`, `PlatformsTab.test.tsx`) and nothing joins them. **The
+  same answer is read PER CORE onto every row** (`FirmwareCatalogue.cores_needing_a_system_image` → `build_file_entry`'s
+  `cores[<core_so>]["system_image_demanded"]`, worded by `BiosTab.tsx`'s `coreLineSuffix`), and there the rule is that
+  the two keys on that entry are two SPEAKERS: `required` is the core's own `.info`, the other is the packaged table
+  about that core's console, and `optional` beside a demanded image is the informative pair rather than a contradiction
+  to resolve. Rewriting the declaration off the demand — printing "required" where the core said optional — puts words
+  in the emulator's mouth and loses the only fact the row had to add; folding the pair the other way loses the demand.
+  Nothing checks it: both keys are plain booleans on a dict a surface may read either of
 - **Which emulator a PLATFORM's answers are about is one pick, and every platform-scoped answer is a projection of it**
   — test + prompt-only — `tests/services/test_firmware.py::TestOnePlatformOneEmulator` asserts the two surfaces AGREE
   across every way a platform arrives at an emulator (no pick, each of the three ES-DE offers, a pin naming an emulator

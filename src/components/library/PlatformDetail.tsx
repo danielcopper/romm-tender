@@ -118,12 +118,14 @@ function getBiosSummary(
   // author reaches for is their choice, and over one PlayStation the deployed
   // catalogue goes both ways — SwanStation marks all five of its images
   // optional, so the required-file phrasing below reads "Nothing required" over
-  // a system that will not boot. Stated as "one of these" and never as a ratio —
-  // the list is many files and the requirement is one.
+  // a system that will not boot. Stated as "at least one" and never as a ratio —
+  // the list is many files and the requirement is one. It points at no set
+  // either: the table below holds rows only the launching core's declaration can
+  // answer the demand with, and rows it cannot.
   if (systemImage === "absent") {
     return {
-      summaryLabel: "Needs one of these",
-      summaryDescription: "This system needs one of these BIOS files and none of them is in place",
+      summaryLabel: "Needs at least one BIOS file",
+      summaryDescription: "This system needs at least one BIOS file and none is in place",
     };
   }
   if (requiredCount > 0 && requiredReady) {
@@ -835,7 +837,7 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   // joins the three surfaces, and a decline added ahead of that test in
   // `compute_bios_level` would leave this pane alone saying "Nothing installed
   // could answer for this system" and withdrawing every download button while
-  // the other two said the console needs one of these files.
+  // the other two said the console needs at least one BIOS file.
   const declined = firmware.bios_level === "unknown" && systemImage !== "absent";
   // An unsettled console demand is a declined VERDICT and not an unanswered
   // platform: its rows were answered, so the downloads below stay — the same

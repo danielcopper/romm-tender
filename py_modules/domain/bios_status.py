@@ -38,7 +38,7 @@ from domain.firmware_wants import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Collection, Mapping
 
     from domain.firmware_wants import CoreFirmwareVerdict, FirmwarePlacement
 
@@ -141,7 +141,10 @@ class BiosFileEntry:
     description: str
     wanted: str
     required_by_active: bool
-    cores: dict[str, dict[str, Any]]  # {core_so: {"required": bool}}
+    # {core_so: {"required": bool, "system_image_demanded": bool}} — per core, what
+    # its own declaration says about this file and what the packaged table says
+    # about its console. Two speakers, two keys, never folded into one.
+    cores: dict[str, dict[str, Any]]
     used_by_active: bool
     on_server: bool = True
     supplied_by: str | None = None
@@ -256,6 +259,7 @@ def build_file_entry(
     active_core_so: str | None,
     *,
     on_server: bool = True,
+    image_demanding_cores: Collection[str] = (),
 ) -> BiosFileEntry:
     """Build a single file status entry from the machine's answer about it.
 
@@ -265,10 +269,25 @@ def build_file_entry(
     the game will launch with, or ``None`` when it could not be resolved; then
     every declaring core stands in for it, which is the same permissive default
     the platform has always fallen back to.
+
+    ``image_demanding_cores`` is
+    :meth:`~domain.firmware_wants.FirmwareCatalogue.cores_needing_a_system_image`
+    — the cores whose console will not start without one of the images they
+    declare. It rides on each core's own entry in ``cores`` because the two
+    statements there belong to different speakers: ``required`` is what that
+    core's ``.info`` says about this file, ``system_image_demanded`` is what the
+    packaged table says about that core's console. A core can say ``optional``
+    while the console cannot start without one, and that pair is exactly what a
+    surface listing the core has to be able to show. Nothing is folded: the
+    declaration is carried unaltered.
     """
     folder = placement.folder if placement is not None else None
     wants = placement.wants if placement is not None else ()
-    cores = {want.core_so: {"required": want.required} for want in wants if want.core_so is not None}
+    cores = {
+        want.core_so: {"required": want.required, "system_image_demanded": want.core_so in image_demanding_cores}
+        for want in wants
+        if want.core_so is not None
+    }
     if active_core_so is None:
         used_by_active = True
         required_by_active = placement.required_by_any if placement is not None else False
@@ -326,11 +345,14 @@ def collect_firmware_status(
     placements: Mapping[str, FirmwarePlacement],
     complete: bool,
     active_core_so: str | None,
+    image_demanding_cores: Collection[str] = (),
 ) -> tuple[BiosFileEntry, ...]:
     """Build BiosFileEntry objects for a list of pre-resolved firmware items.
 
     Each item must have keys: file_name, downloaded, dest; ``on_server``
     defaults to ``True`` for the items that came off the RomM listing.
+    ``image_demanding_cores`` is machine-wide and is read per row, so one core's
+    console answers the same way on every file it declares.
     """
     return tuple(
         build_file_entry(
@@ -341,6 +363,7 @@ def collect_firmware_status(
             complete,
             active_core_so,
             on_server=item.get("on_server", True),
+            image_demanding_cores=image_demanding_cores,
         )
         for item in items
     )

@@ -221,7 +221,15 @@ export interface BiosFileStatus extends FirmwareVerdict {
   /** Whether the core THIS game launches with requires the file. `wanted` is the
    *  machine's answer about the file; this one is the launch's. */
   required_by_active: boolean;
-  cores?: Record<string, { required: boolean }>;
+  /** Per core that declares the file: what that core's own `.info` says about
+   *  it (`required`), and what the packaged table says about that core's
+   *  CONSOLE (`system_image_demanded` — it will not start without one of the
+   *  images the core declares). Two speakers, so the pair `optional` +
+   *  `system_image_demanded` is not a contradiction and is the case a surface
+   *  has to be able to word. `system_image_demanded` is optional because a
+   *  payload from before the field existed carries none, and absent claims
+   *  nothing. */
+  cores?: Record<string, { required: boolean; system_image_demanded?: boolean }>;
   used_by_active?: boolean;
   /** False for a file an emulator asks for that the RomM library does not hold.
    *  It still counts as missing — it just cannot be fetched from the plugin. */

@@ -281,6 +281,17 @@ class FirmwareCatalogue:
         """
         return self.core_verdicts.get(core_so) if core_so is not None else None
 
+    def cores_needing_a_system_image(self) -> frozenset[str]:
+        """The cores whose CONSOLE the table says will not start without an image.
+
+        The per-core half of :meth:`verdict_for`, read over every core at once so
+        a surface listing several emulators beside one file can say which of them
+        declare for such a console. Every other recording is left out, including
+        the absent entry: a core the table says nothing about is an unasked
+        question, and this set answers only where something was recorded.
+        """
+        return frozenset(core_so for core_so, verdict in self.core_verdicts.items() if verdict.system_needs_an_image)
+
     def by_file_name(self) -> dict[str, FirmwarePlacement]:
         """The placements indexed by file name — the shape every lookup wants.
 

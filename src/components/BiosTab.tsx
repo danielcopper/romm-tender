@@ -52,15 +52,38 @@ interface BiosTabProps {
   isActive: boolean;
 }
 
+/**
+ * What one core's line says about this file — its own word, then the console's.
+ *
+ * The two are different speakers and the line shows both, because on their own
+ * either one misleads. `required` / `optional` is the core's `.info` and nothing
+ * else, and it is never rewritten here: a libretro declaration can mark a file
+ * needed or optional and can say nothing more, so an author who knows the
+ * console will not start without one of these images has only those two words to
+ * reach for. The deployed catalogue goes both ways over one PlayStation —
+ * SwanStation marks all five of its images optional, Beetle PSX marks three of
+ * its own required — so a reader shown "optional" alone under a headline saying
+ * the console needs one is reading a contradiction that is not there.
+ *
+ * Only the optional case is annotated, and that is the whole of the informative
+ * case: where the core already says required, the console's demand adds nothing
+ * a reader would act on differently.
+ */
+function coreLineSuffix(core: { required: boolean; system_image_demanded?: boolean }): string {
+  if (core.required) return " (required)";
+  if (core.system_image_demanded) return " (optional — the console will not start without one)";
+  return " (optional)";
+}
+
 /** Render the per-core lines under a BIOS file — one row per core that uses it. */
 function buildBiosCoreLines(
-  cores: Record<string, { required: boolean }>,
+  cores: Record<string, { required: boolean; system_image_demanded?: boolean }>,
   coreLabelMap: Record<string, string>,
   activeCore: string | null | undefined,
 ): ReactElement[] {
   return Object.entries(cores).map(([coreSo, coreData]) => {
     const label = coreLabelMap[coreSo] || coreSo.replace(/_libretro$/, "");
-    const suffix = coreData.required ? " (required)" : " (optional)";
+    const suffix = coreLineSuffix(coreData);
     // Highlight the resolved active core's line (#955). active_core is the
     // core's `.so`, same identifier space as the cores keys; a null/undefined
     // active core matches nothing.
@@ -102,11 +125,17 @@ function buildBiosCoreLines(
  * file required or optional and can say nothing else. Which of the two an author
  * reaches for is their choice, and over one PlayStation the deployed catalogue
  * goes both ways — SwanStation marks all five of its images optional, Beetle PSX
- * marks three of its own required. So this says "one of these" and never a
+ * marks three of its own required. So this says "at least one" and never a
  * required-file ratio — under SwanStation the pane read a green "Nothing
  * required (0/20 files held)" while no game on it would start. It names no core:
  * which core the sentence is about is the highlighted line in the list below,
  * and repeating it here would be the same fact twice on one pane.
+ *
+ * It also names no SET. "one of these" pointed at the list underneath, where
+ * only the files the active core declares can answer the demand — a reader who
+ * fetched one of the others saw the sentence stand. The ratio beside it is the
+ * library's inventory, a third set again, which is why the sentence states a
+ * requirement and the counter stays what it always was.
  */
 function buildBiosHeader(bios: BiosStatus, biosLevel: BiosTabProps["biosLevel"]): ReactElement[] {
   const localCount = bios.local_count ?? 0;
@@ -121,7 +150,7 @@ function buildBiosHeader(bios: BiosStatus, biosLevel: BiosTabProps["biosLevel"])
   const biosColor = biosColorForLevel(biosLevel);
   let biosLabel: string;
   if (bios.system_image === "absent") {
-    biosLabel = `Needs one of these BIOS files${heldRatio}`;
+    biosLabel = `Needs at least one BIOS file${heldRatio}`;
   } else if (biosLevel === "unknown") {
     // Three ignorances behind one grey dot, and they are not the same sentence.
     // With a required row nothing could judge — or with the console's own image

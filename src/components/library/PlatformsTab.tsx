@@ -39,7 +39,7 @@ function biosTooltip(row: PlatformRow): string {
   // The console's own demand outranks the counts here for the reason it does in
   // the pane: it is the one requirement no count can state, so "Nothing
   // required" would stand over a system that will not boot.
-  if (firmware.system_image === "absent") return "Needs one of these BIOS files";
+  if (firmware.system_image === "absent") return "Needs at least one BIOS file";
   if (firmware.bios_level === "unknown") {
     return (firmware.required_withheld ?? 0) > 0 || firmware.system_image === "unsettled"
       ? "BIOS readiness unknown"

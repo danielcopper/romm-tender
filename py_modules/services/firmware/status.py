@@ -378,6 +378,7 @@ class FirmwareStatusReader:
         are the platform's, the answer is the core's.
         """
         index = catalogue.by_file_name()
+        image_cores = catalogue.cores_needing_a_system_image()
         asked: dict[str, Mapping[str, FolderVerdict]] = {}
         for plat in platforms_map.values():
             slug = plat["platform_slug"]
@@ -408,6 +409,7 @@ class FirmwareStatusReader:
                 placements,
                 complete,
                 core_so,
+                image_cores,
             )
             plat["files"] = [{**raw, **_wanted_fields(entry)} for raw, entry in zip(plat["files"], files, strict=True)]
             # Alphabetical, and only here: the two halves arrive in their own
@@ -558,7 +560,9 @@ class FirmwareStatusReader:
             self._demand.wanted_beyond_server(placements, scope, {fw.get("file_name", "") for fw in firmware_list})
         )
         complete = catalogue.reading_complete_for(scope)
-        files = collect_firmware_status(items, placements, complete, active_core_so)
+        files = collect_firmware_status(
+            items, placements, complete, active_core_so, catalogue.cores_needing_a_system_image()
+        )
         system_image = classify_system_image(catalogue.verdict_for(active_core_so), files, active_core_so)
 
         if not files:

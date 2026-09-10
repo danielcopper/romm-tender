@@ -26,6 +26,7 @@ from domain.bios_status import (
     SYSTEM_IMAGE_UNSETTLED,
     BiosFileEntry,
     BiosStatus,
+    build_file_entry,
     classify_system_image,
     compute_bios_label,
     compute_bios_level,
@@ -39,9 +40,12 @@ from domain.firmware_wants import (
     WANTED_OPTIONAL,
     WANTED_UNKNOWN,
     CoreFirmwareVerdict,
+    FirmwarePlacement,
+    FirmwareWant,
 )
 
 _CORE = "swanstation_libretro"
+_ALTERNATIVE_CORE = "pcsx_rearmed_libretro"
 
 
 def _image(name: str, *, satisfied: bool | None, core: str = _CORE) -> BiosFileEntry:
@@ -281,3 +285,54 @@ class TestTheVerdictOverTheSystemImage:
     def test_the_default_is_the_quiet_answer(self):
         """A caller that supplies nothing keeps the verdict it always got."""
         assert _status((_image("scph5501.bin", satisfied=True),)).system_image == SYSTEM_IMAGE_NOT_DEMANDED
+
+
+class TestWhatACoresEntryOnARowSays:
+    """Per core: its own word about the file, and the table's word about its console.
+
+    Two speakers, two keys, and the pair is what a surface listing several
+    emulators has to be able to word — a core that marks the file ``optional``
+    while its console will not start without one of the images it declares is
+    the informative case, and it is the deployed catalogue's SwanStation.
+    """
+
+    _PLACEMENT = FirmwarePlacement(
+        file_name="scph5501.bin",
+        relative_path="scph5501.bin",
+        description="PlayStation BIOS",
+        wants=(
+            FirmwareWant(core_so=_CORE, required=False),
+            FirmwareWant(core_so=_ALTERNATIVE_CORE, required=False),
+            FirmwareWant(core_so=None, required=True),
+        ),
+    )
+
+    def _cores(self, image_demanding_cores=()) -> dict[str, dict[str, object]]:
+        return build_file_entry(
+            "scph5501.bin",
+            False,
+            "/bios/scph5501.bin",
+            self._PLACEMENT,
+            True,
+            _CORE,
+            image_demanding_cores=image_demanding_cores,
+        ).cores
+
+    def test_the_declaration_and_the_consoles_demand_ride_side_by_side(self):
+        cores = self._cores(frozenset({_CORE}))
+
+        assert cores[_CORE] == {"required": False, "system_image_demanded": True}
+        assert cores[_ALTERNATIVE_CORE] == {"required": False, "system_image_demanded": False}
+
+    def test_the_declaration_is_carried_unaltered(self):
+        """The core's own word never moves with the console's demand."""
+        for image_demanding_cores in ((), frozenset({_CORE})):
+            assert self._cores(image_demanding_cores)[_CORE]["required"] is False
+
+    def test_a_caller_that_names_no_core_claims_nothing_for_any_of_them(self):
+        """The default is silence, not a demand — an unasked question is not an answer."""
+        assert all(core["system_image_demanded"] is False for core in self._cores().values())
+
+    def test_an_emulator_with_no_core_of_its_own_keeps_its_row_out(self):
+        """A standalone emulator names no ``.so``, so there is no key to answer under."""
+        assert set(self._cores(frozenset({_CORE}))) == {_CORE, _ALTERNATIVE_CORE}

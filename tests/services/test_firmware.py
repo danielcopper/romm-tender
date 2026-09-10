@@ -2368,6 +2368,21 @@ class TestOnePlatformOneEmulator:
         assert platform["active_core"] == _PSX_CORE
         assert _emulator_dependent(platform) == _emulator_dependent(page)
 
+    @pytest.mark.asyncio
+    async def test_the_per_core_lines_carry_the_declaration_and_the_consoles_demand(self):
+        """Each core's entry on a row says its own word AND what its console needs.
+
+        The pair is the informative case and the reason it cannot be folded:
+        both cores mark every image ``optional`` — a libretro ``.info`` has
+        nothing else to say — and only one of the two consoles will not start
+        without one.
+        """
+        _, page = await self._both(None)
+
+        cores = next(f for f in page["files"] if f["file_name"] == _PSX_IMAGES[0])["cores"]
+        assert cores[_PSX_CORE] == {"required": False, "system_image_demanded": True}
+        assert cores[_PSX_ALTERNATIVE_CORE] == {"required": False, "system_image_demanded": False}
+
 
 class TestDownloadFirmware:
     @pytest.mark.asyncio
@@ -4162,9 +4177,11 @@ class TestPerCoreFiltering:
         gb_file = next(f for f in result["files"] if f["file_name"] == "gb_bios.bin")
         assert gb_file["used_by_active"] is False
         assert gb_file["required_by_active"] is False
+        # Each core's entry states both halves: its own declaration, and whether
+        # its console is one that will not start without an image (#1858).
         assert gb_file["cores"] == {
-            "gambatte_libretro": {"required": False},
-            "mgba_libretro": {"required": False},
+            "gambatte_libretro": {"required": False, "system_image_demanded": False},
+            "mgba_libretro": {"required": False, "system_image_demanded": False},
         }
 
         assert result["required_count"] == 1
