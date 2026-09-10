@@ -71,10 +71,11 @@ function cells(el: Element): string[] {
   return Array.from(grid(el).children).map((cell) => cell.textContent);
 }
 
-// What this plugin registers itself as: `register_device` passes
-// `client="decky-romm-sync"` with the plugin version
-// (`py_modules/services/saves/sync_engine/devices.py`). Every row a Deck shows
-// carries it, so it is the string the Client column has to hold.
+// The longest client string the server can hand back — NOT what this plugin
+// registers under now, which is `DISPLAY_NAME`, "Tender" (`domain/identity.py`).
+// RomM keeps the rows earlier versions wrote, and up to 0.32 they said
+// `decky-romm-sync`; those rows do not expire, so this is what the column has to
+// hold. Sizing to today's shorter name would clip them.
 const REAL_CLIENT = "decky-romm-sync";
 const REAL_VERSION = "0.32.0";
 

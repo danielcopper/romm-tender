@@ -27,11 +27,15 @@ import { formatRelativeTime } from "./helpers";
 // The name is the column with something to say, so it takes what the other two
 // leave.
 //
-// `Client` is sized for the string THIS plugin registers itself under, which is
-// what every row a Deck shows will carry: `register_device` passes
-// `client="decky-romm-sync"` with the plugin version
-// (`services/saves/sync_engine/devices.py`), so the cell reads
-// `decky-romm-sync v0.32.0` — 23 characters, not the 14 of a shorter name. At
+// `Client` is sized for the longest string the SERVER can hand back, which is
+// not what this plugin registers under today. `register_device` passes
+// `client=DISPLAY_NAME` — "Tender" (`domain/identity.py`) — but the rows come
+// from RomM, which keeps what earlier versions wrote, and up to 0.32 that was
+// `decky-romm-sync`. A real listing shows both spellings side by side, plus
+// `web` for the rows RomM's own frontend registers, and the column has to hold
+// the widest of them: `decky-romm-sync v0.32.0`, 23 characters. Sizing it to
+// today's name would clip every row a Deck registered before the rename, and
+// those do not expire. At
 // the 11px these cells are set in that measures 131px in Noto Sans and 143px in
 // DejaVu Sans; the device renders it in Steam's own Motiva Sans, which is on
 // neither this machine nor any check here, so the track takes the wider of the

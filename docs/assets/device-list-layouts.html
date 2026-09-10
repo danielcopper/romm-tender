@@ -168,6 +168,11 @@
       <dt>The facts per device</dt>
       <dd>The server answers with five: name, client, client version, platform, last seen — plus an id and the
         “this device” mark.</dd>
+      <dt>What the client column holds</dt>
+      <dd>The rows above are the mix a real listing carries: this plugin registers as <code>Tender</code> since the
+        rename, RomM keeps what earlier versions wrote under <code>decky-romm-sync</code>, and RomM's own frontend
+        registers <code>web</code>. Those older rows do not expire, which is why the column is sized for the longest of
+        the three rather than for today's name.</dd>
       <dt>Why it was a question at all</dt>
       <dd>The Tables rule asks for aligned columns, because a device row carries more than two facts. But every other
         row in this pane is a Steam <code>Field</code> — label left, value right — so a grid here is the only content
@@ -208,15 +213,15 @@
               <div class="sec-t">Registered Devices <span class="m">A</span></div>
               <div class="row" style="display:block">
                 <span>Steam Deck<span class="here">(this device)</span></span>
-                <div class="desc">decky-romm-sync v0.32.0 · linux · last seen just now · ID a1b2c3d4</div>
+                <div class="desc">Tender v0.33.0 · linux · last seen just now · ID a1b2c3d4</div>
               </div>
               <div class="row" style="display:block">
                 <span>Living-room PC</span>
                 <div class="desc">decky-romm-sync v0.31.0 · linux · last seen 3 Sep · ID 7f2e91bc</div>
               </div>
               <div class="row" style="display:block">
-                <span>Old Deck</span>
-                <div class="desc">decky-romm-sync v0.29.1 · linux · last seen 12 Jun · ID c05a44d1</div>
+                <span>Chrome on Linux</span>
+                <div class="desc">web v148 · linux · last seen 12 Jun · ID c05a44d1</div>
               </div>
             </div>
           </div>
@@ -274,9 +279,9 @@
               <table class="tbl">
                 <thead><tr><th>Device</th><th>Client</th><th>Last seen</th></tr></thead>
                 <tbody>
-                  <tr><td class="cell" style="width:58%">Steam Deck<span class="here">(this)</span></td><td class="cell tnum" style="width:27%">decky-romm-sync v0.32.0</td><td class="cell tnum" style="width:15%">just now</td></tr>
+                  <tr><td class="cell" style="width:58%">Steam Deck<span class="here">(this)</span></td><td class="cell tnum" style="width:27%">Tender v0.33.0</td><td class="cell tnum" style="width:15%">just now</td></tr>
                   <tr><td class="cell">Living-room PC</td><td class="cell tnum">decky-romm-sync v0.31.0</td><td class="cell tnum">3 Sep</td></tr>
-                  <tr><td class="cell">Old Deck</td><td class="cell tnum mu">decky-romm-sync v0.29.1</td><td class="cell tnum mu">12 Jun</td></tr>
+                  <tr><td class="cell">Chrome on Linux</td><td class="cell tnum mu">web v148</td><td class="cell tnum mu">12 Jun</td></tr>
                 </tbody>
               </table>
             </div>
@@ -336,7 +341,7 @@
               <div class="btn"><span>Sync all now</span><span class="ar">›</span></div>
               <div class="sec-t">Registered Devices <span class="sp">3</span></div>
               <div class="two">
-                <span>Steam Deck<span class="here">(this device)</span><div class="desc">decky-romm-sync v0.32.0</div></span>
+                <span>Steam Deck<span class="here">(this device)</span><div class="desc">Tender v0.33.0</div></span>
                 <span class="rt">just now</span>
               </div>
               <div class="two">
@@ -344,7 +349,7 @@
                 <span class="rt">3 Sep</span>
               </div>
               <div class="two">
-                <span>Old Deck<div class="desc">decky-romm-sync v0.29.1</div></span>
+                <span>Chrome on Linux<div class="desc">web v148</div></span>
                 <span class="rt">12 Jun</span>
               </div>
             </div>
