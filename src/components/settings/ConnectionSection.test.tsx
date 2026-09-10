@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, fireEvent } from "@testing-library/react";
+import { render, fireEvent, within } from "@testing-library/react";
 import { createElement, type ReactElement } from "react";
 import { ConnectionSection } from "./ConnectionSection";
 import { showModal } from "@decky/ui";
@@ -74,6 +74,10 @@ interface ConnectModalProps {
   onConnectToken?: (token: string) => void;
   onConnectPairing?: (code: string) => void;
 }
+interface CustomHeadersModalProps {
+  storedNames?: string[];
+  onSave?: (headers: unknown[]) => void;
+}
 interface ConfirmModalProps {
   strTitle?: string;
   strDescription?: string;
@@ -95,7 +99,9 @@ function defaultProps(overrides: Partial<React.ComponentProps<typeof ConnectionS
     hasToken: false,
     allowInsecureSsl: false,
     status: "",
+    customHeaderNames: [] as string[],
     onUrlChange: vi.fn(),
+    onSaveCustomHeaders: vi.fn(),
     onConnect: vi.fn(),
     onConnectToken: vi.fn(),
     onConnectPairing: vi.fn(),
@@ -103,6 +109,13 @@ function defaultProps(overrides: Partial<React.ComponentProps<typeof ConnectionS
     onSignOut: vi.fn(),
     ...overrides,
   };
+}
+
+/** The Field row carrying `label` — the section renders several "Edit" buttons. */
+function fieldRow(getAllByTestId: (id: string) => HTMLElement[], label: string): HTMLElement {
+  const row = getAllByTestId("field").find((el) => within(el).queryByTestId("field-label")?.textContent === label);
+  if (row === undefined) throw new Error(`no Field row labelled ${label}`);
+  return row;
 }
 
 describe("ConnectionSection", () => {
@@ -139,14 +152,54 @@ describe("ConnectionSection", () => {
 
     it("opens a TextInputModal with field='url' when Edit is clicked", () => {
       const onUrlChange = vi.fn();
-      const { getByText } = render(<ConnectionSection {...defaultProps({ url: "http://romm.local", onUrlChange })} />);
-      fireEvent.click(getByText("Edit"));
+      const { getAllByTestId } = render(
+        <ConnectionSection {...defaultProps({ url: "http://romm.local", onUrlChange })} />,
+      );
+      fireEvent.click(within(fieldRow(getAllByTestId, "RomM URL")).getByText("Edit"));
       const props = lastShownModalProps<UrlModalProps>();
       expect(props?.label).toBe("RomM URL");
       expect(props?.value).toBe("http://romm.local");
       expect(props?.field).toBe("url");
       expect(props?.bIsPassword).toBeUndefined();
       expect(props?.onSubmit).toBe(onUrlChange);
+    });
+  });
+
+  describe("Custom headers row", () => {
+    it("sits directly under the URL row", () => {
+      const { getAllByTestId } = render(<ConnectionSection {...defaultProps()} />);
+      const labels = getAllByTestId("field-label").map((el) => el.textContent);
+      expect(labels.indexOf("Custom headers")).toBe(labels.indexOf("RomM URL") + 1);
+    });
+
+    it("describes an empty list as '(none)'", () => {
+      const { getAllByTestId } = render(<ConnectionSection {...defaultProps()} />);
+      const row = fieldRow(getAllByTestId, "Custom headers");
+      expect(within(row).getByTestId("field-desc").textContent).toBe("(none)");
+    });
+
+    it("counts the configured headers in the description", () => {
+      const { getAllByTestId } = render(
+        <ConnectionSection {...defaultProps({ customHeaderNames: ["P-Access-Token", "P-Access-Token-Id"] })} />,
+      );
+      const row = fieldRow(getAllByTestId, "Custom headers");
+      expect(within(row).getByTestId("field-desc").textContent).toBe("2 set");
+    });
+
+    it("never shows a header value — only names reach the frontend", () => {
+      const { container } = render(<ConnectionSection {...defaultProps({ customHeaderNames: ["P-Access-Token"] })} />);
+      expect(container.textContent).not.toContain("P-Access-Token");
+    });
+
+    it("opens a CustomHeadersModal carrying the stored names and the save handler", () => {
+      const onSaveCustomHeaders = vi.fn();
+      const { getAllByTestId } = render(
+        <ConnectionSection {...defaultProps({ customHeaderNames: ["P-Access-Token"], onSaveCustomHeaders })} />,
+      );
+      fireEvent.click(within(fieldRow(getAllByTestId, "Custom headers")).getByText("Edit"));
+      const props = lastShownModalProps<CustomHeadersModalProps>();
+      expect(props?.storedNames).toEqual(["P-Access-Token"]);
+      expect(props?.onSave).toBe(onSaveCustomHeaders);
     });
   });
 
@@ -313,16 +366,17 @@ describe("ConnectionSection", () => {
       const { getAllByTestId } = render(<ConnectionSection {...defaultProps({ status: "Connected ✓" })} />);
       const labels = getAllByTestId("field-label").map((el) => el.textContent);
       expect(labels).toContain("Connected ✓");
-      // URL row + RomM Account row + status row.
-      expect(getAllByTestId("field")).toHaveLength(3);
+      // URL row + Custom headers row + RomM Account row + status row.
+      expect(getAllByTestId("field")).toHaveLength(4);
     });
 
     it("omits the status Field when empty", () => {
       const { getAllByTestId } = render(<ConnectionSection {...defaultProps()} />);
-      // URL + RomM Account are Field + DialogButton rows, so with no status the
-      // only Fields are those two — the status row does not render.
+      // URL, Custom headers and RomM Account are Field + DialogButton rows, so
+      // with no status the only Fields are those three — the status row does not
+      // render.
       const labels = getAllByTestId("field-label").map((el) => el.textContent);
-      expect(labels).toEqual(["RomM URL", "RomM Account"]);
+      expect(labels).toEqual(["RomM URL", "Custom headers", "RomM Account"]);
     });
   });
 });

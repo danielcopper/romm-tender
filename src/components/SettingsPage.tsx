@@ -16,6 +16,7 @@ import { showToast } from "../utils/toast";
 import {
   getSettings,
   saveServerUrl,
+  saveCustomHeaders,
   connectWithCredentials,
   connectWithToken,
   connectWithPairingCode,
@@ -43,6 +44,7 @@ import {
 import type {
   RegisteredDevice,
   CollectionNamingMode,
+  CustomHeaderEntry,
   SaveSyncSettings as SaveSyncSettingsType,
   RetroArchInputCheck,
   SettingsSection,
@@ -109,6 +111,9 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   const [hasToken, setHasToken] = useState(false);
   const [status, setStatus] = useState("");
   const [allowInsecureSsl, setAllowInsecureSsl] = useState(false);
+  // Names only — a configured header's value is a proxy credential the backend
+  // never sends back (#1822).
+  const [customHeaderNames, setCustomHeaderNames] = useState<string[]>([]);
 
   // SteamGridDB state
   const [sgdbApiKey, setSgdbApiKey] = useState("");
@@ -155,6 +160,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
         setUrl(pendingEdits.url ?? s.romm_url);
         setHasToken(s.has_token);
         setAllowInsecureSsl(s.romm_allow_insecure_ssl);
+        setCustomHeaderNames(s.romm_custom_header_names ?? []);
         setSgdbApiKey(s.sgdb_api_key_masked);
         setSteamInputMode(s.steam_input_mode);
         setLogLevel(s.log_level);
@@ -326,6 +332,16 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
       // field, over the URL actually saved (#1020).
       delete pendingEdits.url;
     }
+  };
+  // The modal owns closing (on success) and error display (on failure), so the
+  // verdict — and a rejection — is handed straight back to it rather than caught
+  // here. Only the row's own count is updated, from the list that was accepted.
+  const handleSaveCustomHeaders = async (headers: CustomHeaderEntry[]) => {
+    const result = await saveCustomHeaders(headers);
+    if (result.success) {
+      setCustomHeaderNames(headers.map((h) => h.name));
+    }
+    return result;
   };
   const handleAllowInsecureSslChange = (val: boolean) => {
     setAllowInsecureSsl(val);
@@ -552,9 +568,11 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
               hasToken={hasToken}
               allowInsecureSsl={allowInsecureSsl}
               status={status}
+              customHeaderNames={customHeaderNames}
               onUrlChange={(value) => {
                 detach(handleUrlChange(value));
               }}
+              onSaveCustomHeaders={handleSaveCustomHeaders}
               onConnect={handleConnect}
               onConnectToken={handleConnectToken}
               onConnectPairing={handleConnectPairing}

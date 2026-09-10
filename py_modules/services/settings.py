@@ -16,6 +16,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from domain.custom_headers import (
+    HeaderProblem,
+    HeaderRefusal,
+    resolve_custom_headers,
+    stored_custom_headers,
+)
 from domain.sibling_resolution import AUTO_REGION
 from lib.list_result import ErrorCode
 from lib.url_host import is_valid_server_url
@@ -29,6 +35,37 @@ if TYPE_CHECKING:
 _MASK_PLACEHOLDER = "••••"
 _VALID_LOG_LEVELS = ("debug", "info", "warn", "error")
 _VALID_STEAM_INPUT_MODES = ("default", "force_on", "force_off")
+
+# What the user is told about a refused custom-header list. Each template may name
+# the offending header, never its value. ``Authorization`` gets its own sentence
+# because it is the first header a proxy's docs suggest and the one the RomM
+# bearer already occupies — a user told only "reserved" would keep trying.
+_HEADER_REFUSAL_MESSAGES: dict[HeaderProblem, str] = {
+    HeaderProblem.NOT_A_LIST: "Custom headers must be a list of rows.",
+    HeaderProblem.MALFORMED_ENTRY: "A custom header row is missing its name or value.",
+    HeaderProblem.UNKNOWN_VALUE_ACTION: "Could not tell whether to keep or replace the value for '{name}'.",
+    HeaderProblem.INVALID_NAME: (
+        "'{name}' is not a valid header name — it may not contain a space or a colon; "
+        "letters, digits and - _ . are safe."
+    ),
+    HeaderProblem.RESERVED_NAME: "'{name}' is set by the plugin itself and cannot be overridden.",
+    HeaderProblem.AUTHORIZATION_RESERVED: (
+        "'Authorization' already carries your RomM API token, so it cannot also carry a proxy credential. "
+        "Ask your proxy for a header of its own (Pangolin uses P-Access-Token and P-Access-Token-Id)."
+    ),
+    HeaderProblem.DUPLICATE_NAME: "'{name}' is listed more than once.",
+    HeaderProblem.EMPTY_VALUE: "'{name}' needs a value.",
+    HeaderProblem.UNSAFE_VALUE: "The value for '{name}' contains a line break or control character.",
+    HeaderProblem.PADDED_VALUE: "The value for '{name}' starts or ends with a space — remove it.",
+    HeaderProblem.UNENCODABLE_VALUE: "The value for '{name}' contains characters an HTTP header cannot carry.",
+    HeaderProblem.UNEXPECTED_VALUE: "'{name}' asked to keep its stored value but sent one as well.",
+    HeaderProblem.NO_STORED_VALUE: "'{name}' has no stored value to keep — enter one.",
+}
+
+
+def _header_refusal_message(refusal: HeaderRefusal) -> str:
+    """Word a refusal for the user. A template with no ``{name}`` ignores the name."""
+    return _HEADER_REFUSAL_MESSAGES[refusal.problem].format(name=refusal.name)
 
 
 @dataclass(frozen=True)
@@ -90,12 +127,36 @@ class SettingsService:
             self._logger.error(f"Failed to save settings: {e}")
             return {"success": False, "reason": "save_failed", "message": f"Save failed: {e}"}
 
+    def save_custom_headers(self, headers: object) -> dict[str, Any]:
+        """Validate and persist the extra headers sent to the RomM origin.
+
+        Whole-list replace: the list handed in IS the new configuration, so a row
+        the user removed is gone. Each entry states what to do with its value —
+        ``"set"`` carries a new one, ``"keep"`` reuses the one stored under that
+        name — because a stored value is never sent to the frontend and so cannot
+        be echoed back. The whole list is refused on the first problem, and the
+        refusal names the offending header, never its value.
+        """
+        stored = stored_custom_headers(self._settings.get("romm_custom_headers"))
+        resolved = resolve_custom_headers(headers, stored)
+        if isinstance(resolved, HeaderRefusal):
+            return {
+                "success": False,
+                "reason": resolved.problem.value,
+                "message": _header_refusal_message(resolved),
+            }
+        self._settings["romm_custom_headers"] = [{"name": h.name, "value": h.value} for h in resolved]
+        self._settings_persister.save_settings()
+        return {"success": True}
+
     def get_settings(self) -> dict[str, Any]:
         """Return the read-shape settings dict for the frontend.
 
         Reports whether a Client API Token is stored via ``has_token``;
         the token itself is never sent to the frontend. The SteamGridDB
-        API key is reported as a masked placeholder.
+        API key is reported as a masked placeholder. The custom proxy
+        headers are reported by NAME only, for the same reason: a stored
+        value can be replaced, never read back.
         """
         return {
             "romm_url": self._settings.get("romm_url", ""),
@@ -110,6 +171,9 @@ class SettingsService:
             "collection_naming_mode": self._settings.get("collection_naming_mode", "merge"),
             "preferred_region": self._settings.get("preferred_region", AUTO_REGION),
             "skip_preview": self._settings.get("skip_preview", False),
+            "romm_custom_header_names": [
+                h.name for h in stored_custom_headers(self._settings.get("romm_custom_headers"))
+            ],
         }
 
     # ── Log level ────────────────────────────────────────────────────────

@@ -57,6 +57,12 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # sign-out. Drives the collection owner-scope filter; ``None`` makes "Own"
     # behave like "All" (the non-breaking fallback).
     "romm_user_id": None,
+    # Extra HTTP headers every request to the configured RomM origin carries, for
+    # a server behind an authenticating reverse proxy. A LIST of
+    # ``{"name", "value"}`` rather than a map, so the modal shows the rows back in
+    # the order they were entered. Values are proxy credentials: never sent to the
+    # frontend, never logged.
+    "romm_custom_headers": [],
     "enabled_platforms": {},
     "enabled_collections": {"standard": {}, "smart": {}, "virtual": {}},
     "collection_create_platform_groups": False,

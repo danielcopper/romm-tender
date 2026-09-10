@@ -57,6 +57,7 @@ import type {
   CollisionChoice,
   AdoptResult,
   VerifyContentResult,
+  CustomHeaderEntry,
 } from "../types";
 
 export interface BackendResult {
@@ -67,6 +68,17 @@ export interface BackendResult {
   /** Set when a callable was rejected because a RetroDECK migration is pending. */
   blocked_by_migration?: boolean;
   prune_lease_token?: string;
+}
+
+/**
+ * The custom-header save's verdict (#1822). A refusal names the offending header
+ * in `message`; it never carries a value back, so there is no payload beyond the
+ * verdict itself.
+ */
+export interface CustomHeadersResult {
+  success: boolean;
+  reason?: string;
+  message?: string;
 }
 
 export interface CallableFailure {
@@ -234,6 +246,7 @@ export interface CachedGameDetail extends BiosAnswer {
 export { getCachedGameDetail, invalidateCachedGameDetail } from "../utils/cachedGameDetailStore";
 export const getSettings = callable<[], PluginSettings>("get_settings");
 export const saveServerUrl = callable<[string, boolean], BackendResult>("save_server_url");
+export const saveCustomHeaders = callable<[CustomHeaderEntry[]], CustomHeadersResult>("save_custom_headers");
 export const connectWithCredentials = callable<[string, string, string, boolean], BackendResult>(
   "connect_with_credentials",
 );

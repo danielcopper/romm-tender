@@ -65,12 +65,51 @@ The **Connections** section manages your RomM server connection.
 
   Once you are signed in, this button reads **Sign in again** and a **Sign out** button appears below it (see
   [Sign out](#sign-out)).
+- **Custom headers** — extra HTTP headers sent with every request to your RomM server. Shows how many are configured, or
+  **(none)**. Only needed when your server sits behind a proxy that authenticates requests itself — see
+  [Custom headers for an authenticating proxy](#custom-headers-for-an-authenticating-proxy) below.
 - **Allow Insecure SSL** — shown only for `https://` URLs; skips certificate verification for self-signed certs (LAN
   only).
 
 The plugin checks the connection for you — there is no manual "Test Connection" button. The **Connection** row on the
 plugin's main QAM panel shows the live status whenever you open it, and names the problem when it can't connect (for
 example _Sign-in rejected_, _Server unreachable_, or _No server URL_).
+
+### Custom headers for an authenticating proxy
+
+If your RomM server sits behind a proxy that authenticates requests before they reach RomM — Pangolin, Cloudflare
+Access, Authelia, Authentik forward-auth — the proxy rejects the plugin's requests and you cannot connect at all. A
+browser gets past it because you logged in to the proxy there; the plugin has no such session.
+
+The way through is a header the proxy accepts. Tap **Edit** on the **Custom headers** row, add a row per header, enter
+its name and value, and save. From then on every request the plugin sends to your RomM server carries them — including
+the sign-in itself, since the proxy sits in front of that too.
+
+**Where they go.** To the RomM server you configured, and nowhere else — they are credentials for your front door, so no
+request to any other host carries them. The plugin does reach other hosts: SteamGridDB for artwork, and a metadata
+provider's CDN for a cover image RomM has no local copy of.
+
+**What they cannot be.** A header the plugin sets itself is refused when you save, so nothing you enter can quietly
+replace it: `Authorization`, `User-Agent`, `Content-Type`, `Content-Length`, `Host`, `Range`, `If-None-Match` and
+`If-Modified-Since`.
+
+`Authorization` is the one worth explaining. Proxy documentation often suggests it — Pangolin documents a Basic-auth
+`Authorization` header — but that is exactly the header your RomM API token travels in. One request cannot carry both,
+so the plugin refuses it rather than silently sending one and dropping the other. A proxy built for non-browser clients
+usually offers a header of its own as well; use that one.
+
+**Worked example — Pangolin.** Issue a resource access token in Pangolin, then enter its two parts as rows:
+
+| Name                | Value                        |
+| ------------------- | ---------------------------- |
+| `P-Access-Token`    | the token Pangolin generated |
+| `P-Access-Token-Id` | the token's id               |
+
+Save, then check the **Connection** row on the main QAM panel — it should stop reporting a rejection.
+
+**Values are write-only.** A saved value is never sent back to the plugin's UI: reopening the editor shows each header's
+name with an empty value field marked `•••• stored`. Leave it empty to keep the stored value, or type to replace it.
+Removing a row and saving deletes that header. Values are never written to the plugin's log.
 
 ### Sign out
 

@@ -407,6 +407,24 @@ Format: **invariant** — tier — enforced by.
   `BiosChecker` has one method, so there is no cheap cached twin to reach for — and an absence is exactly what a future
   change restores without noticing. Re-adding a stored answer would look like a performance win and would put a previous
   page open's requirement on this page
+- **A configured custom header reaches the RomM origin and never a foreign one, and never displaces a header the adapter
+  sets itself** — test + prompt-only — `tests/domain/test_custom_headers.py` pins the validation in both directions
+  (every reserved name case-insensitively, a CRLF in a value, and what the persisted reading skips), and
+  `tests/adapters/romm/test_http.py::TestCustomProxyHeaders` pins the three attachment points, the one exclusion, and
+  that a hand-planted `Authorization` / `Host` still loses. **Nothing joins them.** The rule spans
+  `domain/custom_headers.py`, the transport's `_apply_origin_headers` and its three callers — `_apply_default_headers`
+  (every authenticated route), `unauthenticated_post_json` (the pairing-code exchange) and `basic_auth_request` (the
+  token mint) — plus the one place that must NOT call it, `download_external`. Both directions fail in silence and each
+  one is worse than it looks. A fourth request method that forgets the helper works perfectly for the user who has no
+  proxy and 403s for the user who has one, on that path only. Adding it to `download_external` hands the user's proxy
+  credential to a third-party metadata CDN, which no test would notice because the fetch still succeeds. And the
+  reserved set is held by three independent things rather than one: validation refuses the name; `stored_custom_headers`
+  skips what validation would have refused, so a hand edit cannot route around it; and attachment ORDER puts the
+  configured headers on before the adapter's own, so the adapter's `add_header` wins the same name whatever preceded it.
+  Weaken any one of the three and the other two still pass green today, which is exactly how the guarantee becomes a
+  coincidence. `host` is in the set for a reason nothing here reveals: `http.client._send_request` suppresses its own
+  derived `Host` when the caller supplied one, so a configured `Host` retargets every request's virtual host. Detail:
+  `docs/architecture/backend-architecture.md` → "the headers every RomM-origin request carries"
 - **Aggregate state mutated only via verb-named methods (no field assignment)** — check —
   `scripts/check_aggregate_field_assignment.py`
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, uow_factory) is called while a UoW is open on the

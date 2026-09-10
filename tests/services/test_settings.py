@@ -129,6 +129,89 @@ class TestSaveServerUrl:
 # ── get_settings ───────────────────────────────────────────────────────
 
 
+class TestSaveCustomHeaders:
+    """#1822: the whole configured list is replaced, validated, and never echoed back."""
+
+    def _set(self, name: str, value: str) -> dict[str, str]:
+        return {"name": name, "value_action": "set", "value": value}
+
+    def _keep(self, name: str) -> dict[str, str]:
+        return {"name": name, "value_action": "keep"}
+
+    def test_persists_the_list_in_order(self, service, settings, settings_persister):
+        result = service.save_custom_headers([self._set("P-Access-Token", "tok"), self._set("P-Access-Token-Id", "id")])
+        assert result == {"success": True}
+        assert settings["romm_custom_headers"] == [
+            {"name": "P-Access-Token", "value": "tok"},
+            {"name": "P-Access-Token-Id", "value": "id"},
+        ]
+        settings_persister.save_settings.assert_called_once_with()
+
+    def test_keep_preserves_the_stored_value(self, service, settings):
+        settings["romm_custom_headers"] = [{"name": "X-Token", "value": "stored"}]
+        result = service.save_custom_headers([self._keep("X-Token")])
+        assert result == {"success": True}
+        assert settings["romm_custom_headers"] == [{"name": "X-Token", "value": "stored"}]
+
+    def test_keep_for_an_unknown_name_fails_without_writing(self, service, settings, settings_persister):
+        settings["romm_custom_headers"] = [{"name": "X-Token", "value": "stored"}]
+        result = service.save_custom_headers([self._keep("X-Other")])
+        assert result["success"] is False
+        assert result["reason"] == "no_stored_header_value"
+        assert "X-Other" in result["message"]
+        assert settings["romm_custom_headers"] == [{"name": "X-Token", "value": "stored"}]
+        settings_persister.save_settings.assert_not_called()
+
+    def test_a_whole_list_replace_drops_a_removed_row(self, service, settings):
+        settings["romm_custom_headers"] = [
+            {"name": "X-Keep", "value": "a"},
+            {"name": "X-Drop", "value": "b"},
+        ]
+        service.save_custom_headers([self._keep("X-Keep")])
+        assert settings["romm_custom_headers"] == [{"name": "X-Keep", "value": "a"}]
+
+    def test_an_empty_list_clears_every_header(self, service, settings):
+        settings["romm_custom_headers"] = [{"name": "X-Token", "value": "a"}]
+        assert service.save_custom_headers([]) == {"success": True}
+        assert settings["romm_custom_headers"] == []
+
+    def test_authorization_is_refused_with_its_own_message(self, service, settings):
+        result = service.save_custom_headers([self._set("Authorization", "Basic abc")])
+        assert result["success"] is False
+        assert result["reason"] == "authorization_reserved"
+        assert "RomM API token" in result["message"]
+        assert "romm_custom_headers" not in settings
+
+    @pytest.mark.parametrize(
+        ("entries", "reason"),
+        [
+            ("not-a-list", "headers_not_a_list"),
+            ([{"name": "X-Token"}], "unknown_value_action"),
+            (["X-Token: v"], "malformed_header_entry"),
+            ([{"name": 7, "value_action": "set", "value": "v"}], "malformed_header_entry"),
+            ([{"name": "X-Token", "value_action": "wipe", "value": "v"}], "unknown_value_action"),
+            ([{"name": "X Token", "value_action": "set", "value": "v"}], "invalid_header_name"),
+            ([{"name": "User-Agent", "value_action": "set", "value": "v"}], "reserved_header_name"),
+            ([{"name": "X-Token", "value_action": "set", "value": "a\r\nX-Injected: y"}], "unsafe_header_value"),
+            ([{"name": "X-Token", "value_action": "set", "value": ""}], "empty_header_value"),
+        ],
+    )
+    def test_garbage_from_the_wire_is_rejected_without_writing(
+        self, service, settings, settings_persister, entries, reason
+    ):
+        result = service.save_custom_headers(entries)
+        assert result["success"] is False
+        assert result["reason"] == reason
+        assert result["message"]
+        assert "romm_custom_headers" not in settings
+        settings_persister.save_settings.assert_not_called()
+
+    def test_a_refusal_never_carries_the_value(self, service):
+        result = service.save_custom_headers([self._set("X-Token", "s3cret\r\nX-Injected: y")])
+        assert result["success"] is False
+        assert "s3cret" not in result["message"]
+
+
 class TestGetSettings:
     def test_happy_path(self, service, settings, steam_config):
         settings.update(
@@ -210,6 +293,18 @@ class TestGetSettings:
         assert result["collection_naming_mode"] == "merge"
         assert result["preferred_region"] == "auto"
         assert result["skip_preview"] is False
+        assert result["romm_custom_header_names"] == []
+
+    def test_reports_custom_header_names_and_never_a_value(self, service, settings):
+        """Same rule as the token and the SteamGridDB key: a stored value can be replaced, not read back."""
+        settings["romm_custom_headers"] = [
+            {"name": "P-Access-Token", "value": "s3cret"},
+            {"name": "P-Access-Token-Id", "value": "id-42"},
+        ]
+        result = service.get_settings()
+        assert result["romm_custom_header_names"] == ["P-Access-Token", "P-Access-Token-Id"]
+        assert "s3cret" not in str(result)
+        assert "id-42" not in str(result)
 
     def test_includes_retroarch_input_check_payload(self, service, steam_config):
         steam_config.check_retroarch_input_driver.return_value = {

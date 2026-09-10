@@ -89,7 +89,22 @@ export interface PluginSettings {
   // Optional: the backend always sends it, but older payloads / test fixtures
   // may omit it, treated as false.
   skip_preview?: boolean;
+  // Names of the extra headers sent to the RomM origin (#1822), in the order
+  // they were entered. NAMES only — a stored value is a proxy credential and is
+  // never sent to the frontend, so it can be replaced but never read back.
+  // Optional: the backend always sends it, but older payloads / test fixtures
+  // may omit it, treated as none configured.
+  romm_custom_header_names?: string[];
 }
+
+/**
+ * One row of the custom proxy-header list on its way to the backend (#1822).
+ * The union is the wire contract: a `value` accompanies `"set"` and only
+ * `"set"`, and `"keep"` means "reuse the value already stored under this name"
+ * — the row the user did not touch, whose value the frontend never received.
+ */
+export type CustomHeaderEntry =
+  { name: string; value_action: "set"; value: string } | { name: string; value_action: "keep" };
 
 export interface RomMetadata {
   summary: string;

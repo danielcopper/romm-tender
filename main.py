@@ -261,6 +261,10 @@ class Plugin:
     async def save_server_url(self, romm_url, allow_insecure_ssl=None):
         return self._settings_service.save_server_url(romm_url, allow_insecure_ssl)
 
+    @prune_active_blocked
+    async def save_custom_headers(self, headers):
+        return self._settings_service.save_custom_headers(headers)
+
     async def frontend_log(self, level, message):
         self._settings_service.frontend_log(level, message)
 

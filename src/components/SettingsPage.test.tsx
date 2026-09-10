@@ -717,6 +717,68 @@ describe("SettingsPage", () => {
     });
   });
 
+  describe("custom proxy headers fed to ConnectionSection", () => {
+    it("passes the names the backend reported down to the section", async () => {
+      vi.mocked(backend.getSettings).mockResolvedValue({
+        ...defaultSettings(),
+        romm_custom_header_names: ["P-Access-Token", "P-Access-Token-Id"],
+      });
+      render(<SettingsPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(capturedConnection[capturedConnection.length - 1]?.customHeaderNames).toEqual([
+        "P-Access-Token",
+        "P-Access-Token-Id",
+      ]);
+    });
+
+    it("treats a payload without the field as none configured", async () => {
+      render(<SettingsPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(capturedConnection[capturedConnection.length - 1]?.customHeaderNames).toEqual([]);
+    });
+
+    it("persists the list and updates the names on success", async () => {
+      vi.mocked(backend.saveCustomHeaders).mockResolvedValue({ success: true });
+      render(<SettingsPage onBack={vi.fn()} />);
+      await flushAsync();
+      const conn = capturedConnection[capturedConnection.length - 1];
+      const entries = [{ name: "X-Token" as const, value_action: "set" as const, value: "abc" }];
+
+      await act(async () => {
+        await conn?.onSaveCustomHeaders(entries);
+      });
+
+      expect(vi.mocked(backend.saveCustomHeaders)).toHaveBeenCalledWith(entries);
+      expect(capturedConnection[capturedConnection.length - 1]?.customHeaderNames).toEqual(["X-Token"]);
+    });
+
+    it("hands a refusal back to the modal and leaves the names alone", async () => {
+      vi.mocked(backend.getSettings).mockResolvedValue({
+        ...defaultSettings(),
+        romm_custom_header_names: ["X-Existing"],
+      });
+      vi.mocked(backend.saveCustomHeaders).mockResolvedValue({
+        success: false,
+        reason: "authorization_reserved",
+        message: "'Authorization' already carries your RomM API token",
+      });
+      render(<SettingsPage onBack={vi.fn()} />);
+      await flushAsync();
+      const conn = capturedConnection[capturedConnection.length - 1];
+
+      let result: { success: boolean; message?: string } | undefined;
+      await act(async () => {
+        result = await conn?.onSaveCustomHeaders([{ name: "Authorization", value_action: "set", value: "Basic abc" }]);
+      });
+
+      expect(result?.success).toBe(false);
+      expect(result?.message).toContain("RomM API token");
+      expect(capturedConnection[capturedConnection.length - 1]?.customHeaderNames).toEqual(["X-Existing"]);
+    });
+  });
+
   describe("handleConnect (credential → token flow)", () => {
     it("calls connectWithCredentials with url + creds + ssl, surfaces the message, and sets hasToken on success", async () => {
       vi.mocked(backend.getSettings).mockResolvedValue({

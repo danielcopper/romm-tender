@@ -20,6 +20,7 @@ from typing import Any, ClassVar
 from models.cover import CoverRevalidation
 
 from adapters.romm.retry import RetryLadder, RetryListener
+from domain.custom_headers import stored_custom_headers
 from lib.certifi_bundle import ca_bundle as _ca_bundle
 from lib.errors import (
     RommApiError,
@@ -174,13 +175,31 @@ class RommHttpAdapter:
             raise TokenHostMismatchError("Stored token was minted for a different server than the configured URL")
         return f"Bearer {token}"
 
+    def _apply_origin_headers(self, req: urllib.request.Request) -> None:
+        """Attach what EVERY request to the configured RomM origin carries.
+
+        The user's configured proxy headers (#1822) and the plugin
+        ``User-Agent`` — the two that do not depend on being signed in, so the
+        sign-in requests carry them too: an authenticating proxy sits in front of
+        sign-in as well, and without them the user cannot authenticate at all.
+
+        The configured headers go on FIRST, so a name the validation somehow let
+        through still cannot displace a header the adapter sets afterwards. They
+        are read from the live settings dict at call time, the way ``romm_url``
+        is: a value captured at construction would go stale the moment the user
+        edits it. ``download_external`` deliberately does not call this — its
+        host is a third-party CDN, not the RomM origin.
+        """
+        for header in stored_custom_headers(self._settings.get("romm_custom_headers")):
+            req.add_header(header.name, header.value)
+        req.add_header("User-Agent", self._user_agent)
+
     def _apply_default_headers(self, req: urllib.request.Request) -> None:
-        """Attach the standard outgoing headers: ``User-Agent`` always, and
-        ``Authorization`` only when a Client API Token is stored."""
+        """Attach the origin headers plus ``Authorization``, when a Client API Token is stored."""
+        self._apply_origin_headers(req)
         header = self.auth_header()
         if header is not None:
             req.add_header("Authorization", header)
-        req.add_header("User-Agent", self._user_agent)
 
     @staticmethod
     def _basic_auth_header(username: str, password: str) -> str:
@@ -677,8 +696,9 @@ class RommHttpAdapter:
 
         For a ROM's ``url_cover`` (an external metadata-provider CDN such as
         SteamGridDB / IGDB) used as the fallback when the RomM-local cover asset
-        404s (#1450): the host-bound RomM bearer must NEVER reach a third-party
-        origin, so only the plugin ``User-Agent`` is attached — no
+        404s (#1450): neither the host-bound RomM bearer nor the user's
+        configured proxy headers may reach a third-party origin, so only the
+        plugin ``User-Agent`` is attached — no
         ``Authorization`` header is ever built here (the CDN behind Cloudflare
         Bot Fight Mode also 403s the default ``Python-urllib`` UA). The *url*
         scheme is validated against :attr:`_EXTERNAL_URL_SCHEMES` first and a
@@ -700,6 +720,9 @@ class RommHttpAdapter:
 
         def _do_download():
             req = urllib.request.Request(encoded_url, method="GET")
+            # Not ``_apply_origin_headers``: this host is a third-party CDN, and
+            # the configured proxy headers are credentials for the user's own
+            # RomM front door. Only the UA goes out.
             req.add_header("User-Agent", self._user_agent)
             try:
                 with self._urlopen(req, timeout=self._CONNECT_TIMEOUT, romm_origin=False) as resp:
@@ -758,8 +781,8 @@ class RommHttpAdapter:
         def _do_json_request():
             body = json.dumps(data).encode("utf-8")
             req = urllib.request.Request(url, data=body, method=method)
-            req.add_header("Content-Type", _CONTENT_TYPE_JSON)
             self._apply_default_headers(req)
+            req.add_header("Content-Type", _CONTENT_TYPE_JSON)
             try:
                 with self._urlopen(req, timeout=30) as resp:
                     return json.loads(resp.read().decode())
@@ -803,8 +826,8 @@ class RommHttpAdapter:
 
         url = self._settings["romm_url"].rstrip("/") + path
         req = urllib.request.Request(url, data=body, method=method)
-        req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
         self._apply_default_headers(req)
+        req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
         try:
             with self._urlopen(req, timeout=30) as resp:
                 return json.loads(resp.read().decode())
@@ -821,7 +844,8 @@ class RommHttpAdapter:
 
         For endpoints whose credential is the request body itself (the
         pairing-code exchange, whose one-time code IS the credential): a stored
-        bearer must never be attached (only the ``User-Agent`` goes out). On an
+        bearer must never be attached, but the request still goes to the RomM
+        origin, so it carries the origin headers. On an
         HTTP error the response ``detail`` is attached to the raised typed error
         so the caller can branch on the server's specific reason. Returns ``{}``
         on a 204 No Content, parsed JSON otherwise.
@@ -829,8 +853,8 @@ class RommHttpAdapter:
         url = self._settings["romm_url"].rstrip("/") + path
         body = json.dumps(data).encode("utf-8")
         req = urllib.request.Request(url, data=body, method="POST")
+        self._apply_origin_headers(req)
         req.add_header("Content-Type", _CONTENT_TYPE_JSON)
-        req.add_header("User-Agent", self._user_agent)
         try:
             with self._urlopen(req, timeout=30) as resp:
                 if resp.status == 204:
@@ -865,10 +889,10 @@ class RommHttpAdapter:
         url = self._settings["romm_url"].rstrip("/") + path
         body = json.dumps(data).encode("utf-8") if data is not None else None
         req = urllib.request.Request(url, data=body, method=method)
+        self._apply_origin_headers(req)
         if body is not None:
             req.add_header("Content-Type", _CONTENT_TYPE_JSON)
         req.add_header("Authorization", self._basic_auth_header(username, password))
-        req.add_header("User-Agent", self._user_agent)
         try:
             with self._urlopen(req, timeout=30) as resp:
                 if resp.status == 204:

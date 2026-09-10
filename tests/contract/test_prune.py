@@ -267,6 +267,7 @@ async def test_action_report_rejects_stale_token_with_canonical_shape(harness):
         ("connect_with_pairing_code", ("https://server.example", "code", None)),
         ("sign_out", ()),
         ("save_server_url", ("https://server.example", None)),
+        ("save_custom_headers", ([],)),
         ("start_download", (41,)),
         ("adopt_existing_rom", (41,)),
         ("migrate_retrodeck_files", (None,)),

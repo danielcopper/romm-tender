@@ -23,7 +23,10 @@ import {
 import { TextInputModal } from "./TextInputModal";
 import { ConnectModal } from "./ConnectModal";
 import type { SignInResult } from "./ConnectModal";
+import { CustomHeadersModal } from "./CustomHeadersModal";
+import type { SaveHeadersResult } from "./CustomHeadersModal";
 import { isHttpsUrl } from "../../utils/serverUrl";
+import type { CustomHeaderEntry } from "../../types";
 
 // Sign-out only forgets the token on this device; it never revokes it in RomM.
 const SIGN_OUT_CONFIRM_DESCRIPTION =
@@ -35,7 +38,10 @@ interface ConnectionSectionProps {
   hasToken: boolean;
   allowInsecureSsl: boolean;
   status: string;
+  /** Names of the configured proxy headers — values never reach the frontend. */
+  customHeaderNames: string[];
   onUrlChange: (value: string) => void;
+  onSaveCustomHeaders: (headers: CustomHeaderEntry[]) => Promise<SaveHeadersResult>;
   onConnect: (username: string, password: string) => Promise<SignInResult>;
   onConnectToken: (token: string) => Promise<SignInResult>;
   onConnectPairing: (code: string) => Promise<SignInResult>;
@@ -48,7 +54,9 @@ export const ConnectionSection: FC<ConnectionSectionProps> = ({
   hasToken,
   allowInsecureSsl,
   status,
+  customHeaderNames,
   onUrlChange,
+  onSaveCustomHeaders,
   onConnect,
   onConnectToken,
   onConnectPairing,
@@ -63,6 +71,21 @@ export const ConnectionSection: FC<ConnectionSectionProps> = ({
             style={{ minWidth: "auto", width: "auto" }}
             onClick={() =>
               showModal(<TextInputModal label="RomM URL" value={url} field="url" onSubmit={onUrlChange} />)
+            }
+          >
+            Edit
+          </DialogButton>
+        </Field>
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <Field
+          label="Custom headers"
+          description={customHeaderNames.length > 0 ? `${customHeaderNames.length} set` : "(none)"}
+        >
+          <DialogButton
+            style={{ minWidth: "auto", width: "auto" }}
+            onClick={() =>
+              showModal(<CustomHeadersModal storedNames={customHeaderNames} onSave={onSaveCustomHeaders} />)
             }
           >
             Edit
