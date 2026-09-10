@@ -10,6 +10,7 @@
  *
  * Updated by:
  *   - plugin load init in index.tsx (fetchLegacyInstallState)
+ *   - the card's Dismiss (dismissLegacyInstall), after the backend persisted it
  *
  * Read by:
  *   - components/LegacyInstallBanner.tsx through {@link useLegacyInstallState},
@@ -26,14 +27,21 @@
  */
 
 import { useSyncExternalStore } from "react";
-import { getLegacyInstallNotice } from "../api/backend";
+import { dismissLegacyInstallNotice, getLegacyInstallNotice } from "../api/backend";
 
 export interface LegacyInstallState {
   pending: boolean;
   legacyDataPresent: boolean;
+  /**
+   * The user has answered the card's removable statement and is keeping the
+   * older install. Persisted by the backend as user intent, so it survives a
+   * restart — a card that came back at every Steam start is exactly the
+   * standing warning the Dismiss exists to prevent.
+   */
+  dismissed: boolean;
 }
 
-let _state: LegacyInstallState = { pending: false, legacyDataPresent: false };
+let _state: LegacyInstallState = { pending: false, legacyDataPresent: false, dismissed: false };
 let _listeners: Array<() => void> = [];
 
 export function setLegacyInstallState(state: LegacyInstallState): void {
@@ -64,7 +72,23 @@ export function useLegacyInstallState(): LegacyInstallState {
  */
 export async function fetchLegacyInstallState(): Promise<LegacyInstallState> {
   const notice = await getLegacyInstallNotice();
-  const next: LegacyInstallState = { pending: notice.pending, legacyDataPresent: notice.legacy_data_present };
+  const next: LegacyInstallState = {
+    pending: notice.pending,
+    legacyDataPresent: notice.legacy_data_present,
+    dismissed: notice.dismissed,
+  };
   setLegacyInstallState(next);
   return next;
+}
+
+/**
+ * Answer the card for good: persist the dismissal, then take it down here.
+ *
+ * The store is written only after the backend has accepted the write, so a
+ * dismissal that did not persist leaves the card up rather than hiding it until
+ * the next start and bringing it back — which reads as the plugin forgetting.
+ */
+export async function dismissLegacyInstall(): Promise<void> {
+  await dismissLegacyInstallNotice();
+  setLegacyInstallState({ ..._state, dismissed: true });
 }

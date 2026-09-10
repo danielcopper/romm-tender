@@ -26,7 +26,14 @@ _EXECUTABLE_MODE = 0o755
 
 
 class LauncherInstallAdapter:
-    """Keeps this release's shortcut launcher at its home outside the plugin folder."""
+    """Keeps this release's shortcut launcher at its home outside the plugin folder.
+
+    Never the thing that brings the data root into existence: the composition
+    root calls this only once the start-up migration's data half stands at that
+    root, because the migration reads any entry in it as a finished move. The
+    ordering, and what it costs to lose it, is stated where it is enforced —
+    ``bootstrap/adapters.py``, at the call.
+    """
 
     def __init__(self, *, source: str, destination: str, logger: logging.Logger) -> None:
         self._source = source

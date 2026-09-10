@@ -330,9 +330,10 @@ def bootstrap(
     # Each older location's two halves are found by taking the parent of the
     # directory Decky assigned US and looking for the folder name beside it,
     # which asserts one layout fact less than composing ``DECKY_HOME`` here.
+    data_home = data_root(user_home)
     data_location_store = UserDataMigrationAdapter(
         settings_root=config_root(user_home),
-        data_root=data_root(user_home),
+        data_root=data_home,
         fallback_settings_dir=settings_dir,
         fallback_data_dir=runtime_dir,
         sources=[
@@ -357,10 +358,24 @@ def bootstrap(
     # on every start rather than once, so the launcher a shortcut runs is always
     # the one this release ships — a launcher installed once would freeze at
     # whatever version the day of the move happened to bring.
-    launcher_home = launcher_path(locations.data_dir)
+    #
+    # IT MUST NOT RUN BEFORE THE DATA HALF HAS LANDED, and the reason is not
+    # tidiness. ``UserDataMigrationAdapter._probe_root`` (adapters/
+    # user_data_migration.py:332-334) reads a target root as already migrated the
+    # moment ``os.scandir`` yields ANY entry, so a launcher written into an empty
+    # data root would settle the migration's first rung for the life of the
+    # install and the user's library would never come across — with no failure,
+    # no notice and nothing in the log. Whether the half landed is read off what
+    # the migration just decided, never by probing the directory a second time.
+    # A start that has not got there installs nothing, creates nothing, and
+    # points new shortcuts at the copy the release ships, which is where they
+    # pointed before the move and still runs.
+    data_settled = locations.data_dir == data_home
+    launcher_home = launcher_path(locations.data_dir) if data_settled else launcher_path(plugin_dir)
     launcher = ShortcutLauncher(
         path=launcher_home,
-        installed=LauncherInstallAdapter(
+        at_home=data_settled
+        and LauncherInstallAdapter(
             source=launcher_path(plugin_dir),
             destination=launcher_home,
             logger=logger,

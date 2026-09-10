@@ -2002,29 +2002,43 @@ launcher's home below.
 ### The launcher's home
 
 `<data root>/bin/rom-launcher` is the file every Steam shortcut's `exe` names, and `bootstrap()` puts this release's
-copy there on **every** start, right after the migration above and before anything opens the database
-([ADR-0032](../adr/0032-shortcuts-are-rewritten-in-place.md)). `adapters/launcher_install.py` owns the write;
-`domain/user_data_location.py::launcher_path` owns where it goes, and answers for the shipped copy under the plugin
-folder as well, so the two components that make up `/bin/rom-launcher` have one spelling.
+copy there on **every** start ([ADR-0032](../adr/0032-shortcuts-are-rewritten-in-place.md)).
+`adapters/launcher_install.py` owns the write; `domain/user_data_location.py::launcher_path` owns where it goes, and
+answers for the shipped copy under the plugin folder as well, so the two components that make up `/bin/rom-launcher`
+have one spelling — the suffix ownership detection matches is derived from that same tuple.
 
 The reason it left the plugin folder is that Decky deletes that folder whole before unpacking an update. The reason it
 is written on every start rather than once is that a launcher installed once would freeze at whatever version the day of
 the move brought. The reason it is written through a staging file that is renamed on — never in place — is that a game
 running right now is executing that file, and bash reads a script as it runs it.
 
-An install that cannot be done is reported, never raised: `ShortcutLauncher.installed` carries whether the file is
-really at `ShortcutLauncher.path`, and the two are separate answers on purpose. The **path** is what a newly built
-shortcut is given whatever happened, because a library split across two launcher paths is a state nothing later could
-tell apart. The **installed** flag is what an existing shortcut may be rewritten on, because pointing one at a launcher
-nothing put there stops its game from starting and no part of this plugin could put it back.
+**It runs after the migration above, and only where the data half landed.** The migration reads a target root holding
+anything at all as already migrated, so a launcher written into an empty data root would settle that rung for the life
+of the install and the user's library would never come across, silently. Whether the half landed is read off what the
+migration just returned — `locations.data_dir` IS the new root — rather than by probing the directory a second time. A
+start that has not got there installs nothing and creates nothing, and `ShortcutLauncher.path` is then the copy the
+release ships inside the plugin folder: a real file, so a sync in that state still produces shortcuts that launch.
 
-**The choice the plugin will not make.** Two libraries is the one case with no safe automatic answer, so the panel
-raises a notice whose button opens a modal showing both candidates with their path, size and last-changed date. The
-answer is **recorded, not executed**: the plugin is running from one of the two candidates with its database open, and
-copying a live SQLite file risks a torn copy — so the choice lands in a small file in the Decky-assigned runtime
-directory and the plugin's next start acts on it, which is why the modal offers to restart the DEVICE — restarting the
-Steam client reloads the frontend and does not start the backend again, so it would not reach that start.
-`DataLocationService` owns that surface; the file is deleted once the migration it named has completed.
+`ShortcutLauncher` carries the two answers apart on purpose. `path` is what a newly built shortcut names, and is always
+a launcher that exists. `at_home` is the narrower question — `path` is the home under the data root, with this release's
+launcher in it — and it is what repointing an EXISTING shortcut turns on: pointing one at a launcher nothing put there
+stops its game from starting, and no part of this plugin could put it back.
+
+### Repointing the shortcuts that already exist
+
+`services/shortcut_relocation.py` answers which of Steam's non-Steam shortcuts still name a launcher inside a plugin
+folder. It reads them out of `shortcuts.vdf` through `SteamConfigStore.read_shortcut_exes` — one parse for all of them,
+where the frontend's own route to the same fact is a `RegisterForAppDetails` per shortcut — and hands the frontend a
+list of app IDs plus the `exe` and `start_dir` to write. Two shapes in that file are matched carefully because both fail
+quietly: the keys case-insensitively (Steam has written more than one case), and the app id converted out of the
+**signed** int32 form the file stores, since every `SteamClient` API takes the unsigned one.
+
+It is a one-time transition with a recorded completion (`kv_config`, `shortcut_launcher_relocated`): once a run has
+repointed everything a reading found, no later start reads the file again. Every uncertainty answers `blocked` instead —
+the launcher is not at its home, or the file could not be read — and a blocked answer is never stamped, so the next
+start asks again. The gap that leaves is named at `complete_shortcut_relocation`: nothing clears the stamp, so a
+shortcut that turns up later on the old path stays there, which is harmless while the package still ships
+`bin/rom-launcher`.
 
 ## Composition Root (`bootstrap/`)
 

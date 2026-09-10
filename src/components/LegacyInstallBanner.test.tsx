@@ -4,14 +4,13 @@ import { useEffect, FC } from "react";
 import {
   LegacyInstallBanner,
   LegacyInstallNotice,
-  LEGACY_DATA_TITLE,
   LEGACY_INSTALL_TITLE,
   LEGACY_REMOVABLE_TITLE,
   legacyInstallStatement,
 } from "./LegacyInstallBanner";
-import { getLegacyInstallNotice, getSyncStats } from "../api/backend";
+import { dismissLegacyInstallNotice, getLegacyInstallNotice, getSyncStats } from "../api/backend";
 import { setLegacyInstallState, fetchLegacyInstallState } from "../utils/legacyInstallStore";
-import { getLauncherState, resetLauncherStoreForTests, setLauncherRelocated } from "../utils/launcherStore";
+import { resetLauncherStoreForTests, setLauncherRelocated } from "../utils/launcherStore";
 import { refreshSyncStats, resetSyncStatsStoreForTests } from "../utils/syncStatsStore";
 import type { SyncStats } from "../types";
 
@@ -81,17 +80,6 @@ describe("legacyInstallStatement", () => {
   it("tells the reader where to remove it", () => {
     expect(legacyInstallStatement(true, false).body).toContain("Decky's settings, under Plugins");
   });
-
-  it("never offers removal while the library is still in the older install", () => {
-    // The launcher argument has gone; the data argument has not, and it is the
-    // one where removing costs something no copy exists of.
-    const statement = legacyInstallStatement(true, true);
-    expect(statement.title).toBe(LEGACY_DATA_TITLE);
-    expect(statement.body).toContain(STRANDED_SENTENCE);
-    expect(statement.body).toContain("Leave it in place");
-    expect(statement.body).not.toContain("you can remove it");
-    expect(statement.dismissible).toBe(false);
-  });
 });
 
 describe("LegacyInstallBanner component", () => {
@@ -109,14 +97,9 @@ describe("LegacyInstallBanner component", () => {
     expect(stranded.textContent).toContain(STRANDED_SENTENCE);
   });
 
-  it("offers no action while the card describes something the user would lose by acting", () => {
-    const { container: launcher } = render(<LegacyInstallBanner dataStranded={true} relocated={false} />);
-    expect(launcher.querySelector("button")).toBeNull();
-
-    const { container: stranded } = render(
-      <LegacyInstallBanner dataStranded={true} relocated={true} onDismiss={vi.fn()} />,
-    );
-    expect(stranded.querySelector("button")).toBeNull();
+  it("offers no action while the shortcuts still launch through the older install", () => {
+    const { container } = render(<LegacyInstallBanner dataStranded={true} relocated={false} onDismiss={vi.fn()} />);
+    expect(container.querySelector("button")).toBeNull();
   });
 
   it("offers Dismiss on the removable statement, and calls it", () => {
@@ -136,7 +119,8 @@ describe("LegacyInstallNotice store-driven visibility", () => {
   beforeEach(() => {
     vi.mocked(getLegacyInstallNotice).mockReset();
     vi.mocked(getSyncStats).mockReset();
-    setLegacyInstallState({ pending: false, legacyDataPresent: false });
+    vi.mocked(dismissLegacyInstallNotice).mockReset().mockResolvedValue({ success: true });
+    setLegacyInstallState({ pending: false, legacyDataPresent: false, dismissed: false });
     resetLauncherStoreForTests();
     resetSyncStatsStoreForTests();
   });
@@ -146,14 +130,18 @@ describe("LegacyInstallNotice store-driven visibility", () => {
   // update as unwrapped.
   afterEach(() => {
     act(() => {
-      setLegacyInstallState({ pending: false, legacyDataPresent: false });
+      setLegacyInstallState({ pending: false, legacyDataPresent: false, dismissed: false });
       resetLauncherStoreForTests();
     });
     resetSyncStatsStoreForTests();
   });
 
   it("shows the banner when the callable reports pending:true", async () => {
-    vi.mocked(getLegacyInstallNotice).mockResolvedValue({ pending: true, legacy_data_present: false });
+    vi.mocked(getLegacyInstallNotice).mockResolvedValue({
+      pending: true,
+      legacy_data_present: false,
+      dismissed: false,
+    });
     const { container } = render(<LegacyNoticeHost />);
     await flushAsync();
     expect(container.textContent).toContain(LEGACY_INSTALL_TITLE);
@@ -161,14 +149,14 @@ describe("LegacyInstallNotice store-driven visibility", () => {
   });
 
   it("adds the stranded-data sentence when the older install has data and this one shows nothing", async () => {
-    vi.mocked(getLegacyInstallNotice).mockResolvedValue({ pending: true, legacy_data_present: true });
+    vi.mocked(getLegacyInstallNotice).mockResolvedValue({ pending: true, legacy_data_present: true, dismissed: false });
     const { container } = render(<LegacyNoticeHost romCount={0} />);
     await flushAsync();
     expect(container.textContent).toContain(STRANDED_SENTENCE);
   });
 
   it("drops the stranded-data sentence once this install has a library of its own", async () => {
-    vi.mocked(getLegacyInstallNotice).mockResolvedValue({ pending: true, legacy_data_present: true });
+    vi.mocked(getLegacyInstallNotice).mockResolvedValue({ pending: true, legacy_data_present: true, dismissed: false });
     const { container } = render(<LegacyNoticeHost romCount={42} />);
     await flushAsync();
     // The launcher warning is the half that must survive: it is what stops the
@@ -178,7 +166,7 @@ describe("LegacyInstallNotice store-driven visibility", () => {
   });
 
   it("withholds the stranded-data sentence while no ROM count has landed yet", async () => {
-    vi.mocked(getLegacyInstallNotice).mockResolvedValue({ pending: true, legacy_data_present: true });
+    vi.mocked(getLegacyInstallNotice).mockResolvedValue({ pending: true, legacy_data_present: true, dismissed: false });
     const { container } = render(<LegacyNoticeHost />);
     await flushAsync();
     // A null stats read is not knowledge that this install is empty, so the
@@ -188,14 +176,22 @@ describe("LegacyInstallNotice store-driven visibility", () => {
   });
 
   it("renders nothing when the callable reports pending:false", async () => {
-    vi.mocked(getLegacyInstallNotice).mockResolvedValue({ pending: false, legacy_data_present: false });
+    vi.mocked(getLegacyInstallNotice).mockResolvedValue({
+      pending: false,
+      legacy_data_present: false,
+      dismissed: false,
+    });
     const { container } = render(<LegacyNoticeHost />);
     await flushAsync();
     expect(container.textContent).toBe("");
   });
 
   it("turns into the removal statement once the shortcuts have been relocated", async () => {
-    vi.mocked(getLegacyInstallNotice).mockResolvedValue({ pending: true, legacy_data_present: false });
+    vi.mocked(getLegacyInstallNotice).mockResolvedValue({
+      pending: true,
+      legacy_data_present: false,
+      dismissed: false,
+    });
     const { container } = render(<LegacyNoticeHost romCount={42} />);
     await flushAsync();
     expect(container.textContent).toContain(LEGACY_INSTALL_TITLE);
@@ -208,37 +204,61 @@ describe("LegacyInstallNotice store-driven visibility", () => {
     expect(container.textContent).not.toContain(LEGACY_INSTALL_TITLE);
   });
 
-  it("takes the removal statement down for good once it is dismissed", async () => {
-    vi.mocked(getLegacyInstallNotice).mockResolvedValue({ pending: true, legacy_data_present: false });
+  it("persists the dismissal before taking the card down", async () => {
+    vi.mocked(getLegacyInstallNotice).mockResolvedValue({
+      pending: true,
+      legacy_data_present: false,
+      dismissed: false,
+    });
     setLauncherRelocated(true);
     const { container } = render(<LegacyNoticeHost romCount={42} />);
     await flushAsync();
 
-    act(() => {
-      fireEvent.click(container.querySelector("button")!);
-    });
+    fireEvent.click(container.querySelector("button")!);
+    await flushAsync();
 
+    expect(vi.mocked(dismissLegacyInstallNotice)).toHaveBeenCalledTimes(1);
     expect(container.textContent).toBe("");
-    expect(getLauncherState().removalDismissed).toBe(true);
   });
 
-  it("a dismissal does not silence a statement the user is not free to ignore", async () => {
-    vi.mocked(getLegacyInstallNotice).mockResolvedValue({ pending: true, legacy_data_present: false });
+  it("stays down on the next start, because the backend answered dismissed", async () => {
+    // The whole point of persisting it: a card that came back at every Steam
+    // start is the standing warning the Dismiss exists to prevent.
+    vi.mocked(getLegacyInstallNotice).mockResolvedValue({ pending: true, legacy_data_present: false, dismissed: true });
     setLauncherRelocated(true);
-    const { container } = render(<LegacyNoticeHost romCount={0} />);
+    const { container } = render(<LegacyNoticeHost romCount={42} />);
     await flushAsync();
-    act(() => {
-      fireEvent.click(container.querySelector("button")!);
-    });
+
     expect(container.textContent).toBe("");
+  });
 
-    // The older install turns out to hold the library after all. Dismissing an
-    // offer to remove it was never an answer to that.
-    act(() => {
-      setLegacyInstallState({ pending: true, legacyDataPresent: true });
-    });
+  it("a dismissal does not silence the statement the user is not free to ignore", async () => {
+    // Answered "I am keeping it" on a previous start, and this start's
+    // shortcuts point into that install again — a restore, a downgraded build.
+    vi.mocked(getLegacyInstallNotice).mockResolvedValue({ pending: true, legacy_data_present: false, dismissed: true });
+    const { container } = render(<LegacyNoticeHost romCount={42} />);
+    await flushAsync();
 
-    expect(container.textContent).toContain(LEGACY_DATA_TITLE);
+    expect(container.textContent).toContain(LEGACY_INSTALL_TITLE);
     expect(container.querySelector("button")).toBeNull();
+  });
+
+  it("keeps the card up when the dismissal could not be persisted", async () => {
+    vi.mocked(getLegacyInstallNotice).mockResolvedValue({
+      pending: true,
+      legacy_data_present: false,
+      dismissed: false,
+    });
+    vi.mocked(dismissLegacyInstallNotice).mockRejectedValue(new Error("settings unwritable"));
+    setLauncherRelocated(true);
+    const { container } = render(<LegacyNoticeHost romCount={42} />);
+    await flushAsync();
+
+    fireEvent.click(container.querySelector("button")!);
+    await flushAsync();
+
+    // Hiding it here would bring it back at the next start, which reads as the
+    // plugin forgetting what it was told.
+    expect(container.textContent).toContain(LEGACY_REMOVABLE_TITLE);
   });
 });

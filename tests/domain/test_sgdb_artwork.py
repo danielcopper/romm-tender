@@ -13,6 +13,7 @@ from domain.sgdb_artwork import (
     parse_autocomplete_results,
     sgdb_endpoint_path,
     to_signed_app_id,
+    to_unsigned_app_id,
 )
 
 
@@ -211,3 +212,17 @@ class TestClassifyResolution:
 
     def test_both_none_unresolved(self):
         assert classify_resolution(None, None) == "unresolved"
+
+
+class TestToUnsignedAppId:
+    """The direction anything reading shortcuts.vdf needs."""
+
+    def test_round_trips_a_shortcut_app_id(self):
+        for app_id in (0x80000000, 0xC7654321, 0xFFFFFFFF):
+            assert to_unsigned_app_id(to_signed_app_id(app_id)) == app_id
+
+    def test_turns_the_signed_form_the_file_stores_back_into_steams_own_id(self):
+        assert to_unsigned_app_id(-949288395) == 3345678901
+
+    def test_leaves_an_id_that_was_never_negative_alone(self):
+        assert to_unsigned_app_id(42) == 42

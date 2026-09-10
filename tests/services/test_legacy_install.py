@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import pytest
 from fakes.fake_path_exists_reader import FakePathExistsReader
@@ -66,6 +67,16 @@ class _RecordingProbe:
         return path in self._present
 
 
+class _RecordingPersister:
+    """The settings persister, counting the saves the dismissal asks for."""
+
+    def __init__(self) -> None:
+        self.saves = 0
+
+    def save_settings(self) -> None:
+        self.saves += 1
+
+
 def _make_service(
     *,
     plugin_dir: str = _OUR_PLUGIN_DIR,
@@ -74,6 +85,8 @@ def _make_service(
     links: dict[str, str] | None = None,
     path_exists=None,
     resolve_path=None,
+    settings: dict[str, Any] | None = None,
+    settings_persister=None,
     logger: logging.Logger | None = None,
 ) -> LegacyInstallService:
     return LegacyInstallService(
@@ -83,6 +96,8 @@ def _make_service(
             db_filename=_DB,
             path_exists=path_exists if path_exists is not None else FakePathExistsReader(paths=present or set()),
             resolve_path=resolve_path if resolve_path is not None else FakeResolvedPath(links=links),
+            settings=settings if settings is not None else {},
+            settings_persister=settings_persister if settings_persister is not None else _RecordingPersister(),
             logger=logger if logger is not None else logging.getLogger("test_legacy_install"),
         ),
     )
@@ -91,11 +106,19 @@ def _make_service(
 class TestPending:
     def test_silent_when_the_legacy_folder_is_absent(self):
         service = _make_service(present=set())
-        assert service.get_legacy_install_notice() == {"pending": False, "legacy_data_present": False}
+        assert service.get_legacy_install_notice() == {
+            "pending": False,
+            "legacy_data_present": False,
+            "dismissed": False,
+        }
 
     def test_fires_when_the_legacy_folder_stands_beside_ours(self):
         service = _make_service(present={_LEGACY_PLUGIN_DIR})
-        assert service.get_legacy_install_notice() == {"pending": True, "legacy_data_present": False}
+        assert service.get_legacy_install_notice() == {
+            "pending": True,
+            "legacy_data_present": False,
+            "dismissed": False,
+        }
 
     def test_silent_when_we_are_the_legacy_folder(self):
         """The dev deploy targets the legacy folder itself — nothing to warn about."""
@@ -104,7 +127,11 @@ class TestPending:
             runtime_dir=_LEGACY_RUNTIME_DIR,
             present={_LEGACY_PLUGIN_DIR, _LEGACY_RUNTIME_DIR, f"{_LEGACY_RUNTIME_DIR}/{_DB}"},
         )
-        assert service.get_legacy_install_notice() == {"pending": False, "legacy_data_present": False}
+        assert service.get_legacy_install_notice() == {
+            "pending": False,
+            "legacy_data_present": False,
+            "dismissed": False,
+        }
 
     def test_silent_when_the_legacy_folder_resolves_onto_our_own(self):
         """One directory under two names is one install (#1838).
@@ -118,7 +145,11 @@ class TestPending:
             present={_LEGACY_PLUGIN_DIR},
             links={_LEGACY_PLUGIN_DIR: _OUR_PLUGIN_DIR},
         )
-        assert service.get_legacy_install_notice() == {"pending": False, "legacy_data_present": False}
+        assert service.get_legacy_install_notice() == {
+            "pending": False,
+            "legacy_data_present": False,
+            "dismissed": False,
+        }
 
     def test_fires_when_the_two_folders_resolve_apart(self):
         """Both spellings sit under a symlinked root and still name two installs."""
@@ -133,7 +164,7 @@ class TestPending:
 class TestLegacyDataPresent:
     def test_set_when_only_the_legacy_runtime_dir_holds_a_database(self):
         service = _make_service(present={_LEGACY_PLUGIN_DIR, _LEGACY_RUNTIME_DIR, f"{_LEGACY_RUNTIME_DIR}/{_DB}"})
-        assert service.get_legacy_install_notice() == {"pending": True, "legacy_data_present": True}
+        assert service.get_legacy_install_notice() == {"pending": True, "legacy_data_present": True, "dismissed": False}
 
     def test_set_even_though_our_own_database_file_exists_too(self):
         """Ours is never absent — bootstrap creates it on the first boot."""
@@ -145,16 +176,24 @@ class TestLegacyDataPresent:
                 f"{_OUR_RUNTIME_DIR}/{_DB}",
             }
         )
-        assert service.get_legacy_install_notice() == {"pending": True, "legacy_data_present": True}
+        assert service.get_legacy_install_notice() == {"pending": True, "legacy_data_present": True, "dismissed": False}
 
     def test_clear_when_the_legacy_runtime_dir_holds_nothing(self):
         service = _make_service(present={_LEGACY_PLUGIN_DIR})
-        assert service.get_legacy_install_notice() == {"pending": True, "legacy_data_present": False}
+        assert service.get_legacy_install_notice() == {
+            "pending": True,
+            "legacy_data_present": False,
+            "dismissed": False,
+        }
 
     def test_never_reported_without_a_pending_notice(self):
         """The sentence qualifies the warning, so it cannot stand on its own."""
         service = _make_service(present={_LEGACY_RUNTIME_DIR, f"{_LEGACY_RUNTIME_DIR}/{_DB}"})
-        assert service.get_legacy_install_notice() == {"pending": False, "legacy_data_present": False}
+        assert service.get_legacy_install_notice() == {
+            "pending": False,
+            "legacy_data_present": False,
+            "dismissed": False,
+        }
 
 
 class TestTheDatabaseProbeAsksTheSameQuestionAsTheCard:
@@ -175,7 +214,11 @@ class TestTheDatabaseProbeAsksTheSameQuestionAsTheCard:
             },
             links={_LEGACY_RUNTIME_DIR: _OUR_RUNTIME_DIR},
         )
-        assert service.get_legacy_install_notice() == {"pending": True, "legacy_data_present": False}
+        assert service.get_legacy_install_notice() == {
+            "pending": True,
+            "legacy_data_present": False,
+            "dismissed": False,
+        }
 
 
 class TestProbeDiscipline:
@@ -190,6 +233,8 @@ class TestProbeDiscipline:
                 db_filename=_DB,
                 path_exists=_RecordingProbe(probed, present),
                 resolve_path=FakeResolvedPath(),
+                settings={},
+                settings_persister=_RecordingPersister(),
                 logger=logging.getLogger("test_legacy_install"),
             ),
         )
@@ -223,7 +268,11 @@ class TestAFailingResolverStillAnswers:
             resolve_path=_RaisingResolvedPath(raise_under=_PLUGINS),
         )
         with caplog.at_level(logging.WARNING):
-            assert service.get_legacy_install_notice() == {"pending": False, "legacy_data_present": False}
+            assert service.get_legacy_install_notice() == {
+                "pending": False,
+                "legacy_data_present": False,
+                "dismissed": False,
+            }
 
     def test_a_non_oserror_still_propagates(self):
         """Pins the guard's TYPE scope — widening to ``except Exception`` fails here.
@@ -267,7 +316,11 @@ class TestTheWarningSurvivesAFailingProbe:
         """The probe cannot raise as ``os.path.exists``, but it is a Protocol."""
         service = _make_service(path_exists=_RaisingProbe(raise_under=_DATA, present={_LEGACY_PLUGIN_DIR}))
         with caplog.at_level(logging.WARNING):
-            assert service.get_legacy_install_notice() == {"pending": True, "legacy_data_present": False}
+            assert service.get_legacy_install_notice() == {
+                "pending": True,
+                "legacy_data_present": False,
+                "dismissed": False,
+            }
         assert "Input/output error" in caplog.text
 
     def test_a_probe_that_raises_on_the_broad_half_still_propagates(self):
@@ -275,3 +328,62 @@ class TestTheWarningSurvivesAFailingProbe:
         service = _make_service(path_exists=_RaisingProbe(raise_under=_PLUGINS, present=set()))
         with pytest.raises(OSError):
             service.get_legacy_install_notice()
+
+
+class TestTheDismissal:
+    """The user's answer to the one statement they are free to ignore."""
+
+    def test_it_is_reported_back_off_the_settings_dict(self):
+        service = _make_service(present={_LEGACY_PLUGIN_DIR}, settings={"legacy_install_notice_dismissed": True})
+
+        assert service.get_legacy_install_notice() == {
+            "pending": True,
+            "legacy_data_present": False,
+            "dismissed": True,
+        }
+
+    def test_an_absent_key_reads_as_not_dismissed(self):
+        """No schema bump and no default entry — absent already means the right thing."""
+        service = _make_service(present={_LEGACY_PLUGIN_DIR}, settings={})
+
+        assert service.get_legacy_install_notice()["dismissed"] is False
+
+    def test_dismissing_writes_the_answer_and_persists_it(self):
+        settings: dict[str, Any] = {}
+        persister = _RecordingPersister()
+        service = _make_service(present={_LEGACY_PLUGIN_DIR}, settings=settings, settings_persister=persister)
+
+        assert service.dismiss_legacy_install_notice() == {"success": True}
+
+        assert settings["legacy_install_notice_dismissed"] is True
+        assert persister.saves == 1
+
+    def test_the_answer_survives_into_the_next_read(self):
+        """It has to outlive the session: a card returning at every start is the warning it prevents."""
+        settings: dict[str, Any] = {}
+        service = _make_service(present={_LEGACY_PLUGIN_DIR}, settings=settings)
+
+        service.dismiss_legacy_install_notice()
+
+        assert service.get_legacy_install_notice()["dismissed"] is True
+
+    def test_dismissing_twice_is_idempotent(self):
+        settings: dict[str, Any] = {}
+        persister = _RecordingPersister()
+        service = _make_service(present={_LEGACY_PLUGIN_DIR}, settings=settings, settings_persister=persister)
+
+        service.dismiss_legacy_install_notice()
+        service.dismiss_legacy_install_notice()
+
+        assert settings["legacy_install_notice_dismissed"] is True
+        assert persister.saves == 2
+
+    def test_it_answers_nothing_about_the_folder_itself(self):
+        """A dismissal is not a claim that the older install has gone."""
+        service = _make_service(present=set(), settings={"legacy_install_notice_dismissed": True})
+
+        assert service.get_legacy_install_notice() == {
+            "pending": False,
+            "legacy_data_present": False,
+            "dismissed": False,
+        }

@@ -9,6 +9,7 @@ from domain.shortcut_data import (
     build_launch_options,
     build_shortcuts_data,
     resolve_emulator_invocation,
+    select_shortcuts_to_relocate,
 )
 
 # The launcher's home under the user's data root: what the composition root
@@ -493,3 +494,34 @@ class TestBuildShortcutsDataVersionMetadata:
 
         emitted = collapse_sibling_groups(result, registry={}, installed_rom_ids=set(), complete_group_view=True)
         assert len(emitted) == 1  # one bucket → one representative
+
+
+class TestSelectShortcutsToRelocate:
+    """Which live shortcuts still have to be pointed at the launcher's home."""
+
+    _OLD = "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher"
+    _RENAMED = "/home/deck/homebrew/plugins/romm-tender/bin/rom-launcher"
+
+    def test_picks_a_shortcut_written_by_either_plugin_folder_name(self):
+        exes = {10: self._OLD, 20: self._RENAMED}
+
+        assert select_shortcuts_to_relocate(exes, _LAUNCHER) == [10, 20]
+
+    def test_skips_a_shortcut_already_on_the_launchers_home(self):
+        assert select_shortcuts_to_relocate({10: _LAUNCHER, 20: self._OLD}, _LAUNCHER) == [20]
+
+    def test_never_picks_a_shortcut_that_is_not_ours(self):
+        assert select_shortcuts_to_relocate({10: "/usr/bin/some-other-game"}, _LAUNCHER) == []
+
+    def test_a_quoted_exe_is_still_ours(self):
+        """AddShortcut stores it bare; reading a hand-quoted one as foreign strands it."""
+        assert select_shortcuts_to_relocate({10: f'"{self._OLD}"'}, _LAUNCHER) == [10]
+
+    def test_a_quoted_exe_already_on_the_home_is_still_skipped(self):
+        assert select_shortcuts_to_relocate({10: f'"{_LAUNCHER}"'}, _LAUNCHER) == []
+
+    def test_the_answer_is_sorted(self):
+        assert select_shortcuts_to_relocate({30: self._OLD, 10: self._OLD, 20: self._OLD}, _LAUNCHER) == [10, 20, 30]
+
+    def test_an_empty_reading_selects_nothing(self):
+        assert select_shortcuts_to_relocate({}, _LAUNCHER) == []

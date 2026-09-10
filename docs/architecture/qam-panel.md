@@ -356,17 +356,17 @@ plugin stays a card without a jump, with Dismiss where the condition has a sensi
 for all** — the user picks between named outcomes and the answering ends it — has no page to return to, so its home is a
 modal opened from the notice; that modal _is_ the home, not an exception to the rule.
 
-| Condition                                   | On Main                                              | Home                                                  |
-| ------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------- |
-| Settings were reset                         | text, backup path, Dismiss                           | none — the card is the whole of it                    |
-| Cross-device playtime needs a fresh sign-in | text, **Open Connections**, Dismiss                  | Settings › Connections, where the accounts are        |
-| RetroDECK paths missing or unreadable       | warning card, no action                              | none — the fix is outside the plugin                  |
-| "RomM Sync" is still installed              | warning card; Dismiss on one of its three statements | none — removing the folder ends it                    |
-| Two copies of the library were found        | text, **Choose a copy**                              | the choice modal — answered once, so nothing to open  |
-| Moving the data did not work                | warning card, no action                              | none — the next start tries again                     |
-| RetroArch `input_driver` is wrong           | text, **Open Controller**                            | Settings › Controller, which holds the Fix button     |
-| Save-file sorting changed                   | text, **Open Save Sync**                             | Settings › Save Sync, which holds Migrate and Dismiss |
-| Sync paused on the session budget           | text, **Open Sync**                                  | Sync, which holds Restart Steam now and Resume        |
+| Condition                                   | On Main                                       | Home                                                  |
+| ------------------------------------------- | --------------------------------------------- | ----------------------------------------------------- |
+| Settings were reset                         | text, backup path, Dismiss                    | none — the card is the whole of it                    |
+| Cross-device playtime needs a fresh sign-in | text, **Open Connections**, Dismiss           | Settings › Connections, where the accounts are        |
+| RetroDECK paths missing or unreadable       | warning card, no action                       | none — the fix is outside the plugin                  |
+| "RomM Sync" is still installed              | warning card; Dismiss on its second statement | none — removing the folder ends it                    |
+| Two copies of the library were found        | text, **Choose a copy**                       | the choice modal — answered once, so nothing to open  |
+| Moving the data did not work                | warning card, no action                       | none — the next start tries again                     |
+| RetroArch `input_driver` is wrong           | text, **Open Controller**                     | Settings › Controller, which holds the Fix button     |
+| Save-file sorting changed                   | text, **Open Save Sync**                      | Settings › Save Sync, which holds Migrate and Dismiss |
+| Sync paused on the session budget           | text, **Open Sync**                           | Sync, which holds Restart Steam now and Resume        |
 
 Today the `input_driver` fix has a button on Main and another in Settings, the save-sort card exists on both pages, the
 session-budget card with **Restart Steam now** sits on Main, and the playtime notice has Dismiss but no jump. The two
@@ -408,28 +408,28 @@ itself a question only the user can answer, so it would be unanswerable as well 
 Five of the nine conditions above carry no Dismiss anywhere — RetroDECK paths, the two data-location conditions, the
 `input_driver` fix and the session budget — so the absence is ordinary.
 
-`"RomM Sync" is still installed` is the sixth, and it is the one that says three different things as its reasons clear
-one at a time. Its condition is unchanged — the pre-rename plugin folder stands beside ours — and it still ends only
-when that folder does; what changes is what there is to say about it, and only the last of the three may be dismissed:
+`"RomM Sync" is still installed` is the sixth, and it is the one card that says two different things as its reason
+clears. Its condition is unchanged — the pre-rename plugin folder stands beside ours — and it still ends only when that
+folder does; what changes is what there is to say about it:
 
 1. **The shortcuts still point into it.** The launcher warning, no Dismiss: removing the folder stops every game from
    starting, and nothing about that is optional. Since [ADR-0032](../adr/0032-shortcuts-are-rewritten-in-place.md) this
-   is the transient state — the frontend rewrites the shortcuts at plugin load — so it stands only until that pass has
-   run, or where it could not.
-2. **Nothing points into it, but the library is still inside it.** No Dismiss either, for a reason of its own: the
-   migration copies rather than moves, so while this sentence is true the older install holds the only copy of the
-   user's library.
-3. **Nothing depends on it at all.** The card says so and tells the reader where to remove it, and carries a **Dismiss**
-   — keeping the older install is a legitimate choice, and it must not cost a standing warning on Main. The dismissal is
-   session-scoped and stored nowhere, because the condition ends when the folder does and a marker on disk would outlive
-   it; it silences that statement alone, so a card that later has one of the other two to make still makes it.
+   is the transient state — the shortcuts are repointed at plugin load — so it stands until that pass has run, or where
+   it could not: a start whose data migration is still outstanding installs no launcher and repoints nothing.
+2. **Nothing points into it any more.** The card says so, tells the reader where to remove the older install, and
+   carries a **Dismiss**. That Dismiss is the one in this panel that hides a condition which is STILL TRUE, and it is
+   allowed to because keeping the older install is a legitimate end state — so the answer is persisted as user intent in
+   `settings.json` (`legacy_install_notice_dismissed`) rather than held for the session: a card that came back at every
+   Steam start is exactly the standing warning it exists to prevent. It answers this statement alone, so a user who
+   dismissed it and later finds their shortcuts pointing back into the older install is told so again.
 
-Its backend read (`get_legacy_install_notice`) is computed live on every call with no persisted marker for the same
-reason, and asks only about two directories. Neither of the two facts the statements are chosen by is the backend's:
-"this version starts empty" needs the `roms` count from `get_sync_stats`, which the panel already holds, and "the
-shortcuts have been relocated" is the frontend's own answer — the backend knows where the launcher is, never where the
-shortcuts point. `LegacyInstallNotice` (`src/components/LegacyInstallBanner.tsx`) joins the three frontend stores, which
-is what keeps the statement that prevents the irreversible removal independent of any database read.
+Its two DIRECTORY answers are computed live on every call with no persisted marker, for the reason above — that
+condition ends when the folder does. The dismissal is the exception and rides the same payload. Neither of the two facts
+the statements are chosen by is a directory question: "this version starts empty" needs the `roms` count from
+`get_sync_stats`, which the panel already holds, and "the shortcuts have been repointed" is what the relocation pass
+reported — the backend knows which shortcuts needed the write, never whether the write happened. `LegacyInstallNotice`
+(`src/components/LegacyInstallBanner.tsx`) joins the three frontend stores, which is what keeps the statement that
+prevents the irreversible removal independent of any database read.
 
 **It is also the one condition BOTH full-page states carry inside their own content** — the version error and the
 pending RetroDECK migration; the data-location pair above reaches only the second of the two. That is not a card stacked

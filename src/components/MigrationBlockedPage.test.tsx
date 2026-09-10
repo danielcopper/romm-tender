@@ -134,13 +134,13 @@ describe("MigrationBlockedPage component", () => {
     // subscriber before RTL's cleanup.
     afterEach(() => {
       act(() => {
-        setLegacyInstallState({ pending: false, legacyDataPresent: false });
+        setLegacyInstallState({ pending: false, legacyDataPresent: false, dismissed: false });
       });
     });
 
     it("carries the warning while the pre-rename install stands beside this one", () => {
       act(() => {
-        setLegacyInstallState({ pending: true, legacyDataPresent: false });
+        setLegacyInstallState({ pending: true, legacyDataPresent: false, dismissed: false });
       });
       const { container } = render(<MigrationBlockedPage migration={defaultMigration} />);
       expect(container.textContent).toContain(LEGACY_INSTALL_TITLE);
@@ -148,7 +148,7 @@ describe("MigrationBlockedPage component", () => {
 
     it("keeps the migration's own explanation and actions first", () => {
       act(() => {
-        setLegacyInstallState({ pending: true, legacyDataPresent: false });
+        setLegacyInstallState({ pending: true, legacyDataPresent: false, dismissed: false });
       });
       const { container } = render(<MigrationBlockedPage migration={defaultMigration} />);
       expect(container.firstElementChild?.getAttribute("title")).toBe("RetroDECK Migration Required");

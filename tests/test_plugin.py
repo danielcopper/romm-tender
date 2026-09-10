@@ -830,13 +830,18 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # pending; that the card actually gets there is pinned in
     # src/components/MigrationBlockedPage.test.tsx, not by this whitelist entry.
     "get_legacy_install_notice",
-    # Where the shortcut launcher lives — a read of what the start already
-    # settled, touching neither RetroDECK state nor the disk. It has to answer
-    # while a migration is pending for the same reason as the notice above: the
-    # frontend points the shortcuts at the launcher at plugin load, whatever page
-    # the panel happens to be showing, and a shortcut left naming a file inside
-    # the plugin folder is the condition that card exists to warn about.
-    "get_shortcut_launcher",
+    # The one-time move of the shortcuts onto the launcher's home: the plan, the
+    # completion stamp, and the user's answer to the card that ends the
+    # transition. None of the three touches RetroDECK state — the reading is of
+    # Steam's own shortcut file and the two writes are a kv_config row and a
+    # settings key. They have to answer while a migration is pending for the
+    # same reason as the notice above: the frontend points the shortcuts at the
+    # launcher at plugin load, whatever page the panel happens to be showing,
+    # and a shortcut left naming a file inside the plugin folder is the
+    # condition that card exists to warn about.
+    "get_shortcut_relocation",
+    "complete_shortcut_relocation",
+    "dismiss_legacy_install_notice",
     # Where the plugin's OWN data lives — the notice, the two candidates behind
     # it, and the answer. None of the three touches RetroDECK state. The notice
     # reads nothing at all: it hands back what the start already decided. The
@@ -1139,6 +1144,7 @@ class TestMainStartupOrdering:
             "connection_service": connection_service,
             "startup_healing_service": startup_healing_service,
             "legacy_install_service": MagicMock(),
+            "shortcut_relocation_service": MagicMock(),
             "data_location_service": MagicMock(),
             "launch_gate_service": MagicMock(),
             "session_lifecycle_service": MagicMock(),
@@ -1208,7 +1214,7 @@ class TestMainStartupOrdering:
                 choice_required=False,
                 failure=None,
             ),
-            launcher=ShortcutLauncher(path="/fake/data/bin/rom-launcher", installed=True),
+            launcher=ShortcutLauncher(path="/fake/data/bin/rom-launcher", at_home=True),
         )
 
         with (

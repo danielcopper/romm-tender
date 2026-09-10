@@ -78,14 +78,13 @@ of your games from starting, and nothing in Tender can put the file back.
 
 While both are installed, Tender's QAM panel carries a card that tells you which of those it is — including when the
 panel is showing a server-version error or a pending RetroDECK migration instead of its usual contents, the two states
-in which the older plugin looks most like something to clear away. The card says one of three things:
+in which the older plugin looks most like something to clear away. The card says one of two things:
 
 - **"RomM Sync" is still installed, and your games need it** — the move has not happened yet on this device. Leave the
   older plugin alone; restarting Steam is usually all it takes.
-- **"RomM Sync" still holds your library** — your games no longer need it, but your settings and synced library are
-  still over there and Tender is starting empty. Leave it in place until that has been brought across.
 - **"RomM Sync" can be removed now** — nothing in Tender depends on it any more. Remove it from Decky's settings, under
-  Plugins, or keep it: it costs disk space and nothing else. This is the one you can dismiss.
+  Plugins, or keep it: it costs disk space and nothing else. This one has a **Dismiss**, and dismissing it is remembered
+  — the card does not come back at the next start.
 
 The new install also starts with its own empty settings and library, because Decky gave each plugin folder its own data
 location — your existing settings and synced library are in the older install until Tender brings them across.

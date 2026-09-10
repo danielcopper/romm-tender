@@ -3532,7 +3532,7 @@ describe("MainPage", () => {
     const STRANDED_SENTENCE = "Your library and settings are still in that older install too";
 
     beforeEach(() => {
-      setLegacyInstallState({ pending: true, legacyDataPresent: true });
+      setLegacyInstallState({ pending: true, legacyDataPresent: true, dismissed: false });
     });
 
     afterEach(() => {
@@ -3540,7 +3540,7 @@ describe("MainPage", () => {
       // so the notify reaches a still-mounted subscriber — act, or React
       // reports the update as unwrapped and the suite's console guard fails it.
       act(() => {
-        setLegacyInstallState({ pending: false, legacyDataPresent: false });
+        setLegacyInstallState({ pending: false, legacyDataPresent: false, dismissed: false });
       });
     });
 
@@ -3578,7 +3578,7 @@ describe("MainPage", () => {
     });
 
     it("shows no card at all when no legacy install stands beside this one", async () => {
-      setLegacyInstallState({ pending: false, legacyDataPresent: false });
+      setLegacyInstallState({ pending: false, legacyDataPresent: false, dismissed: false });
       vi.mocked(backend.getSyncStats).mockResolvedValue({ ...defaultStats(), roms: 0 });
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();

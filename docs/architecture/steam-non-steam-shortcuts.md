@@ -47,17 +47,26 @@ Every shortcut's `exe` is `<data root>/bin/rom-launcher` — under the user's ow
 Decky deletes that folder whole before it unpacks an update
 ([ADR-0032](../adr/0032-shortcuts-are-rewritten-in-place.md); the roots themselves are
 [ADR-0031](../adr/0031-user-data-lives-outside-the-plugin-directory.md)). The backend installs this release's launcher
-there on every start and reports the path through `get_shortcut_launcher`; the frontend rewrites `exe` and `startDir` on
-every RomM-owned shortcut that does not already carry it, once, at plugin load — `src/utils/launcherRelocation.ts`.
+there on every start, once the data migration's own half has landed.
 
-Two properties of that path are load-bearing:
+Shortcuts written before that move are repointed once, at plugin load. The **backend** decides which: it parses
+`shortcuts.vdf` and returns the app IDs whose `exe` still ends in `/bin/rom-launcher` but is not the launcher's home,
+plus the `exe` and `startDir` to write (`get_shortcut_relocation`). The frontend writes exactly those and then stamps
+the transition complete (`complete_shortcut_relocation`), after which no start reads that file again —
+`src/utils/launcherRelocation.ts`. An app **overview** carries no `exe`, so the frontend's own route to the same fact
+would be a `RegisterForAppDetails` per shortcut at every start.
+
+Three properties of that path are load-bearing:
 
 - **It ends in `/bin/rom-launcher`.** Ownership is decided by that suffix and nothing else (`isRomMShortcutDetails`,
-  `scanRomMShortcutExes`, and `py_modules/services/prune/requests.py`), so a launcher kept under any other last two
-  components makes every shortcut written before the move stop being recognised as ours.
-- **A shortcut nobody has rewritten still launches.** The package still ships `bin/rom-launcher`, so the old path stays
-  a real file; the rewrite is a repair, not a cutover, and the frontend performs none of it when the backend reports the
-  launcher as not installed.
+  `domain/shortcut_data.py::select_shortcuts_to_relocate`, and `py_modules/services/prune/requests.py`), so a launcher
+  kept under any other last two components makes every shortcut written before the move stop being recognised as ours.
+- **A shortcut nobody has repointed still launches.** The package still ships `bin/rom-launcher`, so the old path stays
+  a real file; the rewrite is a repair, not a cutover, and nothing is written at all while the backend reports the
+  launcher as not at its home.
+- **The app id in the file is signed.** `shortcuts.vdf` stores it as a signed int32 (`to_signed_app_id`) while every
+  `SteamClient.Apps.Set*` takes the unsigned form, so anything reading ids back out of the file converts them
+  (`to_unsigned_app_id`). A negative id names no shortcut and fails silently.
 
 ### Exe quoting
 

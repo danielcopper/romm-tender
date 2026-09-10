@@ -215,6 +215,13 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # `resolve_system`, the implementation's own method name.
         "resolve_system",
         "_resolve_system",
+        # SteamConfigStore.read_shortcut_exes (services/protocols/transport.py) —
+        # parses Steam's whole shortcuts.vdf (315 KB and 828 entries on the
+        # reference machine) to answer which shortcuts still name a launcher
+        # inside a plugin folder. Object-shaped, so the method name is the whole
+        # entry; the store's other reads are not listed because no service calls
+        # them.
+        "read_shortcut_exes",
         # FirmwareFolderVerdictFn (services/protocols/paths.py) — lists one
         # core's declared folder and reads every candidate inside it the way the
         # core does (0.26 s for LRPS2 on the reference machine, against 0.24 s

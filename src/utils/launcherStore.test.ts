@@ -2,12 +2,11 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { expectStableSubscribe } from "../test-utils/store-hook-subscription";
 import {
-  dismissLegacyRemovalNotice,
   getLauncherState,
   onLauncherChange,
   resetLauncherStoreForTests,
   setLauncherRelocated,
-  useLauncherState,
+  useLauncherRelocated,
 } from "./launcherStore";
 
 // Fakes nothing — the real useSyncExternalStore runs. The wrapper only records
@@ -25,23 +24,15 @@ describe("launcherStore", () => {
   });
 
   it("starts unestablished, because no pass has run yet", () => {
-    expect(getLauncherState()).toEqual({ relocated: false, removalDismissed: false });
+    expect(getLauncherState()).toEqual({ relocated: false });
   });
 
   it("setLauncherRelocated updates the state and notifies subscribers", () => {
     const fn = vi.fn();
     onLauncherChange(fn);
     setLauncherRelocated(true);
-    expect(getLauncherState()).toEqual({ relocated: true, removalDismissed: false });
+    expect(getLauncherState()).toEqual({ relocated: true });
     expect(fn).toHaveBeenCalledTimes(1);
-  });
-
-  it("a dismissal leaves the relocation answer alone, and the other way round", () => {
-    dismissLegacyRemovalNotice();
-    expect(getLauncherState()).toEqual({ relocated: false, removalDismissed: true });
-
-    setLauncherRelocated(true);
-    expect(getLauncherState()).toEqual({ relocated: true, removalDismissed: true });
   });
 
   it("onLauncherChange returns an unsubscribe that stops notifications", () => {
@@ -66,15 +57,15 @@ describe("launcherStore", () => {
     });
   });
 
-  describe("useLauncherState", () => {
+  describe("useLauncherRelocated", () => {
     it("renders the current answer and re-renders on a change", () => {
-      const { result, unmount } = renderHook(() => useLauncherState());
-      expect(result.current.relocated).toBe(false);
+      const { result, unmount } = renderHook(() => useLauncherRelocated());
+      expect(result.current).toBe(false);
 
       act(() => {
         setLauncherRelocated(true);
       });
-      expect(result.current.relocated).toBe(true);
+      expect(result.current).toBe(true);
       unmount();
     });
 
@@ -82,7 +73,7 @@ describe("launcherStore", () => {
       let renders = 0;
       const { unmount } = renderHook(() => {
         renders += 1;
-        return useLauncherState();
+        return useLauncherRelocated();
       });
       unmount();
       const afterUnmount = renders;
@@ -93,7 +84,7 @@ describe("launcherStore", () => {
     });
 
     it("subscribes with the store's own seam, so a re-render does not re-subscribe", () => {
-      expectStableSubscribe(useLauncherState, onLauncherChange);
+      expectStableSubscribe(useLauncherRelocated, onLauncherChange);
     });
   });
 });

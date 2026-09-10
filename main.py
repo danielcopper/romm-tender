@@ -51,7 +51,6 @@ class Plugin:
     _romm_api: Any
     _steam_config: Any
     _retrodeck_paths: Any
-    _launcher: Any
 
     # Strong refs to the fire-and-forget play-session flush tasks. ``create_task``
     # alone is not enough — without a strong ref the loop is free to GC the task
@@ -134,10 +133,6 @@ class Plugin:
         # callable can read the resolution health without routing through a
         # service (it's a pure adapter read, no orchestration).
         self._retrodeck_paths = result.callbacks.retrodeck_paths
-        # Where the shortcut launcher lives this run, and whether this start got
-        # it there — settled by the composition root and read by one callable,
-        # so there is no service between the two to hold it.
-        self._launcher = result.launcher
 
         # ── 4. Wire services ────────────────────────────────────────────────
         services = wire_services(
@@ -184,6 +179,7 @@ class Plugin:
         self._connection_service = services["connection_service"]
         self._startup_healing_service = services["startup_healing_service"]
         self._legacy_install_service = services["legacy_install_service"]
+        self._shortcut_relocation_service = services["shortcut_relocation_service"]
         self._data_location_service = services["data_location_service"]
         self._launch_gate_service = services["launch_gate_service"]
         self._session_lifecycle_service = services["session_lifecycle_service"]
@@ -1010,14 +1006,17 @@ class Plugin:
     async def get_legacy_install_notice(self):
         """Report the pre-rename install still sitting beside this one.
 
-        Returns ``{"pending": bool, "legacy_data_present": bool}``. ``pending``
-        means the plugin folder releases used before 0.31.0 is on disk and is not
+        Returns ``{"pending": bool, "legacy_data_present": bool, "dismissed": bool}``.
+        ``pending`` means the plugin folder releases used before 0.31.0 is on disk and is not
         the one this plugin runs from — a shortcut launches through a launcher
         inside the folder it was written from, so the frontend warns against
         removing it.
         ``legacy_data_present`` means that older install still has a database;
         the panel pairs it with the ROM count it already reads to decide whether
         to add "this version starts empty". False whenever ``pending`` is.
+        ``dismissed`` is the user's own answer to the card's removable statement,
+        the only persisted part of this: they have chosen to keep the older
+        install and the panel stops offering to be rid of it.
 
         Two directory questions and nothing else — no database of ours is opened,
         so the warning cannot be taken down by a library read, and a path error
@@ -1027,31 +1026,44 @@ class Plugin:
         """
         return self._legacy_install_service.get_legacy_install_notice()
 
-    async def get_shortcut_launcher(self):
-        """Report the launcher a Steam shortcut runs through, and whether it is there.
+    async def get_shortcut_relocation(self):
+        """Report which Steam shortcuts still have to be pointed at the launcher.
 
-        Returns ``{"exe": str, "start_dir": str, "installed": bool}``. ``exe`` is
-        the path every shortcut this plugin writes names, under the user's data
-        root rather than in the plugin folder Decky deletes before each update
-        (ADR-0032); ``start_dir`` is the directory holding it, so the frontend
-        does the same path algebra as the shortcut builder in no second place.
+        Returns a discriminated status union: ``{"status": "done"}`` when no
+        shortcut of ours names a plugin folder any more;
+        ``{"status": "outstanding", "exe", "start_dir", "app_ids"}`` naming
+        exactly the shortcuts to rewrite and what to write on them; or
+        ``{"status": "blocked", "message"}`` when nothing may be rewritten yet,
+        which is the answer to every uncertainty — pointing a shortcut at a
+        launcher that is not there stops its game from starting.
 
-        ``installed`` is a separate answer and is what the frontend's rewrite of
-        the EXISTING shortcuts turns on: pointing one at a launcher this start
-        could not place would stop its game from starting, and nothing here
-        could put the file back. The path is reported either way — a shortcut
-        built this run is built for the one home whatever happened, because a
-        library split across two launcher paths is a state nothing later could
-        tell apart.
-
-        Settled at start-up and unchanged for the life of the process, so one
-        read at plugin load is the whole of it.
+        The reading is the backend's because ``shortcuts.vdf`` holds every
+        shortcut's ``exe`` and one 315 KB parse answers for all of them; the
+        frontend's own route to the same fact is a ``RegisterForAppDetails``
+        per shortcut, which loads and caches a fat details object each time
+        (ADR-0032). Answered without reading anything at all once the transition
+        is stamped complete.
         """
-        return {
-            "exe": self._launcher.path,
-            "start_dir": self._launcher.start_dir,
-            "installed": self._launcher.installed,
-        }
+        return await self._shortcut_relocation_service.get_shortcut_relocation()
+
+    async def complete_shortcut_relocation(self):
+        """Record that the frontend rewrote every shortcut it was handed.
+
+        Stamps the one-time transition complete, so no later start reads Steam's
+        shortcut file again. Idempotent; returns ``{"success": True}``.
+        """
+        return await self._shortcut_relocation_service.complete_shortcut_relocation()
+
+    async def dismiss_legacy_install_notice(self):
+        """Acknowledge the pre-rename install for good, keeping its card down.
+
+        The user's explicit answer to the one statement that card makes which
+        they are free to ignore — that the older install can now be removed.
+        Persisted as user intent, so it survives restarts; the card is still
+        shown while the shortcuts point into that install, because nothing about
+        that statement is optional. Returns ``{"success": True}``.
+        """
+        return self._legacy_install_service.dismiss_legacy_install_notice()
 
     async def get_data_location_notice(self):
         """Report what this start's data-location migration left standing.

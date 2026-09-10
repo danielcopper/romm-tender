@@ -51,6 +51,14 @@ def data_root(user_home: str) -> str:
     return os.path.join(user_home, ".local", "share", APP_DIR_NAME)
 
 
+# The two path components the launcher sits under, and the suffix a shortcut is
+# recognised by. Derived from one tuple rather than written twice: the suffix IS
+# the components, and a second spelling of them is exactly how ownership
+# detection would drift away from where the file is put.
+_LAUNCHER_COMPONENTS = ("bin", "rom-launcher")
+LAUNCHER_EXE_SUFFIX = "/" + "/".join(_LAUNCHER_COMPONENTS)
+
+
 def launcher_path(root: str) -> str:
     """The launcher's place beneath *root* — the data root, or the plugin folder it ships in.
 
@@ -63,12 +71,13 @@ def launcher_path(root: str) -> str:
     answers for both.
 
     Those two components are not free. A shortcut is recognised as ours by its
-    ``exe`` ENDING in ``/bin/rom-launcher`` — ``src/utils/steamShortcuts.ts`` and
-    ``services/prune/requests.py`` both match that suffix — so a launcher kept
-    anywhere but a ``bin`` directory, or under any other name, makes every
-    shortcut written before the move stop being recognised as ours.
+    ``exe`` ENDING in :data:`LAUNCHER_EXE_SUFFIX` — ``src/utils/steamShortcuts.ts``
+    and ``services/prune/requests.py`` both match that suffix as their own
+    literal — so a launcher kept anywhere but a ``bin`` directory, or under any
+    other name, makes every shortcut written before the move stop being
+    recognised as ours.
     """
-    return os.path.join(root, "bin", "rom-launcher")
+    return os.path.join(root, *_LAUNCHER_COMPONENTS)
 
 
 @dataclass(frozen=True)

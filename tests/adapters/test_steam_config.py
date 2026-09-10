@@ -1,5 +1,6 @@
 import logging
 import os
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -129,6 +130,78 @@ class TestReadShortcuts:
         adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
         result = adapter.read_shortcuts()
         assert result["shortcuts"]["0"]["appname"] == "Test"
+
+
+class TestReadShortcutExes:
+    """The reading the shortcut relocation is planned off."""
+
+    @staticmethod
+    def _write(tmp_path, entries: dict[str, Any]) -> None:
+        config_dir = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123" / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        with open(str(config_dir / "shortcuts.vdf"), "wb") as f:
+            f.write(vdf.binary_dumps({"shortcuts": entries}))
+
+    def test_reads_every_shortcut_app_id_and_exe(self, tmp_path):
+        self._write(
+            tmp_path,
+            {
+                "0": {"appid": 1, "AppName": "One", "Exe": "/a/bin/rom-launcher"},
+                "1": {"appid": 2, "AppName": "Two", "Exe": "/usr/bin/other"},
+            },
+        )
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_exes() == {1: "/a/bin/rom-launcher", 2: "/usr/bin/other"}
+
+    def test_reads_the_keys_whatever_case_steam_wrote_them_in(self, tmp_path):
+        """Steam has written both spellings; a case-sensitive read comes back empty on one."""
+        self._write(tmp_path, {"0": {"AppId": 7, "exe": "/a/bin/rom-launcher"}})
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_exes() == {7: "/a/bin/rom-launcher"}
+
+    def test_converts_the_signed_app_id_the_file_stores(self, tmp_path):
+        """Every SteamClient API takes the unsigned form; a negative id names no shortcut."""
+        self._write(tmp_path, {"0": {"appid": -949288395, "Exe": "/a/bin/rom-launcher"}})
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_exes() == {3345678901: "/a/bin/rom-launcher"}
+
+    def test_skips_an_entry_missing_either_field(self, tmp_path):
+        self._write(tmp_path, {"0": {"appid": 1}, "1": {"Exe": "/a/bin/rom-launcher"}, "2": "not a dict"})
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_exes() == {}
+
+    def test_a_machine_with_no_shortcut_file_reads_as_no_shortcuts(self, tmp_path):
+        """A finished reading of nothing — not the same answer as a failed one."""
+        (tmp_path / ".local" / "share" / "Steam" / "userdata" / "123").mkdir(parents=True)
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_exes() == {}
+
+    def test_an_unlocatable_steam_directory_reads_as_nothing_established(self, tmp_path):
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_exes() is None
+
+    def test_a_file_that_will_not_parse_reads_as_nothing_established(self, tmp_path):
+        config_dir = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123" / "config"
+        config_dir.mkdir(parents=True)
+        (config_dir / "shortcuts.vdf").write_bytes(b"not a vdf file at all")
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_exes() is None
+
+    def test_a_file_holding_no_shortcut_list_reads_as_nothing_established(self, tmp_path):
+        config_dir = tmp_path / ".local" / "share" / "Steam" / "userdata" / "123" / "config"
+        config_dir.mkdir(parents=True)
+        with open(str(config_dir / "shortcuts.vdf"), "wb") as f:
+            f.write(vdf.binary_dumps({"something_else": {}}))
+        adapter = SteamConfigAdapter(user_home=str(tmp_path), logger=logging.getLogger("test"))
+
+        assert adapter.read_shortcut_exes() is None
 
 
 class TestWriteShortcuts:

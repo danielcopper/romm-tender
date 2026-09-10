@@ -40,14 +40,14 @@ def _stage_legacy_install(harness, *, with_database: bool = False):
 
 async def test_no_legacy_install_reports_nothing(harness):
     result = await harness.plugin.get_legacy_install_notice()
-    assert result == {"pending": False, "legacy_data_present": False}
+    assert result == {"pending": False, "legacy_data_present": False, "dismissed": False}
 
 
 async def test_the_legacy_plugin_folder_beside_ours_fires_the_notice(harness):
     _stage_legacy_install(harness)
 
     result = await harness.plugin.get_legacy_install_notice()
-    assert result == {"pending": True, "legacy_data_present": False}
+    assert result == {"pending": True, "legacy_data_present": False, "dismissed": False}
 
 
 async def test_a_legacy_database_is_reported_though_ours_exists_too(harness):
@@ -57,7 +57,7 @@ async def test_a_legacy_database_is_reported_though_ours_exists_too(harness):
     assert (pathlib.Path(harness.data_dir) / _DB_FILENAME).exists()
 
     result = await harness.plugin.get_legacy_install_notice()
-    assert result == {"pending": True, "legacy_data_present": True}
+    assert result == {"pending": True, "legacy_data_present": True, "dismissed": False}
 
 
 async def test_the_warning_survives_a_library_this_install_already_holds(harness):
@@ -66,4 +66,4 @@ async def test_the_warning_survives_a_library_this_install_already_holds(harness
     seed_rom(harness, 1)
 
     result = await harness.plugin.get_legacy_install_notice()
-    assert result == {"pending": True, "legacy_data_present": True}
+    assert result == {"pending": True, "legacy_data_present": True, "dismissed": False}

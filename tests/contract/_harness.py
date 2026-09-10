@@ -87,6 +87,7 @@ _BOUND_SERVICE_ATTRS = {
     "_connection_service": "connection_service",
     "_startup_healing_service": "startup_healing_service",
     "_legacy_install_service": "legacy_install_service",
+    "_shortcut_relocation_service": "shortcut_relocation_service",
     "_data_location_service": "data_location_service",
     "_launch_gate_service": "launch_gate_service",
     "_session_lifecycle_service": "session_lifecycle_service",
@@ -245,7 +246,6 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
     plugin._debug_logger = result.handles.debug_logger
     plugin._persistence = result.handles.persistence
     plugin._retrodeck_paths = result.callbacks.retrodeck_paths
-    plugin._launcher = result.launcher
     for attr, key in _BOUND_SERVICE_ATTRS.items():
         setattr(plugin, attr, services[key])
 

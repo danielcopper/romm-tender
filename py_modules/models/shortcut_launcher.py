@@ -1,35 +1,33 @@
-"""Where the launcher every Steam shortcut runs through is, and whether it is there.
+"""Where the launcher every Steam shortcut runs through is, and whether it is home.
 
 Produced by the composition root, which is the only thing that can answer it: the
-path is derived from the data root the start-up migration settled, and whether
-the file is at that path is what installing it this start reported.
+home is derived from the data root the start-up migration settled, and whether
+the launcher is in it is what installing it this start reported.
 """
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class ShortcutLauncher:
-    """The launcher's home this start, and whether this release's copy is in it.
+    """The launcher a shortcut built this run names, and whether that path is its home.
 
-    ``path`` is where a shortcut's ``exe`` names it. It is the answer whether or
-    not the installation succeeded: a shortcut is built for the one home, never
-    for whichever one a given start managed to reach, because a library split
-    across two launcher paths is a state nothing later could tell apart.
+    ``path`` is always a launcher that exists. On an ordinary start it is the
+    home under the user's data root; on a start whose data half has not landed
+    it is the copy the release ships inside the plugin folder, which is where
+    every shortcut pointed before the move and still works. Something real is
+    named either way, because a shortcut built against a path nothing put a file
+    at cannot start its game.
 
-    ``installed`` is the separate question of whether the file is really there,
-    and it is what rewriting an EXISTING shortcut turns on — a shortcut pointed
-    at a launcher nothing put there stops its game from starting, and no part of
-    this plugin could put the file back afterwards.
+    ``at_home`` is the narrower question: is ``path`` the home under the data
+    root, with this release's launcher in it. It is what repointing an EXISTING
+    shortcut turns on, and the two come apart in exactly the case that matters —
+    the shipped copy is a real file, so the first question says yes about it
+    while this one says no, and a rewrite onto the plugin folder is the very
+    fragility the move exists to remove.
     """
 
     path: str
-    installed: bool
-
-    @property
-    def start_dir(self) -> str:
-        """The working directory a shortcut records beside the exe — where the launcher sits."""
-        return os.path.dirname(self.path)
+    at_home: bool

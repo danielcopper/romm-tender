@@ -224,7 +224,7 @@ class TestBootstrapInstallsTheLauncher:
         result = _bootstrap_for(tmp_path)
 
         assert result.launcher.path == str(self._home(tmp_path))
-        assert result.launcher.installed is True
+        assert result.launcher.at_home is True
         assert self._home(tmp_path).read_bytes() == content
 
     def test_the_launcher_is_not_put_in_deckys_own_directory(self, tmp_path):
@@ -244,11 +244,97 @@ class TestBootstrapInstallsTheLauncher:
         """The one thing that must not happen is the plugin failing to start over it."""
         result = _bootstrap_for(tmp_path)
 
-        assert result.launcher.installed is False
+        assert result.launcher.at_home is False
         assert result.launcher.path == str(self._home(tmp_path))
 
+
+class TestTheLauncherWaitsForTheDataMigration:
+    """The ordering that keeps the launcher from disarming the data migration.
+
+    ``UserDataMigrationAdapter._probe_root`` reads a target root holding ANY
+    entry as already migrated, so a launcher written into an empty data root
+    would settle that rung for the life of the install and the user's library
+    would never come across — silently. Every case here is about the start where
+    the data half has NOT landed.
+    """
+
+    @staticmethod
+    def _ship(tmp_path) -> None:
+        shipped = tmp_path / "plugin" / "bin" / "rom-launcher"
+        shipped.parent.mkdir(parents=True, exist_ok=True)
+        shipped.write_bytes(b'#!/bin/bash\nexec "$@"\n')
+        shipped.chmod(0o755)
+
+    @staticmethod
+    def _block_the_data_half(tmp_path) -> pathlib.Path:
+        """Make the data root unfillable, so the migration leaves that half behind.
+
+        The parent is read-only, so the staging directory beside the root cannot
+        be created and the copy reports a failure — the half keeps reading and
+        writing Decky's own directory, which is the state this is all about.
+        """
+        share = tmp_path / "home" / ".local" / "share"
+        share.mkdir(parents=True)
+        share.chmod(0o500)
+        return share
+
+    def test_nothing_is_installed_while_the_data_half_is_outstanding(self, tmp_path):
+        self._ship(tmp_path)
+        share = self._block_the_data_half(tmp_path)
+        try:
+            result = _bootstrap_for(tmp_path)
+        finally:
+            share.chmod(0o700)
+
+        assert result.launcher.at_home is False
+
+    def test_the_data_root_is_not_created_by_the_launcher(self, tmp_path):
+        """The whole safety property: an entry in that root reads as a finished move."""
+        self._ship(tmp_path)
+        share = self._block_the_data_half(tmp_path)
+        try:
+            _bootstrap_for(tmp_path)
+        finally:
+            share.chmod(0o700)
+
+        assert not (tmp_path / "home" / ".local" / "share" / "romm-tender").exists()
+
+    def test_new_shortcuts_still_name_a_launcher_that_exists(self, tmp_path):
+        """Not the dead path under Decky's directory: the copy the release ships.
+
+        A sync can run in this state, and a shortcut built against a path nothing
+        put a file at cannot start its game.
+        """
+        self._ship(tmp_path)
+        share = self._block_the_data_half(tmp_path)
+        try:
+            result = _bootstrap_for(tmp_path)
+        finally:
+            share.chmod(0o700)
+
+        assert result.launcher.path == str(tmp_path / "plugin" / "bin" / "rom-launcher")
+        assert pathlib.Path(result.launcher.path).is_file()
+
+    def test_a_later_start_installs_it_once_the_half_has_landed(self, tmp_path):
+        """The condition is retried, not settled — nothing about it is one-shot."""
+        self._ship(tmp_path)
+        share = self._block_the_data_half(tmp_path)
+        try:
+            _bootstrap_for(tmp_path)
+        finally:
+            share.chmod(0o700)
+
+        result = _bootstrap_for(tmp_path)
+
+        assert result.launcher.at_home is True
+        assert (tmp_path / "home" / ".local" / "share" / "romm-tender" / "bin" / "rom-launcher").is_file()
+
     def test_a_launcher_that_cannot_be_written_leaves_the_start_running(self, tmp_path):
-        """The database is fatal to a start; the launcher is not, and says so instead."""
+        """The database is fatal to a start; the launcher is not, and says so instead.
+
+        The data root itself IS there — the migration filled it — so the failure
+        is the write, not the ordering the class above is about.
+        """
         self._ship(tmp_path)
         blocked = tmp_path / "home" / ".local" / "share" / "romm-tender" / "bin"
         blocked.mkdir(parents=True)
@@ -258,8 +344,10 @@ class TestBootstrapInstallsTheLauncher:
         finally:
             blocked.chmod(0o700)
 
-        assert result.launcher.installed is False
-        assert result.launcher.path == str(self._home(tmp_path))
+        assert result.launcher.at_home is False
+        assert result.launcher.path == str(
+            tmp_path / "home" / ".local" / "share" / "romm-tender" / "bin" / "rom-launcher"
+        )
         assert result.adapters.romm_api is not None
 
 
@@ -371,7 +459,7 @@ class TestWireServices:
             ),
             "launcher": ShortcutLauncher(
                 path=str(tmp_path / "data" / "bin" / "rom-launcher"),
-                installed=True,
+                at_home=True,
             ),
         }
 
@@ -494,7 +582,7 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(result) == 27
+        assert len(result) == 28
         assert "migration_service" in result
         assert "game_detail_service" in result
         assert "rom_removal_service" in result

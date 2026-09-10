@@ -8,9 +8,13 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 from domain.sibling_group import compute_sibling_group_key
+from domain.user_data_location import LAUNCHER_EXE_SUFFIX
 
 # RetroDECK's flatpak application id — the single source of the string across the
 # plugin. Its plain ``flatpak run <app>`` form is the emulator invocation prefix
@@ -198,6 +202,31 @@ def extract_version_metadata(rom: dict[str, Any]) -> dict[str, Any]:
         "tags": list(rom.get("tags") or []),
         "is_main_sibling": bool((rom.get("rom_user") or {}).get("is_main_sibling", False)),
     }
+
+
+def select_shortcuts_to_relocate(exes: Mapping[int, str], launcher_exe: str) -> list[int]:
+    """Pick the app IDs whose ``exe`` is ours but is not *launcher_exe* yet.
+
+    *exes* maps a live shortcut's app ID to the ``exe`` it currently carries —
+    every non-Steam shortcut, ours and foreign. Ownership is the
+    :data:`~domain.user_data_location.LAUNCHER_EXE_SUFFIX` ending and nothing
+    else, which is what lets a shortcut written by either plugin folder name be
+    recognised and repointed without anything having recorded where it came
+    from.
+
+    Surrounding quotes are stripped before both tests. ``AddShortcut`` stores
+    the path unquoted, so ours are bare; a hand-added shortcut can be quoted,
+    and reading one as foreign would leave it behind while counting the run
+    complete.
+
+    Sorted, so a run's plan and its log line are the same on every start.
+    """
+    selected = []
+    for app_id, exe in exes.items():
+        bare = exe.strip('"')
+        if bare.endswith(LAUNCHER_EXE_SUFFIX) and bare != launcher_exe:
+            selected.append(app_id)
+    return sorted(selected)
 
 
 def build_shortcuts_data(

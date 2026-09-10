@@ -1112,29 +1112,35 @@ export const dismissSettingsResetNotice = callable<[], { success: boolean }>("di
 // database. Two directory questions and nothing else — whether THIS install has
 // anything to show is `get_sync_stats`'s `roms`, which MainPage already reads and
 // joins with this. Read live, so there is no marker and no dismiss callable.
-export const getLegacyInstallNotice = callable<[], { pending: boolean; legacy_data_present: boolean }>(
-  "get_legacy_install_notice",
-);
+export const getLegacyInstallNotice = callable<
+  [],
+  { pending: boolean; legacy_data_present: boolean; dismissed: boolean }
+>("get_legacy_install_notice");
 
-/** Where the launcher a Steam shortcut runs through lives this run. */
-export interface ShortcutLauncher {
-  /** The path a shortcut's `exe` names — under the user's data root, not the plugin folder. */
-  exe: string;
-  /** The directory holding it, written as the shortcut's start dir. */
-  start_dir: string;
-  /**
-   * Whether this start actually got the launcher to `exe`.
-   *
-   * The rewrite of EXISTING shortcuts turns on it: pointing one at a launcher
-   * that is not there stops its game from starting, and nothing in the plugin
-   * could put the file back. A shortcut the backend BUILDS is given `exe`
-   * either way — a library split across two launcher paths is a state nothing
-   * later could tell apart.
-   */
-  installed: boolean;
-}
+/**
+ * What the backend says is left of pointing the shortcuts at the launcher.
+ *
+ * `done` — nothing of ours names a plugin folder any more; the transition is
+ * over and no file was read to say so.
+ * `outstanding` — those `app_ids` still carry a launcher path that is not
+ * `exe`. Write `exe` and `start_dir` on each, then call
+ * {@link completeShortcutRelocation}.
+ * `blocked` — nothing may be rewritten yet, and the reason is the backend's
+ * (the launcher is not at its home, or Steam's shortcut file could not be
+ * read). Rewriting anyway would point games at a file that is not there.
+ */
+export type ShortcutRelocation =
+  | { status: "done" }
+  | { status: "outstanding"; exe: string; start_dir: string; app_ids: number[] }
+  | { status: "blocked"; message: string };
 
-export const getShortcutLauncher = callable<[], ShortcutLauncher>("get_shortcut_launcher");
+export const getShortcutRelocation = callable<[], ShortcutRelocation>("get_shortcut_relocation");
+
+/** Stamp the one-time shortcut relocation complete, so no later start looks again. */
+export const completeShortcutRelocation = callable<[], { success: boolean }>("complete_shortcut_relocation");
+
+/** Persist the user's answer that they are keeping the pre-rename install. */
+export const dismissLegacyInstallNotice = callable<[], { success: boolean }>("dismiss_legacy_install_notice");
 
 /** What kind of data-location condition the last start left standing. */
 export type DataLocationKind = "choice" | "failed";

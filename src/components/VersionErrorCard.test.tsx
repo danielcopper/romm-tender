@@ -51,13 +51,13 @@ describe("VersionErrorCard legacy-install notice", () => {
   // still-mounted subscriber before RTL's cleanup.
   afterEach(() => {
     act(() => {
-      setLegacyInstallState({ pending: false, legacyDataPresent: false });
+      setLegacyInstallState({ pending: false, legacyDataPresent: false, dismissed: false });
     });
   });
 
   it("carries the warning while the pre-rename install stands beside this one", () => {
     act(() => {
-      setLegacyInstallState({ pending: true, legacyDataPresent: false });
+      setLegacyInstallState({ pending: true, legacyDataPresent: false, dismissed: false });
     });
     const { container } = render(<VersionErrorCard message="RomM 4.7.0 too old" compact />);
     expect(container.textContent).toContain(LEGACY_INSTALL_TITLE);
@@ -65,7 +65,7 @@ describe("VersionErrorCard legacy-install notice", () => {
 
   it("keeps the version error first — the warning goes below, never on top of it", () => {
     act(() => {
-      setLegacyInstallState({ pending: true, legacyDataPresent: false });
+      setLegacyInstallState({ pending: true, legacyDataPresent: false, dismissed: false });
     });
     const { container, getByTestId } = render(<VersionErrorCard message="RomM 4.7.0 too old" compact />);
     // Nothing here takes focus, so nothing can scroll this panel: a warning

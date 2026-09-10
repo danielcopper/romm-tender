@@ -212,8 +212,13 @@ Format: **invariant** — tier — enforced by.
   `SgdbArtworkCacheAdapter`, `services.py`'s `cover_cache_dir`, and the launcher's home
   (`launcher_path(locations.data_dir)`, carried on as `ShortcutLauncher.path` and baked into every shortcut's `exe`) —
   the one whose mix-up would be visible to the user rather than only to the next start, since a shortcut's `exe` names a
-  directory Decky renames. One reads `runtime_dir`: `LegacyInstallService`, which asks whether the pre-rename plugin
-  folder still stands beside ours by taking that directory's PARENT. Hand it `locations.data_dir` and it computes
+  directory Decky renames. That sixth site is also **ordered against the migration rather than merely reading its
+  answer**: the launcher is installed only where `locations.data_dir` IS the new root, because the migration reads a
+  target root holding anything at all as already migrated (`adapters/user_data_migration.py::_probe_root`), so writing a
+  launcher into an empty data root would settle that rung for the life of the install and strand the user's library —
+  with no failure, no notice and nothing in the log. Nothing mechanical holds that ordering either; it is stated at the
+  call in `bootstrap/adapters.py`. One reads `runtime_dir`: `LegacyInstallService`, which asks whether the pre-rename
+  plugin folder still stands beside ours by taking that directory's PARENT. Hand it `locations.data_dir` and it computes
   `~/.local/share/decky-romm-sync`, a directory Decky never created — the card's second sentence goes quiet and nothing
   fails, which is exactly the card that keeps a user from removing the install their every shortcut launches through.
   The other direction is worse and equally quiet: a new consumer of the data root reaching for `runtime_dir` writes into
@@ -371,9 +376,11 @@ Format: **invariant** — tier — enforced by.
   mid-session is seen), `SandboxLauncherFn` (re-probes the flatpak roots for `es_find_rules.xml` and re-stats it before
   it may use the parse cache), `SystemResolver` (parses the plugin's **own** bundled `config.json`, not RetroDECK's
   `retrodeck.json`, and does no network work despite living on the RomM HTTP adapter), `SystemSupportedExtensionsFn` /
-  `SystemKnownFn` (two more questions to the same catalogue, through the same adapter cache), and
-  `FirmwareFolderVerdictFn` (lists one core's declared folder and reads every candidate inside it the way the core does
-  — 0.26 s for LRPS2 on the reference machine, the one seam here a cost was measured for), the two path resolvers —
+  `SystemKnownFn` (two more questions to the same catalogue, through the same adapter cache),
+  `SteamConfigStore.read_shortcut_exes` (parses Steam's whole `shortcuts.vdf` — 315 KB and 828 entries on the reference
+  machine — for the one-time shortcut relocation; the store's other reads are not listed because no service calls them)
+  and `FirmwareFolderVerdictFn` (lists one core's declared folder and reads every candidate inside it the way the core
+  does — 0.26 s for LRPS2 on the reference machine, the one seam here a cost was measured for), the two path resolvers —
   `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker, a directory that may sit on the SD card the
   marker is pending a migration away from) and `ResolvedPathFn` (the same walk, but on **both** sides of a comparison,
   so a call site costs what the rows it checks cost, not what it checks them against) — and the `RetroDeckPaths` getters

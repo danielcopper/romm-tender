@@ -42,6 +42,7 @@ from services.rom_removal import RomRemovalService, RomRemovalServiceConfig
 from services.saves import SaveService, SaveServiceConfig
 from services.session_lifecycle import SessionLifecycleService, SessionLifecycleServiceConfig
 from services.settings import SettingsService, SettingsServiceConfig
+from services.shortcut_relocation import ShortcutRelocationService, ShortcutRelocationServiceConfig
 from services.shortcut_removal import ShortcutRemovalService, ShortcutRemovalServiceConfig
 from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
@@ -508,6 +509,19 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
             db_filename=DB_FILENAME,
             path_exists=cfg.adapters.path_probe,
             resolve_path=cfg.adapters.resolve_path,
+            settings=cfg.stores.settings,
+            settings_persister=cfg.callbacks.settings_persister,
+            logger=cfg.runtime.logger,
+        ),
+    )
+
+    shortcut_relocation_service = ShortcutRelocationService(
+        config=ShortcutRelocationServiceConfig(
+            launcher_exe=cfg.launcher.path,
+            launcher_at_home=cfg.launcher.at_home,
+            steam_config=cfg.adapters.steam_config,
+            uow_factory=cfg.callbacks.uow_factory,
+            loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
         ),
     )
@@ -617,6 +631,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         "connection_service": connection_service,
         "startup_healing_service": startup_healing_service,
         "legacy_install_service": legacy_install_service,
+        "shortcut_relocation_service": shortcut_relocation_service,
         "data_location_service": data_location_service,
         "launch_gate_service": launch_gate_service,
         "session_lifecycle_service": session_lifecycle_service,

@@ -47,6 +47,15 @@ The last two components are load-bearing: a shortcut is recognised as this plugi
 `/bin/rom-launcher` (`src/utils/steamShortcuts.ts`, `py_modules/services/prune/requests.py`). The new home ends the same
 way, so every shortcut written before the move is still ours, with nothing to change on either side.
 
+**It waits for the data migration, and that ordering is load-bearing.**
+[ADR-0031](0031-user-data-lives-outside-the-plugin-directory.md)'s first rung reads a target root holding **anything**
+as already migrated, so a launcher written into an empty data root would settle that rung for the life of the install
+and the user's library would never come across — with no failure, no notice and nothing in the log. The install
+therefore runs only on a start whose data half already stands at that root, decided off what the migration just returned
+rather than by probing the directory again. A start that has not got there installs nothing, creates nothing, and points
+new shortcuts at the copy the release ships inside the plugin folder — where they pointed before this cut, and which
+still runs.
+
 ### 2. Existing shortcuts are rewritten in place, never deleted and recreated
 
 At frontend start the plugin rewrites `exe` and `startDir` on each of its shortcuts that does not already carry the new
@@ -62,7 +71,31 @@ register, and an in-place `Set*` on a shortcut that already exists waits for not
 The rewrite runs at frontend start rather than when the QAM panel is opened, because a user can launch a game without
 ever opening the panel.
 
-### 3. The shipped copy stays, and the old path keeps working
+### 3. The backend says WHICH shortcuts, off `shortcuts.vdf`, once
+
+Which shortcuts still name a plugin folder is a question about every non-Steam shortcut's `exe`, and an app **overview**
+does not carry one. The frontend's only route to it is `RegisterForAppDetails` per shortcut, which makes Steam load and
+cache a fat details object each time — 828 of them at every start, against the renderer heap budget
+[ADR-0024](0024-session-budget-rss-gate.md) exists to protect. The backend reads the same fact out of `shortcuts.vdf` in
+one 315 KB parse and hands the frontend a ready list of app IDs plus the `exe` and `startDir` to write. The frontend
+stops asking and only writes.
+
+Two shapes in that file are not obvious and both fail quietly: Steam has written the keys in more than one case, so they
+are matched case-insensitively, and the id is stored **signed** while every `SteamClient` API takes the unsigned form.
+
+**It is a one-time task with a recorded completion**, in the shape of a schema migration: once a run has rewritten
+everything a reading found, that is stamped in `kv_config` and no later start reads the file again — a plugin start
+already carries enough checks for this not to become a permanent one. The stamp is written only for a run that issued
+every write it was given; a reading that could not be done, or a pass that stopped part-way, leaves the question open
+for the next start.
+
+**Nothing clears the stamp, deliberately.** A shortcut that turns up later carrying the old path — restored from a
+backup, written by a downgraded build — stays on it, and no start will look again. That is harmless while the package
+still ships `bin/rom-launcher`: the old path is a real file that still launches. Clearing the stamp on Force Full Sync
+was considered and rejected — it would only ever reach a user who had already diagnosed the shortcut, and that button
+carries enough meanings already.
+
+### 4. The shipped copy stays, and the old path keeps working
 
 The package still ships `bin/rom-launcher`; it is the source the installer copies from. A shortcut nobody has rewritten
 — written by an older release, on a machine where the rewrite has not run yet — still points at a real file and still
@@ -73,11 +106,11 @@ launches. Nothing about the old path becomes an error.
 - **The plugin folder becomes code only, and disposable.** An update that deletes it, or fails to unpack into it, no
   longer stops games from starting.
 - **The #1865 card changes its sentence rather than disappearing.** Once no shortcut points into the pre-rename install,
-  the card that asked the user not to remove it tells them they now can, and where.
-- **The launcher follows the data root.** A start whose data half could not be migrated installs the launcher under the
-  Decky-assigned directory instead, and writes that path into any shortcut it creates. That directory is named after the
-  plugin folder, so such a shortcut carries the very fragility this decision removes — until a later start migrates the
-  half and rewrites it.
+  the card that asked the user not to remove it tells them they now can, and where — and that statement, alone among the
+  panel's notices, carries a Dismiss that hides a condition which is still true, because keeping the older install is a
+  legitimate end state.
+- **A start that cannot migrate the data changes nothing at all.** No launcher is installed, no shortcut is rewritten,
+  and the card keeps its first statement. New shortcuts name the copy the release ships, exactly as before this cut.
 - **The display name is still unmeasured.** The `exe` measurement above says nothing about what `SetShortcutName` does
   to an `appId`, and the sync writes the name in place alongside the exe. Do not read one as covering the other.
 - **A Steam client that never runs this frontend keeps its old shortcuts.** The rewrite is a frontend action; a library
@@ -94,6 +127,11 @@ launches. Nothing about the old path becomes an error.
   anyway: Decky deletes the folder before every update whatever it is called.
 - **Install the launcher once, on the first start that finds it missing.** Rejected. The launcher would then be whatever
   version the day of the move shipped, forever, while the plugin that hands it its arguments moves on.
+- **Let the frontend find the shortcuts itself**, through the `RegisterForAppDetails` sweep it already runs once per
+  sync. Rejected on cost and on where the fact lives: the sweep would move from once per sync to once per start, each
+  call materialising a details object in the renderer's heap, to read something the backend can parse out of one file. A
+  variant that swept only the app IDs the backend has bound was rejected too — it would miss an unbound orphan, and the
+  card's "nothing points into the older install" would then claim more than was checked.
 - **A third location of its own** (`~/.local/bin`, or a folder beside the two roots). Rejected. It would be a third
   thing to migrate, a third thing to explain in [Where Your Data Lives](../user-guide/where-your-data-lives.md), and it
   buys nothing the data root does not: the launcher is already outside everything Decky deletes.
