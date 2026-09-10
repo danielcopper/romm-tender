@@ -57,6 +57,7 @@ import { detach } from "../utils/detach";
 import { trimServerUrl, isValidServerUrl } from "../utils/serverUrl";
 import { WidePage } from "./qam/WidePage";
 import { ListDetail, type ListDetailItem } from "./qam/ListDetail";
+import { ROW_MARKER_GAP, ROW_MARKER_WIDTH, SELECTION_ACCENT } from "./qam/pane";
 import { pendingEdits } from "./settings/TextInputModal";
 import { SaveSortMigrationSection } from "./settings/SaveSortMigrationSection";
 import { ConnectionSection } from "./settings/ConnectionSection";
@@ -94,11 +95,6 @@ const SECTION_LABELS: Record<SettingsSection, string> = {
   "steam-library": "Steam Library",
   advanced: "Advanced",
 };
-
-// The selection marker and the gap after it — the same pair the Platforms list
-// insets its rows by, so the two lists read as one kind of list.
-const ROW_MARKER_WIDTH = 3;
-const ROW_MARKER_GAP = 5;
 
 /** The list hands its ids back as plain strings; this is where one becomes a
  *  section again — by lookup rather than by assertion, so an id no section
@@ -658,7 +654,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
       <div
         data-testid={`settings-section-${id}`}
         style={{
-          borderLeft: `${ROW_MARKER_WIDTH}px solid ${selected ? "#1a9fff" : "transparent"}`,
+          borderLeft: `${ROW_MARKER_WIDTH}px solid ${selected ? SELECTION_ACCENT : "transparent"}`,
           paddingLeft: `${ROW_MARKER_GAP}px`,
         }}
       >

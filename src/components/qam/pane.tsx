@@ -36,6 +36,25 @@ export const PALE_GREEN = "#8fc46b";
 export const VIOLET = "#a48fd4";
 
 /**
+ * The bar down the left edge of the selected row of a list, and the gap between
+ * it and the row's content — together, how far every row of a list-and-detail
+ * page is inset from its column's edge.
+ *
+ * Here rather than on a page because every such list has to be inset by the same
+ * pair, and two lists that differ read as two kinds of list. A list header spans
+ * exactly what a row spans, so {@link ROW_CONTENT_INSET} is its left padding:
+ * happy-dom lays nothing out, so a drift between a list's rows and its header —
+ * or between one page's list and another's — is invisible to every test here.
+ */
+export const ROW_MARKER_WIDTH = 3;
+export const ROW_MARKER_GAP = 5;
+export const ROW_CONTENT_INSET = ROW_MARKER_WIDTH + ROW_MARKER_GAP;
+
+/** What the marker is drawn in while its row is the selected one. Outside the
+ *  verdict palette above: it reports where the reader is, not how anything is. */
+export const SELECTION_ACCENT = "#1a9fff";
+
+/**
  * The padding a `DialogButton` is given wherever a pane puts buttons in a row.
  *
  * `ButtonItem` — the full-width control most of the panel uses — takes no style
