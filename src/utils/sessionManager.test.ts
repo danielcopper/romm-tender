@@ -6,6 +6,7 @@ import {
   initSessionManager,
   destroySessionManager,
   isSessionActive,
+  isAnySessionActive,
   planAdoption,
   ADOPTION_POLL_MAX_MS,
 } from "./sessionManager";
@@ -395,6 +396,76 @@ describe("sessionManager isSessionActive", () => {
     await stopApp(lifetime, APP_ID);
 
     expect(isSessionActive(ROM_ID)).toBe(false);
+  });
+});
+
+// The rom-less half of the same question, read by surfaces that must not act
+// while play time is being counted for ANY game — the update card, whose press
+// reloads the plugin and would make the reloaded manager re-stamp the session.
+describe("sessionManager isAnySessionActive", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    localStorage.clear();
+    stubLifecycleSteamClient();
+    stubNothingRunning();
+    vi.mocked(backend.getAppIdRomIdMap).mockResolvedValue({
+      [String(APP_ID)]: ROM_ID,
+      [String(OTHER_APP_ID)]: OTHER_ROM_ID,
+    });
+    vi.mocked(backend.finalizeGameSession).mockResolvedValue({ ...IDLE_FINALIZE });
+  });
+
+  afterEach(() => {
+    destroySessionManager();
+    vi.useRealTimers();
+  });
+
+  it("is false with no session open", async () => {
+    await initDrainingAdoptionPoll();
+
+    expect(isAnySessionActive()).toBe(false);
+  });
+
+  it("is true for whichever rom is live, without being asked which", async () => {
+    await initDrainingAdoptionPoll();
+    const lifetime = captureLifetimeCb();
+
+    await startApp(lifetime, OTHER_APP_ID);
+
+    expect(isAnySessionActive()).toBe(true);
+    expect(isSessionActive(ROM_ID)).toBe(false);
+  });
+
+  it("stays true while a second game is still running", async () => {
+    await initDrainingAdoptionPoll();
+    const lifetime = captureLifetimeCb();
+
+    await startApp(lifetime, APP_ID);
+    await startApp(lifetime, OTHER_APP_ID);
+    await stopApp(lifetime, APP_ID);
+
+    expect(isAnySessionActive()).toBe(true);
+  });
+
+  it("goes false again once the last session ends", async () => {
+    await initDrainingAdoptionPoll();
+    const lifetime = captureLifetimeCb();
+
+    await startApp(lifetime, APP_ID);
+    await stopApp(lifetime, APP_ID);
+
+    expect(isAnySessionActive()).toBe(false);
+  });
+
+  it("ignores an app the plugin does not own", async () => {
+    await initDrainingAdoptionPoll();
+    const lifetime = captureLifetimeCb();
+
+    await startApp(lifetime, UNRELATED_APP_ID);
+
+    expect(isAnySessionActive()).toBe(false);
   });
 });
 

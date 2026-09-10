@@ -87,6 +87,22 @@ export function isSessionActive(romId: number): boolean {
   return false;
 }
 
+/**
+ * Does this manager track a live session for ANY game? Read synchronously by
+ * surfaces that must not act while play time is being counted — the update card
+ * is the first, because applying an update reloads the plugin and a reloaded
+ * manager that cannot find its breadcrumb re-stamps the running session, which
+ * makes `record_session_start` open the durable marker anew instead of
+ * extending it and discards everything played so far (see `handleGameStart`).
+ *
+ * This is the question about ROMM sessions, deliberately not
+ * `isAnyAppRunning()`: what is at stake is play time this manager is counting,
+ * and a Steam game it never opened a session for has none to lose here.
+ */
+export function isAnySessionActive(): boolean {
+  return activeSessions.size > 0;
+}
+
 async function refreshAppIdMap(): Promise<void> {
   try {
     appIdToRomId = await getAppIdRomIdMap();
