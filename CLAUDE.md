@@ -875,6 +875,22 @@ Format: **invariant** — tier — enforced by.
   the suite is blind to it for the same reason — a page whose only control is a library's length below the point it
   opens at renders exactly like one whose control is a press away. Detail: `docs/architecture/qam-panel.md`, "Building
   blocks"
+- **A list-and-detail page opens on the row it was opened WITH, not on its first row — because on that layout focus
+  selects, so entry focus landing anywhere selects what it lands on** — test + prompt-only — `ListDetail.test.tsx` pins
+  the mark and that it moves with the selection, `WidePage.test.tsx` pins that the frame asks for the declared stop, and
+  both use a **non-first** row deliberately. **The rule spans three modules and nothing joins them**:
+  `utils/entryFocus.ts` owns `ENTRY_STOP_ATTR` and `pageEntryStop`, `qam/WidePage.tsx` places entry focus through it
+  rather than through `firstBodyStop`, and `qam/ListDetail.tsx` marks its selected row — plus whatever page passes a
+  starting selection at all, `SettingsPage` today. A fourth wide page that opens on a non-first row and forgets the mark
+  selects its first row instead, and every test still passes. **The end to end is unreachable here**: happy-dom performs
+  no layout and does not reproduce Steam's focus resolution, so what the suite pins is the declaration and the finder,
+  never the press. Only a controller confirms it. **What hid this for a whole review round is the shape of the failure,
+  not its size**: Main has three notices that name a section, and the one naming the FIRST section keeps working, so a
+  reader checking Open Connections sees the feature working while Open Controller and Open Save Sync both land on
+  Connections. A check that exercises the first row proves nothing about the rule. The mark sits on a
+  `display: contents` wrapper AROUND each row rather than on the row, and that is load-bearing rather than stylistic:
+  `pageEntryStop` calls `firstBodyStop(declared)`, which searches DESCENDANTS — a mark on the row itself finds no
+  candidate inside it, falls back to the first row, and ships the defect under a comment saying it does not
 
 When a change applies a guard / sanitize / backup / grouping pattern, sweep for sibling sites of the same pattern — the
 register is what that sweep checks against.
