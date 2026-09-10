@@ -194,9 +194,29 @@ FIRMWARE_DECLARED_KINDS = ("file", "directory")
 FirmwareChecked = Literal["verified", "mismatch", "unchecked", "unknown", "not-comparable"]
 
 CHECKED_VERIFIED: FirmwareChecked = "verified"
+"""The bytes were compared with the packaged identity and match: this file is the right one.
+It does not say the core can start — ``requirements_met`` is the verdict over the whole
+declaration.
+"""
 CHECKED_MISMATCH: FirmwareChecked = "mismatch"
+"""A file is there and its bytes are not the pinned ones — the one value that means *present
+with the wrong bytes*, and it appears only where ``verify`` ran. It never means absent: a
+missing file answers ``None``, never this.
+"""
 CHECKED_UNCHECKED: FirmwareChecked = "unchecked"
+"""A packaged identity exists and the bytes were not compared with it, because ``verify`` was
+not passed. It says neither that something is wrong nor that anything is right — the verdict
+costs one ``verify=True`` query.
+"""
 CHECKED_UNKNOWN: FirmwareChecked = "unknown"
+"""Nothing was compared and nothing is pending: no packaged identity exists for this
+destination, or its bytes would not come back, or its shape answered instead of its bytes — a
+directory where the core opens a file, a file where the core lists a folder, a folder answered
+by what it holds. It is no verdict on the entry: ``satisfied`` beside it is ``True`` for a plain
+file with no identity, ``False`` for a file where a folder is opened, ``None`` where the bytes
+were unreadable or a directory stands where a file is opened, and whatever the listing
+established for a listed folder — ``True``, ``False`` or ``None``.
+"""
 # The bytes differ from the pinned ones and that settles nothing, because the
 # identity is not whole-file comparable (:data:`FIRMWARE_IDENTITY_KINDS`). It
 # replaces ``mismatch`` for such an identity and never joins it: a verdict is
@@ -204,6 +224,10 @@ CHECKED_UNKNOWN: FirmwareChecked = "unknown"
 # spellings of the same idea ("incomparable") read as praise, and this is a
 # statement about a comparison, not about a file.
 CHECKED_NOT_COMPARABLE: FirmwareChecked = "not-comparable"
+"""The bytes differ from the pinned ones and the identity is not whole-file comparable, so the
+difference settles nothing. It is a withheld verdict and never a failure: an exact hit on the
+same file still answers ``verified``.
+"""
 
 FIRMWARE_CHECKED = ("verified", "mismatch", "unchecked", "unknown", "not-comparable")
 
@@ -1638,12 +1662,13 @@ class SuppliedBy:
 
     @property
     def label(self) -> str:
-        """The name ``distribution`` writes for itself — to show, never to match.
+        """The name ``distribution`` writes for itself — to show, never to match. A
+        consumer renders it beside "provided by" and branches on the ``distribution``
+        identifier instead.
 
         Derived rather than stored, because it is a fact about the identifier
         and not about this file: the pair cannot drift apart if there is only
-        one of it (:mod:`atlas.distribution_labels`). A consumer renders this
-        beside "provided by" and keeps branching on ``distribution``.
+        one of it (:mod:`atlas.distribution_labels`).
         """
         return distribution_label(self.distribution)
 
@@ -1823,10 +1848,12 @@ class FirmwareRequirement:
 
     @property
     def present(self) -> bool | None:
-        """Is anything at the destination? ``None`` when atlas could not look.
+        """Is anything at the destination? ``None`` when atlas could not look. A
+        projection of :attr:`found`, so it says only that *something* is there: a
+        directory sitting where the core opens a file is ``present`` too, and ``found``
+        is the field that keeps the kinds apart.
 
-        Derived from :attr:`found`, and deliberately three-valued: "could not
-        look" is not "not there".
+        Deliberately three-valued: "could not look" is not "not there".
         """
         if self.found == KIND_INACCESSIBLE:
             return None
@@ -1834,7 +1861,11 @@ class FirmwareRequirement:
 
     @property
     def satisfied(self) -> bool | None:
-        """Is the right file where this core will look for it?
+        """Is the right file where this core will look for it? No value reads like a
+        two-valued check. ``False`` includes a file that is *there* with the wrong bytes.
+        ``None`` means atlas did not establish it, an unverified query being the ordinary
+        case. ``True`` over a file the packaged table does not cover says only that it is
+        in place under the right name.
 
         ``True`` only when a file is there and atlas *established* that it is
         the right one — or, for a declaration the core opens as a folder, when
@@ -2029,19 +2060,36 @@ CoreSystemFirmware = Literal[
 # PlayStation BIOS: its five images all read ``optional``, because that is what
 # its ``.info`` says, and the system still will not boot.
 SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT: CoreSystemFirmware = "cannot-run-without-firmware"
+"""The system does not start without a firmware image, and this core needs one of the ones it
+declares. It comes from the packaged table rather than from this machine, so it says nothing
+about whether an image is in place — that is ``requirements_met``.
+"""
 # The system does not start without an image, and this core carries its own
 # substitute, so its all-optional declaration is correct. PCSX ReARMed's HLE
 # BIOS is the recorded case; the table names such cores per system, each with
 # the evidence for it.
 SYSTEM_FIRMWARE_CORE_ALTERNATIVE: CoreSystemFirmware = "core-supplies-an-alternative"
+"""The system needs an image and this core carries its own substitute, so its all-optional
+declaration is right. It is a statement about this core and not about the system: another core
+on the same system may still need an image.
+"""
 # Somebody established that the system starts with no image present. Recorded
 # knowledge like the other two, and the reason it is a value of its own: it is
 # emphatically not the same claim as ``None``.
 SYSTEM_FIRMWARE_RUNS_WITHOUT: CoreSystemFirmware = "runs-without-firmware"
+"""Somebody established that the system starts with no image present. Recorded knowledge, and
+emphatically not the same claim as ``None``: ``None`` is a system nobody has looked at, or a
+core with no requirement and so no system on this answer to state anything about.
+"""
 # Nobody has established which. A value, not an absence — the table records a
 # system whose cores contradict each other so that the open question is
 # visible instead of merely unrecorded.
 SYSTEM_FIRMWARE_OPEN: CoreSystemFirmware = "open"
+"""Nobody has established whether this system starts without a firmware image. A value and not
+an absence — the table records the open question rather than leaving it merely unrecorded — and
+the open entry itself adds no world-knowledge caveat, having nothing to say beyond the field:
+another entry on the same core still marks what it states.
+"""
 
 CORE_SYSTEM_FIRMWARE_STATES = (
     SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
@@ -2126,6 +2174,50 @@ class CoreFirmware:
     caveats: tuple[Caveat, ...]
     """Every degradation of this core's answer, and on any declaration but ``read`` the
     statement of why the list is not the whole story.
+    """
+    emulator: str | None = None
+    """Which emulator this is, in the spelling its own launch command uses: a libretro
+    entry's core file basename — the string ``core_so`` carries — or, for a standalone
+    one, the name the command states (ES-DE's ``%EMULATOR_X%`` token ``X``, an EmuDeck
+    launcher script's name). ``null`` says atlas could not identify an emulator from
+    the command, never that none is launched. The spelling is the frontend's own and
+    atlas neither invents nor renames it, which is what makes this the field two
+    answers about one emulator join on — ``label`` is a display name (``Dolphin
+    (Standalone)`` beside ``PrimeHack (Standalone)``, ``Cemu (Native)`` beside ``Cemu
+    (Proton)``), and a display name is presentation.
+
+    The join this exists for runs between questions: a client asks the
+    catalogue which emulators launch a system, the user picks one, and the
+    firmware answer for that pick is found by this field rather than by the
+    display name it was rendered under. Where this answer was built from a
+    catalogue entry the two carry the same string by construction
+    (:attr:`atlas.installations.EmulatorEntry.emulator`); where it was built
+    from an installed core instead — the per-core route, the inventory — it
+    is that core's own ``.so`` name, which is what a catalogue entry loading
+    that core would have said.
+    """
+    declared_index: int | None = None
+    """The place, from 0, of the catalogue row this answer was built from — the shipped
+    position ES-DE gives it, which promotion never touches, exactly as
+    :attr:`atlas.installations.EmulatorEntry.declared_index` states it. ``null`` where no
+    catalogue row was behind this answer at all: the inventory, a question asked about a
+    core by name, and the derived enumeration (#133), which no layer declared. With
+    ``emulator`` it makes the join to a catalogue entry exact where the identity alone
+    would not be, because two rows of one system can launch one emulator (EmuDeck
+    declares its Cemu twice, native and under Proton) and the position is what tells
+    those two rows apart.
+
+    The pair is the join and each half is needed: the identity says which
+    emulator, the position says which row of the catalogue's launch list. A
+    client holding a row it rendered from ``emulators_for`` therefore finds
+    that row's firmware by matching both, and where this is ``null`` the
+    answer describes no row and only the identity can be matched at all.
+
+    The numbering is the catalogue's, so everything
+    :attr:`atlas.installations.EmulatorEntry.declared_index` says about it
+    holds here unchanged: it is ES-DE's own walk rather than a count of
+    ``<command>`` elements, it may skip a position, and it is not an index
+    into any list a client holds.
     """
     system_firmware: CoreSystemFirmware | None = None
     """What is recorded about the SYSTEM this core declares firmware for — world
@@ -2325,10 +2417,13 @@ class CoreFirmware:
 
     @property
     def requirements_met(self) -> bool | None:
-        """Are all *required* files in place and right? ``None`` when atlas cannot say.
-        Atlas's own verdict rather than a reproduction of what the emulator declared:
-        where :attr:`requirements` is that declaration, this weighs it against what is on
-        disk *and* against world knowledge about the system (:attr:`system_firmware`).
+        """Are all *required* files in place and right? ``None`` when atlas cannot say —
+        atlas's verdict on the :attr:`requirements` declaration, weighed against disk
+        *and* world knowledge about the system (:attr:`system_firmware`). Not a presence
+        signal: with ``hash_checked`` false a required file of known identity answers
+        ``None`` though the image is in place; read :attr:`~FirmwareRequirement.present`
+        for presence. A ``False`` is always demonstrated; a ``True`` need not be, over a
+        required file the packaged table does not cover.
 
         That second source is what lets this field be right where the
         declaration alone cannot be: a ``.info`` has no way to say "this
@@ -2343,14 +2438,10 @@ class CoreFirmware:
         ``None`` when the declaration could not be read, when a required file
         could not be judged — including one that was simply never verified — or
         when a required declaration was refused for leaving the firmware root.
-        ``True`` is never reached out of ignorance, and never with a required
-        file whose bytes are known to be wrong. The system-level reading only
-        ever narrows this: it can turn a ``True`` into ``False`` or ``None``,
-        and it makes nothing true that was not true before.
-
-        Note what follows for ``verify=False``: a core whose required files have
-        known identities answers ``None``, not ``True``. Presence alone is not
-        the question this field asks.
+        ``True`` is never reached with a required file whose bytes are known to
+        be wrong. The system-level reading only ever narrows this: it can turn a
+        ``True`` into ``False`` or ``None``, and it makes nothing true that was
+        not true before.
 
         An alternatives group folds in through its own three-valued
         :attr:`FirmwareAlternatives.satisfied`: ``False`` blocks (no region
@@ -2570,6 +2661,19 @@ class CatalogueEntry:
     catalogue, because what a command identifies is arrangement knowledge.
     ``None`` where the command identifies nothing atlas can act on.
 
+    ``emulator`` is the entry's identity as the client sees it
+    (:attr:`CoreFirmware.emulator`), carried across this seam so the firmware
+    answer for an entry can be joined to the catalogue answer that named it.
+    It is *not* ``standalone_token``: that one is gated on the firmware
+    knowledge this route needs and answers ``None`` wherever the trees a card
+    describes are not the ones this launch reads, while an identity is
+    ungated and stands for a libretro entry too.
+
+    ``declared_index`` travels beside it and for the same reason: the identity
+    names an emulator and two rows of one system can launch one emulator, so
+    the row is what the position adds. Both are the catalogue entry's own
+    values, handed over unchanged — this seam derives neither.
+
     The two homes are the per-entry override of the context's standalone
     bases: ``None`` means the arrangement's own pair governs, and a value
     means this entry's launch picks a binary whose trees hang elsewhere —
@@ -2580,6 +2684,8 @@ class CatalogueEntry:
     label: str
     kind: str
     core_so: str | None
+    emulator: str | None = None
+    declared_index: int | None = None
     standalone_token: str | None = None
     standalone_data_home: str | None = None
     standalone_config_home: str | None = None
@@ -3994,7 +4100,7 @@ def _why_unread(unread: tuple[str, ...], raw_count: str) -> str:
     return "; ".join(clauses)
 
 
-def _unread_declaration_caveats(core: CoreDeclarations) -> tuple[Caveat, ...]:
+def _unread_declaration_caveats(core: CoreDeclarations) -> list[Caveat]:
     """State the firmware a core's ``.info`` declares outside its own enumeration.
 
     RetroArch reads firmware through the ``firmware_count`` slots it composes
@@ -4007,8 +4113,8 @@ def _unread_declaration_caveats(core: CoreDeclarations) -> tuple[Caveat, ...]:
     its file lists.
     """
     if not core.unread:
-        return ()
-    return (
+        return []
+    return [
         Caveat(
             CAVEAT_FIRMWARE_DECLARATION_UNREAD,
             f"{core.core_so} declares {', '.join(core.unread)}, which RetroArch does not take: "
@@ -4019,8 +4125,8 @@ def _unread_declaration_caveats(core: CoreDeclarations) -> tuple[Caveat, ...]:
                 "declared": core.unread,
                 "firmware_count": core.firmware_count,
             },
-        ),
-    )
+        )
+    ]
 
 
 def _core_caveats(core: CoreDeclarations, refusals: tuple[Caveat, ...]) -> tuple[Caveat, ...]:
@@ -4045,6 +4151,7 @@ def _read_core(
     core: CoreDeclarations,
     label: str | None,
     *,
+    declared_index: int | None = None,
     verify: bool,
     folders: _FolderReads,
 ) -> tuple[CoreFirmware, list[Caveat]]:
@@ -4052,8 +4159,10 @@ def _read_core(
 
     Both routes that reach a read declaration — the per-core/system one and the
     catalogue one — build it here, because they differ only in where the label
-    comes from. A field carried at one site and forgotten at the other is
-    invisible: the answer still type-checks, the caveat that mentions the fact
+    and the declared position come from: a catalogue row hands over both, and
+    a question asked about a core by name has neither. A field carried at one
+    site and forgotten at the other is invisible: the answer still
+    type-checks, the caveat that mentions the fact
     still appears on the core, and the suite stays green. ``unread`` was
     exactly that. It reached the catalogue route empty, so
     ``_declared_without_requiring`` saw nothing declared and an empty
@@ -4066,6 +4175,11 @@ def _read_core(
         CoreFirmware(
             core_so=core.core_so,
             label=label,
+            # A core answers for itself: the ``.so`` the catalogue would name
+            # to load it is what identifies this emulator, whichever route
+            # asked (per-core, per-system, inventory).
+            emulator=core.core_so,
+            declared_index=declared_index,
             declaration=DECLARATION_READ,
             requirements=requirements,
             caveats=_core_caveats(core, core_caveats),
@@ -4128,11 +4242,15 @@ def _cores_a_derived_assignment_may_hide(
     )
 
 
-def _undeclarable_core(core: CoreDeclarations, label: str | None) -> CoreFirmware:
+def _undeclarable_core(
+    core: CoreDeclarations, label: str | None, declared_index: int | None = None
+) -> CoreFirmware:
     """A core that is here, whose ``.info`` is not — present, and unexplained."""
     return CoreFirmware(
         core_so=core.core_so,
         label=label,
+        emulator=core.core_so,
+        declared_index=declared_index,
         declaration=DECLARATION_UNREADABLE,
         requirements=(),
         caveats=(
@@ -4349,6 +4467,9 @@ def firmware_for_core(
                     CoreFirmware(
                         core_so=f"{stem}.so",
                         label=None,
+                        # The caller named a core this machine does not have,
+                        # and the name is still the identity it asked about.
+                        emulator=f"{stem}.so",
                         declaration=DECLARATION_ABSENT,
                         requirements=(),
                         caveats=(reason,),
@@ -4549,6 +4670,8 @@ def _packaged_standalone_core(
         CoreFirmware(
             core_so=None,
             label=entry.label,
+            emulator=entry.emulator,
+            declared_index=entry.declared_index,
             declaration=DECLARATION_PACKAGED,
             requirements=tuple(sorted(requirements, key=_by_destination)),
             caveats=(_packaged_provenance_caveat(entry, card),),
@@ -4562,6 +4685,8 @@ def _melonds_config_unreadable_core(entry: CatalogueEntry, path: str) -> CoreFir
     return CoreFirmware(
         core_so=None,
         label=entry.label,
+        emulator=entry.emulator,
+        declared_index=entry.declared_index,
         declaration=DECLARATION_UNREADABLE,
         requirements=(),
         caveats=(
@@ -4790,6 +4915,8 @@ def _melonds_standalone_core(
         CoreFirmware(
             core_so=None,
             label=entry.label,
+            emulator=entry.emulator,
+            declared_index=entry.declared_index,
             declaration=DECLARATION_PACKAGED,
             requirements=tuple(sorted(requirements, key=_by_destination)),
             caveats=tuple(caveats),
@@ -4879,6 +5006,8 @@ def _pcsx2_standalone_core(
             CoreFirmware(
                 core_so=None,
                 label=entry.label,
+                emulator=entry.emulator,
+                declared_index=entry.declared_index,
                 declaration=DECLARATION_UNREADABLE,
                 requirements=(),
                 caveats=(
@@ -4918,6 +5047,8 @@ def _pcsx2_standalone_core(
                 CoreFirmware(
                     core_so=None,
                     label=entry.label,
+                    emulator=entry.emulator,
+                    declared_index=entry.declared_index,
                     declaration=DECLARATION_PACKAGED,
                     requirements=(),
                     caveats=(*caveats, untranslated),
@@ -4948,6 +5079,8 @@ def _pcsx2_standalone_core(
             CoreFirmware(
                 core_so=None,
                 label=entry.label,
+                emulator=entry.emulator,
+                declared_index=entry.declared_index,
                 declaration=DECLARATION_PACKAGED,
                 requirements=(),
                 caveats=tuple(caveats),
@@ -4993,6 +5126,8 @@ def _pcsx2_standalone_core(
         CoreFirmware(
             core_so=None,
             label=entry.label,
+            emulator=entry.emulator,
+            declared_index=entry.declared_index,
             declaration=DECLARATION_PACKAGED,
             requirements=(requirement,),
             caveats=tuple(caveats),
@@ -5054,6 +5189,8 @@ def _xemu_unreadable_core(entry: CatalogueEntry, path: str, why: str) -> CoreFir
     return CoreFirmware(
         core_so=None,
         label=entry.label,
+        emulator=entry.emulator,
+        declared_index=entry.declared_index,
         declaration=DECLARATION_UNREADABLE,
         requirements=(),
         caveats=(
@@ -5191,6 +5328,8 @@ def _xemu_standalone_core(
         CoreFirmware(
             core_so=None,
             label=entry.label,
+            emulator=entry.emulator,
+            declared_index=entry.declared_index,
             declaration=DECLARATION_PACKAGED,
             requirements=tuple(sorted(requirements, key=_by_destination)),
             caveats=tuple(caveats),
@@ -5213,6 +5352,8 @@ def _duckstation_unreadable_core(entry: CatalogueEntry, path: str) -> CoreFirmwa
     return CoreFirmware(
         core_so=None,
         label=entry.label,
+        emulator=entry.emulator,
+        declared_index=entry.declared_index,
         declaration=DECLARATION_UNREADABLE,
         requirements=(),
         caveats=(
@@ -5604,6 +5745,8 @@ def _duckstation_standalone_core(
             CoreFirmware(
                 core_so=None,
                 label=entry.label,
+                emulator=entry.emulator,
+                declared_index=entry.declared_index,
                 declaration=DECLARATION_PACKAGED,
                 requirements=(),
                 caveats=(*caveats, untranslated),
@@ -5665,6 +5808,8 @@ def _duckstation_standalone_core(
         CoreFirmware(
             core_so=None,
             label=entry.label,
+            emulator=entry.emulator,
+            declared_index=entry.declared_index,
             declaration=DECLARATION_PACKAGED,
             requirements=requirements,
             caveats=tuple(caveats),
@@ -5905,6 +6050,8 @@ def _standalone_entry_core(
         CoreFirmware(
             core_so=entry.core_so,
             label=entry.label,
+            emulator=entry.emulator,
+            declared_index=entry.declared_index,
             declaration=DECLARATION_UNSUPPORTED,
             requirements=(),
             caveats=(
@@ -5965,6 +6112,8 @@ def _catalogue_entry_core(
             CoreFirmware(
                 core_so=entry.core_so,
                 label=entry.label,
+                emulator=entry.emulator,
+                declared_index=entry.declared_index,
                 declaration=DECLARATION_ABSENT,
                 requirements=(),
                 caveats=(reason,),
@@ -5972,8 +6121,16 @@ def _catalogue_entry_core(
             [],
         )
     if core.info_status != READ_OK:
-        return _undeclarable_core(core, entry.label), []
-    return _read_core(machine, context, core, entry.label, verify=verify, folders=folders)
+        return _undeclarable_core(core, entry.label, entry.declared_index), []
+    return _read_core(
+        machine,
+        context,
+        core,
+        entry.label,
+        declared_index=entry.declared_index,
+        verify=verify,
+        folders=folders,
+    )
 
 
 def _empty_system_statement(

@@ -185,6 +185,7 @@ from .placement import (
     CAVEAT_OPTION_ENTRY_RETIRED,
     CAVEAT_FILE_NAMES_UNESTABLISHED,
     CAVEAT_FILE_SET_ACROSS_SYSTEMS,
+    CAVEAT_FILE_SET_DIRECTORIES_UNREAD,
     CAVEAT_EMULATOR_CONFIG_UNREAD,
     CAVEAT_EMULATOR_READ_UNESTABLISHED,
     CAVEAT_FEATURE_SWITCH_ABSENT,
@@ -626,20 +627,20 @@ class _CfgPath:
     app_relative: bool = False
 
     @property
-    def caveats(self) -> tuple[Caveat, ...]:
+    def caveats(self) -> list[Caveat]:
         """The degradation, when the configured spelling has no host location."""
         if self.path is not None:
-            return ()
+            return []
         if self.app_relative:
-            return (_app_relative_caveat(self.key, self.configured),)
-        return (
+            return [_app_relative_caveat(self.key, self.configured)]
+        return [
             Caveat(
                 CAVEAT_SANDBOX_PATH_UNTRANSLATED,
                 f'{self.key} = "{self.configured}" names a location inside the Flatpak sandbox that '
                 "has no equivalent on this host — atlas cannot read what the emulator reads there",
                 {"key": self.key, "path": self.configured},
-            ),
-        )
+            )
+        ]
 
     @property
     def note(self) -> str:
@@ -1522,7 +1523,7 @@ def _host_save_dir(sandbox: _Sandbox, layout: RetroArchCfg) -> _SaveRoot:
     if resolved.path == configured:
         return _SaveRoot(layout)
     if resolved.path is None:
-        return _SaveRoot(layout, reachable=False, caveats=resolved.caveats)
+        return _SaveRoot(layout, reachable=False, caveats=tuple(resolved.caveats))
     return _SaveRoot(
         _dc_replace(layout, directory=resolved.path),
         sources=(f'{key} = "{configured}"{resolved.note}',),
@@ -2793,7 +2794,7 @@ def _card_file_set(
 
 def _file_set_caveats(
     card: CoreCard, mode: SaveMode, *, mode_value: str, rom_stem: str | None
-) -> tuple[Caveat, ...]:
+) -> list[Caveat]:
     """What one declared file list cannot say about this mode's save.
 
     Two states the card keeps apart, each stated rather than left to an
@@ -2804,14 +2805,14 @@ def _file_set_caveats(
     :func:`_cross_root_parts` carries them.
     """
     if mode.files is None:
-        return (
+        return [
             Caveat(
                 CAVEAT_FILENAMES_UNVERIFIED,
                 f"core {card.key!r} in mode {mode_value!r} places per-game files under the standard "
                 "directory, but the filename scheme is unverified — file names not stated",
                 {"core": card.key, "mode": mode_value},
-            ),
-        )
+            )
+        ]
     if mode.files_without_save_id is not None or mode.files_established_for is not None:
         stated = _card_files(mode.files, rom_stem) or mode.files
         data: dict[str, DataValue] = {"core": card.key, "mode": mode_value, "files": stated}
@@ -2838,15 +2839,15 @@ def _file_set_caveats(
             )
         if mode.files_citation is not None:
             data["citation"] = mode.files_citation
-        return (
+        return [
             Caveat(
                 CAVEAT_FILENAMES_CONTENT_CONDITIONAL,
                 f"core {card.key!r} in mode {mode_value!r}: the file set depends on the content, "
                 f"which atlas does not identify.{spelling}{scope}",
                 data,
-            ),
-        )
-    return ()
+            )
+        ]
+    return []
 
 
 def _unnamed_tree_caveats(
@@ -2879,6 +2880,68 @@ def _unnamed_tree_caveats(
                 "from anything atlas reads — the directory is stated, the names are not, and "
                 "the citation says what stands behind them",
                 {"core": card.key, "dir": where, "role": group.role, "citation": group.unnamed or ""},
+            )
+        )
+    return tuple(caveats)
+
+
+def _unread_directory_caveats(
+    card: CoreCard,
+    mode: SaveMode,
+    file_set: FileSet,
+    *,
+    mode_value: str,
+    directory: str,
+    rom_stem: str | None,
+    content_dir_name: str | None,
+) -> tuple[Caveat, ...]:
+    """The mode's other directories under this root, once an observation replaced them.
+
+    An observed set's groups are what was found in the one directory the
+    observation read (:func:`_observed_groups`), so a mode whose parts lie in
+    sibling subdirectories loses them exactly when a file turns up: Kronos
+    declares ``kronos/saturn`` beside ``kronos/stv``, and a single ``.ram`` in
+    the first states one group; MAME 2010 declares eight trees, and a single
+    ``.nv`` in its ``nvram`` states one. Some of those directories had a carrier
+    already — the ones whose names were never derivable keep their
+    ``file-names-unestablished`` caveat — and the ones that *state* their files
+    had none at all. That silence is what this closes.
+
+    One caveat per directory, in the card's group order, each resolved the way
+    :func:`_declared_groups` resolves it, so a caveat's ``dir`` is the same
+    string the declared answer's group for that directory carries. Only for an
+    observed set: a declared answer already reaches every one of them as a
+    group, and an unknown one states nothing to have left out. Cross-root parts
+    are not this caveat's business — ``file-set-spans-roots`` carries those in
+    either state.
+    """
+    if file_set.state != FILE_SET_OBSERVED:
+        return ()
+    base = _base_of(directory, mode.subdir)
+
+    def resolved(subdir: str | None) -> str:
+        filled, _ = _fill_subdir(
+            subdir or "", rom_stem=rom_stem or None, content_dir_name=content_dir_name
+        )
+        return os.path.join(base, *[segment for segment in filled.split("/") if segment])
+
+    suffix = f" in mode {mode_value!r}" if mode_value else ""
+    seen = {resolved(mode.subdir)}
+    caveats = []
+    for group in mode.groups:
+        if group.root is not None:
+            continue
+        where = resolved(group.subdir)
+        if where in seen:
+            continue
+        seen.add(where)
+        caveats.append(
+            Caveat(
+                CAVEAT_FILE_SET_DIRECTORIES_UNREAD,
+                f"core {card.key!r}{suffix} also keeps save data under {where}: this "
+                f"observation read {directory} alone, so nothing here says what {where} "
+                "holds; while the file set is declared the same question states it as a group",
+                {"core": card.key, "mode": mode_value, "dir": where},
             )
         )
     return tuple(caveats)
@@ -3022,7 +3085,7 @@ def _core_system_root(
             ROOT_SYSTEM_DIRECTORY,
             reachable=False,
             sources=(f'{cfg_label} chain: system_directory = "{raw_system}"',),
-            caveats=configured.caveats,
+            caveats=tuple(configured.caveats),
         )
     else:
         root = _SystemRoot(
@@ -3030,7 +3093,7 @@ def _core_system_root(
             ROOT_SYSTEM_DIRECTORY,
             sources=(f'{cfg_label} chain: system_directory = "{raw_system}"{configured.note}',),
         )
-    return _dc_replace(root, caveats=(*caveats, *root.caveats))
+    return cast(_SystemRoot, _dc_replace(root, caveats=(*caveats, *root.caveats)))
 
 
 def _with_cross_parts(file_set: FileSet, cross_parts: "_CrossParts") -> FileSet:
@@ -3227,6 +3290,20 @@ def _card_root_placement(
         observable=observable,
         excluded=excluded,
     )
+    # After the file set, because whether the card's other directories dropped
+    # out of the answer is a fact about the set's state.
+    if granularity is not None:
+        all_caveats.extend(
+            _unread_directory_caveats(
+                card,
+                mode,
+                file_set,
+                mode_value=granularity.mode or "",
+                directory=directory,
+                rom_stem=content.rom_stem,
+                content_dir_name=content.dir_name,
+            )
+        )
     physical_dir = None
     if observable:
         physical_dir, link_caveats = _link_view(machine, directory)
@@ -3627,12 +3704,13 @@ def _observed_groups(
     What this does *not* produce is the card's other directories. Every pass
     above is about the answer's own directory, because that is the one the
     observation read, so a mode with groups in sibling subdirectories
-    (``kronos/stv`` beside ``kronos/saturn``) states them while the set is
-    declared and not once it is observed. Those keep their
-    ``file-names-unestablished`` caveat where they are unnamed and travel
-    nowhere where they state files. The type's own docstring states that limit
-    for callers, and closing it is a decision about what an observed answer may
-    carry, not a change to this function's shape.
+    (``kronos/stv`` beside ``kronos/saturn``) states them as groups while the
+    set is declared and not once it is observed. They reach the caller as
+    caveats instead: :func:`_unread_directory_caveats` names every one of them
+    on an observed answer, and a directory whose names were never derivable
+    keeps its ``file-names-unestablished`` beside that. The promise here stays
+    the narrow one — these groups are what was found, where it was found — and
+    the type's own docstring states it for callers.
     """
     unclaimed = list(observed)
     groups: list[FileGroup] = []
@@ -4248,6 +4326,17 @@ def _standard_placement(
             _unnamed_tree_caveats(
                 card,
                 mode,
+                directory=final_dir,
+                rom_stem=content.rom_stem,
+                content_dir_name=content.dir_name,
+            )
+        )
+        all_caveats.extend(
+            _unread_directory_caveats(
+                card,
+                mode,
+                file_set,
+                mode_value=granularity.mode or "",
                 directory=final_dir,
                 rom_stem=content.rom_stem,
                 content_dir_name=content.dir_name,
@@ -5497,7 +5586,7 @@ def _pcsx2_texture_placement(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"PCSX2's configuration ({ini_path}) exists and could not be read — where it "
             "reads texture packs from, and whether it reads them at all, is unknowable here",
-            {"emulator": card.token, "config": ini_path},
+            {"token": card.token, "config": ini_path},
         )
     values = qt_ini.values(result.text) if result.status == READ_OK and result.text else {}
     setting = card.directory
@@ -5522,7 +5611,7 @@ def _pcsx2_texture_placement(
                 f"the texture directory PCSX2's configuration names ({raw_dir!r}) has no "
                 f"spelling on this host — {ini_path} read fine, and nothing this answer "
                 "could anchor at",
-                {"emulator": card.token, "config": ini_path, "path": raw_dir},
+                {"token": card.token, "config": ini_path, "path": raw_dir},
             )
         root = host.path
     else:
@@ -5855,7 +5944,7 @@ def _duckstation_configured_directory(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"DuckStation's configuration ({read.unreadable}) exists and could not be read — "
             f"where it reads {reads} from is unknowable here",
-            {"emulator": token, "config": read.unreadable},
+            {"token": token, "config": read.unreadable},
         )
     # The key the way the emulator matches it (#295): CSimpleIniA is ASCII
     # case-insensitive, so a case-variant spelling governs here as it does
@@ -5869,7 +5958,7 @@ def _duckstation_configured_directory(
                 f"the {named} directory DuckStation's configuration names ({configured!r}) "
                 f"has no spelling on this host — {read.stated_path} read fine, and nothing "
                 "this answer could anchor at",
-                {"emulator": token, "config": read.stated_path or "", "path": configured},
+                {"token": token, "config": read.stated_path or "", "path": configured},
             )
         directory = host.path
     else:
@@ -5887,7 +5976,7 @@ def _duckstation_configured_directory(
             f"whether {token} has {switch} switched on is not established — the setting lives "
             f"in {config_path}, which this answer reads for the directory and not for the "
             "switch, because the card states none",
-            {"emulator": token, "config": config_path},
+            {"token": token, "config": config_path},
         )
     )
     return directory, physical_dir, caveats
@@ -6026,7 +6115,7 @@ def _standalone_texture_placement(
                 f"whether {card.token} has texture replacement switched on is not established — the "
                 f"setting lives in {config_path}, a configuration of the emulator's own that atlas "
                 "does not read (standalone emulator configuration is its own roadmap block)",
-                {"emulator": card.token, "config": config_path},
+                {"token": card.token, "config": config_path},
             ),
             # The Dolphin family reads this tree through a directory index one
             # per-game key re-points, so the fixed join above is the answer for
@@ -6926,7 +7015,7 @@ def _dolphin_savefile_placement(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"Dolphin's configuration ({ini_path}) exists and could not be read — which devices "
             "sit in the card slots and where the trees point is unknowable here",
-            {"emulator": card.token, "config": ini_path},
+            {"token": card.token, "config": ini_path},
         )
     values = _parse_sectioned_ini(result.text) if result.status == READ_OK and result.text else {}
     stated_ini = ini_path if result.status == READ_OK else None
@@ -7141,7 +7230,7 @@ def _xemu_document(
         return Unresolved(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"xemu's configuration ({toml_path}) exists and could not be read — {lost}",
-            {"emulator": card.token, "config": toml_path},
+            {"token": card.token, "config": toml_path},
         )
     try:
         doc: Mapping[str, Any] = (
@@ -7151,7 +7240,7 @@ def _xemu_document(
         return Unresolved(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"xemu's configuration ({toml_path}) is not parseable TOML — {lost}",
-            {"emulator": card.token, "config": toml_path},
+            {"token": card.token, "config": toml_path},
         )
     return doc, (toml_path if result.status == READ_OK else None)
 
@@ -7183,7 +7272,7 @@ def _xemu_disk_pieces(
             "outside the image is addressable per game: back the image up whole, or parse "
             "its filesystem with the layout stated here",
             {
-                "emulator": card.token,
+                "token": card.token,
                 "image": os.path.join(group.dir, group.files[0]),
                 "layout": "UDATA/<title id>",
             },
@@ -7266,7 +7355,7 @@ def _xemu_savefile_placement(
             # this emitter's stated order (the disk image first, then the
             # EEPROM) whenever more than one file is named.
             data: dict[str, str | tuple[str, ...]] = {
-                "emulator": card.token,
+                "token": card.token,
                 "config": toml_path,
                 "path": untranslated[0],
             }
@@ -7283,7 +7372,7 @@ def _xemu_savefile_placement(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"none of the files xemu's configuration names could be located from here "
             f"({toml_path}) — nothing this answer could anchor at",
-            {"emulator": card.token, "config": toml_path},
+            {"token": card.token, "config": toml_path},
         )
     directory = groups[0].dir
     # A <cwd>-templated directory is a property of the launch — nothing on the
@@ -7365,7 +7454,7 @@ def _cemu_mlc_root(
             f"the MLC path Cemu's configuration names ({configured!r}) has no spelling "
             f"on this host — {xml_path} read fine, and nothing this answer could "
             "anchor at",
-            {"emulator": token, "config": xml_path, "path": configured},
+            {"token": token, "config": xml_path, "path": configured},
         )
         return None, reading, refusal
     return resolved.path, reading, None
@@ -7390,7 +7479,7 @@ def _cemu_savefile_placement(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"Cemu's configuration ({xml_path}) exists and could not be read — where the MLC "
             "and every save in it live is unknowable here",
-            {"emulator": card.token, "config": xml_path},
+            {"token": card.token, "config": xml_path},
         )
     doc: _ET.Element | None = None
     if result.status == READ_OK and result.text:
@@ -7401,7 +7490,7 @@ def _cemu_savefile_placement(
                 UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
                 f"Cemu's configuration ({xml_path}) is not parseable XML — where the MLC and "
                 "every save in it live is unknowable here",
-                {"emulator": card.token, "config": xml_path},
+                {"token": card.token, "config": xml_path},
             )
     caveats: list[Caveat] = [*extra_caveats]
     if "--mlc" in command:
@@ -7587,7 +7676,7 @@ def _azahar_sdmc_root(
             f"the SD path Azahar's configuration names ({configured_dir!r}) has no "
             f"spelling on this host — {ini_path} read fine, and nothing this answer "
             "could anchor at",
-            {"emulator": card.token, "config": ini_path, "path": configured_dir},
+            {"token": card.token, "config": ini_path, "path": configured_dir},
         )
         return None, tuple(readings), refusal
     return resolved.path, tuple(readings), None
@@ -7621,7 +7710,7 @@ def _azahar_savefile_placement(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"Azahar's configuration ({ini_path}) exists and could not be read — where the "
             "emulated SD and every save on it live is unknowable here",
-            {"emulator": card.token, "config": ini_path},
+            {"token": card.token, "config": ini_path},
         )
     values = qt_ini.values(result.text) if result.status == READ_OK and result.text else {}
     caveats: list[Caveat] = [*extra_caveats]
@@ -7783,7 +7872,7 @@ def _duckstation_settings(
         refusal = Unresolved(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"DuckStation's configuration ({read.unreadable}) exists and could not be read — {lost}",
-            {"emulator": card.token, "config": read.unreadable},
+            {"token": card.token, "config": read.unreadable},
         )
         return read.root, {}, None, (), refusal
     if not read.ambiguous:
@@ -8192,7 +8281,7 @@ def _duckstation_savefile_placement(
                 f"the memory-card directory DuckStation's configuration names ({raw_dir!r}) "
                 f"has no spelling on this host — {stated_ini} read fine, and nothing this "
                 "answer could anchor at",
-                {"emulator": card.token, "config": stated_ini or "", "path": raw_dir},
+                {"token": card.token, "config": stated_ini or "", "path": raw_dir},
             )
         memcards_dir = host.path
     slots = tuple(
@@ -8530,7 +8619,7 @@ def _pcsx2_memcards_dir(
             f"the memory-card directory PCSX2's configuration names ({raw_dir!r}) has no "
             f"spelling on this host — {ini_path} read fine, and nothing this answer "
             "could anchor at",
-            {"emulator": card.token, "config": ini_path, "path": raw_dir},
+            {"token": card.token, "config": ini_path, "path": raw_dir},
         )
         return None, reading, refusal
     return host.path, reading, None
@@ -8639,7 +8728,7 @@ def _pcsx2_savefile_placement(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"PCSX2's configuration ({ini_path}) exists and could not be read — which cards "
             "its slots hold and where they live is unknowable here",
-            {"emulator": card.token, "config": ini_path},
+            {"token": card.token, "config": ini_path},
         )
     values = qt_ini.values(result.text) if result.status == READ_OK and result.text else {}
     stated_ini = ini_path if result.status == READ_OK else None
@@ -8860,7 +8949,7 @@ def _melonds_config(
         return Unresolved(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"melonDS's configuration ({read.unreadable}) exists and could not be read — {lost}",
-            {"emulator": card.token, "config": read.unreadable},
+            {"token": card.token, "config": read.unreadable},
         )
     config = read.config
     assert config is not None  # a read is either a document or an unreadable path
@@ -8943,7 +9032,7 @@ def _melonds_root(
             f"the {what} directory melonDS's configuration names ({trimmed!r}) has no "
             f"spelling on this host — {config.stated_file} read fine, and nothing this "
             "answer could anchor at",
-            {"emulator": card.token, "config": config.stated_file or "", "path": trimmed},
+            {"token": card.token, "config": config.stated_file or "", "path": trimmed},
         )
         return _MelonRoot(
             directory="", root_kind=ROOT_EMULATOR_DIRECTORY, mode="", refusal=refusal
@@ -9581,7 +9670,7 @@ def _rpcs3_savefile_placement(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"RPCS3's VFS configuration ({vfs_path}) exists and could not be read — which "
             "drive its saves live on is unknowable here",
-            {"emulator": card.token, "config": vfs_path},
+            {"token": card.token, "config": vfs_path},
         )
     text = result.text or "" if result.status == READ_OK else ""
     read = read_scalars(text, fallbacks={_RPCS3_EMULATOR_DIR_KEY: f"{config_dir}/"})
@@ -9590,7 +9679,7 @@ def _rpcs3_savefile_placement(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"RPCS3's VFS configuration ({vfs_path}) states a construct atlas does not read "
             f"({read.refusal}) — which drive its saves live on is unknowable here",
-            {"emulator": card.token, "config": vfs_path, "reason": read.refusal},
+            {"token": card.token, "config": vfs_path, "reason": read.refusal},
         )
     if _RPCS3_HDD0_KEY in read.skipped:
         # Stated as a nested block, a list or a multi-line scalar: RPCS3 reads a
@@ -9603,7 +9692,7 @@ def _rpcs3_savefile_placement(
             "atlas does not read — its value is unread, not absent, so which drive its saves "
             "live on is unknowable here",
             {
-                "emulator": card.token,
+                "token": card.token,
                 "config": vfs_path,
                 "reason": REASON_KEY_UNREAD,
                 "key": _RPCS3_HDD0_KEY,
@@ -9624,7 +9713,7 @@ def _rpcs3_savefile_placement(
             UNRESOLVED_EMULATOR_CONFIG_PATH_UNTRANSLATABLE,
             f"the drive RPCS3's VFS configuration names ({raw!r}) has no spelling on "
             f"this host — {vfs_path} read fine, and nothing this answer could anchor at",
-            {"emulator": card.token, "config": vfs_path, "path": raw},
+            {"token": card.token, "config": vfs_path, "path": raw},
         )
     hdd0 = host.path
     vmc = os.path.join(hdd0, _RPCS3_VMC_SUBDIR)
@@ -10140,7 +10229,7 @@ def _vita3k_savefile_placement(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"Vita3K's configuration ({config_path}) exists and could not be read — where "
             "its ux0 tree lives is unknowable here",
-            {"emulator": card.token, "config": config_path},
+            {"token": card.token, "config": config_path},
         )
     read = read_scalars(result.text or "" if result.status == READ_OK else "")
     if read.refusal is not None:
@@ -10148,7 +10237,7 @@ def _vita3k_savefile_placement(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"Vita3K's configuration ({config_path}) states a construct atlas does not read "
             f"({read.refusal}) — where its ux0 tree lives is unknowable here",
-            {"emulator": card.token, "config": config_path, "reason": read.refusal},
+            {"token": card.token, "config": config_path, "reason": read.refusal},
         )
     if _VITA3K_PREF_PATH_KEY in read.skipped:
         # Stated as a nested block, a list or a multi-line scalar: the emulator
@@ -10160,7 +10249,7 @@ def _vita3k_savefile_placement(
             "construct atlas does not read — its value is unread, not absent, so where its "
             "ux0 tree lives is unknowable here",
             {
-                "emulator": card.token,
+                "token": card.token,
                 "config": config_path,
                 "reason": REASON_KEY_UNREAD,
                 "key": _VITA3K_PREF_PATH_KEY,
@@ -10173,7 +10262,7 @@ def _vita3k_savefile_placement(
             f"Vita3K's configuration ({config_path}) names no pref-path, and an empty one "
             "means a default this build derives at run time rather than writing down "
             "(config.cpp:189-190) — where its ux0 tree lives is not established here",
-            {"emulator": card.token, "config": config_path},
+            {"token": card.token, "config": config_path},
         )
     host = sandbox.host(_VITA3K_PREF_PATH_KEY, stated)
     if host.path is None:
@@ -10182,7 +10271,7 @@ def _vita3k_savefile_placement(
             f"the preference path Vita3K's configuration names ({stated!r}) has no "
             f"spelling on this host — {config_path} read fine, and nothing this answer "
             "could anchor at",
-            {"emulator": card.token, "config": config_path, "path": stated},
+            {"token": card.token, "config": config_path, "path": stated},
         )
     user_root = os.path.join(host.path, _VITA3K_USER_TREE)
     listing, directories = _per_user_listing(machine, user_root)
@@ -10462,7 +10551,7 @@ def _pcsx2_savestate_placement(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"PCSX2's configuration ({ini_path}) exists and could not be read — where a "
             "state lands is unknowable here",
-            {"emulator": card.token, "config": ini_path},
+            {"token": card.token, "config": ini_path},
         )
     values = qt_ini.values(result.text) if result.status == READ_OK and result.text else {}
     raw, spelled = _simpleini_value(values, setting.section, setting.key)
@@ -10483,7 +10572,7 @@ def _pcsx2_savestate_placement(
                 f"the states directory PCSX2's configuration names ({raw!r}) has no "
                 f"spelling on this host — {ini_path} read fine, and nothing this answer "
                 "could anchor at",
-                {"emulator": card.token, "config": ini_path, "path": raw},
+                {"token": card.token, "config": ini_path, "path": raw},
             )
         directory = host.path
     else:
@@ -10571,7 +10660,7 @@ def _duckstation_savestate_placement(
                 f"the states directory DuckStation's configuration names ({raw!r}) has "
                 f"no spelling on this host — {stated_ini} read fine, and nothing this "
                 "answer could anchor at",
-                {"emulator": card.token, "config": stated_ini or "", "path": raw},
+                {"token": card.token, "config": stated_ini or "", "path": raw},
             )
         directory = host.path
         reading = f'settings.ini: [{setting.section}] {spelled} = "{raw}"'
@@ -10751,7 +10840,7 @@ def _xemu_savestate_placement(
             f"xemu.toml names no hard-disk image ([sys.files] {stated.key}) — the machine "
             "has no disk to keep a snapshot in, and where one would be attached is "
             "unknowable here",
-            {"emulator": card.token, "config": toml_path},
+            {"token": card.token, "config": toml_path},
         )
     if os.path.isabs(hdd):
         host = sandbox.host(stated.key, hdd)
@@ -10761,7 +10850,7 @@ def _xemu_savestate_placement(
                 f"the hard-disk image xemu's configuration names ({hdd!r}) has no spelling "
                 f"on this host — {toml_path} read fine, and nothing this answer could "
                 "anchor at",
-                {"emulator": card.token, "config": toml_path, "path": hdd},
+                {"token": card.token, "config": toml_path, "path": hdd},
             )
         directory, image = os.path.split(host.path)
         image_path = host.path
@@ -10802,7 +10891,7 @@ def _xemu_savestate_placement(
                 "into the qcow2 itself, with no file per state — so back the image up "
                 f"whole; entries inside it are named {card.names} ({stated.citation})",
                 {
-                    "emulator": card.token,
+                    "token": card.token,
                     "image": image_path,
                     "names": card.names or "",
                     "citation": stated.citation,
@@ -11328,7 +11417,7 @@ def _mame_savestate_placement(
             "one still writes the file and warns that save states are not officially "
             "supported for it (machine.cpp:927-928), so reliability is the driver's own",
             {
-                "emulator": card.token,
+                "token": card.token,
                 "citation": "gamedrv.h:76, machine.cpp:927-928 at mame0287",
             },
         ),
@@ -11433,7 +11522,7 @@ def _mame_ini_probe(
                 UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
                 f"MAME's configuration ({candidate}) exists and could not be read — where "
                 "a state lands is unknowable here",
-                {"emulator": token, "config": candidate},
+                {"token": token, "config": candidate},
             )
         return _MameIniReading(_mame_ini_values(result.text or ""), candidate)
     return _MameIniReading({}, None)
@@ -11605,7 +11694,7 @@ def _mame_root_value(
                 f"{stated_file} names the states directory through ${missing}, a value of "
                 "the launch's own environment this answer cannot establish — where a state "
                 "lands is unknowable here",
-                {"emulator": card.token, "config": stated_path or shape.file},
+                {"token": card.token, "config": stated_path or shape.file},
             )
         return substituted, f'{stated_file}: {key} {raw}' + (
             "" if substituted == raw else f" — the environment expands it to {substituted}"
@@ -11655,7 +11744,7 @@ def _mame_root_anchor(
                 f"no spelling on this host — {stated_ini or shape.file} read fine, and "
                 "nothing this answer could anchor at",
                 {
-                    "emulator": card.token,
+                    "token": card.token,
                     "config": stated_ini or shape.file,
                     "path": substituted,
                 },
@@ -11830,12 +11919,12 @@ def _savestate_absence_answer(
             Caveat(
                 CAVEAT_UNVERIFIED_VERSION,
                 absent.build_unestablished,
-                {"emulator": card.token, "verification": "build-unestablished"},
+                {"token": card.token, "verification": "build-unestablished"},
             )
         )
     caveats.extend(arrangement)
     return SavestateAbsence(
-        emulator=card.token,
+        token=card.token,
         citation=absent.citation,
         sources=(f"standalone savestate card '{card.token}': {card.provenance}",),
         caveats=tuple(caveats),
@@ -12376,7 +12465,7 @@ def _pcsx2_mod_placement(
             UNRESOLVED_EMULATOR_CONFIG_UNREADABLE,
             f"PCSX2's configuration ({ini_path}) exists and could not be read — where it "
             "reads patches from is unknowable here",
-            {"emulator": card.token, "config": ini_path},
+            {"token": card.token, "config": ini_path},
         )
     values = qt_ini.values(result.text) if result.status == READ_OK and result.text else {}
     # The key the way the emulator matches it (#295): CSimpleIniA is ASCII
@@ -12400,7 +12489,7 @@ def _pcsx2_mod_placement(
                 f"the patches directory PCSX2's configuration names ({raw_dir!r}) has no "
                 f"spelling on this host — {ini_path} read fine, and nothing this answer "
                 "could anchor at",
-                {"emulator": card.token, "config": ini_path, "path": raw_dir},
+                {"token": card.token, "config": ini_path, "path": raw_dir},
             )
         directory = host.path
     else:
@@ -12413,7 +12502,7 @@ def _pcsx2_mod_placement(
             f"whether {card.token} has patch loading switched on is not established — the "
             f"setting lives in {ini_path}, which this answer reads for the directory and not "
             "for the switch, because the card states none",
-            {"emulator": card.token, "config": ini_path},
+            {"token": card.token, "config": ini_path},
         )
     )
     sources = [
@@ -12507,7 +12596,7 @@ def _standalone_mod_placement(
                 f"whether {card.token} has mod loading switched on is not established — the setting "
                 f"lives in {config_path}, a configuration of the emulator's own that atlas does not "
                 "read (standalone emulator configuration is its own roadmap block)",
-                {"emulator": card.token, "config": config_path},
+                {"token": card.token, "config": config_path},
             )
         )
     else:
@@ -12797,7 +12886,7 @@ def _cfg_directory(
     if resolved is None:
         return None, ()
     if resolved.path is None or sandbox.machine.path_kind(resolved.path) != KIND_DIRECTORY:
-        return None, resolved.caveats
+        return None, tuple(resolved.caveats)
     return resolved.path, ()
 
 
@@ -12856,7 +12945,6 @@ def _retroarch_firmware_context(
     ships files into the firmware root passes them — a bare RetroArch ships
     none, so nothing is asked there.
     """
-    machine = sandbox.machine
     # The dropped lines are read here, not only the values: once an absent key
     # resolves silently to the platform default, a line the parser refused
     # looks exactly like a key nobody wrote — and the user did write it. The
@@ -12870,6 +12958,50 @@ def _retroarch_firmware_context(
     caveats: list[Caveat] = list(findings)
     sources: list[str] = list(extra_sources)
 
+    root, root_caveats, root_sources = _firmware_root(
+        sandbox, read, cfg_label=cfg_label, retroarch_config_dir=retroarch_config_dir
+    )
+    caveats.extend(root_caveats)
+    sources.extend(root_sources)
+    cores, cores_read, core_caveats, core_sources = _firmware_core_declarations(sandbox, parsed)
+    caveats.extend(core_caveats)
+    sources.extend(core_sources)
+
+    return FirmwareContext(
+        root=root,
+        cores=cores,
+        hashes=load_hashes(),
+        cores_read=cores_read,
+        sources=tuple(sources),
+        caveats=tuple(caveats),
+        arrangement_version=arrangement_version,
+        standalone_data_home=standalone_homes.data if standalone_homes is not None else None,
+        standalone_config_home=standalone_homes.config if standalone_homes is not None else None,
+        standalone_flatpak=standalone_homes.flatpak if standalone_homes is not None else None,
+        standalone_sandbox=standalone_sandbox,
+        standalone_xdg_pinned=standalone_homes is not None and standalone_homes.xdg_pinned,
+        distribution=distribution,
+        distribution_sandbox=distribution_sandbox,
+    )
+
+
+def _firmware_root(
+    sandbox: _Sandbox, read: ParsedCfg, *, cfg_label: str, retroarch_config_dir: str
+) -> tuple[str | None, list[Caveat], list[str]]:
+    """The firmware root this cfg establishes, and what stands in the way of one.
+
+    ``system_directory`` is the root the declared paths are relative to — the
+    same directory RetroArch hands cores when they look their firmware up.
+    ``None`` comes back two ways: the setting cleared, or a spelling with no
+    host equivalent. Absent resolves to the platform default RetroArch seeded
+    before it read a line, and a configured path that is no directory comes
+    back as it stands — and where the directory either names is not on the
+    machine, that arm says so with its own caveat.
+    """
+    machine = sandbox.machine
+    caveats: list[Caveat] = []
+    sources: list[str] = []
+    parsed = read.values
     raw_system = parsed.get("system_directory")
     configured_system = sandbox.cfg_path("system_directory", raw_system) if raw_system is not None else None
     root = configured_system.path if configured_system is not None else None
@@ -12912,7 +13044,24 @@ def _retroarch_firmware_context(
         sources.append(f'{cfg_label}: system_directory = "{raw_system}"{configured_system.note}')
         if machine.path_kind(root) != KIND_DIRECTORY:
             caveats.append(_firmware_root_missing(root))
+    return root, caveats, sources
 
+
+def _firmware_core_declarations(
+    sandbox: _Sandbox, parsed: Mapping[str, str]
+) -> tuple[tuple[CoreDeclarations, ...], bool, list[Caveat], list[str]]:
+    """What the installed cores declare they want, and whether that could be read.
+
+    Two keys, read independently and free to point anywhere:
+    ``libretro_info_path`` names the ``.info`` files that declare what cores
+    want, and ``libretro_directory`` says which of those cores are actually
+    installed. Without the first there is nothing to declare; without the
+    second the declarations cannot be limited to the cores that are there, and
+    the answer says so rather than narrowing on a guess.
+    """
+    machine = sandbox.machine
+    caveats: list[Caveat] = []
+    sources: list[str] = []
     info_dir, info_caveats = _cfg_directory(sandbox, parsed, "libretro_info_path")
     core_dir, core_dir_caveats = _cfg_directory(sandbox, parsed, "libretro_directory")
     caveats.extend((*info_caveats, *core_dir_caveats))
@@ -12953,28 +13102,13 @@ def _retroarch_firmware_context(
             for unreadable in enumeration.unreadable
         )
 
-    return FirmwareContext(
-        root=root,
-        cores=cores,
-        hashes=load_hashes(),
-        # Whether the enumeration happened is now the seam's answer, not a
-        # guess from the list being empty. That guess was wrong in the safe
-        # direction — a genuinely empty core directory read as "nobody looked",
-        # so an installation that ships no cores could never say so — and the
-        # case it protected against, a directory that resolves but cannot be
-        # listed, is stated above by its own caveat.
-        cores_read=info_dir is not None and cores_listed,
-        sources=tuple(sources),
-        caveats=tuple(caveats),
-        arrangement_version=arrangement_version,
-        standalone_data_home=standalone_homes.data if standalone_homes is not None else None,
-        standalone_config_home=standalone_homes.config if standalone_homes is not None else None,
-        standalone_flatpak=standalone_homes.flatpak if standalone_homes is not None else None,
-        standalone_sandbox=standalone_sandbox,
-        standalone_xdg_pinned=standalone_homes is not None and standalone_homes.xdg_pinned,
-        distribution=distribution,
-        distribution_sandbox=distribution_sandbox,
-    )
+    # Whether the enumeration happened is the seam's answer, not a guess from
+    # the list being empty. That guess was wrong in the safe direction — a
+    # genuinely empty core directory read as "nobody looked", so an
+    # installation that ships no cores could never say so — and the case it
+    # protected against, a directory that resolves but cannot be listed, is
+    # stated above by its own caveat.
+    return cores, info_dir is not None and cores_listed, caveats, sources
 
 
 class _FirmwareQueries:
@@ -13005,11 +13139,14 @@ class _FirmwareQueries:
         the same reason — it is what the handle's own read saw, not a fresh
         one.
         """
-        return _dc_replace(
-            context,
-            caveats=(
-                *context.caveats,
-                *arrangement_caveats(self.kind, observed_version=context.arrangement_version),
+        return cast(
+            FirmwareContext,
+            _dc_replace(
+                context,
+                caveats=(
+                    *context.caveats,
+                    *arrangement_caveats(self.kind, observed_version=context.arrangement_version),
+                ),
             ),
         )
 
@@ -13026,7 +13163,14 @@ class _FirmwareQueries:
         return _resolve_for_system(self._machine, self._firmware_context(), system=system, verify=verify)
 
     def firmware_inventory(self, *, verify: bool = False) -> FirmwareAnswer:
-        """Every installed core's firmware, plus what is lying around unclaimed."""
+        """Every installed core's firmware, plus what is lying around unclaimed.
+
+        The installed cores are the whole enumeration: a standalone emulator has
+        no core, so its firmware is never an entry here. Where a frontend
+        catalogue enumerates a system's emulators, :meth:`firmware_for_system`
+        states it instead; where none does, that route is derived from the
+        installed cores too and no route reaches it.
+        """
         return _resolve_inventory(self._machine, self._firmware_context(), verify=verify)
 
     def identify_firmware(
@@ -13232,6 +13376,15 @@ class _CatalogueHost(Protocol):
         ``%EMULATOR_…%`` token, EmuDeck's run launcher scripts — each handle
         answers with its own reading, and ``None`` where the command
         identifies nothing atlas can act on.
+        """
+        ...
+
+    def entry_emulator(self, spec: EmulatorSpec) -> str | None:
+        """Which emulator *spec* launches, as this arrangement reads its commands.
+
+        The catalogue's own reading everywhere, plus whatever spellings the
+        arrangement adds to it (EmuDeck's launcher scripts). ``None`` where
+        no reading identifies an emulator.
         """
         ...
 
@@ -14323,6 +14476,8 @@ def _firmware_catalogue_entries(
                 label=entry.label,
                 kind=entry.kind,
                 core_so=entry.core_so,
+                emulator=entry.emulator,
+                declared_index=entry.declared_index,
                 standalone_token=token,
                 standalone_data_home=homes.data if homes is not None else None,
                 standalone_config_home=homes.config if homes is not None else None,
@@ -14477,6 +14632,26 @@ class EmulatorEntry:
         return self._spec.core_so
 
     @property
+    def emulator(self) -> str | None:
+        """Which emulator this is, in the spelling its own launch command uses: a libretro
+        entry's core file basename — the string ``core_so`` carries — or, for a standalone
+        one, the name the command states (ES-DE's ``%EMULATOR_X%`` token ``X``, an EmuDeck
+        launcher script's name). ``null`` says atlas could not identify an emulator from
+        the command, never that none is launched. The spelling is the frontend's own and
+        atlas neither invents nor renames it, which is what makes this the field two
+        answers about one emulator join on — ``label`` is a display name (``Dolphin
+        (Standalone)`` beside ``PrimeHack (Standalone)``, ``Cemu (Native)`` beside ``Cemu
+        (Proton)``), and a display name is presentation.
+
+        The reading is the arrangement's (:meth:`_CatalogueQueries.entry_emulator`):
+        ES-DE's own vocabulary everywhere, plus the launcher-script spelling on
+        EmuDeck. Nothing gates it — an emulator atlas holds no card for is
+        still identified, because which emulator an entry launches and what
+        atlas knows about it are two questions.
+        """
+        return self._installation.entry_emulator(self._spec)
+
+    @property
     def command(self) -> str:
         return self._spec.command
 
@@ -14487,17 +14662,19 @@ class EmulatorEntry:
 
     @property
     def declared_index(self) -> int | None:
-        """This entry's place, from 0, in the launch list the declaring layer yields.
+        """This entry's place, from 0, in the launch list the declaring layer yields — the
+        shipped position, which promotion never touches: the answer is in *effective*
+        order, so a promoted entry may put a higher position first and the value is not
+        the entry's index in the answer; the numbering is ES-DE's own and may skip one.
+        ``None`` on a derived entry: no layer declared it, so it has no declared position
+        (#133).
 
-        The shipped position, which promotion never touches — read it beside
-        :attr:`selection` to tell an entry promoted out of the middle from the
-        declared first that a user also selected. It is ES-DE's own numbering
-        rather than a count of ``<command>`` elements
-        (:func:`atlas.esde._stored_commands`), so the values across one answer
-        are distinct and ascending *in declared order* — the answer itself is
-        in effective order, where a promoted entry may put a higher position
-        first — and they may skip one. ``None`` on a derived entry: no layer
-        declared it, so it has no declared position (#133).
+        Read it beside :attr:`selection` to tell an entry promoted out of the
+        middle from the declared first that a user also selected. The numbering
+        comes from :func:`atlas.esde._stored_commands`, the walk ES-DE itself
+        makes, rather than from counting ``<command>`` elements — that is what
+        lets a position go unused — and across one answer the values are
+        distinct and ascending *in declared order*.
         """
         return self._spec.declared_index
 
@@ -14987,6 +15164,11 @@ def _derived_catalogue_entries(
                 core_so=core.core_so,
                 command="",
                 provenance=_DERIVED_ENTRY_PROVENANCE,
+                # No command to read, and the core enumeration is where this
+                # entry came from: the core it was derived from is the
+                # emulator it launches, stated from the enumeration rather
+                # than parsed out of the empty string.
+                emulator=core.core_so,
                 declared_index=None,
             ),
         )
@@ -15126,6 +15308,24 @@ class _CatalogueQueries:
         what a command identifies is arrangement knowledge.
         """
         return emulator_token(command)
+
+    def entry_emulator(self, spec: EmulatorSpec) -> str | None:
+        """Which emulator this entry launches — the catalogue's reading by default.
+
+        The parser already read the command in ES-DE's own vocabulary
+        (:func:`atlas.esde.emulator_identity`) and every ES-DE-driven handle
+        stands on that reading. EmuDeck extends it, because its overlays also
+        launch through ``tools/launchers/<name>.sh`` scripts, and what a
+        command outside ES-DE's vocabulary identifies is arrangement
+        knowledge — the same reason :meth:`standalone_firmware_token` is
+        answered per handle.
+
+        Unlike that token this is not gated on anything: whether atlas holds
+        firmware or save knowledge for the emulator is a different question
+        from which emulator the entry launches, and an identity withheld for
+        want of a card would be an identity a client cannot join on.
+        """
+        return spec.emulator
 
     def standalone_firmware_homes(self, command: str) -> "_XdgHomes | None":
         """The per-entry override of the context's standalone bases — none by default.
@@ -16690,8 +16890,8 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
                 return _savestate_absence_answer(
                     card,
                     entry=(*entry_caveats, *extra),
-                    arrangement=arrangement_caveats(
-                        self.kind, observed_version=_marker_version(config)
+                    arrangement=tuple(
+                        arrangement_caveats(self.kind, observed_version=_marker_version(config))
                     ),
                 )
             health = self._health_from(config, marker_issues)
@@ -18245,6 +18445,32 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             return _EmuDeckGate(launch, variant, None, self._variant_reason(launch, variant))
         return _EmuDeckGate(launch, variant, homes, None)
 
+    def entry_emulator(self, spec: EmulatorSpec) -> str | None:
+        """The catalogue's reading, plus the launcher script EmuDeck launches through.
+
+        EmuDeck's overlays spell a launch two ways
+        (:meth:`_standalone_launch_identity`), and only one of them is ES-DE's
+        own: the second is a ``tools/launchers/<name>.sh`` script, whose name
+        without its ``.sh`` suffix is what identifies the emulator
+        (``bigpemu``, ``xenia`` — :func:`_emudeck_launcher` takes the suffix
+        off).
+        That reading is arrangement knowledge, which is why it lives here and
+        not in the catalogue parser.
+
+        Deliberately *not* the reading :meth:`standalone_firmware_token`
+        makes: that one is variant-gated, because a firmware answer may only
+        stand where the trees the cards describe are the ones the launch
+        really reads. An identity has no such condition — the entry launches
+        what it launches whether or not atlas knows where that emulator keeps
+        its files — so a ``-w`` Proton row and a flatpak nobody established
+        homes for are identified here exactly like the rest.
+        """
+        identity = super().entry_emulator(spec)
+        if identity is not None:
+            return identity
+        launcher = _emudeck_launcher(spec.command)
+        return None if launcher is None else launcher[0]
+
     def standalone_firmware_token(self, command: str) -> str | None:
         """The command's word, variant-gated — EmuDeck's own reading.
 
@@ -18372,8 +18598,8 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
             return _savestate_absence_answer(
                 card,
                 entry=(*entry_caveats, *extra),
-                arrangement=arrangement_caveats(
-                    self.kind, observed_version=self._observed_backend_head()
+                arrangement=tuple(
+                    arrangement_caveats(self.kind, observed_version=self._observed_backend_head())
                 ),
             )
         gate = self._standalone_launch_gate(spec)

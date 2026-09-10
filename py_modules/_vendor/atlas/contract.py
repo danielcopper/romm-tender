@@ -494,6 +494,33 @@ def firmware_contract(answer: FirmwareAnswer) -> dict[str, Any]:
       across two cores (blueMSX's databases and machine ROMs, Dolphin's
       ``codehandler.bin``).
 
+    ``emulator`` on a core is the identity the catalogue answer states under
+    that same name: a client that asked which emulators launch a system, let
+    the user pick one, and now wants that pick's firmware matches this field
+    against the entry's, never ``label`` — the display name is presentation
+    and two rows of one emulator can carry two of them. It stands on a
+    standalone emulator too, where ``core_so`` is ``null`` and used to leave
+    the answer with no identity at all.
+
+    **The identity names an emulator, not a row, and ``declared_index`` names
+    the row.** Several rows of one system can share one identity — EmuDeck
+    declares its Cemu twice, native and under Proton, and both rows and both
+    cores read ``cemu`` — so the pair is the join: the identity says which
+    emulator, the position says which of the catalogue's launch rows this
+    answer was built from, and it is ``null`` where none was (the inventory,
+    a question asked about a core by name, a derived enumeration). What the
+    pair identifies is the row, so it joins even where the identity is
+    ``null``: EmuDeck's two ``n3ds`` rows identify no emulator and are still
+    one row each, told apart by their positions in both answers. The
+    identity **alone** is what never joins on ``null`` — matching on it would
+    collapse those two rows into one — and a ``null`` there says only that
+    the emulator was not identified, never that the row is not a row.
+
+    The two lists can also be in different orders, so the pair is matched
+    rather than the position in the list: a catalogue question given a
+    ``content_path`` promotes the row a per-game ``altemulator`` names, and
+    this route names no content.
+
     ``supplied_by`` is none of those three: it is read rather than derived, and
     it answers a different question from all of them — whose file is at the
     destination. A file the distribution places itself is restored by its own
@@ -526,6 +553,8 @@ def firmware_contract(answer: FirmwareAnswer) -> dict[str, Any]:
         "cores": [
             {
                 "core_so": core.core_so,
+                "emulator": core.emulator,
+                "declared_index": core.declared_index,
                 "label": core.label,
                 "declaration": core.declaration,
                 "requirements_met": core.requirements_met,
@@ -566,6 +595,15 @@ def emulator_contract(entry: EmulatorEntry) -> dict[str, Any]:
     a client's own list, into a serialized answer read later — otherwise names
     the emulator without naming what it launches.
 
+    ``emulator`` is the entry's identity and ``label`` its presentation, and
+    the two are never interchangeable: a client that joins this answer to a
+    firmware answer joins on ``emulator``, because the display name is where
+    an arrangement puts whatever it likes — ``Cemu (Native)`` and ``Cemu
+    (Proton)`` are one emulator under two rows, and ``Dolphin (Standalone)``
+    beside ``PrimeHack (Standalone)`` two emulators whose labels differ by one
+    word. ``core_so`` carries the identity only for a libretro entry; this
+    field carries it for both kinds.
+
     ``declared_index`` is the entry's 0-based place in the launch list ES-DE
     builds from the declaring layer's ``<command>`` elements, and ``selection``
     says why the list order moved. The list travels in *effective* order, so
@@ -590,6 +628,7 @@ def emulator_contract(entry: EmulatorEntry) -> dict[str, Any]:
         "label": entry.label,
         "kind": entry.kind,
         "core_so": entry.core_so,
+        "emulator": entry.emulator,
         "declared_index": entry.declared_index,
         "selection": entry.selection,
         "caveats": _caveats_contract(entry.caveats),
@@ -736,10 +775,17 @@ def savestate_absence_contract(absence: SavestateAbsence) -> dict[str, Any]:
     no such feature — an answer, not a refusal — and the citation rides
     contractually because a client repeating the claim repeats its source.
     ``sources`` stays out, like every provenance prose.
+
+    ``token`` and not ``emulator``: this names the emulator in atlas's own
+    packaged-card vocabulary, while ``emulator`` on a catalogue entry or a
+    firmware core is the frontend's own spelling of the same emulator. The
+    two disagree wherever an arrangement spells a launch its own way — an
+    EmuDeck entry reports ``cemu`` where the card here is ``CEMU`` — so they
+    do not share a name.
     """
     return {
         "no_savestates": {
-            "emulator": absence.emulator,
+            "token": absence.token,
             "citation": absence.citation,
             "caveats": _caveats_contract(absence.caveats),
         }

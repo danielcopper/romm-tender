@@ -1478,6 +1478,18 @@ _LOOPS = _Landing(loops=True)
 _NOT_A_DIRECTORY = _Landing()
 
 
+def _stepped_onto_link(resolved: str, target: str, parts: list[str]) -> tuple[str, list[str]]:
+    """Where the walk stands after following a link, and what is left to walk.
+
+    An absolute target restarts the walk at the root; a relative one is
+    relative to the directory holding the link, which is exactly where the walk
+    already stands. Either way the target's own components are walked before
+    whatever the spelling still had left.
+    """
+    rest = [p for p in target.split("/") if p and p != "."] + parts
+    return ("/" if target.startswith("/") else resolved), rest
+
+
 def _refuse_both_unreadable_lists(inaccessible: set[str], unlistable: set[str]) -> None:
     """A path cannot both fail its ``stat`` and be a directory whose ``stat`` succeeded.
 
@@ -1932,11 +1944,7 @@ class FixtureMachine:
             hops += 1
             if hops > SYMLINK_HOPS:
                 return _LOOPS
-            if target.startswith("/"):
-                resolved = "/"
-            # A relative target is relative to the directory holding the link,
-            # which is exactly where `resolved` already stands.
-            parts = [p for p in target.split("/") if p and p != "."] + parts
+            resolved, parts = _stepped_onto_link(resolved, target, parts)
         return _Landing(resolved)
 
     def _resolve_parent(self, path: str) -> str | None:

@@ -160,7 +160,7 @@ def lookup_arrangement(kind: str) -> ArrangementEvidence | None:
     return _EVIDENCE.get(kind)
 
 
-def arrangement_caveats(kind: str, *, observed_version: str | None = None) -> tuple[Caveat, ...]:
+def arrangement_caveats(kind: str, *, observed_version: str | None = None) -> list[Caveat]:
     """What every answer from *kind* must state about its own evidence.
 
     Two states produce a caveat, and they are the halves of one question — has
@@ -194,7 +194,7 @@ def arrangement_caveats(kind: str, *, observed_version: str | None = None) -> tu
     record = lookup_arrangement(kind)
     if record is None or record.verified is None:
         label = record.label if record is not None else f"the {kind!r} arrangement"
-        return (
+        return [
             Caveat(
                 CAVEAT_ARRANGEMENT_UNVERIFIED,
                 f"no live installation of {label} has been observed by atlas — how its configs are read is "
@@ -202,13 +202,13 @@ def arrangement_caveats(kind: str, *, observed_version: str | None = None) -> tu
                 "a running machine, so this answer is derived rather than verified "
                 "(docs/how-to-use.md, 'What atlas has actually seen')",
                 {"kind": kind},
-            ),
-        )
+            )
+        ]
     # An empty string names no version any more than ``None`` does, and a
     # comparison against it would report drift to nothing.
     if not observed_version or observed_version == record.verified.version:
-        return ()
-    return (
+        return []
+    return [
         Caveat(
             CAVEAT_ARRANGEMENT_VERSION_DRIFTED,
             f"atlas's knowledge of {record.label} was verified against {record.verified.version}, and this "
@@ -220,5 +220,5 @@ def arrangement_caveats(kind: str, *, observed_version: str | None = None) -> tu
                 "verified": record.verified.version,
                 "observed": observed_version,
             },
-        ),
-    )
+        )
+    ]

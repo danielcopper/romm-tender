@@ -312,41 +312,38 @@ def _keying(value: object, where: str) -> tuple[Keying | None, str | None]:
     return keying, _expect_str(value.get("citation"), f"{where}.citation")
 
 
-def _trees(value: object, where: str) -> tuple[ModTreeSpec, ...]:
-    """The directories a card states — one, or several that are different mechanisms.
+def _tree(entry: object, at: str) -> ModTreeSpec:
+    """One stated tree: where it is, what tells its files apart, what it is for.
 
-    A card with several requires a role on each, and the roles must differ:
-    they are what a caller holding three directories tells them apart by, and a
-    repeated one would make two of them indistinguishable in the answer. A card
-    with one states no role, because there is nothing to tell apart.
+    Exactly one of ``subdir`` and ``directory`` says where — a fixed place
+    below the card's base, or the configuration key whose value is the
+    directory — because a tree that stated both would name two places and a
+    tree that stated neither would name none.
     """
-    if not isinstance(value, list) or not value:
-        raise ValueError(f"{where}: expected a non-empty list of trees, got {value!r}")
-    trees: list[ModTreeSpec] = []
-    for index, entry in enumerate(value):
-        at = f"{where}[{index}]"
-        if not isinstance(entry, dict):
-            raise ValueError(f"{at}: expected an object, got {entry!r}")
-        role = entry.get("role")
-        if role is not None:
-            role = _expect_str(role, f"{at}.role")
-        keying, citation = _keying(entry.get("keying"), f"{at}.keying")
-        subdir = entry.get("subdir")
-        directory = entry.get("directory")
-        if (subdir is None) == (directory is None):
-            raise ValueError(
-                f"{at}: state exactly one of 'subdir' and 'directory' — a fixed place below the "
-                "card's base, or the configuration key whose value is the directory"
-            )
-        trees.append(
-            ModTreeSpec(
-                subdir=None if subdir is None else _expect_subdir(subdir, f"{at}.subdir"),
-                directory=None if directory is None else _mod_setting(directory, f"{at}.directory"),
-                role=role,
-                keying=keying,
-                keying_citation=citation,
-            )
+    if not isinstance(entry, dict):
+        raise ValueError(f"{at}: expected an object, got {entry!r}")
+    role = entry.get("role")
+    if role is not None:
+        role = _expect_str(role, f"{at}.role")
+    keying, citation = _keying(entry.get("keying"), f"{at}.keying")
+    subdir = entry.get("subdir")
+    directory = entry.get("directory")
+    if (subdir is None) == (directory is None):
+        raise ValueError(
+            f"{at}: state exactly one of 'subdir' and 'directory' — a fixed place below the "
+            "card's base, or the configuration key whose value is the directory"
         )
+    return ModTreeSpec(
+        subdir=None if subdir is None else _expect_subdir(subdir, f"{at}.subdir"),
+        directory=None if directory is None else _mod_setting(directory, f"{at}.directory"),
+        role=role,
+        keying=keying,
+        keying_citation=citation,
+    )
+
+
+def _expect_roles_tell_trees_apart(trees: list[ModTreeSpec], where: str) -> None:
+    """A card with several trees names each one; a card with one names none."""
     roles = [tree.role for tree in trees]
     if len(trees) == 1:
         if roles[0] is not None:
@@ -358,6 +355,20 @@ def _trees(value: object, where: str) -> tuple[ModTreeSpec, ...]:
         raise ValueError(f"{where}: every tree of a multi-tree card names its role")
     elif len(set(roles)) != len(roles):
         raise ValueError(f"{where}: roles must tell the trees apart, got {roles}")
+
+
+def _trees(value: object, where: str) -> tuple[ModTreeSpec, ...]:
+    """The directories a card states — one, or several that are different mechanisms.
+
+    A card with several requires a role on each, and the roles must differ:
+    they are what a caller holding three directories tells them apart by, and a
+    repeated one would make two of them indistinguishable in the answer. A card
+    with one states no role, because there is nothing to tell apart.
+    """
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"{where}: expected a non-empty list of trees, got {value!r}")
+    trees = [_tree(entry, f"{where}[{index}]") for index, entry in enumerate(value)]
+    _expect_roles_tell_trees_apart(trees, where)
     return tuple(trees)
 
 
@@ -446,6 +457,25 @@ def _settings_name(value: object, where: str) -> str | None:
     return None if value is None else _expect_str(value, where)
 
 
+def _recorded_tree_words(tree: object) -> list[str]:
+    """The words one tree row states — its subpath, and the setting it reads."""
+    if not isinstance(tree, dict):
+        return []
+    words = list(path_segments(tree.get("subdir")))
+    directory = tree.get("directory")
+    if not isinstance(directory, dict):
+        return words
+    # A configured tree states three names of the emulator's own — the section
+    # and key it reads, and the fallback it composes without one — and all
+    # three are pinned like any subpath segment. The section counts: a card
+    # whose key survives a rename of the section around it reads nothing, and
+    # the texture rows have always watched theirs.
+    for field in ("section", "key", "default"):
+        if isinstance(directory.get(field), str):
+            words.extend(path_segments(directory[field]))
+    return words
+
+
 def recorded_mod_words(entry: Mapping[str, Any]) -> frozenset[str]:
     """Every word a mods row states as this emulator's own — both row kinds.
 
@@ -456,19 +486,7 @@ def recorded_mod_words(entry: Mapping[str, Any]) -> frozenset[str]:
     mods = entry.get("mods", {})
     words: list[str] = []
     for tree in mods.get("trees") or ():
-        if isinstance(tree, dict):
-            words.extend(path_segments(tree.get("subdir")))
-            directory = tree.get("directory")
-            if isinstance(directory, dict):
-                # A configured tree states three names of the emulator's own —
-                # the section and key it reads, and the fallback it composes
-                # without one — and all three are pinned like any subpath
-                # segment. The section counts: a card whose key survives a
-                # rename of the section around it reads nothing, and the
-                # texture rows have always watched theirs.
-                for field in ("section", "key", "default"):
-                    if isinstance(directory.get(field), str):
-                        words.extend(path_segments(directory[field]))
+        words.extend(_recorded_tree_words(tree))
     option = mods.get("option")
     if isinstance(option, dict) and isinstance(option.get("setting"), str):
         words.append(option["setting"])

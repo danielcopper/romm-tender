@@ -64,7 +64,7 @@ from __future__ import annotations
 # tests/test_version.py holds it equal to pyproject — CI's package job holds
 # dist-info to pyproject in a clean venv — so drift is a red test, not a
 # silent fork.
-__version__ = "0.15.0"  # x-release-please-version
+__version__ = "0.17.0"  # x-release-please-version
 
 # --- The two entry points, and the aggregate over them -----------------------
 from .detect import detect
@@ -382,6 +382,7 @@ from .placement import (
     CAVEAT_FILENAMES_UNVERIFIED,
     CAVEAT_FILE_NAMES_UNESTABLISHED,
     CAVEAT_FILE_SET_ACROSS_SYSTEMS,
+    CAVEAT_FILE_SET_DIRECTORIES_UNREAD,
     CAVEAT_FILE_SET_SPANS_ROOTS,
     CAVEAT_INVALID_SAVE_DIRECTORY,
     CAVEAT_INVALID_SCREENSHOT_DIRECTORY,
@@ -897,6 +898,7 @@ __all__ = [
     "CAVEAT_FILENAMES_UNVERIFIED",
     "CAVEAT_FILE_NAMES_UNESTABLISHED",
     "CAVEAT_FILE_SET_ACROSS_SYSTEMS",
+    "CAVEAT_FILE_SET_DIRECTORIES_UNREAD",
     "CAVEAT_FILE_SET_SPANS_ROOTS",
     "CAVEAT_EMULATOR_CONFIG_UNREADABLE",
     "CAVEAT_FIRMWARE_BUILTIN_REPLACEMENT",

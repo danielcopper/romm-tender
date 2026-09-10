@@ -200,7 +200,7 @@
       },
       "directory": {
         "name": "duckstation",
-        "citation": "[V-source] the DataRoot is the duckstation directory below whichever base the launch picks (qthost.cpp:562-582 at stenzek/duckstation@64655818e); components/duckstation/component_functions.sh:3-12 pin the config-home spelling",
+        "citation": "[V-source] the DataRoot is the duckstation directory below whichever base the launch picks (qthost.cpp:562-582 at stenzek/duckstation@64655818e); components/duckstation/component_functions.sh:3 and component_functions.sh:5-12 pin the config-home spelling (the line between names the component's own rd_config, not a DuckStation tree)",
         "anchors": {
           "binary": "duckstation/bin/duckstation-qt",
           "names": {

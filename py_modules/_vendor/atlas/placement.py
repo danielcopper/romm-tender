@@ -94,8 +94,23 @@ FILE_SET_DECLARED: FileSetState = "declared"
 FILE_SET_UNKNOWN: FileSetState = "unknown"
 
 ROOT_SAVEFILE_DIRECTORY: RootKind = "savefile_directory"
+"""The configured save root — the directory RetroArch would write this game's save below, read
+off the arrangement rather than assumed. It is the anchor and not the whole answer: what the
+core builds below it is the rest of the placement.
+"""
 ROOT_CONTENT_DIRECTORY: RootKind = "content_directory"
+"""The content's own directory: the save lands beside the ROM. A core whose card roots its saves
+in the system directory is anchored here once RetroArch's ``systemfiles_in_content_dir`` is set,
+and where ``system_directory`` is blank or the literal ``default`` — the system directory the
+core is _handed_ decides, not the key's value. A blank ``savefile_directory`` does the opposite
+and keeps the standing root.
+"""
 ROOT_SYSTEM_DIRECTORY: RootKind = "system_directory"
+"""The core's system directory, the tree it reads firmware from, for the cores whose card roots
+their saves in it. A card does not settle it alone: RetroArch's ``systemfiles_in_content_dir``,
+or a ``system_directory`` left blank or set to the literal ``default``, moves such a core to
+``content_directory``.
+"""
 # The root that is a property of the launch rather than of the machine: the
 # working directory of the process that loads the core. DeSmuME 2015 composes
 # its .dsv path from a variable its libretro build never fills, so the file
@@ -104,12 +119,20 @@ ROOT_SYSTEM_DIRECTORY: RootKind = "system_directory"
 # rather than a refusal: a hole is something the caller fills, and the caller
 # often IS the launcher.
 ROOT_WORKING_DIRECTORY: RootKind = "working_directory"
+"""The working directory of the launching process — a property of the launch rather than of the
+machine, which is why the answer is a ``<cwd>`` template with a hole rather than a refusal: a
+hole is something the caller fills, and the caller often is the launcher.
+"""
 # The root a standalone emulator owns: its user tree below the XDG base the
 # arrangement pins. No frontend hands these emulators a save directory — the
 # tree is the emulator's own, its shape read from the emulator's configuration
 # the way the emulator reads it, and where an arrangement routes pieces of it
 # elsewhere it does so with symlinks the answer walks, not with settings.
 ROOT_EMULATOR_DIRECTORY: RootKind = "emulator_directory"
+"""The tree a standalone emulator owns. No frontend hands such an emulator a save directory, so
+this root is what the emulator's own configuration names, read the way that emulator reads it: a
+default below the XDG base the arrangement pins, or the absolute path a setting states.
+"""
 
 # The screenshot question's own two-word vocabulary, closed around its own
 # question like the savestate one is: a screenshot is never anchored at a
@@ -158,17 +181,40 @@ _FILE_SET_STATES = ("observed", "declared", "unknown")
 # read of the machine recovers it, so it is stated only where a citation backs
 # it and left absent otherwise. Closed like every other vocabulary here, and
 # named per value so a client branches on a constant rather than a literal.
-KEYING_GAME_ID = "game-id"
-KEYING_SERIAL = "serial"
-KEYING_TITLE_ID = "title-id"
-KEYING_ROM_NAME = "rom-name"
-KEYING_PACK = "pack"
+KEYING_GAME_ID: Keying = "game-id"
+"""The level below the root is one per game, named by the emulator's own game ID for the content
+— the identifier that emulator states for it, never the content file's name.
+"""
+KEYING_SERIAL: Keying = "serial"
+"""The level below the root is one per game, named by the serial the medium carries — the disc's
+own product code, read by the emulator rather than derived from the content path. That level is
+a file name where a card keys a flat directory, not always a directory of its own.
+"""
+KEYING_TITLE_ID: Keying = "title-id"
+"""The level below the root is one per game, named by the platform's own title ID — the
+hexadecimal identifier the title carries, not a name a person would recognise.
+"""
+KEYING_ROM_NAME: Keying = "rom-name"
+"""The level below the root is one per game, named after the content file itself — the ROM's own
+name, taken from the content path. It names a file as readily as a directory; which one is the
+card's to say.
+"""
+KEYING_PACK: Keying = "pack"
+"""The level below the root is one per **pack** rather than per game: it carries the pack's own
+name, and which games it applies to is the pack's business, so a caller cannot compose this path
+from a game.
+"""
 # The game's *title* rather than any identifier of it: the name an emulator's
 # own database gives the disc, which a user may have overridden in that
 # emulator's list. Distinct from ``rom-name`` on purpose — the content file's
 # name is one of the things such a title falls back to, never the thing it is —
 # and a caller filling it reads it off the emulator, not off the content path.
-KEYING_TITLE = "title"
+KEYING_TITLE: Keying = "title"
+"""The level below the root is one per game, named by the game's *title* — the name the
+emulator's own list gives it, which a user may have overridden, and a file name of that name
+where the card keys a flat directory. Deliberately not ``rom-name``: the content file's stem is
+one of the things such a title falls back to, never the thing it is.
+"""
 KEYINGS = (
     KEYING_GAME_ID,
     KEYING_SERIAL,
@@ -185,10 +231,16 @@ Keying = Literal["game-id", "serial", "title-id", "rom-name", "pack", "title"]
 # card's word: nothing on a machine can reorder it. Closed like every other
 # vocabulary in this module, and named per value so a client branches on a
 # constant.
-PATCH_FORMAT_IPS = "ips"
-PATCH_FORMAT_BPS = "bps"
-PATCH_FORMAT_UPS = "ups"
-PATCH_FORMAT_XDELTA = "xdelta"
+PATCH_FORMAT_IPS: PatchFormat = "ips"
+"""The IPS patch beside the content, and the first name RetroArch tries. The value names the
+candidate's format and the extension its file carries, never that such a file is there.
+"""
+PATCH_FORMAT_BPS: PatchFormat = "bps"
+"""The BPS patch beside the content, tried after ``ips``."""
+PATCH_FORMAT_UPS: PatchFormat = "ups"
+"""The UPS patch beside the content, tried after ``bps``."""
+PATCH_FORMAT_XDELTA: PatchFormat = "xdelta"
+"""The xdelta patch beside the content, the last of the four names RetroArch tries."""
 PATCH_FORMATS = (PATCH_FORMAT_IPS, PATCH_FORMAT_BPS, PATCH_FORMAT_UPS, PATCH_FORMAT_XDELTA)
 PatchFormat = Literal["ips", "bps", "ups", "xdelta"]
 
@@ -376,6 +428,19 @@ CAVEAT_FILE_SET_SPANS_ROOTS = "file-set-spans-roots"
 # would be the failure this project exists to avoid. `data` carries `dir` and a
 # `citation` for the reading behind it.
 CAVEAT_FILE_NAMES_UNESTABLISHED = "file-names-unestablished"
+# A directory under this answer's own root that the card states and the
+# observation did not read. An observed set's groups describe the one directory
+# that was read, so a mode whose parts lie in sibling subdirectories — Kronos's
+# `kronos/stv` beside `kronos/saturn`, MAME 2010's seven trees beside its
+# `nvram` — drops them the moment a file turns up in the directory the answer
+# is about. One caveat per such directory, resolved the way the declared
+# answer's group resolves it. `data` carries `core`, `mode` and `dir`, and no
+# file names: one directory can hold two groups naming different files, and the
+# declared answer already states every one of them. The parts under *another*
+# root are `file-set-spans-roots`, and a directory whose names follow from
+# nothing atlas reads is `file-names-unestablished` as well as this — the two
+# say different things about the same place.
+CAVEAT_FILE_SET_DIRECTORIES_UNREAD = "file-set-directories-unread"
 # The caller named no system, and the answer holds anyway because every system
 # the core's record covers writes the same files. The claim is scoped to those
 # systems — `data["systems"]` lists them — because a core run for a system its
@@ -1083,19 +1148,21 @@ class FileSet:
     **An observed set's groups describe the directory that was read, and only
     it.** They are the found files sorted into what the declaration says they
     are, so a card that also writes elsewhere has parts that no group of this
-    answer carries. Two kinds: the parts under another root, which
-    :data:`CAVEAT_FILE_SET_SPANS_ROOTS` names in either state, and the parts
-    under this answer's own root in another subdirectory, which are the ones to
-    know about. Kronos declares three groups over ``kronos/saturn`` and
-    ``kronos/stv`` and an observation of the first states one; MAME 2010
-    declares eight directories and an observation states one. Of the seven it
-    drops, the three whose names were never derivable still travel as
-    :data:`CAVEAT_FILE_NAMES_UNESTABLISHED`, which carries the directory; the
-    four that state files travel nowhere. Those directories are in the card, and
-    the same question states them as groups until this content's own name turns
-    up in the answer's directory and the set becomes an observation. This is a
-    known gap in what an observed answer states, never a claim that the other
-    directories hold nothing.
+    answer carries — and every one of those parts is named by a caveat instead.
+    The parts under another root are :data:`CAVEAT_FILE_SET_SPANS_ROOTS`, in
+    either state. The parts under this answer's own root in another
+    subdirectory are :data:`CAVEAT_FILE_SET_DIRECTORIES_UNREAD`, one per
+    directory, on the observation alone: Kronos declares three groups over
+    ``kronos/saturn`` and ``kronos/stv`` and an observation of the first states
+    one group and names the other directory; MAME 2010 declares eight
+    directories, and an observation states one and names seven. A directory
+    whose file names were never derivable also keeps its
+    :data:`CAVEAT_FILE_NAMES_UNESTABLISHED`, which is the other fact about the
+    same place — one says the names do not follow from anything atlas reads,
+    the other says nothing read the directory. So a short ``groups`` list is
+    never a claim that the card's other directories hold nothing: what the
+    answer says about them is in the caveats, and what it says is that they
+    were not looked at.
     """
 
     state: FileSetState
@@ -1640,9 +1707,17 @@ class SavestateAbsence:
     absence names no path for them to qualify.
     """
 
-    emulator: str
-    """The emulator this stated no is about, named by the token its packaged card
-    carries.
+    token: str
+    """The emulator this stated no is about, named by the token its packaged card carries —
+    atlas's own vocabulary for a carded emulator, and deliberately not ``emulator``, which
+    on a catalogue entry and a firmware core is the frontend's own spelling of the launch.
+
+    The two vocabularies agree wherever an arrangement's commands carry the
+    card's own word, which is every RetroDECK launch, and part company where
+    one spells a launch its own way: EmuDeck runs Cemu through a launcher
+    script, so the entry there reports ``cemu`` while the card behind this
+    answer is ``CEMU``. One name per vocabulary is what keeps a client from
+    joining the two by accident.
     """
     citation: str
     """The evidence for the no, contractual so that a client repeating the claim repeats
@@ -1655,8 +1730,8 @@ class SavestateAbsence:
     """
 
     def __post_init__(self) -> None:
-        if not self.emulator:
-            raise ValueError("SavestateAbsence: emulator must be non-empty")
+        if not self.token:
+            raise ValueError("SavestateAbsence: token must be non-empty")
         if not self.citation:
             raise ValueError(
                 "SavestateAbsence: citation must be non-empty — a stated no without its "

@@ -62,6 +62,11 @@ _CORE_SO_RE = re.compile(r"([A-Za-z0-9_\-\[\]]{1,255}_libretro\.so)")
 # the run above, and for the same reason.
 _EMULATOR_TOKEN_RE = re.compile(r"%EMULATOR_([A-Za-z0-9_-]{1,255})%")
 
+# The token of ES-DE's own RetroArch rule. It names the *runner* a launch goes
+# through, never an emulator: what a RetroArch launch runs is the core its
+# command names, and a command that names none has identified nothing.
+_RETROARCH_TOKEN = "RETROARCH"
+
 KIND_LIBRETRO = "libretro"
 KIND_STANDALONE = "standalone"
 
@@ -79,6 +84,36 @@ def emulator_token(command: str) -> str | None:
     return match.group(1) if match else None
 
 
+def emulator_identity(command: str) -> str | None:
+    """Which emulator *command* launches, in the command's own spelling.
+
+    The catalogue's base reading, and the one every ES-DE-driven arrangement
+    starts from: a command naming a ``*_libretro.so`` launches that core and
+    the basename is the identity — the very string
+    :attr:`EmulatorSpec.core_so` carries — and a command naming none is
+    identified by its ``%EMULATOR_…%`` token instead.
+
+    ``RETROARCH`` is the one token that never becomes an identity. It names
+    the *runner*, not an emulator: a RetroArch launch is identified by the
+    core it names, so one that names no ``.so`` (EmuDeck's ``n3ds`` rows name
+    a Windows ``.dll``) has identified nothing, and answering ``RETROARCH``
+    would hand a client the frontend's runner under the name of an emulator.
+    ``None`` is what everything else answers too — a bare path, a shell line,
+    a launcher script — and it says atlas could not identify the emulator
+    from this command, never that the entry launches none.
+
+    Arrangements that spell a launch some other way read it on their own
+    handle, the way EmuDeck reads its ``tools/launchers/<name>.sh`` scripts:
+    what a command outside ES-DE's own vocabulary identifies is arrangement
+    knowledge and does not belong to the catalogue parser.
+    """
+    core = _CORE_SO_RE.search(command)
+    if core is not None:
+        return core.group(1)
+    token = emulator_token(command)
+    return None if token is None or token == _RETROARCH_TOKEN else token
+
+
 @dataclass(frozen=True, slots=True)
 class EmulatorSpec:
     """One launch entry of one system, as declared in ``es_systems.xml``.
@@ -86,6 +121,15 @@ class EmulatorSpec:
     ``core_so`` is the extracted ``.so`` basename for libretro entries, ``None``
     for standalone ones. ``provenance`` names the file layer that defined the
     system (bundled or custom overlay).
+
+    ``emulator`` is what the command identifies, read by
+    :func:`emulator_identity`: the catalogue's own reading and nothing more.
+    An arrangement whose commands spell a launch some other way adds its
+    reading on its own handle, so a ``None`` here is "ES-DE's vocabulary
+    identifies nothing", not the last word — the last word is the entry's
+    (:attr:`atlas.installations.EmulatorEntry.emulator`). The derived
+    enumeration (issue #133) carries no command at all and states the core it
+    was derived from.
 
     ``declared_index`` is where the entry sits, counted from 0, in the launch
     list ES-DE builds out of that layer's ``<command>`` elements — see
@@ -104,6 +148,7 @@ class EmulatorSpec:
     core_so: str | None
     command: str
     provenance: str
+    emulator: str | None = None
     declared_index: int | None = None
     selection: str | None = None
 
@@ -195,6 +240,7 @@ def _launch_entries(system_el: ET.Element, *, system: str, provenance: str) -> t
                 core_so=match.group(1) if match else None,
                 command=command,
                 provenance=provenance,
+                emulator=emulator_identity(command),
                 declared_index=declared_index,
             )
         )
@@ -611,23 +657,46 @@ def parse_gamelist(text: str) -> GamelistSelections:
     fail the whole file — selections ES-DE honors would read as none set.
     Anything unparseable yields empty selections, never a guess.
     """
+    root = _wrapped_gamelist(text)
+    if root is None:
+        return GamelistSelections(system_label=None, per_game={})
+    return GamelistSelections(
+        system_label=_gamelist_system_label(root), per_game=_gamelist_per_game(root)
+    )
+
+
+def _wrapped_gamelist(text: str) -> ET.Element | None:
+    """The gamelist under the synthetic root, or ``None`` when it does not parse.
+
+    The BOM and the XML declaration come off first: both are legal at the top
+    of a file and neither is legal in the middle of one, which is where the
+    wrapper would put them.
+    """
     stripped = text.removeprefix("\ufeff").strip()
     if stripped.startswith("<?"):
         end = stripped.find("?>")
         if end != -1:
             stripped = stripped[end + 2 :]
     try:
-        root = ET.fromstring(f"<atlas-wrapper>{stripped}</atlas-wrapper>")
+        return ET.fromstring(f"<atlas-wrapper>{stripped}</atlas-wrapper>")
     except ET.ParseError:
-        return GamelistSelections(system_label=None, per_game={})
+        return None
+
+
+def _gamelist_system_label(root: ET.Element) -> str | None:
+    """The per-system selection, from the two places ES-DE looks, in its order."""
     selection_el = root.find("alternativeEmulator")
     if selection_el is None:
         game_list = root.find("gameList")
         if game_list is not None:
             selection_el = game_list.find("alternativeEmulator")
-    system_label: str | None = None
-    if selection_el is not None:
-        system_label = (selection_el.findtext("label") or "").strip() or None
+    if selection_el is None:
+        return None
+    return (selection_el.findtext("label") or "").strip() or None
+
+
+def _gamelist_per_game(root: ET.Element) -> dict[str, str]:
+    """Each game entry's own ``<altemulator>``, by its gamelist-relative path."""
     per_game: dict[str, str] = {}
     for game in root.iter("game"):
         path = (game.findtext("path") or "").strip()
@@ -639,7 +708,7 @@ def parse_gamelist(text: str) -> GamelistSelections:
             if normalized.startswith("./"):
                 normalized = normalized[2:]
             per_game[normalized] = label
-    return GamelistSelections(system_label=system_label, per_game=per_game)
+    return per_game
 
 
 def parse_gamelist_alternative(text: str) -> str | None:
