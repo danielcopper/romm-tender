@@ -117,6 +117,21 @@ def test_seals_verified_bundle_with_generated_destinations(tmp_path):
     assert "README.txt" in (sealed / "checksums.sha256").read_text()
 
 
+def test_the_recovery_root_is_named_after_the_package(tmp_path):
+    """The folder the user finds their bundles in follows ``package.json``.
+
+    Two names rather than one: the plugin's own name is what a literal here
+    would spell, so a test using only that would pass either way. The name
+    reaches this adapter from ``package.json`` through bootstrap, and it also
+    decides the folder the plugin ships as — so a literal is free to drift away
+    from it, and the drift lands on the one surface a destructive cleanup leaves
+    behind.
+    """
+    for package_name in ("romm-tender", "some-other-plugin"):
+        adapter = RecoveryBundleAdapter(user_home=str(tmp_path), package_name=package_name, plugin_version="1.2.3")
+        assert adapter.root() == str(tmp_path / f"{package_name}-recovery")
+
+
 def test_recovery_root_explains_itself_once_it_exists(tmp_path):
     adapter = _adapter(tmp_path)
 

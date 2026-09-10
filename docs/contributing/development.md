@@ -175,10 +175,10 @@ mise run dev          # build frontend, deploy to the plugin dir, restart plugin
 mise run dev dp2      # ...and also open windowed Big Picture on that display after deploying
 ```
 
-This builds the frontend, copies the plugin files into `~/homebrew/plugins/decky-romm-sync`, and restarts
-`plugin_loader` to pick up the changes. It **stops** `plugin_loader` around the file copy on purpose: the loader runs as
-root and continuously re-owns the plugin dir back to root within ~1–2s as a tamper guard, so copying while it runs races
-against that re-own and fails with `permission denied`. With the loader stopped, the copy is uncontested; it restarts
+This builds the frontend, copies the plugin files into `~/homebrew/plugins/romm-tender`, and restarts `plugin_loader` to
+pick up the changes. It **stops** `plugin_loader` around the file copy on purpose: the loader runs as root and
+continuously re-owns the plugin dir back to root within ~1–2s as a tamper guard, so copying while it runs races against
+that re-own and fails with `permission denied`. With the loader stopped, the copy is uncontested; it restarts
 automatically when the task finishes — even if the build or copy fails, so a failure never leaves the plugin dead. For
 backend-only changes, restarting the plugin loader is sufficient without rebuilding.
 
@@ -199,7 +199,7 @@ Mode's. See [Frontend dev loop](frontend-dev-loop.md) for the full workflow, key
 For development, symlink the repo into the plugins directory:
 
 ```bash
-sudo ln -sf "$(pwd)" ~/homebrew/plugins/decky-romm-sync
+sudo ln -sf "$(pwd)" ~/homebrew/plugins/romm-tender
 sudo systemctl restart plugin_loader
 ```
 

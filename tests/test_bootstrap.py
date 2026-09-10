@@ -155,53 +155,61 @@ class TestBootstrap:
         assert result.runtime_adapters.hostname_provider is not None
         assert result.runtime_adapters.machine_id_provider is not None
 
+    @staticmethod
+    def _bootstrap_with_package(tmp_path, payload: dict[str, str]) -> BootstrapResult:
+        """Bootstrap against a plugin dir whose ``package.json`` holds *payload*."""
+        import json
+
+        plugin_dir = tmp_path / "plugin"
+        plugin_dir.mkdir()
+        (plugin_dir / "package.json").write_text(json.dumps(payload))
+        return bootstrap(
+            settings_dir=str(tmp_path / "settings"),
+            runtime_dir=str(tmp_path / "runtime"),
+            plugin_dir=str(plugin_dir),
+            user_home=str(tmp_path / "home"),
+            logger=logging.getLogger("test"),
+        )
+
     def test_user_agent_threaded_to_romm_http_adapter(self, tmp_path):
         """Bootstrap reads ``package.json`` once and threads the resulting
-        ``decky-romm-sync/<version>`` string to ``RommHttpAdapter`` (#249, #719).
+        ``<package name>/<version>`` string to ``RommHttpAdapter`` (#249, #719).
 
         Without a User-Agent, Cloudflare Bot Fight Mode 403s the default
         ``Python-urllib`` UA before the request reaches self-hosted RomM
         behind a tunnel.
         """
-        import json
-
-        plugin_dir = tmp_path / "plugin"
-        plugin_dir.mkdir()
-        (plugin_dir / "package.json").write_text(json.dumps({"version": "1.2.3"}))
-        result = bootstrap(
-            settings_dir=str(tmp_path / "settings"),
-            runtime_dir=str(tmp_path / "runtime"),
-            plugin_dir=str(plugin_dir),
-            user_home=str(tmp_path / "home"),
-            logger=logging.getLogger("test"),
-        )
-        assert result.adapters.http_adapter._user_agent == "decky-romm-sync/1.2.3"
+        result = self._bootstrap_with_package(tmp_path, {"name": "romm-tender", "version": "1.2.3"})
+        assert result.adapters.http_adapter._user_agent == "romm-tender/1.2.3"
 
     def test_user_agent_threaded_to_steamgriddb_adapter(self, tmp_path):
-        """Bootstrap threads the same ``decky-romm-sync/<version>`` UA into
+        """Bootstrap threads the same ``<package name>/<version>`` UA into
         ``SteamGridDbAdapter`` so SGDB sees a non-default UA on every site
         (#719). SGDB rejects ``Python-urllib`` with 403.
         """
-        import json
+        result = self._bootstrap_with_package(tmp_path, {"name": "romm-tender", "version": "1.2.3"})
+        assert result.adapters.sgdb_adapter._user_agent == "romm-tender/1.2.3"
 
-        plugin_dir = tmp_path / "plugin"
-        plugin_dir.mkdir()
-        (plugin_dir / "package.json").write_text(json.dumps({"version": "1.2.3"}))
-        result = bootstrap(
-            settings_dir=str(tmp_path / "settings"),
-            runtime_dir=str(tmp_path / "runtime"),
-            plugin_dir=str(plugin_dir),
-            user_home=str(tmp_path / "home"),
-            logger=logging.getLogger("test"),
-        )
-        assert result.adapters.sgdb_adapter._user_agent == "decky-romm-sync/1.2.3"
+    def test_user_agent_names_the_package_rather_than_a_literal(self, tmp_path):
+        """Both halves of the UA come from ``package.json``, name included.
+
+        A hardcoded name passes every assertion above — the plugin's own name is
+        what those write — so the rule is stated with a name the plugin will
+        never carry. What it protects: the package name also decides the folder
+        the plugin ships as and the recovery root beside it, so a literal here is
+        free to drift away from both and the drift shows up on a server's token
+        list, not in CI.
+        """
+        result = self._bootstrap_with_package(tmp_path, {"name": "not-the-plugins-name", "version": "1.2.3"})
+        assert result.adapters.http_adapter._user_agent == "not-the-plugins-name/1.2.3"
+        assert result.adapters.sgdb_adapter._user_agent == "not-the-plugins-name/1.2.3"
 
     def test_user_agent_falls_back_when_package_json_missing(self, tmp_path):
-        """When ``package.json`` is absent, the adapter's documented
-        fallback (``0.0.0``) feeds into the UA string."""
+        """When ``package.json`` is absent, the adapter's documented fallback
+        (``decky-plugin``, ``0.0.0``) feeds into BOTH halves of the UA string."""
         result = _bootstrap_for(tmp_path)
-        assert result.adapters.http_adapter._user_agent == "decky-romm-sync/0.0.0"
-        assert result.adapters.sgdb_adapter._user_agent == "decky-romm-sync/0.0.0"
+        assert result.adapters.http_adapter._user_agent == "decky-plugin/0.0.0"
+        assert result.adapters.sgdb_adapter._user_agent == "decky-plugin/0.0.0"
 
 
 class TestBootstrapInstallsTheLauncher:

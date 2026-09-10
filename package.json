@@ -1,5 +1,5 @@
 {
-  "name": "decky-romm-sync",
+  "name": "romm-tender",
   "version": "0.32.0",
   "description": "Decky Loader plugin to sync your RomM library to Steam as non-steam shortcuts",
   "type": "module",

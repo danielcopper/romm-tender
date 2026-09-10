@@ -131,8 +131,8 @@ The confirmation options apply to this run only:
   a game RomM no longer has is what this dialog is for, and because the default-on recovery bundle keeps the shortcut's
   Steam details so it can be rebuilt by hand. Switch it off to limit the run to individual versions of games that still
   exist — the list then hides the retained siblings, since nothing else can reach them.
-- **Create recovery bundle** is on. Bundles are sealed under `~/decky-romm-sync-recovery/bundles/` before mutation.
-  Leaving it on is what makes whole-game removal reversible by hand; turning it off asks you to confirm separately.
+- **Create recovery bundle** is on. Bundles are sealed under `~/romm-tender-recovery/bundles/` before mutation. Leaving
+  it on is what makes whole-game removal reversible by hand; turning it off asks you to confirm separately.
 - **Include installed ROM content** is off for every disclosed installed row. Its exact recursive size is shown;
   selecting more than the currently free recovery space blocks confirmation. Turning recovery off clears and disables
   these selections, and so does switching off whole-game removal for a row that is only listed because of it. Large

@@ -540,7 +540,7 @@ One play session the frontend is currently tracking: `{appId, romId, startMs}` i
 Steam app that opened it. There is one entry **per running app**, not one overall — two RomM games at once are two
 active sessions, each finalizing on its own app's exit. An active session is opened by a game-start notification or by
 reload-adoption, and its durable counterpart is the `last_session_start` marker on the ROM's `rom_playtime` row plus the
-`decky-romm-sync:active-session` breadcrumb that lets a reload adopt it. "Active" is about the frontend's tracking, not
+`romm-tender:active-session` breadcrumb that lets a reload adopt it. "Active" is about the frontend's tracking, not
 about foreground/focus — a backgrounded game's session is still active.
 
 ### Unbind / stale / prune

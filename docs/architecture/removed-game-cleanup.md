@@ -295,7 +295,7 @@ acknowledgement toggle before the run can start. The dialog shows recursive size
 space, and blocks confirmation when space is insufficient.
 
 The root is `~/<package-name>-recovery`, with the package name taken from `package.json` through the canonical metadata
-adapter and path-sanitized (today: `~/decky-romm-sync-recovery`). Reading free space must not create that layout — a
+adapter and path-sanitized (today: `~/romm-tender-recovery`). Reading free space must not create that layout — a
 read-only preview stats the nearest existing parent, and the directories appear only when a bundle is actually written.
 The root's own `README.txt`, which explains what the folder is, is written by the same layout-creating step for the same
 reason: the only moment the root is known to be wanted is the one that creates it. It is best-effort, because a bundle

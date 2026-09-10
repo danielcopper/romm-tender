@@ -437,12 +437,14 @@ def bootstrap(
     # the freshly-written value, not a snapshot.
     platform_core_reader = PlatformCoreReaderAdapter(settings)
     plugin_metadata = PluginMetadataAdapter()
-    # Single source of truth for outgoing User-Agent — read package.json
-    # version once at boot and thread the string to every HTTP-talking
-    # adapter. Bot Fight Mode on Cloudflare blocks the default
-    # ``Python-urllib`` UA before requests reach self-hosted RomM (#249).
+    # Single source of truth for outgoing User-Agent — read package.json once at
+    # boot and thread the string to every HTTP-talking adapter. Bot Fight Mode on
+    # Cloudflare blocks the default ``Python-urllib`` UA before requests reach
+    # self-hosted RomM (#249). Both halves come from that one read: a literal
+    # name here would be a second spelling of the package, free to drift away
+    # from the folder the plugin actually ships as.
     package_name, plugin_version = plugin_metadata.read_metadata(plugin_dir)
-    user_agent = f"decky-romm-sync/{plugin_version}"
+    user_agent = f"{package_name}/{plugin_version}"
     recovery_store = RecoveryBundleAdapter(
         user_home=user_home,
         package_name=package_name,

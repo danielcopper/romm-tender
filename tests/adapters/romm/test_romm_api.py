@@ -323,7 +323,7 @@ class TestRegisterDevice:
             "name": "steamdeck",
             "created_at": "2026-01-01T00:00:00Z",
         }
-        result = api.register_device("steamdeck", "linux", "decky-romm-sync", "0.13.0")
+        result = api.register_device("steamdeck", "linux", "romm-tender", "0.13.0")
         _name, payload = client.post_json.call_args[0]
         assert payload["client_version"] == "0.13.0"
         assert "version" not in payload
@@ -336,13 +336,13 @@ class TestRegisterDevice:
             "name": "steamdeck",
             "created_at": "2026-01-01T00:00:00Z",
         }
-        api.register_device("steamdeck", "linux", "decky-romm-sync", "0.13.0")
+        api.register_device("steamdeck", "linux", "romm-tender", "0.13.0")
         client.post_json.assert_called_once_with(
             "/api/devices",
             {
                 "name": "steamdeck",
                 "platform": "linux",
-                "client": "decky-romm-sync",
+                "client": "romm-tender",
                 "client_version": "0.13.0",
             },
         )
@@ -353,7 +353,7 @@ class TestRegisterDevice:
         api.register_device(
             "steamdeck",
             "linux",
-            "decky-romm-sync",
+            "romm-tender",
             "0.13.0",
             hostname="machine-abc-123",
         )
@@ -363,7 +363,7 @@ class TestRegisterDevice:
     def test_omits_hostname_when_none(self):
         api, client = _make_api()
         client.post_json.return_value = {"id": "abc-123"}
-        api.register_device("steamdeck", "linux", "decky-romm-sync", "0.13.0", hostname=None)
+        api.register_device("steamdeck", "linux", "romm-tender", "0.13.0", hostname=None)
         _path, payload = client.post_json.call_args[0]
         assert "hostname" not in payload
 
@@ -1070,14 +1070,14 @@ class TestMintClientToken:
     def test_posts_to_client_tokens_with_scopes_and_never_expiry(self):
         api, client = _make_api()
         client.basic_auth_request.return_value = {"id": 7, "raw_token": "rmm_x"}
-        result = api.mint_client_token("alice", "secret", token_name="decky-romm-sync (Deck)")
+        result = api.mint_client_token("alice", "secret", token_name="romm-tender (Deck)")
         client.basic_auth_request.assert_called_once_with(
             "/api/client-tokens",
             "alice",
             "secret",
             method="POST",
             data={
-                "name": "decky-romm-sync (Deck)",
+                "name": "romm-tender (Deck)",
                 "scopes": _TOKEN_SCOPES,
                 "expires_in": "never",
             },

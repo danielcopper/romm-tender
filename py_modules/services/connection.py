@@ -841,4 +841,4 @@ class ConnectionService:
     def _token_name(self) -> str:
         """Build the device-scoped token name from the configured device name."""
         device_name = self._settings.get("device_name") or "Steam Deck"
-        return f"decky-romm-sync ({device_name})"
+        return f"romm-tender ({device_name})"

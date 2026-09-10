@@ -119,7 +119,9 @@ locally with `mise run docs`.
   `main.py`) — the plugin is inert until the server is updated.
 - **User-Agent on outgoing HTTP**: SteamGridDB **and** RomM behind Cloudflare Tunnel reject the default `Python-urllib`
   UA with 403. Every HTTP-talking adapter takes a `user_agent: str` ctor param; bootstrap threads
-  `decky-romm-sync/<version>` from `package.json` — no hardcoded version strings.
+  `<package name>/<version>`, both halves from one `package.json` read — no hardcoded name and no hardcoded version, so
+  the UA can never name the plugin something other than the folder it ships as. A missing or malformed `package.json`
+  degrades to the metadata adapter's documented fallback, `decky-plugin/0.0.0`.
 - **Large payloads**: Never send bulk base64 through `decky.emit()` — the WebSocket bridge has size limits. Use per-item
   callables, and chunk bulk lists (the library apply emits shortcuts in batches; the metadata cache loads page-by-page).
 - **No `BIsModOrShortcut` bypass**: the bypass counter was removed deliberately. Shortcuts return `true` (natural

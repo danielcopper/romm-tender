@@ -5,6 +5,7 @@ from __future__ import annotations
 from domain.user_data_location import (
     DATA_HALF,
     SETTINGS_HALF,
+    SOURCE_FOLDER_NAMES,
     SourceFacts,
     config_root,
     data_root,
@@ -52,6 +53,22 @@ def _plan(
         recorded_answer=recorded,
         probe_sources=probe if probe is not None else _Probe(sources if sources is not None else []),
     )
+
+
+class TestSourceFolderNames:
+    def test_the_pre_rename_spelling_never_follows_a_rename(self):
+        """Both folder names Decky has derived a data location from, oldest first.
+
+        ``romm-tender`` is what the plugin ships as today, so a sweep renaming
+        every ``decky-romm-sync`` in this tree reaches this tuple too — and the
+        ladder's own tests would stay green, because the two names are fixture
+        values there. What breaks is a user updating from 0.30.1 or earlier: the
+        location holding their library is no longer among the ones searched, so
+        the start finds nothing to copy and the plugin comes up empty, with
+        nothing failing and nothing said. The order carries the ladder's last
+        rung, where a tie goes to the first source probed.
+        """
+        assert SOURCE_FOLDER_NAMES == ("decky-romm-sync", "romm-tender")
 
 
 class TestRoots:

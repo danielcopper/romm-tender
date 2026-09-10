@@ -117,7 +117,7 @@ function stubNothingRunning(): void {
 // actually happens. `readSessions` is the shape assertion most tests want (the
 // attested list, or null for "no row"); `readCrumb` exposes the raw row for the
 // version itself.
-const BREADCRUMB_KEY = "decky-romm-sync:active-session";
+const BREADCRUMB_KEY = "romm-tender:active-session";
 
 function seedSessions(sessions: { appId: number; romId: number; startMs: number }[]): void {
   localStorage.setItem(BREADCRUMB_KEY, JSON.stringify({ v: 2, sessions }));

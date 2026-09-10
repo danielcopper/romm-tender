@@ -168,7 +168,7 @@ _BPM_TITLE_MARKER = "bigpicture"
 # KWin scripting (window half). Same DBus route dev_open_bpm.sh uses for placement.
 _KWIN_SERVICE = "org.kde.KWin"
 _KWIN_SCRIPTING_PATH = "/Scripting"
-_KWIN_SCRIPT_NAME = "decky-romm-sync-ui-scale"
+_KWIN_SCRIPT_NAME = "romm-tender-ui-scale"
 # A decorated window needs one correction pass (frame != client area); the rest is slack.
 _GEOMETRY_ATTEMPTS = 3
 # KWin resizes asynchronously and Steam repaints into the new size; measured well under

@@ -9,7 +9,7 @@ import pytest
 from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_resolved_path import FakeResolvedPath
 
-from services.legacy_install import LegacyInstallService, LegacyInstallServiceConfig
+from services.legacy_install import _LEGACY_PLUGIN_FOLDER, LegacyInstallService, LegacyInstallServiceConfig
 
 _PLUGINS = "/home/deck/homebrew/plugins"
 _DATA = "/home/deck/homebrew/data"
@@ -219,6 +219,20 @@ class TestTheDatabaseProbeAsksTheSameQuestionAsTheCard:
             "legacy_data_present": False,
             "dismissed": False,
         }
+
+
+class TestTheFolderItLooksFor:
+    def test_the_pre_rename_spelling_never_follows_a_rename(self):
+        """The name releases up to 0.30.1 unpacked into, and only ever that one.
+
+        The plugin ships as ``romm-tender``, so a sweep that renamed every
+        ``decky-romm-sync`` in this tree would take this constant with it — and
+        the tests below would go green again, because their own fixtures spell
+        the folder out and would be swept too. Nothing else fails: the card
+        simply stops firing, and the user removes the older install every one of
+        their Steam shortcuts still launches through.
+        """
+        assert _LEGACY_PLUGIN_FOLDER == "decky-romm-sync"
 
 
 class TestProbeDiscipline:

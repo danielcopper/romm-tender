@@ -99,7 +99,7 @@ async function refreshAppIdMap(): Promise<void> {
 // re-initialized manager can adopt the still-running games and finalize their
 // stops. A single versioned localStorage row; every access is wrapped so a
 // storage failure degrades to the no-attestation path instead of throwing.
-const SESSION_BREADCRUMB_KEY = "decky-romm-sync:active-session";
+const SESSION_BREADCRUMB_KEY = "romm-tender:active-session";
 const SESSION_BREADCRUMB_VERSION = 2;
 
 /** Read one stored entry into the current shape, or `null` if it isn't one. */

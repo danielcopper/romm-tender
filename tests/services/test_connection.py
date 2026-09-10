@@ -378,13 +378,13 @@ class TestEstablishTokenHappyPath:
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
         event_loop.run_until_complete(service.establish_token("http://romm.local", "u", "p"))
         romm_api.mint_client_token.assert_called_once()
-        assert romm_api.mint_client_token.call_args.kwargs["token_name"] == "decky-romm-sync (MyDeck)"
+        assert romm_api.mint_client_token.call_args.kwargs["token_name"] == "romm-tender (MyDeck)"
 
     def test_token_name_defaults_to_steam_deck(self, event_loop, romm_api, logger):
         settings: dict[str, Any] = {}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
         event_loop.run_until_complete(service.establish_token("http://romm.local", "u", "p"))
-        assert romm_api.mint_client_token.call_args.kwargs["token_name"] == "decky-romm-sync (Steam Deck)"
+        assert romm_api.mint_client_token.call_args.kwargs["token_name"] == "romm-tender (Steam Deck)"
 
     def test_persists_url_and_ssl_flag(self, event_loop, romm_api, logger):
         settings: dict[str, Any] = {}
