@@ -458,6 +458,7 @@ modal opened from the notice; that modal _is_ the home, not an exception to the 
 | RetroArch `input_driver` is wrong           | text, **Open Controller**                     | Settings › Controller, which holds the Fix button     |
 | Save-file sorting changed                   | text, **Open Save Sync**                      | Settings › Save Sync, which holds Migrate and Dismiss |
 | Sync paused on the session budget           | text, **Open Sync**                           | Sync, which holds Restart Steam now and Resume        |
+| A newer release of Tender is out            | text, the address, **Update now**, Dismiss    | none — Decky's own installer is where it is confirmed |
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and exactly one condition is carried inside them (below).
@@ -466,6 +467,23 @@ The playtime notice is the one that carries **two** buttons, and they sit side b
 full-width ones: Main is the narrow page, and a notice costing three rows pushes the status block it sits above off the
 screen. Its jump is not an answer either — only a fresh sign-in ends the condition, so **Open Connections** leaves it
 standing and **Dismiss** remains the way to put it away for this view.
+
+**The update notice is the second card whose action sits on Main**, and it has no home for a stronger reason than the
+session budget's: there is no page in this plugin that could hold the action, because the install is confirmed and
+performed by Decky. What the button does is file a request; Decky's own dialog asks the user, and the loader then
+unloads this plugin before it replaces the folder. So the press is not awaited, and the card carries the **download
+address as readable text whatever else it shows** — the button can be absent (`plugin_name` could not be read, so there
+is no name to match the existing installation by) or fail (`utilities/install_plugin` answers
+`Python RouteNotFoundError` on a Decky that moved it), and in both cases the address plus one instruction is what is
+left. Two facts behind it are Decky's, not ours, and are stated at `src/utils/deckyInstall.ts`: the name handed over is
+plugin.json's and not package.json's, and the digest goes across without its `sha256:` prefix.
+
+**The button refuses while Tender is counting a play session** (`isAnySessionActive`), rather than warning and letting
+the press through: after the handover Decky's dialog owns the screen and this panel is torn down, so there is no later
+moment in which to warn. What it protects is the play time of the running session — a reloaded session manager that
+cannot find its breadcrumb re-stamps the session, and `record_session_start` then opens the durable marker anew instead
+of extending it. It is the ROMM-session question and not `isAnyAppRunning()`, because a Steam game this plugin never
+opened a session for has no play time here to lose.
 
 **The two data-location conditions are one card in one component** (`src/components/DataLocationNotice.tsx`), because
 they are two outcomes of the same start-up step and only ever one of them stands. The choice's modal
@@ -499,7 +517,7 @@ longer the only condition to reach it. What earns it here is stronger than what 
 a user action, so a condition invisible on it is invisible for however long the user takes — and one of these two is
 itself a question only the user can answer, so it would be unanswerable as well as unseen.
 
-Five of the nine conditions above carry no Dismiss anywhere — RetroDECK paths, the two data-location conditions, the
+Five of the ten conditions above carry no Dismiss anywhere — RetroDECK paths, the two data-location conditions, the
 `input_driver` fix and the session budget — so the absence is ordinary.
 
 `"RomM Sync" is still installed` is not one of the five, and it is the one card that says two different things as its
@@ -546,12 +564,14 @@ settings-reset and playtime-scope notices, each a titled section of its own, all
 block — the RetroDECK warning, then Connection, Last sync, Library, then the conditional slot and, while a run is going,
 Cancel Sync, then the transient line a just-ended run leaves behind (and a cancel whose call failed), and under all of
 those the three notices that carry a button (the RetroArch input driver, the save-file sorting, a run paused on the
-session budget) and, last, the data-location notice — last because the plugin is running either way and only where its
-data ends up is outstanding; it carries a button only in its choice variant, and that button opens a modal rather than a
-page; the download summary (up to two rows, an overflow count, a completed count, View All); the menu — Sync, Library,
-Settings, Data Management. **Those last three blocks carry no section title at all** — what separates one from the next
-is a hairline (`BlockSeparator`), which costs one pixel of height where a heading would cost a whole row. The layout
-study it was chosen from is [main-layouts.html](../assets/main-layouts.html).
+session budget), then the data-location notice — the plugin is running either way and only where its data ends up is
+outstanding; it carries a button only in its choice variant, and that button opens a modal rather than a page — and,
+last of all, the update notice, below even that one because it is the only condition in the block that is not about this
+install at all: nothing here is outstanding, a newer release simply exists elsewhere; the download summary (up to two
+rows, an overflow count, a completed count, View All); the menu — Sync, Library, Settings, Data Management. **Those last
+three blocks carry no section title at all** — what separates one from the next is a hairline (`BlockSeparator`), which
+costs one pixel of height where a heading would cost a whole row. The layout study it was chosen from is
+[main-layouts.html](../assets/main-layouts.html).
 
 **The menu is the navigation that is always there — complete, and always in the same place. The status rows state and do
 nothing. The single exception is one conditional slot that exists only while the Sync page has something to report; a
@@ -1144,7 +1164,7 @@ sits under Save Sync, and SteamGridDB joins the other external service under Con
 | Save Sync     | the save-sort migration first, as the condition asking to be answered; then the toggle, device, before-launch and after-exit, default slot, history limit, Sync all now; then the registered devices as a table                                                                                         |
 | Controller    | Steam Input mode, Apply to all shortcuts, the `input_driver` fix. Home of the fix.                                                                                                                                                                                                                      |
 | Steam Library | preferred region, collection games in platform groups, collection types in Steam names — the narrow page's **Library** section, renamed because a Library page now exists: the page is the RomM side (what is synced), the section is the Steam side (which version, in which groups, under which name) |
-| Advanced      | log level                                                                                                                                                                                                                                                                                               |
+| Advanced      | log level; the daily update check (on by default — the plugin's only outgoing request that goes to neither RomM nor SteamGridDB, which is what earns it a switch) |
 
 The registered devices are the one thing on the page with more than two facts per row, so they are a table — Device,
 Client, Last seen — drawn with § Tables' shared one at the pane's default register. The layout study it was chosen from
@@ -1207,6 +1227,7 @@ menu entry.
 | Migrate the save-file sorting      | Settings › Save Sync   | Settings › Save Sync; Main shows the notice  |
 | Pause or cancel a download         | Downloads              | Downloads                                    |
 | Clean up removed RomM games        | Data Management, modal | Data Management, as a page                   |
+| Install a newer Tender release     | Main, on the notice    | Main; Decky's installer confirms it          |
 
 ## Sequence
 
