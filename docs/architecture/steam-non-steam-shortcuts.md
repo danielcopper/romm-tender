@@ -1,6 +1,6 @@
 # Steam Non-Steam Shortcuts
 
-Technical reference for how decky-romm-sync creates, manages, and launches non-Steam shortcuts. This covers the
+Technical reference for how Tender creates, manages, and launches non-Steam shortcuts. This covers the
 `SteamClient.Apps.AddShortcut` API, VDF format details, and app ID handling.
 
 ## AddShortcut API Behavior
