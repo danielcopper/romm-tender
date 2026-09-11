@@ -248,16 +248,31 @@ async def test_the_firmware_overview_names_platforms_without_reading_them(harnes
     assert gba["has_games"] is True
 
 
-async def test_get_platform_firmware_status_carries_the_platforms_emulators(harness):
-    """One platform's entry carries the classified emulator list for it."""
+async def _named_platform(harness, slug: str) -> dict:
+    """The BIOS answer for a platform the page NAMES, asked for the way the page asks.
+
+    Taken through both calls rather than by reaching for the second one: what the
+    guarantee says is that the emulator info is there for every platform the page
+    can speak for, so a platform the overview stopped naming — or one it names
+    and the per-platform call cannot answer — has to fail these, and a test that
+    hardcoded the slug would pass through either.
+    """
+    named = await harness.plugin.get_firmware_status()
+    assert slug in [p["platform_slug"] for p in named["platforms"]]
+    answer = await harness.plugin.get_platform_firmware_status(slug)
+    assert answer["success"] is True
+    assert answer["platform"] is not None
+    return answer["platform"]
+
+
+async def test_a_named_platforms_answer_carries_its_classified_emulators(harness):
+    """Every platform the page names has the classified emulator list with its answer."""
     seed_es_systems(harness)
     seed_rom(harness, 7, platform_slug="gba")  # bound → has_games
     harness.romm.firmware_files = list(_GBA_FIRMWARE)
 
-    result = await harness.plugin.get_platform_firmware_status("gba")
+    gba = await _named_platform(harness, "gba")
 
-    assert result["success"] is True
-    gba = result["platform"]
     assert gba["emulator_data_available"] is True
     assert gba["emulators"] == [_MGBA_ENTRY, _VBA_NEXT_ENTRY]
     # The pane's pick and the identity its BIOS rows are keyed on are one field,
@@ -267,14 +282,17 @@ async def test_get_platform_firmware_status_carries_the_platforms_emulators(harn
     assert gba["active_core"] == _MGBA_ENTRY["emulator"]
 
 
-async def test_get_platform_firmware_status_flags_unavailable_emulator_data(harness):
-    """No es_systems → the platform's entry flags emulator data unavailable."""
+async def test_a_named_platform_flags_unavailable_emulator_data(harness):
+    """No es_systems → the named platform's answer flags emulator data unavailable.
+
+    Unavailable is not empty: the page says "RetroDECK was not found" off this
+    flag, and an empty list alone would read as a platform with no emulator.
+    """
     seed_rom(harness, 8, platform_slug="gba")
     harness.romm.firmware_files = list(_GBA_FIRMWARE)
 
-    result = await harness.plugin.get_platform_firmware_status("gba")
+    gba = await _named_platform(harness, "gba")
 
-    gba = result["platform"]
     assert gba["emulator_data_available"] is False
     assert gba["emulators"] == []
 

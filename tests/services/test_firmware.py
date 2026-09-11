@@ -222,6 +222,14 @@ async def _overview(fw: FirmwareService) -> dict[str, Any]:
     Deliberately serial and complete, which the page is not: the frontend
     reorders around the focused row and stops when the reader leaves, and
     neither of those changes an answer.
+
+    **This helper cannot catch a composition bug**, and nothing that uses it
+    should be read as covering one: it joins the two answers the way the
+    production code splits them, so a field dropped in the split is dropped here
+    too and every assertion below stays green. What makes these callers safe is
+    `tests/contract/test_firmware_status_read.py`, which composes the same two
+    calls over the real wiring and holds the result against the key set the
+    single whole-page call answered with.
     """
     skeleton = await fw.get_firmware_status()
     platforms = []
