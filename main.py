@@ -111,7 +111,7 @@ class Plugin:
             raise
 
     async def _main(self):  # Decky lifecycle — must be async
-        self.loop = asyncio.get_event_loop()
+        self.loop = asyncio.get_running_loop()
 
         # ── 1. Wire adapters ────────────────────────────────────────────────
         # Bootstrap loads + migrates settings as part of adapter construction
