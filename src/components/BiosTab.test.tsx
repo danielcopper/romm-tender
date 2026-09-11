@@ -7,16 +7,25 @@
 import { describe, it, expect } from "vitest";
 import { render } from "@testing-library/react";
 import { BiosTab } from "./BiosTab";
-import type { BiosStatus, CoreInfo } from "../types";
+import { libretroEmu, standaloneEmu } from "../test-utils/coreFixtures";
+import type { BiosStatus, CoreInfo, EmulatorOption } from "../types";
 
 const coreInfo: CoreInfo = {
-  active_core: "snes9x_libretro",
+  active_core: "snes9x_libretro.so",
   active_core_label: "Snes9x",
   platform_core_label: null,
   has_game_override: false,
   emulator_data_available: true,
   emulators: [
-    { label: "Snes9x", kind: "libretro", core_so: "snes9x_libretro", is_default: true, bakeable: true, reason: null },
+    {
+      label: "Snes9x",
+      kind: "libretro",
+      core_so: "snes9x_libretro",
+      emulator: "snes9x_libretro.so",
+      is_default: true,
+      bakeable: true,
+      reason: null,
+    },
   ],
 };
 
@@ -439,7 +448,7 @@ describe("BiosTab", () => {
       // The count is what makes this line the only one that can: the headline
       // above says "at least one" without a number, and each row below
       // describes one file.
-      expect(lineFor({ swanstation_libretro: { required: false, needs_one_of: 5 } }, "swanstation")).toBe(
+      expect(lineFor({ "swanstation_libretro.so": { required: false, needs_one_of: 5 } }, "swanstation")).toBe(
         "swanstation (needs one of its 5 BIOS files)",
       );
     });
@@ -449,7 +458,7 @@ describe("BiosTab", () => {
       // adds nothing a reader would act on differently, so the line is
       // unchanged. Reading the pair as licence to print "required" over an
       // "optional" declaration is the misreading this shape exists to prevent.
-      expect(lineFor({ beetle_psx_libretro: { required: true, needs_one_of: null } }, "beetle_psx")).toBe(
+      expect(lineFor({ "beetle_psx_libretro.so": { required: true, needs_one_of: null } }, "beetle_psx")).toBe(
         "beetle_psx (required)",
       );
     });
@@ -457,7 +466,7 @@ describe("BiosTab", () => {
     it("says nothing extra for a core whose console the table has no entry for", () => {
       // Absent is an unasked question, not "this console needs nothing" — so the
       // line says only what the declaration said.
-      expect(lineFor({ mgba_libretro: { required: false } }, "mgba")).toBe("mgba (optional)");
+      expect(lineFor({ "mgba_libretro.so": { required: false } }, "mgba")).toBe("mgba (optional)");
     });
 
     it("leaves a file a demanding core marks optional beside required ones plain", () => {
@@ -465,18 +474,146 @@ describe("BiosTab", () => {
       // replaced got wrong. That console does not start without an image, and
       // what the core says about it is three OTHER files marked required — so
       // this row carries no disjunction and the line is the declaration alone.
-      expect(lineFor({ beetle_psx_libretro: { required: false } }, "beetle_psx")).toBe("beetle_psx (optional)");
+      expect(lineFor({ "beetle_psx_libretro.so": { required: false } }, "beetle_psx")).toBe("beetle_psx (optional)");
     });
 
     it("answers each core on its own, over one file two of them declare", () => {
       // One row, two emulators, two different consoles' answers: the pane lists
       // both lines and neither may take the other's.
       const cores = {
-        swanstation_libretro: { required: false, needs_one_of: 5 },
-        pcsx_rearmed_libretro: { required: false, needs_one_of: null },
+        "swanstation_libretro.so": { required: false, needs_one_of: 5 },
+        "pcsx_rearmed_libretro.so": { required: false, needs_one_of: null },
       };
       expect(lineFor(cores, "swanstation")).toBe("swanstation (needs one of its 5 BIOS files)");
       expect(lineFor(cores, "pcsx_rearmed")).toBe("pcsx_rearmed (optional)");
+    });
+  });
+
+  describe("which emulator a line names", () => {
+    // A row's `cores` map is keyed on the resolver's emulator IDENTITY, and each
+    // picker row carries the same string beside its label — that pair is the
+    // whole join, and there is no other. `core_so` cannot serve it: it is null
+    // for every standalone emulator and omits the core file's extension for a
+    // libretro one, so a page matching on it named no standalone emulator at all
+    // and printed `dolphin_libretro.so` where the label said Dolphin.
+    type CoreEntry = { required: boolean; needs_one_of?: number | null };
+
+    const statusFor = (cores: Record<string, CoreEntry>): BiosStatus => ({
+      needs_bios: true,
+      server_count: 1,
+      local_count: 0,
+      all_downloaded: false,
+      required_count: 1,
+      required_downloaded: 0,
+      required_withheld: 0,
+      files: [
+        {
+          file_name: "scph5501.bin",
+          downloaded: false,
+          local_path: "",
+          description: "PlayStation BIOS (SCPH-5501)",
+          wanted: "needed",
+          required_by_active: true,
+          cores,
+          on_server: true,
+          declared_kind: "file",
+          satisfied: false,
+        },
+      ],
+    });
+
+    const info = (emulators: EmulatorOption[], activeCore: string | null): CoreInfo => ({
+      active_core: activeCore,
+      active_core_label: null,
+      platform_core_label: null,
+      has_game_override: false,
+      emulator_data_available: true,
+      emulators,
+    });
+
+    /** The per-emulator lines under the row, as elements. Leaf divs only: the
+     *  block wrapping them is a div too, and its text is every line run
+     *  together. */
+    const linesOf = (cores: Record<string, CoreEntry>, coreInfo: CoreInfo): HTMLElement[] => {
+      const { container } = render(
+        <BiosTab biosStatus={statusFor(cores)} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
+      );
+      return [...container.querySelectorAll<HTMLElement>("div")].filter((div) => div.children.length === 0);
+    };
+
+    const textsOf = (cores: Record<string, CoreEntry>, coreInfo: CoreInfo): (string | null)[] =>
+      linesOf(cores, coreInfo).map((div) => div.textContent);
+
+    const lineNamed = (cores: Record<string, CoreEntry>, coreInfo: CoreInfo, text: string): HTMLElement | undefined =>
+      linesOf(cores, coreInfo).find((div) => div.textContent === text);
+
+    it("takes a libretro core's label off the picker row carrying its identity", () => {
+      const cores = { "swanstation_libretro.so": { required: true } };
+      expect(textsOf(cores, info([libretroEmu("swanstation_libretro", "SwanStation")], null))).toContain(
+        "SwanStation (required)",
+      );
+    });
+
+    it("names a standalone emulator, which has no core file to be named after", () => {
+      // The whole reason the join is the identity: DuckStation declares firmware
+      // and carries no `core_so` at all, so nothing could put its own name on
+      // the line and the row read the resolver's spelling, DUCKSTATION.
+      expect(textsOf({ DUCKSTATION: { required: true } }, info([standaloneEmu("DuckStation")], null))).toContain(
+        "DuckStation (required)",
+      );
+    });
+
+    it("strips the core file's spelling off an identity the picker cannot name", () => {
+      // Both strips in one identity. The key is the core FILE, so taking only
+      // `_libretro` off leaves the line naming a file with an extension, and
+      // taking only `.so` off leaves the marker no reader typed.
+      expect(textsOf({ "some_obscure_libretro.so": { required: true } }, info([], null))).toContain(
+        "some_obscure (required)",
+      );
+    });
+
+    it("prints an identity that is nothing but those two parts whole", () => {
+      // Stripping both would leave an empty line, which names no emulator at all.
+      expect(textsOf({ "_libretro.so": { required: true } }, info([], null))).toContain("_libretro.so (required)");
+    });
+
+    it("takes the first declared label where two picker rows are one emulator", () => {
+      // ES-DE lists one `pcsx2_libretro.so` as both LRPS2 and PCSX2, so a label
+      // identifies a row and not an emulator. Declared order is preference order
+      // — it is the order the system default is chosen in — so the first row
+      // names the line and the second does not rename it.
+      const emulators = [libretroEmu("pcsx2_libretro", "LRPS2", true), libretroEmu("pcsx2_libretro", "PCSX2")];
+      const texts = textsOf({ "pcsx2_libretro.so": { required: true } }, info(emulators, null));
+      expect(texts).toContain("LRPS2 (required)");
+      expect(texts).not.toContain("PCSX2 (required)");
+    });
+
+    it("highlights the line of the standalone emulator the platform launches with (#955)", () => {
+      // The highlight is an identity match, so it reaches a standalone pick.
+      // `active_core` used to be the libretro `.so`, which is null for one — no
+      // line was highlighted on any platform that launches a standalone
+      // emulator, which on a stock RetroDECK is PS2, GameCube and PSP.
+      const emulators = [standaloneEmu("DuckStation", true), libretroEmu("swanstation_libretro", "SwanStation")];
+      const cores = { DUCKSTATION: { required: true }, "swanstation_libretro.so": { required: false } };
+      const active = lineNamed(cores, info(emulators, "DUCKSTATION"), "DuckStation (required)");
+      const other = lineNamed(cores, info(emulators, "DUCKSTATION"), "SwanStation (optional)");
+
+      expect(active?.style.color).toBe("#d4a72c");
+      expect(active?.style.fontWeight).toBe("bold");
+      expect(other?.style.color).toBe("rgba(255, 255, 255, 0.5)");
+      expect(other?.style.fontWeight).toBe("normal");
+    });
+
+    it("highlights a libretro core on its identity and not on its bare name", () => {
+      const emulators = [libretroEmu("swanstation_libretro", "SwanStation", true)];
+      const cores = { "swanstation_libretro.so": { required: true } };
+      const line = (activeCore: string) => lineNamed(cores, info(emulators, activeCore), "SwanStation (required)");
+
+      expect(line("swanstation_libretro.so")?.style.fontWeight).toBe("bold");
+      // The bare `core_so` is the spelling the payload used to carry. It matches
+      // no key here, so a payload still sending it highlights nothing — which is
+      // the regression this pins, not a state the backend can reach.
+      expect(line("swanstation_libretro")?.style.fontWeight).toBe("normal");
     });
   });
 });

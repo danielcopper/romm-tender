@@ -956,16 +956,25 @@ it, for the focused platform:
 - **BIOS files** — the summary (required, or files, the console's own demand where it has one, and the three shapes that
   make no readiness claim — `system_image: "absent"` reads "Needs at least one BIOS file" and outranks the counts and
   the decline alike, tested before either, because the console asks for one of the images and no count can state that;
-  `"unsettled"` joins `required_withheld` on the keeping side of `nothingEstablished`, so its downloads stay), then a
-  table: File, On disk, Contents, and a **Download** button on every row that is missing and in the RomM library (#164)
-  — never on a folder declaration, whatever its state, because the emulator opens that name as a directory — and a
-  **Delete** button on every row a download record of ours still holds. That covers a declared **folder** too, where no
-  record carries the row's name and the button counts the distinct files our records name underneath it (`Delete (N)`):
-  a folder is never a download, which says nothing about the files already inside one. Same authority as `Delete BIOS`,
-  described below. Below the table one row of buttons: Download required (_N_), Download all, Delete BIOS behind a
-  `ConfirmModal`. **All three are always rendered and disable when there is nothing to do**, the ruling the Remove group
-  already had: on PS2 all three vanished at once, and a button that disappears is a state the reader has to work out. A
-  disabled `DialogButton` is still a focus stop, so the row stays walkable.
+  `"unsettled"` and `required_withheld` are declined VERDICTS over rows that answered, so neither reaches
+  `nothingEstablished`, which is the narrowest decline and decides **wording only**), then a table: File, On disk,
+  Contents, and a **Download** button on every row that is missing and in the RomM library (#164) — never on a folder
+  declaration, whatever its state, because the emulator opens that name as a directory — and a **Delete** button on
+  every row a download record of ours still holds. That covers a declared **folder** too, where no record carries the
+  row's name and the button counts the distinct files our records name underneath it (`Delete (N)`): a folder is never a
+  download, which says nothing about the files already inside one. Same authority as `Delete BIOS`, described below.
+  Below the table one row of buttons: Download required (_N_), Download all, Delete BIOS behind a `ConfirmModal`. **All
+  three are always rendered and disable when there is nothing to do**, the ruling the Remove group already had: on PS2
+  all three vanished at once, and a button that disappears is a state the reader has to work out. A disabled
+  `DialogButton` is still a focus stop, so the row stays walkable.
+
+  **What the two Download buttons and the per-row one read is the fetchable set and nothing else** — one filter, in this
+  file, over `on_server && !downloaded && declared_kind !== "directory"`. Readiness is not an input to it, in any of its
+  shapes: what the resolver could establish is the EMULATOR's demand and what is fetchable is what the RomM library
+  holds, and neither answers the other. Gating on the verdict is what took the buttons off PS2, GameCube and PSP when a
+  BIOS answer was first scoped to the emulator that launches — those three launch standalone emulators the resolver
+  holds no card for, so the verdict declines over a library that still holds their files, and the pane then offered
+  nothing to press on exactly the platforms that need one.
 
   **A running download is said by the button that started it.** The pressed button — bulk or per-row — becomes a
   spinner, every other download button on the pane disables, and when it finishes the rows re-read. There is no

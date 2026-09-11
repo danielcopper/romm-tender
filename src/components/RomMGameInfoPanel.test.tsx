@@ -1556,6 +1556,7 @@ describe("RomMGameInfoPanel", () => {
             label: "FROM_CORE_CHANGED",
             kind: "libretro",
             core_so: "from_core_changed.so",
+            emulator: "from_core_changed.so",
             is_default: true,
             bakeable: true,
             reason: null,
@@ -1666,6 +1667,7 @@ describe("RomMGameInfoPanel", () => {
             label: "INITIAL_CORE",
             kind: "libretro",
             core_so: "initial_core.so",
+            emulator: "initial_core.so",
             is_default: true,
             bakeable: true,
             reason: null,
@@ -2811,7 +2813,7 @@ describe("RomMGameInfoPanel", () => {
               downloaded: false,
               wanted: "needed",
               required_by_active: true,
-              cores: { snes9x_libretro: { required: true } },
+              cores: { "snes9x_libretro.so": { required: true } },
               used_by_active: true,
             },
             {
@@ -2828,7 +2830,7 @@ describe("RomMGameInfoPanel", () => {
       });
       // Core info (label map + Emulator column) from the dedicated path (#923).
       vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
-        active_core: "snes9x_libretro",
+        active_core: "snes9x_libretro.so",
         active_core_label: "Snes9x",
         platform_core_label: null,
         has_game_override: false,
@@ -2838,6 +2840,7 @@ describe("RomMGameInfoPanel", () => {
             label: "Snes9x",
             kind: "libretro",
             core_so: "snes9x_libretro",
+            emulator: "snes9x_libretro.so",
             is_default: true,
             bakeable: true,
             reason: null,
@@ -2879,8 +2882,8 @@ describe("RomMGameInfoPanel", () => {
               wanted: "needed",
               required_by_active: true,
               cores: {
-                beetle_psx_hw_libretro: { required: true },
-                swanstation_libretro: { required: false },
+                "beetle_psx_hw_libretro.so": { required: true },
+                "swanstation_libretro.so": { required: false },
               },
               used_by_active: true,
             },
@@ -2891,7 +2894,7 @@ describe("RomMGameInfoPanel", () => {
       });
       // Active core is Beetle PSX HW; SwanStation is an alternative core.
       vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
-        active_core: "beetle_psx_hw_libretro",
+        active_core: "beetle_psx_hw_libretro.so",
         active_core_label: "Beetle PSX HW",
         platform_core_label: null,
         has_game_override: false,
@@ -2901,6 +2904,7 @@ describe("RomMGameInfoPanel", () => {
             label: "Beetle PSX HW",
             kind: "libretro",
             core_so: "beetle_psx_hw_libretro",
+            emulator: "beetle_psx_hw_libretro.so",
             is_default: true,
             bakeable: true,
             reason: null,
@@ -2909,6 +2913,7 @@ describe("RomMGameInfoPanel", () => {
             label: "SwanStation",
             kind: "libretro",
             core_so: "swanstation_libretro",
+            emulator: "swanstation_libretro.so",
             is_default: false,
             bakeable: true,
             reason: null,
@@ -2952,8 +2957,8 @@ describe("RomMGameInfoPanel", () => {
               wanted: "needed",
               required_by_active: true,
               cores: {
-                beetle_psx_hw_libretro: { required: true },
-                swanstation_libretro: { required: false },
+                "beetle_psx_hw_libretro.so": { required: true },
+                "swanstation_libretro.so": { required: false },
               },
               used_by_active: false,
             },
@@ -2974,6 +2979,7 @@ describe("RomMGameInfoPanel", () => {
             label: "Beetle PSX HW",
             kind: "libretro",
             core_so: "beetle_psx_hw_libretro",
+            emulator: "beetle_psx_hw_libretro.so",
             is_default: false,
             bakeable: true,
             reason: null,
@@ -2982,6 +2988,7 @@ describe("RomMGameInfoPanel", () => {
             label: "SwanStation",
             kind: "libretro",
             core_so: "swanstation_libretro",
+            emulator: "swanstation_libretro.so",
             is_default: false,
             bakeable: true,
             reason: null,
@@ -3002,7 +3009,7 @@ describe("RomMGameInfoPanel", () => {
       expect(swanLine.style.fontWeight).toBe("normal");
     });
 
-    it("falls back to the de-suffixed .so when a core is absent from coreInfo (#955)", async () => {
+    it("falls back to the de-suffixed identity when an emulator is absent from coreInfo (#955)", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,
         rom_id: 58,
@@ -3023,7 +3030,7 @@ describe("RomMGameInfoPanel", () => {
               wanted: "needed",
               required_by_active: true,
               cores: {
-                some_obscure_libretro: { required: true },
+                "some_obscure_libretro.so": { required: true },
               },
               used_by_active: true,
             },
@@ -3032,10 +3039,12 @@ describe("RomMGameInfoPanel", () => {
         metadata: makeMetadata(),
         stale_fields: [],
       });
-      // coreInfo does NOT enumerate `some_obscure_libretro`, so coreLabelMap[coreSo]
-      // is undefined and the `.replace(/_libretro$/, "")` fallback renders the label.
+      // coreInfo does NOT enumerate `some_obscure_libretro.so`, so the label map
+      // cannot answer and the fallback renders the identity with the core file's
+      // extension and the `_libretro` marker taken off. Both strips are exercised
+      // here: stripping only one of them leaves the row naming a file.
       vi.mocked(backend.getPlatformCoreInfo).mockResolvedValue({
-        active_core: "beetle_psx_hw_libretro",
+        active_core: "beetle_psx_hw_libretro.so",
         active_core_label: "Beetle PSX HW",
         platform_core_label: null,
         has_game_override: false,
@@ -3045,6 +3054,7 @@ describe("RomMGameInfoPanel", () => {
             label: "Beetle PSX HW",
             kind: "libretro",
             core_so: "beetle_psx_hw_libretro",
+            emulator: "beetle_psx_hw_libretro.so",
             is_default: true,
             bakeable: true,
             reason: null,
@@ -3057,8 +3067,7 @@ describe("RomMGameInfoPanel", () => {
         globalThis.dispatchEvent(new CustomEvent("romm_tab_switch", { detail: { tab: "bios" } }));
         await Promise.resolve();
       });
-      // Fallback label = `.so` key with `_libretro` stripped; not the active core,
-      // so it stays grey + normal weight.
+      // Not the active emulator, so the line stays grey + normal weight.
       const fallbackLine = getByText("some_obscure (required)");
       expect(fallbackLine.style.color).toBe("rgba(255, 255, 255, 0.5)");
       expect(fallbackLine.style.fontWeight).toBe("normal");
@@ -3511,7 +3520,15 @@ describe("RomMGameInfoPanel", () => {
         has_game_override: false,
         emulator_data_available: true,
         emulators: [
-          { label: "MyCore", kind: "libretro", core_so: "mycore.so", is_default: true, bakeable: true, reason: null },
+          {
+            label: "MyCore",
+            kind: "libretro",
+            core_so: "mycore.so",
+            emulator: "mycore.so",
+            is_default: true,
+            bakeable: true,
+            reason: null,
+          },
         ],
       });
       const { container } = render(<RomMGameInfoPanel appId={testAppId} />);
@@ -4525,7 +4542,17 @@ describe("RomMGameInfoPanel", () => {
         platform_core_label: null,
         has_game_override: false,
         emulator_data_available: true,
-        emulators: [{ label, kind: "libretro", core_so: coreSo, is_default: true, bakeable: true, reason: null }],
+        emulators: [
+          {
+            label,
+            kind: "libretro",
+            core_so: coreSo,
+            emulator: `${coreSo}.so`,
+            is_default: true,
+            bakeable: true,
+            reason: null,
+          },
+        ],
       });
 
       /** A cached detail whose core needs BIOS, `localCount` of 3 files present. */

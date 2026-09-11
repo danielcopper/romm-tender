@@ -622,9 +622,11 @@ Format: **invariant** — tier — enforced by.
   **unverified** (the entry below), so it cannot occur here. What the presence half actually resolves to — a row's
   `satisfied` is presence, `null` in two shapes, and both read as not held — is written once, at
   `classify_system_image`, because an outside reader took that field for the resolver's usability answer and drew a
-  false finding from it. And on the frontend, `system_image: "unsettled"` joins `required_withheld` on the KEEPING side
-  of `PlatformDetail`'s `nothingEstablished`: its rows were answered, so withdrawing the downloads there takes away the
-  one action that still moves the platform along. **A fourth frontend reader is the play row's BIOS badge**
+  false finding from it. And on the frontend, `system_image: "unsettled"` joins `required_withheld` on the side
+  `PlatformDetail`'s `nothingEstablished` excludes: its rows were answered, so the pane has a file list to point at
+  rather than only a place to put files by hand. Since #1821 that flag decides WORDING alone — the download affordances
+  read the fetchable set and nothing else, because what the resolver could establish is the emulator's demand and what
+  is fetchable is what the library holds. **A fourth frontend reader is the play row's BIOS badge**
   (`src/utils/playSection.ts::extractBiosInfo`), where `"absent"` is a second established absence beside the required
   count. Whether the count sees the same thing is the core author's choice, which is why the badge may not be left to
   it: under SwanStation every image is optional, `required_count` is 0 and the comparison beside it is vacuously false,

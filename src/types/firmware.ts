@@ -101,11 +101,22 @@ interface FirmwarePlatform {
  * (`core_so` set to the bare core name) or `"standalone"` (`core_so` null).
  * `bakeable` is false for the `needs_setup` (`reason: "inject"`) and un-bakeable
  * forms; `reason` names why the frontend can't offer it as a clickable pick.
+ *
+ * `emulator` is the resolver's identity for the emulator behind the row and the
+ * only field that names one for BOTH kinds — `dolphin_libretro.so` for a
+ * libretro entry, `DUCKSTATION` for a standalone one. It is what a firmware
+ * row's per-emulator entries (`BiosFileStatus.cores`) are keyed on, so it is the
+ * join between a picker row and a BIOS answer; `core_so` carries no extension
+ * and is null for every standalone emulator, and `label` identifies a ROW rather
+ * than an emulator — ES-DE lists one `pcsx2_libretro.so` as both `LRPS2` and
+ * `PCSX2`. `null` is an emulator the resolver could not identify, which nothing
+ * may be keyed on.
  */
 export interface EmulatorOption {
   label: string;
   kind: "libretro" | "standalone";
   core_so: string | null;
+  emulator: string | null;
   is_default: boolean;
   bakeable: boolean;
   reason: string | null;
@@ -123,6 +134,11 @@ export interface EmulatorOption {
 export interface CoreInfo {
   emulators: EmulatorOption[];
   emulator_data_available: boolean;
+  /** The IDENTITY of the emulator this ROM launches with — the same spelling the
+   *  picker rows carry in {@link EmulatorOption.emulator} and the same one a
+   *  firmware row's `cores` map is keyed on, so the BIOS tab can highlight the
+   *  line its answer was scoped to. Never the bare `core_so`: that names no
+   *  standalone emulator and is a second spelling of a libretro one. */
   active_core: string | null;
   active_core_label: string | null;
   platform_core_label: string | null;
@@ -172,6 +188,9 @@ export interface SystemCoreInfo {
 export interface FirmwarePlatformExt extends FirmwarePlatform {
   has_games?: boolean;
   all_downloaded?: boolean;
+  /** The platform pick's IDENTITY — the same space as {@link CoreInfo.active_core}
+   *  and as a row's `cores` keys. Its label is the field below, and both are
+   *  projections of ONE backend resolution. */
   active_core?: string;
   active_core_label?: string;
   emulators?: EmulatorOption[];
@@ -228,10 +247,12 @@ export interface BiosFileStatus extends FirmwareVerdict {
   /** Whether the core THIS game launches with requires the file. `wanted` is the
    *  machine's answer about the file; this one is the launch's. */
   required_by_active: boolean;
-  /** Per core that declares the file: what that core's own `.info` says about
-   *  it (`required`), and — where that core's CONSOLE needs an image and the
-   *  core marks nothing required — how many files that one demand is spread over
-   *  (`needs_one_of`). Two speakers, so the pair `optional` + `needs_one_of` is
+  /** Per emulator that declares the file, keyed on its IDENTITY
+   *  ({@link EmulatorOption.emulator}) — the one spelling that names a
+   *  standalone emulator as well as a libretro core: what that emulator's own
+   *  `.info` says about it (`required`), and — where its CONSOLE needs an image
+   *  and it marks nothing required — how many files that one demand is spread
+   *  over (`needs_one_of`). Two speakers, so the pair `optional` + `needs_one_of` is
    *  not a contradiction: it is a core saying "any one of my five will do", and
    *  it is the case a surface has to be able to word. `needs_one_of` is null or
    *  absent for every other core, including one whose console demands an image

@@ -156,7 +156,11 @@ async def test_get_platform_core_info_payload_shape(harness):
     }
     assert result["emulator_data_available"] is True
     assert result["emulators"] == [_MGBA_ENTRY, _VBA_NEXT_ENTRY]
-    assert result["active_core"] == "mgba_libretro"
+    # One identity space across the whole payload: the active pick is stated in
+    # the same spelling the picker entry beside it carries, which is what the
+    # BIOS pane joins its per-emulator rows on.
+    assert result["active_core"] == "mgba_libretro.so"
+    assert result["active_core"] == _MGBA_ENTRY["emulator"]
     assert result["active_core_label"] == "mGBA"
     assert result["platform_core_label"] is None
     assert result["has_game_override"] is False

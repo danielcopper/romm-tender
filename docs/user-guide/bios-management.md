@@ -222,8 +222,9 @@ and the row you focus is the one the right-hand pane describes.
    when it finishes the list re-reads itself. **If it fails**, that button turns red and says **Failed** for about two
    seconds — the other buttons stay greyed until it clears — and a line under the section says what went wrong
 10. **Download required** and **Download all** fetch several at once, and **Delete BIOS** removes everything this plugin
-    downloaded for the platform (see below). All three are always there and grey out when there is nothing to do — a
-    system nothing installed could answer for has all of them greyed, see
+    downloaded for the platform (see below). All three are always there and grey out when there is nothing to do. What
+    they follow is your **library**, not the readiness line above them: a system the plugin could work out nothing about
+    still offers everything your library holds for it, because those are two separate questions — see
     [When the requirement is unknown](#when-the-requirement-is-unknown)
 
 <!-- Screenshot: Library › Platforms with a platform selected, its core button above the BIOS table -->
@@ -356,20 +357,24 @@ This is informational, not an error: your files may be perfectly fine, the plugi
 Genuinely BIOS-free systems (such as the NES) are unaffected — the emulator answers, it wants nothing, and the system
 reads as ready.
 
-#### Such a system offers no downloads
+#### Such a system still offers its downloads
 
-A system in that state offers no **Download All** or **Download Required**, and adds the one thing you can still do:
-_You can still put BIOS files in your BIOS folder by hand._ Fetching files the plugin cannot reason about — beside a
-line admitting it cannot — would be offering to act on an answer it does not have. What the page does **not** say is
-that BIOS management is unsupported here: that would describe the plugin, and the plugin is not the limitation. Install
-an emulator that declares firmware for this system and the page answers for it, with nothing changed on our side.
-Downloading them from RomM's own web interface and dropping them in your BIOS folder works exactly as it always did;
-nothing about the files changes, only what this page will claim about them.
+The page adds one line — _You can still put BIOS files in your BIOS folder by hand._ — because the summary above it
+cannot tell you which files to place, and hand-placing one works regardless.
 
-This is scoped to the **whole system**, never to single files. A system whose reading finished may well hold files no
-installed emulator asks for — a PlayStation page typically lists a good number of regional BIOS dumps that nothing wants
-— and every one of those stays downloadable, because "nothing wants this" is a finished answer. The buttons go only
-where there was no answer at all, and they come back the moment anything installed can speak for the system.
+What it does **not** do is take the download buttons away. Which files an emulator wants and which files your RomM
+library holds are two separate questions, and neither answers the other: a system nobody could speak for still has a
+library behind it, and fetching from it is the one action that moves the system along at all. **Download All**,
+**Download Required** and every row's own **Download** follow your library exactly as they do on a system that answered.
+
+That matters most on the systems most likely to be in this state. PS2, GameCube and PSP launch standalone emulators the
+plugin has no card for, so their readiness line declines — while your library may well hold every file they need. A page
+that withdrew the downloads there would leave you with nothing to press on exactly the systems that need the files most.
+
+What the page also does **not** say is that BIOS management is unsupported here: that would describe the plugin, and the
+plugin is not the limitation. Install an emulator that declares firmware for this system and the page answers for it,
+with nothing changed on our side. Downloading the files from RomM's own web interface and dropping them in your BIOS
+folder works exactly as it always did; nothing about the files changes, only what this page will claim about them.
 
 !!! note "Systems that used to read \"Not managed by the plugin\" will have moved"
 
@@ -442,8 +447,8 @@ What that state does **not** do is flatten the rest of the page:
 - The **file rows keep their own answers.** A file that is present is still green, one that is missing is still red, and
   only the row nothing could be established for reads amber, with the reason beside it.
 - **Downloads stay.** Every file your library holds is still fetchable, and fetching them is the thing that actually
-  gets a PS2 system running. This is the opposite of the state above, where nothing could be answered at all and there
-  was nothing to download against.
+  gets a PS2 system running. That holds for the state above too: what your library offers never depends on what the
+  plugin could work out about the emulator.
 - The system is **not** flagged "BIOS needed", because that would be a claim too.
 - The red **BIOS** badge beside Play still appears for a file that is genuinely missing — the unjudgeable row is simply
   not one of them.
@@ -492,10 +497,12 @@ The active core name appears on the game detail page (the **Emulator** column) a
    only source; there is no bundled fallback snapshot.
 4. If the live configuration can't be read, or the plugin has no source for whatever that platform launches with, it has
    nothing to filter with — so it does not filter, and it does not guess either. Every BIOS file the platform has is
-   listed, each marked _unknown_, and the platform's summary reads **BIOS requirement unknown** with a grey dot and no
-   download buttons — including when the platform has no files to list, which is where saying nothing at all would have
-   read as "nothing needed". That is the honest answer for a platform like PS3, whose emulator the plugin has no card
-   for: saying nothing is needed would report it ready over firmware the emulator will not boot without.
+   listed, each marked _unknown_, and the platform's summary reads **BIOS requirement unknown** with a grey dot —
+   including when the platform has no files to list, which is where saying nothing at all would have read as "nothing
+   needed". That is the honest answer for a platform like PS3, whose emulator the plugin has no card for: saying nothing
+   is needed would report it ready over firmware the emulator will not boot without. The download buttons are unaffected
+   — they follow your library, which is a different question — see
+   [When the requirement is unknown](#when-the-requirement-is-unknown).
 
 Whatever this chain resolves to is the **same core the game launches on** — the plugin bakes the resolved core into the
 Steam shortcut, so the core shown for BIOS, saves, and the core badge always matches the core that runs.

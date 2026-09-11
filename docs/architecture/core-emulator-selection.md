@@ -496,9 +496,28 @@ Its **`active_core_label`**, and the identically-named field `get_firmware_statu
 per-platform override (`platform_cores`) when it is set and still resolves to a bakeable emulator, else the es_systems
 **default emulator** label (the first bakeable command — libretro _or_ standalone). One function, so the two readers
 cannot drift; a stale override degrades to the default rather than naming an emulator that would not launch, and a
-standalone default reads its standalone label rather than the libretro system default. It is intentionally distinct from
-the firmware payload's `active_core` (`core_so`), which stays the **libretro** system default the BIOS filter keys on
-(standalone-default BIOS accuracy is deferred by ADR-0020).
+standalone default reads its standalone label rather than the libretro system default.
+
+### One identity space on the wire
+
+Every payload that names the active emulator names it the same way, and the name is the **emulator identity** — the
+resolver's own `emulator` field, `mgba_libretro.so` for a libretro entry and `DUCKSTATION` for a standalone one. Three
+places carry it and they are the same string:
+
+- the **`active_core`** of `get_platform_core_info` (per ROM, through `active_emulator_for_rom`) and of the
+  `get_firmware_status` overview (per platform, through `resolve_platform_option`);
+- the **`emulator`** field of every picker row in `options_to_payload`, beside its `core_so`;
+- the **keys** of a firmware row's `cores` map.
+
+That is what lets the BIOS pane join a row's per-emulator lines onto the picker's labels and highlight the one the
+answer was scoped to (#955). `core_so` cannot serve any of it: it is `None` for every standalone emulator and carries no
+extension for a libretro one, so matching on it named no standalone emulator and printed `dolphin_libretro.so` where the
+label said Dolphin. `label` cannot either — ES-DE lists one `pcsx2_libretro.so` as both `LRPS2` and `PCSX2`, so a label
+identifies a launch ROW and two rows can be one emulator. `core_so` stays on the picker payload because a surface may
+still need to name the libretro core itself; it is not a second answer to "which emulator is this".
+
+`active_core_for_rom`'s `(core_so, label)` is therefore **not** what a payload sends: it answers `None` for a standalone
+pick, which is the degradation this swap removed.
 
 ## Why the plugin always bakes the core, never the gamelist
 
@@ -559,10 +578,10 @@ non-RetroDECK launcher behind a `Frontend`-style port — is net-new work and is
 concrete.
 
 The **core picker now lists standalone emulators alongside libretro cores** (#1210 / ADR-0020) — you _can_ choose
-standalone PCSX2 vs the LRPS2 libretro core in the UI, at both per-game and per-platform scope. One follow-up stays out
-of scope for the standalone seam: **BIOS badge / save-sync** for a standalone system read `active_core = None` and
-degrade — the launch works (BIOS already present on-device), but badge accuracy and standalone save-sync are separate
-efforts.
+standalone PCSX2 vs the LRPS2 libretro core in the UI, at both per-game and per-platform scope. **BIOS** is no longer
+part of the follow-up: since #1821 a firmware answer is keyed on the emulator identity, so a standalone pick is asked
+and answered like any libretro core rather than reading `active_core = None` and degrading. **Save-sync** for a
+standalone system is still its own effort.
 
 ---
 

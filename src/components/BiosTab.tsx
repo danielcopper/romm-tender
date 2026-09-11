@@ -80,22 +80,35 @@ function coreLineSuffix(core: { required: boolean; needs_one_of?: number | null 
   return " (optional)";
 }
 
-/** Render the per-core lines under a BIOS file — one row per core that uses it. */
+/**
+ * What to call an emulator the picker payload could not name.
+ *
+ * The key is the resolver's identity, which is the emulator's own spelling —
+ * `swanstation_libretro.so` for a libretro core, `DUCKSTATION` for a standalone
+ * one. Strip only what a reader would not have typed: the core file's extension
+ * and the `_libretro` marker every libretro core carries. An identity made of
+ * nothing else is printed whole, because a blank line names no emulator at all.
+ */
+function fallbackEmulatorLabel(emulator: string): string {
+  return emulator.replace(/\.so$/, "").replace(/_libretro$/, "") || emulator;
+}
+
+/** Render the per-emulator lines under a BIOS file — one row per emulator that uses it. */
 function buildBiosCoreLines(
   cores: Record<string, { required: boolean; needs_one_of?: number | null }>,
-  coreLabelMap: Record<string, string>,
-  activeCore: string | null | undefined,
+  emulatorLabels: Map<string, string>,
+  activeEmulator: string | null | undefined,
 ): ReactElement[] {
-  return Object.entries(cores).map(([coreSo, coreData]) => {
-    const label = coreLabelMap[coreSo] || coreSo.replace(/_libretro$/, "");
+  return Object.entries(cores).map(([emulator, coreData]) => {
+    const label = emulatorLabels.get(emulator) || fallbackEmulatorLabel(emulator);
     const suffix = coreLineSuffix(coreData);
-    // Highlight the resolved active core's line (#955). active_core is the
-    // core's `.so`, same identifier space as the cores keys; a null/undefined
-    // active core matches nothing.
-    const isActiveCore = coreSo === activeCore;
+    // Highlight the resolved active emulator's line (#955). `active_core` is the
+    // emulator IDENTITY, the same space these keys are in; a null/undefined
+    // active emulator matches nothing.
+    const isActiveCore = emulator === activeEmulator;
     return (
       <div
-        key={`core-${coreSo}`}
+        key={`core-${emulator}`}
         style={{
           color: isActiveCore ? "#d4a72c" : "rgba(255, 255, 255, 0.5)",
           fontSize: "12px",
@@ -255,12 +268,18 @@ function fileLines(lines: string[], coreLines: ReactElement[]): ReactElement | n
  * known core" while counting neither.
  */
 function buildBiosFileList(bios: BiosStatus, coreInfo: CoreInfo | null): ReactElement[] {
-  // Build core_so -> label lookup from the dedicated core-info path (#923).
-  // Only libretro emulators carry a core_so (a standalone emulator has none),
-  // so filter those in for the per-core BIOS lines.
-  const coreLabelMap: Record<string, string> = {};
+  // Build identity -> label lookup from the dedicated core-info path (#923).
+  // The join is the emulator IDENTITY because that is what a row's `cores` map
+  // is keyed on: `core_so` is null for every standalone emulator and carries no
+  // extension for a libretro one, so it matches nothing here.
+  //
+  // Two rows can be one emulator — ES-DE lists one `pcsx2_libretro.so` as both
+  // LRPS2 and PCSX2 — so the first declared wins, which is the order the picker
+  // offers them in and the order the default is chosen from. An entry the
+  // resolver could not identify carries no identity and names no line.
+  const emulatorLabels = new Map<string, string>();
   for (const e of coreInfo?.emulators ?? []) {
-    if (e.core_so) coreLabelMap[e.core_so] = e.label;
+    if (e.emulator && !emulatorLabels.has(e.emulator)) emulatorLabels.set(e.emulator, e.label);
   }
 
   const files = bios.files ?? [];
@@ -268,7 +287,7 @@ function buildBiosFileList(bios: BiosStatus, coreInfo: CoreInfo | null): ReactEl
   const countOf = (wanted: FirmwareWanted) => files.filter((f) => f.wanted === wanted).length;
 
   const fileElements = wantedFiles.map((f) => {
-    const coreLines = f.cores ? buildBiosCoreLines(f.cores, coreLabelMap, coreInfo?.active_core) : [];
+    const coreLines = f.cores ? buildBiosCoreLines(f.cores, emulatorLabels, coreInfo?.active_core) : [];
     const { note, lines } = biosFileNote(f);
     const suffix = note ? ` — ${note}` : "";
 

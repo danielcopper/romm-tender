@@ -205,7 +205,7 @@ class TestGetPlatformCoreInfo:
         assert result == {
             "emulators": options_to_payload(core_info.options),
             "emulator_data_available": True,
-            "active_core": "snes9x_libretro",
+            "active_core": "snes9x_libretro.so",
             "active_core_label": "Snes9x",
             "platform_core_label": None,
             "has_game_override": False,
@@ -257,9 +257,35 @@ class TestGetPlatformCoreInfo:
         _seed_rom(uow, rom_id=42, platform_slug="snes", emulator_override="bsnes")
         active_core.per_rom[42] = ("bsnes_libretro", "bsnes")
         result = event_loop.run_until_complete(service.get_platform_core_info(42))
-        assert result["active_core"] == "bsnes_libretro"
+        assert result["active_core"] == "bsnes_libretro.so"
         assert result["active_core_label"] == "bsnes"
-        assert active_core.calls == [42]
+        assert active_core.emulator_calls == [42]
+
+    def test_active_marker_names_a_standalone_pick(self, event_loop, service, uow, active_core):
+        # The identity names a standalone emulator, which is the whole reason
+        # the payload carries it rather than the `.so`: `active_core_for_rom`
+        # answers `None` here, and the BIOS pane would then highlight no line at
+        # all on every platform that launches one.
+        # The label and the identity are deliberately different strings: ES-DE
+        # names a ROW and the resolver names an EMULATOR, and a payload that
+        # projected one of them twice would pass an assertion over equal ones.
+        _seed_rom(uow, rom_id=42, platform_slug="ps2", emulator_override="PCSX2 (Standalone)")
+        active_core.per_rom_emulator[42] = EmulatorInvocation.standalone(
+            "%EMULATOR_PCSX2% %ROM%", "PCSX2 (Standalone)", "PCSX2"
+        )
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+        assert result["active_core"] == "PCSX2"
+        assert result["active_core_label"] == "PCSX2 (Standalone)"
+
+    def test_active_marker_is_none_for_an_unidentified_emulator(self, event_loop, service, uow, active_core):
+        # An emulator the resolver could not identify carries no identity, and
+        # nothing may be keyed on it — the pane highlights nothing rather than
+        # matching a row by accident.
+        _seed_rom(uow, rom_id=42, platform_slug="n3ds")
+        active_core.per_rom_emulator[42] = EmulatorInvocation.standalone("%EMULATOR_X% %ROM%", "Citra", None)
+        result = event_loop.run_until_complete(service.get_platform_core_info(42))
+        assert result["active_core"] is None
+        assert result["active_core_label"] == "Citra"
 
     def test_has_game_override_true_when_rom_is_pinned(self, event_loop, service, uow):
         # A ROM with a per-game emulator_override surfaces has_game_override=True
@@ -283,7 +309,7 @@ class TestGetPlatformCoreInfo:
         _seed_rom(uow, rom_id=42, platform_slug="snes")
         active_core.default = ("snes9x_libretro", "Snes9x")
         result = event_loop.run_until_complete(service.get_platform_core_info(42))
-        assert result["active_core"] == "snes9x_libretro"
+        assert result["active_core"] == "snes9x_libretro.so"
         assert result["active_core_label"] == "Snes9x"
 
     def test_empty_emulators_list(self, event_loop, service, core_info, uow):

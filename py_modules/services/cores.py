@@ -94,11 +94,20 @@ class CoreService:
 
         The emulator list is platform-wide (system-level): every ES-DE
         ``<command>`` for the ROM's system, each annotated ``{label, kind,
-        core_so, is_default, bakeable, reason}`` (libretro AND standalone). The
-        active selection is the per-ROM resolution from
+        core_so, emulator, is_default, bakeable, reason}`` (libretro AND
+        standalone). The active selection is the per-ROM resolution from
         :class:`ActiveCoreResolver`, so a pinned ``emulator_override`` (or
         per-platform core) surfaces over the system default and the menu can
-        highlight the active emulator (or offer Reset). ``platform_core_label``
+        highlight the active emulator (or offer Reset).
+
+        ``active_core`` and ``active_core_label`` are two projections of that ONE
+        resolution, and ``active_core`` is the emulator IDENTITY — the same
+        spelling the ``emulator`` field of each picker entry carries and the same
+        one a firmware row's per-emulator map is keyed on, so the BIOS pane can
+        match its answer against the pick it was scoped to. ``active_core_for_rom``
+        cannot serve it: its ``core_so`` is ``None`` for every standalone
+        emulator and omits the extension for a libretro one, which is two
+        identifier spaces on one payload. ``platform_core_label``
         carries the per-platform override label (``settings.json``
         ``platform_cores``) so the menu can mark the system-level selection
         distinctly from the active emulator. ``has_game_override`` reports
@@ -125,12 +134,12 @@ class CoreService:
             }
         system = self._resolve_system(rom.platform_slug)
         options = self._core_info.get_emulator_options(system)
-        active_so, active_label = self._active_core.active_core_for_rom(rom_id)
+        emulator = self._active_core.active_emulator_for_rom(rom_id)
         return {
             "emulators": options_to_payload(options["options"]),
             "emulator_data_available": options["available"],
-            "active_core": active_so,
-            "active_core_label": active_label,
+            "active_core": emulator.emulator if emulator is not None else None,
+            "active_core_label": emulator.label if emulator is not None else None,
             "platform_core_label": self._settings.get("platform_cores", {}).get(rom.platform_slug),
             "has_game_override": rom.emulator_override is not None,
         }

@@ -43,6 +43,7 @@ const MGBA = {
   label: "mGBA",
   kind: "libretro" as const,
   core_so: "mgba_libretro",
+  emulator: "mgba_libretro.so",
   is_default: true,
   bakeable: true,
   reason: null,
@@ -51,6 +52,7 @@ const VBA = {
   label: "VBA Next",
   kind: "libretro" as const,
   core_so: "vba_next_libretro",
+  emulator: "vba_next_libretro.so",
   is_default: false,
   bakeable: true,
   reason: null,
@@ -2492,7 +2494,14 @@ describe("Library › Platforms", () => {
       }
     });
 
-    it("withdraws the downloads and says why when nothing could be established", async () => {
+    it("says why nothing could be established, and keeps every download its library can serve", async () => {
+      // The two questions are independent and neither answers the other: what
+      // the RESOLVER could establish is the emulator's demand, what is FETCHABLE
+      // is what the RomM library holds. Reading the first as a gate on the
+      // second took the buttons off PS2, GameCube and PSP the moment a BIOS
+      // answer was scoped to the emulator that actually launches — those launch
+      // standalone emulators the resolver holds no card for, so the verdict is
+      // withheld over a library that still holds their files.
       vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
         success: true,
         platforms: [
@@ -2514,8 +2523,44 @@ describe("Library › Platforms", () => {
       expect(container.textContent).toContain("Nothing installed could answer for this system");
       expect(container.textContent).toContain("You can still put BIOS files in your BIOS folder by hand");
       expect(container.textContent).not.toContain("not supported for this system yet");
-      expect(buttonByText(container, "Download")).toBeUndefined();
-      expect(buttonByText(container, "Download all")).toBeDisabled();
+      // The affordance, on both surfaces it has: the row's own button and the
+      // bulk one under the table.
+      expect(buttonByText(container, "Download")).toBeTruthy();
+      expect(buttonByText(container, "Download all")).not.toBeDisabled();
+      // Nothing is REQUIRED here — no emulator could be asked — so that count is
+      // zero and its button is dead for the reason it always is.
+      expect(buttonByText(container, "Download required (0)")).toBeDisabled();
+    });
+
+    it("fetches the row it offered, on a platform nothing could be established for", async () => {
+      // Rendered is not the same as pressable. The row's button and the bulk
+      // ones read one fetchable set, so this asserts the press reaches the
+      // backend naming the row — not merely that a button was drawn.
+      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
+        success: true,
+        platforms: [
+          firmwarePlatform({
+            bios_level: "unknown",
+            required_withheld: 0,
+            required_count: 0,
+            files: [firmwareFile({ wanted: "unknown", required_by_active: false })],
+          }),
+        ],
+      });
+      vi.mocked(backend.downloadPlatformFirmwareFile).mockResolvedValue({
+        success: true,
+        message: "Downloaded gba_bios.bin",
+        downloaded: 1,
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Download")!);
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+      });
+
+      expect(vi.mocked(backend.downloadPlatformFirmwareFile)).toHaveBeenCalledWith("gba", "gba_bios.bin");
     });
 
     it("says the console needs at least one file where the counts would say nothing is required", async () => {

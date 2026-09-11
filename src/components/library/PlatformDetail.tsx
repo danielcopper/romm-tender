@@ -914,38 +914,40 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   // on `missing` and so never arrives with an `unknown` level — but nothing
   // joins the three surfaces, and a decline added ahead of that test in
   // `compute_bios_level` would leave this pane alone saying "Nothing installed
-  // could answer for this system" and withdrawing every download button while
-  // the other two said the console needs at least one BIOS file.
+  // could answer for this system" while the other two said the console needs at
+  // least one BIOS file.
   const declined = firmware.bios_level === "unknown" && systemImage !== "absent";
-  // An unsettled console demand is a declined VERDICT and not an unanswered
-  // platform: its rows were answered, so the downloads below stay — the same
-  // reading `requiredWithheld` gets, one axis over.
+  // The narrowest of the declines: not one row on the platform was answered, so
+  // the pane has nothing to point the reader at and says where a file can be put
+  // instead. A withheld required row and an unsettled console demand are both
+  // declined VERDICTS over rows that DID answer, and neither reaches this. It
+  // decides wording only — what the pane offers to fetch is a separate question
+  // with a separate input, below.
   const nothingEstablished = declined && requiredWithheld === 0 && systemImage !== "unsettled";
   const { summaryLabel, summaryDescription } = declined
     ? getUnknownSummary(requiredWithheld, systemImage)
     : getBiosSummary(requiredCount, requiredDone, requiredReady, optionalMissing, done, total, systemImage);
 
-  // The download affordances key off what is missing AND fetchable, never off
-  // readiness: a required file the RomM library does not hold leaves the
-  // platform not ready and still gives the user nothing to press here.
+  // The download affordances key off what is missing AND fetchable, and off
+  // nothing else — not on readiness, and not on whether a verdict could be
+  // reached. They are two independent questions: what the RESOLVER could
+  // establish is the emulator's demand, what is FETCHABLE is what the RomM
+  // library holds, and neither answers the other. A required file the library
+  // does not hold leaves the platform not ready and still gives the user
+  // nothing to press here; a platform nothing could be read for still has a
+  // library behind it, and fetching from it is the one action that moves the
+  // platform along at all.
   //
-  // `nothingEstablished` withdraws them entirely, and that is a PLATFORM
-  // condition, never a per-file one: a platform whose reading finished may hold
-  // plenty of files no installed emulator asks for — a PlayStation page
-  // typically does — and every one of them stays fetchable, because "nothing
-  // wants this" is an answer. Where nothing could be established there is no
-  // answer to download against, so the pane says so instead of offering to
-  // fetch files it cannot reason about. A declined READINESS verdict is not
-  // that state and keeps its buttons: its rows were answered, and downloading
-  // the files the library holds is the one thing that can still move the
-  // platform along.
+  // Reading readiness here is what took the buttons off PS2, GameCube and PSP
+  // the moment a BIOS answer was scoped to the emulator that actually launches:
+  // those launch standalone emulators the resolver holds no card for, so their
+  // verdict is withheld — which says nothing whatever about the files their
+  // library offers.
   //
   // A folder declaration is out whatever its state: the emulator lists that
   // name, so there is no file to fetch into it — what would satisfy it is a
   // BIOS image inside the folder, which is a different row.
-  const fetchableMissing = nothingEstablished
-    ? []
-    : files.filter((f) => f.on_server && !f.downloaded && f.declared_kind !== "directory");
+  const fetchableMissing = files.filter((f) => f.on_server && !f.downloaded && f.declared_kind !== "directory");
   const requiredMissing = fetchableMissing.filter((f) => f.required_by_active).length;
   const hasOptionalMissing = fetchableMissing.some((f) => !f.required_by_active);
   const showRequired = requiredMissing > 0 && !state.serverOffline;
@@ -976,12 +978,12 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
           state a platform's BIOS state and they now agree by construction. */}
       <SectionTitle title="BIOS files" note={summaryLabel} noteColor={biosColorForLevel(firmware.bios_level ?? null)} />
       <Muted>{summaryDescription}</Muted>
-      {/* The one actionable thing in this state, and all that is left to say.
-          The line used to open "BIOS management is not supported for this
-          system yet", which is a claim about the plugin and not what the state
-          means: install an emulator that declares firmware for this platform
-          and the pane answers, with nothing changed here. It also said a third
-          time what the label and the summary above already say. */}
+      {/* The route the summary above cannot name: nothing here could say which
+          files this system wants, so the reader has to be told that placing one
+          by hand still works. The line used to open "BIOS management is not
+          supported for this system yet", which is a claim about the plugin and
+          not what the state means: install an emulator that declares firmware
+          for this platform and the pane answers, with nothing changed here. */}
       {nothingEstablished && <Muted>You can still put BIOS files in your BIOS folder by hand.</Muted>}
       {files.length > 0 && <BiosTableHeader />}
       {files.map((file) => (
