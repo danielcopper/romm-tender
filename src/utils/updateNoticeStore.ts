@@ -71,18 +71,30 @@ let _state: UpdateNoticeState = INITIAL;
 let _listeners: Array<() => void> = [];
 
 /**
- * Ordering fence, in the shape `gameDetailStore`'s `loadSeq` established: a read
- * takes the number when it is ISSUED and writes nothing if the number has moved
- * by the time it lands.
+ * Ordering fence, in the shape `gameDetailStore`'s `loadSeq` established.
  *
- * A user answer bumps it too, and that is the half the fence exists for. The
- * read can sit on a GitHub request for as long as that request takes, and its
- * payload carries `enabled` — which belongs to the user, not to the answer. With
- * no fence, switching the check on and straight back off again leaves the first
- * read in flight with `enabled: true` on it; it lands after the switch is off
- * and puts the toggle back on and the card back up, while `settings.json` says
- * off. The press is newer information than any read issued before it, so the
- * press wins whatever the read says.
+ * The rule is one sentence and has no exceptions: **every write that crosses an
+ * `await` takes the number before the `await` and writes nothing if the number
+ * has moved by the time it lands.** Reads and presses alike — a half-rule that
+ * fenced only reads is what the next person adding a writer would carry on.
+ *
+ * Against a read, the press wins. A read can sit on a GitHub request for as long
+ * as that request takes and its payload carries `enabled`, which belongs to the
+ * user and not to the answer: with no fence, switching the check on and straight
+ * back off leaves the first read in flight with `enabled: true` on it, landing
+ * after the switch is off and putting the toggle back on and the card back up
+ * while `settings.json` says off.
+ *
+ * Against another press, the later press wins — and two are genuinely in flight
+ * at once, because Steam's `Toggle` keeps its own state unless it is given
+ * `controlled` and reports the already-flipped value, so a double press sends
+ * `true` and then `false` with neither settled. The loser skips its own trailing
+ * read as well, which is right: the winner issues one of its own.
+ *
+ * Nothing legitimate is discarded by this, because of what does and does not
+ * bump the number. It is bumped only when a press or a read is ISSUED, reads are
+ * issued in only two places, and the one at plugin load flies before any press
+ * can exist, so it can overtake nothing.
  *
  * An answer that fails to persist has still spent the number. That costs a
  * refresh — the card appears one read later than it might have — and never a
@@ -154,8 +166,9 @@ export async function fetchUpdateNotice(): Promise<UpdateNoticeState> {
  * card is showing — the next release raises it again on its own.
  */
 export async function dismissUpdateForVersion(version: string): Promise<void> {
-  ++_seq;
+  const seq = ++_seq;
   await dismissUpdateNotice(version);
+  if (seq !== _seq) return;
   setUpdateNoticeState({ ..._state, available: false });
 }
 
@@ -169,10 +182,14 @@ export async function dismissUpdateForVersion(version: string): Promise<void> {
  * timeout, and the toggle the user just pressed would sit there with it. That
  * read takes a newer number than this press, so it is the one read a press does
  * not overtake.
+ *
+ * A press a later press overtook writes nothing and starts no read — see
+ * {@link _seq} for why two are in flight at once.
  */
 export async function setUpdateCheckSwitch(enabled: boolean): Promise<void> {
-  ++_seq;
+  const seq = ++_seq;
   await setUpdateCheckEnabled(enabled);
+  if (seq !== _seq) return;
   setUpdateNoticeState({ ..._state, enabled, available: enabled && _state.available });
   if (enabled) detach(fetchUpdateNotice());
 }

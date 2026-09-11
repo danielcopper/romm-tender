@@ -127,6 +127,29 @@ describe("updateNoticeStore", () => {
       expect(getUpdateNoticeState().available).toBe(true);
     });
 
+    it("discards a dismissal a later press overtook", async () => {
+      setUpdateNoticeState(AVAILABLE);
+      let settleDismiss: (() => void) | undefined;
+      vi.mocked(dismissUpdateNotice).mockReturnValue(
+        new Promise((resolve) => {
+          settleDismiss = () => resolve({ success: true });
+        }),
+      );
+      vi.mocked(setUpdateCheckEnabled).mockResolvedValue({ success: true });
+      // Never settles, so the winner's own read cannot stand in for the fence.
+      vi.mocked(getUpdateNotice).mockReturnValue(new Promise<never>(() => {}));
+
+      const dismissing = dismissUpdateForVersion("0.33.0");
+      await setUpdateCheckSwitch(true);
+
+      settleDismiss?.();
+      await dismissing;
+
+      // The press was issued later, so it wins; the card comes down when the
+      // read that press started lands, not on this write.
+      expect(getUpdateNoticeState().available).toBe(true);
+    });
+
     it("discards a read still in flight when the user dismisses the card", async () => {
       let release: (() => void) | undefined;
       vi.mocked(getUpdateNotice).mockReturnValue(
@@ -186,6 +209,33 @@ describe("updateNoticeStore", () => {
       await expect(setUpdateCheckSwitch(false)).rejects.toThrow("nope");
       expect(getUpdateNoticeState().enabled).toBe(true);
       expect(getUpdateNoticeState().available).toBe(true);
+    });
+
+    it("discards a press a later press overtook", async () => {
+      setUpdateNoticeState({ ...AVAILABLE, enabled: true });
+      // Steam's Toggle keeps its own state unless it is given `controlled` and
+      // reports the already-flipped value, so a double press sends `false` then
+      // `true` with neither settled.
+      const settle: Array<() => void> = [];
+      vi.mocked(setUpdateCheckEnabled).mockImplementation(
+        () => new Promise((resolve) => settle.push(() => resolve({ success: true }))),
+      );
+      // Never settles: the winner starts a read of its own, and letting it land
+      // would write `enabled` again and pass this test with or without the fence.
+      vi.mocked(getUpdateNotice).mockReturnValue(new Promise<never>(() => {}));
+
+      const first = setUpdateCheckSwitch(false);
+      const second = setUpdateCheckSwitch(true);
+
+      settle[1]?.();
+      await second;
+      expect(getUpdateNoticeState().enabled).toBe(true);
+
+      settle[0]?.();
+      await first;
+
+      // The earlier press carries the opposite value and lands last.
+      expect(getUpdateNoticeState().enabled).toBe(true);
     });
 
     it("discards a read still in flight when the user switches back off (#race)", async () => {
