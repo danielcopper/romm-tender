@@ -1,9 +1,12 @@
 /**
  * `DeckyBackend` — Decky Loader's own frontend↔backend bridge, as it exists in
  * SharedJSContext. Decky's `static/index.js` assigns it onto `window`, so
- * plugin code running in the same realm reaches it as a bare global; `call`
- * and `callable` are both functions on it, and arguments after the route name
- * arrive at the Python side positionally.
+ * plugin code running in the same realm reaches it as a bare global, and
+ * arguments after the route name arrive at the Python side positionally.
+ *
+ * Only `call` is declared, because only `call` is used. The object carries more
+ * than this — declaring a member nothing here calls would be an assertion about
+ * Decky's shape that nothing in this repo exercises or could notice going stale.
  *
  * `@decky/api`'s own `callable` cannot stand in for it: that one is wired to
  * the calling plugin's own routes and can never address Decky's `utilities/`.

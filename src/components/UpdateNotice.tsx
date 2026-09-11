@@ -1,4 +1,4 @@
-import { FC, useState } from "react";
+import { FC, useEffect, useState } from "react";
 import { PanelSectionRow, ButtonItem, Focusable } from "@decky/ui";
 import { requestPluginInstall } from "../utils/deckyInstall";
 import { isAnySessionActive } from "../utils/sessionManager";
@@ -8,14 +8,25 @@ import { logError } from "../api/backend";
 
 /** Refusal shown when a game is running — on the button and, at a press, as a toast. */
 export const UPDATE_GAME_RUNNING_REASON =
-  "Close your running game first — updating now would lose this session's play time.";
+  "Close your running game first — updating reloads Tender, which can drop this session's play time and its save sync.";
 
 /** Where the address is pasted when the button is not an option. */
 export const UPDATE_MANUAL_HINT =
   "Paste this address into Decky's Developer tab, under Install Plugin from URL, to update by hand.";
 
-/** How far the press got. `handed` means Decky owns the rest of it. */
-type Handover = "idle" | "handed" | "unavailable";
+/**
+ * How long the button stays down after a request is filed.
+ *
+ * It is a double-press guard, not a wait: nothing here can observe whether the
+ * user confirmed, so the button has to come back on its own. Long enough that a
+ * second press is a decision rather than a bounce, short enough that a reader
+ * who declined Decky's dialog and changed their mind is not left with a dead
+ * control.
+ */
+export const REQUEST_COOLDOWN_MS = 5000;
+
+/** How far the press got. `filed` means Decky has been asked and not yet answered. */
+type RequestState = "idle" | "filed" | "unavailable";
 
 /**
  * The QAM card that says a newer Tender release exists.
@@ -33,7 +44,15 @@ type Handover = "idle" | "handed" | "unavailable";
  */
 export const UpdateNotice: FC = () => {
   const state = useUpdateNoticeState();
-  const [handover, setHandover] = useState<Handover>("idle");
+  const [request, setRequest] = useState<RequestState>("idle");
+
+  // Above the early return, so the hook order does not depend on whether there
+  // is a release to show.
+  useEffect(() => {
+    if (request !== "filed") return;
+    const timer = setTimeout(() => setRequest("idle"), REQUEST_COOLDOWN_MS);
+    return () => clearTimeout(timer);
+  }, [request]);
 
   // A card that cannot name the release has nothing to say. `available` already
   // implies a version — it is decided by comparing one — so this is the type
@@ -41,33 +60,41 @@ export const UpdateNotice: FC = () => {
   if (!state.available || state.latestVersion === null) return null;
   const latestVersion = state.latestVersion;
 
-  // No name, no button: Decky matches the existing installation by plugin.json's
-  // name, and an empty one misses the match exactly as a wrong one would.
-  const canInstall = state.pluginName !== "";
+  // Two ways to have nothing to offer, both ending in the address alone.
+  // No name: Decky matches the existing installation by plugin.json's name, and
+  // an empty one misses the match exactly as a wrong one would. No version-bound
+  // address: the only address left is `releases/latest`, which resolves to
+  // whatever is newest — pair it with this notice's digest and Decky fetches one
+  // release, verifies it against another, and refuses to unpack.
+  const canInstall = state.pluginName !== "" && state.installUrl !== "";
   const gameRunning = isAnySessionActive();
 
   const handleUpdate = () => {
-    // The button is disabled while a game runs, but nothing re-renders this card
-    // when one starts — so the press is where the refusal has to hold, and it
-    // has to say why: after the handover Decky's dialog owns the screen and this
-    // panel is torn down, so there is no later moment to warn in.
+    // Nothing re-renders this card when a session opens — it reads the answer at
+    // render and subscribes to nothing — so the disabled state can be stale by
+    // the time of the press, and the press is where the refusal has to hold. It
+    // says why rather than doing nothing: a request filed here puts Decky's own
+    // dialog in front of the reader, which is no place to raise a warning about
+    // a decision they have already made.
     if (isAnySessionActive()) {
       showToast(UPDATE_GAME_RUNNING_REASON);
       return;
     }
-    setHandover("handed");
-    // Deliberately not awaited. The call files a request; Decky's own dialog
-    // asks for confirmation and the loader unloads this plugin before it
-    // replaces the folder, so this promise may never settle and an await would
-    // leave the card frozen mid-press.
+    setRequest("filed");
+    // `install_plugin` files the request and emits the dialog event; it does not
+    // wait for the user's confirmation, so this promise settles at once and says
+    // only that Decky was ASKED. The outcome — confirmed, declined, installed —
+    // reaches this card through nothing at all, which is why the button is not
+    // gated on it: it goes down to stop a double press filing a second request
+    // and comes back up on its own timer.
     requestPluginInstall({
-      artifact: state.downloadUrl,
+      artifact: state.installUrl,
       name: state.pluginName,
       version: latestVersion,
       hash: state.digest,
     }).catch((e) => {
       logError(`Failed to hand the update to Decky's installer: ${e}`);
-      setHandover("unavailable");
+      setRequest("unavailable");
     });
   };
 
@@ -75,11 +102,11 @@ export const UpdateNotice: FC = () => {
     dismissUpdateForVersion(latestVersion).catch((e) => logError(`Failed to dismiss the update notice: ${e}`));
   };
 
-  const showManualHint = !canInstall || handover === "unavailable";
+  const showManualHint = !canInstall || request === "unavailable";
   const buttonDescription = gameRunning
     ? UPDATE_GAME_RUNNING_REASON
-    : handover === "handed"
-      ? "Decky is asking you to confirm the update."
+    : request === "filed"
+      ? "Confirm the update in Decky's own dialog."
       : undefined;
 
   return (
@@ -105,11 +132,11 @@ export const UpdateNotice: FC = () => {
               You have {state.currentVersion}.{" "}
               {canInstall
                 ? "Update now hands this to Decky, which asks you to confirm before installing."
-                : "This plugin could not read its own name, so it cannot ask Decky to install the update."}
+                : "This release cannot be installed from here, so it has to be done by hand."}
             </div>
             {showManualHint && (
               <div data-testid="update-manual-hint" style={{ color: "rgba(255, 255, 255, 0.7)", marginTop: "6px" }}>
-                {handover === "unavailable" ? "Decky's installer could not be reached. " : ""}
+                {request === "unavailable" ? "Decky's installer could not be reached. " : ""}
                 {UPDATE_MANUAL_HINT}
               </div>
             )}
@@ -132,11 +159,11 @@ export const UpdateNotice: FC = () => {
           <ButtonItem
             layout="below"
             bottomSeparator="none"
-            disabled={gameRunning || handover === "handed"}
+            disabled={gameRunning || request === "filed"}
             description={buttonDescription}
             onClick={handleUpdate}
           >
-            {handover === "handed" ? "Waiting for Decky…" : "Update now"}
+            {request === "filed" ? "Handed to Decky…" : "Update now"}
           </ButtonItem>
         </PanelSectionRow>
       )}

@@ -28,7 +28,7 @@ export const AdvancedSection: FC<AdvancedSectionProps> = ({
           // Names the destination because this is the plugin's only outgoing
           // request that goes neither to the user's own RomM server nor to
           // SteamGridDB, which is what makes it worth a switch at all.
-          description="Asks GitHub once a day whether a newer Tender release exists, and shows a card when there is one."
+          description="Asks GitHub whether a newer Tender release exists — at most once a day, when Tender starts up — and shows a card when there is one."
           checked={updateCheckEnabled}
           onChange={onUpdateCheckEnabledChange}
         />

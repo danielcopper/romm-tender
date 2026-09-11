@@ -26,6 +26,7 @@ const WIRE = {
   latest_version: "0.33.0",
   current_version: "0.32.0",
   download_url: "https://example.invalid/Tender.zip",
+  install_url: "https://example.invalid/tender-v0.33.0/Tender.zip",
   plugin_name: "Tender",
   digest: "abc123",
   enabled: true,
@@ -36,6 +37,7 @@ const AVAILABLE: UpdateNoticeState = {
   latestVersion: "0.33.0",
   currentVersion: "0.32.0",
   downloadUrl: "https://example.invalid/Tender.zip",
+  installUrl: "https://example.invalid/tender-v0.33.0/Tender.zip",
   pluginName: "Tender",
   digest: "abc123",
   enabled: true,
@@ -55,6 +57,7 @@ describe("updateNoticeStore", () => {
       latestVersion: null,
       currentVersion: "",
       downloadUrl: "",
+      installUrl: "",
       pluginName: "",
       digest: null,
       enabled: true,
@@ -162,6 +165,55 @@ describe("updateNoticeStore", () => {
       await expect(setUpdateCheckSwitch(false)).rejects.toThrow("nope");
       expect(getUpdateNoticeState().enabled).toBe(true);
       expect(getUpdateNoticeState().available).toBe(true);
+    });
+
+    it("discards a read still in flight when the user switches back off (#race)", async () => {
+      // The press the fence exists for: switch on, the read sits on GitHub, the
+      // user changes their mind. The stale payload carries `enabled: true`.
+      setUpdateNoticeState({ ...AVAILABLE, enabled: false, available: false });
+      vi.mocked(setUpdateCheckEnabled).mockResolvedValue({ success: true });
+      let release: (() => void) | undefined;
+      vi.mocked(getUpdateNotice).mockReturnValue(
+        new Promise((resolve) => {
+          release = () => resolve(WIRE);
+        }),
+      );
+
+      await setUpdateCheckSwitch(true);
+      expect(getUpdateNoticeState().enabled).toBe(true);
+
+      await setUpdateCheckSwitch(false);
+      expect(getUpdateNoticeState().enabled).toBe(false);
+
+      // The read from the first press lands only now, with enabled: true on it.
+      release?.();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(getUpdateNoticeState().enabled).toBe(false);
+      expect(getUpdateNoticeState().available).toBe(false);
+    });
+
+    it("discards a read still in flight when the user dismisses the card", async () => {
+      let release: (() => void) | undefined;
+      vi.mocked(getUpdateNotice).mockReturnValue(
+        new Promise((resolve) => {
+          release = () => resolve(WIRE);
+        }),
+      );
+      vi.mocked(dismissUpdateNotice).mockResolvedValue({ success: true });
+
+      const inFlight = fetchUpdateNotice();
+      setUpdateNoticeState(AVAILABLE);
+      await dismissUpdateForVersion("0.33.0");
+      expect(getUpdateNoticeState().available).toBe(false);
+
+      release?.();
+      await inFlight;
+
+      // The plugin-load read would have put the card back up.
+      expect(getUpdateNoticeState().available).toBe(false);
     });
 
     it("swallows a failed refresh after switching on, leaving the switch on", async () => {

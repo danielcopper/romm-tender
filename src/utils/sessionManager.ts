@@ -89,11 +89,19 @@ export function isSessionActive(romId: number): boolean {
 
 /**
  * Does this manager track a live session for ANY game? Read synchronously by
- * surfaces that must not act while play time is being counted — the update card
- * is the first, because applying an update reloads the plugin and a reloaded
- * manager that cannot find its breadcrumb re-stamps the running session, which
- * makes `record_session_start` open the durable marker anew instead of
- * extending it and discards everything played so far (see `handleGameStart`).
+ * surfaces that must not reload the plugin while play time is being counted —
+ * the update card is the first.
+ *
+ * What is at stake is NOT that a reload loses the session: the breadcrumb
+ * survives one, `destroySessionManager` does not clear it, and
+ * {@link adoptOrphanedSessions} restores an attested session that is still
+ * running with the `startMs` it was attested with, re-opening no marker. What is
+ * at stake is that this recovery is best-effort and its failures are silent. It
+ * restores a session only if the game surfaces in Steam's running-app reading
+ * within {@link ADOPTION_POLL_MAX_MS}; past that the session is ORPHANED — never
+ * finalized, so neither its play time nor its after-exit save sync happens. And
+ * a stop that lands inside the swap is observed by nobody: the old hook is
+ * unregistered and the new manager has not adopted yet.
  *
  * This is the question about ROMM sessions, deliberately not
  * `isAnyAppRunning()`: what is at stake is play time this manager is counting,

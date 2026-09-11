@@ -40,11 +40,18 @@ export interface UpdateNoticeState {
   /** The newer release's bare version. `null` until a check has succeeded. */
   latestVersion: string | null;
   currentVersion: string;
-  /** Always shown in the card, because the button can fail and this cannot. */
+  /**
+   * The `releases/latest` address. Always shown in the card, because the button
+   * can fail and this cannot — and never installed from: it resolves to
+   * whatever is newest, so pairing it with {@link digest} would fetch one
+   * release and verify it against another.
+   */
   downloadUrl: string;
+  /** The version-bound address the button installs from. `""` where unknown. */
+  installUrl: string;
   /** plugin.json's name — what Decky matches the existing installation against. */
   pluginName: string;
-  /** The asset's bare sha256 hex, or `null` where the release carried none. */
+  /** The bare sha256 hex of {@link installUrl}'s asset, `null` where unknown. */
   digest: string | null;
   enabled: boolean;
 }
@@ -54,6 +61,7 @@ const INITIAL: UpdateNoticeState = {
   latestVersion: null,
   currentVersion: "",
   downloadUrl: "",
+  installUrl: "",
   pluginName: "",
   digest: null,
   enabled: true,
@@ -62,6 +70,26 @@ const INITIAL: UpdateNoticeState = {
 let _state: UpdateNoticeState = INITIAL;
 let _listeners: Array<() => void> = [];
 
+/**
+ * Ordering fence, in the shape `gameDetailStore`'s `loadSeq` established: a read
+ * takes the number when it is ISSUED and writes nothing if the number has moved
+ * by the time it lands.
+ *
+ * A user answer bumps it too, and that is the half the fence exists for. The
+ * read can sit on a GitHub request for as long as that request takes, and its
+ * payload carries `enabled` — which belongs to the user, not to the answer. With
+ * no fence, switching the check on and straight back off again leaves the first
+ * read in flight with `enabled: true` on it; it lands after the switch is off
+ * and puts the toggle back on and the card back up, while `settings.json` says
+ * off. The press is newer information than any read issued before it, so the
+ * press wins whatever the read says.
+ *
+ * An answer that fails to persist has still spent the number. That costs a
+ * refresh — the card appears one read later than it might have — and never a
+ * wrong value, which is the direction to fail in.
+ */
+let _seq = 0;
+
 export function setUpdateNoticeState(state: UpdateNoticeState): void {
   _state = state;
   _listeners.forEach((fn) => fn());
@@ -69,6 +97,7 @@ export function setUpdateNoticeState(state: UpdateNoticeState): void {
 
 /** Test seam: drop the answer, as a fresh plugin load has it. */
 export function resetUpdateNoticeStoreForTests(): void {
+  _seq = 0;
   setUpdateNoticeState(INITIAL);
 }
 
@@ -93,21 +122,27 @@ export function useUpdateNoticeState(): UpdateNoticeState {
  *
  * The call can spend a GitHub request timeout on the one day the check is due,
  * so no surface may await it before rendering: the plugin-load caller detaches
- * it and the card appears when the answer does.
+ * it and the card appears when the answer does. A read that a later read or a
+ * user answer has overtaken writes nothing at all — see {@link _seq}.
+ *
+ * Resolves with what the store holds afterwards, which for an overtaken read is
+ * whatever overtook it.
  */
 export async function fetchUpdateNotice(): Promise<UpdateNoticeState> {
+  const seq = ++_seq;
   const notice = await getUpdateNotice();
-  const next: UpdateNoticeState = {
+  if (seq !== _seq) return _state;
+  setUpdateNoticeState({
     available: notice.available,
     latestVersion: notice.latest_version,
     currentVersion: notice.current_version,
     downloadUrl: notice.download_url,
+    installUrl: notice.install_url,
     pluginName: notice.plugin_name,
     digest: notice.digest,
     enabled: notice.enabled,
-  };
-  setUpdateNoticeState(next);
-  return next;
+  });
+  return _state;
 }
 
 /**
@@ -119,6 +154,7 @@ export async function fetchUpdateNotice(): Promise<UpdateNoticeState> {
  * card is showing — the next release raises it again on its own.
  */
 export async function dismissUpdateForVersion(version: string): Promise<void> {
+  ++_seq;
   await dismissUpdateNotice(version);
   setUpdateNoticeState({ ..._state, available: false });
 }
@@ -130,9 +166,12 @@ export async function dismissUpdateForVersion(version: string): Promise<void> {
  * the switch. Switching ON cannot restore it from anything held here — the
  * backend answers a disabled check with no version at all — so a fresh read is
  * started and deliberately not awaited: it is the one that may sit on a GitHub
- * timeout, and the toggle the user just pressed would sit there with it.
+ * timeout, and the toggle the user just pressed would sit there with it. That
+ * read takes a newer number than this press, so it is the one read a press does
+ * not overtake.
  */
 export async function setUpdateCheckSwitch(enabled: boolean): Promise<void> {
+  ++_seq;
   await setUpdateCheckEnabled(enabled);
   setUpdateNoticeState({ ..._state, enabled, available: enabled && _state.available });
   if (enabled) detach(fetchUpdateNotice());

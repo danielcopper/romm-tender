@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import { toaster } from "@decky/api";
-import { UpdateNotice, UPDATE_GAME_RUNNING_REASON, UPDATE_MANUAL_HINT } from "./UpdateNotice";
+import { UpdateNotice, REQUEST_COOLDOWN_MS, UPDATE_GAME_RUNNING_REASON, UPDATE_MANUAL_HINT } from "./UpdateNotice";
 import * as backend from "../api/backend";
 import { isAnySessionActive } from "../utils/sessionManager";
 import {
@@ -20,6 +20,7 @@ const AVAILABLE: UpdateNoticeState = {
   latestVersion: "0.33.0",
   currentVersion: "0.32.0",
   downloadUrl: "https://example.invalid/Tender.zip",
+  installUrl: "https://example.invalid/tender-v0.33.0/Tender.zip",
   pluginName: "Tender",
   digest: "abc123",
   enabled: true,
@@ -34,7 +35,7 @@ const flushAsync = () =>
 /** The card's Update button, or `null` where the card offers none. */
 function updateButton(container: HTMLElement): HTMLButtonElement | null {
   const buttons = Array.from(container.querySelectorAll("button"));
-  return (buttons.find((b) => b.textContent.startsWith("Update now") || b.textContent.startsWith("Waiting")) ??
+  return (buttons.find((b) => b.textContent.startsWith("Update now") || b.textContent.startsWith("Handed to Decky")) ??
     null) as HTMLButtonElement | null;
 }
 
@@ -106,7 +107,10 @@ describe("UpdateNotice", () => {
       expect(call).toHaveBeenCalledTimes(1);
       expect(call).toHaveBeenCalledWith(
         "utilities/install_plugin",
-        "https://example.invalid/Tender.zip",
+        // The VERSION-BOUND address, never the shown one: `releases/latest`
+        // resolves to whatever is newest, so pairing it with this notice's
+        // digest fetches one release and verifies it against another.
+        "https://example.invalid/tender-v0.33.0/Tender.zip",
         "Tender",
         "0.33.0",
         "abc123",
@@ -114,17 +118,71 @@ describe("UpdateNotice", () => {
       );
     });
 
-    it("does not sit on the handover — the button reports it before the call settles", () => {
+    it("installs from install_url while the card still shows download_url", async () => {
       setUpdateNoticeState(AVAILABLE);
-      // A promise that never settles, which is what an update the loader is
-      // already unloading us for looks like from here.
+      const { container, getByTestId } = render(<UpdateNotice />);
+
+      fireEvent.click(updateButton(container)!);
+      await flushAsync();
+
+      const artifact = vi.mocked(DeckyBackend!.call).mock.calls[0]?.[1];
+      expect(artifact).toBe("https://example.invalid/tender-v0.33.0/Tender.zip");
+      expect(getByTestId("update-download-url").textContent).toBe("https://example.invalid/Tender.zip");
+      expect(artifact).not.toBe(getByTestId("update-download-url").textContent);
+    });
+
+    it("is absent when the release named no version-bound address, leaving the address", () => {
+      setUpdateNoticeState({ ...AVAILABLE, installUrl: "" });
+      const { container, getByTestId } = render(<UpdateNotice />);
+      expect(updateButton(container)).toBeNull();
+      expect(getByTestId("update-download-url").textContent).toBe("https://example.invalid/Tender.zip");
+      expect(getByTestId("update-manual-hint").textContent).toContain(UPDATE_MANUAL_HINT);
+    });
+
+    it("goes down at the press, before the call has settled", () => {
+      setUpdateNoticeState(AVAILABLE);
       vi.stubGlobal("DeckyBackend", { call: vi.fn(() => new Promise<never>(() => {})) });
       const { container } = render(<UpdateNotice />);
 
       fireEvent.click(updateButton(container)!);
 
-      expect(updateButton(container)?.textContent).toBe("Waiting for Decky…");
+      expect(updateButton(container)?.textContent).toBe("Handed to Decky…");
       expect(updateButton(container)?.disabled).toBe(true);
+    });
+
+    it("files one request for a double press", async () => {
+      setUpdateNoticeState(AVAILABLE);
+      const { container } = render(<UpdateNotice />);
+
+      const button = updateButton(container)!;
+      fireEvent.click(button);
+      fireEvent.click(button);
+      await flushAsync();
+
+      expect(vi.mocked(DeckyBackend!.call)).toHaveBeenCalledTimes(1);
+    });
+
+    it("comes back up on its own, because nothing here can see the outcome", async () => {
+      vi.useFakeTimers();
+      try {
+        setUpdateNoticeState(AVAILABLE);
+        const { container } = render(<UpdateNotice />);
+
+        fireEvent.click(updateButton(container)!);
+        expect(updateButton(container)?.disabled).toBe(true);
+
+        // Decky's dialog is up; declining it tells this card nothing at all, so
+        // the cool-down is the only thing that can re-arm the button.
+        await act(async () => {
+          vi.advanceTimersByTime(REQUEST_COOLDOWN_MS);
+          await Promise.resolve();
+        });
+
+        expect(updateButton(container)?.disabled).toBe(false);
+        expect(updateButton(container)?.textContent).toBe("Update now");
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("is absent when the plugin could not read its own name, leaving the address", () => {
