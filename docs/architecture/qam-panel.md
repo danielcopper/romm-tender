@@ -461,9 +461,9 @@ modal opened from the notice; that modal _is_ the home, not an exception to the 
 | A newer release of Tender is out            | text, the address, **Update now**, Dismiss    | none — Decky's own installer is where it is confirmed |
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
-migration — are not notices; they replace the page, and each carries conditions inside it — but not the same
-ones (both below). The version error carries exactly one, the pre-rename install; the migration page carries
-that one **and** the two data-location conditions.
+migration — are not notices; they replace the page, and each carries conditions inside it — but not the same ones (both
+below). The version error carries exactly one, the pre-rename install; the migration page carries that one **and** the
+two data-location conditions.
 
 The playtime notice is the one that carries **two** buttons, and they sit side by side on one row rather than on two
 full-width ones: Main is the narrow page, and a notice costing three rows pushes the status block it sits above off the
@@ -1190,7 +1190,7 @@ sits under Save Sync, and SteamGridDB joins the other external service under Con
 | Save Sync     | the save-sort migration first, as the condition asking to be answered; then the toggle, device, before-launch and after-exit, default slot, history limit, Sync all now; then the registered devices as a table                                                                                         |
 | Controller    | Steam Input mode, Apply to all shortcuts, the `input_driver` fix. Home of the fix.                                                                                                                                                                                                                      |
 | Steam Library | preferred region, collection games in platform groups, collection types in Steam names — the narrow page's **Library** section, renamed because a Library page now exists: the page is the RomM side (what is synced), the section is the Steam side (which version, in which groups, under which name) |
-| Advanced      | log level; the update check (on by default, throttled to at most one GitHub read a day — the plugin's only outgoing request that goes to neither RomM nor SteamGridDB, which is what earns it a switch)                                                                                                    |
+| Advanced      | log level; the update check (on by default, throttled to at most one GitHub read a day — the plugin's only outgoing request that goes to neither RomM nor SteamGridDB, which is what earns it a switch)                                                                                                 |
 
 The registered devices are the one thing on the page with more than two facts per row, so they are a table — Device,
 Client, Last seen — drawn with § Tables' shared one at the pane's default register. The layout study it was chosen from
