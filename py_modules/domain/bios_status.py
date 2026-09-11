@@ -84,15 +84,6 @@ SYSTEM_IMAGE_VALUES = (
 
 
 @dataclass(frozen=True)
-class AvailableCore:
-    """A RetroArch core available for a platform."""
-
-    core_so: str
-    label: str
-    is_default: bool
-
-
-@dataclass(frozen=True)
 class BiosFileEntry:
     """Status of a single BIOS/firmware file on a platform's list.
 
@@ -176,9 +167,6 @@ class BiosStatus:
     required_count: int | None
     required_downloaded: int | None
     files: tuple[BiosFileEntry, ...]
-    active_core: str | None
-    active_core_label: str | None
-    available_cores: tuple[AvailableCore, ...]
     # Server files the machine has an answer about (``needed`` or ``optional``).
     # ``None`` means the caller did not supply it, so the "unknown" decision is
     # not made; ``0`` alongside ``unknown_count`` means nothing about this
@@ -195,7 +183,6 @@ class BiosStatus:
     # one of :data:`SYSTEM_IMAGE_VALUES`. Defaults to the neutral value so a
     # caller that does not supply it keeps the verdict it always got.
     system_image: str = SYSTEM_IMAGE_NOT_DEMANDED
-    cached_at: float = 0.0
 
 
 def format_bios_status(
@@ -204,7 +191,6 @@ def format_bios_status(
     *,
     reading_complete: bool = True,
     system_image: str = SYSTEM_IMAGE_NOT_DEMANDED,
-    cached_at: float = 0.0,
 ) -> BiosStatus:
     """Build a frontend-ready BiosStatus dataclass from raw firmware check result."""
     raw_files = bios.get("files", [])
@@ -233,16 +219,6 @@ def format_bios_status(
     else:
         files = tuple(raw_files)
 
-    raw_cores = bios.get("available_cores", [])
-    available_cores: tuple[AvailableCore, ...] = tuple(
-        AvailableCore(
-            core_so=c.get("core_so", c.get("core", "")),
-            label=c.get("label", ""),
-            is_default=c.get("is_default", False),
-        )
-        for c in raw_cores
-    )
-
     return BiosStatus(
         platform_slug=platform_slug,
         server_count=bios.get("server_count", 0),
@@ -251,14 +227,10 @@ def format_bios_status(
         required_count=bios.get("required_count"),
         required_downloaded=bios.get("required_downloaded"),
         files=files,
-        active_core=bios.get("active_core"),
-        active_core_label=bios.get("active_core_label"),
-        available_cores=available_cores,
         known_count=bios.get("known_count"),
         unknown_count=bios.get("unknown_count", 0),
         reading_complete=reading_complete,
         system_image=system_image,
-        cached_at=cached_at,
     )
 
 

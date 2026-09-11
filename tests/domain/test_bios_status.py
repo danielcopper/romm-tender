@@ -99,9 +99,6 @@ def _status(files: tuple[BiosFileEntry, ...] = (), **overrides) -> BiosStatus:
         "required_count": 0,
         "required_downloaded": 0,
         "files": files,
-        "active_core": _CORE,
-        "active_core_label": "SwanStation",
-        "available_cores": (),
         "known_count": len(files),
         "unknown_count": 0,
     }
