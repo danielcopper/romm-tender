@@ -3311,10 +3311,14 @@ describe("RomMGameInfoPanel", () => {
       });
 
       // Present but unfetchable: the library note survives, the "missing" drops.
-      expect(container.textContent).toContain("Dolphin 'Sys' folder — not in your RomM library");
-      expect(container.textContent).not.toContain("Dolphin 'Sys' folder — missing");
+      // The note rides beside the row's own name — the description is a line
+      // below it, and this one names no file the row already shows, so it is
+      // printed whole there.
+      expect(container.textContent).toContain("codehandler.bin — not in your RomM library");
+      expect(container.textContent).toContain("Dolphin 'Sys' folder");
+      expect(container.textContent).not.toContain("codehandler.bin — missing");
       // Genuinely absent: both halves stay.
-      expect(container.textContent).toContain("Absent — missing, not in your RomM library");
+      expect(container.textContent).toContain("absent.bin — missing, not in your RomM library");
     });
 
     it("says the distribution provides a file rather than that RomM lacks it", async () => {
@@ -3360,7 +3364,8 @@ describe("RomMGameInfoPanel", () => {
         await Promise.resolve();
       });
 
-      expect(container.textContent).toContain("Dolphin 'Sys' folder — provided by RetroDECK");
+      expect(container.textContent).toContain("codehandler.bin — provided by RetroDECK");
+      expect(container.textContent).toContain("Dolphin 'Sys' folder");
       expect(container.textContent).not.toContain("not in your RomM library");
     });
 
@@ -3389,6 +3394,7 @@ describe("RomMGameInfoPanel", () => {
               file_name: "bios",
               downloaded: true,
               local_path: "",
+              declared_path: "pcsx2/bios",
               description: "'pcsx2/bios' folder",
               wanted: "needed",
               required_by_active: true,
@@ -3414,7 +3420,11 @@ describe("RomMGameInfoPanel", () => {
 
       expect(container.textContent).toContain("BIOS readiness unknown");
       expect(container.textContent).not.toContain("BIOS requirement unknown");
-      expect(container.textContent).toContain("'pcsx2/bios' folder — its contents could not be read in full");
+      // The row is headed by the path the emulator declares, not by the
+      // packager's prose: `'pcsx2/bios' folder` is that path plus the word
+      // "folder", which is a restatement of the declaration kind, so the
+      // description adds nothing and the row shows none of it.
+      expect(container.textContent).toContain("pcsx2/bios — its contents could not be read in full");
       expect(container.textContent).not.toContain("missing");
     });
 

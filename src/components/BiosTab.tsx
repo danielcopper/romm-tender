@@ -34,7 +34,7 @@
 import { FC, type ReactElement } from "react";
 import type { BiosFileStatus, BiosLevel, BiosStatus, CoreInfo, FirmwareWanted } from "../types";
 import { biosColorForLevel } from "../utils/biosColor";
-import { biosFileNote } from "../utils/biosFileNote";
+import { biosFileDescription, biosFileNote } from "../utils/biosFileNote";
 import { infoRow, section } from "./panelSection";
 
 interface BiosTabProps {
@@ -219,7 +219,8 @@ function fileDotColor(file: BiosFileStatus): string {
 }
 
 /**
- * The lines under a file's name — what its read found, then who uses it.
+ * The lines under a file's name — what it IS, then what its read found, then
+ * who uses it.
  *
  * One indented block, because they are one column to the eye and two blocks
  * would leave the images floating between the row and its cores. The row's own
@@ -227,13 +228,21 @@ function fileDotColor(file: BiosFileStatus): string {
  * folder's three image lines into that name is what wrapped the row and
  * orphaned the dot above it.
  *
+ * **The description leads**, and it is a line here rather than a second em-dash
+ * segment after the name: three segments and two dashes on one narrow QAM line
+ * read as a chain of equals, which these are not. It says what the file IS,
+ * where `biosFileNote`'s note says something about its STATE — so the note
+ * keeps the dash beside the name and this goes below, which is also where the
+ * platform detail puts it.
+ *
  * The image text is the resolver's verbatim string, and `pre-wrap` keeps the
  * column padding PCSX2 puts in its own option labels — that alignment is what
  * makes a line matchable against the emulator's picker, and it still wraps
- * rather than overflowing the panel.
+ * rather than overflowing the panel. The description is prose and takes no such
+ * padding, so it wraps normally.
  */
-function fileLines(lines: string[], coreLines: ReactElement[]): ReactElement | null {
-  if (lines.length === 0 && coreLines.length === 0) return null;
+function fileLines(description: string | null, lines: string[], coreLines: ReactElement[]): ReactElement | null {
+  if (description === null && lines.length === 0 && coreLines.length === 0) return null;
   return (
     <div
       key="lines"
@@ -245,6 +254,11 @@ function fileLines(lines: string[], coreLines: ReactElement[]): ReactElement | n
         marginLeft: "18px",
       }}
     >
+      {description !== null && (
+        <div key="description" style={{ color: "rgba(255, 255, 255, 0.5)", fontSize: "12px" }}>
+          {description}
+        </div>
+      )}
       {lines.map((line) => (
         <div
           key={`image-${line}`}
@@ -289,15 +303,29 @@ function buildBiosFileList(bios: BiosStatus, coreInfo: CoreInfo | null): ReactEl
   const fileElements = wantedFiles.map((f) => {
     const coreLines = f.cores ? buildBiosCoreLines(f.cores, emulatorLabels, coreInfo?.active_core) : [];
     const { note, lines } = biosFileNote(f);
+    // The row is headed by the file the emulator DECLARED — `declared_path`, not
+    // `file_name`, which is only its basename: a `dc/dc_boot.bin` row would
+    // otherwise head itself `dc_boot.bin` and a declared folder `bios`, taking
+    // away the one thing a reader placing a file by hand needs. The platform
+    // detail states the same thing by splitting the path into a muted folder
+    // prefix and the name; this row has one span, so it prints the path whole.
+    //
+    // The head is never `description`, which used to be it: that is the
+    // packager's prose out of a core's `.info`, deliberately outside the
+    // resolver's contract, and for a row no placement covers the backend fills
+    // the file name into it — so the headline was the name wearing another
+    // field's clothes. What the description still ADDS goes under the row
+    // (`fileLines`), by the rule the platform detail applies too, so neither
+    // surface prints the name twice.
     const suffix = note ? ` — ${note}` : "";
 
     return (
       <div key={f.file_name} className="romm-panel-file-row">
         <span key="dot" className="romm-status-dot" style={{ backgroundColor: fileDotColor(f) }} />
         <span key="name" className="romm-panel-file-name">
-          {`${f.description || f.file_name}${suffix}`}
+          {`${f.declared_path || f.file_name}${suffix}`}
         </span>
-        {fileLines(lines, coreLines)}
+        {fileLines(biosFileDescription(f), lines, coreLines)}
       </div>
     );
   });

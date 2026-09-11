@@ -205,6 +205,72 @@ describe("BiosTab", () => {
     }
   });
 
+  it("heads a row with the file it declares, and adds only what the description still says", () => {
+    // The description is the packager's prose out of a core's `.info` — outside
+    // the resolver's contract, and routinely spelling the row's own name into
+    // its words. Heading the row with it put that prose where the file's
+    // identity belongs; printing it whole would print the name twice. The two
+    // rows below are the common shapes, and the second is the one with nothing
+    // to add.
+    const { container } = render(
+      <BiosTab
+        biosStatus={{
+          needs_bios: true,
+          server_count: 2,
+          local_count: 0,
+          all_downloaded: false,
+          required_count: 2,
+          required_downloaded: 0,
+          required_withheld: 0,
+          files: [
+            {
+              file_name: "dc_boot.bin",
+              downloaded: false,
+              local_path: "",
+              declared_path: "dc/dc_boot.bin",
+              description: "dc/dc_boot.bin (Dreamcast BIOS)",
+              wanted: "needed",
+              required_by_active: true,
+              cores: {},
+              on_server: true,
+              satisfied: false,
+            },
+            {
+              file_name: "macventure.dat",
+              downloaded: false,
+              local_path: "",
+              declared_path: "macventure.dat",
+              description: "macventure.dat",
+              wanted: "needed",
+              required_by_active: true,
+              cores: {},
+              on_server: true,
+              satisfied: false,
+            },
+          ],
+        }}
+        biosLevel="missing"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+
+    const names = [...container.querySelectorAll(".romm-panel-file-name")].map((el) => el.textContent);
+    // The declared path heads the row and carries nothing else — the folder is
+    // the one thing a reader placing the file by hand needs, and `file_name` is
+    // only its basename.
+    expect(names).toContain("dc/dc_boot.bin");
+    // A description that is nothing but the name adds nothing, so that row is
+    // the name alone rather than the name twice.
+    expect(names).toContain("macventure.dat");
+    // What the description still says is a line of its own under the row, not a
+    // second em-dash segment beside the name.
+    const rendered = [...container.querySelectorAll("div")].map((div) => div.textContent);
+    expect(rendered).toContain("(Dreamcast BIOS)");
+    expect(container.textContent).not.toContain("dc/dc_boot.bin (Dreamcast BIOS)");
+    expect(container.textContent).not.toContain("macventure.dat — ");
+  });
+
   it("puts a satisfied folder's images on their own lines, under a name short enough to keep its dot", () => {
     // The row's name and its status dot share one flex line. Folding three
     // image descriptions into that name ran it to ~150 characters, wrapped the
@@ -229,6 +295,7 @@ describe("BiosTab", () => {
               file_name: "bios",
               downloaded: true,
               local_path: "",
+              declared_path: "pcsx2/bios",
               description: "'pcsx2/bios' folder",
               wanted: "needed",
               required_by_active: true,
@@ -251,8 +318,11 @@ describe("BiosTab", () => {
     const rendered = [...container.querySelectorAll("div")].map((div) => div.textContent);
     for (const image of images) expect(rendered).toContain(image);
     // The name carries the row and nothing else — no joined run of images, and
-    // no "holds" heading over a list that is its own sentence.
-    expect(name?.textContent).toBe("'pcsx2/bios' folder");
+    // no "holds" heading over a list that is its own sentence. It is the row's
+    // own declared path, never the packager's prose: `'pcsx2/bios' folder`
+    // reduces to the bare word "folder" once the declaration comes out of it,
+    // which is a restatement of `declared_kind`, so the row shows none.
+    expect(name?.textContent).toBe("pcsx2/bios");
     expect(container.textContent).not.toContain(images.join(", "));
   });
 
@@ -292,7 +362,13 @@ describe("BiosTab", () => {
       />,
     );
 
-    expect(container.textContent).toContain("Dreamcast boot ROM — its location could not be read");
+    // The note rides beside the row's own name — it says something about the
+    // file's STATE, which is what earns it the dash. The description says only
+    // what the file is, and is a line below (this one names nothing the row's
+    // name already shows, so it is printed whole).
+    expect(container.textContent).toContain("dc_boot.bin — its location could not be read");
+    expect(container.textContent).toContain("Dreamcast boot ROM");
+    expect(container.textContent).not.toContain("Dreamcast boot ROM — ");
   });
 
   it("draws a folder row whose contents could not be read amber, never green", () => {
@@ -316,6 +392,7 @@ describe("BiosTab", () => {
               file_name: "bios",
               downloaded: true,
               local_path: "",
+              declared_path: "pcsx2/bios",
               description: "'pcsx2/bios' folder",
               wanted: "needed",
               required_by_active: true,
@@ -361,6 +438,7 @@ describe("BiosTab", () => {
               file_name: "bios",
               downloaded: true,
               local_path: "",
+              declared_path: "pcsx2/bios",
               description: "'pcsx2/bios' folder",
               wanted: "needed",
               required_by_active: true,

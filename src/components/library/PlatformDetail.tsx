@@ -18,7 +18,7 @@ import { ConfirmModal, DialogButton, Focusable, showContextMenu, showModal, Spin
 import { FaMicrochip } from "react-icons/fa";
 import type { FirmwarePlatformExt, SystemCoreInfo, SystemImage } from "../../types";
 import { biosColorForLevel } from "../../utils/biosColor";
-import { biosFileNote } from "../../utils/biosFileNote";
+import { biosFileDescription, biosFileNote } from "../../utils/biosFileNote";
 import { buildEmulatorMenu } from "../../utils/emulatorMenu";
 import { getEventTarget } from "../../utils/events";
 import { pluralize } from "../../utils/pluralize";
@@ -437,73 +437,6 @@ const BiosRowLines: FC<{ lines: string[] }> = ({ lines }) =>
   );
 
 /**
- * The description beside a file's name, with the name itself taken back out.
- *
- * **It is not RomM's description** — `_server_files` builds no `description`
- * key at all, and `_wanted_fields` overwrites whatever came in.
- * What arrives is the core's own `firmwareN_desc` out of its `.info` file, or,
- * for a row no placement covers, the file name itself (`build_file_entry`'s
- * `else file_name`). Both spell the name into the words.
- *
- * Measured over the 292 `.info` files a stock RetroDECK ships — 695 declared
- * firmware entries — the description's relation to the row's own `file_name`
- * (which is `os.path.basename` of the declared path) falls into six shapes:
- *
- * | 245 | 35% | it IS the name — `"macventure.dat"`                          |
- * | 328 | 47% | the name, a space, then prose — `"scph5500.bin (PS1 JP BIOS)"` |
- * | 115 | 17% | the same, but the name carries its directory — `"dc/dc_boot.bin (Dreamcast BIOS)"` |
- * |   5 |  1% | the first token names something else — a folder the file sits in (`"'Databases' folder"`), or a misspelling of it (two upstream typos) |
- * |   1 |  0% | it names the file, but the name has a space in it — `"7800 BIOS (U).rom (7800 BIOS)"` |
- * |   1 |  0% | it names the file in quotes — `"'pcsx2/bios' folder"`, the corpus's only folder declaration |
- *
- * So the rule has two halves: strip the name where the description opens with
- * it verbatim (which is the only way a name containing spaces can be seen), and
- * otherwise strip a first token that names this file — as itself or at the end
- * of a path, with surrounding quotes ignored.
- * Together they fire on 690 of the 695 and on the no-placement case; the
- * remaining five say something real and are printed whole. The name half is
- * anchored at the start rather than searched for anywhere, because a rule that
- * scanned the whole string would cut into prose that merely quotes the name.
- * The prose is kept verbatim, parentheses and all, because it is the packager's
- * own words and re-punctuating it is a second way to be wrong.
- *
- * The counts were taken over the deployed flatpak with
- * `grep -o … | wc -l`-style matching per entry rather than per line: the shapes
- * are counted by classifying every `firmwareN_path` / `firmwareN_desc` pair,
- * which is reproducible by re-running that classification over the same tree.
- */
-function fileDescription(file: FirmwareRow): string | null {
-  // A declared FOLDER shows none. Its meaning is its verdict and the images
-  // listed under it — LRPS2 never reads a file name, so what the row says is
-  // "this folder holds something the core will boot", which `✓` and the image
-  // lines already say. The corpus's one folder is described as
-  // `'pcsx2/bios' folder`, which after the name comes out leaves the bare word
-  // "folder": a restatement of `declared_kind`. This is a rule about what a
-  // folder ROW shows, not a prediction about what descriptions exist.
-  if (file.declared_kind === "directory") return null;
-  const description = file.description.trim();
-  if (!description) return null;
-  // A name with a space in it is not one token, so the token rule cannot see it.
-  // Exactly one of the 695 is spelled that way ("7800 BIOS (U).rom"), and it
-  // printed the name twice until this line. Anchored at the start rather than
-  // searched for anywhere, so prose that merely quotes the name is left alone.
-  if (description.startsWith(`${file.file_name} `)) {
-    return description.slice(file.file_name.length).trim() || null;
-  }
-  const [head, ...tail] = description.split(" ");
-  // Quotes are stripped before the comparison, because the corpus's one folder
-  // declaration is described as `'pcsx2/bios' folder` — a token that names the
-  // declaration exactly, which the row's own name line is already showing, and
-  // which nothing else would have removed. Comparing the whole declared path as
-  // well would change no outcome: `file_name` is its basename, so a token
-  // equalling the path always equals the basename after the split too.
-  const token = (head ?? "").replace(/^['"]|['"]$/g, "");
-  if ((token.split("/").pop() ?? "") !== file.file_name) return description;
-  const rest = tail.join(" ").trim();
-  return rest || null;
-}
-
-/**
  * The folder the emulator declared this file in, with its trailing slash, or
  * `null` for a file that belongs at the root of the BIOS directory.
  *
@@ -583,7 +516,7 @@ const BiosFileRow: FC<{ file: FirmwareRow; systemImage: SystemImage; action: Rea
   const { note, lines, fromLibrary } = biosFileNote(file);
   const mark = diskMark(file, systemImage);
   const library = libraryMark(file);
-  const description = fileDescription(file);
+  const description = biosFileDescription(file);
   const folder = declaredFolder(file);
   // The library note is the one sentence the cell's second mark now carries, and
   // on a platform whose library holds little it was the same words under nearly

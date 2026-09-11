@@ -49,6 +49,12 @@ cannot.
 The readiness line is computed against the **active core** for that game — so switching to a core that needs no BIOS (or
 that treats a file as optional) clears the warning, while switching to a core that requires a missing file surfaces it.
 
+Under the line the tab lists the files themselves, one per row. A row is headed by the file the emulator declares, with
+its folder where it asks for one (`dc/dc_boot.bin`) — that is where the file has to go, and it is the one thing you need
+when placing one by hand. Whatever the emulator's packager wrote about the file goes on its own line under the row, and
+only where it says something the name does not: those descriptions usually repeat the file name, and many are nothing
+else.
+
 Beside the Play button there is also a short **BIOS** badge, which is a shortcut into this tab. Two things raise it, and
 nothing else does. The first: a file the active core **requires** is shown to be absent from your BIOS folder. If that
 core requires nothing, or requires only files you already have, there is no badge — however many optional files are

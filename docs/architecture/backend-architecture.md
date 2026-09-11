@@ -1911,8 +1911,12 @@ with it, the BIOS tab picks between "BIOS requirement unknown" and "BIOS readine
 subtracts it so a required file whose absence _was_ established still warns. What a withheld row SAYS comes from its
 caveat codes, because the verdict is the answer alone and carries none of its causes; the verdict decides only which
 family of codes can apply and what to say when none of them is recognised, which is the one sentence written off it —
-`src/utils/biosFileNote.ts` is the one place both surfaces derive what a row says from — a sentence, and the lines under
-it, which is how a satisfied folder's images arrive as a list rather than folded into the row's own name.
+`src/utils/biosFileNote.ts` is the one place both surfaces derive what a row says from — a sentence, the lines under it,
+which is how a satisfied folder's images arrive as a list rather than folded into the row's own name, and the
+description beside the name (`biosFileDescription`). A row is headed by the file it declares on both surfaces and never
+by its description: that is the packager's prose out of a core's `.info`, outside the resolver's contract, and it
+routinely spells the row's own name into its words — so the shared rule takes the name back out and answers `null` where
+nothing is left.
 
 **A withdrawn download is a platform condition, and only one of the unknowns earns it.** Where _nothing_ could be
 established there is no answer to download against, so `PlatformDetail` withdraws every download button and says so in

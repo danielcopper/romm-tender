@@ -1065,7 +1065,12 @@ it, for the focused platform:
   (`"7800 BIOS (U).rom (7800 BIOS)"`). Surrounding quotes are stripped before that comparison, which is what reaches the
   corpus's one folder declaration (`"'pcsx2/bios' folder"`, on a row whose name line already shows that path). Together
   they fire on 690 of the 695; of the five printed whole, three name a folder the file sits in and two are upstream
-  misspellings of the file.
+  misspellings of the file. The rule is `biosFileDescription` in `src/utils/biosFileNote.ts` and **both** surfaces apply
+  it, because a rule applied on one is a row reading two ways: the game page's BIOS tab used to head its rows with the
+  raw description, which put the packager's prose where the file's identity belongs and printed the name twice on every
+  shape that opens with it. There the row's head is the declared path whole rather than a prefix and a name — it has one
+  span — and the description leads the indented block under it, above a folder's images and the per-core lines, because
+  a second em-dash segment beside the note would read as a chain of equals on a narrow line.
 
   **The description is on its own line under the row**, muted and clipped to one line, not beside the name: at the
   Deck's scale the `File` column is ~150 px and a fifty-character parenthesis was clipped mid-word on every row that had
