@@ -21,9 +21,10 @@ helper body, which has to name a loop before any test is running. That one passe
 it, so nothing is created and nothing is left unclosed (#806).
 
 Neither answers for a service that touches its loop from a **worker thread** (an executor callback calling
-`call_soon_threadsafe`): off the loop thread there is no running loop to resolve against, so that service needs the real
-loop object, rebound by an autouse async fixture — the shape in `tests/contract/_harness.py` and
-`tests/services/test_downloads.py`.
+`call_soon_threadsafe`, as the download progress does): off the loop thread there is no running loop to resolve against,
+so that service needs the real loop object. Take it in an **async** fixture — at construction, the way
+`tests/contract/_harness.py` builds the real `Plugin`, or afterwards through an autouse fixture that rebinds each
+service's `_loop`, the way `tests/services/test_downloads.py` does.
 
 ## Property-based tests — pure decision kernels (hypothesis)
 

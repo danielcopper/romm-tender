@@ -47,8 +47,8 @@ async def test_it_refuses_from_a_worker_thread():
     This is the bad path that decided a design: ``tests/contract/_harness.py``
     hands the real ``Plugin`` the loop OBJECT because its ``DownloadService``
     reaches ``call_soon_threadsafe`` from an executor thread — which is exactly
-    the position below, and where the forwarder answers with nothing. A service
-    whose loop is touched off the loop thread needs the real object, not this.
+    the position below, and where the forwarder raises instead of answering. A
+    service whose loop is touched off the loop thread needs the real object.
     """
     loop = asyncio.get_running_loop()
 
