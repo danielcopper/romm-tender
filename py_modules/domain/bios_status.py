@@ -158,7 +158,13 @@ class BiosFileEntry:
 
 @dataclass(frozen=True)
 class BiosStatus:
-    """Aggregated BIOS status for a platform, ready for frontend display."""
+    """One platform's classified files and counts, in the shape the level decision reads.
+
+    **Not a wire shape, and it never reaches the wire.** Its one caller builds it
+    to ask :func:`compute_bios_level` and :func:`compute_bios_label` and keeps
+    nothing else of it; what the frontend receives is the plain dict assembled
+    beside it (``FirmwareStatusReader._bios_aggregates``).
+    """
 
     platform_slug: str
     server_count: int
@@ -192,7 +198,7 @@ def format_bios_status(
     reading_complete: bool = True,
     system_image: str = SYSTEM_IMAGE_NOT_DEMANDED,
 ) -> BiosStatus:
-    """Build a frontend-ready BiosStatus dataclass from raw firmware check result."""
+    """Assemble the :class:`BiosStatus` the level decision reads, from one raw check result."""
     raw_files = bios.get("files", [])
     if raw_files and isinstance(raw_files[0], dict):
         files: tuple[BiosFileEntry, ...] = tuple(
@@ -370,8 +376,12 @@ def _row_verdict(placement: FirmwarePlacement | None, downloaded: bool) -> bool 
     is not the file, so neither "there" nor "absent" is a claim the reading
     supports.
 
-    Everything else is ``downloaded``, which for a declared file is the
-    resolver's own reading at the destination it will be opened from.
+    Everything else is ``downloaded``, which for a declared file the resolver
+    placed under this root is the resolver's own reading at the destination it
+    will be opened from. Where the declaration carries no ``relative_path`` the
+    destination is one this plugin cannot honour, so the resolver read somewhere
+    else and ``FirmwareDemand.is_downloaded`` answers with its own look at the
+    path assembled here instead.
     """
     if placement is None:
         return downloaded
@@ -489,10 +499,14 @@ def classify_system_image(
 
     **A row's** ``satisfied`` **is presence, not the resolver's usability
     verdict** — the name invites the second reading and does not carry it. For a
-    declared file it is ``FirmwareDemand.is_downloaded``, which ends at
-    ``placement.present is True``; for a folder declaration it is the verdict on
-    what the folder HOLDS, and may be ``None``; and where something other than
-    the expected file occupies the destination it is ``None`` too. Either
+    declared file it is ``FirmwareDemand.is_downloaded``, which answers from the
+    resolver's ``placement.present`` wherever the resolver placed the file under
+    this root and from the plugin's own look at the destination where the
+    declaration carries no ``relative_path`` — the boundary between the two is
+    drawn at ``FirmwareDemand.is_downloaded`` itself, and is stated there. For a
+    folder declaration it is the verdict on what the folder HOLDS, and may be
+    ``None``; and where something other than the expected file occupies the
+    destination it is ``None`` too. Either
     ``None`` reads here as not held — the safe direction, since the alternative
     claims a readiness nothing established.
 
@@ -668,17 +682,20 @@ def count_wanted(files: tuple[BiosFileEntry, ...]) -> tuple[int, int]:
     """``(known, unknown)`` over the server's files — asked for, and unanswerable.
 
     A ``not_needed`` file is in neither: the machine answered for it, and no
-    emulator asks for it. Its absence from both counts is what keeps
-    ``compute_bios_level`` from reading "nothing here is needed" as "nothing
-    could be established".
+    emulator asks for it.
 
-    **Scoped to ``on_server`` rows**, because ``_nothing_established`` weighs
-    ``known_count`` against ``server_count``, which is the server's rows alone.
-    A row the library does not hold exists only because an emulator declared the
-    file, so it always classifies ``needed``/``optional`` and would always be
-    counted as known: one such row would cancel the ``unknown`` verdict for a
-    platform whose every server file went unanswered, turning the headline green
-    while each row still said nothing could answer for it.
+    **Neither number is read as a number.** :func:`_nothing_established` asks
+    ``known_count is not None`` — whether the caller supplied the counts at all —
+    and decides on ``reading_complete`` alone; nothing weighs either count
+    against ``server_count`` or against anything else. ``unknown_count`` has no
+    reader in either half: it travels to the wire and the frontend declares its
+    type (``src/types/firmware.ts``) without ever using it. So the pair is a
+    supplied/not-supplied flag beside a value nobody asks.
+
+    **Scoped to ``on_server`` rows**, and no consumer can currently tell that
+    scoping from any other. A row the library does not hold exists only because
+    an emulator declared the file, so it always classifies
+    ``needed``/``optional`` and would always be counted as known.
     """
     on_server = [f for f in files if f.on_server]
     known = sum(1 for f in on_server if f.wanted in (WANTED_NEEDED, WANTED_OPTIONAL))

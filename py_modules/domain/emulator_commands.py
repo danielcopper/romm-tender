@@ -255,9 +255,10 @@ def resolve_platform_option(options: list[EmulatorOption], override: str | None)
 
     **One pick, because a platform's surfaces must not be able to answer for two
     emulators.** The option is returned rather than one projection of it so that
-    the name a pane displays (:func:`resolve_platform_label`) and the ``.so`` its
-    BIOS answers key on (``EmulatorOption.core_so``, ``None`` for a standalone
-    emulator) come off the same choice. Resolving them separately is what let a
+    the name a pane displays (:func:`resolve_platform_label`) and the identity
+    its BIOS answers are joined and scoped on (``EmulatorOption.emulator``, the
+    one field that names a standalone emulator, where ``core_so`` is ``None`` for
+    every standalone pick) come off the same choice. Resolving them separately is what let a
     pane name PCSX ReARMed and judge the platform by the system default beside
     it.
     """

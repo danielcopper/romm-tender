@@ -177,9 +177,10 @@ class FirmwareStatusReader:
         read as work outstanding on a system that needs nothing — a SNES page
         would say ``0 / 26 files, 26 missing`` for twenty-six optional files no
         core requires. ``known_count`` / ``unknown_count`` are the machine's
-        answer about the files themselves, and are the library's set too — they
-        are weighed against ``server_count``, so a row it does not hold would
-        raise the numerator of a ratio it is not in.
+        answer about the files themselves, over the library's set too — and
+        neither is weighed against anything: ``_nothing_established`` reads only
+        whether ``known_count`` was supplied, and ``unknown_count`` has no reader
+        on either side of the wire (:func:`count_wanted`).
 
         *system_image* is a fourth axis beside those three counted sets, and the
         only one of the four that is not a count at all
