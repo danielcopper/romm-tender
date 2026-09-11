@@ -10,10 +10,16 @@
  *
  * The three reads answer different questions and each covers a set the others
  * do not: `get_platforms` is RomM's platforms with ROMs (the list itself),
- * `get_firmware_status` the BIOS state of the platforms it can speak for, and
+ * `get_firmware_status` WHICH platforms have a BIOS answer to give, and
  * `get_registry_platforms` the ROMs bound to a Steam shortcut per platform —
  * which is also what "this platform has synced games" means here, and the only
  * one of the three that answers it for every platform in the list.
+ *
+ * What a platform's BIOS answer IS costs a live reading of the machine for that
+ * system, so it is a fourth read, asked one platform at a time
+ * (`get_platform_firmware_status`) while the page already stands. This module
+ * owns the order they are asked in, when they stop, and which of four states
+ * each row is in meanwhile — see {@link FirmwareState}.
  *
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Library.
  */
@@ -30,6 +36,7 @@ import {
   downloadPlatformFirmwareFile,
   downloadRequiredFirmware,
   getFirmwareStatus,
+  getPlatformFirmwareStatus,
   getPlatforms,
   getRegistryPlatforms,
   getSystemCoreInfo,
@@ -84,6 +91,27 @@ export interface DetailStatus {
   text: string;
 }
 
+/**
+ * Where one platform's BIOS answer stands.
+ *
+ * `pending` is the state this page exists to keep separate: the answer has been
+ * asked for and has not arrived, which is NOT "nothing could be established".
+ * Rendering the two alike is how a reader takes an answer where none has come
+ * yet — and every row starts out that way, because the answers arrive one
+ * platform at a time.
+ *
+ * - `pending` — asked for (or queued), not back yet.
+ * - `answered` — {@link PlatformRow.firmware} holds it.
+ * - `nothing` — a finished answer with nothing to say about this platform.
+ * - `failed` — the read did not come back and there is nothing behind it.
+ *
+ * An answer already held outranks a failure, so a failed RE-read leaves the
+ * state where it was and raises {@link PlatformRow.firmwareStale} instead:
+ * "nothing is known about this platform" is an answer, and taking it back
+ * because a later read failed is how a pane loses an answer it has.
+ */
+export type FirmwareState = "pending" | "answered" | "nothing" | "failed";
+
 /** One platform as the list and the detail read it — the three reads joined. */
 export interface PlatformRow {
   id: number;
@@ -98,9 +126,19 @@ export interface PlatformRow {
    *  "nothing outstanding as of the last sync", not a fresh server-side proof. */
   romCount: number;
   syncEnabled: boolean;
-  /** `null` while the firmware read is in flight, and for a platform that read
-   *  has nothing to say about — the list then shows no dot and no number. */
+  /** This platform's BIOS answer, or `null` where none is held. Non-null exactly
+   *  when {@link firmwareState} is `answered`. */
   firmware: FirmwarePlatformExt | null;
+  /** Whether {@link firmware} is an answer, a question still out, a finished
+   *  "nothing to say", or a read that did not come back. The list's dot and the
+   *  detail's BIOS block are worded off this, never off `firmware` being null —
+   *  three of the four states share that. */
+  firmwareState: FirmwareState;
+  /** Whether the last read for this platform failed over an answer it still
+   *  holds — so what is shown is the state from before whatever changed it.
+   *  Distinct from `firmwareState: "failed"`, which is a platform with no
+   *  answer at all: one pane warns about its rows, the other has none. */
+  firmwareStale: boolean;
   /** How many of the platform's ROMs are bound to a Steam shortcut, or `null`
    *  when that read failed. `null` is not zero: read as zero it withdraws the
    *  core picker and disables the shortcut removal — two claims about a platform
@@ -155,15 +193,6 @@ export interface PlatformsPageState {
   failed: boolean;
   /** RomM is unreachable: the BIOS downloads are withdrawn, everything else stands. */
   serverOffline: boolean;
-  /** The BIOS overview could not be read. Distinct from a platform the read
-   *  simply has nothing to say about, which is a finished answer. */
-  firmwareFailed: boolean;
-  /** A read has landed at some point. With `firmwareFailed` it is what separates
-   *  a failed REFRESH from a failed first read: the panes still carry their last
-   *  good answers, including the "nothing known" one, which a pane with no entry
-   *  of its own must go on saying. It is the READ that is recorded, not the
-   *  answer's size — an overview that spoke for no platform is an answer too. */
-  firmwareHeld: boolean;
   /** The Steam shortcut counts could not be read — every row's `shortcutCount`
    *  is `null` and the detail says so where the number would have been. */
   shortcutCountsFailed: boolean;
@@ -267,9 +296,17 @@ export function usePlatformsPage(): PlatformsPageState {
   const [groups, setGroups] = useState<FrozenGroups | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
-  const [firmware, setFirmware] = useState<Record<string, FirmwarePlatformExt>>({});
+  // The three things known about the BIOS answers, kept apart because they are
+  // three different statements: which platforms the page can speak for at all
+  // (`named`, null until the overview lands), what each one's answer IS
+  // (`firmware`, a landed entry or an explicit `null` for "nothing to say"), and
+  // which reads did not come back (`readFailed`). A slug in none of them is a
+  // question still out.
+  const [named, setNamed] = useState<Set<string> | null>(null);
+  const [firmware, setFirmware] = useState<Record<string, FirmwarePlatformExt | null>>({});
+  const [readFailed, setReadFailed] = useState<Record<string, true>>({});
   const [serverOffline, setServerOffline] = useState(false);
-  const [firmwareFailed, setFirmwareFailed] = useState(false);
+  const [overviewFailed, setOverviewFailed] = useState(false);
   const [downloadPending, setDownloadPending] = useState<string | null>(null);
   const [downloadFailed, setDownloadFailed] = useState<string | null>(null);
   // Cleared on unmount, so a page left during the window cannot set state on a
@@ -283,11 +320,6 @@ export function usePlatformsPage(): PlatformsPageState {
     },
     [],
   );
-  // Whether a read has ever LANDED, which is not the same as its answer being
-  // non-empty: a successful read that speaks for no platform is still an answer
-  // set, and counting the map's keys would call it "never read" and take back
-  // the "nothing is known" wording on every pane after a failed refresh.
-  const [firmwareRead, setFirmwareRead] = useState(false);
   // Both counts in one entry rather than two parallel maps: they come from one
   // answer about one platform, and split across two states a failed write to
   // either would leave the header disagreeing with the Remove button.
@@ -307,24 +339,85 @@ export function usePlatformsPage(): PlatformsPageState {
   const coreRequested = useRef<Set<string>>(new Set());
   const saveCountRequested = useRef<Set<string>>(new Set());
 
-  const refreshFirmware = useCallback(async () => {
+  // False from the moment the page is torn down. Every write below is guarded on
+  // it, and so is the walk: an answer that lands after the reader has left is
+  // DROPPED rather than written, and no further platform is asked for. Leaving
+  // and coming back builds a fresh page whose own answers must not be
+  // overwritten by the ones the previous visit was still waiting on.
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  // One counter per platform, taken when a read is ISSUED. Two reads for one
+  // platform are ordered by it, which is what a download's re-read needs: the
+  // answer the walk asked for before the file landed is still in flight, and
+  // without this it overwrites the fresh one — a wrong dot, no error, nothing to
+  // see. It answers ordering only; the slug itself is what binds an answer to
+  // its platform.
+  const readSeq = useRef<Map<string, number>>(new Map());
+  // Which platforms the walk has issued a read for. A ref, not state: the walk
+  // picks the next platform between awaits and must see its own progress
+  // immediately, before any answer has landed.
+  const asked = useRef<Set<string>>(new Set());
+
+  /** May an answer for *slug* be written — is this page still open, and is this
+   *  still the newest read issued for that platform? */
+  const accept = useCallback((slug: string, seq: number) => alive.current && readSeq.current.get(slug) === seq, []);
+
+  const readPlatform = useCallback(
+    async (slug: string) => {
+      asked.current.add(slug);
+      const seq = (readSeq.current.get(slug) ?? 0) + 1;
+      readSeq.current.set(slug, seq);
+      try {
+        const result = await getPlatformFirmwareStatus(slug);
+        if (!accept(slug, seq)) return;
+        if (!result.success) {
+          // Unreachable today — the callable always answers success — but a
+          // dropped failure is indistinguishable from a platform the backend has
+          // nothing to say about, which is a finished answer and reads green.
+          logWarn(`BIOS state for ${slug} answered a failure: ${result.message ?? "no message"}`);
+          setReadFailed((prev) => ({ ...prev, [slug]: true }));
+          return;
+        }
+        setFirmware((prev) => ({ ...prev, [slug]: result.platform }));
+        setReadFailed((prev) => {
+          if (!(slug in prev)) return prev;
+          const next = { ...prev };
+          delete next[slug];
+          return next;
+        });
+      } catch (e) {
+        logWarn(`Failed to read the BIOS state for ${slug}: ${e}`);
+        if (!accept(slug, seq)) return;
+        // The previous answer, where there is one, is deliberately left in
+        // place: the pane says it may be out of date, which is more use than
+        // taking the rows away.
+        setReadFailed((prev) => ({ ...prev, [slug]: true }));
+      }
+    },
+    [accept],
+  );
+
+  const readOverview = useCallback(async () => {
     try {
       const result = await getFirmwareStatus();
+      if (!alive.current) return;
       if (!result.success) {
-        // Unreachable today — the callable always answers success — but a
-        // dropped failure is indistinguishable from a platform the overview has
-        // nothing to say about, which is a finished answer and reads green.
-        logWarn(`Firmware status answered a failure: ${result.message ?? "no message"}`);
-        setFirmwareFailed(true);
+        logWarn(`Firmware overview answered a failure: ${result.message ?? "no message"}`);
+        setOverviewFailed(true);
         return;
       }
       setServerOffline(result.server_offline ?? false);
-      setFirmware(Object.fromEntries(result.platforms.map((p) => [p.platform_slug, p])));
-      setFirmwareRead(true);
-      setFirmwareFailed(false);
+      setNamed(new Set(result.platforms.map((p) => p.platform_slug)));
+      setOverviewFailed(false);
     } catch (e) {
-      logWarn(`Failed to read firmware status: ${e}`);
-      setFirmwareFailed(true);
+      logWarn(`Failed to read the firmware overview: ${e}`);
+      if (!alive.current) return;
+      setOverviewFailed(true);
     }
   }, []);
 
@@ -342,6 +435,46 @@ export function usePlatformsPage(): PlatformsPageState {
       setShortcutCountsFailed(true);
     }
   }, []);
+
+  // The platform the reader is on, for the walk below to prefer. A ref because
+  // the walk picks its next platform between awaits and has to see the
+  // selection as it is THEN, not as it was when the walk started.
+  const selectedRef = useRef<string | null>(null);
+  useEffect(() => {
+    selectedRef.current = selectedSlug;
+  }, [selectedSlug]);
+
+  // Read each platform's BIOS answer, one at a time, in the order the list is in
+  // — preferring whichever row the reader is looking at, which is the one whose
+  // pane is open and should not wait behind the rows above it.
+  //
+  // One at a time: every answer is a live reading of the machine for that
+  // system (64-350 ms on the reference device), so firing them together would
+  // not finish sooner on a two-core handheld and would take away the only thing
+  // that makes the focused row cheap — the ability to pick what goes next.
+  //
+  // A platform the overview names but the list does not show is never asked:
+  // RomM files firmware under its own directory names, so a key can belong to
+  // no row on this page, and no row means nothing to render the answer on.
+  useEffect(() => {
+    if (named === null || groups === null) return;
+    const order = [...groups.synced, ...groups.available].filter((slug) => named.has(slug));
+    let walking = true;
+    const next = () => {
+      const focused = selectedRef.current;
+      if (focused !== null && named.has(focused) && !asked.current.has(focused)) return focused;
+      return order.find((slug) => !asked.current.has(slug)) ?? null;
+    };
+    const walk = async () => {
+      for (let slug = next(); slug !== null && walking && alive.current; slug = next()) {
+        await readPlatform(slug);
+      }
+    };
+    detach(walk());
+    return () => {
+      walking = false;
+    };
+  }, [groups, named, readPlatform]);
 
   const loadCore = useCallback((slug: string) => {
     if (coreRequested.current.has(slug)) return;
@@ -426,15 +559,35 @@ export function usePlatformsPage(): PlatformsPageState {
       .finally(() => setLoading(false));
     // The BIOS state and the shortcut counts fill in beside the list rather
     // than gating it: the platform read is the only one the tab cannot render
-    // without, and the other two are slower (a RomM listing, a machine-wide
-    // firmware walk) than the one the user is waiting on.
+    // without, and the other two are slower (a RomM listing, a per-platform
+    // reading of the machine) than the one the user is waiting on.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial async data loads on mount are the standard React pattern; the rule is overzealous here
-    detach(refreshFirmware());
+    detach(readOverview());
     detach(refreshShortcutCounts());
     return () => {
       detach(releasePruneLeasesByOwner(LEASE_OWNER));
     };
-  }, [loadCore, loadSaveCount, refreshFirmware, refreshShortcutCounts]);
+  }, [loadCore, loadSaveCount, readOverview, refreshShortcutCounts]);
+
+  /** Where a platform's BIOS answer stands — see {@link FirmwareState}.
+   *
+   *  Order matters. An answer already held is read first, so a failed re-read
+   *  cannot take one back — it is reported beside the answer instead. Then a
+   *  failure with nothing behind it, which includes every row when the overview
+   *  itself did not land. Then a platform the overview did not name, which is a
+   *  finished "nothing to say". Everything left is still coming, including every
+   *  row while the overview is in flight. */
+  const firmwareStateFor = (slug: string): FirmwareState => {
+    if (slug in firmware) return firmware[slug] !== null ? "answered" : "nothing";
+    if (named !== null && !named.has(slug)) return "nothing";
+    if (readFailed[slug] || overviewFailed) return "failed";
+    return "pending";
+  };
+
+  /** Is an answer for this platform held at all? Two ways to hold one: the
+   *  platform answered for itself, or the overview did not name it, which is the
+   *  page saying it has nothing to manage here. */
+  const firmwareHeldFor = (slug: string) => slug in firmware || (named !== null && !named.has(slug));
 
   const rows = new Map<string, PlatformRow>(
     platforms.map((p) => [
@@ -446,6 +599,8 @@ export function usePlatformsPage(): PlatformsPageState {
         romCount: p.rom_count,
         syncEnabled: p.sync_enabled,
         firmware: firmware[p.slug] ?? null,
+        firmwareState: firmwareStateFor(p.slug),
+        firmwareStale: readFailed[p.slug] === true && firmwareHeldFor(p.slug),
         shortcutCount: shortcutCountsFailed ? null : (shortcutCounts[p.slug]?.bound ?? 0),
         reachableCount: shortcutCountsFailed ? null : (shortcutCounts[p.slug]?.reachable ?? 0),
       },
@@ -457,8 +612,16 @@ export function usePlatformsPage(): PlatformsPageState {
       setSelectedSlug(slug);
       loadCore(slug);
       loadSaveCount(slug);
+      // A read that did not come back is retried by picking the platform again
+      // — the same recovery the save count offers, and the only one there is:
+      // the walk asks each platform once, so nothing else would ever ask again.
+      // The pane's line says so, and it says so on a pane whose platform was
+      // never asked at all because the overview did not land — so that is
+      // retried here too, and the walk follows it.
+      if (readFailed[slug]) detach(readPlatform(slug));
+      else if (overviewFailed) detach(readOverview());
     },
-    [loadCore, loadSaveCount],
+    [loadCore, loadSaveCount, overviewFailed, readFailed, readOverview, readPlatform],
   );
 
   const coreFor = useCallback((slug: string): CoreAnswer => cores[slug], [cores]);
@@ -566,9 +729,9 @@ export function usePlatformsPage(): PlatformsPageState {
             );
             clearCoreLine(slug);
             reloadCore(slug);
-            // A different core wants different BIOS files, so the table below
-            // the picker is stale until the overview is read again.
-            await refreshFirmware();
+            // A different core wants different BIOS files, so the table
+            // below the picker is stale until this platform is read again.
+            await readPlatform(slug);
             globalThis.dispatchEvent(
               new CustomEvent("romm_data_changed", { detail: { type: "core_changed", platform_slug: slug } }),
             );
@@ -590,7 +753,7 @@ export function usePlatformsPage(): PlatformsPageState {
         })(),
       );
     },
-    [clearCoreLine, cores, refreshFirmware, reloadCore],
+    [clearCoreLine, cores, readPlatform, reloadCore],
   );
 
   /** Hold the pressed button on a red `Failed` for a moment before everything
@@ -625,7 +788,7 @@ export function usePlatformsPage(): PlatformsPageState {
             // re-read. Only a failure gets words, because a stopped spinner is
             // not a message and the notice that used to carry one is gone.
             if (result.success) {
-              await refreshFirmware();
+              await readPlatform(slug);
               if ((result.downloaded ?? 0) > 0) announceBiosChange(slug);
               setDownloadPending(null);
               setBusySlug(null);
@@ -640,7 +803,7 @@ export function usePlatformsPage(): PlatformsPageState {
         })(),
       );
     },
-    [refreshFirmware, reportFailure],
+    [readPlatform, reportFailure],
   );
 
   const downloadRequired = useCallback(
@@ -665,7 +828,7 @@ export function usePlatformsPage(): PlatformsPageState {
             const result = await deletePlatformBios(slug);
             setStatus({ slug, scope: "bios", text: result.message });
             if (result.success) {
-              await refreshFirmware();
+              await readPlatform(slug);
               // Only when something went, the same rule the row deletes and the
               // downloads keep: the event costs every mounted game panel a live
               // BIOS read, so a run that moved no files stays silent.
@@ -679,7 +842,7 @@ export function usePlatformsPage(): PlatformsPageState {
         })(),
       );
     },
-    [refreshFirmware],
+    [readPlatform],
   );
 
   /** One row's Delete, whichever end it addresses: the same success and failure
@@ -694,7 +857,7 @@ export function usePlatformsPage(): PlatformsPageState {
           try {
             const result = await work();
             if (result.success) {
-              await refreshFirmware();
+              await readPlatform(slug);
               // Only when something actually went. The event fans out to every
               // mounted panel and each matching one pays a live
               // `check_platform_bios` for it, so a run that moved no files must
@@ -712,7 +875,7 @@ export function usePlatformsPage(): PlatformsPageState {
         })(),
       );
     },
-    [refreshFirmware],
+    [readPlatform],
   );
 
   const deleteBiosFile = useCallback(
@@ -822,8 +985,6 @@ export function usePlatformsPage(): PlatformsPageState {
     loading,
     failed,
     serverOffline,
-    firmwareFailed,
-    firmwareHeld: firmwareRead,
     shortcutCountsFailed,
     selectedSlug,
     select,

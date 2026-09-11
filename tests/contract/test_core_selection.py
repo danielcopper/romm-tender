@@ -20,8 +20,10 @@ The resolution reads the live ``es_systems.xml`` the harness seeds under
 ``tmp_path`` (#1210) — there is no ``core_defaults`` snapshot. The last block
 pins the SHAPE of the three emulator-picker payloads — the game-detail
 ``get_platform_core_info``, the platform-keyed ``get_system_core_info`` the
-Library page's Platforms detail asks, and the ``get_firmware_status`` overview —
-with the emulator list present (happy) and absent (emulator data unavailable).
+Library page's Platforms detail asks, and ``get_platform_firmware_status``, the
+BIOS page's per-platform answer — with the emulator list present (happy) and
+absent (emulator data unavailable). The ``get_firmware_status`` overview beside
+them carries none of it, and is pinned for that absence.
 """
 
 from __future__ import annotations
@@ -225,16 +227,37 @@ async def test_get_system_core_info_unavailable_when_no_es_systems(harness):
     assert result["active_core_label"] is None
 
 
-async def test_get_firmware_status_carries_emulators_per_platform(harness):
-    """The firmware overview carries the classified emulator list per platform."""
+async def test_the_firmware_overview_names_platforms_without_reading_them(harness):
+    """The overview says which platforms the page can speak for, and nothing else.
+
+    A platform's state costs a live per-system reading, so this call pays none —
+    which makes the absence of every state-bearing key the thing to pin: a
+    ``bios_level`` or a ``files`` list here would be rendered over a platform
+    nobody has asked about yet.
+    """
     seed_es_systems(harness)
-    seed_rom(harness, 7, platform_slug="gba")  # bound → has_games
+    seed_rom(harness, 6, platform_slug="gba")  # bound → has_games
     harness.romm.firmware_files = list(_GBA_FIRMWARE)
 
     result = await harness.plugin.get_firmware_status()
 
     assert result["success"] is True
+    assert result["server_offline"] is False
     gba = next(p for p in result["platforms"] if p["platform_slug"] == "gba")
+    assert set(gba) == {"platform_slug", "has_games"}
+    assert gba["has_games"] is True
+
+
+async def test_get_platform_firmware_status_carries_the_platforms_emulators(harness):
+    """One platform's entry carries the classified emulator list for it."""
+    seed_es_systems(harness)
+    seed_rom(harness, 7, platform_slug="gba")  # bound → has_games
+    harness.romm.firmware_files = list(_GBA_FIRMWARE)
+
+    result = await harness.plugin.get_platform_firmware_status("gba")
+
+    assert result["success"] is True
+    gba = result["platform"]
     assert gba["emulator_data_available"] is True
     assert gba["emulators"] == [_MGBA_ENTRY, _VBA_NEXT_ENTRY]
     # The pane's pick and the identity its BIOS rows are keyed on are one field,
@@ -244,14 +267,14 @@ async def test_get_firmware_status_carries_emulators_per_platform(harness):
     assert gba["active_core"] == _MGBA_ENTRY["emulator"]
 
 
-async def test_get_firmware_status_flags_unavailable_emulator_data(harness):
-    """No es_systems → each platform entry flags emulator data unavailable."""
+async def test_get_platform_firmware_status_flags_unavailable_emulator_data(harness):
+    """No es_systems → the platform's entry flags emulator data unavailable."""
     seed_rom(harness, 8, platform_slug="gba")
     harness.romm.firmware_files = list(_GBA_FIRMWARE)
 
-    result = await harness.plugin.get_firmware_status()
+    result = await harness.plugin.get_platform_firmware_status("gba")
 
-    gba = next(p for p in result["platforms"] if p["platform_slug"] == "gba")
+    gba = result["platform"]
     assert gba["emulator_data_available"] is False
     assert gba["emulators"] == []
 

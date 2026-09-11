@@ -170,31 +170,36 @@ and the row you focus is the one the right-hand pane describes.
 2. Each row is a coloured dot, the platform's name and the sync toggle. The dot is the BIOS state at a glance — green
    ready, amber partly there, red missing, grey where there is nothing to say — and the numbers behind it are on the
    right-hand pane, which also states them in full. With a mouse, hovering the row says the same thing in words
-3. Move down the list to pick a platform; the pane on the right changes with the focus
-4. The pane's first line names the platform, how many ROMs it has on RomM, how many are in Steam, and the emulator it
+3. The dots fill in one platform at a time, from the top, and the platform you are on is always looked at next — so the
+   pane you have open does not wait behind the rows above it. A row that is still being checked draws its dot as an
+   **outline** rather than a filled circle, and its pane says "Checking what this platform needs…"; that is why a grey
+   filled dot can be trusted to mean "nothing to say" rather than "not looked at yet". Checking one platform takes about
+   a tenth of a second on a Steam Deck, so a large library is done in a few seconds, and leaving the page stops the work
+4. Move down the list to pick a platform; the pane on the right changes with the focus
+5. The pane's first line names the platform, how many ROMs it has on RomM, how many are in Steam, and the emulator it
    launches with — by name, in grey when it is the platform's default and in gold when you have picked something else.
    If it reads **RetroDECK decides**, the plugin could not pin any of this platform's emulators — they may need setting
    up, or ES-DE's command for them is not one the plugin can bake — so RetroDECK chooses one itself when a game starts.
    If it reads **no emulator installed** in red, the emulator RetroDECK would have fallen back to is not on this
    machine, and the sentence below names it. If it reads **no emulator** in red, RetroDECK has none for this platform at
    all. The sentence below the line says which of the three it is
-5. The **chip button** at the right of that line opens a menu of the platform's emulators — the same button, in the same
+6. The **chip button** at the right of that line opens a menu of the platform's emulators — the same button, in the same
    two colours, as the one on a game's page. It is always there: it opens the menu once the platform has games in Steam
    and there is more than one emulator to choose between, and is greyed out otherwise, with the reason shown if you
    hover it. Where the reason is a problem rather than simply nothing to choose — no emulator for the platform, or
    RetroDECK not found — a line under the header says so as well, since a tooltip needs a mouse
-6. **BIOS files** states how many required files are ready (e.g. "1 / 2 required") when the system needs any, and
+7. **BIOS files** states how many required files are ready (e.g. "1 / 2 required") when the system needs any, and
    otherwise reads "Nothing required" with the inventory of your library's files beside it (e.g. "3 / 5 files held"). A
    console that will not start without one of the listed images, with none of them in place, reads **"Needs at least one
    BIOS file"** — see [When the console needs a BIOS image](#when-the-console-needs-a-bios-image). A system with a
    required row the plugin could not judge — a declared folder it could not read, say — reads "BIOS readiness unknown"
    instead — see [When readiness cannot be stated](#when-readiness-cannot-be-stated). Everything here is about the
-   emulator named on line 4: pick a different one from the chip button and the numbers, the dot and the file rows are
+   emulator named on line 5: pick a different one from the chip button and the numbers, the dot and the file rows are
    answered for it, so this pane and a game's BIOS tab tell you the same thing about one platform. That holds for a
    **standalone** emulator too — PCSX2, DuckStation, Cemu and melonDS are asked like any RetroArch core. Where the
    plugin has no source for the emulator, the files are shown against every emulator that declares them instead of
    against one
-7. Below it, a table lists the files themselves: the **file**, whether it is **on disk**, and its **contents**. Where
+8. Below it, a table lists the files themselves: the **file**, whether it is **on disk**, and its **contents**. Where
    the emulator asks for the file in a subfolder, the folder is shown in front of the name (`dc/` **`dc_boot.bin`**) —
    that is where it has to go, and it is the one thing you need when placing a file by hand. The description in
    parentheses is printed under the row rather than beside the name, so it is not cut off. On disk holds marks and no
@@ -210,18 +215,18 @@ and the row you focus is the one the right-hand pane describes.
    line per mark, names the marks that are actually on it. Anything else a row has to say is printed **under** the row
    rather than in the column — that a file was provided by RetroDECK, that a folder holds no image, that a location
    could not be read
-8. **Contents** answers for a required **folder**: how many BIOS images it holds — and the images themselves are listed
+9. **Contents** answers for a required **folder**: how many BIOS images it holds — and the images themselves are listed
    under the row, in the emulator's own words so you can match one against its picker — or that it holds none, or that
    its contents could not be established. A plain file reads an em dash, which means the question was never asked:
    checking a file's contents is still to come, and until it lands the em dash must not be read as "checked, and nothing
    there"
-9. A **Download** button sits on every row that is missing and in your RomM library, and a **Delete** button on every
-   row this plugin downloaded and still has on disk — that is the only thing it will remove, so a file your emulator
-   came with never offers one. A **folder** row (PS2's `pcsx2/bios`) offers `Delete (N)` for the files we downloaded
-   into it. While a download runs, the button you pressed becomes a spinner and the other download buttons grey out;
-   when it finishes the list re-reads itself. **If it fails**, that button turns red and says **Failed** for about two
-   seconds — the other buttons stay greyed until it clears — and a line under the section says what went wrong
-10. **Download required** and **Download all** fetch several at once, and **Delete BIOS** removes everything this plugin
+10. A **Download** button sits on every row that is missing and in your RomM library, and a **Delete** button on every
+    row this plugin downloaded and still has on disk — that is the only thing it will remove, so a file your emulator
+    came with never offers one. A **folder** row (PS2's `pcsx2/bios`) offers `Delete (N)` for the files we downloaded
+    into it. While a download runs, the button you pressed becomes a spinner and the other download buttons grey out;
+    when it finishes the list re-reads itself. **If it fails**, that button turns red and says **Failed** for about two
+    seconds — the other buttons stay greyed until it clears — and a line under the section says what went wrong
+11. **Download required** and **Download all** fetch several at once, and **Delete BIOS** removes everything this plugin
     downloaded for the platform (see below). All three are always there and grey out when there is nothing to do. What
     they follow is your **library**, not the readiness line above them: a system the plugin could work out nothing about
     still offers everything your library holds for it, because those are two separate questions — see

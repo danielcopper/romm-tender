@@ -964,6 +964,7 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     "finalize_game_session",
     # Firmware / BIOS read-only checks.
     "get_firmware_status",
+    "get_platform_firmware_status",
     "check_platform_bios",
     "get_bios_status",
     # Save sync read-only / device queries.

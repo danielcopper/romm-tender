@@ -15,6 +15,12 @@
  * words behind it are the row's `title`, which is where the number went rather
  * than away.
  *
+ * A platform's answer arrives on its own, after the list is already standing, so
+ * the dot has a fourth appearance that is not a level at all: an outline, for a
+ * row whose answer is still coming. It is the one distinction the list cannot do
+ * without — grey for "nothing could be established" is an ANSWER, and most rows
+ * would be showing it seconds before theirs arrives.
+ *
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Library.
  */
 
@@ -35,6 +41,16 @@ import type { PlatformRow, PlatformsPageState } from "./usePlatformsPage";
  * opens the pane meets the same vocabulary rather than two names for one state.
  */
 function biosTooltip(row: PlatformRow): string {
+  // Read off the STATE, not off the answer being absent: a row still waiting for
+  // its answer and a row nothing could be established for are both `firmware ===
+  // null`, and saying the same thing about them is how a reader takes an answer
+  // where none has arrived.
+  if (row.firmwareState === "pending") return "Checking this platform's BIOS files…";
+  // A failed RE-read keeps the answer it could not replace, and the dot goes on
+  // showing it — so the tooltip words that answer, and the pane one keypress
+  // away is where the reader is told it may be out of date. Only a failure with
+  // nothing behind it is worded as one.
+  if (row.firmwareState === "failed") return "Could not read this platform's BIOS state";
   const firmware = row.firmware;
   if (!firmware) return "Nothing is known about this platform's BIOS files";
   // The console's own demand outranks the counts here for the reason it does in
@@ -73,6 +89,14 @@ const GroupHeading: FC<{ title: string; count: number }> = ({ title, count }) =>
 
 const RowLabel: FC<{ row: PlatformRow; selected: boolean }> = ({ row, selected }) => {
   const level = row.firmware?.bios_level ?? null;
+  // A row whose answer has not arrived is drawn as an OUTLINE rather than a
+  // solid dot. The answers land one platform at a time, so at first open most
+  // rows are in this state, and a solid grey one would say "nothing could be
+  // established here" about every platform the walk has not reached yet — an
+  // answer, and the wrong one. An outline states the absence of an answer
+  // without stating an answer, and it does it without motion: a spinner per row
+  // would set two dozen of them going at once.
+  const pending = row.firmwareState === "pending";
   return (
     <span style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }} title={biosTooltip(row)}>
       {/* Always drawn, grey where there is no level to state: a dot that comes
@@ -85,7 +109,9 @@ const RowLabel: FC<{ row: PlatformRow; selected: boolean }> = ({ row, selected }
           width: "8px",
           height: "8px",
           borderRadius: "50%",
-          backgroundColor: biosColorForLevel(level),
+          boxSizing: "border-box",
+          backgroundColor: pending ? "transparent" : biosColorForLevel(level),
+          border: pending ? `1.5px solid ${biosColorForLevel(null)}` : undefined,
           flexShrink: 0,
         }}
       />

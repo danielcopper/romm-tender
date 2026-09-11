@@ -434,6 +434,12 @@ class Plugin:
     async def get_firmware_status(self):
         return await self._firmware_service.get_firmware_status()
 
+    async def get_platform_firmware_status(self, platform_slug):
+        # One platform's BIOS state, which is a live per-system reading the
+        # overview above deliberately does not pay. The page walks its own list
+        # calling this; the order, and when to stop, are the caller's.
+        return await self._firmware_service.get_platform_firmware_status(platform_slug)
+
     @migration_blocked
     async def download_all_firmware(self, platform_slug):
         return await self._firmware_service.download_all_firmware(platform_slug)

@@ -10,14 +10,21 @@ import pytest
 # conftest.py patches decky before this import; use _make_testable_plugin for test-only attrs
 from _factories import _make_testable_plugin
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
-from fakes.fake_core_info_provider import FakeCoreInfoProvider, libretro_option, standalone_option
+from fakes.fake_core_info_provider import (
+    FakeCoreInfoProvider,
+    FakeSandboxLauncher,
+    libretro_option,
+    standalone_option,
+)
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_firmware_file_store import FakeFirmwareFileStore
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
+from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
+from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
 from fakes.running_loop import running_loop
@@ -27,7 +34,7 @@ from adapters.firmware_file import FirmwareFileAdapter
 from adapters.steam_config import SteamConfigAdapter
 from domain.bios_file import BiosFile
 from domain.bios_status import BiosFileEntry
-from domain.emulator_commands import EmulatorOption
+from domain.emulator_commands import EmulatorOption, option_to_invocation, select_default_option
 from domain.firmware_cache import FirmwareCacheEntry
 from domain.firmware_wants import (
     SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT,
@@ -37,7 +44,11 @@ from domain.firmware_wants import (
     FolderVerdict,
 )
 from domain.rom import Rom
+from domain.shortcut_data import EmulatorInvocation
+from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolverConfig
+from services.cores import CoreService, CoreServiceConfig
 from services.firmware import FirmwareService, FirmwareServiceConfig
+from services.game_detail import GameDetailService, GameDetailServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
 
 
@@ -196,6 +207,41 @@ def _core_info(fw: FirmwareService) -> FakeCoreInfoProvider:
     core_info = fw._config.core_info
     assert isinstance(core_info, FakeCoreInfoProvider)
     return core_info
+
+
+async def _overview(fw: FirmwareService) -> dict[str, Any]:
+    """The whole page's BIOS answer, composed the way the page composes it.
+
+    ``get_firmware_status`` names the platforms it can speak for and
+    ``get_platform_firmware_status`` answers for one, so what a reader ends up
+    looking at is the two joined. The tests that are about what the page SHOWS
+    join them here rather than each learning the walk — and the join is the
+    page's own: the platforms in the order the overview named them, each with
+    its own entry, and a platform whose answer is withheld simply absent.
+
+    Deliberately serial and complete, which the page is not: the frontend
+    reorders around the focused row and stops when the reader leaves, and
+    neither of those changes an answer.
+    """
+    skeleton = await fw.get_firmware_status()
+    platforms = []
+    for named in skeleton["platforms"]:
+        answer = await fw.get_platform_firmware_status(named["platform_slug"])
+        if answer["platform"] is not None:
+            platforms.append(answer["platform"])
+    return {**skeleton, "platforms": platforms}
+
+
+def _platform_core_reader(fw: FirmwareService) -> FakePlatformCoreReader:
+    """The fake per-platform override map behind *fw*.
+
+    Taken off the service rather than built a second time, for the tests that
+    hand the same map to a peer: two readers seeded alike agree by coincidence,
+    which is the shape those tests exist to refuse.
+    """
+    reader = fw._config.platform_core_reader
+    assert isinstance(reader, FakePlatformCoreReader)
+    return reader
 
 
 def _set_platform_emulator(fw: FirmwareService, core_so: str, label: str) -> None:
@@ -381,6 +427,7 @@ class TestTheFacadeOnlyDelegates:
         assert own == {
             "invalidate_firmware_cache",
             "get_firmware_status",
+            "get_platform_firmware_status",
             "check_platform_bios",
             "download_firmware",
             "download_all_firmware",
@@ -625,7 +672,7 @@ class TestDestinationReadingsReachBothSurfaces:
         fw = self._service(plugin, tmp_path, resolver)
         _stub_listing(fw, [])
 
-        result = await fw.get_firmware_status()
+        result = await _overview(fw)
         row = next(p for p in result["platforms"] if p["platform_slug"] == "dc")["files"][0]
 
         assert row["declared_kind"] == "directory"
@@ -678,7 +725,7 @@ class TestTheOverviewRowsAreAlphabetical:
             ],
         )
 
-        result = await fw.get_firmware_status()
+        result = await _overview(fw)
         names = [f["file_name"] for f in next(p for p in result["platforms"] if p["platform_slug"] == "gc")["files"]]
 
         # Case-folded, so a capitalised name does not sort above every lowercase
@@ -736,7 +783,7 @@ class TestAFolderRowCountsWhatWePutInside:
         )
         fw = self._service(plugin, tmp_path, resolver, store)
 
-        result = await fw.get_firmware_status()
+        result = await _overview(fw)
         row = next(p for p in result["platforms"] if p["platform_slug"] == "dc")["files"][0]
 
         assert row["declared_kind"] == "directory"
@@ -773,7 +820,7 @@ class TestAFolderRowCountsWhatWePutInside:
         )
         fw = self._service(plugin, tmp_path, resolver, store)
 
-        result = await fw.get_firmware_status()
+        result = await _overview(fw)
         plat = next(p for p in result["platforms"] if p["platform_slug"] == "psx")
 
         assert plat["files"][0]["declared_kind"] == "directory"
@@ -960,7 +1007,7 @@ class TestAFolderRequirementIsAnsweredByItsContents:
         resolver = self._resolver(FolderVerdict(satisfied=True, images=self._IMAGES))
         fw = self._service(plugin, tmp_path, resolver)
 
-        result = await fw.get_firmware_status()
+        result = await _overview(fw)
         platform = next(p for p in result["platforms"] if p["platform_slug"] == "ps2")
 
         assert platform["bios_level"] == "ok"
@@ -1029,6 +1076,229 @@ class TestAFileWithSomethingElseAtItsDestination:
         assert result["bios_level"] == "unknown"
 
 
+class TestTheOverviewNamesPlatformsWithoutReadingThem:
+    """``get_firmware_status`` says WHICH platforms the page can speak for, and no more.
+
+    The reading a platform's state costs is a live per-system one — 64-350 ms
+    each on the reference machine, and a library of 28 platforms put roughly
+    three seconds in front of the first row when the overview paid them all. So
+    the overview pays none, and every assertion here is about an ABSENCE: what
+    this call does NOT read, and what it does NOT carry.
+
+    A field on this payload is a field the page can render before any reading
+    has happened, which is why the key set is pinned rather than sampled: a
+    ``bios_level`` or a ``files`` list leaking back onto it would be rendered as
+    an answer about a platform nobody has asked about yet.
+    """
+
+    @staticmethod
+    def _service(plugin, **kwargs) -> FirmwareService:
+        fw = _make_firmware_service(
+            romm_api=plugin._romm_api,
+            uow_factory=FakeUnitOfWorkFactory(plugin._uow),
+            **kwargs,
+        )
+        _set_loop(fw, asyncio.get_event_loop())
+        return fw
+
+    @pytest.mark.asyncio
+    async def test_it_names_the_listings_platforms_and_the_synced_ones(self, plugin):
+        """Both halves of the page's platform set, in one sorted list.
+
+        ``dc`` comes from the library's own firmware, ``nes`` from a ROM bound to
+        a Steam shortcut — a platform the library holds nothing for is exactly
+        the one whose emulators may still want something.
+        """
+        _seed_rom(plugin._uow, rom_id=44, platform_slug="nes", app_id=1)
+        fw = self._service(plugin)
+
+        with patch.object(
+            plugin._romm_api,
+            "list_firmware",
+            return_value=[{"id": 1, "file_name": "a.bin", "file_path": "bios/dc/a.bin", "file_size_bytes": 1}],
+        ):
+            result = await fw.get_firmware_status()
+
+        assert result == {
+            "success": True,
+            "server_offline": False,
+            "platforms": [
+                {"platform_slug": "dc", "has_games": False},
+                {"platform_slug": "nes", "has_games": True},
+            ],
+        }
+
+    @pytest.mark.asyncio
+    async def test_it_asks_the_resolver_and_the_catalogue_about_nothing(self, plugin):
+        """The absence the whole split is for, stated as one.
+
+        Neither seam is reached for any platform — not the firmware reading, and
+        not the emulator catalogue, which is a per-system read of its own.
+        """
+        _seed_rom(plugin._uow, rom_id=44, platform_slug="nes", app_id=1)
+        resolver = FakeFirmwareResolver()
+        core_info = _test_core_info()
+        fw = self._service(plugin, firmware_resolver=resolver, core_info=core_info)
+
+        with patch.object(
+            plugin._romm_api,
+            "list_firmware",
+            return_value=[{"id": 1, "file_name": "a.bin", "file_path": "bios/dc/a.bin", "file_size_bytes": 1}],
+        ):
+            result = await fw.get_firmware_status()
+
+        assert [p["platform_slug"] for p in result["platforms"]] == ["dc", "nes"]
+        assert resolver.calls == []
+        assert core_info.emulator_options_calls == []
+        assert core_info.active_core_calls == []
+
+    @pytest.mark.asyncio
+    async def test_an_unreachable_server_still_names_the_synced_platforms(self, plugin):
+        """What an unreachable RomM costs is the platforms only IT knows about."""
+        _seed_rom(plugin._uow, rom_id=44, platform_slug="nes", app_id=1)
+        fw = self._service(plugin)
+
+        with patch.object(plugin._romm_api, "list_firmware", side_effect=Exception("offline")):
+            result = await fw.get_firmware_status()
+
+        assert result["server_offline"] is True
+        assert [p["platform_slug"] for p in result["platforms"]] == ["nes"]
+
+
+class TestOnePlatformsOwnEntry:
+    """``get_platform_firmware_status`` — the half that pays the reading, one platform at a time.
+
+    What it answers is the entry the page renders. The one thing it decides
+    beyond that is whether there IS an entry: a platform the listing never named
+    and whose reading finished wanting nothing has nothing to manage, and the
+    page shows it no block — the drop a whole-page answer used to perform before
+    returning.
+    """
+
+    @staticmethod
+    def _service(plugin, **kwargs) -> FirmwareService:
+        fw = _make_firmware_service(
+            romm_api=plugin._romm_api,
+            uow_factory=FakeUnitOfWorkFactory(plugin._uow),
+            **kwargs,
+        )
+        _set_loop(fw, asyncio.get_event_loop())
+        return fw
+
+    @pytest.mark.asyncio
+    async def test_it_answers_with_the_entry_the_pane_renders(self, plugin, tmp_path):
+        bios_dir = tmp_path / "retrodeck" / "bios"
+        bios_dir.mkdir(parents=True)
+        (bios_dir / "req1.bin").write_bytes(b"\x00" * 100)
+        fw = self._service(
+            plugin,
+            firmware_resolver=_dc_resolver(),
+            core_info=_dc_core_info(),
+            retrodeck_paths=FakeRetroDeckPaths(bios=str(bios_dir)),
+        )
+
+        with patch.object(
+            plugin._romm_api,
+            "list_firmware",
+            return_value=[{"id": 1, "file_name": "req1.bin", "file_path": "bios/dc/req1.bin", "file_size_bytes": 100}],
+        ):
+            result = await fw.get_platform_firmware_status("dc")
+
+        entry = result["platform"]
+        assert result["success"] is True
+        assert entry["platform_slug"] == "dc"
+        assert entry["active_core"] == _id(_DC_CORE)
+        assert {f["file_name"] for f in entry["files"]} == {"req1.bin", "req2.bin", "opt1.bin"}
+        assert (entry["required_count"], entry["required_downloaded"]) == (2, 1)
+        assert entry["bios_level"] == "partial"
+
+    @pytest.mark.asyncio
+    async def test_it_reads_only_the_platform_it_was_asked_about(self, plugin):
+        """The whole point of asking one at a time, stated as the reading it did not do."""
+        resolver = FakeFirmwareResolver()
+        fw = self._service(plugin, firmware_resolver=resolver)
+
+        with patch.object(
+            plugin._romm_api,
+            "list_firmware",
+            return_value=[
+                {"id": 1, "file_name": "a.bin", "file_path": "bios/dc/a.bin", "file_size_bytes": 1},
+                {"id": 2, "file_name": "b.bin", "file_path": "bios/psx/b.bin", "file_size_bytes": 1},
+            ],
+        ):
+            await fw.get_platform_firmware_status("dc")
+
+        assert resolver.calls == ["dc"]
+
+    @pytest.mark.asyncio
+    async def test_it_takes_only_its_own_platforms_rows_from_the_listing(self, plugin):
+        """The listing is the library's whole firmware; an entry is one key's slice."""
+        fw = self._service(plugin, core_info=_test_core_info())
+
+        with patch.object(
+            plugin._romm_api,
+            "list_firmware",
+            return_value=[
+                {"id": 1, "file_name": "a.bin", "file_path": "bios/dc/a.bin", "file_size_bytes": 1},
+                {"id": 2, "file_name": "b.bin", "file_path": "bios/psx/b.bin", "file_size_bytes": 1},
+            ],
+        ):
+            result = await fw.get_platform_firmware_status("dc")
+
+        assert [f["file_name"] for f in result["platform"]["files"]] == ["a.bin"]
+
+    @pytest.mark.asyncio
+    async def test_a_synced_platform_nothing_wants_answers_with_no_entry(self, plugin):
+        """The drop, now an answer of its own: a finished reading that wants nothing."""
+        _seed_rom(plugin._uow, rom_id=44, platform_slug="nes", app_id=1)
+        fw = self._service(plugin, firmware_resolver=FakeFirmwareResolver(), core_info=_test_core_info())
+
+        with patch.object(plugin._romm_api, "list_firmware", side_effect=Exception("offline")):
+            result = await fw.get_platform_firmware_status("nes")
+
+        assert result == {"success": True, "platform": None}
+
+    @pytest.mark.asyncio
+    async def test_a_synced_platform_nothing_could_answer_for_keeps_its_entry(self, plugin):
+        """The counterpart, and the reason the no-entry answer is conditional (#1660).
+
+        ``ps3``'s only ES-DE entry is RPCS3, so there is no core to ask and the
+        empty file list is silence rather than an answer. Answering with no entry
+        would say the system needs nothing.
+        """
+        _seed_rom(plugin._uow, rom_id=45, platform_slug="ps3", app_id=1)
+        fw = self._service(plugin, firmware_resolver=FakeFirmwareResolver(), core_info=FakeCoreInfoProvider(options=[]))
+
+        with patch.object(plugin._romm_api, "list_firmware", side_effect=Exception("offline")):
+            result = await fw.get_platform_firmware_status("ps3")
+
+        assert result["platform"]["files"] == []
+        assert result["platform"]["bios_level"] == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_a_platform_the_library_holds_firmware_for_keeps_its_entry(self, plugin):
+        """A listed platform answers even where every row falls away.
+
+        Its one server row carries a traversing name, so the path guard drops it
+        and the reading wants nothing else. The library holding firmware filed
+        under this platform is itself the thing to say, and a page that showed no
+        block would leave the reader looking for a platform RomM does list.
+        """
+        fw = self._service(plugin, firmware_resolver=FakeFirmwareResolver(), core_info=_test_core_info())
+
+        with patch.object(
+            plugin._romm_api,
+            "list_firmware",
+            return_value=[
+                {"id": 1, "file_name": "../escape.bin", "file_path": "bios/dc/../escape.bin", "file_size_bytes": 1}
+            ],
+        ):
+            result = await fw.get_platform_firmware_status("dc")
+
+        assert result["platform"] is not None
+        assert result["platform"]["files"] == []
+
+
 class TestGetFirmwareStatus:
     @pytest.mark.asyncio
     async def test_returns_grouped_platforms(self, fw, tmp_path):
@@ -1059,7 +1329,7 @@ class TestGetFirmwareStatus:
         _stub_listing(fw, firmware_list)
         _inline_executor(fw)
 
-        result = await fw.get_firmware_status()
+        result = await _overview(fw)
         assert result["success"] is True
         assert len(result["platforms"]) == 2
 
@@ -1097,7 +1367,7 @@ class TestGetFirmwareStatus:
         _stub_listing(fw, firmware_list)
         _inline_executor(fw)
 
-        result = await fw.get_firmware_status()
+        result = await _overview(fw)
 
         dc_plat = next(p for p in result["platforms"] if p["platform_slug"] == "dc")
         # Entry identity stays on the RAW slug.
@@ -1149,7 +1419,7 @@ class TestGetFirmwareStatus:
         ]
         _stub_listing(fw, firmware_list)
         _inline_executor(fw)
-        result = await fw.get_firmware_status()
+        result = await _overview(fw)
         psp = next(p for p in result["platforms"] if p["platform_slug"] == "psp")
         return psp["active_core_label"]
 
@@ -1196,7 +1466,7 @@ class TestGetFirmwareStatus:
         _seed_rom(plugin._uow, rom_id=43, platform_slug="ps2", app_id=None)
 
         with patch.object(plugin._romm_api, "list_firmware", return_value=firmware_list):
-            result = await fw.get_firmware_status()
+            result = await _overview(fw)
 
         dc_plat = next(p for p in result["platforms"] if p["platform_slug"] == "dc")
         ps2_plat = next(p for p in result["platforms"] if p["platform_slug"] == "ps2")
@@ -1226,7 +1496,7 @@ class TestGetFirmwareStatus:
         _inline_executor(fw)
 
         with patch.object(fw._demand, "_retrodeck_paths", FakeRetroDeckPaths(bios=str(bios_dir))):
-            result = await fw.get_firmware_status()
+            result = await _overview(fw)
         assert result["success"] is True
         assert result["platforms"][0]["files"][0]["downloaded"] is True
 
@@ -1237,7 +1507,7 @@ class TestGetFirmwareStatus:
         _set_loop(fw, asyncio.get_running_loop())
 
         with patch.object(plugin._romm_api, "list_firmware", side_effect=Exception("Connection refused")):
-            result = await fw.get_firmware_status()
+            result = await _overview(fw)
 
         assert result["success"] is True
         assert result["server_offline"] is True
@@ -1306,7 +1576,7 @@ class TestGetFirmwareStatusBiosAggregates:
         )
         _inline_executor(fw)
 
-        result = await fw.get_firmware_status()
+        result = await _overview(fw)
         return next(p for p in result["platforms"] if p["platform_slug"] == "dc")
 
     @pytest.mark.asyncio
@@ -1390,7 +1660,7 @@ class TestGetFirmwareStatusBiosAggregates:
         )
         _inline_executor(fw)
 
-        result = await fw.get_firmware_status()
+        result = await _overview(fw)
 
         plat = next(p for p in result["platforms"] if p["platform_slug"] == "psvita")
         assert plat["bios_level"] == "unknown"
@@ -1424,7 +1694,7 @@ class TestGetFirmwareStatusBiosAggregates:
         )
         _inline_executor(fw)
 
-        result = await fw.get_firmware_status()
+        result = await _overview(fw)
 
         plat = next(p for p in result["platforms"] if p["platform_slug"] == "snes")
         assert [f["wanted"] for f in plat["files"]] == ["not_needed"]
@@ -1457,7 +1727,7 @@ class TestGetFirmwareStatusBiosAggregates:
         )
         _inline_executor(fw)
 
-        result = await fw.get_firmware_status()
+        result = await _overview(fw)
         plat = next(p for p in result["platforms"] if p["platform_slug"] == "snes")
 
         # All three are listed — the machine wants them and the user should see so.
@@ -1532,7 +1802,7 @@ class TestGetFirmwareStatusBiosAggregates:
         )
         _inline_executor(fw)
 
-        result = await fw.get_firmware_status()
+        result = await _overview(fw)
 
         # The listing names one platform, so only that one carries the row —
         # and it carries it as a library file, not as an absent one.
@@ -1543,12 +1813,12 @@ class TestGetFirmwareStatusBiosAggregates:
     async def test_the_demand_is_read_once_per_platform(self, tmp_path):
         """One reading per platform the page renders, and exactly one.
 
-        The overview pays a reading per platform because which emulators can run
-        a system is the only thing that says whether a standalone emulator's
-        declarations belong to it — a whole-machine reading enumerates installed
-        cores and carries none of them. What must not happen is a second reading
-        WITHIN a platform: the rows, the counts and the verdict all come off one
-        answer, so two readings could disagree about the same file on one page.
+        A reading is per platform because which emulators can run a system is the
+        only thing that says whether a standalone emulator's declarations belong
+        to it — a whole-machine reading enumerates installed cores and carries
+        none of them. What must not happen is a second reading WITHIN a platform:
+        the rows, the counts and the verdict all come off one answer, so two
+        readings could disagree about the same file on one page.
         """
         romm_api = MagicMock()
         romm_api.list_firmware.return_value = [
@@ -1560,7 +1830,7 @@ class TestGetFirmwareStatusBiosAggregates:
         fw = _make_firmware_service(romm_api=romm_api, firmware_resolver=resolver)
         _inline_executor(fw)
 
-        result = await fw.get_firmware_status()
+        result = await _overview(fw)
 
         assert len(result["platforms"]) == 3
         assert sorted(resolver.calls) == ["dc", "gba", "psx"]
@@ -1587,7 +1857,7 @@ class TestGetFirmwareStatusBiosAggregates:
         _set_loop(fw, asyncio.get_running_loop())
 
         with patch.object(plugin._romm_api, "list_firmware", side_effect=Exception("offline")):
-            result = await fw.get_firmware_status()
+            result = await _overview(fw)
 
         assert result["server_offline"] is True
         dc = next(p for p in result["platforms"] if p["platform_slug"] == "dc")
@@ -1616,7 +1886,7 @@ class TestGetFirmwareStatusBiosAggregates:
         _set_loop(fw, asyncio.get_running_loop())
 
         with patch.object(plugin._romm_api, "list_firmware", side_effect=Exception("offline")):
-            result = await fw.get_firmware_status()
+            result = await _overview(fw)
 
         assert result["platforms"] == []
 
@@ -1640,7 +1910,7 @@ class TestGetFirmwareStatusBiosAggregates:
         _set_loop(fw, asyncio.get_running_loop())
 
         with patch.object(plugin._romm_api, "list_firmware", side_effect=Exception("offline")):
-            result = await fw.get_firmware_status()
+            result = await _overview(fw)
 
         ps3 = next(p for p in result["platforms"] if p["platform_slug"] == "ps3")
         assert ps3["files"] == []
@@ -1686,7 +1956,7 @@ class TestGetFirmwareStatusBiosAggregates:
             patch.object(plugin._romm_api, "list_firmware", return_value=firmware_list),
             patch.object(fw._demand, "_retrodeck_paths", FakeRetroDeckPaths(bios=str(bios_dir))),
         ):
-            result = await fw.get_firmware_status()
+            result = await _overview(fw)
 
         plat = next(p for p in result["platforms"] if p["platform_slug"] == "dc")
         assert {f["file_name"] for f in plat["files"]} == {"good.bin"}
@@ -1771,7 +2041,7 @@ class TestGetFirmwareStatusDeletableCount:
             ],
         )
 
-        result = await fw.get_firmware_status()
+        result = await _overview(fw)
         plat = next(p for p in result["platforms"] if p["platform_slug"] == "gc")
 
         assert plat["local_count"] == 3
@@ -1831,7 +2101,7 @@ class TestGetFirmwareStatusDeletableCount:
             [{"id": 7, "file_name": "IPL.bin", "file_path": "bios/gc/IPL.bin", "file_size_bytes": 8, "md5_hash": ""}],
         )
 
-        result = await fw.get_firmware_status()
+        result = await _overview(fw)
         plat = next(p for p in result["platforms"] if p["platform_slug"] == "gc")
 
         assert plat["local_count"] == 1
@@ -2206,7 +2476,7 @@ class TestTheConsolesOwnFirmwareDemand:
         """One builder, so a platform and its games cannot disagree about it."""
         fw = _psx_service()
 
-        overview = await fw.get_firmware_status()
+        overview = await _overview(fw)
         page = await fw.check_platform_bios("psx")
 
         platform = next(p for p in overview["platforms"] if p["platform_slug"] == "ps")
@@ -2338,7 +2608,7 @@ class TestWhichRowsCanAnswerTheConsole:
         """One builder, so the platform table and the game page cannot disagree."""
         fw = _psx_four_core_service(_PSX_CORE)
 
-        overview = await fw.get_firmware_status()
+        overview = await _overview(fw)
         page = await fw.check_platform_bios("psx")
 
         platform = next(p for p in overview["platforms"] if p["platform_slug"] == "psx")
@@ -2361,6 +2631,22 @@ def _psx_emulators() -> list[EmulatorOption]:
         libretro_option(_PSX_ALTERNATIVE_CORE, _PSX_ALTERNATIVE_LABEL),
         standalone_option("%EMULATOR_DUCKSTATION% %ROM%", _PSX_STANDALONE_LABEL),
     ]
+
+
+class _DeclaredDefaultCoreInfo(FakeCoreInfoProvider):
+    """ES-DE's own default, rendered the way the live adapter renders it.
+
+    :class:`FakeCoreInfoProvider` builds the default invocation out of its
+    ``active_core`` tuple, which carries no identity — and the identity is the
+    one field a firmware answer is keyed on, so a fixture on the bare fake
+    resolves an unpinned ROM to a ``None`` where production resolves it to an
+    emulator. The live adapter renders the first bakeable OPTION instead
+    (``AtlasCatalogueAdapter.get_default_emulator``), identity and all.
+    """
+
+    def get_default_emulator(self, system_name: str) -> EmulatorInvocation | None:
+        self.emulator_options_calls.append(system_name)
+        return option_to_invocation(select_default_option(self.options))
 
 
 def _psx_platform_service(
@@ -2405,7 +2691,7 @@ def _psx_platform_service(
     fw = _make_firmware_service(
         romm_api=romm_api,
         firmware_resolver=resolver,
-        core_info=FakeCoreInfoProvider(
+        core_info=_DeclaredDefaultCoreInfo(
             active_core=(_PSX_CORE, _PSX_DEFAULT_LABEL),
             options=options if options is not None else _psx_emulators(),
         ),
@@ -2545,7 +2831,7 @@ class TestAStandaloneEmulatorIsAskedLikeAnyOther:
         _seed_rom(uow, rom_id=9, platform_slug="psx")
         fw = self._service(pick_label="DuckStation", resolver=self._resolver(), uow=uow)
 
-        overview = await fw.get_firmware_status()
+        overview = await _overview(fw)
         platform = next(p for p in overview["platforms"] if p["platform_slug"] == "psx")
         page = await fw.check_platform_bios("psx")
 
@@ -2579,7 +2865,7 @@ class TestOnePlatformOneEmulator:
     async def _both(platform_core: str | None) -> tuple[dict[str, Any], dict[str, Any]]:
         """The overview's entry for the platform, and the game page's answer for it."""
         fw = _psx_platform_service(platform_core=platform_core)
-        overview = await fw.get_firmware_status()
+        overview = await _overview(fw)
         page = await fw.check_platform_bios("psx")
         return next(p for p in overview["platforms"] if p["platform_slug"] == "psx"), page
 
@@ -2635,7 +2921,7 @@ class TestOnePlatformOneEmulator:
             ],
         )
 
-        overview = await fw.get_firmware_status()
+        overview = await _overview(fw)
         page = await fw.check_platform_bios("psx")
 
         platform = next(p for p in overview["platforms"] if p["platform_slug"] == "psx")
@@ -2658,6 +2944,188 @@ class TestOnePlatformOneEmulator:
         cores = next(f for f in page["files"] if f["file_name"] == _PSX_IMAGES[0])["cores"]
         assert cores[_id(_PSX_CORE)] == {"required": False, "needs_one_of": len(_PSX_IMAGES)}
         assert cores[_id(_PSX_ALTERNATIVE_CORE)] == {"required": False, "needs_one_of": None}
+
+
+_PSX_ROM_ID = 501
+_PSX_STANDALONE_ID = "DUCKSTATION"
+
+# Every way a ROM arrives at an emulator, as ``(per-game pin, platform pick)``:
+# nothing pinned anywhere, the platform's own pick, a per-game override, the
+# override winning over a platform pick that names something else, a standalone
+# pick, and a stale pin that no longer resolves. The last degrades to the layer
+# below, and the point is that it degrades the same way on both halves.
+_ROM_PICKS = [
+    (None, None),
+    (None, _PSX_ALTERNATIVE_LABEL),
+    (_PSX_ALTERNATIVE_LABEL, None),
+    (_PSX_DEFAULT_LABEL, _PSX_ALTERNATIVE_LABEL),
+    (_PSX_STANDALONE_LABEL, None),
+    ("An emulator ES-DE no longer lists", None),
+]
+
+
+def _rom_scoped_surfaces(
+    *, game_pick: str | None, platform_pick: str | None
+) -> tuple[CoreService, GameDetailService, FirmwareService]:
+    """The game page's two halves over one PlayStation, one ROM, one resolution.
+
+    Both halves resolve the ROM's emulator through the real
+    :class:`ActiveCoreResolver` — the seam they share in production — reading one
+    emulator list, one per-platform override map and one ROM row. So the only
+    thing a disagreement between them can come from is one half reading a
+    different field of the one answer, which is exactly the defect this pins.
+    """
+    import decky
+
+    # ES-DE's three, but with the standalone one IDENTIFIED. The platform-scoped
+    # fixture leaves it unidentified on purpose, which makes a standalone pick
+    # and an unresolvable one the same ``None`` — and a ROM pinned to it would
+    # then agree with the picker vacuously, both halves holding nothing.
+    fw = _psx_platform_service(
+        platform_core=platform_pick,
+        options=[
+            libretro_option(_PSX_CORE, _PSX_DEFAULT_LABEL),
+            libretro_option(_PSX_ALTERNATIVE_CORE, _PSX_ALTERNATIVE_LABEL),
+            standalone_option("%EMULATOR_DUCKSTATION% %ROM%", _PSX_STANDALONE_LABEL, emulator=_PSX_STANDALONE_ID),
+        ],
+    )
+    core_info = _core_info(fw)
+    uow = FakeUnitOfWork()
+    uow.roms.save(
+        Rom(
+            rom_id=_PSX_ROM_ID,
+            platform_slug="psx",
+            name=f"rom-{_PSX_ROM_ID}",
+            fs_name=f"rom-{_PSX_ROM_ID}.chd",
+            shortcut_app_id=1,
+            last_synced_at="2026-01-01T00:00:00+00:00",
+            emulator_override=game_pick,
+        )
+    )
+    uow_factory = FakeUnitOfWorkFactory(uow)
+    resolve_system = FakeSystemResolver()
+    active_core = ActiveCoreResolver(
+        config=ActiveCoreResolverConfig(
+            uow_factory=uow_factory,
+            core_info=core_info,
+            sandbox_launcher=FakeSandboxLauncher(),
+            platform_core_reader=_platform_core_reader(fw),
+            resolve_system=resolve_system,
+            logger=decky.logger,
+        )
+    )
+    cores = CoreService(
+        config=CoreServiceConfig(
+            loop=asyncio.get_event_loop(),
+            logger=decky.logger,
+            core_info=core_info,
+            resolve_system=resolve_system,
+            settings={},
+            settings_persister=FakeSettingsPersister(),
+            bios_checker=fw,
+            uow_factory=uow_factory,
+            active_core=active_core,
+            disc_resolver=FakeDiscResolver(),
+        )
+    )
+    detail = GameDetailService(
+        config=GameDetailServiceConfig(
+            settings={},
+            logger=decky.logger,
+            clock=_make_clock(),
+            uow_factory=uow_factory,
+            bios_checker=fw,
+            achievements=MagicMock(),
+            active_core=active_core,
+            path_exists=FakePathExistsReader(),
+            retrodeck_paths=FakeRetroDeckPaths(),
+            resolve_system=resolve_system,
+            candidate_probe=lambda platform_slug, fs_name: False,
+        )
+    )
+    return cores, detail, fw
+
+
+class TestOneRomOneEmulator:
+    """A ROM's two halves answer for ONE emulator, whichever way the ROM arrived at it.
+
+    The ROM-scoped sibling of :class:`TestOnePlatformOneEmulator`. The game page
+    is assembled from two services that each ask "which emulator launches this
+    ROM?" for themselves: ``services/cores.py`` names it in the picker, and
+    ``services/game_detail.py`` scopes the BIOS question to it. They read one
+    seam today, and nothing said they must — the picker reading
+    ``active_core_for_rom`` instead would answer ``None`` for every standalone
+    pick and send the BIOS rows back to the platform's own, which is the
+    platform-scoped defect one layer in.
+
+    Asserted as an AGREEMENT rather than as today's value, for the reason its
+    sibling is: a second resolution added on either side would answer today's
+    value for today's configuration and diverge on some other one.
+    """
+
+    @staticmethod
+    async def _both(game_pick: str | None, platform_pick: str | None) -> tuple[dict[str, Any], dict[str, Any], Any]:
+        """The picker payload, the BIOS half's answer, and the firmware service behind them."""
+        cores, detail, fw = _rom_scoped_surfaces(game_pick=game_pick, platform_pick=platform_pick)
+        picker = await cores.get_platform_core_info(_PSX_ROM_ID)
+        bios = (await detail.get_bios_status(_PSX_ROM_ID))["bios_status"]
+        return picker, bios, fw
+
+    @pytest.mark.parametrize(("game_pick", "platform_pick"), _ROM_PICKS)
+    @pytest.mark.asyncio
+    async def test_the_bios_half_answers_for_the_emulator_the_picker_names(self, game_pick, platform_pick):
+        picker, bios, fw = await self._both(game_pick, platform_pick)
+
+        named = await fw.check_platform_bios("psx", picker["active_core"])
+        assert _emulator_dependent(bios) == _emulator_dependent(named)
+
+    @pytest.mark.parametrize(("game_pick", "platform_pick"), _ROM_PICKS)
+    @pytest.mark.asyncio
+    async def test_the_picker_keys_on_the_emulator_it_names(self, game_pick, platform_pick):
+        """The page's label and the identity its BIOS answer is scoped to are one pick.
+
+        Read off the payload's own emulator list rather than off a constant, so
+        what is asserted is the RELATION — which is what makes it hold for the
+        standalone pick, where there is no core to name and the identity is the
+        only field that answers.
+        """
+        picker, _, _ = await self._both(game_pick, platform_pick)
+
+        named = next(e for e in picker["emulators"] if e["label"] == picker["active_core_label"])
+        assert picker["active_core"] == named["emulator"]
+
+    @pytest.mark.asyncio
+    async def test_a_per_game_pin_moves_the_answer_on_both_halves(self):
+        """The non-vacuity check: the two agree about an answer that actually moves.
+
+        Unpinned, the ROM launches with the es_systems default, whose console
+        will not start without an image and holds none. Pinned to PCSX ReARMed —
+        which carries its own substitute — the same three files stop being a
+        requirement. Both halves have to move together, and an agreement over an
+        answer that never moved would hide either of them standing still.
+        """
+        default_picker, default_bios, _ = await self._both(None, None)
+        pinned_picker, pinned_bios, _ = await self._both(_PSX_ALTERNATIVE_LABEL, None)
+
+        assert default_picker["active_core_label"] == _PSX_DEFAULT_LABEL
+        assert (default_bios["system_image"], default_bios["bios_level"]) == ("absent", "missing")
+        assert pinned_picker["active_core_label"] == _PSX_ALTERNATIVE_LABEL
+        assert (pinned_bios["system_image"], pinned_bios["bios_level"]) == ("not_demanded", "ok")
+
+    @pytest.mark.asyncio
+    async def test_a_standalone_pin_is_carried_by_the_identity_alone(self):
+        """The pick both halves would lose by reading the core rather than the identity.
+
+        DuckStation has no ``core_so``, so the ``.so``-space projection answers
+        ``None`` for it — which is the platform's own pick, a different emulator
+        and a different answer.
+        """
+        picker, bios, fw = await self._both(_PSX_STANDALONE_LABEL, None)
+
+        assert picker["active_core_label"] == _PSX_STANDALONE_LABEL
+        assert picker["active_core"] is not None
+        platform_pick = await fw.check_platform_bios("psx", None)
+        assert _emulator_dependent(bios) != _emulator_dependent(platform_pick)
 
 
 class TestDownloadFirmware:

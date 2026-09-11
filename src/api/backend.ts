@@ -14,6 +14,7 @@ import type {
   CollectionNamingMode,
   RegistryPlatform,
   FirmwareStatus,
+  PlatformFirmwareStatus,
   FirmwareDownloadResult,
   BiosLevel,
   SystemImage,
@@ -554,7 +555,11 @@ export const saveSgdbApiKey = callable<[string], { success: boolean; message: st
 export const verifySgdbApiKey = callable<[string], { success: boolean; message: string }>("verify_sgdb_api_key");
 export const saveSteamInputSetting = callable<[string], { success: boolean }>("save_steam_input_setting");
 export const applySteamInputSetting = callable<[], { success: boolean; message: string }>("apply_steam_input_setting");
+// Which platforms the BIOS page can speak for — not what it will say about any
+// of them. The state costs a live per-system reading, so it is asked for one
+// platform at a time below, in the order the page's own list is in.
 export const getFirmwareStatus = callable<[], FirmwareStatus>("get_firmware_status");
+export const getPlatformFirmwareStatus = callable<[string], PlatformFirmwareStatus>("get_platform_firmware_status");
 export const downloadAllFirmware = callable<[string], FirmwareDownloadResult>("download_all_firmware");
 export const downloadRequiredFirmware = callable<[string], FirmwareDownloadResult>("download_required_firmware");
 // One row's Download button (#164). Addressed by file name within the platform,

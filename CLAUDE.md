@@ -660,11 +660,12 @@ Format: **invariant** — tier — enforced by.
   and widening either to match the other is the fix that reintroduces one of those two defects. Nothing checks any of
   it: `needs_one_of` is a plain int-or-null on a dict a surface may read either key of, and the candidate flag is a
   plain bool beside a `required_by_active` that reads like its sibling
-- **Which emulator a PLATFORM's answers are about is one pick, and every platform-scoped answer is a projection of it**
-  — test + prompt-only — `tests/services/test_firmware.py::TestOnePlatformOneEmulator` asserts the two surfaces AGREE
-  across every way a platform arrives at an emulator (no pick, each of the three ES-DE offers, a pin naming an emulator
-  the catalogue no longer lists, a pin whose command cannot be baked) rather than pinning today's value, because a value
-  test would pass for a third resolution that diverges on some other configuration;
+- **Which emulator a set of answers is about is ONE pick per scope — a platform's, and a ROM's — and every answer in
+  that scope is a projection of it** — test + prompt-only —
+  `tests/services/test_firmware.py::TestOnePlatformOneEmulator` asserts the two surfaces AGREE across every way a
+  platform arrives at an emulator (no pick, each of the three ES-DE offers, a pin naming an emulator the catalogue no
+  longer lists, a pin whose command cannot be baked) rather than pinning today's value, because a value test would pass
+  for a third resolution that diverges on some other configuration;
   `::TestDownloadRequiredFirmware::test_it_fetches_what_the_platforms_own_pick_calls_required` holds the download button
   to the same pick. The pick is `domain/emulator_commands.py::resolve_platform_option` — the per-platform override
   (`settings.json` `platform_cores`) when its label still names a bakeable emulator, else the es_systems default — and
@@ -679,7 +680,38 @@ Format: **invariant** — tier — enforced by.
   pick as readily as a libretro one, where `core_so` is `None` for every standalone emulator and sent the rows back to
   "every declaring emulator". Reaching for `.core_so` here again restores that degradation silently, because the field
   is still there and still right for the picker payload beside it. `CoreInfoProvider.get_active_core` — the "first
-  libretro entry, bakeable or not" reading these sites used — has no production caller left
+  libretro entry, bakeable or not" reading these sites used — has no production caller left. **The ROM scope is the same
+  rule one layer in, over a different pair of modules**: the game page is assembled by two services that each ask
+  `ActiveCoreReader.active_emulator_for_rom` for themselves — `services/cores.py::get_platform_core_info` names the pick
+  in the picker, `services/game_detail.py::get_bios_status` scopes the BIOS question to it — and
+  `::TestOneRomOneEmulator` asserts they agree across every way a ROM arrives at an emulator (nothing pinned, the
+  platform's pick, a per-game override, the override over a platform pick naming something else, a standalone pick, a
+  stale pin that degrades). They read one seam today and nothing says they must; the picker reaching for
+  `active_core_for_rom` — the `.so`-space projection right beside it — would answer `None` for every standalone pick and
+  send the BIOS rows back to the platform's own, which is the platform-scoped defect above, per ROM. **What the ROM
+  sibling cannot pin is the fixture's own default**: `FakeCoreInfoProvider.get_default_emulator` builds its invocation
+  from the `active_core` tuple, which carries no identity, so a test on the bare fake resolves an unpinned ROM to a
+  `None` where the live adapter resolves it to an emulator — `_DeclaredDefaultCoreInfo` in that file renders the
+  declared default the way `AtlasCatalogueAdapter` does, and every other fixture on the bare fake still exercises the
+  weaker resolution
+- **A platform's BIOS answer is asked for one platform at a time, and a row that has not got one yet is never rendered
+  as a row nothing could be established for** — test + prompt-only — `src/components/library/PlatformsTab.test.tsx` pins
+  the four halves that can be seen from a test: the two renderings apart (an outline dot and "Checking…" against the
+  solid grey dot and "Nothing is known"), the focused row asked ahead of the rows above it, the walk stopping at
+  unmount, and a read issued before a core change not overwriting the one issued after it. Each was mutation-checked.
+  **The rule spans three frontend modules and one backend split, and nothing joins them.** `services/firmware/status.py`
+  answers `get_firmware_status` (which platforms the page can speak for) and `get_platform_firmware_status` (one
+  platform's whole entry — 64-350 ms of live per-system reading, measured); `usePlatformsPage` owns the walk, the
+  per-slug ordering counter and the four-valued `firmwareState`; `PlatformsTab` draws the dot; `PlatformDetail` words
+  the pane. Every failure here is silent and looks like an answer. A state-bearing field creeping back onto the overview
+  payload gets rendered over a platform nobody has asked about yet. A fifth rendering path reading `firmware === null`
+  instead of the state says "nothing could be established" about most of the list for the first seconds of every visit —
+  which is the confusion this cut exists to remove, restored by a truthiness test. An answer already held is not taken
+  back by a later failure (`firmwareStale` beside the state, never instead of it), and "the overview did not name this
+  platform" is one of the two ways to hold one. **Two halves no test reaches**: the `alive` guard in the hook's `accept`
+  is unobservable under React Testing Library, which drops a write to an unmounted tree itself — what a test can see is
+  the walk stopping, so the guard states the rule rather than being held to it; and whether an 8px outline reads as "not
+  yet" against a filled dot is device-only, like everything else about this list's legibility
 - **The whole-machine firmware inventory is never asked with content verification, and the per-platform reading is never
   asked without it** — prompt-only — `firmware_inventory()` (`FirmwareResolver`, `AtlasFirmwareAdapter`) is asked
   unverified: `verify=True` there sweeps every unclaimed file under the BIOS root plus each declared file the packaged
@@ -729,20 +761,20 @@ Format: **invariant** — tier — enforced by.
   in the UI able to remove it. The PATH has its own version of the same trap: a status row's `local_path` is recomputed
   from today's placement, so for a file fetched before an emu-atlas bump moved it the name still matches our record
   while the path names whatever now occupies the new destination — RetroDECK's own `codehandler.bin`, in the case that
-  motivated this. The count the UI offers is bound to the same set: `deletable_count` on the `get_firmware_status`
-  payload is records-still-on-disk, counted as distinct paths, because `local_count` is the library's progress ratio and
-  is wrong in both directions — it hid the button entirely for a platform whose downloads had all left the library.
-  **Since #1815 the same field is stamped per ROW** (`_stamp_deletable`), and the frontend authorises a destructive
-  action on it: a row's Delete is offered where `deletable_count` is non-zero and nowhere else, and a folder row's
-  counts the distinct files our records name underneath it, because a folder is never a download but what we put inside
-  one is still ours — and two records naming one path are one unlink, the platform count's own rule read one layer in.
-  That is a wire field a page reads to decide whether to offer a delete, so deriving it from `downloaded` — the same
-  substitution as below, one layer out — puts the button on `codehandler.bin`; `TestGetFirmwareStatusDeletableCount`
-  pins the row's answer for a file the plugin did not place. **Three buttons now reach one removal loop**
-  (`PlatformBiosDeleter._delete_recorded_io`, under a record predicate per button): a second copy of that loop is the
-  shape this rule is about, because the copies would drift silently. **Nothing mechanical stands behind any of this.** A
-  delete path looping a status list on `downloaded` alone would go green — which is exactly the shape this one had when
-  it destroyed that file
+  motivated this. The count the UI offers is bound to the same set: `deletable_count` on the
+  `get_platform_firmware_status` payload is records-still-on-disk, counted as distinct paths, because `local_count` is
+  the library's progress ratio and is wrong in both directions — it hid the button entirely for a platform whose
+  downloads had all left the library. **Since #1815 the same field is stamped per ROW** (`_stamp_deletable`), and the
+  frontend authorises a destructive action on it: a row's Delete is offered where `deletable_count` is non-zero and
+  nowhere else, and a folder row's counts the distinct files our records name underneath it, because a folder is never a
+  download but what we put inside one is still ours — and two records naming one path are one unlink, the platform
+  count's own rule read one layer in. That is a wire field a page reads to decide whether to offer a delete, so deriving
+  it from `downloaded` — the same substitution as below, one layer out — puts the button on `codehandler.bin`;
+  `TestGetFirmwareStatusDeletableCount` pins the row's answer for a file the plugin did not place. **Three buttons now
+  reach one removal loop** (`PlatformBiosDeleter._delete_recorded_io`, under a record predicate per button): a second
+  copy of that loop is the shape this rule is about, because the copies would drift silently. **Nothing mechanical
+  stands behind any of this.** A delete path looping a status list on `downloaded` alone would go green — which is
+  exactly the shape this one had when it destroyed that file
 - **Every read-mutate-write of a `RomSaveSyncState` runs under `SyncEngine.rom_lock(rom_id)`** — prompt-only — sync
   paths, `get_save_status`, and the four slot mutations hold the lock; mechanize via a `rom_save_sync_states.save`
   call-site audit

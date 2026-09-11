@@ -103,6 +103,64 @@ function firmwarePlatform(overrides: Partial<FirmwarePlatformExt> = {}): Firmwar
   };
 }
 
+/**
+ * Seed BOTH halves of the page's BIOS read from one list of platforms: the
+ * overview naming them, and each platform's own answer.
+ *
+ * One fixture, because a test that seeded only the overview would leave every
+ * per-platform read unmocked — which is a rejected promise, i.e. a read that
+ * failed, and the page words that differently from every state these tests are
+ * about. A platform not in the list answers `platform: null`, which is what the
+ * backend says about one it has nothing to say about.
+ */
+function mockFirmware(platforms: FirmwarePlatformExt[], opts: { serverOffline?: boolean } = {}): void {
+  vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
+    success: true,
+    server_offline: opts.serverOffline ?? false,
+    platforms: platforms.map((p) => ({ platform_slug: p.platform_slug, has_games: p.has_games ?? false })),
+  });
+  vi.mocked(backend.getPlatformFirmwareStatus).mockImplementation(async (slug: string) => ({
+    success: true,
+    platform: platforms.find((p) => p.platform_slug === slug) ?? null,
+  }));
+}
+
+/** One per-platform read the page has issued and is waiting on. */
+interface PendingRead {
+  slug: string;
+  answer: (platform: FirmwarePlatformExt | null) => void;
+}
+
+/**
+ * Hold every per-platform read open, so a test can see WHICH platform was asked
+ * for and WHEN, and decide the order the answers come back in.
+ *
+ * The page asks one platform at a time and reorders around the reader, so the
+ * queue is behaviour rather than plumbing: a test that let the answers resolve
+ * on their own would see the finished list and none of the decisions that built
+ * it. Returns the live list of outstanding reads, in the order they were issued.
+ */
+function deferredPlatformReads(): PendingRead[] {
+  const pending: PendingRead[] = [];
+  vi.mocked(backend.getPlatformFirmwareStatus).mockImplementation(
+    (slug: string) =>
+      new Promise((resolve) => {
+        pending.push({ slug, answer: (platform) => resolve({ success: true, platform }) });
+      }),
+  );
+  return pending;
+}
+
+/** Answer the outstanding read for *slug* and let the page settle. */
+async function resolveRead(pending: PendingRead[], slug: string, platform: FirmwarePlatformExt | null): Promise<void> {
+  const read = pending.find((p) => p.slug === slug);
+  if (!read) throw new Error(`no read outstanding for ${slug}`);
+  await act(async () => {
+    read.answer(platform);
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+  });
+}
+
 const flushAsync = () =>
   act(async () => {
     for (let i = 0; i < 6; i++) await Promise.resolve();
@@ -216,7 +274,7 @@ describe("Library › Platforms", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: [platform()] });
-    vi.mocked(backend.getFirmwareStatus).mockResolvedValue({ success: true, platforms: [firmwarePlatform()] });
+    mockFirmware([firmwarePlatform()]);
     vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({ platforms: [{ slug: "gba", name: "GBA", count: 9 }] });
     vi.mocked(backend.getSystemCoreInfo).mockResolvedValue(coreInfo());
     vi.mocked(backend.countPlatformSaves).mockResolvedValue({ count: 3 });
@@ -280,13 +338,10 @@ describe("Library › Platforms", () => {
           platform({ id: 2, slug: "n64", name: "Nintendo 64" }),
         ],
       });
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({ required_count: 5, required_downloaded: 3, bios_level: "partial" }),
-          firmwarePlatform({ platform_slug: "n64", required_count: 0, bios_level: "ok", files: [] }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({ required_count: 5, required_downloaded: 3, bios_level: "partial" }),
+        firmwarePlatform({ platform_slug: "n64", required_count: 0, bios_level: "ok", files: [] }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -305,10 +360,7 @@ describe("Library › Platforms", () => {
       // The dot is now the only BIOS signal in the row, so its title has to
       // carry every state the number used to distinguish — including the two
       // the detail pane words apart.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [firmwarePlatform({ bios_level: "unknown", required_count: 0, required_withheld: 0 })],
-      });
+      mockFirmware([firmwarePlatform({ bios_level: "unknown", required_count: 0, required_withheld: 0 })]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -324,10 +376,7 @@ describe("Library › Platforms", () => {
       // line you scan past, and the header's width was what wrapped that line
       // three times — so one statement is left, and it takes the same mapping
       // the dot takes.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [firmwarePlatform({ required_count: 2, required_downloaded: 0, bios_level: "missing" })],
-      });
+      mockFirmware([firmwarePlatform({ required_count: 2, required_downloaded: 0, bios_level: "missing" })]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -352,13 +401,123 @@ describe("Library › Platforms", () => {
       // Drawn on every row: a dot that comes and goes shifts each name beside
       // it, and the list is meant to be scanned down its left edge. Grey is the
       // colour for "no level", which is what the shared mapping answers.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({ success: true, platforms: [] });
+      mockFirmware([]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
       const dot = container.querySelector<HTMLElement>('[data-testid="bios-dot-gba"]');
       expect(dot).not.toBeNull();
       expect(dot!.style.backgroundColor).toBe(biosColorForLevel(null));
+    });
+
+    it("draws a row still waiting for its answer apart from one nothing is known about", async () => {
+      // The distinction this whole lazy read stands on. Both rows hold no
+      // answer, and if they render alike the reader takes "nothing could be
+      // established" off a platform whose turn has not come — which is most of
+      // the list, for the first seconds of every visit. A solid dot is a
+      // verdict; an outline is the absence of one.
+      mockFirmware([firmwarePlatform()]);
+      const pending = deferredPlatformReads();
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const dot = () => container.querySelector<HTMLElement>('[data-testid="bios-dot-gba"]')!;
+      const rowTitle = () =>
+        [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
+          el.textContent.includes("Game Boy Advance"),
+        )?.title;
+      expect(dot().style.backgroundColor).toBe("transparent");
+      expect(dot().style.border).toContain(biosColorForLevel(null));
+      expect(rowTitle()).toBe("Checking this platform's BIOS files…");
+      expect(container.textContent).toContain("Checking what this platform needs…");
+      expect(container.textContent).not.toContain("Nothing is known about this platform");
+
+      // The same row once the answer is in: a solid dot, and words that are an
+      // answer rather than a wait.
+      await resolveRead(pending, "gba", null);
+
+      expect(dot().style.backgroundColor).toBe(biosColorForLevel(null));
+      expect(dot().style.border).toBe("");
+      expect(rowTitle()).toBe("Nothing is known about this platform's BIOS files");
+      expect(container.textContent).toContain("Nothing is known about this platform");
+    });
+
+    it("asks the platform the reader is on before the ones above it", async () => {
+      // The answers arrive one at a time, so the order is the only thing that
+      // decides how long the open pane waits. The reader is looking at this one.
+      vi.mocked(backend.getPlatforms).mockResolvedValue({
+        success: true,
+        platforms: [
+          platform({ id: 1, name: "Game Boy Advance", slug: "gba" }),
+          platform({ id: 2, name: "Nintendo 64", slug: "n64" }),
+          platform({ id: 3, name: "Super Nintendo", slug: "snes" }),
+        ],
+      });
+      mockFirmware([
+        firmwarePlatform(),
+        firmwarePlatform({ platform_slug: "n64" }),
+        firmwarePlatform({ platform_slug: "snes" }),
+      ]);
+      const pending = deferredPlatformReads();
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      // Top-down to start with: nobody has moved, so the first row is the one
+      // whose pane is open.
+      expect(pending.map((p) => p.slug)).toEqual(["gba"]);
+
+      await focusRow(container, "Super Nintendo");
+      await resolveRead(pending, "gba", firmwarePlatform());
+
+      // Not "n64", which is what walking the list in order would have asked.
+      expect(pending.map((p) => p.slug)).toEqual(["gba", "snes"]);
+    });
+
+    it("stops asking when the reader leaves the page", async () => {
+      vi.mocked(backend.getPlatforms).mockResolvedValue({
+        success: true,
+        platforms: [
+          platform({ id: 1, name: "Game Boy Advance", slug: "gba" }),
+          platform({ id: 2, name: "Nintendo 64", slug: "n64" }),
+        ],
+      });
+      mockFirmware([firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })]);
+      const pending = deferredPlatformReads();
+      const { unmount } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      expect(pending.map((p) => p.slug)).toEqual(["gba"]);
+
+      unmount();
+      await resolveRead(pending, "gba", firmwarePlatform());
+
+      // The answer that was already in flight comes back to nobody, and the
+      // platform behind it is never asked for: the walk is not work that
+      // outlives the page it is for.
+      expect(pending.map((p) => p.slug)).toEqual(["gba"]);
+    });
+
+    it("drops an answer from a previous visit rather than writing it over this one's", async () => {
+      // Leaving and coming back builds a fresh page whose rows are read again.
+      // The first visit's answer is still out, and it is about a state this
+      // visit has already re-read — so it is dropped, not written.
+      mockFirmware([firmwarePlatform()]);
+      const stale = deferredPlatformReads();
+      const first = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      first.unmount();
+
+      mockFirmware([firmwarePlatform({ bios_level: "ok", required_count: 1, required_downloaded: 1 })]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      expect(container.querySelector<HTMLElement>('[data-testid="bios-dot-gba"]')!.style.backgroundColor).toBe(
+        biosColorForLevel("ok"),
+      );
+
+      await resolveRead(stale, "gba", firmwarePlatform({ bios_level: "missing" }));
+
+      expect(container.querySelector<HTMLElement>('[data-testid="bios-dot-gba"]')!.style.backgroundColor).toBe(
+        biosColorForLevel("ok"),
+      );
     });
 
     it("toggles a platform optimistically through its own id", async () => {
@@ -592,10 +751,7 @@ describe("Library › Platforms", () => {
       });
       // The other pane needs buttons of its own to be shown disabled, so both
       // platforms carry a firmware entry and a shortcut count.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })],
-      });
+      mockFirmware([firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })]);
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
         platforms: [
           { slug: "gba", name: "GBA", count: 9 },
@@ -871,8 +1027,34 @@ describe("Library › Platforms", () => {
       expect(container.textContent).not.toContain("Nothing is known about this platform");
     });
 
+    it("retries the overview when the reader picks a platform again", async () => {
+      // The pane tells the reader to pick the platform again, and on this pane
+      // the read that failed was the overview — nothing else would ever ask for
+      // it, so the line has to be true here too.
+      vi.mocked(backend.getPlatforms).mockResolvedValue({
+        success: true,
+        platforms: [
+          platform({ id: 1, name: "Game Boy Advance", slug: "gba" }),
+          platform({ id: 2, name: "Nintendo 64", slug: "n64" }),
+        ],
+      });
+      mockFirmware([firmwarePlatform({ platform_slug: "n64", bios_level: "ok" })]);
+      vi.mocked(backend.getFirmwareStatus).mockRejectedValueOnce(new Error("net"));
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      expect(container.textContent).toContain("Could not read the BIOS state");
+
+      await focusRow(container, "Nintendo 64");
+      await flushAsync();
+
+      expect(container.textContent).not.toContain("Could not read the BIOS state");
+      expect(container.querySelector<HTMLElement>('[data-testid="bios-dot-n64"]')!.style.backgroundColor).toBe(
+        biosColorForLevel("ok"),
+      );
+    });
+
     it("reads a platform the overview simply has no entry for as an answer", async () => {
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({ success: true, platforms: [] });
+      mockFirmware([]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -893,7 +1075,7 @@ describe("Library › Platforms", () => {
     });
 
     it("says a failed re-read on the pane that still shows the old rows", async () => {
-      // A failed refresh does not clear the map, so this pane keeps its
+      // A failed re-read does not take the answer away, so this pane keeps its
       // pre-change rows. That is where a reader needs telling — the notice used
       // to appear only where there were no rows to be wrong about.
       vi.mocked(backend.downloadRequiredFirmware).mockResolvedValue({
@@ -905,7 +1087,7 @@ describe("Library › Platforms", () => {
       await flushAsync();
       expect(container.textContent).toContain("gba_bios.bin");
 
-      vi.mocked(backend.getFirmwareStatus).mockRejectedValue(new Error("net"));
+      vi.mocked(backend.getPlatformFirmwareStatus).mockRejectedValue(new Error("net"));
       await act(async () => {
         fireEvent.click(buttonByText(container, "Download required (1)")!);
         for (let i = 0; i < 10; i++) await Promise.resolve();
@@ -916,12 +1098,10 @@ describe("Library › Platforms", () => {
       expect(container.textContent).toContain("what is below may be out of date");
     });
 
-    it("keeps a no-entry pane's answer after a failed re-read", async () => {
-      // "Nothing is known about this platform" is an answer, and a failed
-      // REFRESH does not take it away: the answer set still stands, this
-      // platform's part of it is still "nothing", and the notice above says the
-      // whole of it may be stale. Only a first read that never landed leaves the
-      // pane with nothing to say — which is the test above this one.
+    it("leaves another platform's pane alone when this one's re-read fails", async () => {
+      // The read that failed was about ONE platform, so the warning is about one
+      // platform. A page-wide notice said "what is below may be out of date"
+      // over a pane whose own answer had never been in question.
       vi.mocked(backend.getPlatforms).mockResolvedValue({
         success: true,
         platforms: [
@@ -937,31 +1117,33 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      vi.mocked(backend.getFirmwareStatus).mockRejectedValue(new Error("net"));
+      vi.mocked(backend.getPlatformFirmwareStatus).mockRejectedValue(new Error("net"));
       await act(async () => {
         fireEvent.click(buttonByText(container, "Download required (1)")!);
         for (let i = 0; i < 10; i++) await Promise.resolve();
       });
+      expect(container.textContent).toContain("may be out of date");
+
       await focusRow(container, "Nintendo 64");
 
       expect(container.textContent).toContain("Nothing is known about this platform");
-      expect(container.textContent).toContain("may be out of date");
+      expect(container.textContent).not.toContain("may be out of date");
       expect(container.textContent).not.toContain("Could not read the BIOS state.");
     });
 
-    it("keeps the no-entry wording after a failed refresh of an overview that spoke for nobody", async () => {
-      // A successful read that names no platform is an answer set too. Counting
-      // the map's keys called that "never read", so a later failed refresh took
-      // back "nothing is known" on every pane — the exact wording the failed-
-      // re-read fix put there.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({ success: true, platforms: [] });
+    it("keeps the no-entry wording after a failed re-read of a platform with nothing to say", async () => {
+      // "Nothing is known about this platform" is an ANSWER, and a failed
+      // re-read does not take it back — it warns beside it. The pane that says
+      // nothing could be read is the one holding no answer at all, which is a
+      // different pane and a different sentence.
+      mockFirmware([]);
       vi.mocked(backend.setSystemCore).mockResolvedValue({ success: true, rebake_items: [] });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
       expect(container.textContent).toContain("Nothing is known about this platform");
 
-      // A core change is what re-reads the overview; this one fails.
-      vi.mocked(backend.getFirmwareStatus).mockRejectedValue(new Error("net"));
+      // A core change is what re-reads this platform; this one fails.
+      vi.mocked(backend.getPlatformFirmwareStatus).mockRejectedValue(new Error("net"));
       await act(async () => {
         fireEvent.click(coreButton(container)!);
         await Promise.resolve();
@@ -1099,6 +1281,41 @@ describe("Library › Platforms", () => {
       });
     }
 
+    it("keeps the post-change answer over a read still in flight from before it", async () => {
+      // The core picker is offered while this platform's BIOS answer is still
+      // coming — it needs no BIOS data — so a core change can put a SECOND read
+      // in flight for one platform. The first describes the old core's demand.
+      // Landing last, and written, it puts the old core's dot back over the new
+      // core's answer: a wrong colour, no error, nothing to notice.
+      mockFirmware([firmwarePlatform()]);
+      const pending = deferredPlatformReads();
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      expect(pending.map((p) => p.slug)).toEqual(["gba"]);
+
+      await openCoreMenu(container);
+      await pickFromCoreMenu("VBA Next");
+      expect(pending.map((p) => p.slug)).toEqual(["gba", "gba"]);
+      const [beforeChange, afterChange] = pending;
+      if (!beforeChange || !afterChange) throw new Error("expected two reads for one platform");
+
+      // The change's own read lands: the new core wants nothing.
+      await act(async () => {
+        afterChange.answer(firmwarePlatform({ bios_level: "ok", required_downloaded: 1 }));
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+      });
+      const dot = () => container.querySelector<HTMLElement>('[data-testid="bios-dot-gba"]')!.style.backgroundColor;
+      expect(dot()).toBe(biosColorForLevel("ok"));
+
+      // And now the older one answers, about the core that is no longer picked.
+      await act(async () => {
+        beforeChange.answer(firmwarePlatform({ bios_level: "missing" }));
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+      });
+
+      expect(dot()).toBe(biosColorForLevel("ok"));
+    });
+
     it("pins the picked emulator", async () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -1129,13 +1346,13 @@ describe("Library › Platforms", () => {
       try {
         const { container } = render(<LibraryPage onBack={vi.fn()} />);
         await flushAsync();
-        const firmwareReadsBefore = vi.mocked(backend.getFirmwareStatus).mock.calls.length;
+        const firmwareReadsBefore = vi.mocked(backend.getPlatformFirmwareStatus).mock.calls.length;
         await openCoreMenu(container);
         await pickFromCoreMenu("VBA Next");
         await flushAsync();
 
         expect(vi.mocked(setLaunchOptionsConfirmed)).toHaveBeenCalledWith(7, "flatpak run … -e vba_next_libretro");
-        expect(vi.mocked(backend.getFirmwareStatus).mock.calls.length).toBeGreaterThan(firmwareReadsBefore);
+        expect(vi.mocked(backend.getPlatformFirmwareStatus).mock.calls.length).toBeGreaterThan(firmwareReadsBefore);
         expect(vi.mocked(backend.getSystemCoreInfo)).toHaveBeenCalledTimes(2);
         expect(events.map((e) => e.detail.type)).toContain("core_changed");
       } finally {
@@ -1179,10 +1396,7 @@ describe("Library › Platforms", () => {
           platform({ id: 2, slug: "n64", name: "Nintendo 64" }),
         ],
       });
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })],
-      });
+      mockFirmware([firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })]);
       // Both panes need a synced platform's own buttons: the chip is disabled
       // on a platform with nothing in Steam for a reason of its own.
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
@@ -1301,10 +1515,7 @@ describe("Library › Platforms", () => {
           platform({ id: 2, slug: "n64", name: "Nintendo 64" }),
         ],
       });
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })],
-      });
+      mockFirmware([firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })]);
       let finish: (v: { success: boolean; rebake_items: never[] }) => void = () => {};
       vi.mocked(backend.setSystemCore).mockReturnValue(
         new Promise((resolve) => {
@@ -1354,31 +1565,28 @@ describe("Library › Platforms", () => {
       // The glyph is the VERDICT, the colour is the NEED — two facts, two
       // channels, so neither has to be read off the other. `satisfied` is the
       // verdict, never presence.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({ file_name: "a.bin", required_by_active: true, downloaded: true, satisfied: true }),
-              firmwareFile({ file_name: "b.bin", required_by_active: true, downloaded: false, satisfied: false }),
-              firmwareFile({
-                file_name: "c.bin",
-                wanted: "optional",
-                required_by_active: false,
-                downloaded: true,
-                satisfied: true,
-              }),
-              firmwareFile({
-                file_name: "d.bin",
-                wanted: "optional",
-                required_by_active: false,
-                downloaded: false,
-                satisfied: false,
-              }),
-            ],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            firmwareFile({ file_name: "a.bin", required_by_active: true, downloaded: true, satisfied: true }),
+            firmwareFile({ file_name: "b.bin", required_by_active: true, downloaded: false, satisfied: false }),
+            firmwareFile({
+              file_name: "c.bin",
+              wanted: "optional",
+              required_by_active: false,
+              downloaded: true,
+              satisfied: true,
+            }),
+            firmwareFile({
+              file_name: "d.bin",
+              wanted: "optional",
+              required_by_active: false,
+              downloaded: false,
+              satisfied: false,
+            }),
+          ],
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1396,18 +1604,13 @@ describe("Library › Platforms", () => {
     it("marks a verdict nothing could establish with ?, and nothing else", async () => {
       // `?` is the VERDICT axis alone. Amber, not red: calling it missing would
       // claim an absence nothing established, which the register forbids.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({ file_name: "folder", declared_kind: "directory", downloaded: true, satisfied: null }),
-            ],
-            bios_level: "unknown",
-            required_withheld: 1,
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [firmwareFile({ file_name: "folder", declared_kind: "directory", downloaded: true, satisfied: null })],
+          bios_level: "unknown",
+          required_withheld: 1,
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1423,20 +1626,17 @@ describe("Library › Platforms", () => {
       // answer for is made entirely of such rows: it is the pane that tells the
       // reader to place BIOS files by hand, so it must keep saying which are
       // already there.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({ file_name: "here.bin", wanted: "unknown", required_by_active: false, downloaded: true }),
-              firmwareFile({ file_name: "gone.bin", wanted: "unknown", required_by_active: false, downloaded: false }),
-            ],
-            bios_level: "unknown",
-            required_count: 0,
-            required_withheld: 0,
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            firmwareFile({ file_name: "here.bin", wanted: "unknown", required_by_active: false, downloaded: true }),
+            firmwareFile({ file_name: "gone.bin", wanted: "unknown", required_by_active: false, downloaded: false }),
+          ],
+          bios_level: "unknown",
+          required_count: 0,
+          required_withheld: 0,
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1463,17 +1663,14 @@ describe("Library › Platforms", () => {
     it("counts one unanswerable row as a file, not as file(s)", async () => {
       // The game page's BIOS tab already pluralises; this surface was the one
       // writing the parenthesis at the reader.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [firmwareFile({ file_name: "one.bin", wanted: "unknown", required_by_active: false })],
-            bios_level: "unknown",
-            required_count: 0,
-            required_withheld: 0,
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [firmwareFile({ file_name: "one.bin", wanted: "unknown", required_by_active: false })],
+          bios_level: "unknown",
+          required_count: 0,
+          required_withheld: 0,
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1485,14 +1682,11 @@ describe("Library › Platforms", () => {
       // The register's rule: a folder's verdict is what it HOLDS. A payload
       // carrying none leaves the row unestablished rather than falling back to
       // `downloaded`, which for the linked pcsx2/bios is always true.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [firmwareFile({ file_name: "bios", declared_kind: "directory", downloaded: true })],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [firmwareFile({ file_name: "bios", declared_kind: "directory", downloaded: true })],
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1504,18 +1698,15 @@ describe("Library › Platforms", () => {
       // its green ✓, and a required missing one keeps its red ✗. Folding the
       // library gap into the verdict's colour would collapse required and
       // optional among exactly the rows that cannot be downloaded.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({ file_name: "here.bin", downloaded: true, satisfied: true, on_server: false }),
-              firmwareFile({ file_name: "gone.bin", downloaded: false, satisfied: false, on_server: false }),
-              firmwareFile({ file_name: "have.bin", downloaded: true, satisfied: true }),
-            ],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            firmwareFile({ file_name: "here.bin", downloaded: true, satisfied: true, on_server: false }),
+            firmwareFile({ file_name: "gone.bin", downloaded: false, satisfied: false, on_server: false }),
+            firmwareFile({ file_name: "have.bin", downloaded: true, satisfied: true }),
+          ],
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1546,22 +1737,19 @@ describe("Library › Platforms", () => {
       // No other fixture here has that combination, which is why the suite could
       // not have caught it: a directory row with `on_server: true` is a payload
       // the backend never produces.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({
-                file_name: "bios",
-                declared_kind: "directory",
-                on_server: false,
-                downloaded: true,
-                satisfied: true,
-              }),
-            ],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            firmwareFile({
+              file_name: "bios",
+              declared_kind: "directory",
+              on_server: false,
+              downloaded: true,
+              satisfied: true,
+            }),
+          ],
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1576,12 +1764,9 @@ describe("Library › Platforms", () => {
     it("leaves the second mark off a platform whose library holds everything", async () => {
       // The legend's filter is what keeps it from costing a row per state, and
       // the new mark is inside it like every other entry.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({ files: [firmwareFile({ file_name: "a.bin", downloaded: true, satisfied: true })] }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({ files: [firmwareFile({ file_name: "a.bin", downloaded: true, satisfied: true })] }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1614,21 +1799,18 @@ describe("Library › Platforms", () => {
         files: ReturnType<typeof firmwareFile>[],
         overrides: Partial<FirmwarePlatformExt> = {},
       ) => {
-        vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-          success: true,
-          platforms: [
-            firmwarePlatform({
-              bios_level: systemImage === "absent" ? "missing" : "ok",
-              required_count: 0,
-              required_downloaded: 0,
-              required_withheld: 0,
-              system_image: systemImage,
-              server_count: files.length,
-              files,
-              ...overrides,
-            }),
-          ],
-        });
+        mockFirmware([
+          firmwarePlatform({
+            bios_level: systemImage === "absent" ? "missing" : "ok",
+            required_count: 0,
+            required_downloaded: 0,
+            required_withheld: 0,
+            system_image: systemImage,
+            server_count: files.length,
+            files,
+            ...overrides,
+          }),
+        ]);
         const { container } = render(<LibraryPage onBack={vi.fn()} />);
         await flushAsync();
         return container;
@@ -1730,22 +1912,19 @@ describe("Library › Platforms", () => {
       // Everything `biosFileNote` says that is NOT the library sentence still
       // has to reach the reader — it just gets the full width instead of a
       // 48px cell. `provided by` is the note that outranks all the others.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({
-                file_name: "codehandler.bin",
-                downloaded: true,
-                satisfied: true,
-                on_server: false,
-                supplied_by: "RetroDECK",
-              }),
-            ],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            firmwareFile({
+              file_name: "codehandler.bin",
+              downloaded: true,
+              satisfied: true,
+              on_server: false,
+              supplied_by: "RetroDECK",
+            }),
+          ],
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1760,31 +1939,28 @@ describe("Library › Platforms", () => {
       // one of these is a verbatim pair from the 292 .info files a stock
       // RetroDECK ships. Only the first was caught before, which is why a
       // PlayStation row read "scph5500.bin scph5500.bin (PS1 JP BIOS)".
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              // 35% of the corpus: the description IS the name.
-              firmwareFile({ file_name: "macventure.dat", description: "macventure.dat" }),
-              // 47%: the name, then prose.
-              firmwareFile({ file_name: "scph5500.bin", description: "scph5500.bin (PS1 JP BIOS)" }),
-              // 17%: the same, with the name carrying its directory.
-              firmwareFile({
-                file_name: "dc_boot.bin",
-                declared_path: "dc/dc_boot.bin",
-                description: "dc/dc_boot.bin (Dreamcast BIOS)",
-              }),
-              // 1%: no mention of the name — printed whole, it says something real.
-              firmwareFile({ file_name: "codehandler.bin", description: "Dolphin 'Sys' folder" }),
-              // The two the token rule cannot see: the name itself has a space
-              // in it, so its first token is "7800". Both printed the name twice
-              // until the anchored prefix rule was added.
-              firmwareFile({ file_name: "7800 BIOS (U).rom", description: "7800 BIOS (U).rom (7800 BIOS)" }),
-            ],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            // 35% of the corpus: the description IS the name.
+            firmwareFile({ file_name: "macventure.dat", description: "macventure.dat" }),
+            // 47%: the name, then prose.
+            firmwareFile({ file_name: "scph5500.bin", description: "scph5500.bin (PS1 JP BIOS)" }),
+            // 17%: the same, with the name carrying its directory.
+            firmwareFile({
+              file_name: "dc_boot.bin",
+              declared_path: "dc/dc_boot.bin",
+              description: "dc/dc_boot.bin (Dreamcast BIOS)",
+            }),
+            // 1%: no mention of the name — printed whole, it says something real.
+            firmwareFile({ file_name: "codehandler.bin", description: "Dolphin 'Sys' folder" }),
+            // The two the token rule cannot see: the name itself has a space
+            // in it, so its first token is "7800". Both printed the name twice
+            // until the anchored prefix rule was added.
+            firmwareFile({ file_name: "7800 BIOS (U).rom", description: "7800 BIOS (U).rom (7800 BIOS)" }),
+          ],
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1803,23 +1979,20 @@ describe("Library › Platforms", () => {
       // The one folder declaration in the corpus is described as
       // `'pcsx2/bios' folder`. The name line already shows `pcsx2/bios`, and the
       // quote around the token is what stopped the rule seeing it.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({
-                file_name: "bios",
-                declared_path: "pcsx2/bios",
-                declared_kind: "directory",
-                description: "'pcsx2/bios' folder",
-                on_server: false,
-                satisfied: true,
-              }),
-            ],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            firmwareFile({
+              file_name: "bios",
+              declared_path: "pcsx2/bios",
+              declared_kind: "directory",
+              description: "'pcsx2/bios' folder",
+              on_server: false,
+              satisfied: true,
+            }),
+          ],
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1830,17 +2003,14 @@ describe("Library › Platforms", () => {
       // The row's name is a basename, and for 207 of the corpus's 695
       // declarations the emulator asks for a subdirectory. It is the one thing a
       // user placing a file by hand has to know, and no other cell carries it.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({ file_name: "dc_boot.bin", declared_path: "dc/dc_boot.bin", description: "" }),
-              firmwareFile({ file_name: "gba_bios.bin", declared_path: "gba_bios.bin", description: "" }),
-            ],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            firmwareFile({ file_name: "dc_boot.bin", declared_path: "dc/dc_boot.bin", description: "" }),
+            firmwareFile({ file_name: "gba_bios.bin", declared_path: "gba_bios.bin", description: "" }),
+          ],
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1856,21 +2026,18 @@ describe("Library › Platforms", () => {
       // A 50-character parenthesis in a 150px cell was clipped mid-word on every
       // row that had one. Full width under the row is one line where the cell
       // needed three, and it is the same block a row's note already uses.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({
-                file_name: "BS-X.bin",
-                description: "BS-X.bin (BS-X - Sore wa Namae o Nusumareta Machi no Monogatari (Japan) (Rev 1))",
-                on_server: false,
-                supplied_by: "RetroDECK",
-              }),
-            ],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            firmwareFile({
+              file_name: "BS-X.bin",
+              description: "BS-X.bin (BS-X - Sore wa Namae o Nusumareta Machi no Monogatari (Japan) (Rev 1))",
+              on_server: false,
+              supplied_by: "RetroDECK",
+            }),
+          ],
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1891,25 +2058,22 @@ describe("Library › Platforms", () => {
 
     it("counts a satisfied folder's images in Contents and lists them under the row", async () => {
       const images = ["Japan    v1.00  ROM1", "USA      v2.20  ROM1"];
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({
-                file_name: "bios",
-                declared_kind: "directory",
-                downloaded: true,
-                satisfied: true,
-                images,
-              }),
-            ],
-            required_downloaded: 1,
-            bios_level: "ok",
-            local_count: 1,
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            firmwareFile({
+              file_name: "bios",
+              declared_kind: "directory",
+              downloaded: true,
+              satisfied: true,
+              images,
+            }),
+          ],
+          required_downloaded: 1,
+          bios_level: "ok",
+          local_count: 1,
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1920,16 +2084,11 @@ describe("Library › Platforms", () => {
     });
 
     it("says a folder holds no image where the read established that", async () => {
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({ file_name: "bios", declared_kind: "directory", downloaded: true, satisfied: false }),
-            ],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [firmwareFile({ file_name: "bios", declared_kind: "directory", downloaded: true, satisfied: false })],
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1937,16 +2096,13 @@ describe("Library › Platforms", () => {
     });
 
     it("says a folder's contents are unknown where nothing could establish them", async () => {
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [firmwareFile({ file_name: "bios", declared_kind: "directory", downloaded: true, satisfied: null })],
-            bios_level: "unknown",
-            required_withheld: 1,
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [firmwareFile({ file_name: "bios", declared_kind: "directory", downloaded: true, satisfied: null })],
+          bios_level: "unknown",
+          required_withheld: 1,
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -1974,19 +2130,16 @@ describe("Library › Platforms", () => {
     });
 
     it("offers no Download for a file already here, nor for one the library does not hold", async () => {
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({ file_name: "here.bin", downloaded: true }),
-              firmwareFile({ file_name: "elsewhere.bin", on_server: false, id: null }),
-            ],
-            required_downloaded: 1,
-            local_count: 1,
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            firmwareFile({ file_name: "here.bin", downloaded: true }),
+            firmwareFile({ file_name: "elsewhere.bin", on_server: false, id: null }),
+          ],
+          required_downloaded: 1,
+          local_count: 1,
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -2001,23 +2154,20 @@ describe("Library › Platforms", () => {
       // has no nav tree, but the `Focusable` mock renders a testid AND surfaces
       // the activate handler — which is what makes the wrapper a focus stop
       // rather than a container that passes focus to children it has none of.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              // Present, ours to keep, in the library: no Download, no Delete.
-              firmwareFile({
-                file_name: "settled.bin",
-                downloaded: true,
-                satisfied: true,
-                supplied_by: "RetroDECK",
-                deletable_count: 0,
-              }),
-            ],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            // Present, ours to keep, in the library: no Download, no Delete.
+            firmwareFile({
+              file_name: "settled.bin",
+              downloaded: true,
+              satisfied: true,
+              supplied_by: "RetroDECK",
+              deletable_count: 0,
+            }),
+          ],
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -2037,26 +2187,23 @@ describe("Library › Platforms", () => {
       // RomM library can hand it back — authorising on `downloaded` deleted
       // exactly that file on a real device. `gc-pal-12.bin` is ours, and only it
       // may offer the button.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({
-                file_name: "codehandler.bin",
-                declared_path: "dolphin-emu/Sys/codehandler.bin",
-                downloaded: true,
-                satisfied: true,
-                on_server: false,
-                supplied_by: "RetroDECK",
-                deletable_count: 0,
-              }),
-              firmwareFile({ file_name: "gc-pal-12.bin", downloaded: true, satisfied: true, deletable_count: 1 }),
-            ],
-            deletable_count: 1,
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            firmwareFile({
+              file_name: "codehandler.bin",
+              declared_path: "dolphin-emu/Sys/codehandler.bin",
+              downloaded: true,
+              satisfied: true,
+              on_server: false,
+              supplied_by: "RetroDECK",
+              deletable_count: 0,
+            }),
+            firmwareFile({ file_name: "gc-pal-12.bin", downloaded: true, satisfied: true, deletable_count: 1 }),
+          ],
+          deletable_count: 1,
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -2069,17 +2216,12 @@ describe("Library › Platforms", () => {
     });
 
     it("deletes one BIOS file by name, and says so only when it fails", async () => {
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({ file_name: "gc-pal-12.bin", downloaded: true, satisfied: true, deletable_count: 1 }),
-            ],
-            deletable_count: 1,
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [firmwareFile({ file_name: "gc-pal-12.bin", downloaded: true, satisfied: true, deletable_count: 1 })],
+          deletable_count: 1,
+        }),
+      ]);
       vi.mocked(backend.deleteBiosFile).mockResolvedValue({
         success: false,
         deleted_count: 0,
@@ -2105,25 +2247,22 @@ describe("Library › Platforms", () => {
       // no file to fetch into a name the emulator lists — and that says nothing
       // about the files already inside it, which are ours wherever a record
       // names them. PS2's pcsx2/bios is the whole of that case.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({
-                file_name: "bios",
-                declared_path: "pcsx2/bios",
-                declared_kind: "directory",
-                local_path: "/home/deck/retrodeck/bios/pcsx2/bios",
-                on_server: false,
-                satisfied: true,
-                deletable_count: 2,
-              }),
-            ],
-            deletable_count: 2,
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            firmwareFile({
+              file_name: "bios",
+              declared_path: "pcsx2/bios",
+              declared_kind: "directory",
+              local_path: "/home/deck/retrodeck/bios/pcsx2/bios",
+              on_server: false,
+              satisfied: true,
+              deletable_count: 2,
+            }),
+          ],
+          deletable_count: 2,
+        }),
+      ]);
       vi.mocked(backend.deleteBiosFolder).mockResolvedValue({ success: true, deleted_count: 2, message: "" });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -2148,24 +2287,21 @@ describe("Library › Platforms", () => {
       // lines already say. The corpus's one folder is described as
       // `'pcsx2/bios' folder`, and once the name comes out that leaves the bare
       // word "folder" — a second spelling of `declared_kind`.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({
-                file_name: "bios",
-                declared_path: "pcsx2/bios",
-                declared_kind: "directory",
-                description: "'pcsx2/bios' folder",
-                on_server: false,
-                satisfied: true,
-                images: ["USA v02.00(…) Console"],
-              }),
-            ],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            firmwareFile({
+              file_name: "bios",
+              declared_path: "pcsx2/bios",
+              declared_kind: "directory",
+              description: "'pcsx2/bios' folder",
+              on_server: false,
+              satisfied: true,
+              images: ["USA v02.00(…) Console"],
+            }),
+          ],
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -2175,23 +2311,20 @@ describe("Library › Platforms", () => {
     });
 
     it("offers a folder row no delete when we downloaded nothing into it", async () => {
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({
-                file_name: "bios",
-                declared_path: "pcsx2/bios",
-                declared_kind: "directory",
-                on_server: false,
-                satisfied: true,
-                deletable_count: 0,
-              }),
-            ],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            firmwareFile({
+              file_name: "bios",
+              declared_path: "pcsx2/bios",
+              declared_kind: "directory",
+              on_server: false,
+              satisfied: true,
+              deletable_count: 0,
+            }),
+          ],
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -2210,10 +2343,7 @@ describe("Library › Platforms", () => {
           platform({ id: 2, slug: "n64", name: "Nintendo 64" }),
         ],
       });
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })],
-      });
+      mockFirmware([firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })]);
       vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({
         platforms: [
           { slug: "gba", name: "GBA", count: 9 },
@@ -2320,16 +2450,11 @@ describe("Library › Platforms", () => {
       // The emulator LISTS that name, so there is no file to fetch into it —
       // what would satisfy the row is a BIOS image inside the folder, which is a
       // row of its own. Absent is the case a presence check would let through.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            files: [
-              firmwareFile({ file_name: "bios", declared_kind: "directory", downloaded: false, satisfied: false }),
-            ],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          files: [firmwareFile({ file_name: "bios", declared_kind: "directory", downloaded: false, satisfied: false })],
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -2341,11 +2466,7 @@ describe("Library › Platforms", () => {
     });
 
     it("withdraws every download while RomM is unreachable", async () => {
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        server_offline: true,
-        platforms: [firmwarePlatform()],
-      });
+      mockFirmware([firmwarePlatform()], { serverOffline: true });
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -2376,6 +2497,39 @@ describe("Library › Platforms", () => {
       } finally {
         globalThis.removeEventListener("romm_data_changed", listener);
       }
+    });
+
+    it("re-reads the platform it downloaded for, and no other", async () => {
+      // The files on disk changed, so this platform's rows are stale — and only
+      // this platform's. Re-reading the whole library would pay a live reading
+      // per platform for a change that touched one.
+      vi.mocked(backend.getPlatforms).mockResolvedValue({
+        success: true,
+        platforms: [
+          platform({ id: 1, name: "Game Boy Advance", slug: "gba" }),
+          platform({ id: 2, name: "Nintendo 64", slug: "n64" }),
+        ],
+      });
+      mockFirmware([firmwarePlatform(), firmwarePlatform({ platform_slug: "n64" })]);
+      vi.mocked(backend.downloadRequiredFirmware).mockResolvedValue({
+        success: true,
+        message: "Downloaded 1 required firmware files",
+        downloaded: 1,
+      });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+      const readsBefore = vi.mocked(backend.getPlatformFirmwareStatus).mock.calls.map(([slug]) => slug);
+
+      await act(async () => {
+        fireEvent.click(buttonByText(container, "Download required (1)")!);
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+      });
+
+      const since = vi
+        .mocked(backend.getPlatformFirmwareStatus)
+        .mock.calls.map(([slug]) => slug)
+        .slice(readsBefore.length);
+      expect(since).toEqual(["gba"]);
     });
 
     it("stays silent towards the game page when a run moved no file", async () => {
@@ -2421,10 +2575,7 @@ describe("Library › Platforms", () => {
     });
 
     it("confirms before deleting, then deletes and announces the change", async () => {
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [firmwarePlatform({ deletable_count: 2 })],
-      });
+      mockFirmware([firmwarePlatform({ deletable_count: 2 })]);
       vi.mocked(backend.deletePlatformBios).mockResolvedValue({
         success: true,
         deleted_count: 2,
@@ -2446,10 +2597,7 @@ describe("Library › Platforms", () => {
     });
 
     it("surfaces a BIOS delete that threw", async () => {
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [firmwarePlatform({ deletable_count: 2 })],
-      });
+      mockFirmware([firmwarePlatform({ deletable_count: 2 })]);
       vi.mocked(backend.deletePlatformBios).mockRejectedValue(new Error("io"));
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -2466,10 +2614,7 @@ describe("Library › Platforms", () => {
       // The event fans out to every open game page and each match pays a live
       // check_platform_bios for it, so a delete that moved no file must stay
       // silent rather than send one nothing can act on.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [firmwarePlatform({ deletable_count: 2 })],
-      });
+      mockFirmware([firmwarePlatform({ deletable_count: 2 })]);
       vi.mocked(backend.deletePlatformBios).mockResolvedValue({
         success: false,
         deleted_count: 0,
@@ -2502,17 +2647,14 @@ describe("Library › Platforms", () => {
       // answer was scoped to the emulator that actually launches — those launch
       // standalone emulators the resolver holds no card for, so the verdict is
       // withheld over a library that still holds their files.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            bios_level: "unknown",
-            required_withheld: 0,
-            required_count: 0,
-            files: [firmwareFile({ wanted: "unknown", required_by_active: false })],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          bios_level: "unknown",
+          required_withheld: 0,
+          required_count: 0,
+          files: [firmwareFile({ wanted: "unknown", required_by_active: false })],
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -2536,17 +2678,14 @@ describe("Library › Platforms", () => {
       // Rendered is not the same as pressable. The row's button and the bulk
       // ones read one fetchable set, so this asserts the press reaches the
       // backend naming the row — not merely that a button was drawn.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            bios_level: "unknown",
-            required_withheld: 0,
-            required_count: 0,
-            files: [firmwareFile({ wanted: "unknown", required_by_active: false })],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          bios_level: "unknown",
+          required_withheld: 0,
+          required_count: 0,
+          files: [firmwareFile({ wanted: "unknown", required_by_active: false })],
+        }),
+      ]);
       vi.mocked(backend.downloadPlatformFirmwareFile).mockResolvedValue({
         success: true,
         message: "Downloaded gba_bios.bin",
@@ -2569,20 +2708,17 @@ describe("Library › Platforms", () => {
       // will not boot. One requirement over the images the core declares — so no
       // ratio, here or in the list's own words, and no pointer at a file list
       // where most rows cannot answer it.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            bios_level: "missing",
-            required_count: 0,
-            required_downloaded: 0,
-            required_withheld: 0,
-            system_image: "absent",
-            server_count: 3,
-            files: [firmwareFile({ wanted: "optional", required_by_active: false })],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          bios_level: "missing",
+          required_count: 0,
+          required_downloaded: 0,
+          required_withheld: 0,
+          system_image: "absent",
+          server_count: 3,
+          files: [firmwareFile({ wanted: "optional", required_by_active: false })],
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -2605,20 +2741,17 @@ describe("Library › Platforms", () => {
       // `compute_bios_level`, this pane alone would say "Nothing installed could
       // answer for this system" and withdraw every download button, over a
       // requirement the rows demonstrated.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            bios_level: "unknown",
-            required_count: 0,
-            required_downloaded: 0,
-            required_withheld: 0,
-            system_image: "absent",
-            server_count: 3,
-            files: [firmwareFile({ wanted: "optional", required_by_active: false })],
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          bios_level: "unknown",
+          required_count: 0,
+          required_downloaded: 0,
+          required_withheld: 0,
+          system_image: "absent",
+          server_count: 3,
+          files: [firmwareFile({ wanted: "optional", required_by_active: false })],
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -2637,18 +2770,15 @@ describe("Library › Platforms", () => {
       // An unsettled demand is a declined VERDICT, not an unanswered platform:
       // its rows have answers, so withdrawing the downloads would take away the
       // one thing that can still move it along.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            bios_level: "unknown",
-            required_count: 0,
-            required_downloaded: 0,
-            required_withheld: 0,
-            system_image: "unsettled",
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          bios_level: "unknown",
+          required_count: 0,
+          required_downloaded: 0,
+          required_withheld: 0,
+          system_image: "unsettled",
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -2674,18 +2804,15 @@ describe("Library › Platforms", () => {
       // can name a file. So the page names the row and points at the file list,
       // rather than restating the same list one altitude up with nothing to look
       // at.
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [
-          firmwarePlatform({
-            bios_level: "unknown",
-            required_count: 1,
-            required_downloaded: 0,
-            required_withheld: 1,
-            system_image: "unsettled",
-          }),
-        ],
-      });
+      mockFirmware([
+        firmwarePlatform({
+          bios_level: "unknown",
+          required_count: 1,
+          required_downloaded: 0,
+          required_withheld: 1,
+          system_image: "unsettled",
+        }),
+      ]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
@@ -2699,10 +2826,7 @@ describe("Library › Platforms", () => {
     });
 
     it("keeps the downloads when only the readiness verdict is withheld", async () => {
-      vi.mocked(backend.getFirmwareStatus).mockResolvedValue({
-        success: true,
-        platforms: [firmwarePlatform({ bios_level: "unknown", required_withheld: 1 })],
-      });
+      mockFirmware([firmwarePlatform({ bios_level: "unknown", required_withheld: 1 })]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 

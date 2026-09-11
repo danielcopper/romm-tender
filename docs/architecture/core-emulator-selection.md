@@ -487,12 +487,12 @@ stale snapshot.
 
 The Library page's platform detail reads its core through **`get_system_core_info(platform_slug)`**, a read of its own
 rather than a slice of another payload: `get_platform_core_info` is keyed by ROM and layers that ROM's own pin on top,
-and the `get_firmware_status` overview carries no entry for a platform it has nothing to say about, so neither can
-answer for a platform the user has merely focused. It costs one ES-DE options read and a `settings.json` lookup, opens
-no Unit of Work, and is issued once per selection.
+and `get_platform_firmware_status` answers whenever the page's walk reaches that platform — which is not when the reader
+focuses it, and never at all for a platform the page has nothing to say about. It costs one ES-DE options read and a
+`settings.json` lookup, opens no Unit of Work, and is issued once per selection.
 
-Its **`active_core_label`**, and the identically-named field `get_firmware_status` still carries per platform, are both
-`domain.emulator_commands.resolve_platform_label` — the platform-level projection of the read-path precedence: the
+Its **`active_core_label`**, and the identically-named field `get_platform_firmware_status` carries per platform, are
+both `domain.emulator_commands.resolve_platform_label` — the platform-level projection of the read-path precedence: the
 per-platform override (`platform_cores`) when it is set and still resolves to a bakeable emulator, else the es_systems
 **default emulator** label (the first bakeable command — libretro _or_ standalone). One function, so the two readers
 cannot drift; a stale override degrades to the default rather than naming an emulator that would not launch, and a
@@ -504,8 +504,8 @@ Every payload that names the active emulator names it the same way, and the name
 resolver's own `emulator` field, `mgba_libretro.so` for a libretro entry and `DUCKSTATION` for a standalone one. Three
 places carry it and they are the same string:
 
-- the **`active_core`** of `get_platform_core_info` (per ROM, through `active_emulator_for_rom`) and of the
-  `get_firmware_status` overview (per platform, through `resolve_platform_option`);
+- the **`active_core`** of `get_platform_core_info` (per ROM, through `active_emulator_for_rom`) and of
+  `get_platform_firmware_status` (per platform, through `resolve_platform_option`);
 - the **`emulator`** field of every picker row in `options_to_payload`, beside its `core_so`;
 - the **keys** of a firmware row's `cores` map.
 

@@ -147,8 +147,12 @@ class FirmwareService:
         self._listing.invalidate()
 
     async def get_firmware_status(self) -> dict[str, Any]:
-        """Return BIOS/firmware status for every platform the page can speak for."""
+        """Return which platforms the page can speak for, without reading their state."""
         return await self._status.get_firmware_status()
+
+    async def get_platform_firmware_status(self, platform_slug) -> dict[str, Any]:
+        """Return one platform's overview entry, or ``None`` where it has none to show."""
+        return await self._status.get_platform_firmware_status(platform_slug)
 
     async def check_platform_bios(self, platform_slug, launching_emulator=None) -> dict[str, Any]:
         """Return the platform's BIOS status, filtered by what *launching_emulator* needs."""

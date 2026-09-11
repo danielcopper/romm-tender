@@ -1255,18 +1255,14 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
         busyName={state.rows.get(state.busySlug ?? "")?.name ?? "another platform"}
       />
       <CoreNotice row={row} state={state} offer={offer} />
-      {/* A failed read is said on EVERY pane, not only the ones with no entry.
-          A failed refresh does not clear the map, so a platform that has an
-          entry keeps showing pre-change rows — which is exactly where a reader
-          needs telling, and where the notice used to be silent while appearing
-          on the panes that had least to be wrong about. The two panes need
-          different sentences because only one of them has stale rows to warn
-          about. */}
-      {state.firmwareFailed && (
+      {/* A failed RE-read keeps the answer it could not replace, so what is
+          below is the state from before whatever changed it — which is exactly
+          where a reader needs telling, and where the notice used to be silent.
+          A read that failed with nothing behind it says so where the rows would
+          be, below. */}
+      {row.firmwareStale && (
         <Muted>
-          {state.firmwareHeld
-            ? "Could not re-read the BIOS state, so what is below may be out of date. Reopen the page to try again."
-            : "Could not read the BIOS state. Reopen the page to try again."}
+          Could not re-read the BIOS state, so what is below may be out of date. Pick the platform again to retry.
         </Muted>
       )}
       {firmware ? (
@@ -1274,15 +1270,18 @@ export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }>
       ) : (
         <>
           <SectionTitle title="BIOS files" />
-          {/* A failed read and a platform the overview has nothing to say about
-              arrive the same way — an absent entry — and they are different
-              sentences: one is a question that could not be asked, the other a
-              finished answer. A failed RE-read is the second again: the answer
-              set still stands, this platform's part of it is still "nothing",
-              and the notice above says the whole of it may be stale. */}
-          {(!state.firmwareFailed || state.firmwareHeld) && (
-            <Muted>Nothing is known about this platform&apos;s BIOS files.</Muted>
+          {/* Three ways to have no rows, and they are three different
+              sentences. A read still out is a question nobody has answered yet
+              — said as one, because the alternative is the reader taking the
+              silence for "nothing needed" on a platform whose turn simply has
+              not come. A read that did not come back is a question that could
+              not be asked. What is left is a finished answer: there is nothing
+              to manage here. */}
+          {row.firmwareState === "pending" && <Muted>Checking what this platform needs…</Muted>}
+          {row.firmwareState === "failed" && (
+            <Muted>Could not read the BIOS state. Pick the platform again to retry.</Muted>
           )}
+          {row.firmwareState === "nothing" && <Muted>Nothing is known about this platform&apos;s BIOS files.</Muted>}
         </>
       )}
       <RemoveSection row={row} state={state} />
