@@ -1341,7 +1341,7 @@ class TestGetFirmwareStatus:
     async def test_enrich_resolves_system_for_cores_keeps_raw_slug_for_platform(self, tmp_path):
         """Per-platform core reads get the NORMALIZED system; entry slug stays raw.
 
-        ``_enrich_platform_map`` keys ``platform_slug`` / ``has_games`` /
+        ``_enrich_platform`` keys ``platform_slug`` / ``has_games`` /
         BIOS-folder file lookups on the raw RomM/BIOS-folder slug (ADR-0010 §4)
         but must feed the resolved RetroDECK system to the ``get_active_core`` /
         ``get_emulator_options`` seams (ADR-0010 §2).

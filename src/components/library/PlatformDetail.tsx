@@ -419,8 +419,8 @@ const BiosRowLines: FC<{ lines: string[] }> = ({ lines }) =>
 /**
  * The description beside a file's name, with the name itself taken back out.
  *
- * **It is not RomM's description** — `_group_server_firmware` builds no
- * `description` key at all, and `_wanted_fields` overwrites whatever came in.
+ * **It is not RomM's description** — `_server_files` builds no `description`
+ * key at all, and `_wanted_fields` overwrites whatever came in.
  * What arrives is the core's own `firmwareN_desc` out of its `.info` file, or,
  * for a row no placement covers, the file name itself (`build_file_entry`'s
  * `else file_name`). Both spell the name into the words.

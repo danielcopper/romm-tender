@@ -187,8 +187,8 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # emulator install through the find rules, on every call — that probe is
         # not cached, because a component the user installs mid-session has to be
         # seen. Listing one of the three would be arbitrary: every consumer pairs
-        # two of them. FirmwareStatusReader._enrich_platform_map calls
-        # get_active_core beside get_emulator_options inside one loop, and
+        # two of them. FirmwareStatusReader._enrich_platform calls
+        # get_active_core beside get_emulator_options for one platform, and
         # ActiveCoreResolver reaches get_emulator_options (active_emulator_for_rom)
         # and get_default_emulator (_resolve_by_precedence) on one resolution.
         "get_active_core",

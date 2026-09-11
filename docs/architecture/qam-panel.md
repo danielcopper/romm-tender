@@ -1053,13 +1053,13 @@ it, for the focused platform:
   `biosFileNote`'s caveat wording ("its location could not be read", "a folder is here, where the emulator opens a
   file") appears wherever a destination cannot be read, which no corpus predicts.
 
-  The file name is printed once. The description beside it is **not RomM's** — `_group_server_firmware` builds no
-  description at all and `_wanted_fields` overwrites what came in, so what arrives is the core's own `firmwareN_desc`,
-  or the file name itself for a row no placement covers. Both spell the name into the words, and across the 292 `.info`
-  files a stock RetroDECK ships (695 declared entries) they do it in three shapes: the description IS the name (35%),
-  the name then prose (47%), or the name with its directory then prose (17%). The rule is to drop a leading token that
-  names this file — as itself or at the end of a path — and keep the rest verbatim, with a first half that strips the
-  name where the description opens with it verbatim, which is the only way a name containing spaces can be seen
+  The file name is printed once. The description beside it is **not RomM's** — `_server_files` builds no description at
+  all and `_wanted_fields` overwrites what came in, so what arrives is the core's own `firmwareN_desc`, or the file name
+  itself for a row no placement covers. Both spell the name into the words, and across the 292 `.info` files a stock
+  RetroDECK ships (695 declared entries) they do it in three shapes: the description IS the name (35%), the name then
+  prose (47%), or the name with its directory then prose (17%). The rule is to drop a leading token that names this file
+  — as itself or at the end of a path — and keep the rest verbatim, with a first half that strips the name where the
+  description opens with it verbatim, which is the only way a name containing spaces can be seen
   (`"7800 BIOS (U).rom (7800 BIOS)"`). Surrounding quotes are stripped before that comparison, which is what reaches the
   corpus's one folder declaration (`"'pcsx2/bios' folder"`, on a row whose name line already shows that path). Together
   they fire on 690 of the 695; of the five printed whole, three name a folder the file sits in and two are upstream
