@@ -1913,19 +1913,22 @@ caveat codes, because the verdict is the answer alone and carries none of its ca
 family of codes can apply and what to say when none of them is recognised, which is the one sentence written off it —
 `src/utils/biosFileNote.ts` is the one place both surfaces derive what a row says from — a sentence, the lines under it,
 which is how a satisfied folder's images arrive as a list rather than folded into the row's own name, and the
-description beside the name (`biosFileDescription`). A row is headed by the file it declares on both surfaces and never
-by its description: that is the packager's prose out of a core's `.info`, outside the resolver's contract, and it
-routinely spells the row's own name into its words — so the shared rule takes the name back out and answers `null` where
-nothing is left.
+description on its own line under the row (`biosFileDescription`). A row is headed by the file it declares on both
+surfaces and never by its description: that is the packager's prose out of a core's `.info`, outside the resolver's
+contract, and it routinely spells the row's own name into its words — so the shared rule takes the name back out and
+answers `null` where nothing is left.
 
 **No unknown withdraws a download, because the two questions are independent.** What the resolver could establish is the
 emulator's DEMAND; what is fetchable is what the RomM library HOLDS, and neither answers the other. A platform nothing
 could be read for still has a library behind it, and fetching from it is the one action that moves the platform along at
-all — so `PlatformDetail`'s three download affordances read one filter
-(`on_server && !downloaded && declared_kind !== "directory"`, plus the offline server) and nothing else. Reading
-readiness there is what took the buttons off PS2, GameCube and PSP the moment a BIOS answer was scoped to the emulator
-that actually launches: those launch standalone emulators the resolver holds no card for, so their verdict is withheld
-over a library that still holds their files.
+all — so every download `PlatformDetail` offers is built off the fetchable set
+(`on_server && !downloaded && declared_kind !== "directory"`, plus the offline server) and reads the verdict
+**nowhere**: not `bios_level`, not `required_withheld`, not `system_image`. The two further inputs those buttons do read
+are of the same two kinds — `required_by_active` is the launching emulator's own declaration and is what
+`Download required` counts, and the library's own finished ratio is what stops `Download all` offering a set already
+complete — so neither is a readiness gate either. Reading readiness there is what took the buttons off PS2, GameCube and
+PSP the moment a BIOS answer was scoped to the emulator that actually launches: those launch standalone emulators the
+resolver holds no card for, so the verdict declines over a library that still holds their files.
 
 **What the narrowest decline does decide is wording.** Where _nothing_ could be established the summary cannot name
 which files to place, so the pane adds the one route it can still state — a file put in the BIOS folder by hand works

@@ -959,16 +959,17 @@ it, for the focused platform:
   `"unsettled"` and `required_withheld` are declined VERDICTS over rows that answered, so neither reaches
   `nothingEstablished`, which is the narrowest decline and decides **wording only** — and its sentence names the
   emulator the platform launches with, off the firmware payload's own `active_core_label`, because the decline is about
-  that one pick and not about everything installed), then a table: File, On disk, Contents, and a **Download** button on
-  every row that is missing and in the RomM library (#164) — never on a folder declaration, whatever its state, because
-  the emulator opens that name as a directory — and a **Delete** button on every row a download record of ours still
-  holds. That covers a declared **folder** too, where no record carries the row's name and the button counts the
-  distinct files our records name underneath it (`Delete (N)`): a folder is never a download, which says nothing about
-  the files already inside one. Same authority as `Delete BIOS`, described below. Below the table one row of buttons:
-  Download required (_N_), Download all, Delete BIOS behind a `ConfirmModal`. **All three are always rendered and
-  disable when there is nothing to do**, the ruling the Remove group already had: on PS2 all three vanished at once, and
-  a button that disappears is a state the reader has to work out. A disabled `DialogButton` is still a focus stop, so
-  the row stays walkable.
+  that one pick and not about everything installed; where the platform resolves to no bakeable emulator that label is
+  `null`, and the sentence says the launching emulator could not be asked instead of naming one), then a table: File, On
+  disk, Contents, and a **Download** button on every row that is missing and in the RomM library (#164) — never on a
+  folder declaration, whatever its state, because the emulator opens that name as a directory — and a **Delete** button
+  on every row a download record of ours still holds. That covers a declared **folder** too, where no record carries the
+  row's name and the button counts the distinct files our records name underneath it (`Delete (N)`): a folder is never a
+  download, which says nothing about the files already inside one. Same authority as `Delete BIOS`, described below.
+  Below the table one row of buttons: Download required (_N_), Download all, Delete BIOS behind a `ConfirmModal`. **All
+  three are always rendered and disable when there is nothing to do**, the ruling the Remove group already had: on PS2
+  all three vanished at once, and a button that disappears is a state the reader has to work out. A disabled
+  `DialogButton` is still a focus stop, so the row stays walkable.
 
   **What the two Download buttons and the per-row one read is the fetchable set and nothing else** — one filter, in this
   file, over `on_server && !downloaded && declared_kind !== "directory"`. Readiness is not an input to it, in any of its
@@ -1067,24 +1068,27 @@ it, for the focused platform:
   they fire on 690 of the 695; of the five printed whole, three name a folder the file sits in and two are upstream
   misspellings of the file. The rule is `biosFileDescription` in `src/utils/biosFileNote.ts` and **both** surfaces apply
   it, because a rule applied on one is a row reading two ways: the game page's BIOS tab used to head its rows with the
-  raw description, which put the packager's prose where the file's identity belongs and printed the name twice on every
-  shape that opens with it. There the row's head is the declared path whole rather than a prefix and a name — it has one
-  span — and the description leads the indented block under it, above a folder's images and the per-core lines, because
-  a second em-dash segment beside the note would read as a chain of equals on a narrow line.
+  raw description, which put the packager's prose where the file's identity belongs — and heading such a row with the
+  declared file instead prints the name a second time under it on every shape that opens with the name, unless this rule
+  takes it back out. There the row's head is the declared path whole rather than a prefix and a name — it has one span —
+  and the description leads the indented block under it, above a folder's images and the per-core lines, because a
+  second em-dash segment beside the note would read as a chain of equals on a narrow line.
 
-  **The description is on its own line under the row**, muted and clipped to one line, not beside the name: at the
-  Deck's scale the `File` column is ~150 px and a fifty-character parenthesis was clipped mid-word on every row that had
-  one. The **declared folder** goes the other way, onto the name line as a muted prefix (`dc/` **`dc_boot.bin`**), where
-  it belongs to the file's identity — `declared_path` carries it, because `file_name` is a basename and `local_path` is
-  joined under a root the frontend does not know. 207 of the 695 declarations name a subdirectory and their descriptions
-  spell it in only 115, so the description was never a substitute. A row can therefore carry two lines under it — the
-  description first, then `biosFileNote`'s note — and neither is in a cell any more. Contents is answered for a folder
-  declaration only: the count of images it holds (the resolver's verbatim strings are listed full-width under the row,
-  `pre-wrap`, because the padding in them is what makes a line matchable against the emulator's own picker), or that it
-  holds none, or that nothing could establish its contents. A file row reads an em dash, and that em dash means the
-  question was never asked — the machine-wide reading is deliberately unverified, #1803 is what will ask it, and until
-  then the dash must not come to mean "asked, and nothing found". The section appears whenever the firmware read speaks
-  for the platform, synced or not — there is nothing to say about one it does not cover.
+  **The description is on its own line under the row** and never beside the name: at the Deck's scale the `File` column
+  is ~150 px and a fifty-character parenthesis was clipped mid-word on every row that had one. It is muted on both
+  surfaces, and on the **platform detail** that line is itself clipped to one line (`nowrap` + ellipsis); the game
+  page's BIOS tab lets it wrap. The **declared folder** goes the other way, onto the name line as a muted prefix (`dc/`
+  **`dc_boot.bin`**), where it belongs to the file's identity — `declared_path` carries it, because `file_name` is a
+  basename and `local_path` is joined under a root the frontend does not know. 207 of the 695 declarations name a
+  subdirectory and their descriptions spell it in only 115, so the description was never a substitute. A row can
+  therefore carry two lines under it — the description first, then `biosFileNote`'s note — and neither is in a cell any
+  more. Contents is answered for a folder declaration only: the count of images it holds (the resolver's verbatim
+  strings are listed full-width under the row, `pre-wrap`, because the padding in them is what makes a line matchable
+  against the emulator's own picker), or that it holds none, or that nothing could establish its contents. A file row
+  reads an em dash, and that em dash means the question was never asked — the machine-wide reading is deliberately
+  unverified, #1803 is what will ask it, and until then the dash must not come to mean "asked, and nothing found". The
+  section appears whenever the firmware read speaks for the platform, synced or not — there is nothing to say about one
+  it does not cover.
 - **Remove** — Remove _N_ shortcuts and Delete _N_ save files on one row, the actions the Data Management platform modal
   used to offer, without Delete BIOS (it is one group up). Red, last, each behind a confirmation, and with **no heading
   over them**: both buttons name what they remove and are drawn in red, so a title says nothing they do not. **Both

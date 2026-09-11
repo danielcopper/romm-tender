@@ -2768,9 +2768,9 @@ describe("Library › Platforms", () => {
     it("says the console needs at least one file even where the level declines", async () => {
       // The order the pane, the row tooltip and the game page's BIOS headline
       // have to share. Today the backend never sends this pair — `absent` lands
-      // on `missing` — but nothing joins the three surfaces, so each pins its
-      // own: were a decline added ahead of the `absent` test in
-      // `compute_bios_level`, this pane alone would say nothing could be
+      // on `missing` — and what would keep the three agreeing if it did is that
+      // each carries the test itself. Nothing joins them, so each pins its own:
+      // lose it here and this surface alone would say nothing could be
       // established about what its emulator needs, and offer the by-hand route
       // in place of a requirement the rows demonstrated.
       mockFirmware([
@@ -2789,7 +2789,11 @@ describe("Library › Platforms", () => {
 
       expect(container.textContent).toContain("Needs at least one BIOS file");
       expect(container.textContent).not.toContain("BIOS readiness unknown");
-      expect(container.textContent).not.toContain("could not be asked what it needs");
+      // The LABEL rather than either sentence: the narrowest decline words
+      // itself two ways depending on whether the pick has a name, and a fixture
+      // that later carried an `active_core_label` would make a negation of one
+      // of those sentences vacuously green.
+      expect(container.textContent).not.toContain("BIOS requirement unknown");
       const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
         el.textContent.includes("Game Boy Advance"),
       );
@@ -2818,7 +2822,8 @@ describe("Library › Platforms", () => {
       expect(container.textContent).toContain(
         "Whether the BIOS image this system needs is in place could not be established",
       );
-      expect(container.textContent).not.toContain("could not be asked what it needs");
+      // The label, not one of its two sentences, for the reason above.
+      expect(container.textContent).not.toContain("BIOS requirement unknown");
       expect(container.textContent).not.toContain("You can still put BIOS files in your BIOS folder by hand");
       expect(buttonByText(container, "Download all")).not.toBeDisabled();
       const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>

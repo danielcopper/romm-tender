@@ -49,11 +49,12 @@ cannot.
 The readiness line is computed against the **active core** for that game — so switching to a core that needs no BIOS (or
 that treats a file as optional) clears the warning, while switching to a core that requires a missing file surfaces it.
 
-Under the line the tab lists the files themselves, one per row. A row is headed by the file the emulator declares, with
-its folder where it asks for one (`dc/dc_boot.bin`) — that is where the file has to go, and it is the one thing you need
-when placing one by hand. Whatever the emulator's packager wrote about the file goes on its own line under the row, and
-only where it says something the name does not: those descriptions usually repeat the file name, and many are nothing
-else.
+Under the line the tab lists the files an installed emulator asks for, one per row. The rest are counted on a line of
+their own below them rather than listed — one line for the files nothing installed asks for, one for the files nothing
+installed could answer about. A row is headed by the file the emulator declares, with its folder where it asks for one
+(`dc/dc_boot.bin`) — that is where the file has to go, and it is the one thing you need when placing one by hand.
+Whatever the emulator's packager wrote about the file goes on its own line under the row, and only where it says
+something the name does not: those descriptions usually repeat the file name, and many are nothing else.
 
 Beside the Play button there is also a short **BIOS** badge, which is a shortcut into this tab. Two things raise it, and
 nothing else does. The first: a file the active core **requires** is shown to be absent from your BIOS folder. If that
@@ -366,10 +367,11 @@ of bundled cores are in that state. And a configuration the plugin could not rea
 the launching emulator in the first place.
 
 Under that headline the page names the emulator it could not get an answer out of — _Nothing could be established about
-what PCSX2 needs_ — and, where the system resolves to no emulator the plugin can launch with at all, says that instead:
-_The emulator this platform launches with could not be asked what it needs_. Either way it is about **one** emulator,
-the one your games on that system launch with. Others you have installed may have answered perfectly well, and their
-answers are in the rows below.
+what PCSX2 needs_ — and, where the plugin could not settle on an emulator to name for that system, says that instead:
+_The emulator this platform launches with could not be asked what it needs_. Your games still launch either way: where
+the plugin names no emulator, it hands the launch to RetroDECK and RetroDECK picks one. Either way the sentence is about
+**one** emulator, the one your games on that system launch with. Others you have installed may have answered perfectly
+well, and their answers are in the rows below.
 
 This is informational, not an error: your files may be perfectly fine, the plugin simply can't confirm what is needed.
 Genuinely BIOS-free systems (such as the NES) are unaffected — the emulator answers, it wants nothing, and the system

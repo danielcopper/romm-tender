@@ -4,7 +4,8 @@
 // with that surface.
 
 import { describe, it, expect } from "vitest";
-import { biosFileNote, type BiosNoteRow } from "./biosFileNote";
+import type { FirmwareDeclaredKind } from "../types";
+import { biosFileDescription, biosFileNote, type BiosNoteRow } from "./biosFileNote";
 
 /** The sentence half, for the cases that are about wording alone. */
 const noteOf = (row: BiosNoteRow) => biosFileNote(row).note;
@@ -131,5 +132,59 @@ describe("biosFileNote", () => {
     ).toBe(false);
     expect(biosFileNote({ downloaded: true, on_server: true, satisfied: true }).fromLibrary).toBe(false);
     expect(biosFileNote(folder(false, ["firmware-directory-holds-no-image"])).fromLibrary).toBe(false);
+  });
+});
+
+describe("biosFileDescription", () => {
+  // One example per shape the function's own docstring classifies the `.info`
+  // corpus into, so the rule is pinned beside the code holding it rather than
+  // only through whichever surface happens to render it. The strings are that
+  // docstring's own examples; nothing here re-counts the corpus.
+  const describedAs = (file_name: string, description: string, declared_kind?: FirmwareDeclaredKind) =>
+    biosFileDescription(declared_kind ? { file_name, description, declared_kind } : { file_name, description });
+
+  it("adds nothing where the description IS the name", () => {
+    expect(describedAs("macventure.dat", "macventure.dat")).toBeNull();
+  });
+
+  it("keeps the prose after the name, verbatim", () => {
+    // Parentheses and all: it is the packager's own wording, and
+    // re-punctuating it is a second way to be wrong.
+    expect(describedAs("scph5500.bin", "scph5500.bin (PS1 JP BIOS)")).toBe("(PS1 JP BIOS)");
+  });
+
+  it("sees the name at the end of a declared path", () => {
+    // `file_name` is the basename, so the token that has to go is the whole
+    // `dc/dc_boot.bin` the packager wrote.
+    expect(describedAs("dc_boot.bin", "dc/dc_boot.bin (Dreamcast BIOS)")).toBe("(Dreamcast BIOS)");
+  });
+
+  it("sees a name that has a space in it", () => {
+    // The token half cannot: this name is two tokens. It is the anchored
+    // startsWith half that reaches it, and one of the corpus's entries is
+    // spelled this way.
+    expect(describedAs("7800 BIOS (U).rom", "7800 BIOS (U).rom (7800 BIOS)")).toBe("(7800 BIOS)");
+  });
+
+  it("prints a description whole when its first token names something else", () => {
+    // A folder the file sits in, not the file — so there is nothing to take
+    // out and the sentence is the packager's whole.
+    expect(describedAs("hash.dat", "'Databases' folder")).toBe("'Databases' folder");
+  });
+
+  it("ignores quotes around a token that does name the file", () => {
+    // The corpus's one quoted entry, read as a FILE row: what survives the
+    // rule is the bare word, which is why `declared_kind` is guarded on at all
+    // rather than this being left to say something on a folder row.
+    expect(describedAs("bios", "'pcsx2/bios' folder")).toBe("folder");
+  });
+
+  it("shows none at all on a declared folder", () => {
+    expect(describedAs("bios", "'pcsx2/bios' folder", "directory")).toBeNull();
+  });
+
+  it("shows none where the description is empty or only spaces", () => {
+    expect(describedAs("dc_boot.bin", "")).toBeNull();
+    expect(describedAs("dc_boot.bin", "   ")).toBeNull();
   });
 });

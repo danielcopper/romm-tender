@@ -3426,6 +3426,9 @@ describe("RomMGameInfoPanel", () => {
       // description adds nothing and the row shows none of it.
       expect(container.textContent).toContain("pcsx2/bios — its contents could not be read in full");
       expect(container.textContent).not.toContain("missing");
+      // The bare word left of that description is the whole of what a line
+      // under this row would say, so its absence is what pins "none of it".
+      expect(container.textContent).not.toContain("folder");
     });
 
     it("unknown: grey header dot + honest text, and the 'files on server' note survives (#1520)", async () => {

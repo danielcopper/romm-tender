@@ -229,9 +229,10 @@ function fileDotColor(file: BiosFileStatus): string {
  * orphaned the dot above it.
  *
  * **The description leads**, and it is a line here rather than a second em-dash
- * segment after the name: three segments and two dashes on one narrow QAM line
- * read as a chain of equals, which these are not. It says what the file IS,
- * where `biosFileNote`'s note says something about its STATE — so the note
+ * segment after the name: the name span already carries `biosFileNote`'s note
+ * behind a dash, and chaining another onto the same narrow QAM line reads as a
+ * chain of equals, which these are not. It says what the file IS, where
+ * `biosFileNote`'s note says something about its STATE — so the note
  * keeps the dash beside the name and this goes below, which is also where the
  * platform detail puts it.
  *

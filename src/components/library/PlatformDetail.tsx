@@ -863,12 +863,15 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   const systemImage = firmware.system_image ?? "not_demanded";
   // The console's own established absence is tested BEFORE the decline, which is
   // the order the BIOS tab's headline and the platform list's tooltip already
-  // read in. Today all three agree by way of the backend, where `absent` lands
-  // on `missing` and so never arrives with an `unknown` level — but nothing
-  // joins the three surfaces, and a decline added ahead of that test in
-  // `compute_bios_level` would leave this pane alone saying "Nothing installed
-  // could answer for this system" while the other two said the console needs at
-  // least one BIOS file.
+  // read in. Today the pair never arrives at all: the backend lands `absent` on
+  // `missing`, so no payload carries it with an `unknown` level. What would keep
+  // the three surfaces agreeing if one ever did is that each carries this test
+  // ITSELF — nothing joins them, so a divergence takes one surface losing its
+  // test, not the backend reordering ahead of all three. Lose it here and this
+  // pane alone would say nothing could be established about what its emulator
+  // needs, and offer the by-hand route in place of a requirement the rows
+  // demonstrated, while the other two said the console needs at least one BIOS
+  // file.
   const declined = firmware.bios_level === "unknown" && systemImage !== "absent";
   // The narrowest of the declines: not one row on the platform was answered, so
   // the pane has nothing to point the reader at and says where a file can be put

@@ -640,12 +640,13 @@ Format: **invariant** — tier — enforced by.
   it — the decline needs at least one such row, and this is one — and need not be the only one, since another image the
   core declares can be unjudged too; it is the only half of the pair that can name a file, and naming it points at the
   file list, where its caveat explains itself. **All three wording surfaces test `"absent"` BEFORE the level's
-  decline**, and they agree today only because the backend guarantees `absent ⟹ missing`, so the state never arrives: a
-  decline added ahead of that test in `compute_bios_level` would have `PlatformDetail` alone say that nothing could be
-  established about what the platform's emulator needs, and offer the by-hand route in place of the requirement, while
-  the other two read "Needs at least one BIOS file". Each surface pins its own order (`BiosTab.test.tsx`,
-  `PlatformsTab.test.tsx`) and nothing joins them. **A narrower form of the same answer is read PER CORE onto every
-  row** (`FirmwareCatalogue.emulators_needing_one_of_their_files` → `build_file_entry`'s
+  decline**, and the pair never arrives at all today because the backend lands `absent` on `missing`. What would hold
+  them together if it ever did is that each surface carries that test ITSELF — so a divergence takes one surface losing
+  its own test, not the backend reordering ahead of all three: drop it from `PlatformDetail` and that pane alone would
+  say nothing could be established about what the platform's emulator needs, and offer the by-hand route in place of a
+  requirement the rows demonstrated, while the other two read "Needs at least one BIOS file". Each surface pins its own
+  order (`BiosTab.test.tsx`, `PlatformsTab.test.tsx`) and nothing joins them. **A narrower form of the same answer is
+  read PER CORE onto every row** (`FirmwareCatalogue.emulators_needing_one_of_their_files` → `build_file_entry`'s
   `cores[<emulator>]["needs_one_of"]` and the row's own `system_image_candidate`, worded by `BiosTab.tsx`'s
   `coreLineSuffix` and marked by `library/PlatformDetail.tsx`'s `diskMark`), and there the rule is that the two keys on
   that entry are two SPEAKERS: `required` is the core's own `.info`, the other is the packaged table about that core's

@@ -324,6 +324,9 @@ describe("BiosTab", () => {
     // which is a restatement of `declared_kind`, so the row shows none.
     expect(name?.textContent).toBe("pcsx2/bios");
     expect(container.textContent).not.toContain(images.join(", "));
+    // That bare word is the whole of what a description line would say on this
+    // row, so its absence is the only assertion here that can see the guard.
+    expect(container.textContent).not.toContain("folder");
   });
 
   it("names an unreadable destination on a file row, which otherwise says nothing at all", () => {

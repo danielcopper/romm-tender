@@ -258,9 +258,9 @@ def resolve_platform_option(options: list[EmulatorOption], override: str | None)
     the name a pane displays (:func:`resolve_platform_label`) and the identity
     its BIOS answers are joined and scoped on (``EmulatorOption.emulator``, the
     one field that names a standalone emulator, where ``core_so`` is ``None`` for
-    every standalone pick) come off the same choice. Resolving them separately is what let a
-    pane name PCSX ReARMed and judge the platform by the system default beside
-    it.
+    every standalone pick) come off the same choice. Resolving them separately is
+    what let a pane name PCSX ReARMed and judge the platform by the system
+    default beside it.
     """
     pinned = _pinned_option(options, override) if override is not None else None
     return pinned if pinned is not None else select_default_option(options)

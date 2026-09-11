@@ -178,9 +178,10 @@ class FirmwareStatusReader:
         would say ``0 / 26 files, 26 missing`` for twenty-six optional files no
         core requires. ``known_count`` / ``unknown_count`` are the machine's
         answer about the files themselves, over the library's set too — and
-        neither is weighed against anything: ``_nothing_established`` reads only
-        whether ``known_count`` was supplied, and ``unknown_count`` has no reader
-        on either side of the wire (:func:`count_wanted`).
+        neither is weighed against anything: ``_nothing_established`` asks
+        whether ``known_count`` was supplied at all and then decides on
+        ``reading_complete`` alone, and ``unknown_count`` has no reader on either
+        side of the wire (:func:`count_wanted`).
 
         *system_image* is a fourth axis beside those three counted sets, and the
         only one of the four that is not a count at all
@@ -472,8 +473,10 @@ class FirmwareStatusReader:
         file list to point the reader at, so the pane offers the by-hand route
         instead, while one whose verdict was declined by a single unjudgeable
         requirement points at the rows that did answer. Neither withdraws a
-        download — what the page offers to fetch reads the library and never the
-        verdict.
+        download: no download the page offers is gated on the verdict — not on
+        ``bios_level``, not on this count. What those buttons read is what the
+        RomM library holds and what the launching emulator declared, which are
+        inventory and demand rather than readiness.
 
         *complete* is whether the LAUNCHING emulator could be asked at all, and
         it is what stops a platform reading a green "all ready" over an emulator
