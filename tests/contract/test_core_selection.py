@@ -28,6 +28,8 @@ them carries none of it, and is pinned for that absence.
 
 from __future__ import annotations
 
+from typing import Any
+
 from ._seed import (
     seed_component_launcher,
     seed_es_find_rules,
@@ -248,7 +250,7 @@ async def test_the_firmware_overview_names_platforms_without_reading_them(harnes
     assert gba["has_games"] is True
 
 
-async def _named_platform(harness, slug: str) -> dict:
+async def _named_platform(harness, slug: str) -> dict[str, Any]:
     """The BIOS answer for a platform the page NAMES, asked for the way the page asks.
 
     Taken through both calls rather than by reaching for the second one: what the
