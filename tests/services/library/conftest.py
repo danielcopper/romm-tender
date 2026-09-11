@@ -23,6 +23,7 @@ from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
+from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.cover_art_file_store import CoverArtFileStoreAdapter
@@ -67,7 +68,7 @@ def plugin(tmp_path):
 
     metadata_service = MetadataService(
         config=MetadataServiceConfig(
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             log_debug=p._log_debug,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
@@ -81,7 +82,7 @@ def plugin(tmp_path):
             steam_config=steam_config,
             cover_art_file_store=CoverArtFileStoreAdapter(),
             cover_cache_dir=str(tmp_path / "covers"),
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             get_pending_sync=dict,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
@@ -118,7 +119,7 @@ def plugin(tmp_path):
             romm_api=p._romm_api,
             steam_config=steam_config,
             settings=p.settings,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             plugin_dir=decky.DECKY_PLUGIN_DIR,
             launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/rom-launcher",
@@ -140,7 +141,7 @@ def plugin(tmp_path):
     p._shortcut_removal_service = ShortcutRemovalService(
         config=ShortcutRemovalServiceConfig(
             steam_config=steam_config,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             artwork_remover=artwork_service,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
@@ -156,8 +157,8 @@ def plugin(tmp_path):
 @pytest.fixture(autouse=True)
 async def _set_event_loop(plugin):
     """Ensure plugin.loop matches the running event loop for async tests."""
-    plugin.loop = asyncio.get_event_loop()
-    rebind_loop(plugin._sync_service, asyncio.get_event_loop())
-    plugin._artwork_service._loop = asyncio.get_event_loop()
-    plugin._shortcut_removal_service._loop = asyncio.get_event_loop()
-    plugin._metadata_service._loop = asyncio.get_event_loop()
+    plugin.loop = asyncio.get_running_loop()
+    rebind_loop(plugin._sync_service, asyncio.get_running_loop())
+    plugin._artwork_service._loop = asyncio.get_running_loop()
+    plugin._shortcut_removal_service._loop = asyncio.get_running_loop()
+    plugin._metadata_service._loop = asyncio.get_running_loop()

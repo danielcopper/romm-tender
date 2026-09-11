@@ -52,7 +52,7 @@ def _prober(
     reader = _FakeRomReader(answers, user)
     prober = LivenessProber(
         config=LivenessProberConfig(
-            loop=asyncio.get_event_loop(),
+            loop=asyncio.get_running_loop(),
             logger=logging.getLogger("prune-liveness-test"),
             romm_api=cast("Any", reader),
             settings=settings if settings is not None else dict(_NAMESPACE_SETTINGS),
@@ -122,7 +122,7 @@ class TestNamespaceBinding:
 
         prober = LivenessProber(
             config=LivenessProberConfig(
-                loop=asyncio.get_event_loop(),
+                loop=asyncio.get_running_loop(),
                 logger=logging.getLogger("prune-liveness-test"),
                 romm_api=cast("Any", _SwitchingReader({})),
                 settings=settings,
@@ -146,7 +146,7 @@ class TestNamespaceBinding:
 
         prober = LivenessProber(
             config=LivenessProberConfig(
-                loop=asyncio.get_event_loop(),
+                loop=asyncio.get_running_loop(),
                 logger=logging.getLogger("prune-liveness-test"),
                 romm_api=cast("Any", _SwitchingReader({})),
                 settings=settings,
@@ -253,7 +253,7 @@ class TestEndpointConfirmation:
         reader = _FakeRomReader({7: RommNotFoundError("gone"), 8: RommNotFoundError("gone")})
         prober = LivenessProber(
             config=LivenessProberConfig(
-                loop=asyncio.get_event_loop(),
+                loop=asyncio.get_running_loop(),
                 logger=logging.getLogger("prune-liveness-test"),
                 romm_api=cast("Any", reader),
                 settings=dict(_NAMESPACE_SETTINGS),

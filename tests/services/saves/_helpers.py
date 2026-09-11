@@ -1,6 +1,5 @@
 """Shared factories and fakes for the SaveService test suite."""
 
-import asyncio
 import hashlib
 import logging
 from datetime import UTC, datetime
@@ -16,6 +15,7 @@ from fakes.fake_save_api import FakeSaveApi
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
+from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock
 
 from adapters.gavel_native import GavelNativeAdapter
@@ -57,7 +57,7 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
         "settings": {"log_level": "debug"},
         "settings_persister": FakeSettingsPersister(),
         "save_file_store": save_file_store,
-        "loop": asyncio.get_event_loop(),
+        "loop": running_loop(),
         "logger": logging.getLogger("test"),
         "clock": FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
         "retrodeck_paths": FakeRetroDeckPaths(

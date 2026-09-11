@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 import decky
 import pytest
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
+from fakes.running_loop import running_loop
 
 from adapters.steam_config import SteamConfigAdapter
 from domain.rom import Rom
@@ -86,7 +87,7 @@ def svc(steam_config, artwork_remover_mock, uow_factory):
     return ShortcutRemovalService(
         config=ShortcutRemovalServiceConfig(
             steam_config=steam_config,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             artwork_remover=artwork_remover_mock,
             uow_factory=uow_factory,
@@ -96,7 +97,7 @@ def svc(steam_config, artwork_remover_mock, uow_factory):
 
 @pytest.fixture(autouse=True)
 async def _set_event_loop(svc):
-    svc._loop = asyncio.get_event_loop()
+    svc._loop = asyncio.get_running_loop()
 
 
 # ── TestRemoveAllShortcuts ────────────────────────────────────────────────────
@@ -436,7 +437,7 @@ def _artwork_integration_service(uow, steam_config, tmp_path) -> ShortcutRemoval
             steam_config=steam_config,
             cover_art_file_store=CoverArtFileStoreAdapter(),
             cover_cache_dir=str(tmp_path / "covers"),
-            loop=asyncio.get_event_loop(),
+            loop=asyncio.get_running_loop(),
             logger=decky.logger,
             get_pending_sync=dict,
             uow_factory=FakeUnitOfWorkFactory(uow),
@@ -445,13 +446,13 @@ def _artwork_integration_service(uow, steam_config, tmp_path) -> ShortcutRemoval
     svc = ShortcutRemovalService(
         config=ShortcutRemovalServiceConfig(
             steam_config=steam_config,
-            loop=asyncio.get_event_loop(),
+            loop=asyncio.get_running_loop(),
             logger=decky.logger,
             artwork_remover=artwork_svc,
             uow_factory=FakeUnitOfWorkFactory(uow),
         ),
     )
-    svc._loop = asyncio.get_event_loop()
+    svc._loop = asyncio.get_running_loop()
     return svc
 
 

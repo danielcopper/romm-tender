@@ -14,6 +14,7 @@ from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
+from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.debug_logger import SettingsAwareDebugLogger
@@ -69,7 +70,7 @@ def plugin(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow):
             romm_api=p._romm_api,
             steam_config=steam_config,
             settings=p.settings,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             plugin_dir=decky.DECKY_PLUGIN_DIR,
             launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/rom-launcher",
@@ -99,7 +100,7 @@ def plugin(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow):
             steam_config=steam_config,
             sgdb_artwork_cache=sgdb_artwork_cache,
             settings=p.settings,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             settings_persister=FakeSettingsPersister(),
             get_pending_sync=lambda: p._sync_service._pending_sync,
@@ -114,7 +115,7 @@ def plugin(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow):
 @pytest.fixture(autouse=True)
 async def _set_event_loop(plugin):
     """Ensure plugin.loop matches the running event loop for async tests."""
-    plugin.loop = asyncio.get_event_loop()
+    plugin.loop = asyncio.get_running_loop()
 
 
 def _cached_path(cache: FakeSgdbArtworkCache, rom_id: int, asset_type: str) -> str:
@@ -124,7 +125,7 @@ def _cached_path(cache: FakeSgdbArtworkCache, rom_id: int, asset_type: str) -> s
 class TestVerifySgdbApiKey:
     @pytest.mark.asyncio
     async def test_valid_api_key(self, plugin, fake_steamgrid_db_api):
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         fake_steamgrid_db_api.seed_verify_response({"success": True})
 
         result = await plugin.verify_sgdb_api_key("valid-key-123")
@@ -135,7 +136,7 @@ class TestVerifySgdbApiKey:
 
     @pytest.mark.asyncio
     async def test_invalid_api_key_401(self, plugin, fake_steamgrid_db_api):
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         fake_steamgrid_db_api.verify_api_key_side_effect = SgdbApiError(401, "Unauthorized")
 
         result = await plugin.verify_sgdb_api_key("bad-key")
@@ -145,7 +146,7 @@ class TestVerifySgdbApiKey:
 
     @pytest.mark.asyncio
     async def test_invalid_api_key_403(self, plugin, fake_steamgrid_db_api):
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         fake_steamgrid_db_api.verify_api_key_side_effect = SgdbApiError(403, "Forbidden")
 
         result = await plugin.verify_sgdb_api_key("bad-key")
@@ -155,7 +156,7 @@ class TestVerifySgdbApiKey:
 
     @pytest.mark.asyncio
     async def test_empty_string_falls_back_to_saved_key(self, plugin, fake_steamgrid_db_api):
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         plugin.settings["steamgriddb_api_key"] = "saved-key-456"
         fake_steamgrid_db_api.seed_verify_response({"success": True})
 
@@ -167,7 +168,7 @@ class TestVerifySgdbApiKey:
 
     @pytest.mark.asyncio
     async def test_masked_value_falls_back_to_saved_key(self, plugin, fake_steamgrid_db_api):
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         plugin.settings["steamgriddb_api_key"] = "saved-key-789"
         fake_steamgrid_db_api.seed_verify_response({"success": True})
 
@@ -178,7 +179,7 @@ class TestVerifySgdbApiKey:
 
     @pytest.mark.asyncio
     async def test_no_key_configured(self, plugin):
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         # No saved key, no provided key
         result = await plugin.verify_sgdb_api_key("")
         assert result["success"] is False
@@ -186,14 +187,14 @@ class TestVerifySgdbApiKey:
 
     @pytest.mark.asyncio
     async def test_no_key_at_all_default_param(self, plugin):
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         result = await plugin.verify_sgdb_api_key()
         assert result["success"] is False
         assert "No API key configured" in result["message"]
 
     @pytest.mark.asyncio
     async def test_network_error(self, plugin, fake_steamgrid_db_api):
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         fake_steamgrid_db_api.verify_api_key_side_effect = ConnectionError("DNS resolution failed")
 
         result = await plugin.verify_sgdb_api_key("some-key")
@@ -203,7 +204,7 @@ class TestVerifySgdbApiKey:
 
     @pytest.mark.asyncio
     async def test_sgdb_rejects_key(self, plugin, fake_steamgrid_db_api):
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         fake_steamgrid_db_api.seed_verify_response({"success": False})
 
         result = await plugin.verify_sgdb_api_key("rejected-key")
@@ -213,7 +214,7 @@ class TestVerifySgdbApiKey:
 
     @pytest.mark.asyncio
     async def test_http_500_error(self, plugin, fake_steamgrid_db_api):
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         fake_steamgrid_db_api.verify_api_key_side_effect = SgdbApiError(500, "Internal Server Error")
 
         result = await plugin.verify_sgdb_api_key("some-key")
@@ -226,7 +227,7 @@ class TestVerifySgdbApiKey:
         """Defence-in-depth: a stray urllib.error.HTTPError should still be handled."""
         import urllib.error
 
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         fake_steamgrid_db_api.verify_api_key_side_effect = urllib.error.HTTPError(
             "https://steamgriddb.com", 502, "Bad Gateway", http.client.HTTPMessage(), None
         )
@@ -244,7 +245,7 @@ class TestGetSgdbArtworkBase64:
         import base64
 
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         # Pre-populate the in-memory cache
         sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 42, "hero")] = b"fake png data"
@@ -257,7 +258,7 @@ class TestGetSgdbArtworkBase64:
     @pytest.mark.asyncio
     async def test_no_api_key_returns_no_api_key_true(self, plugin):
         # No API key in settings
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         result = await plugin.get_sgdb_artwork_base64(42, 1)
         assert result["base64"] is None
@@ -266,7 +267,7 @@ class TestGetSgdbArtworkBase64:
     @pytest.mark.asyncio
     async def test_invalid_asset_type(self, plugin):
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         result = await plugin.get_sgdb_artwork_base64(42, 99)
         assert result["base64"] is None
@@ -276,7 +277,7 @@ class TestGetSgdbArtworkBase64:
     async def test_state_only_no_romm_call_when_state_empty(self, plugin, fake_romm_api, fake_steamgrid_db_api):
         """base64 path is state-only — a registry row without sgdb_id never hits RomM."""
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         # roms is empty — no row carries an sgdb_id for rom 42.
         # RomM/IGDB would resolve if (incorrectly) consulted — they must not be.
@@ -294,7 +295,7 @@ class TestGetSgdbArtworkBase64:
     @pytest.mark.asyncio
     async def test_no_sgdb_id_in_state(self, plugin, fake_romm_api):
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         result = await plugin.get_sgdb_artwork_base64(42, 1)
 
@@ -304,7 +305,7 @@ class TestGetSgdbArtworkBase64:
     @pytest.mark.asyncio
     async def test_download_fails_returns_null(self, plugin, fake_steamgrid_db_api):
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         # SGDB returns a URL but the image download fails (CDN 5xx).
         fake_steamgrid_db_api.seed_artwork(9999, "hero", "https://example.com/hero.png")
@@ -320,7 +321,7 @@ class TestGetSgdbArtworkBase64:
         import base64
 
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         # Not in registry, but in pending sync with a resolved sgdb_id.
         plugin._sync_service._pending_sync[42] = {
@@ -341,7 +342,7 @@ class TestGetSgdbArtworkBase64:
     @pytest.mark.asyncio
     async def test_sgdb_id_cached_in_registry(self, plugin, uow, sgdb_artwork_cache, fake_steamgrid_db_api):
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         # ROM with sgdb_id already cached on its row.
         _seed_rom(uow, 42, app_id=100001, sgdb_id=9999, name="Zelda")
@@ -371,14 +372,14 @@ class TestGetSgdbResolution:
 
     @pytest.mark.asyncio
     async def test_no_api_key(self, plugin):
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         result = await plugin.get_sgdb_resolution(42)
         assert result == {"decision": "no_api_key"}
 
     @pytest.mark.asyncio
     async def test_use_state_when_romm_silent(self, plugin, uow, fake_romm_api):
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         _seed_rom(uow, 42, app_id=1, sgdb_id=9999)
         # RomM has no sgdb_id → state wins, nothing persisted.
@@ -391,7 +392,7 @@ class TestGetSgdbResolution:
     @pytest.mark.asyncio
     async def test_use_romm_persists_when_state_empty(self, plugin, uow, fake_romm_api):
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         # ROM row has no sgdb_id; RomM supplies one → persisted on the row.
         _seed_rom(uow, 42, app_id=1)
@@ -406,7 +407,7 @@ class TestGetSgdbResolution:
     @pytest.mark.asyncio
     async def test_romm_wins_over_differing_state_and_persists(self, plugin, uow, fake_romm_api):
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         # Row holds an old id; RomM disagrees → RomM overwrites it.
         _seed_rom(uow, 42, app_id=1, sgdb_id=9999)
@@ -421,7 +422,7 @@ class TestGetSgdbResolution:
     @pytest.mark.asyncio
     async def test_romm_matches_state_no_persist(self, plugin, uow, fake_romm_api):
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         # RomM agrees with the row → resolved, no redundant write.
         _seed_rom(uow, 42, app_id=1, sgdb_id=7777)
@@ -436,7 +437,7 @@ class TestGetSgdbResolution:
     @pytest.mark.asyncio
     async def test_unresolved_igdb_resolves_and_persists(self, plugin, uow, fake_romm_api, fake_steamgrid_db_api):
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         _seed_rom(uow, 42, app_id=1, name="Zelda")
         # No sgdb_id anywhere, but RomM has an igdb_id that cross-refs.
@@ -452,7 +453,7 @@ class TestGetSgdbResolution:
     @pytest.mark.asyncio
     async def test_unresolved_needs_pick_with_candidates(self, plugin, uow, fake_romm_api, fake_steamgrid_db_api):
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         _seed_rom(uow, 42, app_id=1)
         # No sgdb_id, no igdb_id → name search.
@@ -476,7 +477,7 @@ class TestGetSgdbResolution:
         self, plugin, fake_romm_api, fake_steamgrid_db_api
     ):
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         fake_romm_api.roms[42] = {"id": 42, "igdb_id": 1234, "name": "Obscure Port"}
         # IGDB cross-ref has no match.
@@ -493,7 +494,7 @@ class TestSearchSgdbGames:
     @pytest.mark.asyncio
     async def test_happy_path_enriches_thumbs(self, plugin, fake_steamgrid_db_api):
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         fake_steamgrid_db_api.seed_raw_response(
             "/search/autocomplete/mario",
@@ -518,7 +519,7 @@ class TestSearchSgdbGames:
 
     @pytest.mark.asyncio
     async def test_no_api_key(self, plugin):
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         result = await plugin.search_sgdb_games("mario")
         assert result["success"] is False
         assert result["games"] == []
@@ -527,7 +528,7 @@ class TestSearchSgdbGames:
     @pytest.mark.asyncio
     async def test_network_error_returns_failure(self, plugin, fake_steamgrid_db_api):
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         fake_steamgrid_db_api.request_side_effect = ConnectionError("DNS failed")
 
         result = await plugin.search_sgdb_games("mario")
@@ -539,7 +540,7 @@ class TestSearchSgdbGames:
     @pytest.mark.asyncio
     async def test_caps_at_six_candidates(self, plugin, fake_steamgrid_db_api):
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         data = [{"id": i, "name": f"Game {i}"} for i in range(1, 11)]
         fake_steamgrid_db_api.seed_raw_response("/search/autocomplete/many", {"success": True, "data": data})
@@ -565,7 +566,7 @@ class TestApplySgdbGameId:
     ):
         """A manual pick paints all four asset types into the rom's cache."""
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         _seed_all_artwork(fake_steamgrid_db_api, 8888)
 
@@ -584,7 +585,7 @@ class TestApplySgdbGameId:
     async def test_clears_existing_cache_before_redownload(self, plugin, sgdb_artwork_cache, fake_steamgrid_db_api):
         """A re-pick evicts the prior PNGs first, then paints the new game's art."""
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         # Stale art from a previous pick.
         for asset_type in ("hero", "logo", "grid", "icon"):
@@ -602,7 +603,7 @@ class TestApplySgdbGameId:
     async def test_persists_nothing(self, plugin, uow, sgdb_artwork_cache, fake_steamgrid_db_api):
         """A manual pick never writes the ROM row's sgdb_id."""
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         _seed_rom(uow, 42, app_id=1)
         save_count_before = uow.roms.save_count
@@ -618,7 +619,7 @@ class TestApplySgdbGameId:
     @pytest.mark.asyncio
     async def test_coerces_string_args(self, plugin, sgdb_artwork_cache, fake_steamgrid_db_api):
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         _seed_all_artwork(fake_steamgrid_db_api, 8888)
 
         result = await plugin.apply_sgdb_game_id("42", "8888")
@@ -629,7 +630,7 @@ class TestApplySgdbGameId:
     @pytest.mark.asyncio
     async def test_missing_row_still_succeeds(self, plugin, sgdb_artwork_cache, fake_steamgrid_db_api):
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         _seed_all_artwork(fake_steamgrid_db_api, 8888)
 
         # No roms row for rom_id 42.
@@ -645,7 +646,7 @@ class TestApplySgdbGameId:
     async def test_partial_download_failure_still_succeeds(self, plugin, sgdb_artwork_cache, fake_steamgrid_db_api):
         """One asset failing to download must not break the pick — the rest paint."""
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         # Seed only three of the four assets — "logo" stays unseeded so its
         # download yields no data, simulating a single-asset failure.
         for asset_type in ("hero", "grid", "icon"):
@@ -677,7 +678,7 @@ class TestApplySgdbGameId:
         re-pick.
         """
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         _seed_rom(uow, 42, app_id=1)
         _seed_all_artwork(fake_steamgrid_db_api, 8888)
@@ -707,7 +708,7 @@ class TestIconSupport:
         import base64
 
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         # Pre-populate cache
         sgdb_artwork_cache.files[_cached_path(sgdb_artwork_cache, 42, "icon")] = b"icon png data"
@@ -723,7 +724,7 @@ class TestIconSupport:
         import base64
 
         plugin.settings["steamgriddb_api_key"] = "some-key"
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         _seed_rom(uow, 42, app_id=100001, sgdb_id=9999, name="Zelda")
 
@@ -887,7 +888,7 @@ class TestSaveShortcutIcon:
         plugin._steam_config.write_shortcut_icon = fake_write_icon  # type: ignore[method-assign]
         plugin._steam_config.read_shortcuts = _forbidden_vdf  # type: ignore[method-assign]
         plugin._steam_config.write_shortcuts = _forbidden_vdf  # type: ignore[method-assign]
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         icon_b64 = base64.b64encode(b"real icon png").decode("ascii")
         result = await plugin.save_shortcut_icon(12345, icon_b64)
@@ -899,7 +900,7 @@ class TestSaveShortcutIcon:
     @pytest.mark.asyncio
     async def test_save_shortcut_icon_invalid_base64(self, plugin):
         """Invalid base64 → canonical failure shape, no icon_path."""
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         result = await plugin.save_shortcut_icon(12345, "not-valid-base64!!!")
 
@@ -917,7 +918,7 @@ class TestSaveShortcutIcon:
             raise SteamGridDirMissingError("Cannot find Steam grid directory")
 
         plugin._steam_config.write_shortcut_icon = raise_missing  # type: ignore[method-assign]
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         icon_b64 = base64.b64encode(b"real icon png").decode("ascii")
         result = await plugin.save_shortcut_icon(12345, icon_b64)
@@ -959,7 +960,7 @@ class TestDebugLoggerProtocolSeam:
                 romm_api=p._romm_api,
                 steam_config=steam_config,
                 settings=p.settings,
-                loop=asyncio.get_event_loop(),
+                loop=running_loop(),
                 logger=decky.logger,
                 plugin_dir=decky.DECKY_PLUGIN_DIR,
                 launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/rom-launcher",
@@ -986,7 +987,7 @@ class TestDebugLoggerProtocolSeam:
                 steam_config=steam_config,
                 sgdb_artwork_cache=sgdb_artwork_cache,
                 settings=p.settings,
-                loop=asyncio.get_event_loop(),
+                loop=running_loop(),
                 logger=decky.logger,
                 settings_persister=FakeSettingsPersister(),
                 get_pending_sync=lambda: p._sync_service._pending_sync,
@@ -1000,7 +1001,7 @@ class TestDebugLoggerProtocolSeam:
     async def test_sgdb_messages_route_through_injected_debug_logger(self, plugin_with_captured_log):
         """SGDB debug messages reach the injected ``log_debug``, not a hidden ``.info()`` seam."""
         plugin, captured = plugin_with_captured_log
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         # No API key configured -> early "skipped" debug message
         await plugin.get_sgdb_artwork_base64(42, 1)
@@ -1030,7 +1031,7 @@ class TestDebugLoggerProtocolSeam:
         import decky
 
         plugin, captured = plugin_with_captured_log
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
         # log_level=debug — pre-fix this is exactly the state where the
         # per-service ``_log_debug`` emitted via ``self._logger.info``.
         plugin.settings["log_level"] = "debug"
@@ -1211,7 +1212,7 @@ class TestReadFileAsBase64:
     @pytest.mark.asyncio
     async def test_returns_none_when_read_fails(self, plugin, sgdb_artwork_cache):
         """``read_bytes`` raising → ``None`` (frontend sees no artwork)."""
-        plugin._sgdb_service._loop = asyncio.get_event_loop()
+        plugin._sgdb_service._loop = asyncio.get_running_loop()
 
         def raising_read(_path: str) -> bytes:
             raise OSError("permission denied")

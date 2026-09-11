@@ -85,7 +85,7 @@ def service(logger, queue_cleanup, rom_files, uow, emitter):
 @pytest.fixture(autouse=True)
 async def _sync_loop(service):
     """Keep service loop in sync with the running event loop."""
-    service._loop = asyncio.get_event_loop()
+    service._loop = asyncio.get_running_loop()
 
 
 def _make_rom(rom_id: int, *, platform_slug: str = "n64", bound: bool = True) -> Rom:
@@ -907,7 +907,7 @@ class TestDownloadQueueCleanup:
         svc = RomRemovalService(
             config=RomRemovalServiceConfig(
                 logger=logger,
-                loop=asyncio.get_event_loop(),
+                loop=asyncio.get_running_loop(),
                 clock=FakeClock(),
                 emit=RecordingEmitter(),
                 rom_file_store=rom_files,

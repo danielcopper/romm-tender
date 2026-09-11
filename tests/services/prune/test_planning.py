@@ -82,7 +82,7 @@ def _planner(
 
     planner = GroupPlanner(
         config=GroupPlannerConfig(
-            loop=asyncio.get_event_loop(),
+            loop=asyncio.get_running_loop(),
             logger=logging.getLogger("test"),
             results=PruneResultReporter(config=PruneResultReporterConfig(emit=_noop_emit)),
             registry=PruneRegistry(config=PruneRegistryConfig(uow_factory=FakeUnitOfWorkFactory(uow))),

@@ -21,6 +21,7 @@ from fakes.fake_save_api import FakeSaveApi
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
+from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.gavel_native import GavelNativeAdapter
@@ -66,7 +67,7 @@ def plugin(tmp_path):
             romm_api=p._romm_api,
             steam_config=steam_config,
             settings=p.settings,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             plugin_dir=decky.DECKY_PLUGIN_DIR,
             launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/rom-launcher",
@@ -104,7 +105,7 @@ def plugin(tmp_path):
             resolve_upload_conflict=_GAVEL,
             compute_sync_action=_GAVEL.compute_sync_action,
             settings=p._save_settings,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=logging.getLogger("test"),
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             settings_persister=MagicMock(),
@@ -135,7 +136,7 @@ def plugin(tmp_path):
             romm_api=fake_api,
             retry=_make_retry(),
             device_id_provider=p._save_sync_service,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=logging.getLogger("test"),
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             log_debug=p._log_debug,
@@ -159,7 +160,7 @@ def plugin(tmp_path):
 @pytest.fixture(autouse=True)
 async def _set_event_loop(plugin):
     """Ensure plugin and service loops match the running event loop for async tests."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     plugin.loop = loop
     save_svc = plugin._save_sync_service
     save_svc._loop = loop
@@ -540,7 +541,7 @@ class TestPostExitSync:
             config=MigrationServiceConfig(
                 migration_file_store=MigrationFileAdapter(),
                 settings={},
-                loop=asyncio.get_event_loop(),
+                loop=asyncio.get_running_loop(),
                 logger=logging.getLogger("test"),
                 settings_persister=MagicMock(),
                 emit=MagicMock(),

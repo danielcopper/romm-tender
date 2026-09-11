@@ -758,7 +758,7 @@ class TestGameDetailCallableDelegation:
     @pytest.mark.asyncio
     async def test_get_cached_game_detail_delegates(self, plugin):
         # Runs on an executor worker, so the callable needs the real loop.
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         plugin._game_detail_service.get_cached_game_detail.return_value = {"detail": "x"}
         result = await plugin.get_cached_game_detail("12345")
         plugin._game_detail_service.get_cached_game_detail.assert_called_once_with("12345")
@@ -770,7 +770,7 @@ class TestGameDetailCallableDelegation:
         # bounded — a UoW, a firmware-cache read, a stat and a directory
         # listing. Running it on the loop thread stalls everything else the
         # plugin is doing for as long as the storage takes to answer.
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         seen: list[int] = []
         plugin._game_detail_service.get_cached_game_detail.side_effect = lambda _app_id: (
             seen.append(threading.get_ident()) or {"found": False}

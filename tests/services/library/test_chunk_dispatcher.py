@@ -53,7 +53,7 @@ class TestApplyChunking:
         from services.library import chunk_dispatcher
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
 
@@ -103,7 +103,7 @@ class TestApplyChunking:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -145,7 +145,7 @@ class TestApplyChunking:
         committed — the whole point of chunking (#1025)."""
         from services.library import chunk_dispatcher
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
 
@@ -209,7 +209,7 @@ class TestApplyChunking:
         from services.library import chunk_dispatcher
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
 
@@ -268,7 +268,7 @@ class TestApplyChunking:
         unit) under chunk 1's identity, so a late ack commits just that chunk."""
         from services.library import chunk_dispatcher
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
 
@@ -387,7 +387,7 @@ class TestWholeUnitStaging:
 
     @pytest.mark.asyncio
     async def test_delta_and_full_set_are_staged_into_their_own_fields(self, plugin, fake_romm_api):
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         # rom 10 is content-unchanged (skipped from the delta); rom 11 changed its
         # name, so the delta is {11} while the built set is {10, 11}.
@@ -639,7 +639,7 @@ class TestInterChunkCancelGuard:
         from services.library import chunk_dispatcher
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
             fake_romm_api,

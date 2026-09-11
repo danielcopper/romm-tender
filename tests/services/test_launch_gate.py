@@ -7,6 +7,7 @@ import logging
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
+from fakes.running_loop import running_loop
 
 from services.launch_gate import (
     LaunchGateService,
@@ -168,7 +169,7 @@ def _make_service(
             save_file_store=cast(
                 "SaveFileStore", save_file_store if save_file_store is not None else FakeSaveFileStore()
             ),
-            loop=loop if loop is not None else asyncio.get_event_loop(),
+            loop=loop if loop is not None else running_loop(),
             logger=logger,
         ),
     )

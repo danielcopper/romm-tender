@@ -181,7 +181,7 @@ def artwork_service(steam_config, file_store, romm_api, pending_sync_data, uow, 
 
 @pytest.fixture(autouse=True)
 async def _set_event_loop(artwork_service):
-    artwork_service._loop = asyncio.get_event_loop()
+    artwork_service._loop = asyncio.get_running_loop()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -17,6 +16,7 @@ from fakes.fake_relaunch_options_resolver import FakeRelaunchOptionsResolver
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
+from fakes.running_loop import running_loop
 
 from adapters.migration_file import MigrationFileAdapter
 from domain.rom import Rom
@@ -116,7 +116,7 @@ def _make_service(
         config=MigrationServiceConfig(
             migration_file_store=migration_file_store if migration_file_store is not None else MigrationFileAdapter(),
             settings={},
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=logging.getLogger("test"),
             settings_persister=MagicMock(),
             emit=MagicMock(),

@@ -14,6 +14,7 @@ from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
+from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.steam_config import SteamConfigAdapter
@@ -81,7 +82,7 @@ def plugin(clock):
             romm_api=p._romm_api,
             steam_config=steam_config,
             settings=p.settings,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             plugin_dir=decky.DECKY_PLUGIN_DIR,
             launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/rom-launcher",
@@ -103,7 +104,7 @@ def plugin(clock):
         config=AchievementsServiceConfig(
             romm_api=p._romm_api,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             clock=clock,
             log_debug=p._log_debug,
@@ -132,9 +133,9 @@ def plugin(clock):
 @pytest.fixture(autouse=True)
 async def _set_event_loop(plugin):
     """Ensure service loops match the running event loop for async tests."""
-    plugin._achievements_service._loop = asyncio.get_event_loop()
+    plugin._achievements_service._loop = asyncio.get_running_loop()
     # ``get_cached_game_detail`` runs its work on an executor worker.
-    plugin.loop = asyncio.get_event_loop()
+    plugin.loop = asyncio.get_running_loop()
 
 
 @pytest.fixture

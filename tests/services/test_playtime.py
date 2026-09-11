@@ -1,6 +1,5 @@
 """Tests for PlaytimeService — SQLite ``rom_playtime`` aggregate + native play-session ingest."""
 
-import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -9,6 +8,7 @@ import pytest
 from _factories import _make_retry
 from fakes.fake_romm_api import FakeRommApi
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
+from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock
 
 from domain.playtime import PendingPlaySession, Playtime
@@ -76,7 +76,7 @@ def make_service(fake_api=None, clock=None, uow=None, device_id: str | None = "d
         "romm_api": fake,
         "retry": _make_retry(),
         "device_id_provider": FakeDeviceIdProvider(device_id),
-        "loop": asyncio.get_event_loop(),
+        "loop": running_loop(),
         "logger": logging.getLogger("test"),
         "clock": clk,
         "log_debug": lambda _msg: None,

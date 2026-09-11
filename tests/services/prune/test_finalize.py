@@ -146,7 +146,7 @@ class Fixture:
         self.installed = _FakeInstalledRemover(self.order)
         self.recovery = _FakeRecovery()
         self.recovery_store = _FakeRecoveryStore()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         self.finalizer = GroupFinalizer(
             config=GroupFinalizerConfig(
                 loop=loop,

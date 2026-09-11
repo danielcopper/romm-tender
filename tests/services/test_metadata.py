@@ -6,6 +6,7 @@ import pytest
 # conftest.py patches decky before this import; use _make_testable_plugin for test-only attrs
 from _factories import _make_testable_plugin
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
+from fakes.running_loop import running_loop
 
 from adapters.debug_logger import SettingsAwareDebugLogger
 from adapters.steam_config import SteamConfigAdapter
@@ -81,7 +82,7 @@ def plugin(uow):
 
     metadata_service = MetadataService(
         config=MetadataServiceConfig(
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             log_debug=p._log_debug,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
@@ -94,8 +95,8 @@ def plugin(uow):
 @pytest.fixture(autouse=True)
 async def _set_event_loop(plugin):
     """Ensure plugin.loop and service loop match the running event loop for async tests."""
-    plugin.loop = asyncio.get_event_loop()
-    plugin._metadata_service._loop = asyncio.get_event_loop()
+    plugin.loop = asyncio.get_running_loop()
+    plugin._metadata_service._loop = asyncio.get_running_loop()
 
 
 class TestGetRomMetadata:

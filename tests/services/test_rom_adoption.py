@@ -275,7 +275,7 @@ class Harness:
 
 @pytest.fixture
 async def h():
-    return Harness(asyncio.get_event_loop())
+    return Harness(asyncio.get_running_loop())
 
 
 # ── the download gate ────────────────────────────────────────────────────

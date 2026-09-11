@@ -80,7 +80,7 @@ def _runner(
 
     runner = SteamActionRunner(
         config=SteamActionRunnerConfig(
-            loop=asyncio.get_event_loop(),
+            loop=asyncio.get_running_loop(),
             results=PruneResultReporter(config=PruneResultReporterConfig(emit=_noop_emit)),
             registry=PruneRegistry(config=PruneRegistryConfig(uow_factory=FakeUnitOfWorkFactory(uow))),
             switch_version=switch_version,
