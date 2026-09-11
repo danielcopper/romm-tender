@@ -81,7 +81,7 @@ select = [
 # per-file-ignore, in tests least of all — tests are where the banned call lived.
 # That is the whole of the claim. The ban reaches only what ruff walks, so the
 # trees `extend-exclude` drops — `py_modules/_vendor`, `./scripts`, `.claude`,
-# `.worktrees` — never see it; no call site in them spells it today (the one
+# `.worktrees` — never see it; no tracked call site in them spells it today (the one
 # tracked file that names it at all is `.claude/rules/testing-backend.md`, which
 # states the ban in prose and which ruff would not read either way), and
 # `./scripts` has no ruff coverage from anywhere (see the force-exclude note
