@@ -10,6 +10,21 @@ input, missing data, API errors, network failures), and **edge cases** (empty st
 boundaries). Tests mirror the source structure (`tests/services/`, `tests/adapters/`, …), one test file per source
 module. Shared mocks live in `tests/conftest.py`.
 
+## The loop a test hands a service
+
+A service takes its event loop in a frozen `*ServiceConfig`, and `asyncio.get_event_loop()` is banned (ruff TID251) —
+pytest-asyncio 1.4.0 removed the implicit thread-default loop it used to answer with. The ban's message names
+`asyncio.get_running_loop()`, which is right for code already **inside** the loop (an async fixture, an async test, a
+helper only async code enters) and is exactly the call that raises in the other position: a **synchronous** fixture or
+helper body, which has to name a loop before any test is running. That one passes `running_loop()` from
+`tests/fakes/running_loop.py` — a forwarder that resolves against whichever loop is running when the service reaches for
+it, so nothing is created and nothing is left unclosed (#806).
+
+Neither answers for a service that touches its loop from a **worker thread** (an executor callback calling
+`call_soon_threadsafe`): off the loop thread there is no running loop to resolve against, so that service needs the real
+loop object, rebound by an autouse async fixture — the shape in `tests/contract/_harness.py` and
+`tests/services/test_downloads.py`.
+
 ## Property-based tests — pure decision kernels (hypothesis)
 
 The pure decision kernels carry a property tier on top of hand-enumerated cases. The in-tree ones
