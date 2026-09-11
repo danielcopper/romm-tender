@@ -7,10 +7,10 @@ Never a path component, a header value, a storage key or a folder.
 
 The identifier — ``romm-tender`` — is kept out of here, and just as deliberately
 kept apart across the six questions below rather than folded into one, because
-those answers have to stay free to disagree. Each bullet names every place its
-own answer is spelled: four of the six are spelled more than once, so a single
-total at the top would be a number that rots, and the place to check a count is
-the bullet that carries it.
+those answers have to stay free to disagree. Within the scope stated after the
+list, each bullet names every place its own answer is written — four of the six
+are written more than once — so there is no total at the top: a number there
+would rot, and a count is checkable only at the bullet that makes it.
 
 - ``domain.user_data_location.APP_DIR_NAME`` says where the user's own data
   lives, and ``SOURCE_FOLDER_NAMES`` beside it spells the same answer again.
@@ -25,10 +25,10 @@ the bullet that carries it.
   unpacks into, which Decky then derives its settings, data, log and plugin
   directories from. It was inherited from the CI checkout until that workflow
   pinned it, and inheriting it is what moved every user's data at 0.31.0. The
-  same workflow spells it a second time, in the smoke assertion that reads the
-  built zip's top-level directory back — deliberately, because a check that
-  composed its expectation from the value it is checking would pass on any
-  value.
+  same workflow spells it twice more, in the smoke assertion that reads the
+  built zip's top-level directory back and again in that assertion's failure
+  message — deliberately for the first, because a check that composed its
+  expectation from the value it is checking would pass on any value.
 - ``services.legacy_install._LEGACY_PLUGIN_FOLDER`` is the folder releases up to
   0.30.1 unpacked into, and ``SOURCE_FOLDER_NAMES`` spells that one again too.
   It is finished history and follows nothing at all.
@@ -51,25 +51,36 @@ the bullet that carries it.
   opener follows a 301 on GET — so a literal left behind goes on working and
   nothing ever surfaces the disagreement. What does break the check is the old
   address no longer answering for THIS repository: deleted, made private, or the
-  name taken by something else. The last of those is the bad one, because the
-  check then asks a stranger's repository and believes the answer.
+  freed name taken by another repository. The last is the one worth stating, and
+  it is not a stranger: all three literals pin the owner, so the only account
+  that can take the freed name is the same one, and the check would then read
+  ANOTHER OF THIS OWNER'S repositories as if it published Tender. It would
+  announce whatever that repository's latest tag parses as — the card needs only
+  a version newer than the running one — while an install additionally needs an
+  asset named exactly ``Tender.zip`` over there, so the likeliest shape is a card
+  offering an update that cannot be installed.
 
 ``SOURCE_FOLDER_NAMES`` is why the first and the fourth are each spelled twice:
 it is the list a start-up migration searches, written out rather than composed
 from either constant — so the search keeps looking where the data actually is
 once one of them moves.
 
-The bullets cover what the running plugin holds, plus the workflow that builds
-it. Three groups outside that are deliberately not questions of their own, and
-they are named here so the scope can be checked rather than assumed. The docs
-site and the analysis config (``mkdocs.yml``, ``.sonarlint.json``) spell the
-sixth answer for tooling that never runs on a user's Deck. ``mise.toml``'s
-deploy destination and the log path in ``.github/ISSUE_TEMPLATE/bug_report.yml``
-both follow the THIRD answer — the delivered folder — one to install into it,
-the other to tell a reporter where Decky's logs ended up. And
-``src/components/LibraryPage.tsx`` uses the identifier as a log-line prefix,
-which follows nothing because nothing reads it: it is a diagnostic tag, and the
-name a reader is shown is this module's ``DISPLAY_NAME``.
+**Scope of the bullets**: the plugin's own shipped code, its manifests, and the
+workflow that builds a release. Outside those the identifier is written in dozens
+of places — documentation prose, ADRs, tests, dev scripts, repository metadata,
+badge URLs — and none of them is enumerated here, because that list could not be
+kept true and nothing would notice it going stale. Read a bullet as "every place
+this answer is written in what ships or builds", never as "everywhere the string
+occurs".
+
+Three sites are called out anyway, because each looks like an answer and is not.
+``mise.toml``'s deploy destination and the log path in
+``.github/ISSUE_TEMPLATE/bug_report.yml`` sit outside the scope above and both
+follow the THIRD answer — the delivered folder — one to install into it, the
+other to tell a reporter where Decky's logs ended up. ``LibraryPage.tsx`` is
+inside it and still answers nothing: it uses the identifier as a log-line prefix
+that nothing reads back, a diagnostic tag, where the name a reader is shown is
+this module's ``DISPLAY_NAME``.
 
 Fold any two together and one question's answer starts deciding another's, in
 whichever direction the fold happened to point — and each of those failures is
