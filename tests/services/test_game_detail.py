@@ -23,6 +23,7 @@ from fakes.fake_save_api import FakeSaveApi
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
+from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.firmware_file import FirmwareFileAdapter
@@ -73,7 +74,7 @@ def plugin(tmp_path):
             romm_api=MagicMock(),
             steam_config=steam_config,
             settings=p.settings,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             plugin_dir=decky.DECKY_PLUGIN_DIR,
             launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/rom-launcher",
@@ -104,7 +105,7 @@ def plugin(tmp_path):
             resolve_upload_conflict=_GAVEL,
             compute_sync_action=_GAVEL.compute_sync_action,
             settings={"log_level": "debug"},
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=logging.getLogger("test"),
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             settings_persister=MagicMock(),
@@ -135,7 +136,7 @@ def plugin(tmp_path):
             romm_api=fake_api,
             retry=_make_retry(),
             device_id_provider=p._save_sync_service,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=logging.getLogger("test"),
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             log_debug=p._log_debug,
@@ -147,7 +148,7 @@ def plugin(tmp_path):
         config=AchievementsServiceConfig(
             romm_api=MagicMock(),
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=logging.getLogger("test"),
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             log_debug=p._log_debug,
@@ -157,7 +158,7 @@ def plugin(tmp_path):
     p._firmware_service = FirmwareService(
         config=FirmwareServiceConfig(
             romm_api=MagicMock(),
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=logging.getLogger("test"),
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             firmware_file_store=FirmwareFileAdapter(),
@@ -316,7 +317,7 @@ def _seed_metadata(plugin, rom_id, *, cached_at, summary="", genres=(), app_id=N
 
 @pytest.fixture(autouse=True)
 async def _set_event_loop(plugin):
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     plugin.loop = loop
     plugin._save_sync_service._loop = loop
     plugin._playtime_service._loop = loop

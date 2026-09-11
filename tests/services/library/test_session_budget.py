@@ -231,7 +231,7 @@ class TestSessionBudgetMonitor:
     async def test_session_budget_status_happy(self, plugin):
         from domain.session_budget import CLIFF_KB, EFFECTIVE_CEILING_KB, POST_RUN_ADVISORY_KB
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         plugin._renderer_rss.rss_kb = 1_100_000
 
         result = await plugin.get_session_budget_status()
@@ -258,7 +258,7 @@ class TestSessionBudgetMonitor:
     async def test_session_budget_status_rss_none(self, plugin):
         from domain.session_budget import CLIFF_KB, EFFECTIVE_CEILING_KB, POST_RUN_ADVISORY_KB
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         plugin._renderer_rss.rss_kb = None  # measurement unavailable → fail-open
 
         result = await plugin.get_session_budget_status()
@@ -274,7 +274,7 @@ class TestSessionBudgetMonitor:
     @pytest.mark.asyncio
     async def test_session_budget_status_resume_not_ready_at_high_rss(self, plugin):
         # A still-high RSS (a paused run before a Steam restart): resume would re-pause.
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         plugin._renderer_rss.rss_kb = 2_100_000  # 2.1 + 0.5 = 2.6 ≥ 2.2 ceiling
 
         result = await plugin.get_session_budget_status()
@@ -285,7 +285,7 @@ class TestSessionBudgetMonitor:
     async def test_session_budget_status_returns_retained_delta(self, plugin):
         # A prior clean run's delta is retained in the box and surfaced on a QAM
         # remount even though the live RSS read is a separate poll.
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         plugin._renderer_rss.rss_kb = 1_234_000
         plugin._sync_service._box.last_run_delta_kb = 800_000
 

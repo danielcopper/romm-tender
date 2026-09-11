@@ -18,6 +18,7 @@ from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
+from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.adoption_move import AdoptionMoveAdapter
@@ -159,7 +160,7 @@ def plugin():
             romm_api=p._romm_api,
             steam_config=steam_config,
             settings=p.settings,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             plugin_dir=decky.DECKY_PLUGIN_DIR,
             launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/rom-launcher",
@@ -217,7 +218,7 @@ def plugin():
             # Late-bound like production: DownloadService is constructed below.
             sibling_supersede=lambda: p._download_service.supersede_sibling_installs,
             uow_factory=FakeUnitOfWorkFactory(p._uow),
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             log_debug=lambda msg: None,
             emit=decky.emit,
@@ -229,7 +230,7 @@ def plugin():
             romm_api=p._romm_api,
             download_file_store=download_file_store,
             resolve_system=p._resolve_system,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             emit=decky.emit,
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
@@ -249,7 +250,7 @@ def plugin():
     p._rom_removal_service = RomRemovalService(
         config=RomRemovalServiceConfig(
             logger=decky.logger,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             emit=decky.emit,
             rom_file_store=RomFileAdapter(),
@@ -271,10 +272,10 @@ async def _set_event_loop(plugin):
     awaits it, and it offloads onto *its own* loop — a stale one raises "attached
     to a different loop" from inside the gate rather than at the seam.
     """
-    plugin.loop = asyncio.get_event_loop()
-    plugin._download_service._loop = asyncio.get_event_loop()
-    plugin._rom_removal_service._loop = asyncio.get_event_loop()
-    plugin._rom_adoption_service._loop = asyncio.get_event_loop()
+    plugin.loop = asyncio.get_running_loop()
+    plugin._download_service._loop = asyncio.get_running_loop()
+    plugin._rom_removal_service._loop = asyncio.get_running_loop()
+    plugin._rom_adoption_service._loop = asyncio.get_running_loop()
 
 
 class TestStartDownload:
@@ -382,7 +383,7 @@ class TestCancelDownload:
     @pytest.mark.asyncio
     async def test_cancels_active_download(self, plugin):
         # Create a real future that raises CancelledError when awaited
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         fut = loop.create_future()
         fut.cancel()
 
@@ -406,7 +407,7 @@ class TestCancelDownload:
         import decky
 
         decky.emit.reset_mock()
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -450,7 +451,7 @@ class TestCancelDownload:
         import decky
 
         decky.emit.reset_mock()
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[42] = {
             "rom_id": 42,
             "rom_name": "Zelda",
@@ -1555,7 +1556,7 @@ class TestDoDownloadSingleFile:
                 f.write(b"\x00" * 512)
 
         _seed_rom(plugin._uow, 42)
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -1636,7 +1637,7 @@ class TestDoDownloadSingleFile:
                     last_synced_at="2025-01-01T00:00:00",
                 )
             )
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[7] = {"rom_id": 7, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -1672,7 +1673,7 @@ class TestDoDownloadSingleFile:
                 f.write(b"\x00" * 512)
 
         _seed_rom(plugin._uow, 42)  # bound (app_id 1042)
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -1726,7 +1727,7 @@ class TestDoDownloadSingleFile:
                     last_synced_at="2025-01-01T00:00:00",
                 )
             )
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[7] = {"rom_id": 7, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -1778,7 +1779,7 @@ class TestDoDownloadOverrideRebake:
         if override is not None:
             with plugin._uow:
                 plugin._uow.roms.set_emulator_override(rom_id, override)
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[rom_id] = {"rom_id": rom_id, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -1876,7 +1877,7 @@ class TestDoDownloadMultiFile:
                 f.write(zip_bytes)
 
         _seed_rom(plugin._uow, 55, platform_slug="psx")
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[55] = {"rom_id": 55, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -1966,7 +1967,7 @@ class TestDoDownloadMultiFile:
                 f.write(zip_bytes)
 
         _seed_rom(plugin._uow, 99, platform_slug="switch")
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[99] = {"rom_id": 99, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -2046,7 +2047,7 @@ class TestDoDownloadMultiFile:
         def fake_download(_rom_id, _filename, _dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise OSError("network died mid-download")
 
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[99] = {"rom_id": 99, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -2118,7 +2119,7 @@ class TestDoDownloadMultiFile:
                 f.write(zip_bytes)
 
         _seed_rom(plugin._uow, 4778, platform_slug="ps3")
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[4778] = {"rom_id": 4778, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -2190,7 +2191,7 @@ class TestDoDownloadMultiFile:
         def fake_download(_rom_id, _filename, _dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise OSError("network died mid-download")
 
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[4778] = {"rom_id": 4778, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -2251,7 +2252,7 @@ class TestDoDownloadMultiFile:
             fake.files[dest] = b"ZIPDATA"
 
         _seed_rom(plugin._uow, 55, platform_slug="psx")
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[55] = {
             "rom_id": 55,
             "rom_name": "Final Fantasy VII",
@@ -2348,7 +2349,7 @@ class TestDoDownloadBundledM3uPlatformGate:
                 f.write(zip_bytes)
 
         _seed_rom(plugin._uow, 111, platform_slug="switch")
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[111] = {"rom_id": 111, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -2415,7 +2416,7 @@ class TestDoDownloadBundledM3uPlatformGate:
                 f.write(zip_bytes)
 
         _seed_rom(plugin._uow, 112, platform_slug="psx")
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[112] = {"rom_id": 112, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -2466,7 +2467,7 @@ class TestEsDeCollapseRename:
                 f.write(zip_bytes)
 
         _seed_rom(plugin._uow, rom_id, platform_slug=platform)
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[rom_id] = {"rom_id": rom_id, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -2639,7 +2640,7 @@ class TestEsDeCollapseRename:
                 f.write(b"\x00" * 100)
 
         _seed_rom(plugin._uow, 73, platform_slug="gba")
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[73] = {"rom_id": 73, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -2691,7 +2692,7 @@ class TestEsDeCollapseRename:
                 f.write(zip_bytes)
 
         _seed_rom(plugin._uow, 74, platform_slug="psx")
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[74] = {"rom_id": 74, "status": "downloading", "progress": 0}
 
         with (
@@ -2758,7 +2759,7 @@ class TestDoDownloadNestedSingleFile:
                 f.write(b"\x00" * 64)
 
         _seed_rom(plugin._uow, 1, platform_slug="gba")
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[1] = {"rom_id": 1, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -2806,7 +2807,7 @@ class TestDoDownloadNestedSingleFile:
                 f.write(b"\x00" * 128)
 
         _seed_rom(plugin._uow, 7, platform_slug="dc")
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[7] = {"rom_id": 7, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -3185,7 +3186,7 @@ class TestPathTraversalPlatformSlug:
             "platform_name": "Nintendo 64",
         }
 
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
 
         # Track make_dirs to prove the slug is rejected BEFORE any directory work.
         made_dirs: list[str] = []
@@ -3340,7 +3341,7 @@ class TestDoDownloadCancelled:
         def fake_download_cancel(_rom_id, _filename, dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise asyncio.CancelledError()
 
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
 
         with (
@@ -3392,7 +3393,7 @@ class TestDoDownloadZipFailure:
             with open(dest, "wb") as f:
                 f.write(b"not a zip file")
 
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[66] = {"rom_id": 66, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -3452,7 +3453,7 @@ class TestDoDownloadPostDecodeTraversal:
         }
 
         _seed_rom(plugin._uow, 88, platform_slug="psx")
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[88] = {"rom_id": 88, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -3523,7 +3524,7 @@ class TestDoDownloadPostDecodeTraversal:
         }
 
         _seed_rom(plugin._uow, 91, platform_slug="switch")
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[91] = {"rom_id": 91, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -3576,7 +3577,7 @@ class TestDoDownloadFailureEmit:
         def fake_download(_rom_id, _filename, _dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise OSError("simulated network drop")
 
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -3635,7 +3636,7 @@ class TestDoDownloadInvariantFailure:
             with open(dest, "wb") as f:
                 f.write(b"\x00" * 64)
 
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         # rom_id=0 violates RomInstall's invariant (rom_id must be positive).
         plugin._download_service._download_queue[0] = {"rom_id": 0, "status": "downloading", "progress": 0}
 
@@ -3692,7 +3693,7 @@ class TestDoDownloadInvariantFailure:
             with open(dest, "wb") as f:
                 f.write(zip_bytes)
 
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[0] = {"rom_id": 0, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -3921,7 +3922,7 @@ class TestUrlEncodedFilenameRename:
                 f.write(zip_bytes)
 
         _seed_rom(plugin._uow, 99, platform_slug="psx")
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[99] = {"rom_id": 99, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -3980,7 +3981,7 @@ class TestUrlEncodedFilenameRename:
                 f.write(zip_bytes)
 
         _seed_rom(plugin._uow, 55, platform_slug="psx")
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[55] = {"rom_id": 55, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -4725,7 +4726,7 @@ class TestDoDownloadRedownloadPreservesExisting:
         def fake_download(_rom_id, _filename, _dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise OSError("network died mid-redownload")
 
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
 
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
@@ -4778,7 +4779,7 @@ class TestDoDownloadCancelReconcile:
         }
 
         _seed_rom(plugin._uow, 42)
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[42] = {
             "rom_id": 42,
             "status": "downloading",
@@ -4861,7 +4862,7 @@ class TestDoDownloadCancelReconcile:
         }
 
         _seed_rom(plugin._uow, 77, platform_slug="psx")
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[77] = {
             "rom_id": 77,
             "status": "downloading",
@@ -4956,7 +4957,7 @@ class TestDoDownloadCancelEmitsEvent:
         def fake_download_cancel(_rom_id, _filename, _dest, _progress_callback=None, *, resume=False, on_meta=None):
             raise asyncio.CancelledError()
 
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[42] = {
             "rom_id": 42,
             "status": "downloading",
@@ -5077,7 +5078,7 @@ class TestConcurrencyReservation:
                 f.write(b"\x00" * 512)
 
         _seed_rom(plugin._uow, 42)
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._reserved_bytes[42] = 999
         plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "queued", "progress": 0}
 
@@ -5127,7 +5128,7 @@ class TestConcurrencyReservation:
                 f.write(b"\x00" * 64)
 
         _seed_rom(plugin._uow, 3)
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[3] = {"rom_id": 3, "status": "queued", "progress": 0}
 
         # Run the third download as a task — it must emit "queued" then block on
@@ -5248,7 +5249,7 @@ class TestCooperativeCancel:
                 # the loop never runs to completion — the transfer aborts.
                 progress_callback(i, 500)
 
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
 
         with (
@@ -5267,7 +5268,7 @@ class TestCooperativeCancel:
     @pytest.mark.asyncio
     async def test_cancel_download_sets_token_and_cancels_task(self, plugin):
         """``cancel_download`` flips the token AND cancels the asyncio task."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         token = _DownloadControl()
         plugin._download_service._control_tokens[42] = token
 
@@ -5382,7 +5383,7 @@ class TestPauseResume:
             control.paused = True
             raise asyncio.CancelledError()
 
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[42] = {
             "rom_id": 42,
             "status": "downloading",
@@ -5436,7 +5437,7 @@ class TestPauseResume:
             control.cancelled = True
             raise asyncio.CancelledError()
 
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading", "progress": 0}
 
         with (
@@ -5480,7 +5481,7 @@ class TestPauseResume:
                 f.write(b"\x00" * 256)
 
         _seed_rom(plugin._uow, 42)
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[42] = {
             "rom_id": 42,
             "status": "downloading",
@@ -5531,7 +5532,7 @@ class TestPauseResume:
                 f.write(b"\x00" * 256)
 
         _seed_rom(plugin._uow, 42)
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[42] = {
             "rom_id": 42,
             "status": "downloading",
@@ -5632,7 +5633,7 @@ class TestPauseResume:
             "total_bytes": 1024,
             "resumable": True,
         }
-        plugin._download_service._loop = asyncio.get_event_loop()
+        plugin._download_service._loop = asyncio.get_running_loop()
 
         # get_rom is fetched via run_in_executor; the real loop runs it.
         captured_resume: list[bool] = []
@@ -5684,7 +5685,7 @@ class TestPauseResume:
     @pytest.mark.asyncio
     async def test_pause_download_sets_paused_flag_and_cancels_task(self, plugin):
         """pause_download flips control.paused (not cancelled) and cancels the task."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         control = _DownloadControl()
         plugin._download_service._control_tokens[42] = control
 

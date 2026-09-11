@@ -17,6 +17,7 @@ from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
+from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.debug_logger import SettingsAwareDebugLogger
@@ -135,7 +136,7 @@ def plugin():
             romm_api=p._romm_api,
             steam_config=steam_config,
             settings=p.settings,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             plugin_dir=decky.DECKY_PLUGIN_DIR,
             launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/rom-launcher",
@@ -161,7 +162,7 @@ def plugin():
             steam_config=steam_config,
             sgdb_artwork_cache=FakeSgdbArtworkCache(cache_root=decky.DECKY_PLUGIN_RUNTIME_DIR),
             settings=p.settings,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             settings_persister=FakeSettingsPersister(),
             get_pending_sync=lambda: p._sync_service._pending_sync,
@@ -185,7 +186,7 @@ def plugin():
             settings=p.settings,
             romm_api=p._romm_api,
             settings_persister=p._settings_persister,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             min_required_version=Plugin._MIN_REQUIRED_VERSION,
             forget_device=MagicMock(),
@@ -273,7 +274,7 @@ class TestConnection:
     async def test_test_connection_sets_version_on_romm_api(self, plugin):
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         plugin.settings["romm_url"] = "http://romm.local"
         plugin.settings["romm_api_token"] = "rmm_token"
         plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.9.0"}}
@@ -1304,7 +1305,7 @@ class TestPlaytimeFlushTaskLifecycle:
 
     def _plugin_with_playtime(self):
         p = Plugin()
-        p.loop = asyncio.get_event_loop()
+        p.loop = asyncio.get_running_loop()
         p._playtime_service = MagicMock()
         p._playtime_service.record_session_start.return_value = {"success": True}
         p._prune_service = MagicMock()

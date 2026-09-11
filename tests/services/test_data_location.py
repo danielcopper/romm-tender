@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 import pytest
+from fakes.running_loop import running_loop
 from models.data_location import SourceDescription, UserDataLocations
 
 from services.data_location import DataLocationService, DataLocationServiceConfig
@@ -42,7 +42,7 @@ def _make(locations: UserDataLocations, store: FakeDataLocationStore | None = No
         config=DataLocationServiceConfig(
             locations=locations,
             store=used,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=logging.getLogger("test"),
         ),
     )

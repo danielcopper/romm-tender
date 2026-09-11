@@ -223,7 +223,7 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
     # async fixture so this is the *same* loop the callables will await on —
     # binding the loop captured at module import (a different loop) would make
     # ``run_in_executor`` raise "got Future attached to a different loop".
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     # 3. Wire the real services with the patched bundle.
     cfg = WiringConfig(

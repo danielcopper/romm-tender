@@ -23,6 +23,7 @@ from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_settings_persister import FakeSettingsPersister
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
+from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.firmware_file import FirmwareFileAdapter
@@ -91,7 +92,7 @@ def plugin(tmp_path, fake_romm_api):
     p._firmware_service = FirmwareService(
         config=FirmwareServiceConfig(
             romm_api=fake_romm_api,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             firmware_file_store=FirmwareFileAdapter(),
@@ -110,7 +111,7 @@ def plugin(tmp_path, fake_romm_api):
             romm_api=fake_romm_api,
             steam_config=steam_config,
             settings=p.settings,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             plugin_dir=decky.DECKY_PLUGIN_DIR,
             launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/rom-launcher",
@@ -151,7 +152,7 @@ def plugin(tmp_path, fake_romm_api):
         config=MigrationServiceConfig(
             migration_file_store=MigrationFileAdapter(),
             settings=p.settings,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             settings_persister=p._settings_persister,
             emit=RecordingEmitter(),
@@ -226,7 +227,7 @@ def _seed_bios(uow, *, platform_slug, file_name, file_path, firmware_id=None):
 @pytest.fixture(autouse=True)
 async def _set_event_loop(plugin):
     """Ensure plugin.loop and migration service loop match the running event loop."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     plugin.loop = loop
     plugin._migration_service._loop = loop
     # The save-sort half took its own copy of the loop at construction, so
@@ -1679,7 +1680,7 @@ class TestDetectSaveSortChangeThreadSafety:
         Before the fix, this would call ``loop.create_task`` from a
         worker thread, which is undefined behavior.
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         plugin._migration_service._loop = loop
 
         # Initial state: a populated OLD layout. Detect should observe a
@@ -1741,7 +1742,7 @@ class TestMigrationFailureInjection:
         uow = uow if uow is not None else FakeUnitOfWork()
         defaults: dict[str, Any] = {
             "settings": {},
-            "loop": asyncio.get_event_loop(),
+            "loop": running_loop(),
             "logger": decky.logger,
             "settings_persister": FakeSettingsPersister(),
             "emit": RecordingEmitter(),
@@ -2001,7 +2002,7 @@ class TestBackgroundTaskTracking:
     @pytest.mark.asyncio
     async def test_shutdown_cancels_pending_tasks_and_empties_set(self, plugin):
         """``shutdown()`` cancels in-flight tasks and the set is empty after."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         plugin._migration_service._loop = loop
 
         # Spawn a task that blocks forever via an unset Event.

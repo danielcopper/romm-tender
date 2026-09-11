@@ -20,6 +20,7 @@ from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.library_peers import FakeArtworkManager
+from fakes.running_loop import running_loop
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.firmware_file import FirmwareFileAdapter
@@ -127,7 +128,7 @@ def _make_firmware_service(
     return FirmwareService(
         config=FirmwareServiceConfig(
             romm_api=romm_api if romm_api is not None else MagicMock(),
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=logger if logger is not None else decky.logger,
             clock=clock if clock is not None else _make_clock(),
             firmware_file_store=store,
@@ -262,7 +263,7 @@ def plugin():
             romm_api=p._romm_api,
             steam_config=steam_config,
             settings=p.settings,
-            loop=asyncio.get_event_loop(),
+            loop=running_loop(),
             logger=decky.logger,
             plugin_dir=decky.DECKY_PLUGIN_DIR,
             launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/rom-launcher",
@@ -286,7 +287,7 @@ def plugin():
 @pytest.fixture(autouse=True)
 async def _set_event_loop(plugin, fw):
     """Ensure plugin.loop and the firmware sub-services match the running event loop."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     plugin.loop = loop
     _set_loop(fw, loop)
 
@@ -1170,7 +1171,7 @@ class TestGetFirmwareStatus:
             {"id": 3, "file_name": "gba_bios.bin", "file_path": "bios/gba/gba_bios.bin", "file_size_bytes": 300},
         ]
         # A real loop so the executor-run reads hit the shared fake UoW.
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
         # "dc": a bound ROM. "ps2": only an unbound ROM. "gba": no ROM rows.
         _seed_rom(plugin._uow, rom_id=42, platform_slug="dc", app_id=1)
         _seed_rom(plugin._uow, rom_id=43, platform_slug="ps2", app_id=None)
@@ -1214,7 +1215,7 @@ class TestGetFirmwareStatus:
     async def test_handles_api_error_with_offline_fallback(self, plugin, fw):
         # Real loop: only the HTTP list_firmware fails; the installed-slugs read
         # against the fake UoW still succeeds.
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         with patch.object(plugin._romm_api, "list_firmware", side_effect=Exception("Connection refused")):
             result = await fw.get_firmware_status()
@@ -1562,7 +1563,7 @@ class TestGetFirmwareStatusBiosAggregates:
             core_info=_dc_core_info(),
             retrodeck_paths=FakeRetroDeckPaths(bios=str(bios_dir)),
         )
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         with patch.object(plugin._romm_api, "list_firmware", side_effect=Exception("offline")):
             result = await fw.get_firmware_status()
@@ -1592,7 +1593,7 @@ class TestGetFirmwareStatusBiosAggregates:
             firmware_folder_verdicts=FakeFolderVerdicts(),
             core_info=_test_core_info(),
         )
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         with patch.object(plugin._romm_api, "list_firmware", side_effect=Exception("offline")):
             result = await fw.get_firmware_status()
@@ -1617,7 +1618,7 @@ class TestGetFirmwareStatusBiosAggregates:
             firmware_folder_verdicts=FakeFolderVerdicts(),
             core_info=FakeCoreInfoProvider(options=[]),
         )
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         with patch.object(plugin._romm_api, "list_firmware", side_effect=Exception("offline")):
             result = await fw.get_firmware_status()
@@ -1651,7 +1652,7 @@ class TestGetFirmwareStatusBiosAggregates:
                 "md5_hash": "",
             },
         ]
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         real_exists = fw._config.firmware_file_store.exists
         checked: list[str] = []
@@ -2543,7 +2544,7 @@ class TestDownloadFirmware:
                 f.write(content)
 
         fw._demand._retrodeck_paths = FakeRetroDeckPaths(bios=str(bios_dir))
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         with (
             patch.object(plugin._romm_api, "get_firmware", return_value=fw_detail),
@@ -2573,7 +2574,7 @@ class TestDownloadFirmware:
             "md5_hash": "",
         }
 
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         with (
             patch.object(plugin._romm_api, "get_firmware", return_value=fw_detail),
@@ -2601,7 +2602,7 @@ class TestDownloadFirmware:
         }
 
         fw._demand._retrodeck_paths = FakeRetroDeckPaths(bios=str(bios_dir))
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         download_called = []
 
@@ -2654,7 +2655,7 @@ class TestDownloadAllFirmware:
             },
         ]
 
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         download_called_ids = []
 
@@ -2696,7 +2697,7 @@ class TestDownloadAllFirmware:
             declares_directory=True,
             folder=FolderVerdict(satisfied=False),
         )
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
         download_called_ids = []
 
         async def fake_download_firmware(fw_id, _placements):
@@ -2747,7 +2748,7 @@ class TestDownloadPlatformFirmwareFile:
     async def test_downloads_the_named_file_of_that_platform(self, plugin, fw, tmp_path):
         bios_dir = tmp_path / "retrodeck" / "bios"
         bios_dir.mkdir(parents=True)
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
         fetched = []
 
         async def fake_download_one(fw_id, _placements):
@@ -2771,7 +2772,7 @@ class TestDownloadPlatformFirmwareFile:
         bios_dir = tmp_path / "retrodeck" / "bios"
         bios_dir.mkdir(parents=True)
         (bios_dir / "existing.bin").write_bytes(b"\x00" * 50)
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         async def fake_download_one(fw_id, _placements):
             raise AssertionError(f"nothing to fetch, but firmware {fw_id} was requested")
@@ -2791,7 +2792,7 @@ class TestDownloadPlatformFirmwareFile:
     async def test_a_name_the_platform_does_not_hold_is_refused(self, plugin, fw, tmp_path):
         bios_dir = tmp_path / "retrodeck" / "bios"
         bios_dir.mkdir(parents=True)
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         async def fake_download_one(fw_id, _placements):
             raise AssertionError(f"nothing to fetch, but firmware {fw_id} was requested")
@@ -2813,7 +2814,7 @@ class TestDownloadPlatformFirmwareFile:
         # the caller intact rather than folded into a count of errors.
         bios_dir = tmp_path / "retrodeck" / "bios"
         bios_dir.mkdir(parents=True)
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         async def fake_download_one(_fw_id, _placements):
             return {"success": False, "reason": "server_unreachable", "message": "RomM is unreachable"}
@@ -2853,7 +2854,7 @@ class TestDownloadPlatformFirmwareFile:
             declares_directory=True,
             folder=FolderVerdict(satisfied=False),
         )
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         async def fake_download_one(fw_id, _placements):
             raise AssertionError(f"a folder declaration must not be fetched, but firmware {fw_id} was requested")
@@ -2871,7 +2872,7 @@ class TestDownloadPlatformFirmwareFile:
 
     @pytest.mark.asyncio
     async def test_a_failed_listing_fetch_answers_with_zero(self, plugin, fw):
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
         fw._listing._firmware_cache = None
         with patch.object(plugin._romm_api, "list_firmware", side_effect=OSError("Connection reset")):
             result = await fw.download_platform_firmware_file("dc", "missing.bin")
@@ -3161,7 +3162,7 @@ class TestDeletePlatformBios:
             firmware_file_store=store,
             retrodeck_paths=FakeRetroDeckPaths(bios=str(bios_dir)),
         )
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
         _declare(fw, ("scph5501.bin", "PS1 US BIOS", True), ("scph5502.bin", "PS1 EU BIOS", True))
 
         # The downloaded file has a BiosFile record to prune (firmware slug "ps").
@@ -3233,7 +3234,7 @@ class TestDeletePlatformBios:
             retrodeck_paths=FakeRetroDeckPaths(bios=str(bios_dir)),
             core_info=_test_core_info(),
         )
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
         _resolver(fw).declare("IPL.bin", required_by=[_TEST_CORE], description="GameCube IPL")
         _resolver(fw).declare(
             "codehandler.bin",
@@ -3418,7 +3419,7 @@ class TestDeletePlatformBios:
             retrodeck_paths=FakeRetroDeckPaths(bios=str(bios_dir)),
             core_info=_test_core_info(),
         )
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
         for slug in ("psx", "ps"):
             plugin._uow.bios_files.save(
                 BiosFile.mark_downloaded(
@@ -3876,7 +3877,7 @@ class TestCheckPlatformBiosNoCoreFields:
         )
         fw = _make_firmware_service(romm_api=plugin._romm_api, core_info=core_info)
         # no emulator declares anything here
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         with patch.object(plugin._romm_api, "list_firmware", side_effect=Exception("offline")):
             result = await fw.check_platform_bios("sms")
@@ -3948,7 +3949,7 @@ class TestDownloadRequiredFirmware:
         fw._config.core_info.active_core = (_TEST_CORE, "Test Core")
         _declare(fw, ("required.bin", "Required BIOS", True), ("optional.bin", "Optional firmware", False))
 
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         download_called_ids = []
 
@@ -4096,7 +4097,7 @@ class TestDownloadRequiredFirmware:
 
         _declare(fw, ("existing.bin", "Already downloaded", True), ("missing.bin", "Not yet downloaded", True))
 
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         download_called_ids = []
 
@@ -4139,7 +4140,7 @@ class TestCheckPlatformBiosOffline:
             core_info=_dc_core_info(),
             retrodeck_paths=FakeRetroDeckPaths(bios=str(bios_dir)),
         )
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         with patch.object(plugin._romm_api, "list_firmware", side_effect=Exception("offline")):
             result = await fw.check_platform_bios("dc")
@@ -4182,7 +4183,7 @@ class TestCheckPlatformBiosOffline:
             firmware_resolver=FakeFirmwareResolver(unread_cores=frozenset({"n64_libretro"})),
             core_info=FakeCoreInfoProvider(options=[libretro_option("n64_libretro", "Mupen64")]),
         )
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         with patch.object(plugin._romm_api, "list_firmware", side_effect=Exception("offline")):
             result = await fw.check_platform_bios("n64")
@@ -4486,7 +4487,7 @@ class TestDownloadFirmwareErrors:
                 f.write(content)
 
         fw._demand._retrodeck_paths = FakeRetroDeckPaths(bios=str(bios_dir))
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
 
         with (
             patch.object(plugin._romm_api, "get_firmware", return_value=fw_detail),
@@ -4806,7 +4807,7 @@ class TestBadPathFirmwareCallables:
         import logging
 
         fw = self._build_service(fake_romm_api)
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
         fake_romm_api.fail_on_next(OSError("connection reset"))
 
         with caplog.at_level(logging.ERROR):
@@ -4826,7 +4827,7 @@ class TestBadPathFirmwareCallables:
         import logging
 
         fw = self._build_service(fake_romm_api)
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
         fake_romm_api.fail_on_next(OSError("connection reset"))
 
         with caplog.at_level(logging.ERROR):

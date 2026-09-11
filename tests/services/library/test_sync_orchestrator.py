@@ -30,6 +30,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fakes.running_loop import running_loop
 
 from adapters.persistence import (
     PersistenceAdapter,
@@ -200,7 +201,7 @@ class TestSyncPreview:
     async def test_returns_correct_summary(self, plugin, fake_romm_api):
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -256,7 +257,7 @@ class TestSyncPreview:
         """
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
@@ -290,7 +291,7 @@ class TestSyncPreview:
     async def test_populates_pending_delta(self, plugin, fake_romm_api):
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -322,7 +323,7 @@ class TestSyncPreview:
         """
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -354,7 +355,7 @@ class TestSyncPreview:
         """
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -391,7 +392,7 @@ class TestSyncPreview:
     async def test_resets_sync_running_on_completion(self, plugin, fake_romm_api):
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -425,7 +426,7 @@ class TestPreviewCoverRefreshCount:
     def _preview_setup(plugin, fake_romm_api):
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -535,7 +536,7 @@ class TestPreviewRestampPlatformCount:
     def _preview_setup(plugin, fake_romm_api):
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -687,7 +688,7 @@ class TestSyncApplyDelta:
         """Snapshots within the TTL window apply normally."""
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
         self._setup_pending_delta(plugin, "preview-xyz")
@@ -707,7 +708,7 @@ class TestSyncApplyDelta:
         """Apply dispatches ``_do_sync_per_unit`` with no prefetched cache (always live fetch)."""
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
         self._setup_pending_delta(plugin)
@@ -735,7 +736,7 @@ class TestSyncApplyDelta:
         inside ``_do_sync_per_unit`` (covered in TestDoSyncPerUnit)."""
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
         self._setup_pending_delta(plugin)
@@ -750,7 +751,7 @@ class TestSyncApplyDelta:
     async def test_clears_pending_delta(self, plugin, tmp_path):
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
 
@@ -794,7 +795,7 @@ class TestGetPendingPreview:
     def _preview_setup(plugin, fake_romm_api):
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
@@ -1151,7 +1152,7 @@ class TestRunKindOnTheWire:
         return [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_progress"]
 
     def test_start_sync_claims_the_slot_as_an_apply_run(self, plugin):
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = running_loop()
         plugin._sync_service._orchestrator._do_sync_per_unit = AsyncMock()
 
         assert plugin._sync_service.start_sync()["success"] is True
@@ -1160,7 +1161,7 @@ class TestRunKindOnTheWire:
 
     @pytest.mark.asyncio
     async def test_apply_delta_claims_the_slot_as_an_apply_run(self, plugin):
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         plugin._sync_service._orchestrator._do_sync_per_unit = AsyncMock()
         plugin._sync_service._box.stage_preview(
             preview_id="p1",
@@ -1176,7 +1177,7 @@ class TestRunKindOnTheWire:
     async def test_every_preview_frame_says_preview_including_the_terminal(self, plugin, fake_romm_api):
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
@@ -1202,7 +1203,7 @@ class TestRunKindOnTheWire:
     async def test_every_apply_frame_says_apply(self, plugin, fake_romm_api):
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -1254,7 +1255,7 @@ class TestRunKindOnTheWire:
     async def test_the_per_unit_error_terminal_carries_it(self, plugin, fake_romm_api):
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -1280,7 +1281,7 @@ class TestRunKindOnTheWire:
     async def test_a_finished_run_leaves_no_kind_behind(self, plugin, fake_romm_api):
         """The idle snapshot states no kind, so a later mount reads "not
         established" rather than the previous run's answer."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -1534,7 +1535,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         # No platforms enabled → empty work queue.
         plugin.settings["enabled_platforms"] = {}
@@ -1554,7 +1555,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 2}]
@@ -1584,7 +1585,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # N64: skip-eligible — stamp matches the server count, 2 persisted rows
@@ -1641,7 +1642,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -1686,7 +1687,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # Live-fetch platforms (no last_sync, empty registry) so both
@@ -1735,7 +1736,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -1777,7 +1778,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -1815,7 +1816,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         plugin._core_info.available_cores = [
             {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
@@ -1857,7 +1858,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         # The options no longer carry the pinned label → label_to_invocation → None.
         plugin._core_info.available_cores = [
@@ -1908,7 +1909,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # roms matches platform count + zero updates → incremental skip.
@@ -1964,7 +1965,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # rom_id 10 is the live N64 ROM (synced this run). rom_id 99 is a leftover
@@ -2012,7 +2013,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_completed_run(plugin, at="2025-01-01T00:00:00Z")
@@ -2048,7 +2049,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # Old colliding row from before the reassignment: rom 1 bound to app 5000.
@@ -2098,7 +2099,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # rom 1 collides (app 5000 re-bound to rom 2 this run); rom 99 is a
@@ -2137,7 +2138,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -2189,7 +2190,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=roms)
         plugin.settings["enabled_platforms"] = {"1": True}
@@ -2248,7 +2249,7 @@ class TestDoSyncPerUnit:
         game's reported name is the region-canonical (USA) name."""
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
@@ -2276,7 +2277,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         # rom 1 was the bound USA dump (app 5000); it is GONE from the server now.
         _seed_rom_row(
@@ -2357,7 +2358,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # A 2-version Zelda group on N64: rom 10 bound + installed (active
@@ -2448,7 +2449,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # rom 11 (the unbound sibling) lives on N64 + in the collection; rom 10 is
@@ -2510,7 +2511,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # No prior sync → full fetch path → skipped=False → artwork pipeline runs.
@@ -2544,7 +2545,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # Two live-fetch platforms (no last_sync, empty registry).
@@ -2590,7 +2591,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -2631,7 +2632,7 @@ class TestDoSyncPerUnit:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -2689,7 +2690,7 @@ class TestSyncRunLifecycle:
 
     @pytest.mark.asyncio
     async def test_clean_run_persists_completed_with_platforms(self, plugin, fake_romm_api):
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
@@ -2721,7 +2722,7 @@ class TestSyncRunLifecycle:
         completed run would reset the preview baseline (next preview would
         report every platform as 'added'). The prior completed run stays the
         baseline source, matching the JSON era's return-early behaviour."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # A prior real sync completed with N64 synced — this is the baseline
@@ -2747,7 +2748,7 @@ class TestSyncRunLifecycle:
 
     @pytest.mark.asyncio
     async def test_cancelled_run_persists_cancelled(self, plugin, fake_romm_api):
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
@@ -2780,7 +2781,7 @@ class TestSyncRunLifecycle:
         ``box.run_interrupted`` so a crash is never blamed on the user's Cancel."""
         from services.library import sync_orchestrator
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
@@ -2807,7 +2808,7 @@ class TestSyncRunLifecycle:
 
     @pytest.mark.asyncio
     async def test_exception_in_unit_loop_persists_errored(self, plugin, fake_romm_api):
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # build_work_queue succeeds, then list_roms raises during the unit fetch.
@@ -2846,7 +2847,7 @@ class TestSyncRunLifecycle:
         the nulling lives — put a null back before the terminal write and it is
         what keeps this test true.
         """
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
@@ -3225,7 +3226,7 @@ class TestRealOrchestratorLateAckRecovery:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -3289,7 +3290,7 @@ class TestRealOrchestratorLateAckRecovery:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -3416,7 +3417,7 @@ class TestDoSyncPerUnitErrors:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         # ``list_platforms`` runs in the executor; the fake raises
         # CancelledError exactly like an asyncio cancel would propagate.
@@ -3442,7 +3443,7 @@ class TestDoSyncPerUnitErrors:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         fake_romm_api.list_platforms_side_effect = RuntimeError("RomM down")
         plugin.settings["enabled_platforms"] = {"1": True}
@@ -3466,7 +3467,7 @@ class TestDoSyncPerUnitErrors:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # build_work_queue succeeds (platforms listing returns a unit), then
@@ -3509,7 +3510,7 @@ class TestDoSyncPerUnitErrors:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         fake_romm_api.platforms = [{"id": 1, "name": "N64", "slug": "n64", "rom_count": 3}]
@@ -3562,7 +3563,7 @@ class TestDoSyncPerUnitErrors:
         """
         from domain.sync_state import SyncCancelled
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # One live-fetch platform (no last_sync, empty registry) so the unit
@@ -3630,7 +3631,7 @@ class TestDoSyncPerUnitErrors:
         ``_do_sync_per_unit``. The SyncRun is left ``running`` — it is NOT marked
         cancelled by the cooperative swallow path.
         """
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -3708,7 +3709,7 @@ class TestDoSyncPerUnitErrors:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # Two units in the queue; CANCELLING gates the loop before either fires.
@@ -3743,7 +3744,7 @@ class TestSyncOneUnitCollectionAndCancel:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # Seed a real (non-virtual) collection with two ROMs.
@@ -3819,7 +3820,7 @@ class TestSyncOneUnitCollectionAndCancel:
     @pytest.mark.asyncio
     async def test_cancel_after_fetch_returns_zero_applied(self, plugin, fake_romm_api):
         """CANCELLING flipped after fetch_platform_unit → unit returns 0."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # Real fetcher will be called for the unit. Wrap list_roms so the
@@ -3857,7 +3858,7 @@ class TestSyncOneUnitCollectionAndCancel:
     @pytest.mark.asyncio
     async def test_cancel_after_artwork_returns_zero_applied(self, plugin, fake_romm_api):
         """CANCELLING flipped after the artwork download → unit returns 0."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # Real fetcher runs; artwork download is intercepted to flip state mid-flight.
@@ -3894,7 +3895,7 @@ class TestSyncOneUnitCollectionAndCancel:
         count: those ROMs were verified already-correct in Steam, so they are
         processed — same as a wholesale-skipped unit's ROMs — and the terminal
         frame's "N of M games processed" numerator must not drop them."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # rom 10 is content-unchanged (delta-skipped); rom 11 is brand-new, so
@@ -3934,7 +3935,7 @@ class TestSyncOneUnitCollectionAndCancel:
         """Same invariant at the sibling guard: a cancel landing during the
         cover-refresh pass — after the delta is computed, before the artwork
         download — still returns the delta-skip count."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # rom 10 is content-unchanged (delta-skipped); the cancel lands inside
@@ -3974,7 +3975,7 @@ class TestSyncOneUnitCollectionAndCancel:
         ``_wait_for_unit_complete`` returns None while the box is already
         CANCELLING (the cancel branch), so the unit's in-flight state is
         intentionally dropped and a stray late ack can't commit it (#1052)."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # Live-fetch path so the unit reaches the apply branch where
@@ -4025,7 +4026,7 @@ class TestSyncOneUnitCollectionAndCancel:
         commit to read, and the dispatch identity (``unit_complete_event`` +
         ``active_unit_id`` + ``active_chunk_index``) is cleared. The box flips
         CANCELLING so the outer loop stops (#1052 / #1367)."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -4078,7 +4079,7 @@ class TestPerUnitMetadataStamping:
         """The orchestrator threads the acked ROM dicts into ``commit_unit_results``
         so the reporter can stamp ``rom_metadata`` in the same write UoW as the
         ``roms`` upsert (atomic — no separate metadata hop)."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -4138,7 +4139,7 @@ class TestPerUnitMetadataStamping:
         per-unit commit, so no ``rom_metadata`` is written for a skipped unit
         (populated metadata from prior real fetches is preserved, #738).
         """
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # roms matches platform rom_count + zero updates → incremental skip.
@@ -4175,7 +4176,7 @@ class TestPerUnitMetadataStamping:
         """Group-aware persist (ADR-0021): the WHOLE unit fetch is threaded into
         ``commit_unit_results`` (every sibling gets an identity row), while the
         frontend ack — a subset — decides which representatives bind."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -4239,7 +4240,7 @@ class TestPlatformCompletionStamp:
     async def test_stamp_written_after_final_platform_chunk(self, plugin, fake_romm_api):
         """A platform unit that completes stamps ``platform_sync_state`` with the
         server ROM count and the clock's completion timestamp (real commit)."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -4282,7 +4283,7 @@ class TestPlatformCompletionStamp:
         stamp, and it records the unit's whole ``rom_count`` (not the chunk size)."""
         from services.library import chunk_dispatcher
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
 
@@ -4328,7 +4329,7 @@ class TestPlatformCompletionStamp:
         is only partially applied, so the next run must re-fetch it."""
         from services.library import chunk_dispatcher
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
 
@@ -4370,7 +4371,7 @@ class TestPlatformCompletionStamp:
     async def test_no_stamp_on_heartbeat_timeout(self, plugin, fake_romm_api):
         """A heartbeat timeout (wait returns None while NOT cancelling) abandons the
         chunk without committing it — no stamp, even on a single-chunk platform."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -4406,7 +4407,7 @@ class TestPlatformCompletionStamp:
     async def test_no_stamp_for_collection_unit(self, plugin, fake_romm_api):
         """Collection units have no incremental-skip gate, so they are never stamped —
         every chunk's commit carries ``platform_stamp=None``."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -4458,7 +4459,7 @@ class TestPlatformCompletionStamp:
         """
         from services.library import chunk_dispatcher
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
 
@@ -4503,7 +4504,7 @@ class TestPlatformCompletionStamp:
         """A collection spans platforms, so its commits pass no generation — marking
         a foreign platform's row would drop it from that platform's counted rows
         and suppress that platform's skip (#1504)."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -4556,7 +4557,7 @@ class TestPlatformCompletionStamp:
         """
         from services.library import chunk_dispatcher
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
 
@@ -4601,7 +4602,7 @@ class TestPlatformCompletionStamp:
         """A heartbeat timeout abandons the chunk without committing it, and its late-ack
         commit (unreachable today, #1367) carries no stamp — but the apply-start clear
         already removed the pre-existing stamp, so none survives the interruption."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -4638,7 +4639,7 @@ class TestPlatformCompletionStamp:
     async def test_completing_reapply_refreshes_stale_stamp(self, plugin, fake_romm_api):
         """A platform that re-applies to completion replaces a stale stamp with a fresh
         one (current server count + the injected completion clock), not the old values."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -4679,7 +4680,7 @@ class TestPlatformCompletionStamp:
     async def test_skipped_platform_keeps_its_stamp(self, plugin, fake_romm_api):
         """An incremental-skipped platform returns before the apply-start clear, so its
         completion stamp is preserved untouched (the skip is what the stamp exists for)."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # Stamp + one matching bound row + unchanged server → the fetch incremental-skips.
@@ -4715,7 +4716,7 @@ class TestPlatformCompletionStamp:
     async def test_fetch_failure_before_chunk_loop_keeps_stamp(self, plugin, fake_romm_api):
         """A fetch that raises before the chunk loop is not an apply start, so the old
         stamp is preserved (fetch failure ≠ apply started)."""
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform_stamp(plugin, "n64", at="2020-01-01T00:00:00+00:00", rom_count=5)
 
@@ -4766,7 +4767,7 @@ class TestRegression738CacheCorruption:
         """
         from domain.rom_metadata import RomMetadata
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
         # Pre-existing populated metadata rows (the "160 entries" scenario
@@ -4852,7 +4853,7 @@ class TestFetchNarrationInterplay:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
         plugin.settings["enabled_platforms"] = {"1": True}
@@ -4876,7 +4877,7 @@ class TestFetchNarrationInterplay:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -4924,7 +4925,7 @@ class TestComponentGroupKeyStamping:
         # only, RomM listing them as siblings. Both must persist under the SAME
         # component key (igdb), so the ss-only dump does not split into its own
         # group (the #1368 bug). A platform unit is a complete view → recompute.
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -4974,7 +4975,7 @@ class TestDeltaRestrictedApply:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         plugin._sync_service._cover_preparer._download_artwork = AsyncMock(return_value={})
         plugin._sync_service._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
@@ -5085,7 +5086,7 @@ class TestSessionBudgetGate:
         """Seed a 2-ROM platform and force one shortcut per chunk (2 chunks)."""
         from services.library import chunk_dispatcher
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -5145,7 +5146,7 @@ class TestSessionBudgetGate:
         """Seed a 1-ROM platform (→ one chunk = the run's first chunk)."""
         from services.library import chunk_dispatcher
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "Solo"}])
         plugin.settings["enabled_platforms"] = {"1": True}
@@ -5225,7 +5226,7 @@ class TestSessionBudgetGate:
     async def test_preview_flags_pause_likely_when_run_would_cross(self, plugin, fake_romm_api):
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
@@ -5241,7 +5242,7 @@ class TestSessionBudgetGate:
     async def test_preview_pause_likely_false_with_headroom(self, plugin, fake_romm_api):
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
@@ -5256,7 +5257,7 @@ class TestSessionBudgetGate:
     async def test_preview_pause_likely_false_when_rss_unavailable(self, plugin, fake_romm_api):
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
@@ -5274,7 +5275,7 @@ class TestSessionBudgetGate:
         # (which priced unchanged at the create rate) would have crossed here.
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
@@ -5309,7 +5310,7 @@ class TestSessionBudgetGate:
     async def test_completed_run_recommends_restart_when_rss_high(self, plugin, fake_romm_api):
         import decky
 
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
         plugin.settings["enabled_platforms"] = {"1": True}
@@ -5408,7 +5409,7 @@ class TestSessionBudgetGate:
         # so a fully-incremental-skip run (nothing applied, no gate ever fires) still
         # records a baseline and reports an honest ≈ +0.0 GB delta instead of wiping
         # last_run_delta_kb to None on every no-op re-sync.
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         # roms matches platform count + zero updates → the platform incremental-skips.
         _seed_platform_stamp(plugin, "n64", at="2025-01-01T00:00:00Z", rom_count=1)
@@ -5489,7 +5490,7 @@ class TestRunProgressCounters:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         plugin._sync_service._cover_preparer._download_artwork = AsyncMock(return_value={})
         plugin._sync_service._box.sync_state = SyncState.RUNNING
@@ -5673,7 +5674,7 @@ class TestRunProgressCounters:
     async def test_status_callable_reports_unknown_before_any_run(self, plugin):
         # A fresh backend process (or a plugin reload) has no counters: the pair is
         # None, and the banner drops the sentence rather than showing zeros.
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
 
         result = await plugin.get_session_budget_status()
 
@@ -5696,7 +5697,7 @@ class TestProcessedGamesNumerator:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         plugin._sync_service._cover_preparer._download_artwork = AsyncMock(return_value={})
         plugin._sync_service._box.sync_state = SyncState.RUNNING

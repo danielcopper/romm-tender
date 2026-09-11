@@ -196,7 +196,7 @@ class TestCoverRefreshPass:
         import decky
 
         decky.emit.reset_mock()
-        plugin.loop = asyncio.get_event_loop()
+        plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         plugin._sync_service._cover_preparer._download_artwork = AsyncMock(return_value={})
         plugin._sync_service._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event

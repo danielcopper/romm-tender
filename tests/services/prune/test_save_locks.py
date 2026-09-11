@@ -46,7 +46,7 @@ class _FakeSaveCoordinator:
 def _coordinator(inventories: list[dict[str, Any]]) -> tuple[SaveLockCoordinator, _FakeSaveCoordinator]:
     saves = _FakeSaveCoordinator(inventories)
     return (
-        SaveLockCoordinator(config=SaveLockCoordinatorConfig(loop=asyncio.get_event_loop(), save_coordinator=saves)),
+        SaveLockCoordinator(config=SaveLockCoordinatorConfig(loop=asyncio.get_running_loop(), save_coordinator=saves)),
         saves,
     )
 

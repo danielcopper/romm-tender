@@ -62,7 +62,7 @@ def _make(
             launcher_at_home=at_home,
             steam_config=steam_config,  # type: ignore[arg-type]
             uow_factory=factory,
-            loop=asyncio.get_event_loop(),
+            loop=asyncio.get_running_loop(),
             logger=logging.getLogger("test_shortcut_relocation"),
         ),
     )

@@ -12,6 +12,7 @@ import decky
 import pytest
 from fakes.fake_cover_art_file_store import FakeCoverArtFileStore
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
+from fakes.running_loop import running_loop
 from models.cover import CoverRevalidation
 
 from domain.artwork_paths import cover_meta_filename
@@ -163,15 +164,13 @@ def uow() -> FakeUnitOfWork:
 
 @pytest.fixture
 def artwork_service(steam_config, file_store, romm_api, pending_sync_data, uow, cover_cache_dir):
-    # _loop is replaced by the autouse fixture below for async tests; for
-    # sync tests it is never touched, so a MagicMock is fine here.
     return ArtworkService(
         config=ArtworkServiceConfig(
             romm_api=romm_api,
             steam_config=steam_config,
             cover_art_file_store=file_store,
             cover_cache_dir=cover_cache_dir,
-            loop=MagicMock(),
+            loop=running_loop(),
             logger=decky.logger,
             get_pending_sync=lambda: pending_sync_data,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
@@ -181,7 +180,7 @@ def artwork_service(steam_config, file_store, romm_api, pending_sync_data, uow, 
 
 @pytest.fixture(autouse=True)
 async def _set_event_loop(artwork_service):
-    artwork_service._loop = asyncio.get_event_loop()
+    artwork_service._loop = asyncio.get_running_loop()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

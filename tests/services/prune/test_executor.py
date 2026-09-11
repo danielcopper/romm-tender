@@ -90,7 +90,7 @@ def _executor(rows: list[Rom], settings: dict[str, Any], emitted: list[tuple[str
 
     return PruneExecutor(
         config=PruneExecutorConfig(
-            loop=asyncio.get_event_loop(),
+            loop=asyncio.get_running_loop(),
             logger=logging.getLogger("prune-test"),
             emit=emit,
             romm_api=cast("Any", _Unusable()),

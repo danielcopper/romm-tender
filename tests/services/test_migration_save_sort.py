@@ -27,6 +27,31 @@ from services.migration import MigrationService, MigrationServiceConfig
 if TYPE_CHECKING:
     from models.state import SaveSortSettings
 
+# Empty except for the duration of one test: the fixture below fills the key through
+# ``monkeypatch``, which removes it again at teardown, so a read outside a test is a
+# ``KeyError`` rather than a loop that has since been closed.
+_TEST_LOOP: dict[str, asyncio.AbstractEventLoop] = {}
+
+
+@pytest.fixture(autouse=True)
+async def _capture_running_loop(monkeypatch: pytest.MonkeyPatch):
+    """Capture the loop this test runs on for the services built in its body.
+
+    ``detect_save_sort_change`` may be reached from a worker thread (via
+    ``SyncEngine._refresh_save_sort_state`` → ``run_in_executor``) and schedules
+    its emit with ``asyncio.run_coroutine_threadsafe``, which reaches ``_loop``
+    for a ``call_soon_threadsafe``. That is a call from off the loop thread —
+    and in a synchronous test from no loop at all — which is exactly where
+    ``fakes.running_loop`` refuses rather than answering.
+
+    This is deliberately NOT ``tests/services/test_downloads.py``'s
+    ``_set_event_loop``, which rebinds each service's ``_loop`` after the fact:
+    ``_make_service`` builds its service inside the test body, after every
+    fixture has run, so there is nothing yet to rebind. Hence capture, and hence
+    the name — restoring the consistency would put the rebind before the object.
+    """
+    monkeypatch.setitem(_TEST_LOOP, "loop", asyncio.get_running_loop())
+
 
 def _no_corename(core_so: str) -> str | None:
     return None
@@ -116,7 +141,7 @@ def _make_service(
         config=MigrationServiceConfig(
             migration_file_store=migration_file_store if migration_file_store is not None else MigrationFileAdapter(),
             settings={},
-            loop=asyncio.get_event_loop(),
+            loop=_TEST_LOOP["loop"],
             logger=logging.getLogger("test"),
             settings_persister=MagicMock(),
             emit=MagicMock(),
@@ -177,6 +202,35 @@ class TestDetectSaveSortChange:
         assert uow.kv_config.set_count == set_count_before
         with uow:
             assert uow.kv_config.get("save_sort_settings_previous") is None
+
+    def test_a_sync_test_can_schedule_the_emit_for_real(self, tmp_path):
+        """A detected change from a SYNCHRONOUS test, with nothing taken out of the path.
+
+        Every other test on this path replaces ``_loop`` with a ``MagicMock`` or
+        stubs ``run_coroutine_threadsafe``, so all of them keep passing over a
+        service holding something it cannot schedule on — which is what the
+        sync-fixture placeholder is, reached from a thread with no loop running.
+        Here the real call gets the real loop: ``detect_save_sort_change`` must
+        not raise, and one turn of that loop delivers the emit.
+
+        An async test proves none of this — there the placeholder resolves to the
+        running loop and the scheduling works either way.
+        """
+        old = {"sort_by_content": True, "sort_by_core": False}
+        new = {"sort_by_content": False, "sort_by_core": True}
+        svc, _uow = _make_service(
+            tmp_path,
+            sort_settings=(False, True),
+            state_overrides={"save_sort_settings": old},
+        )
+        emit = AsyncMock()
+        svc._save_sort._emit = emit
+
+        svc.detect_save_sort_change()
+        # The schedule only queued a callback — nothing runs until the loop does.
+        _TEST_LOOP["loop"].run_until_complete(asyncio.sleep(0))
+
+        emit.assert_awaited_once_with("save_sort_changed", {"old_settings": old, "new_settings": new})
 
 
 class TestDetectSaveSortChangeContentDir:
