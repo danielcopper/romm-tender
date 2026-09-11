@@ -1607,14 +1607,14 @@ describe("SettingsPage", () => {
     });
 
     it("shows the update check as on by default, which is what an untouched install has", async () => {
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       expect(capturedAdvanced[capturedAdvanced.length - 1]?.updateCheckEnabled).toBe(true);
     });
 
     it("handleUpdateCheckEnabledChange persists the switch and moves it", async () => {
       vi.mocked(backend.setUpdateCheckEnabled).mockResolvedValue({ success: true });
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedAdvanced[capturedAdvanced.length - 1]?.onUpdateCheckEnabledChange(false);
@@ -1627,7 +1627,7 @@ describe("SettingsPage", () => {
     it("leaves the switch where it was and logs when the write fails", async () => {
       const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
       vi.mocked(backend.setUpdateCheckEnabled).mockRejectedValue(new Error("disk full"));
-      render(<SettingsPage onBack={vi.fn()} />);
+      renderPage();
       await flushAsync();
       await act(async () => {
         capturedAdvanced[capturedAdvanced.length - 1]?.onUpdateCheckEnabledChange(false);
