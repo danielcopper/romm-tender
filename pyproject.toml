@@ -68,6 +68,7 @@ select = [
     "PIE",   # flake8-pie
     "PERF",  # perflint
     "TC",   # flake8-type-checking
+    "TID251", # banned-api — the table below is the whole of what this enables
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -76,6 +77,18 @@ select = [
 # os.path) — ASYNC's event-loop concern is a production-only worry, not
 # a test one, so the group is disabled under tests/ (same rationale as ARG).
 "tests/**" = ["ARG", "ASYNC"]
+# TID251 is deliberately absent from every entry above: the ban below has no
+# exception, in tests least of all — tests are where the banned call lived.
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# TID251 flags the attribute call, not only an import of the name, so this reaches
+# every spelling the repo used. ``asyncio.get_event_loop()`` answered with the
+# thread's default loop, which is how a synchronous pytest fixture got hold of the
+# loop its test would run on; pytest-asyncio 1.4.0 stopped creating that implicit
+# loop and the call raised instead (#806). Code already inside the loop asks for
+# the running loop; a sync fixture hands the service ``tests/fakes/running_loop.py``,
+# which resolves one at the moment the service uses it.
+"asyncio.get_event_loop".msg = "Use asyncio.get_running_loop() — get_event_loop() has no implicit loop left to answer with (#806)."
 
 [tool.ruff.lint.isort]
 known-first-party = ["lib", "domain", "services", "adapters"]
