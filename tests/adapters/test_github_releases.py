@@ -109,6 +109,17 @@ class TestGetLatestRelease:
         with patch("urllib.request.urlopen", return_value=_response(json.dumps(_payload(assets=assets)).encode())):
             assert adapter.get_latest_release() == LatestRelease(version="0.33.0", digest="ab33cd", install_url="")
 
+    def test_an_address_without_a_digest_keeps_the_address(self, adapter):
+        """The two absences are independent — the pair is not all-or-nothing.
+
+        An asset may state where to fetch it and say nothing about its
+        checksum. That still gives something to install from, unverified; only
+        the reverse (a checksum with no address) leaves nothing to fetch.
+        """
+        assets = [{"name": "Tender.zip", "browser_download_url": _PINNED_URL}]
+        with patch("urllib.request.urlopen", return_value=_response(json.dumps(_payload(assets=assets)).encode())):
+            assert adapter.get_latest_release() == LatestRelease(version="0.33.0", digest=None, install_url=_PINNED_URL)
+
     def test_a_bare_tag_is_still_a_version(self, adapter):
         with patch("urllib.request.urlopen", return_value=_response(json.dumps(_payload(tag="0.33.0")).encode())):
             assert adapter.get_latest_release() == LatestRelease(

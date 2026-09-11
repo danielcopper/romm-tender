@@ -1068,13 +1068,15 @@ class Plugin:
 
         Two addresses, and they are not interchangeable. ``install_url`` names
         one release and is what an install fetches; it pairs with ``digest``,
-        the bare sha256 hex read off that same release's asset (``""`` and
-        ``None`` where the release stated neither). ``download_url`` is the
-        fixed ``releases/latest`` address to show a reader — passing it to an
-        install alongside the checksum is the failure this pair prevents, since
-        it resolves to a newer release as soon as one is published and Decky
-        then refuses to unpack. ``plugin_name`` is the name Decky matches the
-        existing installation against; anything else leaves the old
+        the bare sha256 hex read off that same release's asset. Either can be
+        absent on its own — an asset stating an address but no checksum gives an
+        ``install_url`` with ``digest`` ``None``, and an absent address is
+        ``""``, meaning there is nothing here to install from. ``download_url``
+        is the fixed ``releases/latest`` address to show a reader — passing it
+        to an install alongside the checksum is the failure this pair prevents,
+        since it resolves to a newer release as soon as one is published and
+        Decky then refuses to unpack. ``plugin_name`` is the name Decky matches
+        the existing installation against; anything else leaves the old
         installation standing beside the new one.
 
         GitHub is asked at most once a day and the answer is persisted, so a

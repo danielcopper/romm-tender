@@ -45,13 +45,15 @@ class LatestRelease:
 
     ``version`` is the bare version the tag named.
 
-    ``install_url`` and ``digest`` are a PAIR and are only ever true together:
-    the address names one release and the checksum was read from that same
-    release's asset. They are what an install is handed. ``install_url`` is
-    ``""`` and ``digest`` ``None`` where the release carried no asset this
-    plugin recognises, or the asset carried no such field — an install can still
-    proceed from :data:`DOWNLOAD_URL` unverified, which is the one place the two
-    addresses may be mixed and only because no checksum travels with it.
+    ``install_url`` and ``digest`` describe ONE release: the address names it and
+    the checksum was read from that same release's asset. Together they are what
+    an install is handed, and neither may be recombined with anything else.
+
+    Either can be absent on its own — an asset stating an address but no
+    ``digest`` yields a set ``install_url`` and ``None``. An absent address
+    (``""``) means there is nothing here to install from at all;
+    :data:`DOWNLOAD_URL` is what a reader is shown and is never the substitute
+    an install falls back to.
     """
 
     version: str
