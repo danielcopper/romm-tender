@@ -1325,7 +1325,6 @@ class TestTestConnectionErrors:
     @pytest.mark.asyncio
     async def test_auth_error_on_401(self, plugin):
         """Returns auth_error when platforms endpoint returns 401."""
-
         _setup_plugin(plugin)
         plugin.loop = asyncio.get_running_loop()
         # Heartbeat succeeds, platforms raises auth error
@@ -1339,7 +1338,6 @@ class TestTestConnectionErrors:
     @pytest.mark.asyncio
     async def test_connection_error_on_refused(self, plugin):
         """Returns connection_error when server is unreachable."""
-
         _setup_plugin(plugin)
         plugin.loop = asyncio.get_running_loop()
         plugin._romm_api.heartbeat.side_effect = RommConnectionError("refused")
@@ -1351,7 +1349,6 @@ class TestTestConnectionErrors:
     @pytest.mark.asyncio
     async def test_ssl_error(self, plugin):
         """Returns ssl_error on SSL certificate failure."""
-
         _setup_plugin(plugin)
         plugin.loop = asyncio.get_running_loop()
         plugin._romm_api.heartbeat.side_effect = RommSSLError("cert fail")
@@ -1363,7 +1360,6 @@ class TestTestConnectionErrors:
     @pytest.mark.asyncio
     async def test_success_on_happy_path(self, plugin):
         """Returns success when both heartbeat and platforms succeed."""
-
         _setup_plugin(plugin)
         plugin.loop = asyncio.get_running_loop()
         plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.9.0"}, "status": "ok"}
@@ -1377,7 +1373,6 @@ class TestTestConnectionErrors:
     @pytest.mark.asyncio
     async def test_server_reachable_but_api_failed(self, plugin):
         """When heartbeat succeeds but platforms fails with non-auth error, message is prefixed."""
-
         _setup_plugin(plugin)
         plugin.loop = asyncio.get_running_loop()
         plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.9.0"}}
@@ -1394,7 +1389,6 @@ class TestVersionDetection:
     @pytest.mark.asyncio
     async def test_version_extracted_from_heartbeat(self, plugin):
         """Extracts version from SYSTEM.VERSION in heartbeat response."""
-
         _setup_plugin(plugin)
         plugin.loop = asyncio.get_running_loop()
         plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.9.0"}}
@@ -1406,7 +1400,6 @@ class TestVersionDetection:
     @pytest.mark.asyncio
     async def test_old_version_rejected(self, plugin):
         """Versions below 4.9.0 are rejected with version_error."""
-
         _setup_plugin(plugin)
         plugin.loop = asyncio.get_running_loop()
         plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.5.0"}}
@@ -1419,7 +1412,6 @@ class TestVersionDetection:
     @pytest.mark.asyncio
     async def test_46_version_rejected(self, plugin):
         """RomM 4.6.x is below the 4.9.0 minimum and is rejected."""
-
         _setup_plugin(plugin)
         plugin.loop = asyncio.get_running_loop()
         plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.6.1"}}
@@ -1431,7 +1423,6 @@ class TestVersionDetection:
     @pytest.mark.asyncio
     async def test_47_version_rejected(self, plugin):
         """RomM 4.7.x is below the 4.9.0 minimum and is rejected."""
-
         _setup_plugin(plugin)
         plugin.loop = asyncio.get_running_loop()
         plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.7.0"}}
@@ -1443,7 +1434,6 @@ class TestVersionDetection:
     @pytest.mark.asyncio
     async def test_minimum_version_accepted(self, plugin):
         """RomM 4.9.0 meets the minimum version requirement."""
-
         _setup_plugin(plugin)
         plugin.loop = asyncio.get_running_loop()
         plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.9.0"}}
@@ -1454,7 +1444,6 @@ class TestVersionDetection:
     @pytest.mark.asyncio
     async def test_former_minimum_now_rejected(self, plugin):
         """RomM 4.8.1 (the former minimum) is below 4.9.0 and is now rejected."""
-
         _setup_plugin(plugin)
         plugin.loop = asyncio.get_running_loop()
         plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.8.1"}}
@@ -1466,7 +1455,6 @@ class TestVersionDetection:
     @pytest.mark.asyncio
     async def test_development_version_accepted(self, plugin):
         """Development builds pass through without version check."""
-
         _setup_plugin(plugin)
         plugin.loop = asyncio.get_running_loop()
         plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "development"}}
@@ -1478,7 +1466,6 @@ class TestVersionDetection:
     @pytest.mark.asyncio
     async def test_missing_version_in_heartbeat(self, plugin):
         """Handles heartbeat without SYSTEM.VERSION gracefully."""
-
         _setup_plugin(plugin)
         plugin.loop = asyncio.get_running_loop()
         plugin._romm_api.heartbeat.return_value = {"status": "ok"}
@@ -1490,7 +1477,6 @@ class TestVersionDetection:
     @pytest.mark.asyncio
     async def test_version_cleared_on_connection_failure(self, plugin):
         """Version is cleared when heartbeat fails."""
-
         _setup_plugin(plugin)
         plugin.loop = asyncio.get_running_loop()
         plugin._romm_api.get_version.return_value = "4.9.0"  # previously detected
@@ -1502,7 +1488,6 @@ class TestVersionDetection:
     @pytest.mark.asyncio
     async def test_timeout_error(self, plugin):
         """Returns timeout_error on request timeout."""
-
         _setup_plugin(plugin)
         plugin.loop = asyncio.get_running_loop()
         plugin._romm_api.heartbeat.side_effect = RommTimeoutError("timed out")
