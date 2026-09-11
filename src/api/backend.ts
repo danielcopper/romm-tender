@@ -1146,6 +1146,58 @@ export const getShortcutRelocation = callable<[], ShortcutRelocation>("get_short
 /** Persist the user's answer that they are keeping the pre-rename install. */
 export const dismissLegacyInstallNotice = callable<[], { success: boolean }>("dismiss_legacy_install_notice");
 
+/**
+ * What the backend knows about a newer release of this plugin.
+ *
+ * Tender is not in Decky's plugin catalogue and cannot be — Decky finds an
+ * installed plugin by looking its name up there — so this is the only channel
+ * through which a user ever learns a new release exists.
+ *
+ * `available` is the whole notice: a newer release exists, this exact version
+ * was not dismissed, and the check is switched on. The rest is what an install
+ * needs. `plugin_name` is what Decky matches the existing installation
+ * against — hand an install-from-URL anything else and the old installation is
+ * never replaced, leaving a second plugin folder beside it.
+ *
+ * Every failure is silent: with no network, an unreadable answer, or an
+ * unexpected shape, `available` is false and there is nothing to show.
+ */
+export interface UpdateNotice {
+  available: boolean;
+  /** The bare version, `tender-v` stripped. `null` until a check has succeeded. */
+  latest_version: string | null;
+  current_version: string;
+  /**
+   * The fixed `releases/latest` address — what to SHOW a reader, never what to
+   * install from. It resolves to whatever is newest, so passing it to an
+   * install alongside `digest` fetches one release and verifies it against
+   * another, and Decky refuses to unpack on the mismatch.
+   */
+  download_url: string;
+  /**
+   * The version-bound address of the release this notice is about, and the one
+   * to install from. `""` where the release stated none — then there is nothing
+   * to install from safely and only `download_url` is left to show.
+   */
+  install_url: string;
+  plugin_name: string;
+  /**
+   * The bare sha256 hex of `install_url`'s asset (no `sha256:` prefix — Decky
+   * compares it against `sha256(zip).hexdigest()`), `null` where the release
+   * carried none. True only of `install_url`, never of `download_url`.
+   */
+  digest: string | null;
+  enabled: boolean;
+}
+
+export const getUpdateNotice = callable<[], UpdateNotice>("get_update_notice");
+
+/** Wave away the card for one release version; the next release asks again. */
+export const dismissUpdateNotice = callable<[string], { success: boolean }>("dismiss_update_notice");
+
+/** Switch the once-a-day GitHub release check on or off. On by default. */
+export const setUpdateCheckEnabled = callable<[boolean], { success: boolean }>("set_update_check_enabled");
+
 /** What kind of data-location condition the last start left standing. */
 export type DataLocationKind = "choice" | "failed";
 

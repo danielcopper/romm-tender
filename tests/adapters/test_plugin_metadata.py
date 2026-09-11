@@ -1,8 +1,9 @@
-"""Tests for the PluginMetadataAdapter — reads plugin package.json."""
+"""Tests for the PluginMetadataAdapter — reads the plugin's package.json and plugin.json."""
 
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -93,3 +94,89 @@ class TestPluginMetadataAdapter:
 
         adapter = PluginMetadataAdapter()
         assert adapter.read_version(str(plugin_dir)) == "0.0.0"
+
+
+class TestReadDeckyName:
+    """The name Decky matches an installed plugin against — plugin.json's, not package.json's."""
+
+    def _plugin_dir(self, tmp_path, *, package_name: str = "romm-tender", decky_name: str | None = "Tender"):
+        plugin_dir = tmp_path / "plugin"
+        plugin_dir.mkdir()
+        (plugin_dir / "package.json").write_text(json.dumps({"name": package_name, "version": "0.32.0"}))
+        if decky_name is not None:
+            (plugin_dir / "plugin.json").write_text(json.dumps({"name": decky_name, "version": "0.32.0"}))
+        return plugin_dir
+
+    def test_answers_from_plugin_json_and_not_from_package_json(self, tmp_path):
+        """The two manifests spell the name differently, and Decky matches on plugin.json's.
+
+        Hand Decky's install-from-URL the package name and the match misses: the
+        previous installation is never uninstalled and a second plugin folder
+        appears beside it. Nothing fails loudly when that happens, so this is
+        the test that has to.
+        """
+        plugin_dir = self._plugin_dir(tmp_path)
+
+        adapter = PluginMetadataAdapter()
+        assert adapter.read_decky_name(str(plugin_dir)) == "Tender"
+        assert adapter.read_name(str(plugin_dir)) == "romm-tender"
+
+    def test_the_two_names_never_cross(self, tmp_path):
+        """Neither read may answer from the other's file, whatever either says."""
+        plugin_dir = self._plugin_dir(tmp_path, package_name="package-spelling", decky_name="Decky Spelling")
+
+        adapter = PluginMetadataAdapter()
+        assert adapter.read_decky_name(str(plugin_dir)) == "Decky Spelling"
+        assert adapter.read_name(str(plugin_dir)) == "package-spelling"
+
+    def test_missing_plugin_json_has_no_fallback_spelling(self, tmp_path):
+        """A literal fallback would be a second spelling of the name this read keeps single."""
+        plugin_dir = self._plugin_dir(tmp_path, decky_name=None)
+
+        adapter = PluginMetadataAdapter()
+        assert adapter.read_decky_name(str(plugin_dir)) == ""
+
+    def test_malformed_plugin_json_does_not_abort(self, tmp_path):
+        plugin_dir = self._plugin_dir(tmp_path)
+        (plugin_dir / "plugin.json").write_text("{not valid json")
+
+        adapter = PluginMetadataAdapter()
+        assert adapter.read_decky_name(str(plugin_dir)) == ""
+
+    @pytest.mark.parametrize("unusable", ["", None, 3, ["Tender"], {"name": "Tender"}])
+    def test_an_unusable_name_answers_empty(self, tmp_path, unusable):
+        plugin_dir = self._plugin_dir(tmp_path)
+        (plugin_dir / "plugin.json").write_text(json.dumps({"name": unusable}))
+
+        adapter = PluginMetadataAdapter()
+        assert adapter.read_decky_name(str(plugin_dir)) == ""
+
+    def test_the_shipped_manifests_really_do_disagree(self):
+        """The premise of the whole read, checked against the files that ship.
+
+        Every other test here fabricates the disagreement. This one reads the
+        repo's own two manifests, so the day they are made to agree — or the day
+        one of them is renamed — this stops being a hypothesis and says so.
+        """
+        repo_root = Path(__file__).resolve().parents[2]
+        package_name = json.loads((repo_root / "package.json").read_text())["name"]
+        decky_name = json.loads((repo_root / "plugin.json").read_text())["name"]
+
+        assert package_name != decky_name
+        assert PluginMetadataAdapter().read_decky_name(str(repo_root)) == decky_name
+
+    def test_the_answer_is_read_once(self, tmp_path, monkeypatch):
+        plugin_dir = self._plugin_dir(tmp_path)
+        adapter = PluginMetadataAdapter()
+        original = adapter._read
+        calls = 0
+
+        def counted(path, filename="package.json"):
+            nonlocal calls
+            calls += 1
+            return original(path, filename)
+
+        monkeypatch.setattr(adapter, "_read", counted)
+        assert adapter.read_decky_name(str(plugin_dir)) == "Tender"
+        assert adapter.read_decky_name(str(plugin_dir)) == "Tender"
+        assert calls == 1

@@ -46,6 +46,7 @@ from services.shortcut_relocation import ShortcutRelocationService, ShortcutRelo
 from services.shortcut_removal import ShortcutRemovalService, ShortcutRemovalServiceConfig
 from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
+from services.update_check import UpdateCheckService, UpdateCheckServiceConfig
 from services.version_switch import VersionSwitchService, VersionSwitchServiceConfig
 
 from .adapters import DB_FILENAME
@@ -519,6 +520,23 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         ),
     )
 
+    # Handed Decky's own plugin directory: the two manifests it reads for the
+    # running version and the name Decky knows this plugin by ship inside the
+    # install, not in the user's data root.
+    update_check_service = UpdateCheckService(
+        config=UpdateCheckServiceConfig(
+            latest_release=cfg.adapters.latest_release,
+            plugin_metadata=cfg.callbacks.plugin_metadata,
+            plugin_dir=cfg.runtime.plugin_dir,
+            clock=cfg.runtime.clock,
+            uow_factory=cfg.callbacks.uow_factory,
+            settings=cfg.stores.settings,
+            settings_persister=cfg.callbacks.settings_persister,
+            loop=cfg.runtime.loop,
+            logger=cfg.runtime.logger,
+        ),
+    )
+
     shortcut_relocation_service = ShortcutRelocationService(
         config=ShortcutRelocationServiceConfig(
             launcher_exe=cfg.launcher.path,
@@ -635,6 +653,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         "connection_service": connection_service,
         "startup_healing_service": startup_healing_service,
         "legacy_install_service": legacy_install_service,
+        "update_check_service": update_check_service,
         "shortcut_relocation_service": shortcut_relocation_service,
         "data_location_service": data_location_service,
         "launch_gate_service": launch_gate_service,

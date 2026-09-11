@@ -179,6 +179,7 @@ class Plugin:
         self._connection_service = services["connection_service"]
         self._startup_healing_service = services["startup_healing_service"]
         self._legacy_install_service = services["legacy_install_service"]
+        self._update_check_service = services["update_check_service"]
         self._shortcut_relocation_service = services["shortcut_relocation_service"]
         self._data_location_service = services["data_location_service"]
         self._launch_gate_service = services["launch_gate_service"]
@@ -1056,6 +1057,57 @@ class Plugin:
         that statement is optional. Returns ``{"success": True}``.
         """
         return self._legacy_install_service.dismiss_legacy_install_notice()
+
+    async def get_update_notice(self):
+        """Report whether a newer release of this plugin is out.
+
+        Returns ``{"available", "latest_version", "current_version",
+        "download_url", "install_url", "plugin_name", "digest", "enabled"}``.
+        ``available`` is the notice itself: a newer release exists, the user has
+        not dismissed that exact version, and the check is switched on.
+
+        Two addresses, and they are not interchangeable. ``install_url`` names
+        one release and is what an install fetches; it pairs with ``digest``,
+        the bare sha256 hex read off that same release's asset. Either can be
+        absent on its own — an asset stating an address but no checksum gives an
+        ``install_url`` with ``digest`` ``None``, and an absent address is
+        ``""``, meaning there is nothing here to install from. ``download_url``
+        is the fixed ``releases/latest`` address to show a reader — passing it
+        to an install alongside the checksum is the failure this pair prevents,
+        since it resolves to a newer release as soon as one is published and
+        Decky then refuses to unpack. ``plugin_name`` is the name Decky matches
+        the existing installation against; anything else leaves the old
+        installation standing beside the new one.
+
+        GitHub is asked at most once a day and the answer is persisted, so a
+        reload inside that window still shows the card without a request. Every
+        failure is silent: no network, an unreadable answer, or an unexpected
+        shape all leave ``available`` False with no error to surface — this
+        plugin is not in Decky's catalogue, so the check is a courtesy, never a
+        thing that can fail in the user's face.
+        """
+        return await self._update_check_service.get_update_notice()
+
+    async def dismiss_update_notice(self, version):
+        """Record that the user waved away the card for one release version.
+
+        Per version, not global: dismissing 0.33.0 leaves the next release free
+        to raise the card again — one Dismiss must not end the only channel
+        this plugin has for announcing a release. Returns ``{"success": True}``,
+        or the canonical failure shape for a version that is not a non-empty
+        string.
+        """
+        return self._update_check_service.dismiss_update_notice(version)
+
+    async def set_update_check_enabled(self, enabled):
+        """Persist whether the plugin may ask GitHub about newer releases.
+
+        On by default, and the only outgoing request that goes neither to the
+        user's RomM server nor to SteamGridDB — with it off, nothing is fetched
+        at all. Returns ``{"success": True}``, or the canonical failure shape
+        for a non-boolean value.
+        """
+        return self._update_check_service.set_update_check_enabled(enabled)
 
     async def get_data_location_notice(self):
         """Report what this start's data-location migration left standing.

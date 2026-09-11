@@ -33,6 +33,7 @@ import { MigrationBlockedPage } from "./MigrationBlockedPage";
 import { SettingsResetBanner } from "./SettingsResetBanner";
 import { LegacyInstallNotice } from "./LegacyInstallBanner";
 import { DataLocationNotice } from "./DataLocationNotice";
+import { UpdateNotice } from "./UpdateNotice";
 import { PlaytimeScopeBanner } from "./PlaytimeScopeBanner";
 import type { SyncPreview, SyncProgress, SyncRunKind, SyncStats, NavTarget } from "../types";
 import { detach } from "../utils/detach";
@@ -789,11 +790,17 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
             </PanelSectionRow>
           </>
         )}
-        {/* Last of the button-carrying notices: nothing is lost either way and
-            the plugin is running, so what is outstanding is only where its data
-            ends up. Its button opens a modal rather than a page, because the
-            condition is answered once and for all. */}
+        {/* Last of the notices about THIS install: nothing is lost either way
+            and the plugin is running, so what is outstanding is only where its
+            data ends up. Its button opens a modal rather than a page, because
+            the condition is answered once and for all. */}
         <DataLocationNotice />
+        {/* Below even the data-location notice, and the only one of this group
+            whose condition is not about this install at all: nothing here is
+            outstanding, a newer release simply exists elsewhere. Its action is
+            on Main because there is no page to send the reader to — Decky's own
+            installer is where the update is confirmed. */}
+        <UpdateNotice />
         <BlockSeparator />
       </PanelSection>
 

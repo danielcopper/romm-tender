@@ -20,6 +20,7 @@ import {
   onSaveSortMigrationChange,
 } from "../utils/saveSortMigrationStore";
 import { pendingEdits } from "./settings/TextInputModal";
+import { resetUpdateNoticeStoreForTests } from "../utils/updateNoticeStore";
 
 // Type-only imports — vi.mock(...) below replaces the runtime implementations,
 // but capturing props off the real prop interfaces keeps assertions in sync as
@@ -266,6 +267,9 @@ describe("SettingsPage", () => {
     capturedMigration.length = 0;
     saveSortListeners.length = 0;
     currentSortState = { pending: false };
+    // The switch's position lives in a module store that outlives the page, so a
+    // test that moves it would hand the next one the wrong starting position.
+    resetUpdateNoticeStoreForTests();
     for (const k of Object.keys(pendingEdits) as Array<keyof typeof pendingEdits>) {
       delete pendingEdits[k];
     }
@@ -1600,6 +1604,38 @@ describe("SettingsPage", () => {
       });
       expect(vi.mocked(backend.saveLogLevel)).toHaveBeenCalledWith("debug");
       expect(capturedAdvanced[capturedAdvanced.length - 1]?.logLevel).toBe("debug");
+    });
+
+    it("shows the update check as on by default, which is what an untouched install has", async () => {
+      renderPage();
+      await flushAsync();
+      expect(capturedAdvanced[capturedAdvanced.length - 1]?.updateCheckEnabled).toBe(true);
+    });
+
+    it("handleUpdateCheckEnabledChange persists the switch and moves it", async () => {
+      vi.mocked(backend.setUpdateCheckEnabled).mockResolvedValue({ success: true });
+      renderPage();
+      await flushAsync();
+      await act(async () => {
+        capturedAdvanced[capturedAdvanced.length - 1]?.onUpdateCheckEnabledChange(false);
+        await Promise.resolve();
+      });
+      expect(vi.mocked(backend.setUpdateCheckEnabled)).toHaveBeenCalledWith(false);
+      expect(capturedAdvanced[capturedAdvanced.length - 1]?.updateCheckEnabled).toBe(false);
+    });
+
+    it("leaves the switch where it was and logs when the write fails", async () => {
+      const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+      vi.mocked(backend.setUpdateCheckEnabled).mockRejectedValue(new Error("disk full"));
+      renderPage();
+      await flushAsync();
+      await act(async () => {
+        capturedAdvanced[capturedAdvanced.length - 1]?.onUpdateCheckEnabledChange(false);
+        await Promise.resolve();
+      });
+      expect(capturedAdvanced[capturedAdvanced.length - 1]?.updateCheckEnabled).toBe(true);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to change the update check"));
+      logSpy.mockRestore();
     });
   });
 

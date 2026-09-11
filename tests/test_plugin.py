@@ -841,6 +841,25 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # condition that card exists to warn about.
     "get_shortcut_relocation",
     "dismiss_legacy_install_notice",
+    # Whether a newer release exists, the user's answer to that card, and the
+    # switch behind the check. None of the three touches RetroDECK state — the
+    # read talks to GitHub and one kv_config row, the two writes are settings
+    # keys — so a pending migration has nothing to protect from them.
+    #
+    # Only the read is certainly exercised while the page is replaced, and it is
+    # exercised whether or not the panel is ever opened: the frontend fires it
+    # from the body of `definePlugin`, at plugin load. The card is NOT rendered
+    # on MigrationBlockedPage — what a condition has to be to earn that slot is
+    # stated in docs/architecture/qam-panel.md under "Notices and homes", and an
+    # update notice is not it. The two writes are reachable only where Settings
+    # survived the state flipping mid-session (`currentPage` is module-level in
+    # src/index.tsx and SettingsPage holds no migration guard of its own) —
+    # whitelisted for that window rather than decorated, because refusing a
+    # settings.json-only write there would fail a toggle the user can see and
+    # press.
+    "get_update_notice",
+    "dismiss_update_notice",
+    "set_update_check_enabled",
     # Where the plugin's OWN data lives — the notice, the two candidates behind
     # it, and the answer. None of the three touches RetroDECK state. The notice
     # reads nothing at all: it hands back what the start already decided. The
@@ -1143,6 +1162,7 @@ class TestMainStartupOrdering:
             "connection_service": connection_service,
             "startup_healing_service": startup_healing_service,
             "legacy_install_service": MagicMock(),
+            "update_check_service": MagicMock(),
             "shortcut_relocation_service": MagicMock(),
             "data_location_service": MagicMock(),
             "launch_gate_service": MagicMock(),
@@ -1180,6 +1200,7 @@ class TestMainStartupOrdering:
                 prune_artifacts=MagicMock(),
                 steam_recovery=MagicMock(),
                 data_location_store=MagicMock(),
+                latest_release=MagicMock(),
             ),
             stores=StateBundle(
                 settings={},

@@ -849,6 +849,34 @@ Format: **invariant** — tier — enforced by.
   (`src/components/RomMGameInfoPanel.test.tsx`); the store side and every new write site on either are prompt-only,
   because a checker scoped to the store's own function bodies would be green on the case this rule was written for. The
   reasons behind the two writer mechanisms live at `writerForRom` and `RomBinding` — do not restate them here
+- **The three values handed to Decky's installer each come from one source and no other: the plugin name from
+  `plugin.json` (never `package.json`, which since #1878 says something else), the checksum as bare sha256 hex (never
+  the `sha256:`-prefixed form GitHub states it in), and the artifact address version-bound to the release that checksum
+  belongs to (never the fixed `releases/latest/download` address the card shows)** — test + prompt-only — every END is
+  pinned and the JOIN is not. The name: `tests/adapters/test_plugin_metadata.py`'s
+  `test_the_shipped_manifests_really_do_disagree` reads the two shipped manifests and asserts they differ, so the
+  premise is checked rather than assumed, plus `tests/services/test_update_check.py`'s
+  `test_the_plugin_name_is_the_one_decky_matches_on`. The checksum and the address:
+  `tests/adapters/test_github_releases.py`'s `test_both_halves_come_off_the_named_asset_only` — a decoy asset carries
+  its own digest and its own address — and `test_the_install_address_names_one_release_and_not_latest`, with
+  `src/components/UpdateNotice.test.tsx`'s "installs from install_url while the card still shows download_url" asserting
+  the two are DIFFERENT values rather than each merely correct. **Nothing joins the chain they travel**, and the chain
+  is longer than the tests that pin its ends: `adapters/plugin_metadata.py` reads the name off `plugin.json`,
+  `adapters/github_releases.py` reads the address and the digest off one asset, `domain/update_release.py` strips the
+  digest's `sha256:` prefix, `services/update_check.py` puts all three on the wire, `main.py` carries the callable,
+  `src/api/backend.ts` types it, `src/utils/updateNoticeStore.ts` holds them, `src/components/UpdateNotice.tsx`
+  assembles the call, and `src/utils/deckyInstall.ts` passes them positionally to `utilities/install_plugin`. **What
+  passes green is not a substitution at a pinned end** — swapping `read_name` for `read_decky_name`, re-adding the
+  prefix or handing the shown address to the installer each fails a test named above, and `mise run gate` runs both
+  suites. It is a NEW consumer: a second install path, another callable, a component that reaches for `download_url`
+  because it is the address in front of it. The callable manifest would not notice, because it checks names and arity,
+  never payload shapes (#1867). What each substitution costs is measured at Decky's own source, not supposed. The name
+  is how Decky finds the existing installation (`find_plugin_folder`), so a wrong one misses the match, the previous
+  install is never removed, and the user is left with two folders claiming the same plugin name — which that function
+  then resolves by `listdir` order. The checksum is compared against `sha256(zip).hexdigest()` BEFORE the zip is
+  extracted, and the existing plugin folder is deleted BEFORE that comparison, so a mismatched pairing ends with no
+  plugin installed at all. That is why the card carries the download address whatever else it shows, and offers no
+  button at all where either the name or the version-bound address is empty
 - **Every row a reader must be able to reach on a QAM page is a row Steam can focus — a toggle, a button, or a
   `Focusable` carrying an activate handler, including a table row with no action of its own, so the reader can walk the
   table** — check + prompt-only — `tender/qam-focusable-row` checks the narrow syntactic slice where an `@decky/ui`

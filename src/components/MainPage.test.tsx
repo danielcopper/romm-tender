@@ -56,6 +56,7 @@ import { resetSyncStatsStoreForTests } from "../utils/syncStatsStore";
 import { setLegacyInstallState } from "../utils/legacyInstallStore";
 import { setPlaytimeScopeState } from "../utils/playtimeScopeStore";
 import { LEGACY_INSTALL_TITLE } from "./LegacyInstallBanner";
+import { resetUpdateNoticeStoreForTests, setUpdateNoticeState } from "../utils/updateNoticeStore";
 import { resetPendingPreviewStoreForTests, adoptPreview, clearPendingPreview } from "../utils/pendingPreviewStore";
 import * as syncManager from "../utils/syncManager";
 import * as connectionState from "../utils/connectionState";
@@ -336,6 +337,9 @@ describe("MainPage", () => {
     // one run id, and a run this store has seen END can never be put back in
     // flight.
     resetSyncProgressStoreForTests();
+    // The update notice outlives the panel like the notice stores around it, so
+    // a release one test leaves standing would render over the next test's page.
+    resetUpdateNoticeStoreForTests();
 
     // Re-stub useVersionError (resetAllMocks wiped it).
     vi.mocked(useVersionError).mockReturnValue(null);
@@ -475,6 +479,53 @@ describe("MainPage", () => {
       await flushAsync();
       expect(queryByTestId("migration-blocked-page")).not.toBeNull();
       expect(queryByTestId("version-error-card")).toBeNull();
+    });
+
+    it("keeps the update notice off both full-page states", async () => {
+      setUpdateNoticeState({
+        available: true,
+        latestVersion: "0.33.0",
+        currentVersion: "0.32.0",
+        downloadUrl: "https://example.invalid/Tender.zip",
+        installUrl: "https://example.invalid/tender-v0.33.0/Tender.zip",
+        pluginName: "Tender",
+        digest: "abc123",
+        enabled: true,
+      });
+
+      vi.mocked(useVersionError).mockReturnValue("server too old");
+      const versionError = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(versionError.queryByTestId("version-error-card")).not.toBeNull();
+      expect(versionError.queryByTestId("update-notice")).toBeNull();
+      versionError.unmount();
+
+      vi.mocked(useVersionError).mockReturnValue(null);
+      currentMigrationState = { pending: true };
+      vi.mocked(backend.refreshMigrationState).mockResolvedValue({
+        retrodeck: { pending: true },
+        save_sort: { pending: false },
+      });
+      const blocked = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(blocked.queryByTestId("migration-blocked-page")).not.toBeNull();
+      expect(blocked.queryByTestId("update-notice")).toBeNull();
+    });
+
+    it("shows the update notice on Main once a newer release is available", async () => {
+      setUpdateNoticeState({
+        available: true,
+        latestVersion: "0.33.0",
+        currentVersion: "0.32.0",
+        downloadUrl: "https://example.invalid/Tender.zip",
+        installUrl: "https://example.invalid/tender-v0.33.0/Tender.zip",
+        pluginName: "Tender",
+        digest: "abc123",
+        enabled: true,
+      });
+      const { queryByTestId } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(queryByTestId("update-notice")).not.toBeNull();
     });
 
     it("renders the panel without any section headings, blocks divided by rules", async () => {

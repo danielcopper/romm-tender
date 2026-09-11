@@ -38,8 +38,7 @@ see [How this is built](../index.md). Install it from the URL below.
 4. Open the **Developer** tab and select **Install Plugin from URL**
 5. Enter the direct URL to the release zip
 
-   This one always points at the newest release, so it needs no version number — and pasting it again later is how you
-   update:
+   This one always points at the newest release, so it needs no version number:
 
    ```text
    https://github.com/danielcopper/romm-tender/releases/latest/download/Tender.zip
@@ -64,6 +63,37 @@ from there.
 
 Any direct URL to the zip file works (GitHub releases, a self-hosted mirror, etc.) as long as it points to a valid
 `.zip` containing the plugin.
+
+### Updating
+
+Tender is not in Decky's plugin store, and Decky's own "update available" badge only ever appears for plugins that are —
+so Tender tells you itself. When it starts up it asks GitHub whether a newer release exists, at most once a day; when
+there is one, a card naming the new version appears in Tender's QAM panel, below the other notices and above the
+downloads and the menu. The card carries:
+
+- **Update now** — hands the release to Decky, which then asks you to confirm before it installs anything. Tender
+  disappears from the panel for a moment while Decky replaces it.
+- **Dismiss** — for that version only. The next release raises the card again.
+- The download address, always, in full — so the manual route below is never more than a copy away.
+
+The check runs when Tender loads — on a reboot, and on a Steam restart too, since that reloads the panel. Nothing
+schedules it in between: a Deck left suspended for a week does not check for a week, and opening the panel does not
+trigger one either.
+
+**Close any running game first.** Updating reloads Tender underneath the running game, and Tender then has to find that
+session again. It needs two things for that: the note it left about the session, and the game still showing in Steam's
+list of running apps, which it waits up to 15 seconds for. Anything it cannot find costs you part of that session — and
+if the game does not reappear in time, all of it: no play time recorded, on the device or in what is reported to RomM,
+and none of the save sync that normally runs when you close the game. The **Update now** button refuses while a session
+is open and says so; finish the game, close it, then update.
+
+If **Update now** is missing or reports that Decky's installer could not be reached, the address on the card still
+works: paste it into **Developer → Install Plugin from URL**, exactly as for a first install. Installing over an
+existing Tender keeps your settings and your synced library.
+
+You can switch the check off under **Settings → Advanced → Check for plugin updates**. It is on by default, and it is
+the only thing Tender asks of a server that is neither your own RomM nor SteamGridDB. With it off, nothing is requested
+and no card appears — checking the releases page yourself is then the only way to learn about a new version.
 
 ### Updating from a release before 0.31.0
 

@@ -100,7 +100,14 @@ Needs **Developer mode** in Decky Loader (Decky tab → gear icon → **General 
 1. Decky settings → **Developer** tab → **Install Plugin from URL**
 2. Paste the URL above and install
 
-That URL always resolves to the newest release, so pasting it again is also how you update.
+That URL always resolves to the newest release.
+
+Tender is not in Decky's plugin store, so Decky's own update detection never fires for it — Tender checks GitHub itself
+whenever it loads, at most once a day, and shows a card in its QAM panel when a newer release is out, with a button that
+hands the update to Decky. Pasting the URL again still works and is the fallback if that button ever cannot reach
+Decky's installer. Close any running game before updating: the update reloads the plugin underneath it, and whatever
+Tender cannot then find of that session costs you part of it — at worst all of it, with no play time recorded and no
+save sync when you close the game.
 
 </details>
 

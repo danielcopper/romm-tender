@@ -11,11 +11,16 @@ class FakePluginMetadataReader:
     matches the production adapter's fallback when ``package.json`` is
     unreadable. ``read_version`` records the last ``plugin_dir`` it was
     called with so tests can assert wiring.
+
+    ``name`` and ``decky_name`` default to the two DIFFERENT spellings the
+    real manifests carry, so a caller that reaches for the wrong one is
+    visible in a test rather than only on a device.
     """
 
-    def __init__(self, version: str = "0.0.0", name: str = "romm-tender") -> None:
+    def __init__(self, version: str = "0.0.0", name: str = "romm-tender", decky_name: str = "Tender") -> None:
         self.version = version
         self.name = name
+        self.decky_name = decky_name
         self.last_plugin_dir: str | None = None
         self.read_count = 0
 
@@ -32,3 +37,7 @@ class FakePluginMetadataReader:
     def read_name(self, plugin_dir: str) -> str:
         self.last_plugin_dir = plugin_dir
         return self.name
+
+    def read_decky_name(self, plugin_dir: str) -> str:
+        self.last_plugin_dir = plugin_dir
+        return self.decky_name

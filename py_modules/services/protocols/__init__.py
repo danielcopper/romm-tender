@@ -130,6 +130,7 @@ from services.protocols.repositories import (
     SyncRunRepository,
 )
 from services.protocols.transport import (
+    LatestReleaseFn,
     RommAchievementsApi,
     RommApi,
     RommConnectionApi,
@@ -184,6 +185,7 @@ __all__ = [
     "InstalledRomFilesRemoverFn",
     "InstalledRomRemoverFn",
     "KvConfigRepository",
+    "LatestReleaseFn",
     "LaunchGateDriftReader",
     "LaunchGateInstalledChecker",
     "LaunchGateRomLookup",
