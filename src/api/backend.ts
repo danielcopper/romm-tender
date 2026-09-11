@@ -1157,9 +1157,7 @@ export const dismissLegacyInstallNotice = callable<[], { success: boolean }>("di
  * was not dismissed, and the check is switched on. The rest is what an install
  * needs. `plugin_name` is what Decky matches the existing installation
  * against — hand an install-from-URL anything else and the old installation is
- * never replaced, leaving a second plugin folder beside it. `digest` is the
- * asset's bare sha256 hex (no `sha256:` prefix — Decky compares it against
- * `sha256(zip).hexdigest()`), `null` where the release carried none.
+ * never replaced, leaving a second plugin folder beside it.
  *
  * Every failure is silent: with no network, an unreadable answer, or an
  * unexpected shape, `available` is false and there is nothing to show.
@@ -1169,8 +1167,25 @@ export interface UpdateNotice {
   /** The bare version, `tender-v` stripped. `null` until a check has succeeded. */
   latest_version: string | null;
   current_version: string;
+  /**
+   * The fixed `releases/latest` address — what to SHOW a reader, never what to
+   * install from. It resolves to whatever is newest, so passing it to an
+   * install alongside `digest` fetches one release and verifies it against
+   * another, and Decky refuses to unpack on the mismatch.
+   */
   download_url: string;
+  /**
+   * The version-bound address of the release this notice is about, and the one
+   * to install from. `""` where the release stated none — then there is nothing
+   * to install from safely and only `download_url` is left to show.
+   */
+  install_url: string;
   plugin_name: string;
+  /**
+   * The bare sha256 hex of `install_url`'s asset (no `sha256:` prefix — Decky
+   * compares it against `sha256(zip).hexdigest()`), `null` where the release
+   * carried none. True only of `install_url`, never of `download_url`.
+   */
   digest: string | null;
   enabled: boolean;
 }

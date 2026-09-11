@@ -31,9 +31,11 @@ _LATEST_RELEASE_URL = "https://api.github.com/repos/danielcopper/romm-tender/rel
 # it is spelled literally here rather than composed from one.
 _ASSET_NAME = "Tender.zip"
 
-# Long enough for a slow mobile connection, short enough that a Deck with no
-# route to the internet does not hold the panel's read open: this request is
-# made from a callable the QAM waits on.
+# Bounds the one blocking call this adapter makes, and nothing more: no surface
+# awaits the check — the frontend detaches it at plugin load — so this is not
+# about how fast a page renders. ``urllib.request.urlopen`` given no timeout
+# waits indefinitely, and this call runs on the default executor's thread pool,
+# which every other ``run_in_executor`` on the backend draws from.
 _TIMEOUT_SECONDS = 10
 
 
@@ -64,7 +66,11 @@ class GithubReleaseAdapter:
         if version is None:
             self._log_debug(f"[update] latest release names no version: {payload.get('tag_name')!r}")
             return None
-        return LatestRelease(version=version, digest=self._asset_digest(payload))
+        # One lookup for both halves: the address and the checksum have to come
+        # off the SAME asset of the SAME answer, or an install fetches one
+        # release and verifies it against another.
+        asset = self._find_asset(payload)
+        return LatestRelease(version=version, digest=self._digest_of(asset), install_url=self._install_url_of(asset))
 
     def _read_latest(self) -> dict[str, Any] | None:
         """GET the latest-release payload, or ``None`` on any failure."""
@@ -82,19 +88,41 @@ class GithubReleaseAdapter:
             return None
         return payload
 
-    def _asset_digest(self, payload: dict[str, Any]) -> str | None:
-        """Return the sha256 hex of the release's Tender asset, or ``None``."""
+    def _find_asset(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        """Return the release's Tender asset, or ``None`` when it carries none."""
         assets = payload.get("assets")
         if not isinstance(assets, list):
             return None
         for asset in assets:
             if isinstance(asset, dict) and asset.get("name") == _ASSET_NAME:
-                digest = sha256_hex(asset.get("digest"))
-                if digest is None:
-                    self._log_debug(f"[update] {_ASSET_NAME} carries no sha256 digest")
-                return digest
+                return asset
         self._log_debug(f"[update] latest release has no {_ASSET_NAME} asset")
         return None
+
+    def _digest_of(self, asset: dict[str, Any] | None) -> str | None:
+        """Return the asset's sha256 hex, or ``None`` when it states none."""
+        if asset is None:
+            return None
+        digest = sha256_hex(asset.get("digest"))
+        if digest is None:
+            self._log_debug(f"[update] {_ASSET_NAME} carries no sha256 digest")
+        return digest
+
+    def _install_url_of(self, asset: dict[str, Any] | None) -> str:
+        """Return the asset's version-bound download address, or ``""``.
+
+        GitHub's ``browser_download_url`` names the release it belongs to
+        (``…/releases/download/tender-v0.33.0/Tender.zip``) rather than
+        redirecting to whatever is newest, which is what makes it safe to pair
+        with a checksum read from the same answer.
+        """
+        if asset is None:
+            return ""
+        url = asset.get("browser_download_url")
+        if not isinstance(url, str) or not url:
+            self._log_debug(f"[update] {_ASSET_NAME} states no download address")
+            return ""
+        return url
 
     @staticmethod
     def _ssl_context() -> ssl.SSLContext:

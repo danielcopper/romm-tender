@@ -24,6 +24,12 @@ from services.update_check import (
 
 _PLUGIN_DIR = "/home/deck/homebrew/plugins/romm-tender"
 _A_DAY = 24 * 60 * 60
+_PINNED_URL = "https://github.com/danielcopper/romm-tender/releases/download/tender-v0.33.0/Tender.zip"
+
+
+def _release(version: str, digest: str | None = "ab33cd", install_url: str = _PINNED_URL) -> LatestRelease:
+    """A release answer whose address and checksum are one consistent pair."""
+    return LatestRelease(version=version, digest=digest, install_url=install_url)
 
 
 class _RecordingPersister:
@@ -78,7 +84,7 @@ def _nothing_stored(uow_factory: FakeUnitOfWorkFactory) -> bool:
 
 class TestWhetherAnUpdateIsAvailable:
     async def test_a_newer_release_is_available(self):
-        service, _, _, _ = _make(latest=LatestRelease(version="0.33.0", digest="ab33cd"))
+        service, _, _, _ = _make(latest=_release("0.33.0"))
 
         notice = await service.get_update_notice()
 
@@ -87,7 +93,7 @@ class TestWhetherAnUpdateIsAvailable:
         assert notice["current_version"] == "0.32.0"
 
     async def test_the_running_release_is_not_an_update(self):
-        service, _, _, _ = _make(latest=LatestRelease(version="0.32.0", digest="ab33cd"))
+        service, _, _, _ = _make(latest=_release("0.32.0"))
 
         notice = await service.get_update_notice()
 
@@ -96,18 +102,18 @@ class TestWhetherAnUpdateIsAvailable:
 
     async def test_an_older_release_is_not_an_update(self):
         """A development build ahead of the last release must not be told to downgrade."""
-        service, _, _, _ = _make(latest=LatestRelease(version="0.31.0", digest=None), current_version="0.32.0")
+        service, _, _, _ = _make(latest=_release("0.31.0", digest=None), current_version="0.32.0")
 
         assert (await service.get_update_notice())["available"] is False
 
     async def test_the_digest_travels_without_its_algorithm_prefix(self):
         """Decky compares what it is handed against ``sha256(zip).hexdigest()``."""
-        service, _, _, _ = _make(latest=LatestRelease(version="0.33.0", digest="ab33cd"))
+        service, _, _, _ = _make(latest=_release("0.33.0"))
 
         assert (await service.get_update_notice())["digest"] == "ab33cd"
 
     async def test_a_release_without_a_digest_is_still_announced(self):
-        service, _, _, _ = _make(latest=LatestRelease(version="0.33.0", digest=None))
+        service, _, _, _ = _make(latest=_release("0.33.0", digest=None))
 
         notice = await service.get_update_notice()
 
@@ -115,13 +121,40 @@ class TestWhetherAnUpdateIsAvailable:
         assert notice["digest"] is None
 
     async def test_the_download_address_is_the_fixed_one(self):
-        service, _, _, _ = _make(latest=LatestRelease(version="0.33.0", digest=None))
+        service, _, _, _ = _make(latest=_release("0.33.0", digest=None))
 
         assert (await service.get_update_notice())["download_url"] == DOWNLOAD_URL
 
+    async def test_the_install_address_is_the_release_bound_one(self):
+        """The two addresses answer two questions and are never the same value.
+
+        `download_url` is what a reader is shown and resolves to whatever is
+        newest; `install_url` names this release and is what an install fetches.
+        Install from the fixed one while passing `digest` and a release landing
+        in between makes Decky verify one release against another's checksum and
+        refuse to unpack.
+        """
+        service, _, _, _ = _make(latest=_release("0.33.0"))
+
+        notice = await service.get_update_notice()
+
+        assert notice["install_url"] == _PINNED_URL
+        assert notice["install_url"] != notice["download_url"]
+        assert "/releases/download/tender-v0.33.0/" in notice["install_url"]
+        assert "/releases/latest/download/" in notice["download_url"]
+
+    async def test_a_release_stating_no_install_address_reports_it_empty(self):
+        service, _, _, _ = _make(latest=_release("0.33.0", install_url=""))
+
+        notice = await service.get_update_notice()
+
+        assert notice["available"] is True
+        assert notice["install_url"] == ""
+        assert notice["download_url"] == DOWNLOAD_URL
+
     async def test_the_plugin_name_is_the_one_decky_matches_on(self):
         """package.json's name is a DIFFERENT string; handing Decky that one duplicates the install."""
-        service, _, _, _ = _make(latest=LatestRelease(version="0.33.0", digest=None), decky_name="Tender")
+        service, _, _, _ = _make(latest=_release("0.33.0", digest=None), decky_name="Tender")
 
         notice = await service.get_update_notice()
 
@@ -149,12 +182,11 @@ class TestEveryFailureIsSilent:
         assert notice["available"] is False
         assert notice["latest_version"] is None
 
-    async def test_a_failed_check_keeps_the_answer_it_already_had(self):
+    async def test_a_failed_check_keeps_the_answer_it_already_had_whole(self):
+        """All three carry forward together — a half-kept pair is the dangerous one."""
         uow_factory = FakeUnitOfWorkFactory()
         clock = FakeClock()
-        service, _, _, _ = _make(
-            latest=LatestRelease(version="0.33.0", digest="ab33cd"), clock=clock, uow_factory=uow_factory
-        )
+        service, _, _, _ = _make(latest=_release("0.33.0"), clock=clock, uow_factory=uow_factory)
         assert (await service.get_update_notice())["available"] is True
 
         clock.advance(_A_DAY + 1)
@@ -164,9 +196,10 @@ class TestEveryFailureIsSilent:
         assert notice["available"] is True
         assert notice["latest_version"] == "0.33.0"
         assert notice["digest"] == "ab33cd"
+        assert notice["install_url"] == _PINNED_URL
 
     async def test_a_failed_check_still_holds_the_next_one_off(self):
-        """An offline Deck must not pay a request timeout on every panel open."""
+        """An offline Deck must not pay a request timeout on every plugin load."""
         uow_factory = FakeUnitOfWorkFactory()
         clock = FakeClock()
         service, releases, _, _ = _make(latest=None, clock=clock, uow_factory=uow_factory)
@@ -181,7 +214,7 @@ class TestEveryFailureIsSilent:
         uow_factory = FakeUnitOfWorkFactory()
         with uow_factory() as uow:
             uow.kv_config.set(LAST_CHECK_KEY, "{not json")
-        service, releases, _, _ = _make(latest=LatestRelease(version="0.33.0", digest=None), uow_factory=uow_factory)
+        service, releases, _, _ = _make(latest=_release("0.33.0", digest=None), uow_factory=uow_factory)
 
         assert (await service.get_update_notice())["latest_version"] == "0.33.0"
         assert releases.calls == 1
@@ -191,9 +224,7 @@ class TestTheDailyThrottle:
     async def test_a_second_ask_inside_the_day_reads_no_release(self):
         uow_factory = FakeUnitOfWorkFactory()
         clock = FakeClock()
-        service, releases, _, _ = _make(
-            latest=LatestRelease(version="0.33.0", digest="ab33cd"), clock=clock, uow_factory=uow_factory
-        )
+        service, releases, _, _ = _make(latest=_release("0.33.0"), clock=clock, uow_factory=uow_factory)
 
         first = await service.get_update_notice()
         clock.advance(_A_DAY - 1)
@@ -206,9 +237,7 @@ class TestTheDailyThrottle:
         """The answer is persisted, so a reload neither loses the card nor asks again."""
         uow_factory = FakeUnitOfWorkFactory()
         clock = FakeClock()
-        first, releases, _, _ = _make(
-            latest=LatestRelease(version="0.33.0", digest="ab33cd"), clock=clock, uow_factory=uow_factory
-        )
+        first, releases, _, _ = _make(latest=_release("0.33.0"), clock=clock, uow_factory=uow_factory)
         await first.get_update_notice()
 
         clock.advance(60)
@@ -223,9 +252,7 @@ class TestTheDailyThrottle:
     async def test_a_day_later_the_release_is_read_again(self):
         uow_factory = FakeUnitOfWorkFactory()
         clock = FakeClock()
-        service, releases, _, _ = _make(
-            latest=LatestRelease(version="0.33.0", digest=None), clock=clock, uow_factory=uow_factory
-        )
+        service, releases, _, _ = _make(latest=_release("0.33.0", digest=None), clock=clock, uow_factory=uow_factory)
 
         await service.get_update_notice()
         clock.advance(_A_DAY)
@@ -240,11 +267,11 @@ class TestTheDailyThrottle:
         with uow_factory() as uow:
             uow.kv_config.set(
                 LAST_CHECK_KEY,
-                encode_update_check(UpdateCheck(checked_at=clock.time() + _A_DAY * 30, version=None, digest=None)),
+                encode_update_check(
+                    UpdateCheck(checked_at=clock.time() + _A_DAY * 30, version=None, digest=None, install_url="")
+                ),
             )
-        service, releases, _, _ = _make(
-            latest=LatestRelease(version="0.33.0", digest=None), clock=clock, uow_factory=uow_factory
-        )
+        service, releases, _, _ = _make(latest=_release("0.33.0", digest=None), clock=clock, uow_factory=uow_factory)
 
         assert (await service.get_update_notice())["latest_version"] == "0.33.0"
         assert releases.calls == 1
@@ -253,7 +280,7 @@ class TestTheDailyThrottle:
 class TestDismissal:
     async def test_the_dismissed_version_is_no_longer_announced(self):
         settings = {DISMISSED_KEY: "0.33.0"}
-        service, _, _, _ = _make(latest=LatestRelease(version="0.33.0", digest="ab33cd"), settings=settings)
+        service, _, _, _ = _make(latest=_release("0.33.0"), settings=settings)
 
         notice = await service.get_update_notice()
 
@@ -263,7 +290,7 @@ class TestDismissal:
     async def test_the_next_version_is_announced_again(self):
         """Dismissal is per version — one Dismiss must not end the only channel there is."""
         settings = {DISMISSED_KEY: "0.33.0"}
-        service, _, _, _ = _make(latest=LatestRelease(version="0.34.0", digest=None), settings=settings)
+        service, _, _, _ = _make(latest=_release("0.34.0", digest=None), settings=settings)
 
         assert (await service.get_update_notice())["available"] is True
 
@@ -295,7 +322,7 @@ class TestDismissal:
         assert persister.saves == 0
 
     async def test_a_dismissal_stored_as_something_else_does_not_hide_the_card(self):
-        service, _, _, _ = _make(latest=LatestRelease(version="0.33.0", digest=None), settings={DISMISSED_KEY: 33})
+        service, _, _, _ = _make(latest=_release("0.33.0", digest=None), settings={DISMISSED_KEY: 33})
 
         assert (await service.get_update_notice())["available"] is True
 
@@ -303,7 +330,7 @@ class TestDismissal:
 class TestTheSwitch:
     async def test_the_check_is_on_where_nothing_was_ever_set(self):
         """Absence is the default, so an install that never touched it still checks."""
-        service, releases, settings, _ = _make(latest=LatestRelease(version="0.33.0", digest=None))
+        service, releases, settings, _ = _make(latest=_release("0.33.0", digest=None))
 
         notice = await service.get_update_notice()
 
@@ -314,7 +341,7 @@ class TestTheSwitch:
     async def test_switched_off_nothing_is_read_and_nothing_is_available(self):
         uow_factory = FakeUnitOfWorkFactory()
         service, releases, _, _ = _make(
-            latest=LatestRelease(version="0.33.0", digest="ab33cd"),
+            latest=_release("0.33.0"),
             settings={ENABLED_KEY: False},
             uow_factory=uow_factory,
         )
@@ -326,9 +353,11 @@ class TestTheSwitch:
         assert notice["enabled"] is False
         assert notice["latest_version"] is None
         assert notice["digest"] is None
+        assert notice["install_url"] == ""
         assert _nothing_stored(uow_factory)
 
     async def test_switched_off_the_answer_still_carries_what_an_install_needs(self):
+        """Only what a release does not have to be read for: the fixed address and the names."""
         service, _, _, _ = _make(settings={ENABLED_KEY: False})
 
         notice = await service.get_update_notice()
@@ -366,7 +395,7 @@ class TestTheSwitch:
 
 class TestTheAnswerShape:
     async def test_every_field_the_frontend_reads_is_present(self):
-        service, _, _, _ = _make(latest=LatestRelease(version="0.33.0", digest="ab33cd"))
+        service, _, _, _ = _make(latest=_release("0.33.0"))
 
         notice = await service.get_update_notice()
 
@@ -375,6 +404,7 @@ class TestTheAnswerShape:
             "latest_version",
             "current_version",
             "download_url",
+            "install_url",
             "plugin_name",
             "digest",
             "enabled",

@@ -12,13 +12,16 @@ import pytest
 from adapters.github_releases import GithubReleaseAdapter
 from domain.update_release import LatestRelease
 
+_PINNED_URL = "https://github.com/danielcopper/romm-tender/releases/download/tender-v0.33.0/Tender.zip"
+
 
 def _payload(tag="tender-v0.33.0", assets=None):
     """A latest-release answer shaped like GitHub's, trimmed to what is read."""
+    default = [{"name": "Tender.zip", "digest": "sha256:ab33cd", "browser_download_url": _PINNED_URL}]
     return {
         "tag_name": tag,
         "name": tag,
-        "assets": [{"name": "Tender.zip", "digest": "sha256:ab33cd"}] if assets is None else assets,
+        "assets": default if assets is None else assets,
     }
 
 
@@ -42,9 +45,27 @@ def adapter(log):
 
 
 class TestGetLatestRelease:
-    def test_reads_the_version_and_the_asset_digest(self, adapter):
+    def test_reads_the_version_the_digest_and_the_pinned_address(self, adapter):
         with patch("urllib.request.urlopen", return_value=_response(json.dumps(_payload()).encode())):
-            assert adapter.get_latest_release() == LatestRelease(version="0.33.0", digest="ab33cd")
+            assert adapter.get_latest_release() == LatestRelease(
+                version="0.33.0", digest="ab33cd", install_url=_PINNED_URL
+            )
+
+    def test_the_install_address_names_one_release_and_not_latest(self, adapter):
+        """The whole point of reading it instead of using the fixed address.
+
+        `browser_download_url` carries its release in the path, so it and the
+        digest read from the same asset stay true together however long the
+        stamp sits. The fixed `releases/latest/download/` address would fetch
+        whatever is newest and fail Decky's checksum comparison the first time a
+        release landed in between.
+        """
+        with patch("urllib.request.urlopen", return_value=_response(json.dumps(_payload()).encode())):
+            release = adapter.get_latest_release()
+
+        assert release is not None
+        assert "/releases/download/tender-v0.33.0/" in release.install_url
+        assert "/releases/latest/download/" not in release.install_url
 
     def test_sends_the_plugin_user_agent(self, adapter):
         """GitHub's API refuses a request that carries no User-Agent at all."""
@@ -54,27 +75,45 @@ class TestGetLatestRelease:
             assert req.get_header("User-agent") == "romm-tender/9.9.9"
             assert req.full_url == "https://api.github.com/repos/danielcopper/romm-tender/releases/latest"
 
-    def test_digest_of_the_named_asset_only(self, adapter):
-        """The release also carries source archives; only the plugin's own zip is ours."""
+    def test_both_halves_come_off_the_named_asset_only(self, adapter):
+        """The release also carries source archives; only the plugin's own zip is ours.
+
+        Both fields are read from the one asset, so a release whose other assets
+        carry their own digests and addresses cannot contribute half a pair.
+        """
         assets = [
-            {"name": "Source code (zip)", "digest": "sha256:0000"},
-            {"name": "Tender.zip", "digest": "sha256:ab33cd"},
+            {
+                "name": "Source code (zip)",
+                "digest": "sha256:0000",
+                "browser_download_url": "https://example.test/source.zip",
+            },
+            {"name": "Tender.zip", "digest": "sha256:ab33cd", "browser_download_url": _PINNED_URL},
         ]
         with patch("urllib.request.urlopen", return_value=_response(json.dumps(_payload(assets=assets)).encode())):
-            assert adapter.get_latest_release() == LatestRelease(version="0.33.0", digest="ab33cd")
+            assert adapter.get_latest_release() == LatestRelease(
+                version="0.33.0", digest="ab33cd", install_url=_PINNED_URL
+            )
 
     @pytest.mark.parametrize(
         "assets",
         [[], [{"name": "other.zip", "digest": "sha256:ab33cd"}], "not-a-list", [{"name": "Tender.zip"}]],
     )
-    def test_a_release_without_a_usable_digest_still_reports_the_version(self, adapter, assets):
-        """A download stays possible unverified; the version is what the card is about."""
+    def test_a_release_without_a_usable_asset_still_reports_the_version(self, adapter, assets):
+        """The version is what the card is about; the pair is simply not known."""
         with patch("urllib.request.urlopen", return_value=_response(json.dumps(_payload(assets=assets)).encode())):
-            assert adapter.get_latest_release() == LatestRelease(version="0.33.0", digest=None)
+            assert adapter.get_latest_release() == LatestRelease(version="0.33.0", digest=None, install_url="")
+
+    @pytest.mark.parametrize("unusable", [None, "", 42, ["https://example.test/Tender.zip"]])
+    def test_an_asset_stating_no_usable_address_reports_none(self, adapter, unusable):
+        assets = [{"name": "Tender.zip", "digest": "sha256:ab33cd", "browser_download_url": unusable}]
+        with patch("urllib.request.urlopen", return_value=_response(json.dumps(_payload(assets=assets)).encode())):
+            assert adapter.get_latest_release() == LatestRelease(version="0.33.0", digest="ab33cd", install_url="")
 
     def test_a_bare_tag_is_still_a_version(self, adapter):
         with patch("urllib.request.urlopen", return_value=_response(json.dumps(_payload(tag="0.33.0")).encode())):
-            assert adapter.get_latest_release() == LatestRelease(version="0.33.0", digest="ab33cd")
+            assert adapter.get_latest_release() == LatestRelease(
+                version="0.33.0", digest="ab33cd", install_url=_PINNED_URL
+            )
 
 
 class TestEveryFailureIsSilent:

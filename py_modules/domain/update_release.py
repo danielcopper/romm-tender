@@ -25,11 +25,17 @@ _TAG_PREFIX = "tender-v"
 # saying why.
 _SHA256_PREFIX = "sha256:"
 
-# Where a user is sent to fetch the update. Deliberately a constant rather than
-# the ``browser_download_url`` of the release we parsed: GitHub keeps this
-# ``releases/latest/download/`` form pointed at whatever is latest, so it is
-# still right when the stamp below is a day old, and it is the address the
-# install instructions name.
+# The address a user is SHOWN — the one the install instructions name and a
+# reader can type by hand. GitHub keeps this ``releases/latest/download/`` form
+# pointed at whatever is newest, so it needs no API answer to build and never
+# goes stale.
+#
+# It is deliberately NOT what an install is handed; that is
+# ``LatestRelease.install_url``, which names one release. Swapping the two is
+# the failure this pair exists to prevent: a checksum belongs to the release it
+# was read from, and this address starts resolving to a newer one the moment the
+# next release lands — Decky compares ``sha256(zip).hexdigest()`` against what it
+# was given and refuses to unpack on a mismatch.
 DOWNLOAD_URL = "https://github.com/danielcopper/romm-tender/releases/latest/download/Tender.zip"
 
 
@@ -37,13 +43,20 @@ DOWNLOAD_URL = "https://github.com/danielcopper/romm-tender/releases/latest/down
 class LatestRelease:
     """The release GitHub calls latest, in this plugin's own vocabulary.
 
-    ``version`` is the bare version the tag named. ``digest`` is the release
-    asset's sha256 hex, or ``None`` when the release carries no asset this
-    plugin recognises — the download stays possible without it, unverified.
+    ``version`` is the bare version the tag named.
+
+    ``install_url`` and ``digest`` are a PAIR and are only ever true together:
+    the address names one release and the checksum was read from that same
+    release's asset. They are what an install is handed. ``install_url`` is
+    ``""`` and ``digest`` ``None`` where the release carried no asset this
+    plugin recognises, or the asset carried no such field — an install can still
+    proceed from :data:`DOWNLOAD_URL` unverified, which is the one place the two
+    addresses may be mixed and only because no checksum travels with it.
     """
 
     version: str
     digest: str | None
+    install_url: str
 
 
 @dataclass(frozen=True)
@@ -52,14 +65,17 @@ class UpdateCheck:
 
     ``checked_at`` is a Unix timestamp and is what the once-a-day throttle
     reads; it stamps the ATTEMPT, so a check that reached nothing still holds
-    the next one off. ``version`` and ``digest`` are the newest answer that ever
-    arrived, which is why a failed attempt carries the previous ones forward
-    rather than clearing them. Both are ``None`` until an attempt has succeeded.
+    the next one off. ``version``, ``digest`` and ``install_url`` are the newest
+    answer that ever arrived, which is why a failed attempt carries the previous
+    ones forward rather than clearing them — and carries all three together,
+    because the address and the checksum describe one release and a mixed pair
+    would fail Decky's unpack with nothing saying why.
     """
 
     checked_at: float
     version: str | None
     digest: str | None
+    install_url: str
 
 
 def version_from_tag(tag: object) -> str | None:
@@ -97,7 +113,14 @@ def sha256_hex(digest: object) -> str | None:
 
 def encode_update_check(check: UpdateCheck) -> str:
     """Render *check* as the JSON text the ``kv_config`` row holds."""
-    return json.dumps({"checked_at": check.checked_at, "version": check.version, "digest": check.digest})
+    return json.dumps(
+        {
+            "checked_at": check.checked_at,
+            "version": check.version,
+            "digest": check.digest,
+            "install_url": check.install_url,
+        }
+    )
 
 
 def decode_update_check(raw: str | None) -> UpdateCheck | None:
@@ -106,9 +129,11 @@ def decode_update_check(raw: str | None) -> UpdateCheck | None:
     ``None`` means "no check has completed", which is what the caller acts on,
     so every unusable value — absent, empty, not JSON, not an object, or
     carrying no numeric ``checked_at`` — collapses onto it and the next call
-    simply checks again. A stored ``version`` / ``digest`` that is not a
-    non-empty string is dropped to ``None`` on its own: the timestamp is still a
-    true statement about when we last asked.
+    simply checks again. A stored ``version`` / ``digest`` / ``install_url``
+    that is not a non-empty string is dropped on its own: the timestamp is still
+    a true statement about when we last asked. A stamp written before
+    ``install_url`` existed decodes with it empty, which reads as "no
+    version-bound address known" and sends the reader to the fixed one.
     """
     if not raw:
         return None
@@ -123,8 +148,10 @@ def decode_update_check(raw: str | None) -> UpdateCheck | None:
         return None
     version = decoded.get("version")
     digest = decoded.get("digest")
+    install_url = decoded.get("install_url")
     return UpdateCheck(
         checked_at=float(checked_at),
         version=version if isinstance(version, str) and version else None,
         digest=digest if isinstance(digest, str) and digest else None,
+        install_url=install_url if isinstance(install_url, str) and install_url else "",
     )

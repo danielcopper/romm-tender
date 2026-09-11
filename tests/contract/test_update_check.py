@@ -11,10 +11,11 @@ from __future__ import annotations
 from domain.update_release import LatestRelease
 
 _A_DAY = 24 * 60 * 60
+_PINNED_URL = "https://github.com/danielcopper/romm-tender/releases/download/tender-v99.0.0/Tender.zip"
 
 
 async def test_get_update_notice_reports_a_newer_release(harness):
-    harness.releases.answer = LatestRelease(version="99.0.0", digest="ab33cd")
+    harness.releases.answer = LatestRelease(version="99.0.0", digest="ab33cd", install_url=_PINNED_URL)
 
     notice = await harness.plugin.get_update_notice()
 
@@ -23,15 +24,28 @@ async def test_get_update_notice_reports_a_newer_release(harness):
     assert notice["digest"] == "ab33cd"
     assert notice["enabled"] is True
     assert notice["download_url"].endswith("/releases/latest/download/Tender.zip")
+    assert notice["install_url"] == _PINNED_URL
     assert set(notice) == {
         "available",
         "latest_version",
         "current_version",
         "download_url",
+        "install_url",
         "plugin_name",
         "digest",
         "enabled",
     }
+
+
+async def test_the_two_addresses_survive_the_wire_as_different_values(harness):
+    """The install address names one release; the shown one resolves to whatever is newest."""
+    harness.releases.answer = LatestRelease(version="99.0.0", digest="ab33cd", install_url=_PINNED_URL)
+
+    notice = await harness.plugin.get_update_notice()
+
+    assert "/releases/download/tender-v99.0.0/" in notice["install_url"]
+    assert "/releases/latest/download/" in notice["download_url"]
+    assert notice["install_url"] != notice["download_url"]
 
 
 async def test_a_check_that_reached_nothing_reports_no_update(harness):
@@ -45,7 +59,7 @@ async def test_a_check_that_reached_nothing_reports_no_update(harness):
 
 
 async def test_the_answer_outlives_the_call_and_is_not_read_again(harness):
-    harness.releases.answer = LatestRelease(version="99.0.0", digest=None)
+    harness.releases.answer = LatestRelease(version="99.0.0", digest=None, install_url="")
     await harness.plugin.get_update_notice()
 
     harness.clock.advance(60)
@@ -58,7 +72,7 @@ async def test_the_answer_outlives_the_call_and_is_not_read_again(harness):
 
 
 async def test_a_day_later_the_release_is_read_again(harness):
-    harness.releases.answer = LatestRelease(version="99.0.0", digest=None)
+    harness.releases.answer = LatestRelease(version="99.0.0", digest=None, install_url="")
     await harness.plugin.get_update_notice()
 
     harness.clock.advance(_A_DAY)
@@ -68,20 +82,20 @@ async def test_a_day_later_the_release_is_read_again(harness):
 
 
 async def test_dismissing_a_version_takes_that_card_down_only(harness):
-    harness.releases.answer = LatestRelease(version="99.0.0", digest=None)
+    harness.releases.answer = LatestRelease(version="99.0.0", digest=None, install_url="")
     await harness.plugin.get_update_notice()
 
     assert await harness.plugin.dismiss_update_notice("99.0.0") == {"success": True}
     assert (await harness.plugin.get_update_notice())["available"] is False
 
     harness.clock.advance(_A_DAY)
-    harness.releases.answer = LatestRelease(version="99.1.0", digest=None)
+    harness.releases.answer = LatestRelease(version="99.1.0", digest=None, install_url="")
     assert (await harness.plugin.get_update_notice())["available"] is True
 
 
 async def test_switching_the_check_off_stops_the_read(harness):
     assert await harness.plugin.set_update_check_enabled(False) == {"success": True}
-    harness.releases.answer = LatestRelease(version="99.0.0", digest=None)
+    harness.releases.answer = LatestRelease(version="99.0.0", digest=None, install_url="")
 
     notice = await harness.plugin.get_update_notice()
 

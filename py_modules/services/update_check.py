@@ -108,23 +108,31 @@ class UpdateCheckService:
         """Report the newer release, if there is one the user still wants to hear about.
 
         Returns ``{"available", "latest_version", "current_version",
-        "download_url", "plugin_name", "digest", "enabled"}``. ``available`` is
-        the notice, and it is the conjunction of three separate answers: a
-        release newer than the running one exists, it is not the version the
-        user dismissed, and the check is switched on. Everything else on the
-        payload is what an install needs — the fixed download address, the name
-        Decky matches the existing installation by, and the asset's sha256 hex
-        where the release carried one.
+        "download_url", "install_url", "plugin_name", "digest", "enabled"}``.
+        ``available`` is the notice, and it is the conjunction of three separate
+        answers: a release newer than the running one exists, it is not the
+        version the user dismissed, and the check is switched on.
+
+        The rest is what an install needs, and it carries TWO addresses because
+        they answer two different questions. ``install_url`` names one release
+        and is the one to fetch: it belongs with ``digest``, which was read off
+        that same release's asset. ``download_url`` is the fixed
+        ``releases/latest`` address a reader is shown and could type by hand;
+        handing it to an install that also passes the checksum is the way this
+        breaks, because it starts resolving to a newer release the moment one
+        lands. ``plugin_name`` is the name Decky matches the existing
+        installation by.
 
         Reads GitHub at most once a day: an answer inside that window comes from
         the stored marker, so a plugin reload or a Steam restart shows the card
         again without asking GitHub again. A check that reached nothing is
-        silent — ``available`` is False, the previous answer stands, and the
-        next attempt is a day out, so an offline Deck neither stalls this call
-        on every panel open nor spends the request budget.
+        silent — ``available`` is False, the previous answer stands whole, and
+        the next attempt is a day out, so an offline Deck neither pays a request
+        timeout on every plugin load nor spends the request budget.
 
         With the switch off nothing is fetched and nothing is read: the answer
-        carries no version and no digest, because the plugin is not looking.
+        carries no version, no digest and no install address, because the plugin
+        is not looking.
         """
         enabled = self._enabled()
         if not enabled:
@@ -174,10 +182,11 @@ class UpdateCheckService:
     def _is_due(self, check: UpdateCheck | None) -> bool:
         """Answer whether a fresh release read is owed.
 
-        A stamp dated in the future is due immediately rather than never: the
-        Deck's clock can jump backwards over a time-zone or NTP correction, and
-        a window measured from a future instant would hold the check off for as
-        long as the jump was large.
+        A stamp dated in the future is due immediately rather than never: an NTP
+        correction or a hand-set clock moves :meth:`Clock.time` backwards — a
+        time-zone change does not, it is Unix seconds — and a window measured
+        from a future instant would hold the check off for as long as the jump
+        was large.
         """
         if check is None:
             return True
@@ -193,22 +202,28 @@ class UpdateCheckService:
                 checked_at=checked_at,
                 version=previous.version if previous is not None else None,
                 digest=previous.digest if previous is not None else None,
+                install_url=previous.install_url if previous is not None else "",
             )
         else:
-            stamped = UpdateCheck(checked_at=checked_at, version=release.version, digest=release.digest)
+            stamped = UpdateCheck(
+                checked_at=checked_at,
+                version=release.version,
+                digest=release.digest,
+                install_url=release.install_url,
+            )
         await self._loop.run_in_executor(None, self._record_check_io, stamped)
         return stamped
 
     def _notice(self, check: UpdateCheck | None, *, enabled: bool) -> dict[str, Any]:
         latest = check.version if check is not None else None
-        digest = check.digest if check is not None else None
         return {
             "available": enabled and is_newer_version(latest, self._current_version) and latest != self._dismissed(),
             "latest_version": latest,
             "current_version": self._current_version,
             "download_url": DOWNLOAD_URL,
+            "install_url": check.install_url if check is not None else "",
             "plugin_name": self._plugin_name,
-            "digest": digest,
+            "digest": check.digest if check is not None else None,
             "enabled": enabled,
         }
 
