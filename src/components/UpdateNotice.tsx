@@ -8,7 +8,8 @@ import { logError } from "../api/backend";
 
 /** Refusal shown when a game is running — on the button and, at a press, as a toast. */
 export const UPDATE_GAME_RUNNING_REASON =
-  "Close your running game first — updating reloads Tender, which can drop this session's play time and its save sync.";
+  "Close your running game first — updating reloads Tender, and this session's play time can be lost; if Tender cannot " +
+  "find the game again afterwards, its save sync goes too.";
 
 /** Where the address is pasted when the button is not an option. */
 export const UPDATE_MANUAL_HINT =
@@ -36,11 +37,13 @@ type RequestState = "idle" | "filed" | "unavailable";
  * looking its name up there — so with no card, nobody ever learns a release
  * happened.
  *
- * The address is on the card whatever else it shows, because everything else
- * can fail and it cannot: an empty `pluginName` means plugin.json could not be
- * read and there is no name to hand Decky, and Decky's own installer route can
- * be gone. Both leave the reader with a URL and one instruction rather than a
- * dead button.
+ * `downloadUrl` is on the card whatever else it shows, because everything else
+ * can fail and it cannot. Two things remove the button before a press — an
+ * empty `pluginName`, so there is no name to match the existing installation
+ * by, and an empty `installUrl`, so there is no address that may be paired with
+ * this notice's digest — and Decky's own installer route can be gone at the
+ * press. All three end with the reader holding a URL and one instruction rather
+ * than a dead button.
  */
 export const UpdateNotice: FC = () => {
   const state = useUpdateNoticeState();

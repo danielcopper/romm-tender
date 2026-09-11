@@ -126,6 +126,27 @@ describe("updateNoticeStore", () => {
       await expect(dismissUpdateForVersion("0.33.0")).rejects.toThrow("nope");
       expect(getUpdateNoticeState().available).toBe(true);
     });
+
+    it("discards a read still in flight when the user dismisses the card", async () => {
+      let release: (() => void) | undefined;
+      vi.mocked(getUpdateNotice).mockReturnValue(
+        new Promise((resolve) => {
+          release = () => resolve(WIRE);
+        }),
+      );
+      vi.mocked(dismissUpdateNotice).mockResolvedValue({ success: true });
+
+      const inFlight = fetchUpdateNotice();
+      setUpdateNoticeState(AVAILABLE);
+      await dismissUpdateForVersion("0.33.0");
+      expect(getUpdateNoticeState().available).toBe(false);
+
+      release?.();
+      await inFlight;
+
+      // The plugin-load read would have put the card back up.
+      expect(getUpdateNoticeState().available).toBe(false);
+    });
   });
 
   describe("setUpdateCheckSwitch", () => {
@@ -192,27 +213,6 @@ describe("updateNoticeStore", () => {
       await Promise.resolve();
 
       expect(getUpdateNoticeState().enabled).toBe(false);
-      expect(getUpdateNoticeState().available).toBe(false);
-    });
-
-    it("discards a read still in flight when the user dismisses the card", async () => {
-      let release: (() => void) | undefined;
-      vi.mocked(getUpdateNotice).mockReturnValue(
-        new Promise((resolve) => {
-          release = () => resolve(WIRE);
-        }),
-      );
-      vi.mocked(dismissUpdateNotice).mockResolvedValue({ success: true });
-
-      const inFlight = fetchUpdateNotice();
-      setUpdateNoticeState(AVAILABLE);
-      await dismissUpdateForVersion("0.33.0");
-      expect(getUpdateNoticeState().available).toBe(false);
-
-      release?.();
-      await inFlight;
-
-      // The plugin-load read would have put the card back up.
       expect(getUpdateNoticeState().available).toBe(false);
     });
 

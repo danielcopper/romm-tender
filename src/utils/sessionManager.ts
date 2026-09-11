@@ -92,16 +92,27 @@ export function isSessionActive(romId: number): boolean {
  * surfaces that must not reload the plugin while play time is being counted —
  * the update card is the first.
  *
- * What is at stake is NOT that a reload loses the session: the breadcrumb
- * survives one, `destroySessionManager` does not clear it, and
- * {@link adoptOrphanedSessions} restores an attested session that is still
- * running with the `startMs` it was attested with, re-opening no marker. What is
- * at stake is that this recovery is best-effort and its failures are silent. It
- * restores a session only if the game surfaces in Steam's running-app reading
- * within {@link ADOPTION_POLL_MAX_MS}; past that the session is ORPHANED — never
- * finalized, so neither its play time nor its after-exit save sync happens. And
- * a stop that lands inside the swap is observed by nobody: the old hook is
- * unregistered and the new manager has not adopted yet.
+ * What is at stake is NOT that a reload loses the session outright. A reload has
+ * three outcomes, and {@link planAdoption} decides between them on two questions
+ * — is there a breadcrumb for this app, and is the app in Steam's running-app
+ * reading:
+ *
+ * - both → `adopted`, with the `startMs` it was attested with and no marker
+ *   re-opened. Nothing is lost; the breadcrumb outlives a reload and
+ *   `destroySessionManager` does not clear it.
+ * - running but no breadcrumb → `restamped` at `nowMs`, and
+ *   `recordSessionStart` re-opens the durable marker. The session goes on and
+ *   its after-exit save sync still runs, but the span played before the reload
+ *   is gone.
+ * - attested but not running → `orphans`, dropped and never finalized, so
+ *   NEITHER its play time nor its after-exit save sync happens.
+ *
+ * The third is what the refusal is for, and it is reachable by any reload: the
+ * app has {@link ADOPTION_POLL_MAX_MS} to reappear, polled every
+ * `ADOPTION_POLL_INTERVAL_MS`, and that window exists because the reading is
+ * empty for seconds after a loader restart (#1054 / #1148). Past it the session
+ * is dropped in silence. A stop landing inside the swap is observed by nobody
+ * either: the old hook is unregistered and the new manager has not adopted yet.
  *
  * This is the question about ROMM sessions, deliberately not
  * `isAnyAppRunning()`: what is at stake is play time this manager is counting,

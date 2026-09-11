@@ -76,14 +76,16 @@ downloads and the menu. The card carries:
 - **Dismiss** — for that version only. The next release raises the card again.
 - The download address, always, in full — so the manual route below is never more than a copy away.
 
-The check runs when Tender starts, which is when your device does. A Deck left suspended for a week does not check for a
-week; opening the panel does not trigger one either.
+The check runs when Tender loads — on a reboot, and on a Steam restart too, since that reloads the panel. Nothing
+schedules it in between: a Deck left suspended for a week does not check for a week, and opening the panel does not
+trigger one either.
 
-**Close any running game first.** Updating reloads Tender underneath the running game. Tender does try to pick the
-session back up afterwards, and usually manages it — but if it cannot, that session ends up recorded nowhere: its play
-time is lost, on the device and in what is reported to RomM, and the save sync that normally runs when you close the
-game does not run. The **Update now** button refuses while a session is open and says so; finish the game, close it,
-then update.
+**Close any running game first.** Updating reloads Tender underneath the running game, and Tender then has to find that
+session again. It needs two things for that: the note it left about the session, and the game still showing in Steam's
+list of running apps, which it waits up to 15 seconds for. Anything it cannot find costs you part of that session — and
+if the game does not reappear in time, all of it: no play time recorded, on the device or in what is reported to RomM,
+and none of the save sync that normally runs when you close the game. The **Update now** button refuses while a session
+is open and says so; finish the game, close it, then update.
 
 If **Update now** is missing or reports that Decky's installer could not be reached, the address on the card still
 works: paste it into **Developer → Install Plugin from URL**, exactly as for a first install. Installing over an
