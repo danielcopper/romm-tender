@@ -91,10 +91,31 @@ let _listeners: Array<() => void> = [];
  * `true` and then `false` with neither settled. The loser skips its own trailing
  * read as well, which is right: the winner issues one of its own.
  *
- * Nothing legitimate is discarded by this, because of what does and does not
- * bump the number. It is bumped only when a press or a read is ISSUED, reads are
- * issued in only two places, and the one at plugin load flies before any press
- * can exist, so it can overtake nothing.
+ * Almost nothing legitimate is discarded, and the incrementers say why: the
+ * number moves only when a press or a read is ISSUED, reads are issued in two
+ * places, and the one at plugin load flies before any press can exist.
+ *
+ * The exception is the one thing ordering by ISSUE TIME cannot do — tell a
+ * stale intent from a current truth. Of two toggle presses the loser's
+ * `enabled` is an intent the user has already replaced, and dropping it is the
+ * whole point. A toggle press that loses to a later Dismiss is not that: nothing
+ * else writes `enabled`, so the value dropped was the one the backend had just
+ * accepted, and this store is then left disagreeing with `settings.json`.
+ *
+ * That case is accepted rather than overlooked, because of what it does and does
+ * not cost. `settings.json` stays right — the losing press was persisted before
+ * it lost. The switch the user is looking at stays right too: `AdvancedSection`
+ * passes `checked` but not `controlled`, and Steam's base class reads
+ * `props.checked` only under `controlled`, so the visible toggle follows its own
+ * state and shows what was pressed. Wrong is only the value this store hands the
+ * next render of that page — seen by leaving Settings and coming back — and the
+ * next plugin load reads it right again. Reaching it at all takes two different
+ * controls on two different pages, pressed within one local call of each other.
+ *
+ * A counter per field would close it, and is deliberately not here: the rule
+ * above is one sentence that cannot be applied wrongly, where three counters
+ * would make the next writer pick the right one. That is the same drift this
+ * fence exists to stop, one level up.
  *
  * An answer that fails to persist has still spent the number. That costs a
  * refresh — the card appears one read later than it might have — and never a
