@@ -27,12 +27,15 @@ from services.migration import MigrationService, MigrationServiceConfig
 if TYPE_CHECKING:
     from models.state import SaveSortSettings
 
+# Empty except for the duration of one test: the fixture below fills the key through
+# ``monkeypatch``, which removes it again at teardown, so a read outside a test is a
+# ``KeyError`` rather than a loop that has since been closed.
 _TEST_LOOP: dict[str, asyncio.AbstractEventLoop] = {}
 
 
 @pytest.fixture(autouse=True)
-async def _set_event_loop():
-    """Give the services built here the loop their test runs on.
+async def _capture_running_loop(monkeypatch: pytest.MonkeyPatch):
+    """Capture the loop this test runs on for the services built in its body.
 
     ``detect_save_sort_change`` may be reached from a worker thread (via
     ``SyncEngine._refresh_save_sort_state`` → ``run_in_executor``) and schedules
@@ -41,12 +44,13 @@ async def _set_event_loop():
     and in a synchronous test from no loop at all — which is exactly where
     ``fakes.running_loop`` refuses rather than answering.
 
-    It captures the loop rather than rebinding a service's ``_loop``, because
-    ``_make_service`` builds its service inside the test body — after every
-    fixture has run, so there is nothing yet to rebind. Otherwise this is
-    ``tests/services/test_downloads.py``'s ``_set_event_loop``.
+    This is deliberately NOT ``tests/services/test_downloads.py``'s
+    ``_set_event_loop``, which rebinds each service's ``_loop`` after the fact:
+    ``_make_service`` builds its service inside the test body, after every
+    fixture has run, so there is nothing yet to rebind. Hence capture, and hence
+    the name — restoring the consistency would put the rebind before the object.
     """
-    _TEST_LOOP["loop"] = asyncio.get_running_loop()
+    monkeypatch.setitem(_TEST_LOOP, "loop", asyncio.get_running_loop())
 
 
 def _no_corename(core_so: str) -> str | None:
