@@ -37,8 +37,11 @@ def test_one_placeholder_answers_for_whichever_loop_is_running():
 
 def test_it_refuses_when_no_loop_is_running():
     """No loop is no answer. Silently standing in for one is what the ban is against."""
+    # Taken before the block on purpose: what must refuse is the USE, not the
+    # handing-out. Holding one is always allowed — a sync fixture does it.
+    placeholder = running_loop()
     with pytest.raises(RuntimeError, match="no running event loop"):
-        running_loop().create_future()
+        placeholder.create_future()
 
 
 async def test_it_refuses_from_a_worker_thread():
@@ -52,9 +55,11 @@ async def test_it_refuses_from_a_worker_thread():
     """
     loop = asyncio.get_running_loop()
 
+    placeholder = running_loop()
+
     def reach_it_from_off_the_loop() -> str:
         with pytest.raises(RuntimeError, match="no running event loop"):
-            running_loop().call_soon_threadsafe(lambda: None)
+            placeholder.call_soon_threadsafe(lambda: None)
         return "refused"
 
     assert await loop.run_in_executor(None, reach_it_from_off_the_loop) == "refused"
