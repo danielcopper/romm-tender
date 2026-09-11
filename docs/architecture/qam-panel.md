@@ -461,7 +461,9 @@ modal opened from the notice; that modal _is_ the home, not an exception to the 
 | A newer release of Tender is out            | text, the address, **Update now**, Dismiss    | none — Decky's own installer is where it is confirmed |
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
-migration — are not notices; they replace the page, and exactly one condition is carried inside them (below).
+migration — are not notices; they replace the page, and each carries conditions inside it — but not the same
+ones (both below). The version error carries exactly one, the pre-rename install; the migration page carries
+that one **and** the two data-location conditions.
 
 The playtime notice is the one that carries **two** buttons, and they sit side by side on one row rather than on two
 full-width ones: Main is the narrow page, and a notice costing three rows pushes the status block it sits above off the
