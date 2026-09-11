@@ -701,17 +701,18 @@ Format: **invariant** — tier — enforced by.
   unmount, and a read issued before a core change not overwriting the one issued after it. Each was mutation-checked.
   **The rule spans three frontend modules and one backend split, and nothing joins them.** `services/firmware/status.py`
   answers `get_firmware_status` (which platforms the page can speak for) and `get_platform_firmware_status` (one
-  platform's whole entry — 64-350 ms of live per-system reading, measured); `usePlatformsPage` owns the walk, the
-  per-slug ordering counter and the four-valued `firmwareState`; `PlatformsTab` draws the dot; `PlatformDetail` words
-  the pane. Every failure here is silent and looks like an answer. A state-bearing field creeping back onto the overview
-  payload gets rendered over a platform nobody has asked about yet. A fifth rendering path reading `firmware === null`
-  instead of the state says "nothing could be established" about most of the list for the first seconds of every visit —
-  which is the confusion this cut exists to remove, restored by a truthiness test. An answer already held is not taken
-  back by a later failure (`firmwareStale` beside the state, never instead of it), and "the overview did not name this
-  platform" is one of the two ways to hold one. **Two halves no test reaches**: the `alive` guard in the hook's `accept`
-  is unobservable under React Testing Library, which drops a write to an unmounted tree itself — what a test can see is
-  the walk stopping, so the guard states the rule rather than being held to it; and whether an 8px outline reads as "not
-  yet" against a filled dot is device-only, like everything else about this list's legibility
+  platform's whole entry — 106-486 ms each against 4.6 ms for the overview, measured); `usePlatformsPage` owns the walk,
+  the per-slug ordering counter and the four-valued `firmwareState`; `PlatformsTab` draws the dot; `PlatformDetail`
+  words the pane. Every failure here is silent and looks like an answer. A state-bearing field creeping back onto the
+  overview payload gets rendered over a platform nobody has asked about yet. A fifth rendering path reading
+  `firmware === null` instead of the state says "nothing could be established" about most of the list for the first
+  seconds of every visit — which is the confusion this cut exists to remove, restored by a truthiness test. An answer
+  already held is not taken back by a later failure (`firmwareStale` beside the state, never instead of it), and "the
+  overview did not name this platform" is one of the two ways to hold one. **Two halves no test reaches**: the `alive`
+  guard in the hook's `accept` is unobservable under React Testing Library, which drops a write to an unmounted tree
+  itself — what a test can see is the walk stopping, so the guard states the rule rather than being held to it; and
+  whether an 8px outline reads as "not yet" against a filled dot is device-only, like everything else about this list's
+  legibility
 - **The whole-machine firmware inventory is never asked with content verification, and the per-platform reading is never
   asked without it** — prompt-only — `firmware_inventory()` (`FirmwareResolver`, `AtlasFirmwareAdapter`) is asked
   unverified: `verify=True` there sweeps every unclaimed file under the BIOS root plus each declared file the packaged

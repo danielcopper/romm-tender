@@ -11,11 +11,11 @@ it — a whole-machine reading enumerates installed cores and carries no standal
 entry at all. Within a platform the two surfaces still share every answer: the
 pane and its games read one catalogue, one row set, one verdict.
 
-That reading costs 64-350 ms per system on the reference machine, so the
-whole-library overview does not pay it at all: it answers WHICH platforms the
-page can speak for, and each platform's state is asked for on its own. The
-caller decides the order, because it is the one that knows which row the reader
-is looking at and when to stop.
+That reading costs 67-350 ms per system on the reference machine and a whole
+answer for one platform 106-486 ms, so the whole-library overview does not pay
+it at all: it answers WHICH platforms the page can speak for, and each
+platform's state is asked for on its own. The caller decides the order, because
+it is the one that knows which row the reader is looking at and when to stop.
 
 The doubt is narrower still, and is narrowed to ONE emulator: the pick the
 platform launches with. An emulator ES-DE also offers, that nothing could be read

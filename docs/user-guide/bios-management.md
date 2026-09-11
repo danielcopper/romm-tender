@@ -173,8 +173,9 @@ and the row you focus is the one the right-hand pane describes.
 3. The dots fill in one platform at a time, from the top, and the platform you are on is always looked at next — so the
    pane you have open does not wait behind the rows above it. A row that is still being checked draws its dot as an
    **outline** rather than a filled circle, and its pane says "Checking what this platform needs…"; that is why a grey
-   filled dot can be trusted to mean "nothing to say" rather than "not looked at yet". Checking one platform takes about
-   a tenth of a second on a Steam Deck, so a large library is done in a few seconds, and leaving the page stops the work
+   filled dot can be trusted to mean "nothing to say" rather than "not looked at yet". Checking one platform takes a
+   tenth to half a second on a Steam Deck, so a library of thirty is done in a few seconds, and leaving the page stops
+   the work
 4. Move down the list to pick a platform; the pane on the right changes with the focus
 5. The pane's first line names the platform, how many ROMs it has on RomM, how many are in Steam, and the emulator it
    launches with — by name, in grey when it is the platform's default and in gold when you have picked something else.

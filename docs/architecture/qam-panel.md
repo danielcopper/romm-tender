@@ -1102,9 +1102,10 @@ three claims about a platform nothing was learned about; the counts go to `null`
 under the header says the number is missing while the removal stays live (it needs only the slug).
 
 The fourth is `get_platform_firmware_status`, and it is asked **once per platform** rather than once per page, because
-what a platform's BIOS state IS costs a live per-system reading of the machine — 64-350 ms each on the reference device,
-so a 28-platform library put roughly three seconds in front of the first row when one call answered for all of them. The
-page therefore renders from the cheap reads and the answers arrive underneath it, and four rules hold:
+what a platform's BIOS state IS costs a live per-system reading of the machine. Measured on the reference device: the
+reading itself is 67-350 ms per system and a platform's whole answer 106-486 ms, so a 28-platform library put 4.1 s in
+front of the first row when one call answered for all of them — where the call that merely names those 28 takes 4.6 ms.
+The page therefore renders from the cheap reads and the answers arrive underneath it, and four rules hold:
 
 - **The frontend owns the order.** It walks its own list top-down and puts whichever row the reader is on next, because
   that is the pane that is open. The backend answers one platform at a time and builds no ordering of its own.
