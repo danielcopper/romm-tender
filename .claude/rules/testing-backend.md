@@ -26,6 +26,12 @@ so that service needs the real loop object. Take it in an **async** fixture — 
 `tests/contract/_harness.py` builds the real `Plugin`, or afterwards through an autouse fixture that rebinds each
 service's `_loop`, the way `tests/services/test_downloads.py` does.
 
+Neither shape is available where the test **body** builds the service: no fixture does the constructing, and at fixture
+time there is no service yet to rebind. Then an async autouse fixture captures the running loop into a module-level
+holder and the body reads it at construction — `tests/services/test_migration_save_sort.py`, whose
+`_capture_running_loop` fills that holder through `monkeypatch`, so teardown empties it again instead of leaving a
+closed loop there for the rest of the session.
+
 ## Property-based tests — pure decision kernels (hypothesis)
 
 The pure decision kernels carry a property tier on top of hand-enumerated cases. The in-tree ones
