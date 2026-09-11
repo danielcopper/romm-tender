@@ -848,15 +848,15 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     #
     # Only the read is certainly exercised while the page is replaced, and it is
     # exercised whether or not the panel is ever opened: the frontend fires it
-    # from the body of `definePlugin`, at plugin load. The card is NOT rendered on
-    # MigrationBlockedPage, which carries the pre-rename install and the
-    # data-location conditions; that slot is earned by an irreversible action the
-    # user takes BECAUSE the plugin looks broken, and an update notice is not one.
-    # The two writes are reachable only where Settings survived the state
-    # flipping mid-session (`currentPage` is module-level in src/index.tsx and
-    # SettingsPage holds no migration guard of its own) — whitelisted for that
-    # window rather than decorated, because refusing a settings.json-only write
-    # there would fail a toggle the user can see and press.
+    # from the body of `definePlugin`, at plugin load. The card is NOT rendered
+    # on MigrationBlockedPage — what a condition has to be to earn that slot is
+    # stated in docs/architecture/qam-panel.md under "Notices and homes", and an
+    # update notice is not it. The two writes are reachable only where Settings
+    # survived the state flipping mid-session (`currentPage` is module-level in
+    # src/index.tsx and SettingsPage holds no migration guard of its own) —
+    # whitelisted for that window rather than decorated, because refusing a
+    # settings.json-only write there would fail a toggle the user can see and
+    # press.
     "get_update_notice",
     "dismiss_update_notice",
     "set_update_check_enabled",
