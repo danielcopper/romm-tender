@@ -181,8 +181,26 @@ function getBiosSummary(
  * of whose required rows nothing could judge — a declared folder the resolver
  * could not read, say. An unsettled `system_image` is the same kind of gap one
  * axis over: the console's own demand is known and whether it is met is not.
- * Neither is the last shape, which is no installed emulator's answer being
- * established for the platform at all.
+ * Neither is the last shape, and it is narrower than the branch reaching it
+ * looks. It is the reading itself: the ONE emulator this platform launches with
+ * could not be asked what it wants — it ships no declaration, the resolver holds
+ * no card for it, it could not be identified, or no pick could be made at all
+ * (`domain/bios_status.py`, `_nothing_established`). Every other installed
+ * emulator may have answered perfectly well, and the rows below say so; what is
+ * unknown is this launch. The branch itself is the fallback after the two causes
+ * above, so all it establishes is that neither of those applied — which is why
+ * the sentence states the machine fact rather than the branch.
+ *
+ * **So it names the emulator where the pick has a name.** That name is
+ * `active_core_label` on this platform's own firmware payload — the label half
+ * of the single pick the whole BIOS answer was scoped to
+ * (`FirmwareStatusReader._enrich_platform`), so the sentence and the verdict
+ * cannot be about two different emulators. Reaching for the core-info read
+ * beside it would be a second resolution of the same question, which is the
+ * split that once had a pane name PCSX ReARMed and judge by the default. Its
+ * `null` is the pick that could not be MADE — the platform offers no bakeable
+ * emulator — and there is then no name to print, so the sentence says what was
+ * asked of nobody instead.
  *
  * That last one states no count. The rows nothing could answer for are counted
  * once, under the table where the line that carries them also says where to
@@ -205,7 +223,7 @@ function getBiosSummary(
  * with no withheld required row — is a different platform and keeps its own
  * sentence.
  */
-function getUnknownSummary(requiredWithheld: number, systemImage: SystemImage) {
+function getUnknownSummary(requiredWithheld: number, systemImage: SystemImage, emulatorLabel: string | null) {
   if (requiredWithheld > 0) {
     return {
       summaryLabel: "BIOS readiness unknown",
@@ -223,7 +241,9 @@ function getUnknownSummary(requiredWithheld: number, systemImage: SystemImage) {
   }
   return {
     summaryLabel: "BIOS requirement unknown",
-    summaryDescription: "Nothing installed could answer for this system",
+    summaryDescription: emulatorLabel
+      ? `Nothing could be established about what ${emulatorLabel} needs`
+      : "The emulator this platform launches with could not be asked what it needs",
   };
 }
 
@@ -925,7 +945,7 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   // with a separate input, below.
   const nothingEstablished = declined && requiredWithheld === 0 && systemImage !== "unsettled";
   const { summaryLabel, summaryDescription } = declined
-    ? getUnknownSummary(requiredWithheld, systemImage)
+    ? getUnknownSummary(requiredWithheld, systemImage, firmware.active_core_label ?? null)
     : getBiosSummary(requiredCount, requiredDone, requiredReady, optionalMissing, done, total, systemImage);
 
   // The download affordances key off what is missing AND fetchable, and off

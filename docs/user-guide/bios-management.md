@@ -359,6 +359,12 @@ whose launching RetroArch core ships without a description file; on a stock Retr
 of bundled cores are in that state. And a configuration the plugin could not read at all, which leaves it unable to name
 the launching emulator in the first place.
 
+Under that headline the page names the emulator it could not get an answer out of — _Nothing could be established about
+what PCSX2 needs_ — and, where the system resolves to no emulator the plugin can launch with at all, says that instead:
+_The emulator this platform launches with could not be asked what it needs_. Either way it is about **one** emulator,
+the one your games on that system launch with. Others you have installed may have answered perfectly well, and their
+answers are in the rows below.
+
 This is informational, not an error: your files may be perfectly fine, the plugin simply can't confirm what is needed.
 Genuinely BIOS-free systems (such as the NES) are unaffected — the emulator answers, it wants nothing, and the system
 reads as ready.

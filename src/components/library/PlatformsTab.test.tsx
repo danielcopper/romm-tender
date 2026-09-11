@@ -2662,7 +2662,12 @@ describe("Library › Platforms", () => {
       // The machine fact, then what the reader can do about it — and no claim
       // that the plugin is the limitation, which it is not: an emulator that
       // declares firmware for this platform makes the pane answer by itself.
-      expect(container.textContent).toContain("Nothing installed could answer for this system");
+      // With no pick to name (this payload carries no `active_core_label`) the
+      // sentence says what was asked of nobody, and claims nothing about the
+      // other emulators installed.
+      expect(container.textContent).toContain(
+        "The emulator this platform launches with could not be asked what it needs",
+      );
       expect(container.textContent).toContain("You can still put BIOS files in your BIOS folder by hand");
       expect(container.textContent).not.toContain("not supported for this system yet");
       // The affordance, on both surfaces it has: the row's own button and the
@@ -2672,6 +2677,33 @@ describe("Library › Platforms", () => {
       // Nothing is REQUIRED here — no emulator could be asked — so that count is
       // zero and its button is dead for the reason it always is.
       expect(buttonByText(container, "Download required (0)")).toBeDisabled();
+    });
+
+    it("names the emulator the platform launches with, where the pick has a name", async () => {
+      // The decline is about ONE emulator — the one this platform launches with
+      // — and every other installed emulator may have answered. Naming it is
+      // what keeps the sentence from claiming the wider gap, and the name comes
+      // off the firmware payload's own `active_core_label`, the label half of
+      // the pick the verdict beside it was scoped to.
+      mockFirmware([
+        firmwarePlatform({
+          bios_level: "unknown",
+          required_withheld: 0,
+          required_count: 0,
+          active_core_label: "PCSX2",
+          files: [firmwareFile({ wanted: "unknown", required_by_active: false })],
+        }),
+      ]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("BIOS requirement unknown");
+      expect(container.textContent).toContain("Nothing could be established about what PCSX2 needs");
+      expect(container.textContent).not.toContain("could not be asked what it needs");
+      // The route out of the state is unchanged: this says nothing about what
+      // the library can still serve.
+      expect(container.textContent).toContain("You can still put BIOS files in your BIOS folder by hand");
+      expect(buttonByText(container, "Download all")).not.toBeDisabled();
     });
 
     it("fetches the row it offered, on a platform nothing could be established for", async () => {
@@ -2738,9 +2770,9 @@ describe("Library › Platforms", () => {
       // have to share. Today the backend never sends this pair — `absent` lands
       // on `missing` — but nothing joins the three surfaces, so each pins its
       // own: were a decline added ahead of the `absent` test in
-      // `compute_bios_level`, this pane alone would say "Nothing installed could
-      // answer for this system" and withdraw every download button, over a
-      // requirement the rows demonstrated.
+      // `compute_bios_level`, this pane alone would say nothing could be
+      // established about what its emulator needs, and offer the by-hand route
+      // in place of a requirement the rows demonstrated.
       mockFirmware([
         firmwarePlatform({
           bios_level: "unknown",
@@ -2757,7 +2789,7 @@ describe("Library › Platforms", () => {
 
       expect(container.textContent).toContain("Needs at least one BIOS file");
       expect(container.textContent).not.toContain("BIOS readiness unknown");
-      expect(container.textContent).not.toContain("Nothing installed could answer for this system");
+      expect(container.textContent).not.toContain("could not be asked what it needs");
       const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
         el.textContent.includes("Game Boy Advance"),
       );
@@ -2786,7 +2818,7 @@ describe("Library › Platforms", () => {
       expect(container.textContent).toContain(
         "Whether the BIOS image this system needs is in place could not be established",
       );
-      expect(container.textContent).not.toContain("Nothing installed could answer for this system");
+      expect(container.textContent).not.toContain("could not be asked what it needs");
       expect(container.textContent).not.toContain("You can still put BIOS files in your BIOS folder by hand");
       expect(buttonByText(container, "Download all")).not.toBeDisabled();
       const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
