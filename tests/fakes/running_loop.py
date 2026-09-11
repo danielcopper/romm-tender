@@ -32,9 +32,10 @@ class _RunningLoop:
         return "<running loop — resolved on use>"
 
 
-# One shared instance: it holds no state, and every service constructed by a sync
-# fixture used to receive one and the same thread-default loop object, so sharing
-# keeps the identity those fixtures always had.
+# One shared instance: it holds no state, and within a single test every service a
+# sync fixture built used to receive one and the same thread-default loop object —
+# so sharing keeps the identity those fixtures had wherever it was observable.
+# Across tests it never held: pytest-asyncio made a fresh loop per test.
 _RUNNING_LOOP = _RunningLoop()
 
 

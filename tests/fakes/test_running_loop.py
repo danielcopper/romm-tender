@@ -41,6 +41,35 @@ def test_it_refuses_when_no_loop_is_running():
         running_loop().create_future()
 
 
+async def test_it_refuses_from_a_worker_thread():
+    """A worker thread is a second way to stand where no loop runs, and it refuses there too.
+
+    This is the bad path that decided a design: ``tests/contract/_harness.py``
+    hands the real ``Plugin`` the loop OBJECT because its ``DownloadService``
+    reaches ``call_soon_threadsafe`` from an executor thread — which is exactly
+    the position below, and where the forwarder answers with nothing. A service
+    whose loop is touched off the loop thread needs the real object, not this.
+    """
+    loop = asyncio.get_running_loop()
+
+    def reach_it_from_off_the_loop() -> str:
+        with pytest.raises(RuntimeError, match="no running event loop"):
+            running_loop().call_soon_threadsafe(lambda: None)
+        return "refused"
+
+    assert await loop.run_in_executor(None, reach_it_from_off_the_loop) == "refused"
+
+
+def test_every_holder_is_handed_the_same_object():
+    """One instance, shared — the identity the sharing comment claims.
+
+    Nothing here depends on it, since every attribute is resolved per use; it is
+    pinned because the comment at ``running_loop.py`` states it as the reason
+    the module hands out one instance rather than building one per call.
+    """
+    assert running_loop() is running_loop()
+
+
 def test_its_repr_resolves_nothing():
     """Printing it must be safe where using it is not — a failing assertion renders its arguments."""
     assert "running loop" in repr(running_loop())
