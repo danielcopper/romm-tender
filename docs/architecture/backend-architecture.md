@@ -1918,15 +1918,22 @@ by its description: that is the packager's prose out of a core's `.info`, outsid
 routinely spells the row's own name into its words — so the shared rule takes the name back out and answers `null` where
 nothing is left.
 
-**A withdrawn download is a platform condition, and only one of the unknowns earns it.** Where _nothing_ could be
-established there is no answer to download against, so `PlatformDetail` withdraws every download button and says so in
-words rather than silently — silence would read as "there is nothing to fetch", which is the finished answer that
-platform precisely does not have. A declined readiness verdict is not that state: its rows were answered, and fetching
-the files the library holds is the one thing that still moves the platform along, so the buttons stay.
-`required_withheld` is what separates the two on the wire, and `system_image: "unsettled"` (below) joins it on the
-keeping side for the same reason. Neither condition is ever per file — a platform whose reading finished may hold plenty
-of files no installed emulator asks for, and every one of those stays fetchable, because "nothing wants this" is an
-answer.
+**No unknown withdraws a download, because the two questions are independent.** What the resolver could establish is the
+emulator's DEMAND; what is fetchable is what the RomM library HOLDS, and neither answers the other. A platform nothing
+could be read for still has a library behind it, and fetching from it is the one action that moves the platform along at
+all — so `PlatformDetail`'s three download affordances read one filter
+(`on_server && !downloaded && declared_kind !== "directory"`, plus the offline server) and nothing else. Reading
+readiness there is what took the buttons off PS2, GameCube and PSP the moment a BIOS answer was scoped to the emulator
+that actually launches: those launch standalone emulators the resolver holds no card for, so their verdict is withheld
+over a library that still holds their files.
+
+**What the narrowest decline does decide is wording.** Where _nothing_ could be established the summary cannot name
+which files to place, so the pane adds the one route it can still state — a file put in the BIOS folder by hand works
+regardless — and `nothingEstablished` has that single consumer. A declined readiness verdict is not that state: its rows
+were answered, so the pane has a file list to point at instead. `required_withheld` is what separates the two on the
+wire, and `system_image: "unsettled"` (below) joins it on the side that keeps the file list. Neither condition is ever
+per file — a platform whose reading finished may hold plenty of files no installed emulator asks for, and every one of
+those stays fetchable, because "nothing wants this" is an answer.
 
 **The console's own firmware demand is a third axis — beside the launching core's required-file counts and the library's
 own held/offered ratio — and it is a value rather than a count.** A libretro `.info` marks each file required or

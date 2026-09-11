@@ -467,10 +467,13 @@ class FirmwareStatusReader:
         whole payload comes from the same builder the per-game path uses, so the
         level a platform shows and the level its games show cannot diverge.
 
-        ``required_withheld`` is what tells the page's two unknowns apart: a
-        platform nothing could speak for withdraws its downloads, while one whose
-        rows were answered and whose verdict was declined by a single unjudgeable
-        requirement keeps every one of them.
+        ``required_withheld`` is what tells the page's two unknowns apart, and
+        what it decides is WORDING: a platform nothing could speak for has no
+        file list to point the reader at, so the pane offers the by-hand route
+        instead, while one whose verdict was declined by a single unjudgeable
+        requirement points at the rows that did answer. Neither withdraws a
+        download — what the page offers to fetch reads the library and never the
+        verdict.
 
         *complete* is whether the LAUNCHING emulator could be asked at all, and
         it is what stops a platform reading a green "all ready" over an emulator
