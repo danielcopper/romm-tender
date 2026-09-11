@@ -1,6 +1,6 @@
 /**
- * What one BIOS file row says about itself — its note, and the description
- * beside its name.
+ * What one BIOS file row says about itself — its note, which rides beside the
+ * name, and its description, which goes on the line under it.
  *
  * Two surfaces render a firmware row (the game detail panel's BIOS tab and the
  * Library page's platform detail) and they used to word the same facts
@@ -169,7 +169,8 @@ function folderWithheld(satisfied: boolean | null | undefined, has: (code: strin
 }
 
 /**
- * The description beside a file's name, with the name itself taken back out.
+ * The description on the line under a file's name, with the name itself taken
+ * back out.
  *
  * Both surfaces head the row with the declared file and put this on its own
  * muted line underneath, so the rule for what the description still adds has to

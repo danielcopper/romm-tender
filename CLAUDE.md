@@ -625,42 +625,44 @@ Format: **invariant** — tier — enforced by.
   false finding from it. And on the frontend, `system_image: "unsettled"` joins `required_withheld` on the side
   `PlatformDetail`'s `nothingEstablished` excludes: its rows were answered, so the pane has a file list to point at
   rather than only a place to put files by hand. Since #1821 that flag decides WORDING alone — the download affordances
-  read the fetchable set and nothing else, because what the resolver could establish is the emulator's demand and what
-  is fetchable is what the library holds. **A fourth frontend reader is the play row's BIOS badge**
-  (`src/utils/playSection.ts::extractBiosInfo`), where `"absent"` is a second established absence beside the required
-  count. Whether the count sees the same thing is the core author's choice, which is why the badge may not be left to
-  it: under SwanStation every image is optional, `required_count` is 0 and the comparison beside it is vacuously false,
-  while under Beetle PSX three of the same images are required and the count raises the badge by itself. One console,
-  one BIOS folder, two answers — and `"absent"` is the same under both. `"unsettled"` deliberately raises no badge, the
-  same reading a withheld required row gets: the badge claims a file is NOT THERE, and nothing established that. **Where
-  BOTH ignorances hold** — a console needing an image whose required folder row could not be judged, the LRPS2 shape and
-  a reachable one — `getUnknownSummary` names the withheld ROW rather than the console. They are not two gaps over two
-  different file sets: a `required_by_active` row always carries the active core, so it is always one of the rows the
-  disjunction is read over. It is always one of the unjudged rows that verdict is read over rather than a finding beside
-  it — the decline needs at least one such row, and this is one — and need not be the only one, since another image the
-  core declares can be unjudged too; it is the only half of the pair that can name a file, and naming it points at the
-  file list, where its caveat explains itself. **All three wording surfaces test `"absent"` BEFORE the level's
-  decline**, and the pair never arrives at all today because the backend lands `absent` on `missing`. What would hold
-  them together if it ever did is that each surface carries that test ITSELF — so a divergence takes one surface losing
-  its own test, not the backend reordering ahead of all three: drop it from `PlatformDetail` and that pane alone would
-  say nothing could be established about what the platform's emulator needs, and offer the by-hand route in place of a
-  requirement the rows demonstrated, while the other two read "Needs at least one BIOS file". Each surface pins its own
-  order (`BiosTab.test.tsx`, `PlatformsTab.test.tsx`) and nothing joins them. **A narrower form of the same answer is
-  read PER CORE onto every row** (`FirmwareCatalogue.emulators_needing_one_of_their_files` → `build_file_entry`'s
-  `cores[<emulator>]["needs_one_of"]` and the row's own `system_image_candidate`, worded by `BiosTab.tsx`'s
-  `coreLineSuffix` and marked by `library/PlatformDetail.tsx`'s `diskMark`), and there the rule is that the two keys on
-  that entry are two SPEAKERS: `required` is the core's own `.info`, the other is the packaged table about that core's
-  console counted over the core's whole declaration, and `optional` beside `needs_one_of: 5` is the informative pair
-  rather than a contradiction to resolve. Rewriting the declaration off the demand — printing "required" where the core
-  said optional — puts words in the emulator's mouth and loses the only fact the row had to add; folding the pair the
-  other way loses the demand. **A core is in that narrower answer only where it marks NOTHING required**, which is
-  deliberate and is the second thing nothing checks: a core whose console needs an image and that does state required
-  files says so through those rows' `required_by_active`, so annotating its optional rows too states one requirement
-  twice — it put "the console will not start without one" under `ps1_rom.bin`, which Beetle PSX marks optional while
-  hard-requiring three other images. The same narrowing makes `system_image_candidate` a strict subset of the rows
-  `classify_system_image` weighs, and widening either to match the other is the fix that reintroduces one of those two
-  defects. Nothing checks any of it: `needs_one_of` is a plain int-or-null on a dict a surface may read either key of,
-  and the candidate flag is a plain bool beside a `required_by_active` that reads like its sibling
+  are built off the fetchable set and read the verdict nowhere, because what the resolver could establish is the
+  emulator's demand and what is fetchable is what the library holds; the two further inputs they do read
+  (`required_by_active`, and the library's own finished ratio) are demand and inventory, not readiness gates. **A fourth
+  frontend reader is the play row's BIOS badge** (`src/utils/playSection.ts::extractBiosInfo`), where `"absent"` is a
+  second established absence beside the required count. Whether the count sees the same thing is the core author's
+  choice, which is why the badge may not be left to it: under SwanStation every image is optional, `required_count` is 0
+  and the comparison beside it is vacuously false, while under Beetle PSX three of the same images are required and the
+  count raises the badge by itself. One console, one BIOS folder, two answers — and `"absent"` is the same under both.
+  `"unsettled"` deliberately raises no badge, the same reading a withheld required row gets: the badge claims a file is
+  NOT THERE, and nothing established that. **Where BOTH ignorances hold** — a console needing an image whose required
+  folder row could not be judged, the LRPS2 shape and a reachable one — `getUnknownSummary` names the withheld ROW
+  rather than the console. They are not two gaps over two different file sets: a `required_by_active` row always carries
+  the active core, so it is always one of the rows the disjunction is read over. It is always one of the unjudged rows
+  that verdict is read over rather than a finding beside it — the decline needs at least one such row, and this is one —
+  and need not be the only one, since another image the core declares can be unjudged too; it is the only half of the
+  pair that can name a file, and naming it points at the file list, where its caveat explains itself. **All three
+  wording surfaces test `"absent"` BEFORE the level's decline**, and the pair never arrives at all today because the
+  backend lands `absent` on `missing`. What would hold them together if it ever did is that each surface carries that
+  test ITSELF — so a divergence takes one surface losing its own test, not the backend reordering ahead of all three:
+  drop it from `PlatformDetail` and that pane alone would say nothing could be established about what the platform's
+  emulator needs, and offer the by-hand route in place of a requirement the rows demonstrated, while the other two read
+  "Needs at least one BIOS file". Each surface pins its own order (`BiosTab.test.tsx`, `PlatformsTab.test.tsx`) and
+  nothing joins them. **A narrower form of the same answer is read PER CORE onto every row**
+  (`FirmwareCatalogue.emulators_needing_one_of_their_files` → `build_file_entry`'s `cores[<emulator>]["needs_one_of"]`
+  and the row's own `system_image_candidate`, worded by `BiosTab.tsx`'s `coreLineSuffix` and marked by
+  `library/PlatformDetail.tsx`'s `diskMark`), and there the rule is that the two keys on that entry are two SPEAKERS:
+  `required` is the core's own `.info`, the other is the packaged table about that core's console counted over the
+  core's whole declaration, and `optional` beside `needs_one_of: 5` is the informative pair rather than a contradiction
+  to resolve. Rewriting the declaration off the demand — printing "required" where the core said optional — puts words
+  in the emulator's mouth and loses the only fact the row had to add; folding the pair the other way loses the demand.
+  **A core is in that narrower answer only where it marks NOTHING required**, which is deliberate and is the second
+  thing nothing checks: a core whose console needs an image and that does state required files says so through those
+  rows' `required_by_active`, so annotating its optional rows too states one requirement twice — it put "the console
+  will not start without one" under `ps1_rom.bin`, which Beetle PSX marks optional while hard-requiring three other
+  images. The same narrowing makes `system_image_candidate` a strict subset of the rows `classify_system_image` weighs,
+  and widening either to match the other is the fix that reintroduces one of those two defects. Nothing checks any of
+  it: `needs_one_of` is a plain int-or-null on a dict a surface may read either key of, and the candidate flag is a
+  plain bool beside a `required_by_active` that reads like its sibling
 - **Which emulator a set of answers is about is ONE pick per scope — a platform's, and a ROM's — and every answer in
   that scope is a projection of it** — test + prompt-only —
   `tests/services/test_firmware.py::TestOnePlatformOneEmulator` asserts the two surfaces AGREE across every way a

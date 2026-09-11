@@ -2325,8 +2325,10 @@ class TestCheckPlatformBiosUnknown:
         result = await fw.check_platform_bios("dc")
 
         # Three declared files, but only the two the listing carries count:
-        # ``known_count`` is weighed against ``server_count``, so the row the
-        # library does not hold is not in its set.
+        # ``count_wanted`` is scoped to ``on_server`` rows, the same subset
+        # ``server_count`` is taken over, so the row the library does not hold is
+        # in neither. Nothing weighs the two against each other — they agree here
+        # because one scoping produced both.
         assert result["known_count"] == 2
         assert result["server_count"] == 2
         assert result["bios_level"] != "unknown"

@@ -971,13 +971,16 @@ it, for the focused platform:
   all three vanished at once, and a button that disappears is a state the reader has to work out. A disabled
   `DialogButton` is still a focus stop, so the row stays walkable.
 
-  **What the two Download buttons and the per-row one read is the fetchable set and nothing else** — one filter, in this
-  file, over `on_server && !downloaded && declared_kind !== "directory"`. Readiness is not an input to it, in any of its
-  shapes: what the resolver could establish is the EMULATOR's demand and what is fetchable is what the RomM library
-  holds, and neither answers the other. Gating on the verdict is what took the buttons off PS2, GameCube and PSP when a
-  BIOS answer was first scoped to the emulator that launches — those three launch standalone emulators the resolver
-  holds no card for, so the verdict declines over a library that still holds their files, and the pane then offered
-  nothing to press on exactly the platforms that need one.
+  **What the two Download buttons and the per-row one are built off is the fetchable set, and none of the three reads
+  the verdict** — one filter, in this file, over `on_server && !downloaded && declared_kind !== "directory"`, and
+  neither `bios_level` nor `required_withheld` nor `system_image` anywhere. Two further inputs sit beside that filter
+  and are of the same two kinds rather than readiness gates: `Download required` counts `required_by_active`, the
+  launching emulator's own declaration, and `Download all` stops at the library's own finished ratio. Readiness is not
+  an input to any of them, in any of its shapes: what the resolver could establish is the EMULATOR's demand and what is
+  fetchable is what the RomM library holds, and neither answers the other. Gating on the verdict is what took the
+  buttons off PS2, GameCube and PSP when a BIOS answer was first scoped to the emulator that launches — those three
+  launch standalone emulators the resolver holds no card for, so the verdict declines over a library that still holds
+  their files, and the pane then offered nothing to press on exactly the platforms that need one.
 
   **A running download is said by the button that started it.** The pressed button — bulk or per-row — becomes a
   spinner, every other download button on the pane disables, and when it finishes the rows re-read. There is no
@@ -1056,7 +1059,7 @@ it, for the focused platform:
   `biosFileNote`'s caveat wording ("its location could not be read", "a folder is here, where the emulator opens a
   file") appears wherever a destination cannot be read, which no corpus predicts.
 
-  The file name is printed once. The description beside it is **not RomM's** — `_server_files` builds no description at
+  The file name is printed once. The description under it is **not RomM's** — `_server_files` builds no description at
   all and `_wanted_fields` overwrites what came in, so what arrives is the core's own `firmwareN_desc`, or the file name
   itself for a row no placement covers. Both spell the name into the words, and across the 292 `.info` files a stock
   RetroDECK ships (695 declared entries) they do it in three shapes: the description IS the name (35%), the name then

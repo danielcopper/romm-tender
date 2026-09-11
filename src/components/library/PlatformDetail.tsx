@@ -884,9 +884,9 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
     ? getUnknownSummary(requiredWithheld, systemImage, firmware.active_core_label ?? null)
     : getBiosSummary(requiredCount, requiredDone, requiredReady, optionalMissing, done, total, systemImage);
 
-  // The download affordances key off what is missing AND fetchable, and off
-  // nothing else — not on readiness, and not on whether a verdict could be
-  // reached. They are two independent questions: what the RESOLVER could
+  // The download affordances key off what is missing AND fetchable, and read
+  // the VERDICT nowhere — not `bios_level`, not `required_withheld`, not
+  // `system_image`. They are two independent questions: what the RESOLVER could
   // establish is the emulator's demand, what is FETCHABLE is what the RomM
   // library holds, and neither answers the other. A required file the library
   // does not hold leaves the platform not ready and still gives the user
@@ -894,10 +894,14 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   // library behind it, and fetching from it is the one action that moves the
   // platform along at all.
   //
+  // The two further inputs below are of those same two kinds, and neither is a
+  // readiness gate either: `required_by_active` is the launching emulator's own
+  // declaration, and `allDone` is the library's own finished ratio.
+  //
   // Reading readiness here is what took the buttons off PS2, GameCube and PSP
   // the moment a BIOS answer was scoped to the emulator that actually launches:
-  // those launch standalone emulators the resolver holds no card for, so their
-  // verdict is withheld — which says nothing whatever about the files their
+  // those launch standalone emulators the resolver holds no card for, so the
+  // verdict declines — which says nothing whatever about the files their
   // library offers.
   //
   // A folder declaration is out whatever its state: the emulator lists that
