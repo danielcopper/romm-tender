@@ -87,30 +87,52 @@ let _listeners: Array<() => void> = [];
  *
  * Against another press, the later press wins — and two are genuinely in flight
  * at once, because Steam's `Toggle` keeps its own state unless it is given
- * `controlled` and reports the already-flipped value, so a double press sends
- * `true` and then `false` with neither settled. The loser skips its own trailing
- * read as well, which is right: the winner issues one of its own.
+ * `controlled` and reports the already-flipped value, so a double press sends a
+ * value and then its opposite with neither settled. The loser also skips its own
+ * trailing read, and that is right whichever press won: a winning toggle-on
+ * issues a read of its own, and a winning Dismiss needs none, because it sets
+ * `available` itself.
  *
  * Almost nothing legitimate is discarded, and the incrementers say why: the
  * number moves only when a press or a read is ISSUED, reads are issued in two
  * places, and the one at plugin load flies before any press can exist.
  *
- * The exception is the one thing ordering by ISSUE TIME cannot do — tell a
- * stale intent from a current truth. Of two toggle presses the loser's
- * `enabled` is an intent the user has already replaced, and dropping it is the
- * whole point. A toggle press that loses to a later Dismiss is not that: nothing
- * else writes `enabled`, so the value dropped was the one the backend had just
- * accepted, and this store is then left disagreeing with `settings.json`.
+ * The exception is the one thing ordering by ISSUE TIME cannot do — tell a stale
+ * intent from a current truth — and a press and a Dismiss can overtake each
+ * other in both directions.
  *
- * That case is accepted rather than overlooked, because of what it does and does
- * not cost. `settings.json` stays right — the losing press was persisted before
- * it lost. The switch the user is looking at stays right too: `AdvancedSection`
- * passes `checked` but not `controlled`, and Steam's base class reads
- * `props.checked` only under `controlled`, so the visible toggle follows its own
- * state and shows what was pressed. Wrong is only the value this store hands the
- * next render of that page — seen by leaving Settings and coming back — and the
- * next plugin load reads it right again. Reaching it at all takes two different
- * controls on two different pages, pressed within one local call of each other.
+ * A DISMISS that a later press overtakes ends right either way, and heals
+ * itself: the `await` in `dismissUpdateForVersion` IS the persist, so only the
+ * local write is dropped and the backend already holds the dismissal. A later
+ * toggle-off forces `available` false regardless; a later toggle-on issues a
+ * read that comes back with it.
+ *
+ * A TOGGLE PRESS that a later Dismiss overtakes is the case that does not heal.
+ * No other PRESS writes `enabled` — `fetchUpdateNotice` does, which is why this
+ * says press and not writer — so the dropped value was not replaced by a newer
+ * intent; it was the one the backend had just accepted, and this store is left
+ * disagreeing with `settings.json`.
+ *
+ * It is accepted rather than closed, and what decides that is the blast radius.
+ * **`enabled` gates nothing.** Outside this module it has exactly one reader,
+ * `SettingsPage` handing it to `AdvancedSection` as `checked`; no fetch consults
+ * it — `fetchUpdateNotice` always asks the backend, and whether GitHub is asked
+ * at all is decided backend-side by `UpdateCheckService._enabled()` off
+ * `settings.json`. So a stranded `enabled: true` cannot cause one request the
+ * user switched off: the promise the switch makes is untouched, and only its
+ * DISPLAY goes wrong. `settings.json` stays right, the visible toggle stays
+ * right, and the next plugin load reads the store right again. Reaching it at
+ * all takes two different controls on two different pages, pressed within one
+ * local call of each other.
+ *
+ * The visible toggle stays right for a narrower reason than "the store cannot
+ * move it", and the difference matters to whoever reads this next.
+ * `AdvancedSection` passes `checked` and not `controlled` (which
+ * `ToggleFieldProps` does not even declare, so passing it needs a type
+ * exception), and Steam's base class reads `props.checked` through its getter
+ * only under `controlled` — but its `componentDidUpdate` pushes the prop into
+ * its own state whenever the prop CHANGES. A discarded write changes nothing, so
+ * it does not fire here. It is immune to this case, not to the store.
  *
  * A counter per field would close it, and is deliberately not here: the rule
  * above is one sentence that cannot be applied wrongly, where three counters
