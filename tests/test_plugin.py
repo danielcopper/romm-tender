@@ -846,8 +846,9 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # read talks to GitHub and one kv_config row, the two writes are settings
     # keys — so a pending migration has nothing to protect from them.
     #
-    # Only the read is certainly exercised while the page is replaced: the panel
-    # fetches at mount whatever page it shows. The card is NOT rendered on
+    # Only the read is certainly exercised while the page is replaced, and it is
+    # exercised whether or not the panel is ever opened: the frontend fires it
+    # from the body of `definePlugin`, at plugin load. The card is NOT rendered on
     # MigrationBlockedPage, which carries the pre-rename install and the
     # data-location conditions; that slot is earned by an irreversible action the
     # user takes BECAUSE the plugin looks broken, and an update notice is not one.

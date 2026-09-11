@@ -18,7 +18,7 @@ from typing import Any
 
 
 class PluginMetadataAdapter:
-    """Real ``PluginMetadataReader`` backed by the on-disk ``package.json``."""
+    """Real ``PluginMetadataReader`` backed by the plugin's on-disk manifests."""
 
     def __init__(self) -> None:
         self._cache: dict[str, tuple[str, str]] = {}
