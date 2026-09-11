@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.33.0](https://github.com/danielcopper/romm-tender/compare/tender-v0.32.0...tender-v0.33.0) (2026-09-11)
+
+
+### Features
+
+* **data:** move user data to the user's own home directory ([#1868](https://github.com/danielcopper/romm-tender/issues/1868)) ([15eaf63](https://github.com/danielcopper/romm-tender/commit/15eaf63815b7cb8a82f71d08c5a71811e7c09908)), closes [#1547](https://github.com/danielcopper/romm-tender/issues/1547)
+* **identity:** name the plugin romm-tender and pin its shipped folder ([#1878](https://github.com/danielcopper/romm-tender/issues/1878)) ([1b4f37c](https://github.com/danielcopper/romm-tender/commit/1b4f37c29600edea4adc5a405afbe6806ddd60aa))
+* **qam:** a Settings page of five sections, and one table for every pane ([#1873](https://github.com/danielcopper/romm-tender/issues/1873)) ([4df8102](https://github.com/danielcopper/romm-tender/commit/4df8102852156d489c967caef6d74e96599c72da)), closes [#1816](https://github.com/danielcopper/romm-tender/issues/1816)
+* **saves:** read a game's save set from the emulator that writes it ([#1861](https://github.com/danielcopper/romm-tender/issues/1861)) ([a278274](https://github.com/danielcopper/romm-tender/commit/a2782741032ce05d0e8a7c997725cb6a4256109e))
+* **shortcuts:** move the launcher out of the plugin folder ([#1875](https://github.com/danielcopper/romm-tender/issues/1875)) ([33dbe3b](https://github.com/danielcopper/romm-tender/commit/33dbe3bb2fea35824e036da0c1f3655c303ec024))
+
+
+### Bug Fixes
+
+* **hooks:** keep a partly staged file partly staged ([#1874](https://github.com/danielcopper/romm-tender/issues/1874)) ([fc3b41a](https://github.com/danielcopper/romm-tender/commit/fc3b41a19d455583819fdd8b722d3a9cdcef4ea9))
+* **qam:** make four unreachable notices focus stops, and catch the next one ([#1869](https://github.com/danielcopper/romm-tender/issues/1869)) ([54494b5](https://github.com/danielcopper/romm-tender/commit/54494b5faa1732ba593751ff0062d9df362e98d3)), closes [#1842](https://github.com/danielcopper/romm-tender/issues/1842)
+
 ## [0.32.0](https://github.com/danielcopper/romm-tender/compare/tender-v0.31.0...tender-v0.32.0) (2026-09-08)
 
 
