@@ -67,25 +67,31 @@ Any direct URL to the zip file works (GitHub releases, a self-hosted mirror, etc
 ### Updating
 
 Tender is not in Decky's plugin store, and Decky's own "update available" badge only ever appears for plugins that are —
-so Tender tells you itself. Once a day it asks GitHub whether a newer release exists, and when there is one, a card
-appears at the bottom of Tender's QAM panel naming the new version. The card carries:
+so Tender tells you itself. When it starts up it asks GitHub whether a newer release exists, at most once a day; when
+there is one, a card naming the new version appears in Tender's QAM panel, below the other notices and above the
+downloads and the menu. The card carries:
 
 - **Update now** — hands the release to Decky, which then asks you to confirm before it installs anything. Tender
   disappears from the panel for a moment while Decky replaces it.
 - **Dismiss** — for that version only. The next release raises the card again.
 - The download address, always, in full — so the manual route below is never more than a copy away.
 
-**Close any running game first.** Updating restarts Tender, and a game that is running when that happens loses the play
-time counted for that session — on the device and in what is reported back to RomM. The Update button refuses while
-Tender is counting a session and says so; finish the game, close it, then update.
+The check runs when Tender starts, which is when your device does. A Deck left suspended for a week does not check for a
+week; opening the panel does not trigger one either.
+
+**Close any running game first.** Updating reloads Tender underneath the running game. Tender does try to pick the
+session back up afterwards, and usually manages it — but if it cannot, that session ends up recorded nowhere: its play
+time is lost, on the device and in what is reported to RomM, and the save sync that normally runs when you close the
+game does not run. The **Update now** button refuses while a session is open and says so; finish the game, close it,
+then update.
 
 If **Update now** is missing or reports that Decky's installer could not be reached, the address on the card still
 works: paste it into **Developer → Install Plugin from URL**, exactly as for a first install. Installing over an
 existing Tender keeps your settings and your synced library.
 
-You can switch the daily check off under **Settings → Advanced → Check for plugin updates**. It is on by default, and it
-is the only thing Tender asks of a server that is neither your own RomM nor SteamGridDB. With it off, nothing is
-requested and no card appears — checking the releases page yourself is then the only way to learn about a new version.
+You can switch the check off under **Settings → Advanced → Check for plugin updates**. It is on by default, and it is
+the only thing Tender asks of a server that is neither your own RomM nor SteamGridDB. With it off, nothing is requested
+and no card appears — checking the releases page yourself is then the only way to learn about a new version.
 
 ### Updating from a release before 0.31.0
 

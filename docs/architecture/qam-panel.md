@@ -470,22 +470,40 @@ full-width ones: Main is the narrow page, and a notice costing three rows pushes
 screen. Its jump is not an answer either — only a fresh sign-in ends the condition, so **Open Connections** leaves it
 standing and **Dismiss** remains the way to put it away for this view.
 
-**The update notice is the second card whose action sits on Main**, and it has no home for a stronger reason than the
-session budget's: there is no page in this plugin that could hold the action, because the install is confirmed and
-performed by Decky. What the button does is file a request; Decky's own dialog asks the user, and the loader then
-unloads this plugin before it replaces the folder. So the press is not awaited, and the card carries the **download
-address as readable text whatever else it shows** — the button can be absent (`plugin_name` could not be read, so there
-is no name to match the existing installation by) or fail (`utilities/install_plugin` answers
-`Python RouteNotFoundError` on a Decky that moved it), and in both cases the address plus one instruction is what is
-left. Two facts behind it are Decky's, not ours, and are stated at `src/utils/deckyInstall.ts`: the name handed over is
-plugin.json's and not package.json's, and the digest goes across without its `sha256:` prefix.
+**The update notice acts on Main**, as the `input_driver` fix does and as the data-location choice does through its
+modal. What sets it apart is why it has no home: for the others a page could hold the action and the table above says
+which one would; here no page in this plugin could, because the install is confirmed and performed by Decky.
+
+What the button does is file a request: `install_plugin` records it and emits the dialog event, and does **not** wait
+for the confirmation — so the call settles at once and says only that Decky was asked. The outcome, confirmed or
+declined, reaches the card through nothing at all. That is why the button is not gated on it: it goes down at the press
+so a double press cannot file a second request, and comes back up on a timer of its own, because no event exists that
+could raise it.
+
+The card carries the **`releases/latest` address as readable text whatever else it shows**, and that is deliberately not
+the address it installs from. **The two addresses answer different questions and must not be swapped**: `download_url`
+resolves to whatever is newest, which is what a reader should be given to type; `install_url` names the one release this
+notice is about, and it is the only one that may be paired with `digest`, which belongs to that same release. Hand Decky
+the fixed address instead and a release appearing in between is fetched and checked against the previous release's
+checksum, so it refuses to unpack. The button is therefore absent in three cases and not two — no `plugin_name` (nothing
+to match the existing installation by), no `install_url` (nothing safe to install from) — and it can still fail at the
+press (`utilities/install_plugin` answers `Python RouteNotFoundError` on a Decky that moved it). In all three the
+address plus one instruction is what is left. Two more facts behind it are Decky's, not ours, and are stated at
+`src/utils/deckyInstall.ts`: the name handed over is plugin.json's and not package.json's, and the digest goes across
+without its `sha256:` prefix.
 
 **The button refuses while Tender is counting a play session** (`isAnySessionActive`), rather than warning and letting
-the press through: after the handover Decky's dialog owns the screen and this panel is torn down, so there is no later
-moment in which to warn. What it protects is the play time of the running session — a reloaded session manager that
-cannot find its breadcrumb re-stamps the session, and `record_session_start` then opens the durable marker anew instead
-of extending it. It is the ROMM-session question and not `isAnyAppRunning()`, because a Steam game this plugin never
-opened a session for has no play time here to lose.
+the press through: the card reads the answer at render and subscribes to nothing, so its disabled state can be stale by
+the time of the press, and a request filed here puts Decky's dialog in front of the reader — no place to raise a warning
+about a decision already made.
+
+What it protects is **not** the session surviving a reload, which it does: the breadcrumb outlives one,
+`destroySessionManager` does not clear it, and adoption restores an attested session still running with the `startMs` it
+was attested with, re-opening no marker. What it protects is that this recovery is best-effort and fails silently — it
+restores a session only if the game surfaces in Steam's running-app reading inside `ADOPTION_POLL_MAX_MS`, and past that
+the session is orphaned, never finalized, so neither its play time nor its after-exit save sync happens; a stop landing
+inside the swap is observed by nobody at all. It is the ROMM-session question and not `isAnyAppRunning()`, because a
+Steam game this plugin never opened a session for has no play time here to lose.
 
 **The two data-location conditions are one card in one component** (`src/components/DataLocationNotice.tsx`), because
 they are two outcomes of the same start-up step and only ever one of them stands. The choice's modal
@@ -565,14 +583,14 @@ Narrow, in this order: the `"RomM Sync"` warning, an untitled section carrying i
 settings-reset and playtime-scope notices, each a titled section of its own, all three above everything else; the status
 block — the RetroDECK warning, then Connection, Last sync, Library, then the conditional slot and, while a run is going,
 Cancel Sync, then the transient line a just-ended run leaves behind (and a cancel whose call failed), and under all of
-those the three notices that carry a button (the RetroArch input driver, the save-file sorting, a run paused on the
-session budget), then the data-location notice — the plugin is running either way and only where its data ends up is
-outstanding; it carries a button only in its choice variant, and that button opens a modal rather than a page — and,
-last of all, the update notice, below even that one because it is the only condition in the block that is not about this
-install at all: nothing here is outstanding, a newer release simply exists elsewhere; the download summary (up to two
-rows, an overflow count, a completed count, View All); the menu — Sync, Library, Settings, Data Management. **Those last
-three blocks carry no section title at all** — what separates one from the next is a hairline (`BlockSeparator`), which
-costs one pixel of height where a heading would cost a whole row. The layout study it was chosen from is
+those the notices that carry a button — the RetroArch input driver, the save-file sorting, a run paused on the session
+budget — then the data-location notice, the plugin is running either way and only where its data ends up is outstanding;
+it carries a button only in its choice variant, and that button opens a modal rather than a page — and, last of all, the
+update notice, below even that one because it is the only condition in the block that is not about this install at all:
+nothing here is outstanding, a newer release simply exists elsewhere; the download summary (up to two rows, an overflow
+count, a completed count, View All); the menu — Sync, Library, Settings, Data Management. **Those last three blocks
+carry no section title at all** — what separates one from the next is a hairline (`BlockSeparator`), which costs one
+pixel of height where a heading would cost a whole row. The layout study it was chosen from is
 [main-layouts.html](../assets/main-layouts.html).
 
 **The menu is the navigation that is always there — complete, and always in the same place. The status rows state and do
@@ -1166,7 +1184,7 @@ sits under Save Sync, and SteamGridDB joins the other external service under Con
 | Save Sync     | the save-sort migration first, as the condition asking to be answered; then the toggle, device, before-launch and after-exit, default slot, history limit, Sync all now; then the registered devices as a table                                                                                         |
 | Controller    | Steam Input mode, Apply to all shortcuts, the `input_driver` fix. Home of the fix.                                                                                                                                                                                                                      |
 | Steam Library | preferred region, collection games in platform groups, collection types in Steam names — the narrow page's **Library** section, renamed because a Library page now exists: the page is the RomM side (what is synced), the section is the Steam side (which version, in which groups, under which name) |
-| Advanced      | log level; the daily update check (on by default — the plugin's only outgoing request that goes to neither RomM nor SteamGridDB, which is what earns it a switch) |
+| Advanced      | log level; the update check (on by default, throttled to at most one GitHub read a day — the plugin's only outgoing request that goes to neither RomM nor SteamGridDB, which is what earns it a switch)                                                                                                    |
 
 The registered devices are the one thing on the page with more than two facts per row, so they are a table — Device,
 Client, Last seen — drawn with § Tables' shared one at the pane's default register. The layout study it was chosen from

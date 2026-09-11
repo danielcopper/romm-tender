@@ -102,10 +102,11 @@ Needs **Developer mode** in Decky Loader (Decky tab → gear icon → **General 
 
 That URL always resolves to the newest release.
 
-Tender is not in Decky's plugin store, so Decky's own update detection never fires for it — Tender checks GitHub once a
-day itself and shows a card in its QAM panel when a newer release is out, with a button that hands the update to Decky.
-Pasting the URL again still works and is the fallback if that button ever cannot reach Decky's installer. Close any
-running game before updating: the update restarts the plugin, and that session's play time is lost.
+Tender is not in Decky's plugin store, so Decky's own update detection never fires for it — Tender checks GitHub itself
+when it starts up, at most once a day, and shows a card in its QAM panel when a newer release is out, with a button that
+hands the update to Decky. Pasting the URL again still works and is the fallback if that button ever cannot reach
+Decky's installer. Close any running game before updating: the update reloads the plugin underneath it, and a session it
+cannot pick back up afterwards is recorded nowhere — no play time, and no save sync when you close the game.
 
 </details>
 
