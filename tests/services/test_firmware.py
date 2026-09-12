@@ -1106,7 +1106,7 @@ class TestTheOverviewNamesPlatformsWithoutReadingThem:
             uow_factory=FakeUnitOfWorkFactory(plugin._uow),
             **kwargs,
         )
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
         return fw
 
     @pytest.mark.asyncio
@@ -1190,7 +1190,7 @@ class TestOnePlatformsOwnEntry:
             uow_factory=FakeUnitOfWorkFactory(plugin._uow),
             **kwargs,
         )
-        _set_loop(fw, asyncio.get_event_loop())
+        _set_loop(fw, asyncio.get_running_loop())
         return fw
 
     @pytest.mark.asyncio
@@ -3024,7 +3024,7 @@ def _rom_scoped_surfaces(
     )
     cores = CoreService(
         config=CoreServiceConfig(
-            loop=asyncio.get_event_loop(),
+            loop=asyncio.get_running_loop(),
             logger=decky.logger,
             core_info=core_info,
             resolve_system=resolve_system,
