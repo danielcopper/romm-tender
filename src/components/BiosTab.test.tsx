@@ -77,12 +77,12 @@ describe("BiosTab", () => {
       />,
     );
     expect(container.textContent).toContain("BIOS requirement unknown");
-    expect(container.textContent).not.toContain("Nothing required");
+    expect(container.textContent).not.toContain("requires none of the files it names");
     expect(container.innerHTML).toContain("#8f98a0");
   });
 
   it("drops the ratio when the library holds none of the platform's files", () => {
-    // "Nothing required (0/0 files held)" counts a set that does not exist.
+    // A "(0/0 files held)" beside the sentence counts a set that does not exist.
     const { container } = render(
       <BiosTab
         biosStatus={{ needs_bios: true, server_count: 0, local_count: 0, all_downloaded: false, required_count: 0 }}
@@ -91,7 +91,7 @@ describe("BiosTab", () => {
         isActive={true}
       />,
     );
-    expect(container.textContent).toContain("Nothing required");
+    expect(container.textContent).toContain("The active core requires none of the files it names");
     expect(container.textContent).not.toContain("files held");
   });
 
@@ -121,7 +121,7 @@ describe("BiosTab", () => {
       />,
     );
     expect(container.textContent).toContain("Needs at least one BIOS file (0/20 files held)");
-    expect(container.textContent).not.toContain("Nothing required");
+    expect(container.textContent).not.toContain("requires none of the files it names");
     expect(container.textContent).not.toContain("required files ready");
     expect(container.innerHTML).toContain("#d94126");
   });
@@ -176,7 +176,7 @@ describe("BiosTab", () => {
       />,
     );
     expect(container.textContent).toContain("BIOS readiness unknown");
-    expect(container.textContent).not.toContain("Nothing required");
+    expect(container.textContent).not.toContain("requires none of the files it names");
   });
 
   it("says nothing of its own for the two quiet answers", () => {
@@ -200,9 +200,37 @@ describe("BiosTab", () => {
           isActive={true}
         />,
       );
-      expect(container.textContent).toContain("Nothing required (1/20 files held)");
+      expect(container.textContent).toContain("The active core requires none of the files it names (1/20 files held)");
       expect(container.textContent).not.toContain("Needs at least one");
     }
+  });
+
+  it("says whose requirement the empty count is, and never that the console needs nothing", () => {
+    // `required_count: 0` is one emulator's declaration and nothing else: the
+    // active core marks none of the files it names required. It says nothing
+    // about the CONSOLE, which is a separate axis (`system_image`) and answers
+    // `not_demanded` for a console nobody has asked about as readily as for one
+    // shown to start with nothing — so a headline that dropped the subject was
+    // read as an all-clear the reading never gave.
+    const { container } = render(
+      <BiosTab
+        biosStatus={{
+          needs_bios: true,
+          server_count: 3,
+          local_count: 1,
+          all_downloaded: false,
+          required_count: 0,
+          required_downloaded: 0,
+          system_image: "not_demanded",
+        }}
+        biosLevel="ok"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+    expect(container.textContent).toContain("The active core requires none of the files it names (1/3 files held)");
+    // The subject, spelled out: the sentence may not stand without it.
+    expect(container.textContent).not.toContain("Nothing required");
   });
 
   it("heads a row with the file it declares, and adds only what the description still says", () => {

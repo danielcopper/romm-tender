@@ -351,9 +351,26 @@ describe("Library › Platforms", () => {
       const gba = rows.find((el) => el.textContent.includes("Game Boy Advance"));
       const n64 = rows.find((el) => el.textContent.includes("Nintendo 64"));
       expect(gba?.title).toBe("3 / 5 required BIOS files ready");
-      expect(n64?.title).toBe("Nothing required");
+      // The set the count was taken over, and this payload names no pick, so
+      // the sentence says which emulator it is about the only way it can.
+      expect(n64?.title).toBe("The launching emulator requires none of the files it names");
       expect(gba?.textContent).not.toContain("3 / 5");
       expect(container.querySelector('[data-testid="bios-dot-n64"]')).toBeTruthy();
+    });
+
+    it("names the emulator an empty required count is about, where the pick has a name", async () => {
+      // The row's words are the detail pane's own, so a reader who hovers here
+      // and then opens the pane meets one sentence rather than two. The name
+      // comes off the same firmware payload the count came off — never off the
+      // core read beside it, which is a second resolution of one question.
+      mockFirmware([firmwarePlatform({ required_count: 0, bios_level: "ok", active_core_label: "mGBA", files: [] })]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
+        el.textContent.includes("Game Boy Advance"),
+      );
+      expect(row?.title).toBe("mGBA requires none of the files it names");
     });
 
     it("says in words what the dot could not say, for a platform the read cannot speak for", async () => {
@@ -1561,6 +1578,59 @@ describe("Library › Platforms", () => {
       expect(contentsCells(container)).toContain("—");
     });
 
+    it("says whose declaration an empty required count is, and keeps the library ratio beside it", async () => {
+      // `required_count: 0` is ONE emulator's declaration: the pick this
+      // platform launches with marks none of the files it names required. It
+      // says nothing about the console, which is a separate axis — so the
+      // summary names the set it was counted over, and the ratio under it goes
+      // on counting the library's own inventory, a third set again.
+      mockFirmware([
+        firmwarePlatform({
+          bios_level: "ok",
+          required_count: 0,
+          required_downloaded: 0,
+          server_count: 3,
+          local_count: 1,
+          active_core_label: "SwanStation",
+        }),
+      ]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const note = [...container.querySelectorAll<HTMLElement>("span")].find(
+        (el) => el.textContent === "SwanStation requires none of the files it names",
+      );
+      expect(note).toBeTruthy();
+      expect(container.textContent).toContain("1 / 3 files held");
+      // The subject is the whole of the correction: without it the line was
+      // read as the console needing no BIOS at all.
+      expect(container.textContent).not.toContain("Nothing required");
+    });
+
+    it("says which emulator an empty required count is about where the pick has no name", async () => {
+      // `active_core_label` is null where no option is bakeable — RetroDECK
+      // picks one at launch — and there is then no name to print. The sentence
+      // still may not drop its subject: an unnamed emulator is not the console.
+      mockFirmware([
+        firmwarePlatform({
+          bios_level: "ok",
+          required_count: 0,
+          required_downloaded: 0,
+          server_count: 0,
+          local_count: 0,
+        }),
+      ]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const note = [...container.querySelectorAll<HTMLElement>("span")].find(
+        (el) => el.textContent === "The launching emulator requires none of the files it names",
+      );
+      expect(note).toBeTruthy();
+      // The ratio's own empty-library wording is untouched by any of this.
+      expect(container.textContent).toContain("No BIOS files in your library");
+    });
+
     it("marks the four need-and-verdict states apart, and says so in a legend", async () => {
       // The glyph is the VERDICT, the colour is the NEED — two facts, two
       // channels, so neither has to be read off the other. `satisfied` is the
@@ -2736,10 +2806,10 @@ describe("Library › Platforms", () => {
 
     it("says the console needs at least one file where the counts would say nothing is required", async () => {
       // The PlayStation state under SwanStation: every image that core declares
-      // is `optional`, so the counts read "Nothing required" over a console that
-      // will not boot. One requirement over the images the core declares — so no
-      // ratio, here or in the list's own words, and no pointer at a file list
-      // where most rows cannot answer it.
+      // is `optional`, so the counts alone answer that the core requires none of
+      // them, over a console that will not boot. One requirement over the images
+      // the core declares — so no ratio, here or in the list's own words, and no
+      // pointer at a file list where most rows cannot answer it.
       mockFirmware([
         firmwarePlatform({
           bios_level: "missing",
@@ -2755,14 +2825,47 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(container.textContent).toContain("Needs at least one BIOS file");
-      expect(container.textContent).toContain("This system needs at least one BIOS file and none is in place");
-      expect(container.textContent).not.toContain("Nothing required");
+      // The sentence is about the images the LAUNCHING emulator names, and says
+      // so: this payload names no pick, so it says it the only way it can. What
+      // it may not say is that no BIOS file is in place — the folder can hold a
+      // working image this emulator simply does not list, which is what the old
+      // wording claimed away.
+      expect(container.textContent).toContain(
+        "This system needs a BIOS image, and none of the images its emulator names is in place",
+      );
+      expect(container.textContent).not.toContain("and none is in place");
+      expect(container.textContent).not.toContain("requires none of the files it names");
       const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
         el.textContent.includes("Game Boy Advance"),
       );
       expect(row?.title).toBe("Needs at least one BIOS file");
       // The rows were answered, so what the library still holds stays fetchable.
       expect(buttonByText(container, "Download all")).not.toBeDisabled();
+    });
+
+    it("names the emulator whose images are absent, where the pick has a name", async () => {
+      // The name comes off the firmware payload's own `active_core_label` — the
+      // label half of the pick the verdict beside it was scoped to — so the
+      // sentence and the state cannot be about two different emulators.
+      mockFirmware([
+        firmwarePlatform({
+          bios_level: "missing",
+          required_count: 0,
+          required_downloaded: 0,
+          required_withheld: 0,
+          system_image: "absent",
+          server_count: 3,
+          active_core_label: "SwanStation",
+          files: [firmwareFile({ wanted: "optional", required_by_active: false })],
+        }),
+      ]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain(
+        "This system needs a BIOS image, and none of the images SwanStation names is in place",
+      );
+      expect(container.textContent).not.toContain("its emulator names");
     });
 
     it("says the console needs at least one file even where the level declines", async () => {

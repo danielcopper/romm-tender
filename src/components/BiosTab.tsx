@@ -133,9 +133,17 @@ function buildBiosCoreLines(
  * The sentence also has to say what the DOT says, and the dot is the backend's
  * required-file verdict: with nothing required it is green whatever the ratio
  * reads, so "0/20 files ready" beside it claimed a readiness it did not mean
- * (#1660). What is true there is that nothing is required; the ratio is then
- * inventory, and says so. "Optional" would be the wrong word for it — those
- * files may be required by a core the user is not launching with.
+ * (#1660). What is true there is that the ACTIVE CORE requires none of the files
+ * it names, which is what that sentence now says: a bare "Nothing required" was
+ * read as the console needing no BIOS, and that is a different axis — one the
+ * catalogue answers `not_demanded` for a console nobody has asked about as
+ * readily as for one shown to start with nothing (CONTEXT.md → System image).
+ * The ratio is then inventory, and says so; "optional" would be the wrong word
+ * for it — those files may be required by a core the user is not launching with.
+ * It names no core for the reason the console's own sentence below does not —
+ * the highlighted line in the core list says which one — plus one this surface
+ * has of its own: `BiosStatus` carries no label at all, so a name here would
+ * have to be taken from the core read beside it.
  *
  * The **console's own demand** (`system_image`) is a third shape and comes first
  * among the answers, because it is the one no count can be relied on to state:
@@ -175,7 +183,7 @@ function buildBiosHeader(bios: BiosStatus, biosLevel: BiosTabProps["biosLevel"])
     // unsettled — the requirement IS known and it is the readiness that cannot
     // be stated. Otherwise nothing installed could say whether these files are
     // wanted at all.
-    // Neither is the "Nothing required" below, which is an answer.
+    // Neither is the no-requirement sentence below, which is an answer.
     biosLabel =
       (bios.required_withheld ?? 0) > 0 || bios.system_image === "unsettled"
         ? "BIOS readiness unknown"
@@ -186,7 +194,7 @@ function buildBiosHeader(bios: BiosStatus, biosLevel: BiosTabProps["biosLevel"])
         ? `All required ready (${reqDone}/${reqCount})`
         : `${reqDone}/${reqCount} required files ready`;
   } else {
-    biosLabel = `Nothing required${heldRatio}`;
+    biosLabel = `The active core requires none of the files it names${heldRatio}`;
   }
 
   return [

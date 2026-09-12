@@ -971,6 +971,20 @@ it, for the focused platform:
   all three vanished at once, and a button that disappears is a state the reader has to work out. A disabled
   `DialogButton` is still a focus stop, so the row stays walkable.
 
+  **The two summaries that would otherwise read as claims about the CONSOLE name the set they were counted over
+  instead**, off the same `active_core_label` and with the same `null` fallback as the decline above. An empty
+  `required_count` is worded "`<emulator>` requires none of the files it names" rather than "Nothing required", and
+  `absent`'s sentence under the headline is "This system needs a BIOS image, and none of the images `<emulator>` names
+  is in place" rather than "none is in place". Both counts are over one emulator's declaration, while the console's own
+  demand is the separate axis beside them — `not_demanded` for a console nothing is recorded about as readily as for one
+  shown to start with nothing — so a subjectless sentence stated the count's conclusion as though the console had been
+  asked, and the second one additionally said no BIOS file was in the folder where what was read is that none of the
+  DECLARED images was. The headline itself stays subjectless: it is the note beside `BIOS FILES` and the sentence under
+  it is where a name fits. The Platforms list's row tooltip carries the first sentence verbatim, deliberately — the
+  reader who hovers and then opens the pane meets one sentence rather than two. The game page's BIOS tab words the same
+  state "The active core requires none of the files it names" and names no emulator, because its own Emulator column
+  already does and `BiosStatus` carries no label to name one from.
+
   **What the two Download buttons and the per-row one are built off is the fetchable set, and none of the three reads
   the verdict** — one filter, in this file, over `on_server && !downloaded && declared_kind !== "directory"`, and
   neither `bios_level` nor `required_withheld` nor `system_image` anywhere. Two further inputs sit beside that filter

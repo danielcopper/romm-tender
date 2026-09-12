@@ -400,9 +400,10 @@ Whether the core a game launches with has the firmware image its **console** can
 libretro declaration can express. A `.info` marks each file **needed** or **optional** and nothing else: no way to say
 "one of these", and no way to say the console will not boot without one. An author who knows it will not has two lossy
 moves and the deployed catalogue takes both — SwanStation marks all five of its PlayStation images optional, Beetle PSX
-marks three of its own required — so the file counts alone read a green **Nothing required** under the one core and
-three separate prerequisites under the other, over a system on which no game starts either way. The console's own answer
-is world knowledge rather than a reading of the machine — the resolver keeps a source-cited table of it, per system.
+marks three of its own required — so the file counts alone read a green "this core requires none of the files it names"
+under the one core and three separate prerequisites under the other, over a system on which no game starts either way.
+The console's own answer is world knowledge rather than a reading of the machine — the resolver keeps a source-cited
+table of it, per system.
 
 It is a **disjunction**, and that is what keeps it out of the counts. The console asks for _one_ of the images the core
 declares, not for each of them, so it is a single requirement over the whole list rather than one requirement per file.

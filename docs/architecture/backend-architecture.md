@@ -1943,11 +1943,11 @@ own held/offered ratio — and it is a value rather than a count.** A libretro `
 optional and can say nothing else: there is no way to say "one of these", and no way to say the console does not start
 without one. An author who knows a PlayStation needs a BIOS image has two lossy moves and the deployed catalogue takes
 both — SwanStation marks all five of its images **optional**, Beetle PSX marks three of its own **required** — so the
-file counts alone report a green "Nothing required (0/20 files held)" under the one core and three separate
-prerequisites under the other, over one PlayStation on which no game starts. The resolver answers the missing half from
-a packaged, source-cited table about the **system** (`CoreFirmware.system_firmware`), carried through the adapter per
-emulator as `FirmwareCatalogue.emulator_verdicts` and turned into `domain/bios_status.py`'s `classify_system_image`. The
-narrower half of that per-emulator answer is read over every one of them at once
+file counts alone report a green "requires none of the files it names (0/20 files held)" under the one core and three
+separate prerequisites under the other, over one PlayStation on which no game starts. The resolver answers the missing
+half from a packaged, source-cited table about the **system** (`CoreFirmware.system_firmware`), carried through the
+adapter per emulator as `FirmwareCatalogue.emulator_verdicts` and turned into `domain/bios_status.py`'s
+`classify_system_image`. The narrower half of that per-emulator answer is read over every one of them at once
 (`emulators_needing_one_of_their_files`) and stamped on each row's own `cores` entry beside that core's `required` flag,
 as the NUMBER of files the core declares. The two keys are two speakers — the core's `.info` and the packaged table — so
 `optional` with `needs_one_of: 5` is the informative pair rather than a contradiction, and neither is ever rewritten

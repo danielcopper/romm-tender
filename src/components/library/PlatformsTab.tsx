@@ -63,7 +63,17 @@ function biosTooltip(row: PlatformRow): string {
       : "BIOS requirement unknown";
   }
   const required = firmware.required_count ?? 0;
-  if (required === 0) return "Nothing required";
+  if (required === 0) {
+    // The set the count was taken over, named. A bare "Nothing required" was
+    // read as the CONSOLE needing no BIOS, which is a different axis and one
+    // the catalogue answers `not_demanded` for a console nobody has asked
+    // about. The name comes off the firmware payload the count came off, never
+    // off the core read beside it.
+    const label = firmware.active_core_label;
+    return label
+      ? `${label} requires none of the files it names`
+      : "The launching emulator requires none of the files it names";
+  }
   return `${firmware.required_downloaded ?? 0} / ${required} required BIOS files ready`;
 }
 

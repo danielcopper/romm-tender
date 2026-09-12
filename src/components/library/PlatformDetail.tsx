@@ -116,6 +116,24 @@ const CORE_BUTTON = {
  *  payload rather than restated, so a field added to it reaches here. */
 type FirmwareRow = FirmwarePlatformExt["files"][number];
 
+/** What {@link getBiosSummary} words one platform's summary from. One argument
+ *  rather than eight, because six of them are numbers and booleans and at the
+ *  call site nothing but their order would say which is which. */
+interface BiosSummaryInput {
+  requiredCount: number;
+  requiredDone: number;
+  requiredReady: boolean;
+  optionalMissing: number;
+  done: number;
+  total: number;
+  systemImage: SystemImage;
+  /** The platform pick's name, off the firmware payload's own
+   *  `active_core_label` — the same source {@link getUnknownSummary} names the
+   *  emulator from, and `null` where no bakeable emulator could be picked and
+   *  there is no name to print. */
+  emulatorLabel: string | null;
+}
+
 /**
  * Build the per-platform summary label/description from the backend BIOS
  * aggregates. The ok/partial/missing DECISION is the backend's `bios_level`
@@ -124,34 +142,54 @@ type FirmwareRow = FirmwarePlatformExt["files"][number];
  * selects the phrasing axis (required vs. plain file counts), and the
  * optional-missing breakdown stays a local computation passed in by the caller.
  *
- * With nothing required, the library ratio is inventory and is worded as such —
- * the same framing the BIOS tab uses. "0 / 20 files … 20 missing" over twenty
- * files no installed core asks for reads as work outstanding on a system that
- * needs nothing.
+ * **Both summaries that would otherwise read as claims about the CONSOLE name
+ * the set they were counted over instead.** The counts are over the files the
+ * launching emulator names, and the console's own demand is a different axis
+ * that answers `not_demanded` for a console nothing is recorded about as
+ * readily as for one shown to start with nothing (CONTEXT.md → System image).
+ * So a bare "Nothing required" states the count's conclusion as if the console
+ * had been asked, and "none is in place" said no BIOS file was there at all
+ * over a BIOS folder holding one the launching emulator simply does not list.
+ * Naming the emulator is what makes each sentence true of what was read, and
+ * the name is `emulatorLabel` — never a second resolution beside it.
+ *
+ * With nothing required, the library ratio stays inventory and is worded as
+ * such — the same framing the BIOS tab uses. "0 / 20 files … 20 missing" over
+ * twenty files no installed core asks for reads as work outstanding on a system
+ * that needs nothing.
  */
-function getBiosSummary(
-  requiredCount: number,
-  requiredDone: number,
-  requiredReady: boolean,
-  optionalMissing: number,
-  done: number,
-  total: number,
-  systemImage: SystemImage,
-) {
+function getBiosSummary({
+  requiredCount,
+  requiredDone,
+  requiredReady,
+  optionalMissing,
+  done,
+  total,
+  systemImage,
+  emulatorLabel,
+}: BiosSummaryInput) {
   // The console's own demand comes first, because no count can be relied on to
   // state it: it asks for ONE of these images, and a libretro declaration marks
   // each file required or optional and can say nothing else. Which of the two an
   // author reaches for is their choice, and over one PlayStation the deployed
   // catalogue goes both ways — SwanStation marks all five of its images
-  // optional, so the required-file phrasing below reads "Nothing required" over
-  // a system that will not boot. Stated as "at least one" and never as a ratio —
-  // the list is many files and the requirement is one. It points at no set
-  // either: the table below holds rows only the launching core's declaration can
-  // answer the demand with, and rows it cannot.
+  // optional, so the required-file phrasing below would stand over a system
+  // that will not boot. Stated as "at least one" and never as a ratio — the
+  // list is many files and the requirement is one.
+  //
+  // The SENTENCE names the emulator because the state is about that emulator's
+  // declaration and nothing else. A BIOS folder can hold a PlayStation image
+  // the console starts from that is not one of the five SwanStation lists, and
+  // the old wording — "and none is in place" — then said something plainly
+  // untrue about the folder while the state itself was right. The label above
+  // it still points at no set: the table below holds rows only the launching
+  // core's declaration can answer the demand with, and rows it cannot.
   if (systemImage === "absent") {
     return {
       summaryLabel: "Needs at least one BIOS file",
-      summaryDescription: "This system needs at least one BIOS file and none is in place",
+      summaryDescription: emulatorLabel
+        ? `This system needs a BIOS image, and none of the images ${emulatorLabel} names is in place`
+        : "This system needs a BIOS image, and none of the images its emulator names is in place",
     };
   }
   if (requiredCount > 0 && requiredReady) {
@@ -168,7 +206,9 @@ function getBiosSummary(
     };
   }
   return {
-    summaryLabel: "Nothing required",
+    summaryLabel: emulatorLabel
+      ? `${emulatorLabel} requires none of the files it names`
+      : "The launching emulator requires none of the files it names",
     summaryDescription: total > 0 ? `${done} / ${total} files held` : "No BIOS files in your library",
   };
 }
@@ -880,9 +920,22 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   // decides wording only — what the pane offers to fetch is a separate question
   // with a separate input, below.
   const nothingEstablished = declined && requiredWithheld === 0 && systemImage !== "unsettled";
+  // One read, both summaries: the platform is judged by ONE pick, and a sentence
+  // that named a second resolution of it could name an emulator the verdict
+  // beside it is not about.
+  const emulatorLabel = firmware.active_core_label ?? null;
   const { summaryLabel, summaryDescription } = declined
-    ? getUnknownSummary(requiredWithheld, systemImage, firmware.active_core_label ?? null)
-    : getBiosSummary(requiredCount, requiredDone, requiredReady, optionalMissing, done, total, systemImage);
+    ? getUnknownSummary(requiredWithheld, systemImage, emulatorLabel)
+    : getBiosSummary({
+        requiredCount,
+        requiredDone,
+        requiredReady,
+        optionalMissing,
+        done,
+        total,
+        systemImage,
+        emulatorLabel,
+      });
 
   // The download affordances key off what is missing AND fetchable, and read
   // the VERDICT nowhere — not `bios_level`, not `required_withheld`, not
