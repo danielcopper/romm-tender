@@ -283,7 +283,7 @@ function getUnknownSummary(requiredWithheld: number, systemImage: SystemImage, e
     summaryLabel: "BIOS requirement unknown",
     summaryDescription: emulatorLabel
       ? `Nothing could be established about what ${emulatorLabel} needs`
-      : "The emulator this platform launches with could not be asked what it needs",
+      : "The launching emulator could not be asked what it needs",
   };
 }
 

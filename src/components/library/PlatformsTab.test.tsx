@@ -2735,9 +2735,7 @@ describe("Library › Platforms", () => {
       // With no pick to name (this payload carries no `active_core_label`) the
       // sentence says what was asked of nobody, and claims nothing about the
       // other emulators installed.
-      expect(container.textContent).toContain(
-        "The emulator this platform launches with could not be asked what it needs",
-      );
+      expect(container.textContent).toContain("The launching emulator could not be asked what it needs");
       expect(container.textContent).toContain("You can still put BIOS files in your BIOS folder by hand");
       expect(container.textContent).not.toContain("not supported for this system yet");
       // The affordance, on both surfaces it has: the row's own button and the

@@ -26,8 +26,8 @@ When you open a game whose platform has BIOS files — on your RomM server, or a
 — the game detail panel's **BIOS** tab shows the readiness line. Its dot color reflects the same
 unknown/ok/partial/missing verdict used everywhere in the plugin:
 
-- **Green** — nothing required is missing: "All required ready (2/2)", or "The active core requires none of the files it
-  names (3/5 files held)" when the core you launch with lists no file it needs
+- **Green** — nothing required is missing: "All required ready (2/2)", or "The launching emulator requires none of the
+  files it names (3/5 files held)" when the emulator you launch with lists no file it needs
 - **Orange** — some required files present: "1/2 required files ready"
 - **Red** — no required files present yet, or "Needs at least one BIOS file" where the console itself will not start
   without one of them (see [When the console needs a BIOS image](#when-the-console-needs-a-bios-image))
@@ -37,13 +37,15 @@ unknown/ok/partial/missing verdict used everywhere in the plugin:
   [When readiness cannot be stated](#when-readiness-cannot-be-stated))
 
 The sentence says what the dot says, and both are about the **required** files. Where the system has none, the dot is
-green because nothing required is missing — so the line says that the core you launch with requires none of the files it
-names, and the ratio beside it is inventory, counting the files your RomM library holds and how many of them you have.
-It is not a readiness score, and those files are not "optional" either: a core you are not launching with may well
-require one.
+green because nothing required is missing — so the line says that the emulator you launch with requires none of the
+files it names, and the ratio beside it is inventory, counting the files your RomM library holds and how many of them
+you have. It is not a readiness score, and those files are not "optional" either: an emulator you are not launching with
+may well require one.
 
-The line names that core on purpose, and it is a statement about the **emulator**, not about the console. Whether the
-console itself starts without a BIOS image is a separate question with a line of its own (see
+The line says whose requirement it is on purpose, and it is a statement about the **emulator**, not about the console.
+It names no emulator itself because this page already does twice over: the **Emulator** column beside it, and the
+highlight each file row puts on the one you launch with. Whether the console itself starts without a BIOS image is a
+separate question with a line of its own (see
 [When the console needs a BIOS image](#when-the-console-needs-a-bios-image)), and where nothing is recorded about the
 console the plugin says nothing about it either — so a line reading only "nothing required" would have claimed an
 all-clear nobody gave.
@@ -377,10 +379,10 @@ the launching emulator in the first place.
 
 Under that headline the page names the emulator it could not get an answer out of — _Nothing could be established about
 what PCSX2 needs_ — and, where the plugin could not settle on an emulator to name for that system, says that instead:
-_The emulator this platform launches with could not be asked what it needs_. Your games still launch either way: where
-the plugin names no emulator, it hands the launch to RetroDECK and RetroDECK picks one. Either way the sentence is about
-**one** emulator, the one your games on that system launch with. Others you have installed may have answered perfectly
-well, and their answers are in the rows below.
+_The launching emulator could not be asked what it needs_. Your games still launch either way: where the plugin names no
+emulator, it hands the launch to RetroDECK and RetroDECK picks one. Either way the sentence is about **one** emulator,
+the one your games on that system launch with. Others you have installed may have answered perfectly well, and their
+answers are in the rows below.
 
 This is informational, not an error: your files may be perfectly fine, the plugin simply can't confirm what is needed.
 Genuinely BIOS-free systems (such as the NES) are unaffected — the emulator answers, it wants nothing, and the system

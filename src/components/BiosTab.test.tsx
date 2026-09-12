@@ -91,7 +91,7 @@ describe("BiosTab", () => {
         isActive={true}
       />,
     );
-    expect(container.textContent).toContain("The active core requires none of the files it names");
+    expect(container.textContent).toContain("The launching emulator requires none of the files it names");
     expect(container.textContent).not.toContain("files held");
   });
 
@@ -200,7 +200,9 @@ describe("BiosTab", () => {
           isActive={true}
         />,
       );
-      expect(container.textContent).toContain("The active core requires none of the files it names (1/20 files held)");
+      expect(container.textContent).toContain(
+        "The launching emulator requires none of the files it names (1/20 files held)",
+      );
       expect(container.textContent).not.toContain("Needs at least one");
     }
   });
@@ -228,7 +230,9 @@ describe("BiosTab", () => {
         isActive={true}
       />,
     );
-    expect(container.textContent).toContain("The active core requires none of the files it names (1/3 files held)");
+    expect(container.textContent).toContain(
+      "The launching emulator requires none of the files it names (1/3 files held)",
+    );
     // The subject, spelled out: the sentence may not stand without it.
     expect(container.textContent).not.toContain("Nothing required");
   });

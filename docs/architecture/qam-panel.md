@@ -982,8 +982,10 @@ it, for the focused platform:
   DECLARED images was. The headline itself stays subjectless: it is the note beside `BIOS FILES` and the sentence under
   it is where a name fits. The Platforms list's row tooltip carries the first sentence verbatim, deliberately — the
   reader who hovers and then opens the pane meets one sentence rather than two. The game page's BIOS tab words the same
-  state "The active core requires none of the files it names" and names no emulator, because its own Emulator column
-  already does and `BiosStatus` carries no label to name one from.
+  state "The launching emulator requires none of the files it names" and names none, because its own Emulator column
+  already does and `BiosStatus` carries no label to name one from. "Emulator" and never "core" on all three: what a
+  platform launches with can be a STANDALONE emulator, which is not a core, and the whole answer is keyed on the
+  emulator's identity for that reason.
 
   **What the two Download buttons and the per-row one are built off is the fetchable set, and none of the three reads
   the verdict** — one filter, in this file, over `on_server && !downloaded && declared_kind !== "directory"`, and

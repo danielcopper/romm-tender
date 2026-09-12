@@ -133,15 +133,21 @@ function buildBiosCoreLines(
  * The sentence also has to say what the DOT says, and the dot is the backend's
  * required-file verdict: with nothing required it is green whatever the ratio
  * reads, so "0/20 files ready" beside it claimed a readiness it did not mean
- * (#1660). What is true there is that the ACTIVE CORE requires none of the files
- * it names, which is what that sentence now says: a bare "Nothing required" was
- * read as the console needing no BIOS, and that is a different axis — one the
- * catalogue answers `not_demanded` for a console nobody has asked about as
- * readily as for one shown to start with nothing (CONTEXT.md → System image).
- * The ratio is then inventory, and says so; "optional" would be the wrong word
- * for it — those files may be required by a core the user is not launching with.
- * It names no core for the reason the console's own sentence below does not —
- * the highlighted line in the core list says which one — plus one this surface
+ * (#1660). What is true there is that the LAUNCHING EMULATOR requires none of
+ * the files it names, which is what that sentence now says: a bare "Nothing
+ * required" was read as the console needing no BIOS, and that is a different
+ * axis — one the catalogue answers `not_demanded` for a console nobody has asked
+ * about as readily as for one shown to start with nothing (CONTEXT.md → System
+ * image). The ratio is then inventory, and says so; "optional" would be the
+ * wrong word for it — those files may be required by a core the user is not
+ * launching with.
+ *
+ * "Emulator" rather than "core", because what a game launches with can be a
+ * STANDALONE emulator — DuckStation, PCSX2 — and one of those is not a core.
+ * The whole answer is keyed on the emulator's identity for that reason, so a
+ * sentence saying "core" would name a kind the state does not have. It names no
+ * emulator for the reason the console's own sentence below does not — the
+ * highlighted line in the emulator list says which one — plus one this surface
  * has of its own: `BiosStatus` carries no label at all, so a name here would
  * have to be taken from the core read beside it.
  *
@@ -194,7 +200,7 @@ function buildBiosHeader(bios: BiosStatus, biosLevel: BiosTabProps["biosLevel"])
         ? `All required ready (${reqDone}/${reqCount})`
         : `${reqDone}/${reqCount} required files ready`;
   } else {
-    biosLabel = `The active core requires none of the files it names${heldRatio}`;
+    biosLabel = `The launching emulator requires none of the files it names${heldRatio}`;
   }
 
   return [
