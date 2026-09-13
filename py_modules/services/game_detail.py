@@ -400,17 +400,17 @@ class GameDetailService:
             return self._bios_answer()
 
         # The BIOS filter keys off the per-game emulator (the pin over the
-        # system default), resolved by rom_id from the shared seam. Its IDENTITY
-        # is what the filter takes, because that is the one field naming a
-        # standalone emulator as well as a libretro core — ``active_core_for_rom``
-        # would answer ``None`` for the first and send the page back to the
-        # platform's own pick.
+        # system default), resolved by rom_id from the shared seam. The whole
+        # resolution goes over, not one field of it: the checker filters by its
+        # IDENTITY — the one field naming a standalone emulator as well as a
+        # libretro core, where ``active_core_for_rom`` would answer ``None`` for
+        # the first and send the page back to the platform's own pick — and
+        # names it by its LABEL, and a caller splitting those is how a page comes
+        # to name one emulator and judge by another.
         emulator = self._active_core.active_emulator_for_rom(rom_id)
 
         try:
-            bios = await self._bios_checker.check_platform_bios(
-                platform_slug, launching_emulator=emulator.emulator if emulator is not None else None
-            )
+            bios = await self._bios_checker.check_platform_bios(platform_slug, launching_emulator=emulator)
             if bios.get("needs_bios"):
                 # The checker's payload IS the wire shape, plus the slug it was
                 # asked about. Re-wrapping it through ``format_bios_status`` here

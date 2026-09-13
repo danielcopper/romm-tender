@@ -140,8 +140,16 @@ describe("biosFileDescription", () => {
   // corpus into, so the rule is pinned beside the code holding it rather than
   // only through whichever surface happens to render it. The strings are that
   // docstring's own examples; nothing here re-counts the corpus.
+  //
+  // They are `read` rows because that is what the corpus IS — a libretro core's
+  // own `.info`, read off the machine beside it. The rows that are not are the
+  // three cases at the end.
   const describedAs = (file_name: string, description: string, declared_kind?: FirmwareDeclaredKind) =>
-    biosFileDescription(declared_kind ? { file_name, description, declared_kind } : { file_name, description });
+    biosFileDescription(
+      declared_kind
+        ? { file_name, description, declared_kind, declaration: "read" }
+        : { file_name, description, declaration: "read" },
+    );
 
   it("adds nothing where the description IS the name", () => {
     expect(describedAs("macventure.dat", "macventure.dat")).toBeNull();
@@ -186,5 +194,29 @@ describe("biosFileDescription", () => {
   it("shows none where the description is empty or only spaces", () => {
     expect(describedAs("dc_boot.bin", "")).toBeNull();
     expect(describedAs("dc_boot.bin", "   ")).toBeNull();
+  });
+
+  it("shows none of a packaged card's prose", () => {
+    // The same field, a different kind of writing: atlas explaining the
+    // requirement in whole sentences where a `.info` writes a label. It is the
+    // DECLARATION that says which, never the file or the emulator behind it —
+    // this row is DuckStation's, and its name is a PlayStation image like the
+    // `read` rows above.
+    expect(
+      biosFileDescription({
+        file_name: "scph1001.bin",
+        description:
+          "a PlayStation BIOS image — the console runs it before any disc, and DuckStation starts nothing " +
+          "without one — found by the search, not named by any setting",
+        declaration: "packaged",
+      }),
+    ).toBeNull();
+  });
+
+  it("shows none for a row that states no declaration", () => {
+    // A file no emulator declared: its description is the file name, which the
+    // rules above would take out anyway — so this pins the gate, not the
+    // outcome. A payload from before the field existed lands here too.
+    expect(biosFileDescription({ file_name: "scph5500.bin", description: "scph5500.bin (PS1 JP BIOS)" })).toBeNull();
   });
 });

@@ -982,10 +982,13 @@ it, for the focused platform:
   DECLARED images was. The headline itself stays subjectless: it is the note beside `BIOS FILES` and the sentence under
   it is where a name fits. The Platforms list's row tooltip carries the first sentence verbatim, deliberately — the
   reader who hovers and then opens the pane meets one sentence rather than two. The game page's BIOS tab words the same
-  state "The launching emulator requires none of the files it names" and names none, because its own Emulator column
-  already does and `BiosStatus` carries no label to name one from. "Emulator" and never "core" on all three: what a
-  platform launches with can be a STANDALONE emulator, which is not a core, and the whole answer is keyed on the
-  emulator's identity for that reason.
+  state "`<emulator>` requires none of the files it names" and names it from the same field — the BIOS payload's own
+  `active_core_label`, which `check_platform_bios` stamps as the label half of the pick it filtered those very counts
+  by, never from the core read beside it on the page. That tab used to name none, because `BiosStatus` carried no label
+  to name one from, and the sentence then sat two inches from an `Active Core` row saying less than everything around
+  it; a payload that names no emulator still words it "The launching emulator requires none of the files it names".
+  "Emulator" and never "core" on all three: what a platform launches with can be a STANDALONE emulator, which is not a
+  core, and the whole answer is keyed on the emulator's identity for that reason.
 
   **What the two Download buttons and the per-row one are built off is the fetchable set, and none of the three reads
   the verdict** — one predicate, `isFetchable` in `src/utils/biosFetchable.ts`, over
@@ -1082,7 +1085,22 @@ it, for the focused platform:
 
   The file name is printed once. The description under it is **not RomM's** — `_server_files` builds no description at
   all and `_wanted_fields` overwrites what came in, so what arrives is the core's own `firmwareN_desc`, or the file name
-  itself for a row no placement covers. Both spell the name into the words, and across the 292 `.info` files a stock
+  itself for a row no placement covers.
+
+  **Only a `read` declaration's prose is shown at all**, which `biosFileDescription` decides first and both surfaces
+  therefore inherit. The row carries the resolver's own word for how the emulator that supplied the description stated
+  what it wants (`declaration`, alongside `declared_kind`), and the two words that can reach a row are two kinds of
+  writing under one field: a libretro `.info`'s is a packager's LABEL for the file, which is the one thing the row's own
+  name cannot say (`ps1_rom.bin` is a PlayStation 3 image), while a `packaged` card's is atlas explaining the
+  requirement in whole sentences — "a PlayStation BIOS image — the console runs it before any disc, and DuckStation
+  starts nothing without one — found by the search, not named by any setting". That is an essay on a line sized for a
+  label: it broke off mid-sentence in the platform detail's clipped line and filled the row on the game page. The
+  register is read off the declaration and never inferred from the row, because an identity ending in `_libretro.so` is
+  the resolver's spelling to change and because a row several emulators declare carries the prose of exactly one of them
+  — the first, which is also the one whose `declaration` the row states. A row that states none shows none either; its
+  description is the file name, which the rules below take out anyway.
+
+  Those rules apply to what is left. Both spell the name into the words, and across the 292 `.info` files a stock
   RetroDECK ships (695 declared entries) they do it in three shapes: the description IS the name (35%), the name then
   prose (47%), or the name with its directory then prose (17%). The rule is to drop a leading token that names this file
   — as itself or at the end of a path — and keep the rest verbatim, with a first half that strips the name where the

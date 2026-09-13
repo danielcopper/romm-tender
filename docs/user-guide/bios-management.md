@@ -26,8 +26,8 @@ When you open a game whose platform has BIOS files — on your RomM server, or a
 — the game detail panel's **BIOS** tab shows the readiness line. Its dot color reflects the same
 unknown/ok/partial/missing verdict used everywhere in the plugin:
 
-- **Green** — nothing required is missing: "All required ready (2/2)", or "The launching emulator requires none of the
-  files it names (3/5 files held)" when the emulator you launch with lists no file it needs
+- **Green** — nothing required is missing: "All required ready (2/2)", or "mGBA requires none of the files it names (3/5
+  files held)" when the emulator you launch with lists no file it needs
 - **Orange** — some required files present: "1/2 required files ready"
 - **Red** — no required files present yet, or "Needs at least one BIOS file" where the console itself will not start
   without one of them (see [When the console needs a BIOS image](#when-the-console-needs-a-bios-image))
@@ -43,9 +43,10 @@ you have. It is not a readiness score, and those files are not "optional" either
 may well require one.
 
 The line says whose requirement it is on purpose, and it is a statement about the **emulator**, not about the console.
-It names no emulator itself because this page already does twice over: the **Emulator** column beside it, and the
-highlight each file row puts on the one you launch with. Whether the console itself starts without a BIOS image is a
-separate question with a line of its own (see
+It names that emulator, and the name is the one the rest of the line was worked out for — the same pick the counts
+beside it were filtered by, so the sentence and the numbers can never be about two different emulators. Where the plugin
+could not settle on one, the line says "The launching emulator requires none of the files it names" instead. Whether the
+console itself starts without a BIOS image is a separate question with a line of its own (see
 [When the console needs a BIOS image](#when-the-console-needs-a-bios-image)), and where nothing is recorded about the
 console the plugin says nothing about it either — so a line reading only "nothing required" would have claimed an
 all-clear nobody gave.
@@ -66,7 +67,10 @@ installed asks for, one for the files nothing installed could answer about. A ro
 declares, with its folder where it asks for one (`dc/dc_boot.bin`) — that is where the file has to go, and it is the one
 thing you need when placing one by hand. Whatever the emulator's packager wrote about the file goes on its own line
 under the row, and only where it says something the name does not: those descriptions usually repeat the file name, and
-many are nothing else.
+many are nothing else. It is the **emulator's own** wording — a RetroArch core's description file — and it is shown for
+no other source. Where the plugin's own card stands in for an emulator that ships no description of its own, that card
+explains the requirement in full sentences, which is a paragraph on a line meant for a few words; the row shows the file
+and its state instead.
 
 Beside the Play button there is also a short **BIOS** badge, which is a shortcut into this tab. Two things raise it, and
 nothing else does. The first: a file the active core **requires** is shown to be absent from your BIOS folder. If that
@@ -236,19 +240,19 @@ and the row you focus is the one the right-hand pane describes.
 8. Below it, a table lists the files themselves: the **file**, whether it is **on disk**, and its **contents**. Where
    the emulator asks for the file in a subfolder, the folder is shown in front of the name (`dc/` **`dc_boot.bin`**) —
    that is where it has to go, and it is the one thing you need when placing a file by hand. The description in
-   parentheses is printed under the row rather than beside the name, so it is not cut off. On disk holds marks and no
-   words. The first mark carries two things — a green ✓ for a file that is there and required, a red ✗ for one that is
-   required and is not, and the paler green ✓ / grey ✗ for a file the core you launch with does not need either way.
-   Amber means nothing could be established: a ✓ or ✗ in amber is a file whose presence is known but which no installed
-   emulator could be asked about, and a `?` is a row that could not be checked at all. Where the system needs **one of
-   several** images (see [When the console needs a BIOS image](#when-the-console-needs-a-bios-image)) those rows are
-   marked as the group they are: a red ✗ on each while none is in place, and once you have one of them that row turns
-   green ✓ and the others go grey, because from then on they really are spare. A violet ⊘ appears **beside** that mark —
-   never in place of it — when your RomM library does not hold the file: a file you already have keeps its green ✓, one
-   you still need keeps its red ✗, and the ⊘ adds that the plugin cannot fetch it for you. A legend under the table, one
-   line per mark, names the marks that are actually on it. Anything else a row has to say is printed **under** the row
-   rather than in the column — that a file was provided by RetroDECK, that a folder holds no image, that a location
-   could not be read
+   parentheses is printed under the row rather than beside the name, so it is not cut off — and, as on the game page, it
+   is shown only where the emulator itself wrote it. On disk holds marks and no words. The first mark carries two things
+   — a green ✓ for a file that is there and required, a red ✗ for one that is required and is not, and the paler green ✓
+   / grey ✗ for a file the core you launch with does not need either way. Amber means nothing could be established: a ✓
+   or ✗ in amber is a file whose presence is known but which no installed emulator could be asked about, and a `?` is a
+   row that could not be checked at all. Where the system needs **one of several** images (see
+   [When the console needs a BIOS image](#when-the-console-needs-a-bios-image)) those rows are marked as the group they
+   are: a red ✗ on each while none is in place, and once you have one of them that row turns green ✓ and the others go
+   grey, because from then on they really are spare. A violet ⊘ appears **beside** that mark — never in place of it —
+   when your RomM library does not hold the file: a file you already have keeps its green ✓, one you still need keeps
+   its red ✗, and the ⊘ adds that the plugin cannot fetch it for you. A legend under the table, one line per mark, names
+   the marks that are actually on it. Anything else a row has to say is printed **under** the row rather than in the
+   column — that a file was provided by RetroDECK, that a folder holds no image, that a location could not be read
 9. **Contents** answers for a required **folder**: how many BIOS images it holds — and the images themselves are listed
    under the row, in the emulator's own words so you can match one against its picker — or that it holds none, or that
    its contents could not be established. A plain file reads an em dash, which means the question was never asked:

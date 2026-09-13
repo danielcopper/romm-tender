@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     import logging
 
     from domain.bios_file import BiosFile
-    from domain.emulator_commands import EmulatorOption
+    from domain.emulator_commands import EmulatorOption, LaunchingEmulator
     from domain.firmware_wants import FirmwareCatalogue
     from services.firmware.demand import FirmwareDemand
     from services.firmware.listing import FirmwareListing
@@ -140,23 +140,27 @@ class FirmwareStatusReader:
         return resolve_platform_option(options["options"], self._platform_core_reader.get_platform_core(platform_slug))
 
     def _resolve_launching_emulator(
-        self, platform_slug: str, options: dict[str, Any], launching_emulator: str | None
-    ) -> str | None:
-        """Return the emulator identity the firmware answer is scoped to.
+        self, platform_slug: str, options: dict[str, Any], launching_emulator: LaunchingEmulator | None
+    ) -> LaunchingEmulator | None:
+        """Return the emulator PICK the firmware answer is scoped to.
+
+        The pick, not its identity: the answer states both the emulator it is
+        scoped to and the name it prints, and handing those two on separately is
+        how one surface comes to name one emulator and judge by another
+        (:class:`~domain.emulator_commands.LaunchingEmulator`).
 
         A non-``None`` *launching_emulator* is the pre-resolved per-game pick (the
         game-detail path runs ``ActiveCoreResolver`` upstream) and is used as-is —
         libretro or standalone, since the identity names both. ``None`` is the
         platform-level callers' "use the platform's own pick" signal, and it is
-        also what the per-game path passes when nothing could be resolved or
-        identified for the ROM at all. Both are answered by
-        :meth:`_platform_emulator`, so the game page and the platform pane cannot
-        key their answers on two different emulators.
+        also what the per-game path passes when nothing could be resolved for the
+        ROM at all. Both are answered by :meth:`_platform_emulator`, so the game
+        page and the platform pane cannot key their answers on two different
+        emulators.
         """
         if launching_emulator is not None:
             return launching_emulator
-        emulator = self._platform_emulator(platform_slug, options)
-        return emulator.emulator if emulator is not None else None
+        return self._platform_emulator(platform_slug, options)
 
     def _bios_aggregates(self, files, platform_slug: str, complete: bool, system_image: str) -> dict[str, Any]:
         """The counts, level and label every surface reads off one classified file list.
@@ -231,10 +235,28 @@ class FirmwareStatusReader:
         result["bios_label"] = compute_bios_label(status)
         return result
 
-    def _bios_payload(self, files, platform_slug: str, complete: bool, system_image: str) -> dict[str, Any]:
-        """The aggregates plus the per-file rows — what the per-game surfaces read."""
+    def _bios_payload(
+        self,
+        files,
+        platform_slug: str,
+        complete: bool,
+        system_image: str,
+        launching_emulator: LaunchingEmulator | None,
+    ) -> dict[str, Any]:
+        """The aggregates plus the per-file rows — what the per-game surfaces read.
+
+        ``active_core_label`` is the NAME of the pick everything else here was
+        scoped to, taken off that same pick rather than resolved again, so the
+        sentence the game page heads its BIOS section with names the emulator the
+        counts under it were filtered by. ``None`` where no pick could be made or
+        it carries no label, and the surface then words the sentence without a
+        name. The IDENTITY is deliberately not served back: what the launch is
+        keyed on reaches the frontend through ``get_platform_core_info``, and this
+        payload's own filtering already applied it (#923).
+        """
         return {
             **self._bios_aggregates(files, platform_slug, complete, system_image),
+            "active_core_label": launching_emulator.label if launching_emulator is not None else None,
             "files": [asdict(f) for f in files],
         }
 
@@ -581,18 +603,24 @@ class FirmwareStatusReader:
 
     # ── The per-game check ───────────────────────────────────
 
-    async def check_platform_bios(self, platform_slug, launching_emulator=None) -> dict[str, Any]:
+    async def check_platform_bios(
+        self, platform_slug, launching_emulator: LaunchingEmulator | None = None
+    ) -> dict[str, Any]:
         """Check if RomM has firmware for this platform and whether it's downloaded.
 
         Returns BIOS status only. ``launching_emulator`` is the pre-resolved
-        emulator IDENTITY used to filter the firmware list by what THIS emulator
-        needs (an INPUT to ``collect_firmware_status`` so ``required_count`` /
-        the missing-BIOS badge stay launch-aware); it is never served back to the
-        UI. ``None`` means "use the platform's own pick"
-        (:meth:`_resolve_launching_emulator`); the per-game game-detail path
-        passes the ROM's resolved identity, which names a standalone emulator as
-        readily as a libretro core. Emulator info reaches the frontend through
-        the dedicated ``get_platform_core_info`` path, not this payload (#923).
+        per-game PICK — the whole resolution rather than its identity, because
+        this answer states both the emulator it was filtered by and the name it
+        prints, and a caller handing those on separately is how a surface comes
+        to name one emulator and judge by another
+        (:class:`~domain.emulator_commands.LaunchingEmulator`). Its identity
+        filters the firmware list by what THIS emulator needs (an INPUT to
+        ``collect_firmware_status`` so ``required_count`` / the missing-BIOS
+        badge stay launch-aware) and names a standalone emulator as readily as a
+        libretro core; its label rides back out as ``active_core_label`` and
+        nothing else does (#923 — what a game launches with reaches the frontend
+        through ``get_platform_core_info``). ``None`` means "use the platform's
+        own pick" (:meth:`_resolve_launching_emulator`).
 
         An unreachable server costs the files only it knows about, not the
         answer: what the platform's emulators want is read locally either way.
@@ -605,7 +633,8 @@ class FirmwareStatusReader:
         system = self._resolve_system(platform_slug)
         fw_slugs = firmware_paths.resolve_firmware_slugs(platform_slug)
         options = self._core_info.get_emulator_options(system)
-        launching_emulator = self._resolve_launching_emulator(platform_slug, options, launching_emulator)
+        pick = self._resolve_launching_emulator(platform_slug, options, launching_emulator)
+        identity = pick.emulator if pick is not None else None
 
         try:
             firmware_list = await self._loop.run_in_executor(None, self._listing.get_firmware_list)
@@ -631,17 +660,17 @@ class FirmwareStatusReader:
             for r in rows
         ]
         placements = catalogue.by_file_name()
-        complete = catalogue.reading_complete_for(launching_emulator)
+        complete = catalogue.reading_complete_for(identity)
         files = collect_firmware_status(
-            items, placements, complete, launching_emulator, catalogue.emulators_needing_one_of_their_files()
+            items, placements, complete, identity, catalogue.emulators_needing_one_of_their_files()
         )
-        system_image = classify_system_image(catalogue.verdict_for(launching_emulator), files, launching_emulator)
+        system_image = classify_system_image(catalogue.verdict_for(identity), files, identity)
 
         if not files:
             settled = complete and system_image == SYSTEM_IMAGE_NOT_DEMANDED
             return {"needs_bios": False} if settled else {"needs_bios": False, "bios_status_unknown": True}
 
-        return self._bios_payload(files, platform_slug, complete, system_image)
+        return self._bios_payload(files, platform_slug, complete, system_image, pick)
 
 
 def _has_something_to_say(plat: dict[str, Any]) -> bool:
@@ -696,6 +725,7 @@ def _wanted_fields(entry) -> dict[str, Any]:
         "supplied_by": entry.supplied_by,
         "satisfied": entry.satisfied,
         "declared_kind": entry.declared_kind,
+        "declaration": entry.declaration,
         "caveats": entry.caveats,
         "images": entry.images,
     }

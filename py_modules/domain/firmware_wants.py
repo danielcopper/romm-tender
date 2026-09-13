@@ -227,6 +227,18 @@ class FirmwarePlacement:
     consumer will never write. ``declared_kind`` does not, because it is a
     property of the declaration rather than of the destination.
 
+    ``declaration`` is the resolver's own word for HOW the entry ``description``
+    came from stated what it wants — ``read`` off a libretro core's own ``.info``
+    beside it, ``packaged`` out of the card that stands in for an emulator
+    shipping none. It rides here because the two speak in different registers:
+    a ``.info``'s prose is a packager's label for what the file IS
+    (``(PS1 JP BIOS)``), a card's is atlas explaining the requirement in whole
+    sentences, and a surface that shows one may not want the other. It names the
+    declaration the DESCRIPTION came from and no other — a file two emulators
+    declare has one description here, taken from the first of them
+    (``adapters.atlas_firmware._placement_for``), so any other entry's word for
+    it would describe prose this row does not carry.
+
     ``wants`` is never empty: a placement exists because at least one emulator
     declared the file, and a placement without an owning emulator is exactly the
     orphaned entry this model removes.
@@ -238,6 +250,7 @@ class FirmwarePlacement:
     wants: tuple[FirmwareWant, ...]
     present: bool | None = None
     declared_kind: str = DECLARED_FILE
+    declaration: str | None = None
     caveats: tuple[str, ...] = ()
     folder: FolderVerdict | None = None
     supplied_by: str | None = None

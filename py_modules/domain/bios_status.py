@@ -118,6 +118,13 @@ class BiosFileEntry:
     as a file the library is missing. It defaults to the silent answer, which is
     the one a row nothing declares has.
 
+    ``declaration`` is the resolver's own word for how the emulator that supplied
+    ``description`` stated what it wants — ``read`` off its own ``.info``,
+    ``packaged`` out of the card standing in for one that ships none — and it is
+    what a surface reads to decide whether that prose is the packager's label for
+    the file or atlas explaining the requirement in sentences. ``None`` for a row
+    no emulator declared, whose ``description`` is the file name itself.
+
     ``declared_path`` is where the emulator said the file goes, relative to the
     firmware root — ``dc/dc_boot.bin`` where a subdirectory was declared, the
     bare name otherwise. It is carried because ``file_name`` is its basename and
@@ -152,6 +159,7 @@ class BiosFileEntry:
     supplied_by: str | None = None
     satisfied: bool | None = None
     declared_kind: str = DECLARED_FILE
+    declaration: str | None = None
     caveats: tuple[str, ...] = ()
     images: tuple[str, ...] = ()
 
@@ -217,6 +225,7 @@ def format_bios_status(
                 supplied_by=f.get("supplied_by"),
                 satisfied=f.get("satisfied"),
                 declared_kind=f.get("declared_kind", DECLARED_FILE),
+                declaration=f.get("declaration"),
                 caveats=tuple(f.get("caveats", ())),
                 images=tuple(f.get("images", ())),
             )
@@ -300,6 +309,7 @@ def build_file_entry(
         supplied_by=placement.supplied_by if placement is not None else None,
         satisfied=_row_verdict(placement, downloaded),
         declared_kind=placement.declared_kind if placement is not None else DECLARED_FILE,
+        declaration=placement.declaration if placement is not None else None,
         caveats=placement.caveats if placement is not None else (),
         images=folder.images if folder is not None else (),
     )

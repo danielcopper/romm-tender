@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     import asyncio
     import logging
 
+    from domain.emulator_commands import LaunchingEmulator
     from services.protocols import (
         Clock,
         CoreInfoProvider,
@@ -154,7 +155,9 @@ class FirmwareService:
         """Return one platform's overview entry, or ``None`` where it has none to show."""
         return await self._status.get_platform_firmware_status(platform_slug)
 
-    async def check_platform_bios(self, platform_slug, launching_emulator=None) -> dict[str, Any]:
+    async def check_platform_bios(
+        self, platform_slug, launching_emulator: LaunchingEmulator | None = None
+    ) -> dict[str, Any]:
         """Return the platform's BIOS status, filtered by what *launching_emulator* needs."""
         return await self._status.check_platform_bios(platform_slug, launching_emulator)
 

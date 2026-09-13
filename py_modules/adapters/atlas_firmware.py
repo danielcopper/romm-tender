@@ -411,7 +411,9 @@ def _placement_for(
     is the early return: a standalone emulator's own XDG tree holding the file
     says nothing about the BIOS root the caller will write to, so the reading is
     dropped rather than travelling on to describe somewhere else. What survives
-    is the declaration — its kind is what the emulator OPENS, not what is there.
+    is the declaration — its kind is what the emulator OPENS, not what is there,
+    and its ``declaration`` state says which register the description is written
+    in, which is a property of the entry that stated it rather than of the place.
     """
     first_core, first = pairs[0]
     directory = first.declared_kind == DECLARED_DIRECTORY
@@ -425,6 +427,7 @@ def _placement_for(
             description=first.description,
             wants=wants,
             declared_kind=declared_kind,
+            declaration=first_core.declaration,
         )
 
     speaking = _speaking_for(at_path, in_dir, first, emulator_identity(first_core))
@@ -437,6 +440,7 @@ def _placement_for(
         wants=wants,
         present=first.present,
         declared_kind=declared_kind,
+        declaration=first_core.declaration,
         caveats=tuple(dict.fromkeys(caveat.code for caveat in speaking)),
         folder=folder,
         supplied_by=supplied.label if supplied is not None else None,

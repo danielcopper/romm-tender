@@ -15,7 +15,7 @@ from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.uow_open_probe import record_uow_open
 
 from domain.disc_selection import Disc
-from domain.emulator_commands import options_to_payload
+from domain.emulator_commands import LaunchingEmulator, options_to_payload
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.shortcut_data import EmulatorInvocation
@@ -43,14 +43,16 @@ class FakeBiosChecker:
     """In-memory ``BiosChecker`` for tests (only implements the async entry CoreService uses)."""
 
     def __init__(self) -> None:
-        self.calls: list[tuple[str, str | None]] = []
+        self.calls: list[tuple[str, LaunchingEmulator | None]] = []
         self.payload: dict[str, Any] = {"needs_bios": False}
         self.side_effect: BaseException | None = None
 
-    async def check_platform_bios(self, platform_slug: str, active_core_so: str | None = None) -> dict[str, Any]:
+    async def check_platform_bios(
+        self, platform_slug: str, launching_emulator: LaunchingEmulator | None = None
+    ) -> dict[str, Any]:
         if self.side_effect is not None:
             raise self.side_effect
-        self.calls.append((platform_slug, active_core_so))
+        self.calls.append((platform_slug, launching_emulator))
         return self.payload
 
 

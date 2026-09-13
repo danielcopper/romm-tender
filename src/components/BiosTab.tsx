@@ -150,11 +150,18 @@ function buildBiosCoreLines(
  * "Emulator" rather than "core", because what a game launches with can be a
  * STANDALONE emulator — DuckStation, PCSX2 — and one of those is not a core.
  * The whole answer is keyed on the emulator's identity for that reason, so a
- * sentence saying "core" would name a kind the state does not have. It names no
- * emulator for the reason the console's own sentence below does not — the
- * highlighted line in the emulator list says which one — plus one this surface
- * has of its own: `BiosStatus` carries no label at all, so a name here would
- * have to be taken from the core read beside it.
+ * sentence saying "core" would name a kind the state does not have.
+ *
+ * **And it names that emulator**, because a sentence about what "the launching
+ * emulator" requires sat two inches from an `Active Core: mGBA` row and a
+ * golden `mGBA (optional)` line under it, saying less than everything around it.
+ * The name is `active_core_label` on this same payload — the label half of the
+ * one pick the backend filtered these counts by — never the core read beside it
+ * on the page, which is a second resolution of the same question and the split
+ * that once had a surface name PCSX ReARMed while judging by the default. A
+ * payload carrying no label is a pick that could not be made or carries no name
+ * of its own, and the sentence then stands as it always did rather than
+ * inventing one.
  *
  * The **console's own demand** (`system_image`) is a third shape and comes first
  * among the answers, because it is the one no count can be relied on to state:
@@ -205,7 +212,8 @@ function buildBiosHeader(bios: BiosStatus, biosLevel: BiosTabProps["biosLevel"])
         ? `All required ready (${reqDone}/${reqCount})`
         : `${reqDone}/${reqCount} required files ready`;
   } else {
-    biosLabel = `The launching emulator requires none of the files it names${heldRatio}`;
+    const emulator = bios.active_core_label;
+    biosLabel = `${emulator || "The launching emulator"} requires none of the files it names${heldRatio}`;
   }
 
   return [

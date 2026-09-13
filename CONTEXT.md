@@ -448,6 +448,22 @@ Scoped to the **active core**, like **required by active core** and unlike **wan
 `absent` under SwanStation, whose five declared images the console needs one of, and `not demanded` under PCSX ReARMed,
 which carries its own substitute.
 
+### Declaration register (firmware): read / packaged
+
+How the emulator that supplied a firmware row's **description** stated what it wants — the resolver's own word, carried
+verbatim onto the row. **read** is a libretro core's own description file, read off the machine beside it, and its prose
+is the packager's LABEL for the file: `(PS1 JP BIOS)`, which says what the file is where its name does not —
+`ps1_rom.bin` is a PlayStation 3 image. **packaged** is the card the resolver keeps for an emulator shipping no
+declaration of its own, and its prose is the resolver explaining the REQUIREMENT in whole sentences. One field, two
+kinds of writing, and only the first is shown on a row: the second is a paragraph on a line sized for a label, and it
+broke off mid-sentence on the platform pane and filled the row on the game page.
+
+It is the register of the ONE entry the description came from — a file several emulators declare carries the prose of
+the first of them — and never a property of the file, the row or the emulator behind it. The resolver states three
+further words (`absent`, `unreadable`, `unsupported`), none of which can reach a row: an entry in one of those states
+carries no requirement, so it declares no file. A row nothing declared states no register at all, and its description is
+its own file name.
+
 ### Safely-bakeable
 
 An ES-DE `<command>` the plugin can bake into a Steam shortcut's `-e` override: a real emulator invocation that **ends

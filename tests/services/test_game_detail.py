@@ -852,9 +852,13 @@ class TestGetBiosStatusFound:
         """The per-game active core (resolved by rom_id) is threaded into the BIOS filter.
 
         The BIOS check no longer receives a ROM filename — game-detail resolves
-        the active ``.so`` through ``ActiveCoreReader`` (which folds the per-game
-        emulator_override pin) and passes the resolved core in, so the core-aware
-        filter keys off the pin rather than a platform default.
+        the emulator through ``ActiveCoreReader`` (which folds the per-game
+        emulator_override pin) and passes that whole resolution in, so the
+        core-aware filter keys off the pin rather than a platform default.
+
+        The PICK goes over rather than its identity, because the answer coming
+        back states both the emulator it was filtered by and the name it prints:
+        split here, the two could be resolved separately and disagree.
         """
         _seed_rom(plugin, 42, app_id=50000, name="Game", platform_slug="gba")
         active_core_resolver.per_rom[42] = ("gpsp_libretro", "gpSP")
@@ -870,7 +874,8 @@ class TestGetBiosStatusFound:
 
         await game_detail_service.get_bios_status(42)
         assert captured["slug"] == "gba"
-        assert captured["launching_emulator"] == "gpsp_libretro.so"
+        assert captured["launching_emulator"].emulator == "gpsp_libretro.so"
+        assert captured["launching_emulator"].label == "gpSP"
         assert active_core_resolver.emulator_calls == [42]
 
     @pytest.mark.asyncio
@@ -887,7 +892,7 @@ class TestGetBiosStatusFound:
         # rom 43 falls through to the default (None, None) → system default.
 
         async def fake_check(slug, launching_emulator=None):
-            if launching_emulator == "gpsp_libretro.so":
+            if launching_emulator is not None and launching_emulator.emulator == "gpsp_libretro.so":
                 return {
                     "needs_bios": True,
                     "server_count": 1,

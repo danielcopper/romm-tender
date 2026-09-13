@@ -277,6 +277,45 @@ class TestPlacements:
 
         assert [(w.emulator, w.required) for w in placement.wants] == [("pcsx2_libretro.so", True)]
 
+    def test_a_rows_declaration_is_the_one_the_description_came_from(self, adapter, monkeypatch):
+        """The register a row's prose is written in, read off the entry that wrote it.
+
+        Two emulators declare one PlayStation image and their descriptions are
+        two kinds of writing: a packaged card explains the requirement in whole
+        sentences, a libretro ``.info`` labels the file. The placement keeps one
+        description — the first pair's — so it has to keep that pair's word for
+        how it was written; taking the word off any other declaring entry would
+        describe prose this row does not carry.
+        """
+        packaged_prose = (
+            "a PlayStation BIOS image — the console runs it before any disc, and DuckStation starts "
+            "nothing without one — found by the search, not named by any setting"
+        )
+        answer = _answer(
+            _core(
+                core_so=None,
+                emulator="DUCKSTATION",
+                declaration="packaged",
+                requirements=(_requirement(core_so=None, file_name="scph1001.bin", description=packaged_prose),),
+            ),
+            _core(
+                core_so="swanstation_libretro.so",
+                requirements=(
+                    _requirement(
+                        core_so="swanstation_libretro.so",
+                        file_name="scph1001.bin",
+                        description="scph1001.bin (PS1 US BIOS)",
+                    ),
+                ),
+            ),
+        )
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+
+        placement = adapter().placements[0]
+
+        assert placement.description == packaged_prose
+        assert placement.declaration == "packaged"
+
     def test_an_entry_the_resolver_could_not_identify_still_owns_its_file(self, adapter, monkeypatch):
         """EmuDeck's ``n3ds`` rows: a launch atlas classifies standalone and cannot name.
 

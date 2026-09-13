@@ -22,6 +22,29 @@ export type FirmwareWanted = "needed" | "optional" | "not_needed" | "unknown";
 export type FirmwareDeclaredKind = "file" | "directory";
 
 /**
+ * How the emulator that supplied a row's `description` stated what it wants, in
+ * the resolver's own vocabulary and carried verbatim.
+ *
+ * `"read"` is a libretro core's own `.info`, read off the machine beside it, and
+ * its description is the packager's LABEL for the file — `"(PS1 JP BIOS)"`,
+ * which says what the file is where its name does not (`ps1_rom.bin` is a
+ * PlayStation 3 image). `"packaged"` is the card atlas keeps for an emulator
+ * shipping no declaration of its own, and its description is atlas explaining
+ * the REQUIREMENT in whole sentences — "a PlayStation BIOS image — the console
+ * runs it before any disc, and DuckStation starts nothing without one". The two
+ * are the same field and are not the same kind of prose, which is the whole
+ * reason this value travels.
+ *
+ * The resolver states three further words (`absent`, `unreadable`,
+ * `unsupported`), and none of them can reach a row here: an entry in one of
+ * those states carries no requirement, so it declares no file and puts no
+ * description on one. They are in the type because the value is the resolver's
+ * and narrowing it to the two we see would be our own claim about its
+ * vocabulary.
+ */
+export type FirmwareDeclarationState = "read" | "packaged" | "absent" | "unreadable" | "unsupported";
+
+/**
  * The reading's answer about one row, carried on both row shapes.
  *
  * `satisfied` is the verdict and the axis the REQUIRED counts key off: the
@@ -35,10 +58,18 @@ export type FirmwareDeclaredKind = "file" | "directory";
  * names what a satisfied folder holds, in the resolver's own words. A surface
  * takes the CAUSE of a verdict from those, because `satisfied` is deliberately
  * the verdict alone and carries none of it.
+ *
+ * `declaration` is not a verdict but rides with them because it is the same
+ * kind of fact — the resolver's own word, carried verbatim, for a row nobody
+ * here re-derives. See {@link FirmwareDeclarationState}.
  */
 interface FirmwareVerdict {
   satisfied?: boolean | null;
   declared_kind?: FirmwareDeclaredKind;
+  /** Which register this row's `description` is written in — see
+   *  {@link FirmwareDeclarationState}. Absent for a row nothing declared, and
+   *  for a payload from before the field existed. */
+  declaration?: FirmwareDeclarationState;
   caveats?: string[];
   images?: string[];
 }
@@ -352,6 +383,15 @@ export interface BiosStatus {
    *  {@link SystemImage}. It is deliberately NOT in `required_count`: that count
    *  is files each individually required, and this one is "one of these". */
   system_image?: SystemImage;
+  /** The NAME of the emulator every answer here was scoped to — the label half
+   *  of the one pick the backend filtered these counts by, taken off that same
+   *  resolution rather than resolved again, so a sentence over them cannot name
+   *  one emulator while the counts under it are about another. Not the picker's
+   *  data: which emulators a platform offers, and the identity this one is keyed
+   *  on, reach the frontend through `get_platform_core_info` and not from here.
+   *  `null` or absent where no pick could be made or it carries no label, and a
+   *  surface then words its sentence without a name rather than inventing one. */
+  active_core_label?: string | null;
   // Server files an installed emulator asks for, and files nothing could answer
   // about. A `not_needed` file is in neither — it is answered for, and wanted by
   // nothing — which is what keeps "nothing here is needed" apart from "nothing

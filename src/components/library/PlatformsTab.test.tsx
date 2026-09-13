@@ -80,6 +80,9 @@ function firmwareFile(overrides: Record<string, unknown> = {}) {
     local_path: "/bios/gba_bios.bin",
     downloaded: false,
     description: "GBA BIOS",
+    // A libretro core's own `.info`, which is what the description on nearly
+    // every row here is — and the only declaration whose prose is shown at all.
+    declaration: "read" as const,
     wanted: "needed" as const,
     required_by_active: true,
     on_server: true,
@@ -2090,6 +2093,31 @@ describe("Library › Platforms", () => {
       // prefix on every row would be noise on the 488 that have none.
       expect(names).toContain("gba_bios.bin");
       expect(container.textContent).not.toContain("/gba_bios.bin");
+    });
+
+    it("shows no description under a row a packaged card describes", async () => {
+      // The description field carries two kinds of writing, and only one of
+      // them is a label: a packaged card explains the requirement in whole
+      // sentences, which broke off mid-sentence in this pane's width. Which it
+      // is comes from the declaration and is never guessed from the row.
+      mockFirmware([
+        firmwarePlatform({
+          files: [
+            firmwareFile({
+              file_name: "scph1001.bin",
+              description:
+                "a PlayStation BIOS image — the console runs it before any disc, and DuckStation starts " +
+                "nothing without one — found by the search, not named by any setting",
+              declaration: "packaged",
+            }),
+          ],
+        }),
+      ]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("scph1001.bin");
+      expect(container.textContent).not.toContain("the console runs it before any disc");
     });
 
     it("puts the description on its own line under the row, not beside the name", async () => {

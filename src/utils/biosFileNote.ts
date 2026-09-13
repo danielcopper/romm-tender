@@ -46,7 +46,7 @@ export type BiosNoteRow = Pick<
 >;
 
 /** The subset {@link biosFileDescription} reads — the same both-surfaces rule. */
-export type BiosDescriptionRow = Pick<BiosFileStatus, "file_name" | "description" | "declared_kind">;
+export type BiosDescriptionRow = Pick<BiosFileStatus, "file_name" | "description" | "declared_kind" | "declaration">;
 
 /**
  * Everything a row says about itself: one sentence, and the lines under it.
@@ -183,6 +183,23 @@ function folderWithheld(satisfied: boolean | null | undefined, has: (code: strin
  * for a row no placement covers, the file name itself (`build_file_entry`'s
  * `else file_name`). Both spell the name into the words.
  *
+ * **Only a `read` declaration's prose is shown at all**, which is the first
+ * thing decided here. That prose is a packager's LABEL for the file and is the
+ * one thing the row's own name cannot say — `ps1_rom.bin` is a PlayStation 3
+ * image, and nothing about the name says so. A `packaged` row's is a different
+ * kind of writing under the same field: atlas explaining the requirement in
+ * whole sentences ("a PlayStation BIOS image — the console runs it before any
+ * disc, and DuckStation starts nothing without one — found by the search, not
+ * named by any setting"), which is an essay on a line sized for a label. Neither
+ * surface has room for it: on the platform detail it broke off mid-sentence, on
+ * the game page it filled the row. So the register is read off the DECLARATION
+ * and never guessed from the row — an identity ending in `_libretro.so` is a
+ * libretro core today and is the resolver's spelling to change, and a row is
+ * declared by several emulators while this prose comes from exactly one of them
+ * ({@link FirmwareDeclarationState}). A row that states no declaration shows
+ * none either: its description is the file name (above), which the rules below
+ * take out anyway.
+ *
  * Measured over the 292 `.info` files a stock RetroDECK ships — 695 declared
  * firmware entries — the description's relation to the row's own `file_name`
  * (which is `os.path.basename` of the declared path) falls into six shapes:
@@ -219,6 +236,7 @@ export function biosFileDescription(file: BiosDescriptionRow): string | null {
   // "folder": a restatement of `declared_kind`. This is a rule about what a
   // folder ROW shows, not a prediction about what descriptions exist.
   if (file.declared_kind === "directory") return null;
+  if (file.declaration !== "read") return null;
   const description = file.description.trim();
   if (!description) return null;
   // A name with a space in it is not one token, so the token rule cannot see it.

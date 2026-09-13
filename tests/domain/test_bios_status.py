@@ -311,6 +311,41 @@ class TestTheVerdictOverTheSystemImage:
         assert _status((_image("scph5501.bin", satisfied=True),)).system_image == SYSTEM_IMAGE_NOT_DEMANDED
 
 
+class TestTheRegisterARowsProseIsWrittenIn:
+    """The declaration state travels onto the row, or says nothing at all.
+
+    A surface decides whether to print ``description`` from it, and the two
+    registers under that one field are a packager's label and atlas's own
+    sentences. Nothing here may be inferred from the row: a file no emulator
+    declared has a description too — its own name — and it is not written in
+    either register.
+    """
+
+    def test_the_row_carries_the_placements_declaration(self):
+        entry = build_file_entry(
+            "scph1001.bin",
+            False,
+            "/bios/scph1001.bin",
+            FirmwarePlacement(
+                file_name="scph1001.bin",
+                relative_path="scph1001.bin",
+                description="a PlayStation BIOS image — the console runs it before any disc",
+                wants=(FirmwareWant(emulator="DUCKSTATION", required=True),),
+                declaration="packaged",
+            ),
+            True,
+            "DUCKSTATION",
+        )
+
+        assert entry.declaration == "packaged"
+
+    def test_a_row_nothing_declared_states_no_declaration(self):
+        """Its description is the file name, and no emulator wrote that."""
+        entry = build_file_entry("stray.bin", False, "/bios/stray.bin", None, True, _CORE)
+
+        assert (entry.description, entry.declaration) == ("stray.bin", None)
+
+
 class TestWhatACoresEntryOnARowSays:
     """Per core: its own word about the file, and the table's word about its console.
 

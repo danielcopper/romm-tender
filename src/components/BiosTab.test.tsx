@@ -237,13 +237,110 @@ describe("BiosTab", () => {
     expect(container.textContent).not.toContain("Nothing required");
   });
 
+  it("names the emulator the answer was scoped to, where the answer names one", () => {
+    // The sentence sat two inches from an `Active Core` row and said less than
+    // everything around it. The name is the label half of the one pick the
+    // backend filtered these counts by, carried on the answer itself — reading
+    // it off the core payload beside it would be a second resolution of the
+    // same question.
+    const { container } = render(
+      <BiosTab
+        biosStatus={{
+          needs_bios: true,
+          server_count: 20,
+          local_count: 1,
+          all_downloaded: false,
+          required_count: 0,
+          required_downloaded: 0,
+          active_core_label: "mGBA",
+        }}
+        biosLevel="ok"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+
+    expect(container.textContent).toContain("mGBA requires none of the files it names (1/20 files held)");
+    expect(container.textContent).not.toContain("The launching emulator requires");
+  });
+
+  it("falls back to the nameless sentence where the answer names no emulator", () => {
+    // No pick could be made, or it carries no label of its own. The sentence is
+    // then exactly what it always was; inventing a name from the core list on
+    // the page is the split this field exists to close.
+    const { container } = render(
+      <BiosTab
+        biosStatus={{
+          needs_bios: true,
+          server_count: 20,
+          local_count: 1,
+          all_downloaded: false,
+          required_count: 0,
+          required_downloaded: 0,
+          active_core_label: null,
+        }}
+        biosLevel="ok"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+
+    expect(container.textContent).toContain(
+      "The launching emulator requires none of the files it names (1/20 files held)",
+    );
+  });
+
+  it("shows no description under a row a packaged card describes", () => {
+    // The same field carries two kinds of writing. A `.info`'s is a label for
+    // the file; a card's is atlas explaining the requirement in sentences, and
+    // on this pane it filled the row. The register is read off the declaration
+    // and never guessed from the row.
+    const { container } = render(
+      <BiosTab
+        biosStatus={{
+          needs_bios: true,
+          server_count: 1,
+          local_count: 0,
+          all_downloaded: false,
+          required_count: 1,
+          required_downloaded: 0,
+          required_withheld: 0,
+          files: [
+            {
+              file_name: "scph1001.bin",
+              downloaded: false,
+              local_path: "",
+              declared_path: "scph1001.bin",
+              description:
+                "a PlayStation BIOS image — the console runs it before any disc, and DuckStation starts " +
+                "nothing without one — found by the search, not named by any setting",
+              declaration: "packaged",
+              wanted: "needed",
+              required_by_active: true,
+              cores: {},
+              on_server: true,
+              satisfied: false,
+            },
+          ],
+        }}
+        biosLevel="missing"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+
+    expect(container.textContent).toContain("scph1001.bin");
+    expect(container.textContent).not.toContain("the console runs it before any disc");
+  });
+
   it("heads a row with the file it declares, and adds only what the description still says", () => {
     // The description is the packager's prose out of a core's `.info` — outside
     // the resolver's contract, and routinely spelling the row's own name into
     // its words. Heading the row with it put that prose where the file's
     // identity belongs; printing it whole would print the name twice. The two
     // rows below are the common shapes, and the second is the one with nothing
-    // to add.
+    // to add. Both are `read` rows, because that is what a `.info` is and only
+    // a `.info`'s prose is shown at all.
     const { container } = render(
       <BiosTab
         biosStatus={{
@@ -261,6 +358,7 @@ describe("BiosTab", () => {
               local_path: "",
               declared_path: "dc/dc_boot.bin",
               description: "dc/dc_boot.bin (Dreamcast BIOS)",
+              declaration: "read",
               wanted: "needed",
               required_by_active: true,
               cores: {},
@@ -273,6 +371,7 @@ describe("BiosTab", () => {
               local_path: "",
               declared_path: "macventure.dat",
               description: "macventure.dat",
+              declaration: "read",
               wanted: "needed",
               required_by_active: true,
               cores: {},
@@ -381,6 +480,7 @@ describe("BiosTab", () => {
               downloaded: false,
               local_path: "",
               description: "Dreamcast boot ROM",
+              declaration: "read",
               wanted: "needed",
               required_by_active: true,
               cores: {},

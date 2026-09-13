@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from models.sync import ClientSaveState
 
     from domain.disc_selection import Disc
+    from domain.emulator_commands import LaunchingEmulator
     from domain.rom_install import RomInstall
     from domain.save_answer import SaveAnswer
     from domain.save_layout import InSaveDir, SaveLayout
@@ -209,16 +210,19 @@ class BiosChecker(Protocol):
     ``launching_emulator`` is pre-resolved rather than a ROM filename: the
     per-game emulator is resolved upstream (GameDetailService runs
     ``ActiveCoreReader.active_emulator_for_rom`` where it already holds the
-    ``rom_id``) so the BIOS filter never re-derives it. It is the resolver's
-    IDENTITY for that emulator, which names a standalone one as readily as a
-    libretro core. ``None`` means "use the platform's own pick" — the
-    platform-level checks (the ``check_platform_bios`` callable, the
-    post-system-core-write recheck) pass it, and so does the per-game path when
-    nothing could be resolved or identified for the ROM.
+    ``rom_id``) so the BIOS filter never re-derives it. It is the whole PICK
+    rather than one field of it: the answer states both the emulator it was
+    filtered by and the name it prints, so the two travel as one value and no
+    caller can pair one emulator's identity with another's name
+    (``domain.emulator_commands.LaunchingEmulator``). Its identity names a
+    standalone emulator as readily as a libretro core. ``None`` means "use the
+    platform's own pick" — the platform-level checks (the
+    ``check_platform_bios`` callable, the post-system-core-write recheck) pass
+    it, and so does the per-game path when nothing could be resolved for the ROM.
     """
 
     async def check_platform_bios(
-        self, platform_slug: str, launching_emulator: str | None = None
+        self, platform_slug: str, launching_emulator: LaunchingEmulator | None = None
     ) -> dict[str, Any]: ...
 
 
