@@ -1112,25 +1112,35 @@ it, for the focused platform:
   it, because a rule applied on one is a row reading two ways: the game page's BIOS tab used to head its rows with the
   raw description, which put the packager's prose where the file's identity belongs — and heading such a row with the
   declared file instead prints the name a second time under it on every shape that opens with the name, unless this rule
-  takes it back out. There the row's head is the declared path whole rather than a prefix and a name — it has one span —
-  and the description leads the indented block under it, above a folder's images and the per-core lines, because a
-  second em-dash segment beside the note would read as a chain of equals on a narrow line.
+  takes it back out. There the row's head is the declared path whole rather than a prefix and a name.
 
-  **The description is on its own line under the row** and never beside the name: at the Deck's scale the `File` column
-  is ~150 px and a fifty-character parenthesis was clipped mid-word on every row that had one. It is muted on both
-  surfaces, and on the **platform detail** that line is itself clipped to one line (`nowrap` + ellipsis); the game
-  page's BIOS tab lets it wrap. The **declared folder** goes the other way, onto the name line as a muted prefix (`dc/`
-  **`dc_boot.bin`**), where it belongs to the file's identity — `declared_path` carries it, because `file_name` is a
-  basename and `local_path` is joined under a root the frontend does not know. 207 of the 695 declarations name a
-  subdirectory and their descriptions spell it in only 115, so the description was never a substitute. A row can
-  therefore carry two lines under it — the description first, then `biosFileNote`'s note — and neither is in a cell any
-  more. Contents is answered for a folder declaration only: the count of images it holds (the resolver's verbatim
-  strings are listed full-width under the row, `pre-wrap`, because the padding in them is what makes a line matchable
-  against the emulator's own picker), or that it holds none, or that nothing could establish its contents. A file row
-  reads an em dash, and that em dash means the question was never asked — the machine-wide reading is deliberately
-  unverified, #1803 is what will ask it, and until then the dash must not come to mean "asked, and nothing found". The
-  section appears whenever the firmware read speaks for the platform, synced or not — there is nothing to say about one
-  it does not cover.
+  **Where the result GOES is each surface's own, and the two differ because their name lines do.** On the game page's
+  BIOS tab the label follows the name on the SAME line, in the packager's own punctuation — `scph5500.bin (PS1 JP BIOS)`
+  — which is the form it was written in, with our declared path in place of the bare basename. Three parts read left to
+  right there: the name, then what the file IS, then `biosFileNote`'s note behind its em dash, which is how it STANDS.
+  The two marks do the separating themselves — parentheses for an identity, a dash for a state — so the pair does not
+  read as a chain of equals. It is a span of its own inside the name span, muted like the per-core lines rather than
+  coloured like the name (a sibling flex item would take the row's 8px gap where the packager wrote a space), and the
+  block under the row is then what the read found and who wants the file, with nothing in it that is about the file's
+  identity. Under the row is where the label used to be, and against a list of five emulator lines it read as a sixth
+  entry.
+
+  On the **platform detail** it stays a muted line under the row, clipped to one line (`nowrap` + ellipsis). That is a
+  column width and not a difference of opinion: that name sits in a ~202px table cell that clips, and it has already
+  given up its folder prefix to the same shortage, so a label hung off it would take the NAME off the screen — the one
+  thing a reader placing a file by hand needs. The reason is stated at both call sites, because "unify the two surfaces"
+  is the obvious-looking change that breaks it. The **declared folder** goes the other way on both, onto the name line
+  as a muted prefix (`dc/` **`dc_boot.bin`**), where it belongs to the file's identity — `declared_path` carries it,
+  because `file_name` is a basename and `local_path` is joined under a root the frontend does not know. 207 of the 695
+  declarations name a subdirectory and their descriptions spell it in only 115, so the description was never a
+  substitute. On the platform detail a row can therefore carry two lines under it — the description first, then
+  `biosFileNote`'s note — and neither is in a cell any more. Contents is answered for a folder declaration only: the
+  count of images it holds (the resolver's verbatim strings are listed full-width under the row, `pre-wrap`, because the
+  padding in them is what makes a line matchable against the emulator's own picker), or that it holds none, or that
+  nothing could establish its contents. A file row reads an em dash, and that em dash means the question was never asked
+  — the machine-wide reading is deliberately unverified, #1803 is what will ask it, and until then the dash must not
+  come to mean "asked, and nothing found". The section appears whenever the firmware read speaks for the platform,
+  synced or not — there is nothing to say about one it does not cover.
 - **Remove** — Remove _N_ shortcuts and Delete _N_ save files on one row, the actions the Data Management platform modal
   used to offer, without Delete BIOS (it is one group up). Red, last, each behind a confirmation, and with **no heading
   over them**: both buttons name what they remove and are drawn in red, so a title says nothing they do not. **Both

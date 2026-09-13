@@ -172,10 +172,12 @@ function folderWithheld(satisfied: boolean | null | undefined, has: (code: strin
  * The description on the line under a file's name, with the name itself taken
  * back out.
  *
- * Both surfaces head the row with the declared file and put this on its own
- * muted line underneath, so the rule for what the description still adds has to
- * be ONE rule — otherwise the same row prints the name twice on one surface and
- * once on the other.
+ * Both surfaces head the row with the declared file, so the rule for what the
+ * description still adds has to be ONE rule — otherwise the same row prints the
+ * name twice on one surface and once on the other. Where the result GOES is each
+ * surface's own: the game page's BIOS tab sets it beside the name, the platform
+ * detail on a muted line under the row, because that name sits in a clipping
+ * table cell narrow enough that a label beside it would cut the name itself.
  *
  * **It is not RomM's description** — `_server_files` builds no `description`
  * key at all, and `_wanted_fields` overwrites whatever came in.

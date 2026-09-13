@@ -258,8 +258,7 @@ function fileDotColor(file: BiosFileStatus): string {
 }
 
 /**
- * The lines under a file's name — what it IS, then what its read found, then
- * who uses it.
+ * The lines under a file's name — what its read found, then who uses it.
  *
  * One indented block, because they are one column to the eye and two blocks
  * would leave the images floating between the row and its cores. The row's own
@@ -267,22 +266,18 @@ function fileDotColor(file: BiosFileStatus): string {
  * folder's three image lines into that name is what wrapped the row and
  * orphaned the dot above it.
  *
- * **The description leads**, and it is a line here rather than a second em-dash
- * segment after the name: the name span already carries `biosFileNote`'s note
- * behind a dash, and chaining another onto the same narrow QAM line reads as a
- * chain of equals, which these are not. It says what the file IS, where
- * `biosFileNote`'s note says something about its STATE — so the note
- * keeps the dash beside the name and this goes below, which is also where the
- * platform detail puts it.
+ * **The packager's label is not among them** — it sits on the name line, where
+ * it says what the file IS beside the file's own name. Under the row it read as
+ * one more entry in the list of emulators that want the file, which is the one
+ * thing it is not.
  *
  * The image text is the resolver's verbatim string, and `pre-wrap` keeps the
  * column padding PCSX2 puts in its own option labels — that alignment is what
  * makes a line matchable against the emulator's picker, and it still wraps
- * rather than overflowing the panel. The description is prose and takes no such
- * padding, so it wraps normally.
+ * rather than overflowing the panel.
  */
-function fileLines(description: string | null, lines: string[], coreLines: ReactElement[]): ReactElement | null {
-  if (description === null && lines.length === 0 && coreLines.length === 0) return null;
+function fileLines(lines: string[], coreLines: ReactElement[]): ReactElement | null {
+  if (lines.length === 0 && coreLines.length === 0) return null;
   return (
     <div
       key="lines"
@@ -294,11 +289,6 @@ function fileLines(description: string | null, lines: string[], coreLines: React
         marginLeft: "18px",
       }}
     >
-      {description !== null && (
-        <div key="description" style={{ color: "rgba(255, 255, 255, 0.5)", fontSize: "12px" }}>
-          {description}
-        </div>
-      )}
       {lines.map((line) => (
         <div
           key={`image-${line}`}
@@ -409,24 +399,41 @@ function buildBiosFileList(bios: BiosStatus, coreInfo: CoreInfo | null): ReactEl
     // otherwise head itself `dc_boot.bin` and a declared folder `bios`, taking
     // away the one thing a reader placing a file by hand needs. The platform
     // detail states the same thing by splitting the path into a muted folder
-    // prefix and the name; this row has one span, so it prints the path whole.
+    // prefix and the name; this row prints the path whole.
     //
     // The head is never `description`, which used to be it: that is the
     // packager's prose out of a core's `.info`, deliberately outside the
     // resolver's contract, and for a row no placement covers the backend fills
     // the file name into it — so the headline was the name wearing another
-    // field's clothes. What the description still ADDS goes under the row
-    // (`fileLines`), by the rule the platform detail applies too, so neither
-    // surface prints the name twice.
+    // field's clothes. What the description still ADDS follows the name on the
+    // same line, in the packager's own punctuation with our declared path in
+    // front of it (`scph5500.bin (PS1 JP BIOS)`), which is how it was written
+    // before the repeated name was cut out of it.
+    //
+    // Three parts, three jobs, and the line is read left to right: the NAME,
+    // then what the file IS, then how it STANDS. The last keeps the em dash it
+    // always had, because a dash is the mark for a state and parentheses are the
+    // mark for an identity — which is what lets both sit on one line without
+    // reading as a chain of equals. Under the row the label read as a sixth
+    // entry in the list of emulators that want the file.
+    const label = biosFileDescription(f);
     const suffix = note ? ` — ${note}` : "";
 
     return (
       <div key={f.file_name} className="romm-panel-file-row">
         <span key="dot" className="romm-status-dot" style={{ backgroundColor: fileDotColor(f) }} />
         <span key="name" className="romm-panel-file-name">
-          {`${f.declared_path || f.file_name}${suffix}`}
+          {f.declared_path || f.file_name}
+          {/* Muted like the emulator lines below rather than like the name
+              beside it: the name is what the eye lands on and the label is
+              beside it, not part of it. Its own span, so the row's one span is
+              now three nested pieces and the flex row still sees one item —
+              siblings would take the row's 8px gap where the packager wrote a
+              space. */}
+          {label !== null && <span key="label" style={{ color: "rgba(255, 255, 255, 0.5)" }}>{` ${label}`}</span>}
+          {suffix}
         </span>
-        {fileLines(biosFileDescription(f), lines, coreLines)}
+        {fileLines(lines, coreLines)}
       </div>
     );
   });

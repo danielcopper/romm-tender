@@ -613,6 +613,14 @@ const BiosFileRow: FC<{ file: FirmwareRow; systemImage: SystemImage; action: Rea
         { content: action, clip: false },
       ]}
     >
+      {/* A muted line UNDER the row, where the game page's BIOS tab puts the
+          same label beside the file's name. That is a column width rather than
+          a difference of opinion, and it is why the two are not "unified": this
+          name lives in a ~202px table cell that clips, and it already gives up
+          its folder prefix to the same shortage — hanging the label off it would
+          take the NAME off the screen, which is the one thing a reader placing a
+          file by hand needs. Under the row there is a whole width for it, on one
+          clipped line, and no list of emulators below to be mistaken for. */}
       {description && (
         <div
           style={{

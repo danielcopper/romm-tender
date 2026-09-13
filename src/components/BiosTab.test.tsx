@@ -387,19 +387,66 @@ describe("BiosTab", () => {
     );
 
     const names = [...container.querySelectorAll(".romm-panel-file-name")].map((el) => el.textContent);
-    // The declared path heads the row and carries nothing else — the folder is
-    // the one thing a reader placing the file by hand needs, and `file_name` is
-    // only its basename.
-    expect(names).toContain("dc/dc_boot.bin");
+    // The declared path heads the row — the folder is the one thing a reader
+    // placing the file by hand needs, and `file_name` is only its basename —
+    // and what the description still says follows it on the same line, in the
+    // packager's own punctuation. That is the form the packager wrote
+    // (`firmware1_desc`), with our declared path in place of the bare basename.
+    expect(names).toContain("dc/dc_boot.bin (Dreamcast BIOS)");
     // A description that is nothing but the name adds nothing, so that row is
     // the name alone rather than the name twice.
     expect(names).toContain("macventure.dat");
-    // What the description still says is a line of its own under the row, not a
-    // second em-dash segment beside the name.
-    const rendered = [...container.querySelectorAll("div")].map((div) => div.textContent);
-    expect(rendered).toContain("(Dreamcast BIOS)");
-    expect(container.textContent).not.toContain("dc/dc_boot.bin (Dreamcast BIOS)");
     expect(container.textContent).not.toContain("macventure.dat — ");
+  });
+
+  it("puts the packager's label beside the name, muted, and never under the row", () => {
+    // Under the row it read as a sixth entry in the list of emulators that want
+    // the file — the one thing it is not. Beside the name it is one statement
+    // with the name: what this file IS. Muted like those emulator lines rather
+    // than like the name, because the name is what the eye lands on.
+    const { container } = render(
+      <BiosTab
+        biosStatus={{
+          needs_bios: true,
+          server_count: 1,
+          local_count: 0,
+          all_downloaded: false,
+          required_count: 1,
+          required_downloaded: 0,
+          required_withheld: 0,
+          files: [
+            {
+              file_name: "scph5500.bin",
+              downloaded: false,
+              local_path: "",
+              declared_path: "scph5500.bin",
+              description: "scph5500.bin (PS1 JP BIOS)",
+              declaration: "read",
+              wanted: "needed",
+              required_by_active: true,
+              cores: { swanstation_libretro: { required: true } },
+              on_server: true,
+              satisfied: false,
+            },
+          ],
+        }}
+        biosLevel="missing"
+        coreInfo={coreInfo}
+        isActive={true}
+      />,
+    );
+
+    const name = container.querySelector(".romm-panel-file-name")!;
+    expect(name.textContent).toBe("scph5500.bin (PS1 JP BIOS)");
+    // A span of its own inside the name, in the muted colour: the label is
+    // beside the name rather than part of it.
+    const label = [...name.querySelectorAll("span")].find((el) => el.textContent.includes("(PS1 JP BIOS)"));
+    expect(label).toBeTruthy();
+    expect(label!.getAttribute("style")).toContain("rgba(255, 255, 255, 0.5)");
+    // Nothing under the row carries it — that block is what the read found and
+    // who wants the file.
+    const under = [...container.querySelectorAll("div")].map((div) => div.textContent);
+    expect(under).not.toContain("(PS1 JP BIOS)");
   });
 
   it("puts a satisfied folder's images on their own lines, under a name short enough to keep its dot", () => {
@@ -497,13 +544,12 @@ describe("BiosTab", () => {
       />,
     );
 
-    // The note rides beside the row's own name — it says something about the
-    // file's STATE, which is what earns it the dash. The description says only
-    // what the file is, and is a line below (this one names nothing the row's
-    // name already shows, so it is printed whole).
-    expect(container.textContent).toContain("dc_boot.bin — its location could not be read");
-    expect(container.textContent).toContain("Dreamcast boot ROM");
-    expect(container.textContent).not.toContain("Dreamcast boot ROM — ");
+    // Three parts on one line, left to right: the name, what the file IS, then
+    // how it STANDS. The note is the last and keeps the em dash, which is what
+    // marks it as a statement about the state rather than about the file (this
+    // description names nothing the row's name already shows, so it is printed
+    // whole and carries no parentheses of its own).
+    expect(container.textContent).toContain("dc_boot.bin Dreamcast boot ROM — its location could not be read");
   });
 
   it("draws a folder row whose contents could not be read amber, never green", () => {

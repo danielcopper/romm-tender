@@ -65,12 +65,15 @@ to do or to know about. The rest are counted on lines of their own below them ra
 files an installed emulator asks for that this game does not need and no page can fetch, one for the files nothing
 installed asks for, one for the files nothing installed could answer about. A row is headed by the file the emulator
 declares, with its folder where it asks for one (`dc/dc_boot.bin`) — that is where the file has to go, and it is the one
-thing you need when placing one by hand. Whatever the emulator's packager wrote about the file goes on its own line
-under the row, and only where it says something the name does not: those descriptions usually repeat the file name, and
-many are nothing else. It is the **emulator's own** wording — a RetroArch core's description file — and it is shown for
-no other source. Where the plugin's own card stands in for an emulator that ships no description of its own, that card
-explains the requirement in full sentences, which is a paragraph on a line meant for a few words; the row shows the file
-and its state instead.
+thing you need when placing one by hand. Whatever the emulator's packager wrote about the file follows the name on the
+same line, in the packager's own wording and punctuation — `scph5500.bin (PS1 JP BIOS)` — and only where it says
+something the name does not: those descriptions usually repeat the file name, and many are nothing else. Where the file
+also has something to say about its state, that comes last, behind a dash:
+`scph5500.bin (PS1 JP BIOS) — missing, not in
+your RomM library`. It is the **emulator's own** wording — a RetroArch
+core's description file — and it is shown for no other source. Where the plugin's own card stands in for an emulator
+that ships no description of its own, that card explains the requirement in full sentences, which is a paragraph on a
+line meant for a few words; the row shows the file and its state instead.
 
 Beside the Play button there is also a short **BIOS** badge, which is a shortcut into this tab. Two things raise it, and
 nothing else does. The first: a file the active core **requires** is shown to be absent from your BIOS folder. If that
@@ -240,12 +243,13 @@ and the row you focus is the one the right-hand pane describes.
 8. Below it, a table lists the files themselves: the **file**, whether it is **on disk**, and its **contents**. Where
    the emulator asks for the file in a subfolder, the folder is shown in front of the name (`dc/` **`dc_boot.bin`**) —
    that is where it has to go, and it is the one thing you need when placing a file by hand. The description in
-   parentheses is printed under the row rather than beside the name, so it is not cut off — and, as on the game page, it
-   is shown only where the emulator itself wrote it. On disk holds marks and no words. The first mark carries two things
-   — a green ✓ for a file that is there and required, a red ✗ for one that is required and is not, and the paler green ✓
-   / grey ✗ for a file the core you launch with does not need either way. Amber means nothing could be established: a ✓
-   or ✗ in amber is a file whose presence is known but which no installed emulator could be asked about, and a `?` is a
-   row that could not be checked at all. Where the system needs **one of several** images (see
+   parentheses is printed under the row rather than beside the name, as it is on a game's page: this column is narrow
+   enough that anything after the name would push the name itself off the row. Like there, it is shown only where the
+   emulator itself wrote it. On disk holds marks and no words. The first mark carries two things — a green ✓ for a file
+   that is there and required, a red ✗ for one that is required and is not, and the paler green ✓ / grey ✗ for a file
+   the core you launch with does not need either way. Amber means nothing could be established: a ✓ or ✗ in amber is a
+   file whose presence is known but which no installed emulator could be asked about, and a `?` is a row that could not
+   be checked at all. Where the system needs **one of several** images (see
    [When the console needs a BIOS image](#when-the-console-needs-a-bios-image)) those rows are marked as the group they
    are: a red ✗ on each while none is in place, and once you have one of them that row turns green ✓ and the others go
    grey, because from then on they really are spare. A violet ⊘ appears **beside** that mark — never in place of it —
