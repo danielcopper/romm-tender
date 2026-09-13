@@ -24,10 +24,13 @@ vi.mock("@decky/ui", () => ({
   ),
   DialogButton: ({ children, onClick, disabled }: AnyProps & { onClick?: () => void; disabled?: boolean }) =>
     createElement("button", { onClick, disabled }, children as never),
-  TextField: (p: TextFieldProps) =>
+  // `placeholder` is not on TextFieldProps — @decky/ui types the component's
+  // props as HTMLAttributes, a level above where React declares it.
+  TextField: (p: TextFieldProps & { placeholder?: string }) =>
     createElement("input", {
       "data-testid": `field-${p.label ?? ""}`,
       "data-description": p.description ?? "",
+      "data-placeholder": p.placeholder ?? "",
       "data-is-password": p.bIsPassword ? "true" : "false",
       value: p.value ?? "",
       onChange: (e: unknown) => p.onChange?.(e as { target: { value: string } }),
@@ -72,7 +75,11 @@ describe("CustomHeadersModal", () => {
     expect(nameField(row!).value).toBe("P-Access-Token");
     expect(valueField(row!).value).toBe("");
     expect(valueField(row!).getAttribute("data-is-password")).toBe("true");
-    expect(valueField(row!).getAttribute("data-description")).toContain("••••");
+    // The dots sit in the field and the sentence sits below it. Whether Steam's
+    // own TextField renders a prop its type does not declare is a device
+    // question — what is pinned here is only that the modal hands it over.
+    expect(valueField(row!).getAttribute("data-placeholder")).toBe("••••");
+    expect(valueField(row!).getAttribute("data-description")).toBe("stored — leave blank to keep it");
   });
 
   it("saves an untouched stored row as 'keep', carrying no value", async () => {

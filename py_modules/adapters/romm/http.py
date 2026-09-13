@@ -14,6 +14,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -62,6 +63,11 @@ class RommHttpAdapter:
         settable attribute, not a hard dependency: ``bootstrap`` wires the
         loop-threadsafe emit after construction (the loop/emit only exist at
         service-wiring time), and tests can pass a spy at construction.
+    log_debug:
+        Optional ``DebugLogger`` seam — the only route to a log line a user can
+        actually read, since it is what the ``log_level`` setting gates. Omitted
+        by a caller that wants no trace; the transport then stays silent rather
+        than falling back to ``logger.debug``, which reaches nothing.
     """
 
     _CONNECT_TIMEOUT = 30
@@ -75,12 +81,14 @@ class RommHttpAdapter:
         logger: logging.Logger,
         user_agent: str,
         on_retry: RetryListener | None = None,
+        log_debug: Callable[[str], None] | None = None,
     ) -> None:
         self._settings = settings
         self._plugin_dir = plugin_dir
         self._logger = logger
         self._user_agent = user_agent
         self._retry = RetryLadder(logger, on_retry=on_retry)
+        self._log_debug = log_debug
         self._logged_header_names: tuple[str, ...] | None = None
 
     @property
@@ -211,15 +219,23 @@ class RommHttpAdapter:
         every outgoing call: a library sync would otherwise write one identical
         line per request. The empty set is logged too — "nothing configured" is
         the answer that separates a mis-saved setting from a rejected one.
+
+        It goes through the injected ``log_debug`` seam rather than
+        ``logger.debug``: nothing in this plugin sets a level on the runtime
+        logger, and the user's ``log_level`` setting gates only that seam, so a
+        ``logger.debug`` call reaches no log a user can read — measured on the
+        device, where this line was invisible with the level set to debug.
         """
         names = tuple(attached)
         if names == self._logged_header_names:
             return
         self._logged_header_names = names
+        if self._log_debug is None:
+            return
         if names:
-            self._logger.debug("Attaching custom headers to RomM requests: %s", ", ".join(names))
+            self._log_debug(f"[headers] attaching to RomM requests: {', '.join(names)}")
         else:
-            self._logger.debug("No custom headers configured for RomM requests")
+            self._log_debug("[headers] none configured for RomM requests")
 
     def _apply_default_headers(self, req: urllib.request.Request) -> None:
         """Attach the origin headers plus ``Authorization``, when a Client API Token is stored."""

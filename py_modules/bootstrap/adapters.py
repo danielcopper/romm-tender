@@ -454,7 +454,11 @@ def bootstrap(
     )
     prune_artifacts = PruneArtifactAdapter(runtime_dir=locations.data_dir)
     steam_recovery = SteamRecoveryAdapter(user_home=user_home, logger=logger)
-    http_adapter = RommHttpAdapter(settings, plugin_dir, logger, user_agent)
+    # Built here rather than beside its peers below because the transport wants
+    # it: a bare `logger.debug` never reaches the log the user reads, since
+    # nothing sets a level on this logger and `log_level` gates this seam alone.
+    debug_logger = SettingsAwareDebugLogger(settings=settings, logger=logger)
+    http_adapter = RommHttpAdapter(settings, plugin_dir, logger, user_agent, log_debug=debug_logger)
     romm_api = RommApiAdapter(http_adapter)
     steam_config = SteamConfigAdapter(user_home=user_home, logger=logger)
     sgdb_adapter = SteamGridDbAdapter(settings=settings, logger=logger, user_agent=user_agent)
@@ -481,7 +485,6 @@ def bootstrap(
     sleeper = AsyncioSleeper()
     hostname_provider = HostnameAdapter()
     machine_id_provider = MachineIdAdapter()
-    debug_logger = SettingsAwareDebugLogger(settings=settings, logger=logger)
     # Without this grant the resolver probes no core here — Decky Loader's
     # frozen runtime is no interpreter to spawn — so every core it is asked
     # about answers unknown and a libretro save answer usually establishes

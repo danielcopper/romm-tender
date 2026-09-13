@@ -404,6 +404,11 @@ class TestCustomProxyHeaderLogging:
     headers — this line is the only thing that can separate "the plugin sent
     nothing" from "the proxy rejected what it sent". It carries names only: a
     value is the credential the proxy checks.
+
+    Asserted against the injected ``log_debug`` seam rather than the logger,
+    because that seam is what the user's ``log_level`` setting gates — a
+    ``logger.debug`` call reaches no log a user reads, which is how the first
+    version of this line shipped invisible.
     """
 
     _PROXY: ClassVar[list[dict[str, str]]] = [
@@ -412,9 +417,12 @@ class TestCustomProxyHeaderLogging:
     ]
 
     def _adapter(self, headers: list[dict[str, str]]):
-        logger = MagicMock()
+        log_debug = MagicMock()
         settings = {"romm_url": "http://romm.local", "romm_custom_headers": headers}
-        return RommHttpAdapter(settings, "/fake/plugin_dir", logger, "decky-romm-sync/9.9.9"), logger
+        adapter = RommHttpAdapter(
+            settings, "/fake/plugin_dir", MagicMock(), "decky-romm-sync/9.9.9", log_debug=log_debug
+        )
+        return adapter, log_debug
 
     def _request(self, adapter) -> None:
         resp = MagicMock()
@@ -426,54 +434,54 @@ class TestCustomProxyHeaderLogging:
             adapter.request("/api/test")
 
     @staticmethod
-    def _debug_text(logger) -> str:
-        return " ".join(str(call) for call in logger.debug.call_args_list)
+    def _debug_text(log_debug) -> str:
+        return " ".join(str(call) for call in log_debug.call_args_list)
 
     def test_it_names_the_headers_it_attached(self):
-        adapter, logger = self._adapter(self._PROXY)
+        adapter, log_debug = self._adapter(self._PROXY)
 
         self._request(adapter)
 
-        text = self._debug_text(logger)
+        text = self._debug_text(log_debug)
         assert "P-Access-Token" in text
         assert "P-Access-Token-Id" in text
 
     def test_it_never_carries_a_value(self):
         """The whole point of the names-only rule: a proxy credential is not log material."""
-        adapter, logger = self._adapter(self._PROXY)
+        adapter, log_debug = self._adapter(self._PROXY)
 
         self._request(adapter)
 
-        text = self._debug_text(logger)
+        text = self._debug_text(log_debug)
         assert "tok" not in text.replace("P-Access-Token", "").replace("P-Access-Token-Id", "")
 
     def test_it_says_so_when_nothing_is_configured(self):
         """Separates a mis-saved setting from a rejected one — both look like a 403 from outside."""
-        adapter, logger = self._adapter([])
+        adapter, log_debug = self._adapter([])
 
         self._request(adapter)
 
-        assert "No custom headers" in self._debug_text(logger)
+        assert "none configured" in self._debug_text(log_debug)
 
     def test_it_writes_one_line_per_set_not_per_request(self):
         """This helper runs on every outgoing call — a library sync would drown the log."""
-        adapter, logger = self._adapter(self._PROXY)
+        adapter, log_debug = self._adapter(self._PROXY)
 
         self._request(adapter)
         self._request(adapter)
         self._request(adapter)
 
-        assert logger.debug.call_count == 1
+        assert log_debug.call_count == 1
 
     def test_an_edited_set_is_logged_again(self):
-        adapter, logger = self._adapter(self._PROXY)
+        adapter, log_debug = self._adapter(self._PROXY)
 
         self._request(adapter)
         adapter._settings["romm_custom_headers"] = [{"name": "CF-Access-Client-Id", "value": "cf"}]
         self._request(adapter)
 
-        assert logger.debug.call_count == 2
-        assert "CF-Access-Client-Id" in self._debug_text(logger)
+        assert log_debug.call_count == 2
+        assert "CF-Access-Client-Id" in self._debug_text(log_debug)
 
 
 class TestRommBasicAuthRequest:

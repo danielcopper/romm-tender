@@ -47,8 +47,20 @@ const rowStyle = { marginBottom: "12px" } as const;
 const removeButtonStyle = { marginTop: "6px", minWidth: "auto", width: "auto" } as const;
 const emptyStyle = { fontSize: "12px", marginBottom: "8px", color: "rgba(255,255,255,0.6)" } as const;
 
-const STORED_VALUE_HINT = "•••• stored — leave blank to keep it";
+const STORED_VALUE_HINT = "stored — leave blank to keep it";
 const GENERIC_SAVE_ERROR = "Could not save the headers. Check your connection and try again.";
+
+// The dots belong inside the empty field, where they read as "something is in
+// here you cannot see" rather than as part of the sentence below it.
+//
+// `placeholder` lives on React's InputHTMLAttributes while @decky/ui types
+// TextField's props as the wider HTMLAttributes, so the prop has to be handed
+// over past the type. That says nothing about whether Steam's own component
+// forwards it to the <input> it renders — the component is fished out of a
+// webpack module and its source is not readable here, so the cast could render
+// nothing at all. It is kept only because it was seen working on the device;
+// `inlineControls` is the declared prop to fall back to if it ever stops.
+const storedValuePlaceholder = { placeholder: "••••" } as Record<string, string>;
 
 /**
  * Whether this row's stored value still applies: it must have one, still be under
@@ -143,7 +155,7 @@ export const CustomHeadersModal: FC<CustomHeadersModalProps> = ({ closeModal, st
           <TextField label="Header name" value={row.name} onChange={handleNameChange(row.id)} />
           <TextField
             label="Value"
-            {...(keepsStoredValue(row) ? { description: STORED_VALUE_HINT } : {})}
+            {...(keepsStoredValue(row) ? { description: STORED_VALUE_HINT, ...storedValuePlaceholder } : {})}
             value={row.value}
             bIsPassword
             onChange={handleValueChange(row.id)}

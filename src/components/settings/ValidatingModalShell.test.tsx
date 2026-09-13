@@ -14,6 +14,15 @@ vi.mock("@decky/ui", () => ({
   ModalRoot: (p: AnyProps) => createElement("div", { "data-testid": "modal-root" }, p.children as never),
   DialogButton: ({ children, onClick, disabled }: AnyProps & { onClick?: () => void; disabled?: boolean }) =>
     createElement("button", { onClick, disabled }, children as never),
+  // The footer's flow direction is recorded as an attribute so the handover is
+  // assertable. What it DOES is a device question — happy-dom has no nav tree,
+  // so both spellings render and behave identically here.
+  Focusable: (p: AnyProps) =>
+    createElement(
+      "div",
+      { "data-testid": "shell-footer", "data-flow-children": p["flow-children"] as never },
+      p.children as never,
+    ),
 }));
 
 // A minimal, always-present body so children rendering is observable and distinct
@@ -163,5 +172,24 @@ describe("ValidatingModalShell", () => {
       </ValidatingModalShell>,
     );
     expect(() => fireEvent.click(getByText("Cancel"))).not.toThrow();
+  });
+
+  it("asks for horizontal traversal across the two footer buttons", () => {
+    // The buttons sit side by side, and a plain container answers to up/down —
+    // which is what this footer did on the device until it became a Focusable.
+    // Every modal using this shell inherits the answer, so it is pinned here.
+    const { getByTestId } = render(
+      <ValidatingModalShell
+        title="My Title"
+        error={null}
+        errorTestId="shell-error"
+        submitLabel="Save"
+        submitDisabled={false}
+        onSubmit={vi.fn()}
+      >
+        {child()}
+      </ValidatingModalShell>,
+    );
+    expect(getByTestId("shell-footer").getAttribute("data-flow-children")).toBe("horizontal");
   });
 });
