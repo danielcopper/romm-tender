@@ -47,7 +47,7 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTab biosStatus={biosStatus} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
     );
-    expect(container.textContent).toContain("0/1 required files ready");
+    expect(container.textContent).toContain("0 of 1 files the launching emulator requires are in place");
     expect(container.textContent).toContain("Snes9x");
   });
 
@@ -76,8 +76,8 @@ describe("BiosTab", () => {
         isActive={true}
       />,
     );
-    expect(container.textContent).toContain("BIOS requirement unknown");
-    expect(container.textContent).not.toContain("requires none of the files it names");
+    expect(container.textContent).toContain("Nothing could be established about what the launching emulator needs");
+    expect(container.textContent).not.toContain("marks none of its BIOS files as required");
     expect(container.innerHTML).toContain("#8f98a0");
   });
 
@@ -91,7 +91,7 @@ describe("BiosTab", () => {
         isActive={true}
       />,
     );
-    expect(container.textContent).toContain("The launching emulator requires none of the files it names");
+    expect(container.textContent).toContain("The launching emulator marks none of its BIOS files as required");
     expect(container.textContent).not.toContain("files held");
   });
 
@@ -120,18 +120,21 @@ describe("BiosTab", () => {
         isActive={true}
       />,
     );
-    expect(container.textContent).toContain("Needs at least one BIOS file (0/20 files held)");
-    expect(container.textContent).not.toContain("requires none of the files it names");
-    expect(container.textContent).not.toContain("required files ready");
+    expect(container.textContent).toContain(
+      "The launching emulator cannot start this system without a BIOS image (0/20 files held)",
+    );
+    expect(container.textContent).not.toContain("marks none of its BIOS files as required");
+    expect(container.textContent).not.toContain("requires are in place");
     expect(container.innerHTML).toContain("#d94126");
   });
 
   it("says the console needs at least one file even where the level declines", () => {
-    // The order the three surfaces have to share. Today the backend never sends
-    // this pair — `absent` lands on `missing` — but nothing joins the three, so
-    // each pins its own: were a decline added ahead of the `absent` test in
-    // `compute_bios_level`, a surface reading the level first would print an
-    // ignorance over a requirement that was demonstrated.
+    // Today the backend never sends this pair — `absent` lands on `missing` —
+    // and the order now lives once, in `biosSummary`, which both wording
+    // surfaces read. This asserts it end to end from THIS one: were a decline
+    // added ahead of the `absent` test in `compute_bios_level`, a surface
+    // reading the level first would print an ignorance over a requirement that
+    // was demonstrated.
     const { container } = render(
       <BiosTab
         biosStatus={{
@@ -149,15 +152,20 @@ describe("BiosTab", () => {
         isActive={true}
       />,
     );
-    expect(container.textContent).toContain("Needs at least one BIOS file (0/20 files held)");
-    expect(container.textContent).not.toContain("BIOS readiness unknown");
-    expect(container.textContent).not.toContain("BIOS requirement unknown");
+    expect(container.textContent).toContain(
+      "The launching emulator cannot start this system without a BIOS image (0/20 files held)",
+    );
+    // The two sentences the decline would have printed instead — named as
+    // sentences, because the page shows the sentence and a status never reaches
+    // it, so asserting the short forms absent would assert nothing.
+    expect(container.textContent).not.toContain("could not be established");
+    expect(container.textContent).not.toContain("could not be checked");
   });
 
   it("names the readiness as the unknown where the console's own image is unsettled", () => {
     // The requirement IS known here — this console needs an image — and it is
-    // whether one is in place that could not be established. "BIOS requirement
-    // unknown" would be the wrong half.
+    // whether one is in place that could not be established. The
+    // requirement-unknown sentence would be the wrong half.
     const { container } = render(
       <BiosTab
         biosStatus={{
@@ -175,8 +183,12 @@ describe("BiosTab", () => {
         isActive={true}
       />,
     );
-    expect(container.textContent).toContain("BIOS readiness unknown");
-    expect(container.textContent).not.toContain("requires none of the files it names");
+    expect(container.textContent).toContain(
+      "Whether the BIOS image the launching emulator needs is in place could not be established",
+    );
+    // The requirement-unknown sentence is the wrong half, and it is the one this
+    // state would fall through to.
+    expect(container.textContent).not.toContain("Nothing could be established about what");
   });
 
   it("says nothing of its own for the two quiet answers", () => {
@@ -201,9 +213,9 @@ describe("BiosTab", () => {
         />,
       );
       expect(container.textContent).toContain(
-        "The launching emulator requires none of the files it names (1/20 files held)",
+        "The launching emulator marks none of its BIOS files as required (1/20 files held)",
       );
-      expect(container.textContent).not.toContain("Needs at least one");
+      expect(container.textContent).not.toContain("cannot start this system");
     }
   });
 
@@ -231,9 +243,11 @@ describe("BiosTab", () => {
       />,
     );
     expect(container.textContent).toContain(
-      "The launching emulator requires none of the files it names (1/3 files held)",
+      "The launching emulator marks none of its BIOS files as required (1/3 files held)",
     );
-    // The subject, spelled out: the sentence may not stand without it.
+    // The subject, spelled out: the sentence may not stand without it. "Nothing
+    // required" is the state's short form, which this surface never shows —
+    // printing it here would be the subjectless headline the sentence replaced.
     expect(container.textContent).not.toContain("Nothing required");
   });
 
@@ -260,8 +274,8 @@ describe("BiosTab", () => {
       />,
     );
 
-    expect(container.textContent).toContain("mGBA requires none of the files it names (1/20 files held)");
-    expect(container.textContent).not.toContain("The launching emulator requires");
+    expect(container.textContent).toContain("mGBA marks none of its BIOS files as required (1/20 files held)");
+    expect(container.textContent).not.toContain("The launching emulator");
   });
 
   it("falls back to the nameless sentence where the answer names no emulator", () => {
@@ -286,7 +300,7 @@ describe("BiosTab", () => {
     );
 
     expect(container.textContent).toContain(
-      "The launching emulator requires none of the files it names (1/20 files held)",
+      "The launching emulator marks none of its BIOS files as required (1/20 files held)",
     );
   });
 
@@ -999,7 +1013,9 @@ describe("BiosTab", () => {
       const withLeftOut = headerOf([kept, ...arcadeRows]);
       const withoutThem = headerOf([kept]);
 
-      expect(withLeftOut.label).toBe("The launching emulator requires none of the files it names (1/20 files held)");
+      expect(withLeftOut.label).toBe(
+        "The launching emulator marks none of its BIOS files as required (1/20 files held)",
+      );
       expect(withLeftOut.label).toBe(withoutThem.label);
       // Non-vacuous: the first render really did leave rows out, so the equality
       // above is over two different lists rather than two identical ones.

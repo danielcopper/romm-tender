@@ -609,24 +609,25 @@ Format: **invariant** — tier — enforced by.
   and nothing joins them** — counted one per file the answer passes through, four backend and four frontend: the adapter
   (`adapters/atlas_firmware.py`) carries `CoreFirmware.system_firmware` and `requirements_met` per core,
   `domain/firmware_wants.py::CoreFirmwareVerdict` holds the four spellings apart from the absence,
-  `domain/bios_status.py::classify_system_image` decides, `services/firmware/status.py` stamps it beside the counts,
-  three frontend surfaces word it (`BiosTab.tsx`, `library/PlatformDetail.tsx`, `library/PlatformsTab.tsx`) and a fourth
-  reads it without wording it (below). A libretro `.info` can mark a file required or optional and nothing else — no way
-  to say "one of these", none to say the console will not start without one — so an author who knows it will not has two
-  lossy moves, and the deployed catalogue takes both: SwanStation marks all five of its PlayStation images **optional**,
+  `domain/bios_status.py::classify_system_image` decides, `services/firmware/status.py` stamps it beside the counts, two
+  frontend surfaces word it through ONE module (`src/utils/biosSummary.ts`, read by `BiosTab.tsx` and
+  `library/PlatformDetail.tsx`), `library/PlatformsTab.tsx`'s row tooltip still words it itself, and a fourth reads it
+  without wording it (below). A libretro `.info` can mark a file required or optional and nothing else — no way to say
+  "one of these", none to say the console will not start without one — so an author who knows it will not has two lossy
+  moves, and the deployed catalogue takes both: SwanStation marks all five of its PlayStation images **optional**,
   Beetle PSX marks three of its own **required**. Which is why no count can be relied on to carry this: it is ONE
   requirement over the whole list, and putting it in `required_count` reports every image the core declares as required
-  — `0 / 5 required files ready` under the SwanStation this was observed on. The twenty in that page's own
-  `0/20 files held` is the library's inventory for the platform, a different set again, and reading the two as one is
-  how the wrong ratio gets written. Each fold fails its own way and all of them silently. Fold it into the counts and
-  the page states a ratio over the wrong set. Read `system_firmware: null` as "this console needs nothing" — a
-  truthiness test, a `!= "runs-without-firmware"` bucket, a default — and the plugin claims an all-clear over a console
-  nobody has looked at, which is the collapse the `unknown`/`not_needed` entry above is about, one axis over. **The
-  demand comes from the table and the presence from our rows, and `requirements_met` is not consulted at all** — weigh
-  the two against each other and you have made the misreading that field exists to prevent, because ignorance there is
-  always `None` and a `False` is therefore a demonstrated statement rather than a disagreement. Its two causes (a
-  DIFFERENT required file absent, or one present with the wrong bytes) each leave one of our own required rows unmet, so
-  the counts already report them by name; the second needs a content check to arise, and the inventory is asked
+  — `0 of 5 files SwanStation requires are in place` under the SwanStation this was observed on. The twenty in that
+  page's own `0/20 files held` is the library's inventory for the platform, a different set again, and reading the two
+  as one is how the wrong ratio gets written. Each fold fails its own way and all of them silently. Fold it into the
+  counts and the page states a ratio over the wrong set. Read `system_firmware: null` as "this console needs nothing" —
+  a truthiness test, a `!= "runs-without-firmware"` bucket, a default — and the plugin claims an all-clear over a
+  console nobody has looked at, which is the collapse the `unknown`/`not_needed` entry above is about, one axis over.
+  **The demand comes from the table and the presence from our rows, and `requirements_met` is not consulted at all** —
+  weigh the two against each other and you have made the misreading that field exists to prevent, because ignorance
+  there is always `None` and a `False` is therefore a demonstrated statement rather than a disagreement. Its two causes
+  (a DIFFERENT required file absent, or one present with the wrong bytes) each leave one of our own required rows unmet,
+  so the counts already report them by name; the second needs a content check to arise, and the inventory is asked
   **unverified** (the entry below), so it cannot occur here. What the presence half actually resolves to — a row's
   `satisfied` is presence, `null` in two shapes, and both read as not held — is written once, at
   `classify_system_image`, because an outside reader took that field for the resolver's usability answer and drew a
@@ -643,34 +644,36 @@ Format: **invariant** — tier — enforced by.
   count raises the badge by itself. One console, one BIOS folder, two answers — and `"absent"` is the same under both.
   `"unsettled"` deliberately raises no badge, the same reading a withheld required row gets: the badge claims a file is
   NOT THERE, and nothing established that. **Where BOTH ignorances hold** — a console needing an image whose required
-  folder row could not be judged, the LRPS2 shape and a reachable one — `getUnknownSummary` names the withheld ROW
-  rather than the console. They are not two gaps over two different file sets: a `required_by_active` row always carries
-  the active core, so it is always one of the rows the disjunction is read over. It is always one of the unjudged rows
-  that verdict is read over rather than a finding beside it — the decline needs at least one such row, and this is one —
-  and need not be the only one, since another image the core declares can be unjudged too; it is the only half of the
-  pair that can name a file, and naming it points at the file list, where its caveat explains itself. **All three
-  wording surfaces test `"absent"` BEFORE the level's decline**, and the pair never arrives at all today because the
-  backend lands `absent` on `missing`. What would hold them together if it ever did is that each surface carries that
-  test ITSELF — so a divergence takes one surface losing its own test, not the backend reordering ahead of all three:
-  drop it from `PlatformDetail` and that pane alone would say nothing could be established about what the platform's
-  emulator needs, and offer the by-hand route in place of a requirement the rows demonstrated, while the other two read
-  "Needs at least one BIOS file". Each surface pins its own order (`BiosTab.test.tsx`, `PlatformsTab.test.tsx`) and
-  nothing joins them. **A narrower form of the same answer is read PER CORE onto every row**
-  (`FirmwareCatalogue.emulators_needing_one_of_their_files` → `build_file_entry`'s `cores[<emulator>]["needs_one_of"]`
-  and the row's own `system_image_candidate`, worded by `BiosTab.tsx`'s `coreLineSuffix` and marked by
-  `library/PlatformDetail.tsx`'s `diskMark`), and there the rule is that the two keys on that entry are two SPEAKERS:
-  `required` is the core's own `.info`, the other is the packaged table about that core's console counted over the
-  core's whole declaration, and `optional` beside `needs_one_of: 5` is the informative pair rather than a contradiction
-  to resolve. Rewriting the declaration off the demand — printing "required" where the core said optional — puts words
-  in the emulator's mouth and loses the only fact the row had to add; folding the pair the other way loses the demand.
-  **A core is in that narrower answer only where it marks NOTHING required**, which is deliberate and is the second
-  thing nothing checks: a core whose console needs an image and that does state required files says so through those
-  rows' `required_by_active`, so annotating its optional rows too states one requirement twice — it put "the console
-  will not start without one" under `ps1_rom.bin`, which Beetle PSX marks optional while hard-requiring three other
-  images. The same narrowing makes `system_image_candidate` a strict subset of the rows `classify_system_image` weighs,
-  and widening either to match the other is the fix that reintroduces one of those two defects. Nothing checks any of
-  it: `needs_one_of` is a plain int-or-null on a dict a surface may read either key of, and the candidate flag is a
-  plain bool beside a `required_by_active` that reads like its sibling
+  folder row could not be judged, the LRPS2 shape and a reachable one — `biosSummary` names the withheld ROW rather than
+  the console. They are not two gaps over two different file sets: a `required_by_active` row always carries the active
+  core, so it is always one of the rows the disjunction is read over. It is always one of the unjudged rows that verdict
+  is read over rather than a finding beside it — the decline needs at least one such row, and this is one — and need not
+  be the only one, since another image the core declares can be unjudged too; it is the only half of the pair that can
+  name a file, and naming it points at the file list, where its caveat explains itself. **`"absent"` is tested BEFORE
+  the level's decline**, and the pair never arrives at all today because the backend lands `absent` on `missing`. Since
+  #1863 that order lives ONCE, in `biosSummary`, which is what the two wording surfaces read — so the divergence this
+  used to guard against (one surface losing its own test while the other two kept theirs) is no longer representable
+  between them. What is still unjoined is `PlatformsTab.tsx`'s row tooltip, which carries its own copy of the order:
+  lose it there and the list would read "BIOS readiness unknown" over a row whose pane says the console cannot start.
+  `biosSummary.test.ts` pins the order in the module and `PlatformsTab.test.tsx` pins the tooltip's; nothing joins those
+  two. **The module's own drift lock is a test that reads both components as SOURCE** (`biosSummary.test.ts`, over the
+  phrase list the module builds its answers from) — it catches a sentence written back into a component and cannot catch
+  a component inventing a NEW wording for one of these states. **A narrower form of the same answer is read PER CORE
+  onto every row** (`FirmwareCatalogue.emulators_needing_one_of_their_files` → `build_file_entry`'s
+  `cores[<emulator>]["needs_one_of"]` and the row's own `system_image_candidate`, worded by `BiosTab.tsx`'s
+  `coreLineSuffix` and marked by `library/PlatformDetail.tsx`'s `diskMark`), and there the rule is that the two keys on
+  that entry are two SPEAKERS: `required` is the core's own `.info`, the other is the packaged table about that core's
+  console counted over the core's whole declaration, and `optional` beside `needs_one_of: 5` is the informative pair
+  rather than a contradiction to resolve. Rewriting the declaration off the demand — printing "required" where the core
+  said optional — puts words in the emulator's mouth and loses the only fact the row had to add; folding the pair the
+  other way loses the demand. **A core is in that narrower answer only where it marks NOTHING required**, which is
+  deliberate and is the second thing nothing checks: a core whose console needs an image and that does state required
+  files says so through those rows' `required_by_active`, so annotating its optional rows too states one requirement
+  twice — it put "the console will not start without one" under `ps1_rom.bin`, which Beetle PSX marks optional while
+  hard-requiring three other images. The same narrowing makes `system_image_candidate` a strict subset of the rows
+  `classify_system_image` weighs, and widening either to match the other is the fix that reintroduces one of those two
+  defects. Nothing checks any of it: `needs_one_of` is a plain int-or-null on a dict a surface may read either key of,
+  and the candidate flag is a plain bool beside a `required_by_active` that reads like its sibling
 - **Which emulator a set of answers is about is ONE pick per scope — a platform's, and a ROM's — and every answer in
   that scope is a projection of it** — test + prompt-only —
   `tests/services/test_firmware.py::TestOnePlatformOneEmulator` asserts the two surfaces AGREE across every way a

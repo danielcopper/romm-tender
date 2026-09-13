@@ -40,6 +40,7 @@ import type { BiosFileStatus, BiosLevel, BiosStatus, CoreInfo, FirmwareWanted } 
 import { biosColorForLevel } from "../utils/biosColor";
 import { isFetchable } from "../utils/biosFetchable";
 import { biosFileDescription, biosFileNote } from "../utils/biosFileNote";
+import { biosSummary } from "../utils/biosSummary";
 import { infoRow, section } from "./panelSection";
 
 interface BiosTabProps {
@@ -127,94 +128,33 @@ function buildBiosCoreLines(
 }
 
 /**
- * The header line: status dot plus the readiness phrasing this surface uses.
+ * The header line: status dot plus the sentence for this platform's BIOS state.
  *
- * The sentence and the ratio beside it are the SAME axis (#1762). Where there
- * are required files the ratio counts those; where there are none it counts
- * every file, because that is then the only axis there is. Printing a
- * required-file sentence next to an all-files ratio described two different sets
- * as one line.
+ * **The sentence is not this surface's to word** — `utils/biosSummary.ts` holds
+ * all seven states and both surfaces read it, because before that each wrote its
+ * own spelling of the same seven and nothing joined them. What stays here is the
+ * choice of WHICH of the two answers this page has room for (the sentence, since
+ * a game page has no adjacent heading to hang a short note on) and what is
+ * appended to it.
  *
- * The sentence also has to say what the DOT says, and the dot is the backend's
- * required-file verdict: with nothing required it is green whatever the ratio
- * reads, so "0/20 files ready" beside it claimed a readiness it did not mean
- * (#1660). What is true there is that the LAUNCHING EMULATOR requires none of
- * the files it names, which is what that sentence now says: a bare "Nothing
- * required" was read as the console needing no BIOS, and that is a different
- * axis — one the catalogue answers `not_demanded` for a console nobody has asked
- * about as readily as for one shown to start with nothing (CONTEXT.md → System
- * image). The ratio is then inventory, and says so; "optional" would be the
- * wrong word for it — those files may be required by a core the user is not
- * launching with.
+ * What is appended is the library's ratio, and it is a different set from
+ * anything the sentence counts: `local_count` / `server_count` is what the RomM
+ * library holds for this platform, where the sentence counts what the launching
+ * emulator requires. It rides along rather than being folded in for exactly that
+ * reason — "0/20 files held" beside "SwanStation marks none of its BIOS files as
+ * required" is two true statements about two sets, and one number built out of
+ * both would be true of neither.
  *
- * "Emulator" rather than "core", because what a game launches with can be a
- * STANDALONE emulator — DuckStation, PCSX2 — and one of those is not a core.
- * The whole answer is keyed on the emulator's identity for that reason, so a
- * sentence saying "core" would name a kind the state does not have.
- *
- * **And it names that emulator**, because a sentence about what "the launching
- * emulator" requires sat two inches from an `Active Core: mGBA` row and a
- * golden `mGBA (optional)` line under it, saying less than everything around it.
- * The name is `active_core_label` on this same payload — the label half of the
- * one pick the backend filtered these counts by — never the core read beside it
- * on the page, which is a second resolution of the same question and the split
- * that once had a surface name PCSX ReARMed while judging by the default. A
- * payload carrying no label is a pick that could not be made or carries no name
- * of its own, and the sentence then stands as it always did rather than
- * inventing one.
- *
- * The **console's own demand** (`system_image`) is a third shape and comes first
- * among the answers, because it is the one no count can be relied on to state:
- * the console needs ONE of these images, and a libretro declaration marks each
- * file required or optional and can say nothing else. Which of the two an author
- * reaches for is their choice, and over one PlayStation the deployed catalogue
- * goes both ways — SwanStation marks all five of its images optional, Beetle PSX
- * marks three of its own required. So this says "at least one" and never a
- * required-file ratio — under SwanStation the pane read a green "Nothing
- * required (0/20 files held)" while no game on it would start. It names no core:
- * which core the sentence is about is the highlighted line in the list below,
- * and repeating it here would be the same fact twice on one pane.
- *
- * It also names no SET. "one of these" pointed at the list underneath, where
- * only the files the active core declares can answer the demand — a reader who
- * fetched one of the others saw the sentence stand. The ratio beside it is the
- * library's inventory, a third set again, which is why the sentence states a
- * requirement and the counter stays what it always was.
+ * The dot's colour is the backend's verdict through the shared helper and is
+ * never re-derived here.
  */
 function buildBiosHeader(bios: BiosStatus, biosLevel: BiosTabProps["biosLevel"]): ReactElement[] {
   const localCount = bios.local_count ?? 0;
   const serverCount = bios.server_count ?? 0;
-  const reqCount = bios.required_count ?? 0;
-  const reqDone = bios.required_downloaded ?? 0;
   const heldRatio = serverCount > 0 ? ` (${localCount}/${serverCount} files held)` : "";
 
-  // Color is sourced from the backend unknown/ok/partial/missing verdict via the
-  // shared helper — never re-derived here. The verbose phrasing below stays this
-  // surface's own concern (per-surface wording).
   const biosColor = biosColorForLevel(biosLevel);
-  let biosLabel: string;
-  if (bios.system_image === "absent") {
-    biosLabel = `Needs at least one BIOS file${heldRatio}`;
-  } else if (biosLevel === "unknown") {
-    // Three ignorances behind one grey dot, and they are not the same sentence.
-    // With a required row nothing could judge — or with the console's own image
-    // unsettled — the requirement IS known and it is the readiness that cannot
-    // be stated. Otherwise nothing installed could say whether these files are
-    // wanted at all.
-    // Neither is the no-requirement sentence below, which is an answer.
-    biosLabel =
-      (bios.required_withheld ?? 0) > 0 || bios.system_image === "unsettled"
-        ? "BIOS readiness unknown"
-        : "BIOS requirement unknown";
-  } else if (reqCount > 0) {
-    biosLabel =
-      reqDone >= reqCount
-        ? `All required ready (${reqDone}/${reqCount})`
-        : `${reqDone}/${reqCount} required files ready`;
-  } else {
-    const emulator = bios.active_core_label;
-    biosLabel = `${emulator || "The launching emulator"} requires none of the files it names${heldRatio}`;
-  }
+  const biosLabel = `${biosSummary(bios, bios.files ?? [], biosLevel).sentence}${heldRatio}`;
 
   return [
     <div key="bios-title" className="romm-panel-section-title" style={{ marginBottom: "8px" }}>

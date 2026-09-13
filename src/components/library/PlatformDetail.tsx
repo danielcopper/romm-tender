@@ -20,6 +20,7 @@ import type { FirmwarePlatformExt, SystemCoreInfo, SystemImage } from "../../typ
 import { biosColorForLevel } from "../../utils/biosColor";
 import { isFetchable } from "../../utils/biosFetchable";
 import { biosFileDescription, biosFileNote } from "../../utils/biosFileNote";
+import { biosSummary } from "../../utils/biosSummary";
 import { buildEmulatorMenu } from "../../utils/emulatorMenu";
 import { getEventTarget } from "../../utils/events";
 import { pluralize } from "../../utils/pluralize";
@@ -116,177 +117,6 @@ const CORE_BUTTON = {
 /** One row of the firmware overview's per-platform file list. Named off the
  *  payload rather than restated, so a field added to it reaches here. */
 type FirmwareRow = FirmwarePlatformExt["files"][number];
-
-/** What {@link getBiosSummary} words one platform's summary from. One argument
- *  rather than eight, because six of them are numbers and booleans and at the
- *  call site nothing but their order would say which is which. */
-interface BiosSummaryInput {
-  requiredCount: number;
-  requiredDone: number;
-  requiredReady: boolean;
-  optionalMissing: number;
-  done: number;
-  total: number;
-  systemImage: SystemImage;
-  /** The platform pick's name, off the firmware payload's own
-   *  `active_core_label` — the same source {@link getUnknownSummary} names the
-   *  emulator from, and `null` where no bakeable emulator could be picked and
-   *  there is no name to print. */
-  emulatorLabel: string | null;
-}
-
-/**
- * Build the per-platform summary label/description from the backend BIOS
- * aggregates. The ok/partial/missing DECISION is the backend's `bios_level`
- * (`compute_bios_level`) — `requiredReady` is `bios_level === "ok"`, so the
- * required-files threshold is no longer re-compared here. `requiredCount` still
- * selects the phrasing axis (required vs. plain file counts), and the
- * optional-missing breakdown stays a local computation passed in by the caller.
- *
- * **Both summaries that would otherwise read as claims about the CONSOLE name
- * the set they were counted over instead.** The counts are over the files the
- * launching emulator names, and the console's own demand is a different axis
- * that answers `not_demanded` for a console nothing is recorded about as
- * readily as for one shown to start with nothing (CONTEXT.md → System image).
- * So a bare "Nothing required" states the count's conclusion as if the console
- * had been asked, and "none is in place" said no BIOS file was there at all
- * over a BIOS folder holding one the launching emulator simply does not list.
- * Naming the emulator is what makes each sentence true of what was read, and
- * the name is `emulatorLabel` — never a second resolution beside it.
- *
- * With nothing required, the library ratio stays inventory and is worded as
- * such — the same framing the BIOS tab uses. "0 / 20 files … 20 missing" over
- * twenty files no installed core asks for reads as work outstanding on a system
- * that needs nothing.
- */
-function getBiosSummary({
-  requiredCount,
-  requiredDone,
-  requiredReady,
-  optionalMissing,
-  done,
-  total,
-  systemImage,
-  emulatorLabel,
-}: BiosSummaryInput) {
-  // The console's own demand comes first, because no count can be relied on to
-  // state it: it asks for ONE of these images, and a libretro declaration marks
-  // each file required or optional and can say nothing else. Which of the two an
-  // author reaches for is their choice, and over one PlayStation the deployed
-  // catalogue goes both ways — SwanStation marks all five of its images
-  // optional, so the required-file phrasing below would stand over a system
-  // that will not boot. Stated as "at least one" and never as a ratio — the
-  // list is many files and the requirement is one.
-  //
-  // The SENTENCE names the emulator because the state is about that emulator's
-  // declaration and nothing else. A BIOS folder can hold a PlayStation image
-  // the console starts from that is not one of the five SwanStation lists, and
-  // the old wording — "and none is in place" — then said something plainly
-  // untrue about the folder while the state itself was right. The label above
-  // it still points at no set: the table below holds rows only the launching
-  // core's declaration can answer the demand with, and rows it cannot.
-  if (systemImage === "absent") {
-    return {
-      summaryLabel: "Needs at least one BIOS file",
-      summaryDescription: emulatorLabel
-        ? `This system needs a BIOS image, and none of the images ${emulatorLabel} names is in place`
-        : "This system needs a BIOS image, and none of the images its emulator names is in place",
-    };
-  }
-  if (requiredCount > 0 && requiredReady) {
-    return {
-      summaryLabel: `${requiredDone} / ${requiredCount} required`,
-      summaryDescription:
-        optionalMissing > 0 ? `All required ready (${optionalMissing} optional missing)` : "All required ready",
-    };
-  }
-  if (requiredCount > 0) {
-    return {
-      summaryLabel: `${requiredDone} / ${requiredCount} required`,
-      summaryDescription: `${requiredCount - requiredDone} required missing`,
-    };
-  }
-  return {
-    summaryLabel: emulatorLabel
-      ? `${emulatorLabel} requires none of the files it names`
-      : "The launching emulator requires none of the files it names",
-    summaryDescription: total > 0 ? `${done} / ${total} files held` : "No BIOS files in your library",
-  };
-}
-
-/**
- * The summary for a platform making no readiness claim. Three shapes reach it
- * and they are different sentences.
- *
- * `requiredWithheld` above zero is a platform whose emulators DID answer and one
- * of whose required rows nothing could judge — a declared folder the resolver
- * could not read, say. An unsettled `system_image` is the same kind of gap one
- * axis over: the console's own demand is known and whether it is met is not.
- * Neither is the last shape, and it is narrower than the branch reaching it
- * looks. It is the reading itself: the ONE emulator this platform launches with
- * could not be asked what it wants — it ships no declaration, the resolver holds
- * no card for it, it could not be identified, or no pick could be made at all
- * (`domain/bios_status.py`, `_nothing_established`). Every other installed
- * emulator may have answered perfectly well, and the rows below say so; what is
- * unknown is this launch. The branch itself is the fallback after the two causes
- * above, so all it establishes is that neither of those applied — which is why
- * the sentence states the machine fact rather than the branch.
- *
- * **So it names the emulator where the pick has a name.** That name is
- * `active_core_label` on this platform's own firmware payload — the label half
- * of the single pick the whole BIOS answer was scoped to
- * (`FirmwareStatusReader._enrich_platform`), so the sentence and the verdict
- * cannot be about two different emulators. Reaching for the core-info read
- * beside it would be a second resolution of the same question, which is the
- * split that once had a pane name PCSX ReARMed and judge by the default. Its
- * `null` is the pick that could not be MADE — the platform offers no bakeable
- * emulator — and there is then no name to print, so the sentence says what was
- * asked of nobody instead.
- *
- * That last one states no count. The rows nothing could answer for are counted
- * once, under the table where the line that carries them also says where to
- * report the gap — and on this platform they are every row, so a count up here
- * as well is the same sentence twice on one screen.
- *
- * **The first two can hold together, and the withheld row is then the truer
- * sentence.** They co-occur on a console that needs an image whose required
- * folder row the read could not judge — the LRPS2 shape. They are not two gaps
- * over two different file sets there: a row that is `required_by_active` always
- * carries the active core, so it is always one of the rows the console's
- * disjunction is read over (`classify_system_image`). It is always one of the
- * unjudged rows that verdict is read over rather than a finding beside it — the
- * decline needs at least one such row, and this is one — and need not be the only
- * one, since another image the core declares can be unjudged too. It is the only
- * half of the pair that can name a file. Saying both would point twice at one
- * file list, once named and once vague; saying only the console's would drop the
- * pointer into that list, where the row shows the caveat explaining itself. So
- * the withheld count is checked first. The reverse — a console demand unsettled
- * with no withheld required row — is a different platform and keeps its own
- * sentence.
- */
-function getUnknownSummary(requiredWithheld: number, systemImage: SystemImage, emulatorLabel: string | null) {
-  if (requiredWithheld > 0) {
-    return {
-      summaryLabel: "BIOS readiness unknown",
-      summaryDescription:
-        requiredWithheld === 1
-          ? "A required file could not be judged — see the file list"
-          : `${requiredWithheld} required files could not be judged — see the file list`,
-    };
-  }
-  if (systemImage === "unsettled") {
-    return {
-      summaryLabel: "BIOS readiness unknown",
-      summaryDescription: "Whether the BIOS image this system needs is in place could not be established",
-    };
-  }
-  return {
-    summaryLabel: "BIOS requirement unknown",
-    summaryDescription: emulatorLabel
-      ? `Nothing could be established about what ${emulatorLabel} needs`
-      : "The launching emulator could not be asked what it needs",
-  };
-}
 
 /**
  * The first mark in one row's `On disk` cell, as a glyph and a colour.
@@ -899,52 +729,31 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   const total = firmware.server_count ?? files.filter((f) => f.on_server).length;
   const done = firmware.local_count ?? files.filter((f) => f.on_server && f.downloaded).length;
   const allDone = done === total;
-  const requiredFiles = files.filter((f) => f.required_by_active);
-  const requiredCount = firmware.required_count ?? requiredFiles.length;
-  const requiredDone = firmware.required_downloaded ?? requiredFiles.filter((f) => f.downloaded).length;
-  const optionalMissing = files.filter((f) => f.wanted === "optional" && !f.required_by_active && !f.downloaded).length;
-  // The ok/partial/missing DECISION is the backend's bios_level — "ready" means
-  // all required files present. Fall back to the local count comparison only
-  // when the level is absent from the payload.
-  const requiredReady = firmware.bios_level == null ? requiredDone === requiredCount : firmware.bios_level === "ok";
 
   const requiredWithheld = firmware.required_withheld ?? 0;
   const systemImage = firmware.system_image ?? "not_demanded";
-  // The console's own established absence is tested BEFORE the decline, which is
-  // the order the BIOS tab's headline and the platform list's tooltip already
-  // read in. Today the pair never arrives at all: the backend lands `absent` on
-  // `missing`, so no payload carries it with an `unknown` level. What would keep
-  // the three surfaces agreeing if one ever did is that each carries this test
-  // ITSELF — nothing joins them, so a divergence takes one surface losing its
-  // test, not the backend reordering ahead of all three. Lose it here and this
-  // pane alone would say nothing could be established about what its emulator
-  // needs, and offer the by-hand route in place of a requirement the rows
-  // demonstrated, while the other two said the console needs at least one BIOS
-  // file.
-  const declined = firmware.bios_level === "unknown" && systemImage !== "absent";
+  // **The pane words none of the seven states itself** — `utils/biosSummary.ts`
+  // holds them, and this surface takes both halves of one answer: the short
+  // `status` as the section's coloured note, where the title beside it says what
+  // is being counted, and the `sentence` under it. The console's own demand
+  // outranking the level's decline is decided in there too, which is what stops
+  // this pane from reading that order differently from the game page's.
+  const { status: summaryLabel, sentence: summaryDescription } = biosSummary(
+    firmware,
+    files,
+    firmware.bios_level ?? null,
+  );
   // The narrowest of the declines: not one row on the platform was answered, so
   // the pane has nothing to point the reader at and says where a file can be put
   // instead. A withheld required row and an unsettled console demand are both
   // declined VERDICTS over rows that DID answer, and neither reaches this. It
-  // decides wording only — what the pane offers to fetch is a separate question
-  // with a separate input, below.
-  const nothingEstablished = declined && requiredWithheld === 0 && systemImage !== "unsettled";
-  // One read, both summaries: the platform is judged by ONE pick, and a sentence
-  // that named a second resolution of it could name an emulator the verdict
-  // beside it is not about.
-  const emulatorLabel = firmware.active_core_label ?? null;
-  const { summaryLabel, summaryDescription } = declined
-    ? getUnknownSummary(requiredWithheld, systemImage, emulatorLabel)
-    : getBiosSummary({
-        requiredCount,
-        requiredDone,
-        requiredReady,
-        optionalMissing,
-        done,
-        total,
-        systemImage,
-        emulatorLabel,
-      });
+  // decides one extra LINE only — what the pane offers to fetch is a separate
+  // question with a separate input, below.
+  const nothingEstablished =
+    firmware.bios_level === "unknown" &&
+    systemImage !== "absent" &&
+    requiredWithheld === 0 &&
+    systemImage !== "unsettled";
 
   // The download affordances key off what is missing AND fetchable, and read
   // the VERDICT nowhere — not `bios_level`, not `required_withheld`, not

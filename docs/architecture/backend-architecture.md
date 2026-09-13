@@ -1871,9 +1871,9 @@ row over: it answers one file the user named, so a silent success would leave th
 it.
 
 **A folder requirement is answered by what is inside it.** LRPS2 declares `pcsx2/bios` — a folder, required, and always
-present because RetroDECK links it onto the BIOS root. Reading presence as the verdict said "All required ready (2/2)"
-over a PS2 install with no BIOS file at all; reading absence said red over a folder that is plainly there. So
-`BiosFileEntry.satisfied` is the row's verdict, and the **required** counts key off it and nothing else:
+present because RetroDECK links it onto the BIOS root. Reading presence as the verdict said "All 2 files LRPS2 requires
+are in place" over a PS2 install with no BIOS file at all; reading absence said red over a folder that is plainly there.
+So `BiosFileEntry.satisfied` is the row's verdict, and the **required** counts key off it and nothing else:
 `count_required` counts rows answered `True`, `count_required_withheld` counts rows answered `None`, and a row answered
 `False` is a requirement shown to be unmet — it reads red, and the play-row badge rises for it, because the game will
 not launch. All three are scoped to `required_by_active` first, so an unmet row the launching core does not require
@@ -1909,16 +1909,16 @@ direction: the row keeps a cause it might not own rather than losing one it does
 **A required row nothing could judge declines the verdict instead of guessing it.** `_requirement_verdict_withheld`
 takes both `compute_bios_level` and `compute_bios_label` to `unknown` while every file row keeps its own answer. The
 count travels as `required_withheld` because three surfaces need it: the platform detail tells its two unknowns apart
-with it, the BIOS tab picks between "BIOS requirement unknown" and "BIOS readiness unknown", and the play-row badge
-subtracts it so a required file whose absence _was_ established still warns. What a withheld row SAYS comes from its
-caveat codes, because the verdict is the answer alone and carries none of its causes; the verdict decides only which
-family of codes can apply and what to say when none of them is recognised, which is the one sentence written off it —
-`src/utils/biosFileNote.ts` is the one place both surfaces derive what a row says from — a sentence, the lines under it,
-which is how a satisfied folder's images arrive as a list rather than folded into the row's own name, and the
-description on its own line under the row (`biosFileDescription`). A row is headed by the file it declares on both
-surfaces and never by its description: that is the packager's prose out of a core's `.info`, outside the resolver's
-contract, and it routinely spells the row's own name into its words — so the shared rule takes the name back out and
-answers `null` where nothing is left.
+with it, the shared `utils/biosSummary.ts` picks between "Nothing could be established about what X needs" and "One file
+X requires could not be checked", and the play-row badge subtracts it so a required file whose absence _was_ established
+still warns. What a withheld row SAYS comes from its caveat codes, because the verdict is the answer alone and carries
+none of its causes; the verdict decides only which family of codes can apply and what to say when none of them is
+recognised, which is the one sentence written off it — `src/utils/biosFileNote.ts` is the one place both surfaces derive
+what a row says from — a sentence, the lines under it, which is how a satisfied folder's images arrive as a list rather
+than folded into the row's own name, and the description on its own line under the row (`biosFileDescription`). A row is
+headed by the file it declares on both surfaces and never by its description: that is the packager's prose out of a
+core's `.info`, outside the resolver's contract, and it routinely spells the row's own name into its words — so the
+shared rule takes the name back out and answers `null` where nothing is left.
 
 **No unknown withdraws a download, because the two questions are independent.** What the resolver could establish is the
 emulator's DEMAND; what is fetchable is what the RomM library HOLDS, and neither answers the other. A platform nothing
@@ -1945,10 +1945,10 @@ own held/offered ratio — and it is a value rather than a count.** A libretro `
 optional and can say nothing else: there is no way to say "one of these", and no way to say the console does not start
 without one. An author who knows a PlayStation needs a BIOS image has two lossy moves and the deployed catalogue takes
 both — SwanStation marks all five of its images **optional**, Beetle PSX marks three of its own **required** — so the
-file counts alone report a green "requires none of the files it names (0/20 files held)" under the one core and three
-separate prerequisites under the other, over one PlayStation on which no game starts. The resolver answers the missing
-half from a packaged, source-cited table about the **system** (`CoreFirmware.system_firmware`), carried through the
-adapter per emulator as `FirmwareCatalogue.emulator_verdicts` and turned into `domain/bios_status.py`'s
+file counts alone report a green "marks none of its BIOS files as required (0/20 files held)" under the one core and
+three separate prerequisites under the other, over one PlayStation on which no game starts. The resolver answers the
+missing half from a packaged, source-cited table about the **system** (`CoreFirmware.system_firmware`), carried through
+the adapter per emulator as `FirmwareCatalogue.emulator_verdicts` and turned into `domain/bios_status.py`'s
 `classify_system_image`. The narrower half of that per-emulator answer is read over every one of them at once
 (`emulators_needing_one_of_their_files`) and stamped on each row's own `cores` entry beside that core's `required` flag,
 as the NUMBER of files the core declares. The two keys are two speakers — the core's `.info` and the packaged table — so
@@ -1966,11 +1966,11 @@ the flag for the launching core.
 
 - **It is not folded into `required_count`.** The console asks for _one_ of the images the core declares, so it is one
   requirement over the whole list rather than one requirement per file; put into that count it would read
-  `0 / 5 required files ready` under the SwanStation this was observed on, five being what that core declares. The
-  twenty in the page's own `0/20 files held` is a different set again — the RomM library's inventory for the platform,
-  which this axis neither counts nor is scoped to. Every surface words it "at least one" and none states it as a ratio,
-  and none of them points at the file list either — only the images the launching core declares can answer the demand,
-  and the rows beside them cannot.
+  `0 of 5 files SwanStation requires are in place` under the SwanStation this was observed on, five being what that core
+  declares. The twenty in the page's own `0/20 files held` is a different set again — the RomM library's inventory for
+  the platform, which this axis neither counts nor is scoped to. Every surface words it "at least one" and none states
+  it as a ratio, and none of them points at the file list either — only the images the launching core declares can
+  answer the demand, and the rows beside them cannot.
 - **Whether an image is held is read off the rows, and `requirements_met` is not consulted at all.** The demand comes
   from the system table, the presence from the file rows, and nothing weighs one against the other — which is the shape
   upstream intends for a consumer here. Reading that field as a second opinion would be the misreading it exists to

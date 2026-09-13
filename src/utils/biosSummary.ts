@@ -1,0 +1,220 @@
+/**
+ * The one place a BIOS state is put into words.
+ *
+ * Seven states, and before this module each surface worded them for itself: the
+ * game page's BIOS tab, the platform pane, and the platform list's tooltip all
+ * held their own spelling of the same seven, some naming the launching emulator
+ * and some not. Nothing joined them, so the drift was invisible to every test —
+ * each surface's own expectations passed while the three said different things
+ * about one platform, which is what a reader moving between them saw.
+ *
+ * So the states are decided here and the sentences are written here, and a
+ * surface chooses only WHICH of the two answers it has room for:
+ *
+ * - `status` is the short coloured note — the platform pane sets it beside
+ *   `BIOS FILES`, where the colour comes from the level and this says what the
+ *   colour means;
+ * - `sentence` is the line itself, and it is what the game page shows.
+ *
+ * They are one answer in two lengths and never two answers: a surface showing
+ * both shows a heading and its own sentence, never two facts to reconcile.
+ *
+ * **Every sentence names the emulator**, because every one of these states is
+ * about ONE emulator's declaration and nothing else — the pick the whole answer
+ * was scoped to, carried on the payload as `active_core_label`. A sentence about
+ * "the launching emulator" sat two inches from an `Active Core: mGBA` row and
+ * said less than everything around it. Where the payload carries no label the
+ * pick could not be made or has no name of its own, and the sentences fall back
+ * to naming the role rather than inventing one.
+ *
+ * **The order of the conditions is load-bearing and is the order the three
+ * surfaces already read in.** The console's own demand (`system_image`) is
+ * tested FIRST, ahead of the level's decline: it is the one requirement no count
+ * can state — the console asks for ONE of the images the emulator declares, and
+ * a libretro `.info` can mark a file required or optional and say nothing else —
+ * so a count-derived sentence would stand over a system that will not boot.
+ * Today the pair never arrives, because the backend lands an established absence
+ * on `missing` rather than on `unknown`; the order is a guard rather than a rule
+ * about a live case, and it is now a guard in one place rather than three.
+ *
+ * What this module does NOT hold is the library's own ratio — `(d/t files held)`
+ * on the game page. That counts what the RomM library holds for the platform, a
+ * third set again, and the surface that shows it appends it to the sentence
+ * itself.
+ */
+
+import type { BiosLevel, FirmwareWanted, SystemImage } from "../types/firmware";
+
+/**
+ * One state, in the two lengths a surface can have room for. Both are always
+ * present: a surface picks, and neither is ever the empty string.
+ */
+export interface BiosSummary {
+  /** The short coloured note — a heading, not a sentence. */
+  status: string;
+  /** The line that says what the state means. */
+  sentence: string;
+}
+
+/** The payload fields every state is read off. Both surfaces' own payload types
+ *  satisfy it structurally, which is what lets one module serve a `BiosStatus`
+ *  and a `FirmwarePlatformExt` without either importing the other. */
+export interface BiosSummarySource {
+  required_count?: number;
+  required_downloaded?: number;
+  required_withheld?: number;
+  system_image?: SystemImage;
+  active_core_label?: string | null;
+}
+
+/** The row fields the two count fallbacks and the optional-missing breakdown are
+ *  taken over. Both file types carry them. */
+export interface BiosSummaryRow {
+  wanted?: FirmwareWanted;
+  required_by_active?: boolean;
+  downloaded?: boolean;
+}
+
+// The role a sentence names where the pick carries no label. Two spellings of
+// one fallback, because two of the seven sentences open with the emulator and
+// the rest name it mid-sentence — and a real label is never recased, since
+// `mGBA` is the name its own catalogue spells.
+const ROLE_MID = "the launching emulator";
+const ROLE_LEADING = "The launching emulator";
+
+// The fixed halves of the seven sentences. They are constants rather than
+// inline literals so `BIOS_SUMMARY_PHRASES` can be built from the same strings
+// the sentences are — a drift lock that repeated the list would be checking a
+// second copy of it.
+const CANNOT_START = "cannot start this system without a BIOS image";
+// The emulator's name sits between the count and this, so the searchable run
+// starts at `requires` — and it has to, because a bare "could not be checked" is
+// also the platform pane's mark for a row whose own verdict was withheld, and a
+// lock searching for that would fire on a string this module does not own.
+const REQUIRES_UNCHECKED = "requires could not be checked";
+const IMAGE_UNSETTLED_HEAD = "Whether the BIOS image";
+const IMAGE_UNSETTLED_TAIL = "needs is in place could not be established";
+const NOTHING_ESTABLISHED_HEAD = "Nothing could be established about what";
+const NOTHING_ESTABLISHED_TAIL = "needs";
+const REQUIRES_ARE_IN_PLACE = "requires are in place";
+const MARKS_NONE_REQUIRED = "marks none of its BIOS files as required";
+const OPTIONAL_MISSING_TAIL = "optional missing";
+
+const STATUS_NEEDS_IMAGE = "Needs a BIOS image";
+const STATUS_READINESS_UNKNOWN = "Readiness unknown";
+const STATUS_REQUIREMENT_UNKNOWN = "Requirement unknown";
+const STATUS_NOTHING_REQUIRED = "Nothing required";
+
+/**
+ * Every fixed phrase a summary is built from — what the drift lock searches the
+ * two surfaces for.
+ *
+ * It is the same list the sentences above are composed of, not a transcription
+ * of them, so a phrase that changes here changes what the lock looks for in the
+ * same edit. What it can catch is a summary string written back into a
+ * component; what it cannot catch is a component inventing a NEW wording for one
+ * of these states, which no string search could see. The interpolated halves are
+ * absent by construction — a phrase has to be a fixed run to be searchable at
+ * all.
+ */
+export const BIOS_SUMMARY_PHRASES: readonly string[] = [
+  CANNOT_START,
+  REQUIRES_UNCHECKED,
+  IMAGE_UNSETTLED_HEAD,
+  IMAGE_UNSETTLED_TAIL,
+  NOTHING_ESTABLISHED_HEAD,
+  REQUIRES_ARE_IN_PLACE,
+  MARKS_NONE_REQUIRED,
+  OPTIONAL_MISSING_TAIL,
+  STATUS_NEEDS_IMAGE,
+  STATUS_READINESS_UNKNOWN,
+  STATUS_REQUIREMENT_UNKNOWN,
+  STATUS_NOTHING_REQUIRED,
+];
+
+/**
+ * The seven states, in the order the surfaces read them.
+ *
+ * *level* is the backend's own readiness verdict and is taken as an argument
+ * rather than off *source*: the game page holds it beside the payload (a
+ * requirement nothing could be established for arrives as a placeholder status
+ * with the level set separately), so reading it off the payload here would answer
+ * a different question on that surface. `null` — a payload from before the field
+ * existed — falls back to the count comparison the level itself makes.
+ */
+export function biosSummary(
+  source: BiosSummarySource,
+  rows: readonly BiosSummaryRow[],
+  level: BiosLevel | null,
+): BiosSummary {
+  const emulator = source.active_core_label ?? null;
+  const named = emulator ?? ROLE_MID;
+  const leading = emulator ?? ROLE_LEADING;
+  const systemImage = source.system_image ?? "not_demanded";
+  const withheld = source.required_withheld ?? 0;
+  const requiredRows = rows.filter((row) => row.required_by_active);
+  const requiredCount = source.required_count ?? requiredRows.length;
+  const requiredDone = source.required_downloaded ?? requiredRows.filter((row) => row.downloaded).length;
+
+  // 1. The console's own demand, ahead of everything: see the header.
+  if (systemImage === "absent") {
+    return { status: STATUS_NEEDS_IMAGE, sentence: `${leading} ${CANNOT_START}` };
+  }
+
+  if (level === "unknown") {
+    // 2. The requirement IS known and the readiness is not — a required row the
+    //    resolver could not judge, a declared folder it could not read. It names
+    //    a file count because the file list is where each row's own caveat
+    //    explains itself.
+    if (withheld > 0) {
+      const files = withheld === 1 ? "One file" : `${withheld} files`;
+      return {
+        status: STATUS_READINESS_UNKNOWN,
+        sentence: `${files} ${named} ${REQUIRES_UNCHECKED}`,
+      };
+    }
+    // 3. The same gap one axis over: the console's demand is known and whether
+    //    it is met is not.
+    if (systemImage === "unsettled") {
+      return {
+        status: STATUS_READINESS_UNKNOWN,
+        sentence: `${IMAGE_UNSETTLED_HEAD} ${named} ${IMAGE_UNSETTLED_TAIL}`,
+      };
+    }
+    // 4. Narrower than the branch reaching it looks: the ONE emulator this
+    //    platform launches with could not be asked what it wants. Every other
+    //    installed emulator may have answered perfectly well.
+    return {
+      status: STATUS_REQUIREMENT_UNKNOWN,
+      sentence: `${NOTHING_ESTABLISHED_HEAD} ${named} ${NOTHING_ESTABLISHED_TAIL}`,
+    };
+  }
+
+  if (requiredCount > 0) {
+    const ratio = `${requiredDone} / ${requiredCount} required`;
+    // 5 / 6. The emulator's own required files. "Ready" is the level, which
+    //        decides it on exactly this comparison — the fallback is that same
+    //        comparison, not a second rule.
+    const ready = level === null ? requiredDone >= requiredCount : level === "ok";
+    if (ready) {
+      const optionalMissing = rows.filter(
+        (row) => row.wanted === "optional" && !row.required_by_active && !row.downloaded,
+      ).length;
+      const tail = optionalMissing > 0 ? ` (${optionalMissing} ${OPTIONAL_MISSING_TAIL})` : "";
+      return {
+        status: ratio,
+        sentence: `All ${requiredCount} files ${named} ${REQUIRES_ARE_IN_PLACE}${tail}`,
+      };
+    }
+    return {
+      status: ratio,
+      sentence: `${requiredDone} of ${requiredCount} files ${named} ${REQUIRES_ARE_IN_PLACE}`,
+    };
+  }
+
+  // 7. A finished answer, and the set it was taken over is named: a bare
+  //    "Nothing required" was read as the CONSOLE needing no BIOS, which is the
+  //    axis above and one the catalogue answers `not_demanded` for a console
+  //    nobody has looked at as readily as for one shown to start with nothing.
+  return { status: STATUS_NOTHING_REQUIRED, sentence: `${leading} ${MARKS_NONE_REQUIRED}` };
+}

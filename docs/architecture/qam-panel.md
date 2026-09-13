@@ -953,42 +953,41 @@ it, for the focused platform:
   and the acting pane says `Switching to <emulator>…` in the same status line the outcome lands in — a success takes
   that line back, a refusal replaces it, and a continuation cancelled by leaving the page takes it back too, because
   such a switch either committed or never ran and there is no pane left to report to either way.
-- **BIOS files** — the summary (required, or files, the console's own demand where it has one, and the three shapes that
-  make no readiness claim — `system_image: "absent"` reads "Needs at least one BIOS file" and outranks the counts and
-  the decline alike, tested before either, because the console asks for one of the images and no count can state that;
+- **BIOS files** — the summary, which this pane words nowhere: `src/utils/biosSummary.ts` holds all seven states and
+  answers each in two lengths, and the pane takes both — the short `status` as the section's coloured note beside
+  `BIOS FILES`, the `sentence` under it. (`system_image: "absent"` outranks the counts and the decline alike, tested
+  before either inside that module, because the console asks for one of the images and no count can state that;
   `"unsettled"` and `required_withheld` are declined VERDICTS over rows that answered, so neither reaches
-  `nothingEstablished`, which is the narrowest decline and decides **wording only** — and its sentence names the
-  emulator the platform launches with, off the firmware payload's own `active_core_label`, because the decline is about
-  that one pick and not about everything installed; where the platform resolves to no bakeable emulator that label is
-  `null`, and the sentence says the launching emulator could not be asked instead of naming one), then a table: File, On
-  disk, Contents, and a **Download** button on every row that is missing and in the RomM library (#164) — never on a
-  folder declaration, whatever its state, because the emulator opens that name as a directory — and a **Delete** button
-  on every row a download record of ours still holds. That covers a declared **folder** too, where no record carries the
-  row's name and the button counts the distinct files our records name underneath it (`Delete (N)`): a folder is never a
-  download, which says nothing about the files already inside one. Same authority as `Delete BIOS`, described below.
-  Below the table one row of buttons: Download required (_N_), Download all, Delete BIOS behind a `ConfirmModal`. **All
-  three are always rendered and disable when there is nothing to do**, the ruling the Remove group already had: on PS2
-  all three vanished at once, and a button that disappears is a state the reader has to work out. A disabled
-  `DialogButton` is still a focus stop, so the row stays walkable.
+  `nothingEstablished` — which is now the narrowest decline and decides one extra LINE only, the by-hand route.) Then a
+  table: File, On disk, Contents, and a **Download** button on every row that is missing and in the RomM library (#164)
+  — never on a folder declaration, whatever its state, because the emulator opens that name as a directory — and a
+  **Delete** button on every row a download record of ours still holds. That covers a declared **folder** too, where no
+  record carries the row's name and the button counts the distinct files our records name underneath it (`Delete (N)`):
+  a folder is never a download, which says nothing about the files already inside one. Same authority as `Delete BIOS`,
+  described below. Below the table one row of buttons: Download required (_N_), Download all, Delete BIOS behind a
+  `ConfirmModal`. **All three are always rendered and disable when there is nothing to do**, the ruling the Remove group
+  already had: on PS2 all three vanished at once, and a button that disappears is a state the reader has to work out. A
+  disabled `DialogButton` is still a focus stop, so the row stays walkable.
 
-  **The two summaries that would otherwise read as claims about the CONSOLE name the set they were counted over
-  instead**, off the same `active_core_label` and with the same `null` fallback as the decline above. An empty
-  `required_count` is worded "`<emulator>` requires none of the files it names" rather than "Nothing required", and
-  `absent`'s sentence under the headline is "This system needs a BIOS image, and none of the images `<emulator>` names
-  is in place" rather than "none is in place". Both counts are over one emulator's declaration, while the console's own
-  demand is the separate axis beside them — `not_demanded` for a console nothing is recorded about as readily as for one
-  shown to start with nothing — so a subjectless sentence stated the count's conclusion as though the console had been
-  asked, and the second one additionally said no BIOS file was in the folder where what was read is that none of the
-  DECLARED images was. The headline itself stays subjectless: it is the note beside `BIOS FILES` and the sentence under
-  it is where a name fits. The Platforms list's row tooltip carries the first sentence verbatim, deliberately — the
-  reader who hovers and then opens the pane meets one sentence rather than two. The game page's BIOS tab words the same
-  state "`<emulator>` requires none of the files it names" and names it from the same field — the BIOS payload's own
-  `active_core_label`, which `check_platform_bios` stamps as the label half of the pick it filtered those very counts
-  by, never from the core read beside it on the page. That tab used to name none, because `BiosStatus` carried no label
-  to name one from, and the sentence then sat two inches from an `Active Core` row saying less than everything around
-  it; a payload that names no emulator still words it "The launching emulator requires none of the files it names".
-  "Emulator" and never "core" on all three: what a platform launches with can be a STANDALONE emulator, which is not a
+  **Every sentence names the emulator**, off the firmware payload's own `active_core_label` — the label half of the pick
+  those very counts were filtered by, never the core read beside it on the page. An empty `required_count` is worded
+  "`<emulator>` marks none of its BIOS files as required" and `absent` is "`<emulator>` cannot start this system without
+  a BIOS image", because both are statements about one emulator's declaration while the console's own demand is the
+  separate axis beside them — `not_demanded` for a console nothing is recorded about as readily as for one shown to
+  start with nothing — so a subjectless sentence stated the count's conclusion as though the console had been asked, and
+  the older `absent` wording additionally said no BIOS file was in the folder where what was read is that none of the
+  DECLARED images was. Where the pick has no label the sentences name the role instead ("The launching emulator …"), and
+  the short `status` beside `BIOS FILES` stays subjectless because it is a heading, with the sentence under it where a
+  name fits. "Emulator" and never "core": what a platform launches with can be a STANDALONE emulator, which is not a
   core, and the whole answer is keyed on the emulator's identity for that reason.
+
+  **The game page's BIOS tab reads the same module** and shows the `sentence` alone, with the library's own
+  `(d/t files held)` ratio appended — a third set again, which is why it rides along rather than being folded in. What
+  stops a surface writing one of these sentences back into itself is `src/utils/biosSummary.test.ts`, which reads both
+  components as SOURCE and fails on any phrase the module builds its answers from. The **Platforms list's row tooltip**
+  (`PlatformsTab.tsx`'s `biosTooltip`) still words these states itself: it has three answers the module has no input for
+  — a row whose read has not arrived, one whose re-read failed, and one with no payload at all — so it is the one
+  surface not yet folded in.
 
   **What the two Download buttons and the per-row one are built off is the fetchable set, and none of the three reads
   the verdict** — one predicate, `isFetchable` in `src/utils/biosFetchable.ts`, over
