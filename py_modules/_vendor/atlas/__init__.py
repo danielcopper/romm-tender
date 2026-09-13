@@ -64,7 +64,7 @@ from __future__ import annotations
 # tests/test_version.py holds it equal to pyproject — CI's package job holds
 # dist-info to pyproject in a clean venv — so drift is a red test, not a
 # silent fork.
-__version__ = "0.17.0"  # x-release-please-version
+__version__ = "0.20.0"  # x-release-please-version
 
 # --- The two entry points, and the aggregate over them -----------------------
 from .detect import detect
@@ -138,6 +138,7 @@ from .contract import (
     unresolved_contract,
 )
 from .firmware import (
+    Concern,
     CoreFirmware,
     FirmwareAlternatives,
     FirmwareAnswer,
@@ -243,6 +244,7 @@ from .firmware import (
     CAVEAT_FIRMWARE_IMAGE_AMBIGUOUS,
     CAVEAT_FIRMWARE_IMAGE_CONTRADICTED,
     CAVEAT_FIRMWARE_IMAGE_IDENTIFIED,
+    CAVEAT_FIRMWARE_IMAGE_REFUSED,
     CAVEAT_FIRMWARE_IMAGE_UNLISTED,
     CAVEAT_FIRMWARE_DECLARATION_UNKNOWN,
     CAVEAT_FIRMWARE_PACKAGED_DECLARATION,
@@ -274,7 +276,10 @@ from .firmware import (
     CHECKED_MISMATCH,
     CHECKED_NOT_COMPARABLE,
     CHECKED_UNCHECKED,
+    CHECKED_UNREAD,
     CHECKED_UNKNOWN,
+    CHECKED_REFUSED,
+    CHECKED_UNRECOGNISED,
     CHECKED_VERIFIED,
     CORE_SYSTEM_FIRMWARE_STATES,
     DECLARATION_ABSENT,
@@ -288,6 +293,8 @@ from .firmware import (
     IDENTITY_FILE,
     NEED_OPTIONAL,
     NEED_REQUIRED,
+    RELATION_DECLARES,
+    RELATION_RECOGNISES,
     SOURCE_CARD,
     SOURCE_NONE,
     SOURCE_OVERRIDE,
@@ -306,6 +313,18 @@ from .firmware import (
     FirmwareIdentityKind,
     FirmwareNeed,
     SystemSource,
+)
+
+# How each emulator finds the firmware it boots, as the CONTRACT spells it: the
+# word `cores[].locating` carries, and the closed list a client branches on. The
+# knowledge file behind it and the two rules that read it stay inside the
+# package — a client acts on the word, never on the citation.
+from .core_firmware import (
+    FIRMWARE_LOCATING,
+    LOCATING_BY_NAME,
+    LOCATING_BY_NAME_THEN_CONTENT,
+    LOCATING_UNESTABLISHED,
+    FirmwareLocating,
 )
 
 # The evidence scale the world-knowledge mark's `evidence` comes from, as the
@@ -384,6 +403,7 @@ from .placement import (
     CAVEAT_FILE_SET_ACROSS_SYSTEMS,
     CAVEAT_FILE_SET_DIRECTORIES_UNREAD,
     CAVEAT_FILE_SET_SPANS_ROOTS,
+    CAVEAT_FIRMWARE_SEARCH_CANDIDATES,
     CAVEAT_INVALID_SAVE_DIRECTORY,
     CAVEAT_INVALID_SCREENSHOT_DIRECTORY,
     CAVEAT_NO_CORE,
@@ -453,6 +473,7 @@ from .placement import (
     ESTABLISHED_FOR_SINGLE_DISK_IMAGE,
     ESTABLISHED_FOR_UNPACKED_GAME_DIRECTORY,
     FILES_ESTABLISHED_FOR_TOKENS,
+    FIRMWARE_SEARCH_READINGS,
     REASON_ACTIVE_USER_UNRECORDED,
     REASON_ARCHIVE_CONTENT_AMBIGUOUS,
     REASON_ARCHIVE_CONTENT_MIXED,
@@ -493,6 +514,9 @@ from .placement import (
     REASON_USER_LISTING_UNESTABLISHED,
     REASON_VOLUME_BOOTS_ITSELF,
     REASON_VIRTUAL_SD_DISABLED,
+    READING_IDENTIFIED,
+    READING_UNREADABLE,
+    READING_UNRECOGNISED,
     ROLE_BATTERY,
     ROLE_NOTES,
     ROLE_DISK_DIFF,
@@ -622,6 +646,7 @@ __all__ = [
     "FirmwareIdentity",
     "SuppliedBy",
     "UnclaimedFile",
+    "Concern",
     "RefusedDeclaration",
     "Caveat",
     # Serializers — one per answer type, the same code the vectors assert
@@ -664,6 +689,7 @@ __all__ = [
     "ArchiveReason",
     "CoreDeclarationState",
     "CoreSystemFirmware",
+    "FirmwareLocating",
     "SystemSource",
     # Vocabulary values — path kinds and read statuses (answers carry both)
     "KIND_FILE",
@@ -698,6 +724,11 @@ __all__ = [
     "CHECKED_UNCHECKED",
     "CHECKED_UNKNOWN",
     "CHECKED_NOT_COMPARABLE",
+    "CHECKED_UNRECOGNISED",
+    "CHECKED_REFUSED",
+    "CHECKED_UNREAD",
+    "RELATION_RECOGNISES",
+    "RELATION_DECLARES",
     "IDENTITY_FILE",
     "IDENTITY_ARCHIVE",
     "ARCHIVE_ROMSET",
@@ -707,6 +738,10 @@ __all__ = [
     "DECLARATION_ABSENT",
     "DECLARATION_PACKAGED",
     "DECLARATION_UNSUPPORTED",
+    "LOCATING_BY_NAME",
+    "LOCATING_BY_NAME_THEN_CONTENT",
+    "LOCATING_UNESTABLISHED",
+    "FIRMWARE_LOCATING",
     "SOURCE_OVERRIDE",
     "SOURCE_SYSTEMNAME",
     "SOURCE_SLUG",
@@ -743,6 +778,7 @@ __all__ = [
     "ESTABLISHED_FOR_SINGLE_DISK_IMAGE",
     "ESTABLISHED_FOR_UNPACKED_GAME_DIRECTORY",
     "FILES_ESTABLISHED_FOR_TOKENS",
+    "FIRMWARE_SEARCH_READINGS",
     "REASON_ACTIVE_USER_UNRECORDED",
     "REASON_ARCHIVE_CONTENT_AMBIGUOUS",
     "REASON_ARCHIVE_CONTENT_MIXED",
@@ -783,6 +819,9 @@ __all__ = [
     "REASON_USER_LISTING_UNESTABLISHED",
     "REASON_VOLUME_BOOTS_ITSELF",
     "REASON_VIRTUAL_SD_DISABLED",
+    "READING_IDENTIFIED",
+    "READING_UNREADABLE",
+    "READING_UNRECOGNISED",
     "CFG_LAYER_CONTENT_DIR_OVERRIDE",
     "CFG_LAYER_CORE_OVERRIDE",
     "CFG_LAYER_GAME_OVERRIDE",
@@ -908,6 +947,7 @@ __all__ = [
     "CAVEAT_FIRMWARE_IMAGE_AMBIGUOUS",
     "CAVEAT_FIRMWARE_IMAGE_CONTRADICTED",
     "CAVEAT_FIRMWARE_IMAGE_IDENTIFIED",
+    "CAVEAT_FIRMWARE_IMAGE_REFUSED",
     "CAVEAT_FIRMWARE_IMAGE_UNLISTED",
     "CAVEAT_FIRMWARE_DECLARATION_UNKNOWN",
     "CAVEAT_FIRMWARE_PACKAGED_DECLARATION",
@@ -924,6 +964,7 @@ __all__ = [
     "CAVEAT_FIRMWARE_ROOT_MISSING",
     "CAVEAT_FIRMWARE_ROOT_UNUSABLE",
     "CAVEAT_FIRMWARE_SCAN_INCOMPLETE",
+    "CAVEAT_FIRMWARE_SEARCH_CANDIDATES",
     "CAVEAT_FIRMWARE_SEARCH_UNVERIFIED",
     "CAVEAT_FIRMWARE_SUPPLIED_SOURCE_UNREADABLE",
     "CAVEAT_FIRMWARE_UNREADABLE",

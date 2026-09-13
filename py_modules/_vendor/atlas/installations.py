@@ -99,7 +99,9 @@ from .firmware import (
     FirmwareContext,
     FirmwareIdentification,
     SandboxTranslation,
+    InventoryCatalogue,
     SYSTEMS_WITHOUT_CATALOGUE_ID,
+    carded_systems,
     load_hashes,
     read_core_declarations,
     xemu_file_value,
@@ -9198,15 +9200,18 @@ class _PerUserSaves:
     localusername file, Vita3K by a user.xml that loads.
 
     ``user_root`` is the directory holding the user directories,
-    ``first_user`` the one the emulator starts with — used only where nothing
-    could be listed, never as a claim that it is the one running.
+    ``first_user`` the one the emulator starts with — the tree the answer
+    names where the listing found no user and where it came back short, never
+    as a claim that it is the one running.
 
-    ``skipped`` and ``unestablished`` are directories the listing reached and
-    the answer does not state as a user: the ones the emulator's own selection
-    passes over, and the ones whose deciding file atlas could not look at.
-    Each rides into the caveat's data when non-empty. ``no_user_reason`` is
-    stated where no user is listed, because "no user directory was found" is
-    false of a tree whose directories were all passed over.
+    ``skipped`` and ``unestablished`` are entries the listing reached and the
+    answer does not state as a user: the ones the emulator's own selection
+    passes over, and the ones atlas could not decide — a deciding file it
+    could not look at, or an entry whose own ``stat`` failed, which leaves not
+    even its kind known. Each rides into the caveat's data when non-empty.
+    ``no_user_reason`` is stated where no user is listed, because "no user
+    directory was found" is false of a tree whose directories were all passed
+    over.
 
     ``user_reason`` is the machine-readable half of ``user_sentence``: *why*
     the running user is or is not settled here. The two emulators do not share
@@ -9222,7 +9227,10 @@ class _PerUserSaves:
     launch reopens exactly that user then — and the caller resolves it
     together with the sentence that explains it, so the two cannot drift.
     RPCS3 never sets it: no file records its user, so its headline stays the
-    first tree found.
+    first tree found. Vita3K withholds it where the listing came back short,
+    because a user a failed listing handed back is not a user found here —
+    and the assembly names the stand-in tree on a short listing whatever this
+    field holds, so the two cannot disagree there either.
     """
 
     user_root: str
@@ -9261,9 +9269,12 @@ def _per_user_state(
     failed listing never reached. That is the defect this round fixed for
     DuckStation's BIOS directory, so it does not get to live on here.
 
-    ``users`` names the trees this answer points at, which is what it has
-    always named — where none were found, the compiled default stands in and
-    the sentence says so in as many words.
+    ``users`` names the users whose trees the per-user groups point at, which
+    is what it has always named — where none were found, the compiled default
+    stands in and the sentence says so in as many words. Where a short listing
+    handed users back they are stated here all the same, and the tree the
+    answer *names* is the compiled default beside them, which is what this
+    sentence says.
     """
     if listing.status != GLOB_COMPLETE:
         sentence = (
@@ -9280,18 +9291,20 @@ def _per_user_state(
     data: dict[str, DataValue] = {
         "core": card.token,
         "reason": reason,
-        # The trees this answer points at, as the list they are — where none
-        # was found, the one the emulator starts with, which is the tree the
-        # groups name too.
+        # The users whose trees the per-user groups point at, as the list they
+        # are — where none was found, the one the emulator starts with, which
+        # is the tree the answer names too.
         "users": users or (shape.first_user,),
     }
     # The recorded user is a reading of the configuration, not of the tree, so
     # it holds whatever the listing did or did not establish.
     if shape.configured_user is not None:
         data["configured_user"] = shape.configured_user
-    # The directories the listing reached and the answer does not state as a
+    # The entries the listing reached and the answer does not state as a
     # user — structured, so a client sees the survey passed them over rather
-    # than never reached them.
+    # than never reached them. Entries, not directories: a name whose stat
+    # failed can be passed over by a rule that reads the name alone, and its
+    # kind stays unstated.
     if shape.skipped:
         data["skipped"] = shape.skipped
     if shape.unestablished:
@@ -9299,7 +9312,24 @@ def _per_user_state(
     return sentence, data
 
 
-def _per_user_listing(machine: Machine, user_root: str) -> tuple[GlobResult, tuple[str, ...]]:
+@dataclass(frozen=True, slots=True)
+class _PerUserListing:
+    """What one walk of a user root found, in the three kinds it holds.
+
+    ``listing`` is the merged glob result over both patterns, ``users`` the
+    names that are directories, and ``unstatable`` the names whose ``stat``
+    failed. The third is kept apart from the second rather than folded into
+    the silent drop: nothing was learned about such a name, not even whether
+    it is a directory, and the two emulators do not treat that alike — so each
+    caller's own survey states it.
+    """
+
+    listing: GlobResult
+    users: tuple[str, ...]
+    unstatable: tuple[str, ...]
+
+
+def _per_user_listing(machine: Machine, user_root: str) -> _PerUserListing:
     """The user directories below ``user_root``, and the listing that found them.
 
     Hoisted out of the placement so an emulator whose words depend on what the
@@ -9317,7 +9347,15 @@ def _per_user_listing(machine: Machine, user_root: str) -> tuple[GlobResult, tup
 
     A user is a directory: anything else the globs hand back — a stray file
     beside the user homes, a dead link — would otherwise become a group naming
-    ``<that file>/savedata``, a path nothing writes to.
+    ``<that file>/savedata``, a path nothing writes to. Those drop out here
+    without a word, and that is the whole of what is owed them: a file beside
+    the homes is no user, and the emulators agree with each other about it.
+
+    A name whose ``stat`` *failed* is not one of those. It is not a
+    non-directory; it is a name atlas learned nothing about, and what the two
+    emulators do with it differs, so it is handed back apart for each survey
+    to state under its own citation. Dropping it here was the silent third
+    fate this seam used to have.
     """
     matches: set[str] = set()
     unreadable: set[str] = set()
@@ -9330,14 +9368,12 @@ def _per_user_listing(machine: Machine, user_root: str) -> tuple[GlobResult, tup
         tuple(sorted(matches)),
         tuple(sorted(unreadable)),
     )
-    users = tuple(
-        sorted(
-            os.path.basename(path)
-            for path in listing.matches
-            if machine.path_kind(path) == KIND_DIRECTORY
-        )
+    kinds = {path: machine.path_kind(path) for path in listing.matches}
+    return _PerUserListing(
+        listing,
+        tuple(sorted(os.path.basename(p) for p, k in kinds.items() if k == KIND_DIRECTORY)),
+        tuple(sorted(os.path.basename(p) for p, k in kinds.items() if k == KIND_INACCESSIBLE)),
     )
-    return listing, users
 
 
 def _per_user_savedata_placement(
@@ -9362,6 +9398,12 @@ def _per_user_savedata_placement(
     ``extra_groups`` are places beside the per-user trees that belong to the
     same save — RPCS3's virtual memory cards — and they follow the user groups
     so the headline never lands on them.
+
+    Which tree the answer names is decided in three steps: a listing that came
+    back short names ``shape.first_user``'s tree whatever it handed back, an
+    established headline names its user's tree, and otherwise the first group
+    is the headline. The first step is what keeps ``dir`` and the sentence
+    beside it saying the same thing, and it holds for both emulators here.
     """
     groups = tuple(
         FileGroup(
@@ -9375,7 +9417,21 @@ def _per_user_savedata_placement(
         # is what the caveat below has to say in so many words.
         for user in (users or (shape.first_user,))
     ) + extra_groups
-    if shape.headline_user is not None:
+    if listing.status != GLOB_COMPLETE:
+        # A listing that came back short establishes no user, so no user it
+        # handed back may take the headline either: the trees it did reach
+        # stay as groups, because they were seen, while the answer names the
+        # tree the emulator starts with — which is what the sentence beside
+        # it says in as many words. Two things reach a short listing that
+        # still carries matches, and the first is not a hypothetical:
+        # :func:`_per_user_listing` globs TWICE, once per pattern, and a real
+        # machine reads the directory once per call, so a root that loses its
+        # read permission between the two merges into matches and an
+        # unreadable place at once. The second is the seam itself — ``Machine``
+        # is a protocol and :class:`~atlas.machine.GlobResult` permits
+        # incomplete with matches outright.
+        directory = os.path.join(shape.user_root, shape.first_user, "savedata")
+    elif shape.headline_user is not None:
         # The caller resolved this identity against the emulator's own user
         # listing. The join composes the tree that identity writes — usually a
         # group's own tree, but a user.xml answering to another id names a
@@ -9409,8 +9465,8 @@ def _per_user_savedata_placement(
             Caveat(
                 CAVEAT_SAVE_DIR_UNLISTABLE,
                 f"{shape.user_root} could not be listed, so which user directories are under "
-                "it is unknown — the tree below is what the compiled default names, not what "
-                "was found",
+                "it is unknown — the tree this answer names is what the compiled default "
+                "names, not one this listing established",
                 {"path": shape.user_root, "core": card.token},
             )
         )
@@ -9447,11 +9503,12 @@ def _per_user_savedata_placement(
 class _PerUserSurvey:
     """The user directories an emulator's own listing keeps, and what became of the rest.
 
-    ``listed`` are the groups; ``skipped`` the directories the emulator's
-    selection passes over, ``unestablished`` the ones whose deciding file
-    atlas could not look at; ``aside`` is the clause that says so, appended
-    to whichever sentence the survey earns — empty where every directory
-    found is listed.
+    ``listed`` are the groups; ``skipped`` the entries the emulator's
+    selection passes over, ``unestablished`` the ones atlas could not decide —
+    a deciding file it could not look at, or an entry whose own ``stat``
+    failed; ``aside`` is the clauses that say so, appended to whichever
+    sentence the survey earns — empty only where every entry found is listed,
+    because a passed-over entry earns a clause of its own too.
     """
 
     listed: tuple[str, ...]
@@ -9460,15 +9517,33 @@ class _PerUserSurvey:
     aside: str
 
 
+@dataclass(frozen=True, slots=True)
+class _Undecided:
+    """Entries one survey could not decide, and the single reason covering them.
+
+    A survey can hold more than one such reason at once — Vita3K has a
+    user.xml it could not read and an entry whose ``stat`` failed — and the
+    reasons do not merge into one clause, because each names a different thing
+    atlas could not look at. So the aside takes a group per reason.
+
+    ``unread`` says what could not be looked at and why that is not the
+    emulator's own verdict — a pair, the sentence for one name and the
+    sentence for several, because these entries are listed as a plain series
+    rather than joined the way ``passed_over``'s comma-carrying entries are.
+    """
+
+    names: tuple[str, ...]
+    unread: tuple[str, str]
+
+
 def _per_user_aside(
     *,
     emulator: str,
     passed_over: list[str],
     citation: str | None,
-    unestablished: list[str],
-    unread: tuple[str, str],
+    undecided: tuple[_Undecided, ...],
 ) -> str:
-    """The clause about the directories a survey does not state as users.
+    """The clause about the entries a survey does not state as users.
 
     ``passed_over`` holds one entry per directory — its name, then the joiner
     and the reason the emulator's listing drops it (``"12345678, which holds
@@ -9479,31 +9554,35 @@ def _per_user_aside(
     — and is ``None`` where the fates need different lines, which the caller
     then cites inside each entry instead, so the citation this answer's
     ``user_sentence`` already carries does not repeat here word for word.
-    ``unread`` says what atlas could not look at for the ``unestablished``
-    ones and why that is not the emulator's verdict — a pair, the sentence
-    for one name and the sentence for several, because those entries are
-    bare names: they are listed as a plain series (``A``, ``A and B``,
-    ``A, B, and C``), not joined the way the comma-carrying ``passed_over``
-    entries are.
+    ``undecided`` is one :class:`_Undecided` per reason atlas could not decide
+    an entry, each earning a clause of its own that lists its bare names as a
+    plain series (``A``, ``A and B``, ``A, B, and C``) rather than joining
+    them the way the comma-carrying ``passed_over`` entries are. An empty
+    group states nothing.
     """
     clauses: list[str] = []
     if passed_over:
-        which = "that directory is" if len(passed_over) == 1 else "those directories are"
+        which = "that entry is" if len(passed_over) == 1 else "those entries are"
         noun = "a user" if len(passed_over) == 1 else "users"
         cite = f" ({citation})" if citation else ""
         clauses.append(
             f"{emulator}'s own listing passes over {', and '.join(passed_over)}{cite}, "
             f"so {which} not stated as {noun}"
         )
-    if unestablished:
-        one = len(unestablished) == 1
-        which = "it is" if one else "they are"
-        noun = "a user" if one else "users"
-        clauses.append(
-            f"whether {emulator} lists {_series(unestablished)} is not established — "
-            f"{unread[0] if one else unread[1]} — so {which} stated apart rather than as {noun}"
-        )
+    clauses.extend(_undecided_clause(emulator, group) for group in undecided if group.names)
     return "".join(f"; {clause}" for clause in clauses)
+
+
+def _undecided_clause(emulator: str, group: _Undecided) -> str:
+    """One reason's clause: which entries it covers, and what could not be looked at."""
+    one = len(group.names) == 1
+    which = "it is" if one else "they are"
+    noun = "a user" if one else "users"
+    unread = group.unread[0] if one else group.unread[1]
+    return (
+        f"whether {emulator} lists {_series(list(group.names))} is not established — "
+        f"{unread} — so {which} stated apart rather than as {noun}"
+    )
 
 
 def _series(names: list[str]) -> str:
@@ -9531,6 +9610,10 @@ _RPCS3_USER_LISTED = "listed"
 _RPCS3_USER_NAME_REJECTED = "name-rejected"
 _RPCS3_USER_NO_LOCALUSERNAME = "no-localusername"
 _RPCS3_USER_UNESTABLISHED = "unestablished"
+# An entry below home/ whose own stat failed here, which is a fate of atlas's
+# alone for the same reason the one above is: the walk that would reach it is a
+# stat too, and the emulator's is not known to fail where atlas's did.
+_RPCS3_USER_STAT_FAILED = "stat-failed"
 _RPCS3_LOCALUSERNAME = "localusername"
 _RPCS3_SELECTION_CITATION = (
     "GetUserAccounts, user_account.cpp:35-66; check_user, system_utils.cpp:59-69 at build 7c6b3dcd"
@@ -9540,6 +9623,13 @@ _RPCS3_SELECTION_CITATION = (
 # sentence that already carries the pair in full does not carry it twice.
 _RPCS3_NAME_CITATION = "check_user, system_utils.cpp:59-69 at build 7c6b3dcd"
 _RPCS3_LOCALUSERNAME_CITATION = "GetUserAccounts, user_account.cpp:57-60 at build 7c6b3dcd"
+# The walk itself, for a directory whose stat failed here. GetUserAccounts
+# iterates fs::dir (user_account.cpp:41), whose readdir walk stats every entry
+# and skips the ones whose fstatat fails — "//failed metadata (broken
+# symlink?), ignore and skip to next file", File.cpp:2101-2104. So the
+# emulator's verdict on such a directory rests on its own stat succeeding or
+# failing, which is exactly what atlas did not learn.
+_RPCS3_WALK_CITATION = "unix_dir::read, File.cpp:2091-2105 at build 7c6b3dcd"
 
 
 def _rpcs3_check_user(name: str) -> int:
@@ -9566,7 +9656,11 @@ def _rpcs3_check_user(name: str) -> int:
 
 @dataclass(frozen=True, slots=True)
 class _Rpcs3UserHome:
-    """One directory below home/ as GetUserAccounts would take it."""
+    """One entry below home/ as GetUserAccounts would take it.
+
+    An entry, not a directory: the fate ``_RPCS3_USER_STAT_FAILED`` covers a
+    name whose own ``stat`` failed, which was never established to be one.
+    """
 
     directory: str
     fate: str
@@ -9594,9 +9688,48 @@ def _rpcs3_user_home(machine: Machine, user_root: str, user: str) -> _Rpcs3UserH
     return _Rpcs3UserHome(user, _RPCS3_USER_NO_LOCALUSERNAME)
 
 
-def _rpcs3_users(machine: Machine, user_root: str, users: tuple[str, ...]) -> _PerUserSurvey:
-    """GetUserAccounts read the way it runs, over the directories the listing found."""
-    homes = tuple(_rpcs3_user_home(machine, user_root, user) for user in users)
+def _rpcs3_unstatable_home(name: str) -> _Rpcs3UserHome:
+    """An entry below home/ whose own ``stat`` failed — the one test that still decides it.
+
+    ``check_user`` reads nothing but the name (system_utils.cpp:59-69, applied
+    at user_account.cpp:49-54), so a name it rejects is passed over whichever
+    way the emulator's own walk went — its ``fstatat`` failing too, or
+    succeeding on something that is no directory (dropped at
+    user_account.cpp:43-46, before the name is read at all), or succeeding on
+    a directory whose name is then rejected. Every road ends in the emulator's
+    own skip, and none of them needed a stat atlas could make — so the fate is
+    the same one a stated directory of that name earns.
+
+    Only a name ``check_user`` accepts is left undecided, and then it really is
+    undecided: the two tests that would settle it — is it a directory, does it
+    hold a localusername — are both reads atlas could not make either.
+    """
+    if _rpcs3_check_user(name) == 0:
+        return _Rpcs3UserHome(name, _RPCS3_USER_NAME_REJECTED)
+    return _Rpcs3UserHome(name, _RPCS3_USER_STAT_FAILED)
+
+
+def _rpcs3_users(
+    machine: Machine, user_root: str, users: tuple[str, ...], unstatable: tuple[str, ...]
+) -> _PerUserSurvey:
+    """GetUserAccounts read the way it runs, over the entries the listing found.
+
+    ``unstatable`` are the entries whose own ``stat`` failed, which the listing
+    could not even call directories. They join the survey rather than being
+    dropped, and :func:`_rpcs3_unstatable_home` says with which fate — one of
+    the two tests still decides them without a stat. They are sorted in with
+    the rest because that fate can be the emulator's own skip, and ``skipped``
+    and the clause naming it are both stated in the order the survey holds.
+    """
+    homes = tuple(
+        sorted(
+            (
+                *(_rpcs3_user_home(machine, user_root, user) for user in users),
+                *(_rpcs3_unstatable_home(name) for name in unstatable),
+            ),
+            key=lambda home: home.directory,
+        )
+    )
     passed_over: list[str] = []
     for home in homes:
         if home.fate == _RPCS3_USER_NAME_REJECTED:
@@ -9609,12 +9742,34 @@ def _rpcs3_users(machine: Machine, user_root: str, users: tuple[str, ...]) -> _P
                 f"{home.directory}, which holds no localusername file "
                 f"({_RPCS3_LOCALUSERNAME_CITATION})"
             )
-    unestablished = [h.directory for h in homes if h.fate == _RPCS3_USER_UNESTABLISHED]
+    undecided = (
+        _Undecided(
+            names=tuple(h.directory for h in homes if h.fate == _RPCS3_USER_UNESTABLISHED),
+            unread=(
+                "its localusername could not be looked at, and the emulator's own look "
+                "(fs::is_file, File.cpp:1064-1079) is not known to fail the same way",
+                "their localusername could not be looked at, and the emulator's own look "
+                "(fs::is_file, File.cpp:1064-1079) is not known to fail the same way",
+            ),
+        ),
+        _Undecided(
+            names=tuple(h.directory for h in homes if h.fate == _RPCS3_USER_STAT_FAILED),
+            unread=(
+                "nothing about it could be looked at, not even whether it is a directory, "
+                f"and the walk that would reach it stats every entry ({_RPCS3_WALK_CITATION}) "
+                "with a stat that is not known to fail the same way",
+                "nothing about them could be looked at, not even whether they are "
+                "directories, and the walk that would reach them stats every entry "
+                f"({_RPCS3_WALK_CITATION}) with a stat that is not known to fail the same way",
+            ),
+        ),
+    )
+    unestablished = tuple(sorted(name for group in undecided for name in group.names))
     skipped_fates = (_RPCS3_USER_NAME_REJECTED, _RPCS3_USER_NO_LOCALUSERNAME)
     return _PerUserSurvey(
         listed=tuple(h.directory for h in homes if h.fate == _RPCS3_USER_LISTED),
         skipped=tuple(h.directory for h in homes if h.fate in skipped_fates),
-        unestablished=tuple(unestablished),
+        unestablished=unestablished,
         aside=_per_user_aside(
             emulator="RPCS3",
             passed_over=passed_over,
@@ -9622,13 +9777,7 @@ def _rpcs3_users(machine: Machine, user_root: str, users: tuple[str, ...]) -> _P
             # entry above cites the one call it actually turns on instead of
             # repeating that pair here.
             citation=None,
-            unestablished=unestablished,
-            unread=(
-                "its localusername could not be looked at, and the emulator's own look "
-                "(fs::is_file, File.cpp:1064-1079) is not known to fail the same way",
-                "their localusername could not be looked at, and the emulator's own look "
-                "(fs::is_file, File.cpp:1064-1079) is not known to fail the same way",
-            ),
+            undecided=undecided,
         ),
     )
 
@@ -9718,13 +9867,14 @@ def _rpcs3_savefile_placement(
     hdd0 = host.path
     vmc = os.path.join(hdd0, _RPCS3_VMC_SUBDIR)
     user_root = os.path.join(hdd0, "home")
-    listing, users = _per_user_listing(machine, user_root)
-    survey = _rpcs3_users(machine, user_root, users)
+    found = _per_user_listing(machine, user_root)
+    listing = found.listing
+    survey = _rpcs3_users(machine, user_root, found.users, found.unstatable)
     if survey.unestablished:
-        # At least one directory found here is one atlas could not decide —
+        # At least one entry found here is one atlas could not decide —
         # the opening clause cannot assert "no account exists" when that is
         # exactly what is unsettled; it says so is itself unestablished, and
-        # the aside then names which directory and why.
+        # the aside then names which entry and why.
         no_user_sentence = (
             f"whether any user account RPCS3 would list exists below {user_root} is not "
             f"established{survey.aside}, and the tree named is user {_RPCS3_FIRST_USER} "
@@ -9852,11 +10002,53 @@ _VITA3K_USER_LISTED = "listed"
 _VITA3K_USER_NO_XML = "no-user-xml"
 _VITA3K_USER_XML_INVALID = "does-not-parse"
 _VITA3K_USER_XML_UNREADABLE = "unreadable"
+# An entry below ux0/user whose own stat failed here — atlas's alone as well,
+# and for a reason the source spells out rather than leaves open: see
+# ``_VITA3K_WALK_CITATION``.
+_VITA3K_USER_STAT_FAILED = "stat-failed"
+# What get_users_list does with an entry whose stat fails, traced through the
+# library it is written against. ``path`` is a boost::filesystem::directory_entry
+# (fs is boost::filesystem, util/fs.h:20,30 at cb1f592c), so fs::is_directory(path)
+# binds to the directory_entry overload (boost/filesystem/directory.hpp:544-547),
+# which reads the status the walk cached and stats only where the type is absent
+# (:238-243, :292-295). The walk caches that type from readdir's d_type
+# (libs/filesystem/src/directory.cpp:413-450, compiled in on Linux by
+# libs/filesystem/CMakeLists.txt:49,218-219). So one entry has three fates by
+# d_type alone: DT_DIR passes the directory test with no stat at all, and the
+# entry then stands or falls on its user.xml the way any other does
+# (user_management.cpp:89 tests both in one condition); DT_REG and its siblings
+# fail that test with no stat either, so the entry is skipped; and DT_UNKNOWN or
+# DT_LNK cache status_error, so the deferred stat runs without an error_code and
+# boost throws filesystem_error on any failure but not-found
+# (libs/filesystem/src/operations.cpp:571-581) — uncaught all the way out of
+# gui::init (gui.cpp:914), ending the listing. Which fate applies turns on
+# d_type, a property of the filesystem that atlas does not read.
+#
+# Which Boost that is, is the build's choice: CMakeLists.txt:170-193 takes a
+# system Boost 1.81 or newer where one is found and falls back to the bundled
+# external/boost, Vita3K/ext-boost@ff5f55bd, which is 1.89 (version.hpp). The
+# three fates above hold at 1.81 as at the bundled 1.89 — 1.81 caches a kind
+# from d_type the same way and reads it back through the same cached-status
+# overload (directory.cpp:324-345, directory.hpp:238-241 at boost-1.81.0) — so the
+# citation names the bundled version and says the older one reads alike. What
+# did widen across the range is the set of kinds typed without a stat: 1.81
+# leaves a socket, fifo or device entry at status_error and so on the deferred
+# stat, where 1.89 types it a non-directory outright. Neither road makes such an
+# entry a user, so it changes no fate this answer states.
+_VITA3K_WALK_CITATION = (
+    "get_users_list, user_management.cpp:87-89 at cb1f592c, over "
+    "boost::filesystem::directory_entry (directory.hpp:544-547, directory.cpp:413-450 at the "
+    "bundled Boost 1.89; the same reading at 1.81, the oldest this build accepts, "
+    "directory.hpp:238-241, directory.cpp:324-345)"
+)
 
 
 @dataclass(frozen=True, slots=True)
 class _Vita3kListedUser:
-    """One user directory as get_users_list would take it.
+    """One entry below ux0/user as get_users_list would take it.
+
+    An entry, not a directory: the fate ``_VITA3K_USER_STAT_FAILED`` covers a
+    name whose own ``stat`` failed, which was never established to be one.
 
     ``identity`` is the gui.users key the directory yields — the user.xml's
     ``id`` attribute where its root ``<user>`` element carries one (present
@@ -9871,13 +10063,32 @@ class _Vita3kListedUser:
 
 
 def _vita3k_stem(name: str) -> str:
-    """``std::filesystem::path::stem`` of a name, spelled the way libstdc++ cuts.
+    """``path::stem`` of a name — boost::filesystem's, since ``fs`` is boost.
 
-    The extension begins at the rightmost period unless it leads the name or
-    the name is ``.`` or ``..`` (``_M_find_extension``) — so ``01.bak`` stems
-    to ``01`` and ``..bak`` to ``.``. Neither stdlib spelling is that mirror:
-    ``os.path.splitext`` skips a leading run of periods and ``PurePath.stem``
-    keeps a trailing one.
+    What this mirrors: the name cut at the rightmost period, left whole where
+    that period leads it or the name is ``.`` or ``..`` — so ``01.bak`` stems
+    to ``01`` and ``..bak`` to ``.``, while ``.hidden`` keeps its period. That
+    is ``stem_v4``'s rule (path.cpp:836-846). Neither stdlib spelling is that
+    mirror: ``os.path.splitext`` skips a leading run of periods and
+    ``PurePath.stem`` keeps a trailing one.
+
+    [D] Vita3K compiles ``stem_v3``, and this mirror is known to differ from it
+    for one shape of name. ``path::stem`` dispatches on
+    ``BOOST_FILESYSTEM_VERSION`` (path.hpp:1596-1599 through
+    ``BOOST_FILESYSTEM_VERSIONED_SYM``, config.hpp:34), which boost defaults to
+    3 for any consumer that does not set it (config.hpp:27-32) — and an
+    unfiltered scan of Vita3K's own tree at cb1f592c finds the macro nowhere,
+    nor ``BOOST_FILESYSTEM_SOURCE``. ``stem_v3`` cuts at the rightmost period
+    even where that period leads the name (path.cpp:824-834), while ``stem_v4``
+    leaves it alone (:836-846); both leave ``.`` and ``..`` whole. So a name
+    that is a leading period followed by more, with no later period
+    (``.hidden``), keys the empty string there and ``.hidden`` here. Every
+    other shape agrees, ``.hidden.bak`` and ``..bak`` included, because their
+    cut falls at a period that does not lead the name.
+
+    This commit does not change that: the v4 answer is what one test here
+    encodes (no vector reaches the shape), so moving the mirror is a behaviour
+    change of its own and belongs to its own review.
     """
     if name in (".", ".."):
         return name
@@ -9913,10 +10124,25 @@ def _vita3k_listed_user(machine: Machine, user_root: str, user: str) -> _Vita3kL
 
 
 def _vita3k_listed_users(
-    machine: Machine, user_root: str, users: tuple[str, ...]
+    machine: Machine, user_root: str, users: tuple[str, ...], unstatable: tuple[str, ...]
 ) -> tuple[_Vita3kListedUser, ...]:
-    """Every directory found as get_users_list would take it — read the way it runs."""
-    return tuple(_vita3k_listed_user(machine, user_root, user) for user in users)
+    """Every entry found as get_users_list would take it — read the way it runs.
+
+    ``unstatable`` are the entries whose own ``stat`` failed. They yield no
+    identity and carry a fate of their own, because what the emulator makes of
+    such an entry is not one thing — ``_VITA3K_WALK_CITATION`` traces the three
+    it could be. Sorted in with the rest so every list this survey states holds
+    its entries in the listing's own order.
+    """
+    return tuple(
+        sorted(
+            (
+                *(_vita3k_listed_user(machine, user_root, user) for user in users),
+                *(_Vita3kListedUser(name, None, _VITA3K_USER_STAT_FAILED) for name in unstatable),
+            ),
+            key=lambda home: home.directory,
+        )
+    )
 
 
 def _vita3k_survey(homes: tuple[_Vita3kListedUser, ...]) -> _PerUserSurvey:
@@ -9924,8 +10150,12 @@ def _vita3k_survey(homes: tuple[_Vita3kListedUser, ...]) -> _PerUserSurvey:
 
     A user is a directory whose user.xml loads (user_management.cpp:89 at
     cb1f592c); one without a user.xml and one whose user.xml does not parse
-    are the emulator's own skip, and one whose user.xml atlas could not read
-    is left undecided, the way :func:`_vita3k_listed_user` classifies them.
+    are the emulator's own skip, the way :func:`_vita3k_listed_user`
+    classifies them. Two fates are left undecided instead, and they are two
+    because they are undecided about different things: a user.xml atlas could
+    not read leaves the emulator's own load open, while an entry whose stat
+    failed leaves open what the emulator's listing makes of the entry — the
+    walk hands back every name, and the kind it was handed with decides.
     """
     passed_over: list[str] = []
     for home in homes:
@@ -9933,23 +10163,40 @@ def _vita3k_survey(homes: tuple[_Vita3kListedUser, ...]) -> _PerUserSurvey:
             passed_over.append(f"{home.directory}, which has no user.xml")
         elif home.fate == _VITA3K_USER_XML_INVALID:
             passed_over.append(f"{home.directory}, whose user.xml does not parse")
-    unestablished = [h.directory for h in homes if h.fate == _VITA3K_USER_XML_UNREADABLE]
-    skipped_fates = (_VITA3K_USER_NO_XML, _VITA3K_USER_XML_INVALID)
-    return _PerUserSurvey(
-        listed=tuple(h.directory for h in homes if h.fate == _VITA3K_USER_LISTED),
-        skipped=tuple(h.directory for h in homes if h.fate in skipped_fates),
-        unestablished=tuple(unestablished),
-        aside=_per_user_aside(
-            emulator="Vita3K",
-            passed_over=passed_over,
-            citation="get_users_list, user_management.cpp:89 at cb1f592c",
-            unestablished=unestablished,
+    undecided = (
+        _Undecided(
+            names=tuple(h.directory for h in homes if h.fate == _VITA3K_USER_XML_UNREADABLE),
             unread=(
                 "its user.xml could not be read, and the emulator's own load "
                 "(load_file, user_management.cpp:89) is not known to fail the same way",
                 "their user.xml could not be read, and the emulator's own load "
                 "(load_file, user_management.cpp:89) is not known to fail the same way",
             ),
+        ),
+        _Undecided(
+            names=tuple(h.directory for h in homes if h.fate == _VITA3K_USER_STAT_FAILED),
+            unread=(
+                "nothing about it could be looked at, not even whether it is a directory, "
+                "and what the emulator's own listing makes of such an entry depends on the "
+                f"kind its walk was handed rather than on a stat ({_VITA3K_WALK_CITATION})",
+                "nothing about them could be looked at, not even whether they are "
+                "directories, and what the emulator's own listing makes of such entries "
+                "depends on the kind its walk was handed rather than on a stat "
+                f"({_VITA3K_WALK_CITATION})",
+            ),
+        ),
+    )
+    unestablished = tuple(sorted(name for group in undecided for name in group.names))
+    skipped_fates = (_VITA3K_USER_NO_XML, _VITA3K_USER_XML_INVALID)
+    return _PerUserSurvey(
+        listed=tuple(h.directory for h in homes if h.fate == _VITA3K_USER_LISTED),
+        skipped=tuple(h.directory for h in homes if h.fate in skipped_fates),
+        unestablished=unestablished,
+        aside=_per_user_aside(
+            emulator="Vita3K",
+            passed_over=passed_over,
+            citation="get_users_list, user_management.cpp:89 at cb1f592c",
+            undecided=undecided,
         ),
     )
 
@@ -9959,7 +10206,10 @@ def _vita3k_survey_tail(survey: _PerUserSurvey) -> str:
 
     Where a user is listed the headline is the first listed tree; where none
     is, it is the compiled stand-in — and the ending has to say which, because
-    "the tree named stays the first found" is false of a stand-in.
+    "the tree named stays the first found" is false of a stand-in. These
+    endings reach a message only where the listing completed: a short one is
+    answered by :func:`_per_user_state`'s own sentence, and the tree it names
+    is the stand-in whatever was listed.
     """
     if survey.listed:
         return (
@@ -9967,7 +10217,7 @@ def _vita3k_survey_tail(survey: _PerUserSurvey) -> str:
             f"list is stated{survey.aside}"
         )
     if survey.unestablished:
-        # At least one directory found here is one atlas could not decide —
+        # At least one entry found here is one atlas could not decide —
         # the ending cannot assert "no directory is a user Vita3K would list"
         # when that is exactly what is unsettled.
         return (
@@ -10033,12 +10283,16 @@ def _vita3k_recorded_user_state(
         return configured, sentence, REASON_CONFIGURED_USER_TREE_NAMED
     tail = _vita3k_survey_tail(survey)
     if survey.unestablished:
+        # Reason-neutral on purpose: the entries reach this state by more than
+        # one route — a user.xml that could not be read, an entry whose own
+        # stat failed — and naming one of them here would state it of both.
+        # The aside inside ``tail`` carries each entry's own reason already.
         sentence = (
             f"config.yml records {_VITA3K_USER_ID_KEY} {configured}, and whether "
-            "Vita3K would list that user is not established — the user.xml under "
-            f"{', '.join(survey.unestablished)} could not be read, and the listing is "
-            "keyed by what those files state (get_users_list, user_management.cpp:83-97) "
-            f"— so the record does not move the headline: {tail}"
+            "Vita3K would list that user is not established — what "
+            f"{', '.join(survey.unestablished)} holds could not be established here, and "
+            "the listing is keyed by exactly that (get_users_list, "
+            f"user_management.cpp:83-97) — so the record does not move the headline: {tail}"
         )
         return None, sentence, REASON_CONFIGURED_USER_SETUP_UNESTABLISHED
     if own is not None:
@@ -10095,8 +10349,9 @@ def _vita3k_user(
     init_user, user_management.cpp:227), which the first save creates where no
     directory of that name exists yet. Everywhere else nothing read here
     settles the launch's user, and the sentence says what stands in the way —
-    including the one state that is atlas's own, a user.xml it could not read,
-    which leaves the emulator's listing unknowable rather than decided.
+    including the two states that are atlas's own — a user.xml it could not
+    read, and an entry whose own stat failed — each of which leaves the
+    emulator's listing unknowable rather than decided.
     """
     unread = _VITA3K_USER_ID_KEY in read.skipped
     configured = None if unread else (read.get(_VITA3K_USER_ID_KEY) or None)
@@ -10130,21 +10385,14 @@ def _vita3k_user(
         # defect in data that the sentences were in prose, so the slug is gone.
         #
         # The HEADLINE was a different matter, and dropping the branch dropped
-        # a guard with it. ``dir`` is read on every path, so a recorded user
-        # found in a SHORT listing would become the tree this answer names,
-        # while the sentence beside it still says the tree named is the one the
-        # emulator starts with. Two things reach that state, and the first is
-        # not a hypothetical: :func:`_per_user_listing` globs TWICE, once per
-        # pattern, and a real machine reads the directory once per call. Each
-        # read is complete or empty on its own, but they are separated in time,
-        # so a directory that loses its read permission between them merges
-        # into a listing carrying matches and an unreadable place at once — a
-        # live race, on the running machine, with no foreign seam involved. The
-        # second is the seam itself: ``Machine`` is a protocol and
-        # :class:`~atlas.machine.GlobResult` permits incomplete WITH matches,
-        # which the same merge handles. A home a failed listing handed back is
-        # not a home found here, so the record does not move the headline until
-        # the listing that would confirm it succeeded.
+        # a guard with it: a home a failed listing handed back is not a home
+        # found here, so the record does not move the headline until the
+        # listing that would confirm it succeeded. What reaches a short
+        # listing that still carries matches is set out at
+        # :func:`_per_user_savedata_placement`, which names the stand-in tree
+        # there for both emulators; this branch is what keeps ``headline``
+        # itself true to what it means here — a user the read did not settle
+        # is not one this answer records.
         headline, sentence, reason = _vita3k_recorded_user_state(
             configured, homes, user_root, survey
         )
@@ -10217,10 +10465,11 @@ def _vita3k_savefile_placement(
     (user_management.cpp:87-89) — becomes a group of its own with the recorded
     id stated beside them, the directories it passes over are stated as
     skipped, and one whose user.xml atlas could not read is stated as
-    unestablished; where the recorded user is among the listed ones the
-    headline names its tree, because a frontend launch reopens exactly that
-    user; everywhere else the headline stays the first tree listed, or the
-    compiled stand-in where none is, and the caveat says what is not settled.
+    unestablished; where the listing completed and the recorded user is among
+    the listed ones the headline names its tree, because a frontend launch
+    reopens exactly that user; everywhere else it stays the first tree
+    listed, or the compiled stand-in where none is and where the listing came
+    back short, and the caveat says what is not settled.
     """
     config_path = _standalone_settings_path(card, homes)
     result = machine.read_text(config_path)
@@ -10274,8 +10523,9 @@ def _vita3k_savefile_placement(
             {"token": card.token, "config": config_path, "path": stated},
         )
     user_root = os.path.join(host.path, _VITA3K_USER_TREE)
-    listing, directories = _per_user_listing(machine, user_root)
-    user_homes = _vita3k_listed_users(machine, user_root, directories)
+    found = _per_user_listing(machine, user_root)
+    listing = found.listing
+    user_homes = _vita3k_listed_users(machine, user_root, found.users, found.unstatable)
     survey = _vita3k_survey(user_homes)
     user = _vita3k_user(
         read, listing=listing, homes=user_homes, survey=survey, user_root=user_root
@@ -13163,13 +13413,13 @@ class _FirmwareQueries:
         return _resolve_for_system(self._machine, self._firmware_context(), system=system, verify=verify)
 
     def firmware_inventory(self, *, verify: bool = False) -> FirmwareAnswer:
-        """Every installed core's firmware, plus what is lying around unclaimed.
+        """Every installed emulator's firmware, plus what is lying around unclaimed.
 
-        The installed cores are the whole enumeration: a standalone emulator has
-        no core, so its firmware is never an entry here. Where a frontend
-        catalogue enumerates a system's emulators, :meth:`firmware_for_system`
-        states it instead; where none does, that route is derived from the
-        installed cores too and no route reaches it.
+        The installed cores are the whole enumeration on an arrangement with no
+        frontend catalogue: a standalone emulator declares no ``.info``, so
+        nothing enumerates it here. A handle whose catalogue can enumerate a
+        system's emulators overrides this to pass it, and then the standalone
+        emulators atlas carries a firmware card for are entries too.
         """
         return _resolve_inventory(self._machine, self._firmware_context(), verify=verify)
 
@@ -14485,6 +14735,41 @@ def _firmware_catalogue_entries(
             )
         )
     return tuple(shaped)
+
+
+# What a gamelist states when there is none to read, and what the inventory
+# hands the assembly on purpose. A gamelist promotes one row of a system to the
+# front; the inventory names no content, renders no list and carries each row's
+# own ``declared_index``, so the promotion could only reorder its entries —
+# while reading one file per system to learn that order is a cost the answer
+# gets nothing for. The entries themselves, and their positions, are the same
+# either way.
+_NO_GAMELIST_SELECTIONS = GamelistSelections(system_label=None, per_game={})
+
+
+def _firmware_catalogues(
+    host: "_CatalogueHost", by_system: Mapping[str, SystemDeclaration]
+) -> dict[str, Catalogue]:
+    """The catalogue an inventory is informed by: one enumeration per system it can use.
+
+    Only the systems a packaged standalone card answers for
+    (:func:`atlas.firmware.carded_systems`), because those are the only ones
+    the inventory reads an entry out of — the libretro half of that answer is
+    the installed cores themselves, enumerated without any catalogue at all.
+    Module-level beside :func:`_firmware_catalogue_entries` and for the same
+    reason: both ES-DE-driven handles hand their firmware route the same
+    projection, and a second copy is how the two drift apart.
+    """
+    wanted = carded_systems()
+    return {
+        system: Catalogue(
+            entries=_firmware_catalogue_entries(
+                host, by_system, system, _NO_GAMELIST_SELECTIONS
+            )
+        )
+        for system in by_system
+        if system in wanted
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -16760,6 +17045,47 @@ class RetroDeck(_FirmwareQueries, _CatalogueQueries):
             (*answer.caveats[:index], *status, *answer.caveats[index:]),
         )
 
+    def firmware_inventory(self, *, verify: bool = False) -> FirmwareAnswer:
+        """Every installed emulator's firmware here, plus what is lying around unclaimed.
+
+        RetroDECK's catalogue is what makes the standalone emulators entries:
+        the ES-DE layers declare which of them launch which system, and the
+        ones atlas carries a firmware card for answer here exactly as they do
+        for :meth:`firmware_for_system` — with their own reads claiming what
+        they looked at, so a BIOS image DuckStation's search collects is that
+        entry's answer instead of a file nobody asks for.
+
+        Assembled from this query's own snapshot, the way that route is: the
+        marker and both catalogue layers are read once here and handed on. A
+        catalogue that could not be read is handed over as such rather than
+        withheld: this answer then names no standalone emulator and states
+        ``emulator-catalogue-unreadable``, because "the frontend declares
+        none" and "atlas could not ask" are two different answers.
+
+        Every statement about that catalogue's own health rides here too, the
+        same ones :meth:`firmware_for_system` rides and in the same order — a
+        layer ES-DE refuses wholesale, a custom layer that declared itself
+        exclusive — and each carries no system, because this answer is about
+        none of them.
+        """
+        config, marker_issues = self._read_marker()
+        root = self._config_path(config, "rd_home_path", "")[0]
+        by_system, read, exclusive, invalid = self._read_catalogue(root)
+        context = self._stated(self._firmware_context_from(config, marker_issues))
+        return _resolve_inventory(
+            self._machine,
+            context,
+            catalogue=InventoryCatalogue(
+                by_system=_firmware_catalogues(self, by_system) if read else {},
+                read=read,
+                findings=(
+                    *(() if invalid is None else (invalid,)),
+                    *(self._catalogue_exclusive(root) if exclusive else ()),
+                ),
+            ),
+            verify=verify,
+        )
+
     def _entry_caveats_for(
         self,
         config: dict[str, Any],
@@ -17455,10 +17781,11 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         """The statements that ride beside the catalogue status, in the pinned order.
 
         The relocation suspicion first, then the marker cross-check — one
-        builder, consumed by :meth:`_esde_snapshot`'s tail and by the firmware
-        route, so the two can never spell the order apart. The relocation read
-        happens only while an ES-DE is present: with none on disk there is
-        nothing a ``portable.txt`` could move out from under.
+        builder, consumed by :meth:`_esde_snapshot`'s tail, by
+        :meth:`firmware_for_system` and by :meth:`firmware_inventory`, so the
+        three can never spell the order apart. The relocation read happens
+        only while an ES-DE is present: with none on disk there is nothing a
+        ``portable.txt`` could move out from under.
         """
         cross_check = self._frontend_marker_caveat(settings, present)
         mismatch = () if cross_check is None else (cross_check,)
@@ -19034,6 +19361,47 @@ class EmuDeck(_FirmwareQueries, _CatalogueQueries):
         return _firmware_with_caveats(
             answer, (*answer.caveats[:index], *inserted, *answer.caveats[index:])
         )
+
+    def firmware_inventory(self, *, verify: bool = False) -> FirmwareAnswer:
+        """Every installed emulator's firmware here, plus what is lying around unclaimed.
+
+        RetroDECK's route mirrored over this arrangement's sources: the ES-DE on
+        disk declares which standalone emulators launch which system, and the
+        ones atlas carries a firmware card for answer here as they do for
+        :meth:`firmware_for_system`. With no ES-DE on this disk at all nothing
+        enumerates a standalone emulator and this answer is the installed cores
+        alone; a resource shadow that could not be read is the opposite state
+        and says so, the unreadable catalogue.
+
+        The entries are the readable layers', which on this arrangement is
+        ordinarily all of them minus the one sealed inside the AppImage — and
+        that limit is stated here as it is there, once on the answer rather
+        than once per system: a card only the sealed layer declares is not
+        reached, and ``emulator-catalogue-sealed`` says so. Beside it ride the
+        same further statements :meth:`firmware_for_system` rides, in the same
+        order: a layer ES-DE refuses wholesale, an exclusive custom layer, and
+        the two that qualify which ES-DE was read at all — the relocation
+        suspicion and the marker cross-check.
+        """
+        settings, marker_issues = self._read_marker()
+        cfg = self._machine.read_text(self._companion_cfg_path())
+        context = self._stated(self._firmware_context_from(settings, marker_issues, cfg))
+        if not self._esde_present() or context.root is None:
+            return _resolve_inventory(self._machine, context, verify=verify)
+        by_system, complete, shadow_broken, exclusive, invalid = self._read_esde_catalogue()
+        findings = (
+            *(() if invalid is None else (invalid,)),
+            *(self._catalogue_exclusive() if exclusive else ()),
+            *self._riders(settings, True),
+        )
+        if shadow_broken:
+            catalogue = InventoryCatalogue(read=False, findings=findings)
+        else:
+            hole = None if complete else self._catalogue_sealed_caveat()
+            catalogue = InventoryCatalogue(
+                by_system=_firmware_catalogues(self, by_system), hole=hole, findings=findings
+            )
+        return _resolve_inventory(self._machine, context, catalogue=catalogue, verify=verify)
 
 
 class _RetroArchInstall(_FirmwareQueries, _CatalogueQueries):

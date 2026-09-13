@@ -224,11 +224,17 @@ def load_standalone_firmware(text: str | None = None) -> tuple[StandaloneFirmwar
 _PACKAGED: tuple[StandaloneFirmwareCard, ...] | None = None
 
 
-def lookup_standalone_firmware_card(token: str | None) -> StandaloneFirmwareCard | None:
-    """The packaged card for one emulator token, or ``None`` — no fuzzy matching."""
+def standalone_firmware_cards() -> tuple[StandaloneFirmwareCard, ...]:
+    """Every packaged card, loaded once."""
     global _PACKAGED
     if _PACKAGED is None:
         _PACKAGED = load_standalone_firmware()
+    return _PACKAGED
+
+
+def lookup_standalone_firmware_card(token: str | None) -> StandaloneFirmwareCard | None:
+    """The packaged card for one emulator token, or ``None`` — no fuzzy matching."""
+    cards = standalone_firmware_cards()
     if token is None:
         return None
-    return next((card for card in _PACKAGED if card.token == token), None)
+    return next((card for card in cards if card.token == token), None)

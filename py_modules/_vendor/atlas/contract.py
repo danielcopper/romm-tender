@@ -73,10 +73,11 @@ def data_contract(data: Mapping[str, "str | Sequence[str] | Mapping[str, str]"])
     """The one rule for serializing a ``data`` block, caveat or refusal alike.
 
     Three shapes, one each: a string stays a string, a sequence of strings
-    becomes a JSON array in the emitter's own order, and a mapping — a tally,
-    at the two keys the guide documents — becomes a plain object. Written once
-    because both callers below and the generated contract reference must agree
-    literally — a second copy is a second answer waiting to happen.
+    becomes a JSON array in the emitter's own order, and a mapping — one value
+    per subject, at the keys the guide documents — becomes a plain object.
+    Written once because both callers below and the generated contract
+    reference must agree literally — a second copy is a second answer waiting
+    to happen.
     """
     out: dict[str, Any] = {}
     for key, value in data.items():
@@ -363,6 +364,11 @@ def _identity_contract(identity: FirmwareIdentity | None) -> dict[str, Any] | No
     moved the bytes, and which version of the curated list called it a drift,
     are explanations rather than the thing a consumer branches on, and both
     travel on the caveat that rides with the value, where the explanations live.
+
+    ``sha1`` is ``null`` where the table that named this content pins no sha1
+    (:class:`FirmwareIdentity`) — a property of the table, never of the file,
+    so a consumer matching on hashes reads it as "this one is not on offer"
+    rather than as anything about the bytes.
     """
     if identity is None:
         return None
@@ -507,8 +513,10 @@ def firmware_contract(answer: FirmwareAnswer) -> dict[str, Any]:
     declares its Cemu twice, native and under Proton, and both rows and both
     cores read ``cemu`` — so the pair is the join: the identity says which
     emulator, the position says which of the catalogue's launch rows this
-    answer was built from, and it is ``null`` where none was (the inventory,
-    a question asked about a core by name, a derived enumeration). What the
+    answer was built from, and it is ``null`` where none was (the inventory's
+    libretro entries, a question asked about a core by name, a derived
+    enumeration; its carded standalone entries were built from a row and carry
+    one). What the
     pair identifies is the row, so it joins even where the identity is
     ``null``: EmuDeck's two ``n3ds`` rows identify no emulator and are still
     one row each, told apart by their positions in both answers. The
@@ -546,6 +554,22 @@ def firmware_contract(answer: FirmwareAnswer) -> dict[str, Any]:
     ``regions`` contain its console region, which is the running disc's own
     under DuckStation's shipped Auto setting. A region no option lists has
     nothing stated for it, and the entry's caveats say why.
+
+    **An ``unclaimed`` entry states what is known about a file and satisfies
+    nothing.** It is the one part of this answer that is not about an emulator's
+    declaration: a file in the firmware tree carrying a name nobody declared,
+    identified against every packaged table atlas carries — with ``verify``
+    only, because a name proves nothing about such a file. ``description`` is
+    the table's own name for the content and ``console`` the machine the bytes
+    belong to, ``null`` wherever that does not follow from a table's size class
+    or from the systems of the cores whose own declarations the table pins
+    these bytes for; it is never inferred from the file name. ``concerns`` names
+    the installed emulators the bytes matter to, each with the way it is
+    concerned — ``recognises`` where the emulator's own table holds them,
+    ``declares`` where a core's ``.info`` declares a name they are known under
+    — and that is a statement about the bytes, never one about an emulator
+    having what it needs. No ``requirements_met`` moves because of an entry
+    here.
     """
     return {
         "root": answer.root,
@@ -557,6 +581,7 @@ def firmware_contract(answer: FirmwareAnswer) -> dict[str, Any]:
                 "declared_index": core.declared_index,
                 "label": core.label,
                 "declaration": core.declaration,
+                "locating": core.locating,
                 "requirements_met": core.requirements_met,
                 "system_firmware": core.system_firmware,
                 "requirements": [_requirement_entry_contract(r) for r in core.requirements],
@@ -570,6 +595,11 @@ def firmware_contract(answer: FirmwareAnswer) -> dict[str, Any]:
                 "path": f.path,
                 "identity": _identity_contract(f.identity),
                 "known_as": list(f.known_as),
+                "description": f.description,
+                "console": f.console,
+                "concerns": [
+                    {"emulator": c.emulator, "relation": c.relation} for c in f.concerns
+                ],
             }
             for f in answer.unclaimed
         ],

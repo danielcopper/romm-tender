@@ -23,11 +23,16 @@ Two properties of the resolver decide this module's shape:
 
 **Two questions, and the scope is what tells them apart.**
 :class:`AtlasFirmwareAdapter` asks ``firmware_inventory()`` — every installed
-libretro core, unverified — and it is the right question only where the caller
-has no platform to name: the RetroDECK-home migration's untracked-BIOS sweep,
-and the download of one firmware id. It carries **no standalone entry at all**,
-which upstream states outright, so it can never answer what a standalone
-emulator wants.
+libretro core plus, since the resolver's 0.19.0, the standalone emulators a
+packaged card covers, all unverified — and it is the right question only where
+the caller has no platform to name: the RetroDECK-home migration's
+untracked-BIOS sweep, and the download of one firmware id. **Its standalone
+entries say only what a card can name unverified.** A card may identify its
+image by CONTENT, and this route reads no bytes, so such an entry comes back
+declaring nothing at all — DuckStation's inventory entry names no file here
+while the verified per-system reading below has it naming the image it found.
+So an absence here is still never "this emulator wants nothing", and no
+readiness answer is built from this route.
 
 :class:`AtlasPlatformFirmwareAdapter` asks
 ``firmware_for_system(<system>, verify=True)`` — every emulator ES-DE offers for

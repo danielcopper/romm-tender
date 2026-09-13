@@ -51,7 +51,9 @@ firmware answer as ``system_firmware``, joining these ``systemname`` keys to
 the system ids an answer speaks through
 :func:`atlas.firmware.system_firmware_system`. A core whose system cannot run
 without an image, and which the entry does not excuse, stops reporting
-``requirements_met`` true while none of its declared images is in place — and
+``requirements_met`` true while none of the images filed under that system is
+in place — each needing system asks that of its own images, so a core two
+entries speak about needs one image apiece and not one between them — and
 :data:`CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE` rides beside every **stated**
 verdict so the second source is marked rather than implied. What does **not**
 move is the declaration: every ``need`` on a requirement stays the value the

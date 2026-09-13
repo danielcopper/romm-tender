@@ -69,12 +69,20 @@ class FirmwareDemand:
         return self._platform_firmware_resolver(system)
 
     def catalogue(self) -> FirmwareCatalogue:
-        """Every installed libretro core's demand, read fresh. Blocking.
+        """The whole machine's demand, read fresh and UNVERIFIED. Blocking.
 
         The fallback for a caller with no platform to name — one firmware id, or
-        the home migration's sweep over a whole BIOS tree. It enumerates cores,
-        so it can answer where a file GOES for anything a core declares and can
-        never say what a standalone emulator wants.
+        the home migration's sweep over a whole BIOS tree. It carries a standalone
+        emulator's declaration where a packaged card can state one without reading
+        bytes, so it is no longer the libretro-only reading it once was; what it
+        still cannot carry is a card that identifies its image by CONTENT, which
+        names no file at all unverified.
+
+        Which is why nothing here answers READINESS. An absence in this
+        catalogue is an unasked question, never "nothing is wanted", and the two
+        callers below both use it for placement alone: where a file GOES, not
+        whether the machine is ready for it. :meth:`platform_catalogue` is the
+        verified question and the only one a status answer is built from.
         """
         return self._firmware_resolver()
 

@@ -356,10 +356,11 @@ class FirmwareDownloader:
 
         The platform-scoped reading rather than the whole machine's, for the same
         reason the status surfaces take it: a standalone emulator's declarations
-        reach a platform only through the emulators ES-DE offers for it, and a
-        machine-wide reading carries none of them — so a file only a standalone
-        emulator declares would land in the flat fallback instead of where it
-        will be opened from.
+        reach a platform only through the emulators ES-DE offers for it. The
+        machine-wide reading does carry standalone entries, and being unverified
+        it carries only what a card can name without reading bytes — so a file a
+        content-identified card is the one declarer of would land in the flat
+        fallback instead of where it will be opened from.
         """
         catalogue = await self._loop.run_in_executor(None, self._demand.platform_catalogue, system)
         return catalogue.by_file_name()

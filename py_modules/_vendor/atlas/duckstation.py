@@ -427,10 +427,16 @@ class BiosCandidate:
     The first is a read failure and settles nothing; the second is a verdict
     about content that was actually seen. Both leave ``image`` at ``None``,
     which is why the flag is here rather than being inferred from it.
+
+    ``size`` is the accepted size this file was kept at — one of
+    :attr:`BiosTable.sizes`, carried from the stat that kept it rather than
+    read a second time, because the table pins no size per row and an identity
+    built from one needs the size class the bytes were seen at.
     """
 
     path: str
     image: BiosImage | None
+    size: int
     unreadable: bool = False
 
 
@@ -447,23 +453,39 @@ class BiosPick:
         return len(self.tied) == 1
 
 
+# The system each size class belongs to, in the vocabulary every atlas answer
+# speaks. The table's ``sizes`` block is keyed by the console whose BIOS is
+# that long — ``BIOS_SIZE``, ``BIOS_SIZE_PS2`` and ``BIOS_SIZE_PS3`` in
+# bios.h, which the generator files under ``ps1``/``ps2``/``ps3`` — and the
+# PlayStation is ``psx`` in ES-DE's names, so the first key is the one that
+# needs translating at all. It sits here because it is the other half of the
+# size rule below: the size decides whether a file is looked up, and the class
+# it was kept at is the only thing this table ever says about which machine the
+# bytes belong to. A class no name here covers stops the load
+# (:func:`load_bios_table`) rather than answering an unstated system.
+SIZE_CLASS_SYSTEMS = {"ps1": "psx", "ps2": "ps2", "ps3": "ps3"}
+
+
 class BiosTable:
     """The packaged recognition table, read-only, by content.
 
     ``sizes`` is the pre-filter and is part of the same rule: a file of any
-    other size is skipped before a byte of it is read.
+    other size is skipped before a byte of it is read. Each of them is a size
+    class named after a console (:data:`SIZE_CLASS_SYSTEMS`), which is what
+    :meth:`system_of_size` answers from.
     """
 
     def __init__(
         self,
         images: tuple[BiosImage, ...],
-        sizes: tuple[int, ...],
+        sizes: Mapping[str, int],
         openbios: Mapping[str, Any],
         meta: Mapping[str, Any],
     ) -> None:
         self._images = images
         self._by_md5 = {image.md5: image for image in images}
-        self._sizes = sizes
+        self._sizes = tuple(sorted(sizes.values()))
+        self._systems = {size: SIZE_CLASS_SYSTEMS[name] for name, size in sizes.items()}
         self._openbios = dict(openbios)
         self._meta = dict(meta)
 
@@ -490,6 +512,17 @@ class BiosTable:
     def accepts_size(self, size: int | None) -> bool:
         """Would the search keep a file of this size? ``None`` (unknown) is not a yes."""
         return size is not None and size in self._sizes
+
+    def system_of_size(self, size: int | None) -> str | None:
+        """Which console's BIOS is this long, in atlas's system vocabulary.
+
+        The table pins no size per row — it recognises an image by md5 alone —
+        so the size a file was kept at is the only thing it says about which
+        machine the bytes belong to, and that is what the size classes are
+        (:data:`SIZE_CLASS_SYSTEMS`). ``None`` for a size no class names,
+        which is every size this table's search would have skipped.
+        """
+        return None if size is None else self._systems.get(size)
 
     def identify(self, md5: str) -> BiosImage | None:
         """The row these bytes are, or ``None`` — which is not a verdict on the file.
@@ -560,6 +593,17 @@ def load_bios_table(text: str | None = None) -> BiosTable:
     sizes = raw.get("sizes")
     if not isinstance(sizes, dict) or not sizes:
         raise ValueError("duckstation_bios: sizes must be a non-empty object")
+    # Loudly too, and for the reason the blocks below are loud: a size class
+    # this code has no system for would answer "which machine" with silence
+    # over bytes the table recognised perfectly, which is the one answer a
+    # vendored newer table must not ship quietly.
+    unnamed = sorted(set(sizes) - set(SIZE_CLASS_SYSTEMS))
+    if unnamed:
+        raise ValueError(
+            f"duckstation_bios: sizes states the class(es) {unnamed} and "
+            f"{sorted(SIZE_CLASS_SYSTEMS)} are the ones this atlas names a system for "
+            "— the table and the code shipped out of step"
+        )
     rows = tuple(_image(entry, index) for index, entry in enumerate(images))
     # Loudly, like the blocks above: both feed answers (the OpenBIOS offset
     # speaks in a caveat's sentence, the revision in its data), so a table
@@ -573,7 +617,7 @@ def load_bios_table(text: str | None = None) -> BiosTable:
         raise ValueError("duckstation_bios: _meta must state the upstream revision")
     return BiosTable(
         images=rows,
-        sizes=tuple(sorted(int(size) for size in sizes.values())),
+        sizes={name: int(size) for name, size in sizes.items()},
         openbios=openbios,
         meta=meta,
     )

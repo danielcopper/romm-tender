@@ -7,9 +7,12 @@ platform and its games can never show a different level for the same files.
 
 **The demand is read per platform**, because which emulators can run a system is
 the only thing that says whether a standalone emulator's declarations belong to
-it — a whole-machine reading enumerates installed cores and carries no standalone
-entry at all. Within a platform the two surfaces still share every answer: the
-pane and its games read one catalogue, one row set, one verdict.
+it. A whole-machine reading does carry standalone entries, and still cannot serve
+this: it is asked unverified, so a card that identifies its image by content
+names no file there, and it is scoped to the machine rather than to the
+emulators ES-DE offers for one system. Within a platform the two surfaces share
+every answer: the pane and its games read one catalogue, one row set, one
+verdict.
 
 That reading costs 67-350 ms per system on the reference machine and a whole
 answer for one platform 106-486 ms, so the whole-library overview does not pay

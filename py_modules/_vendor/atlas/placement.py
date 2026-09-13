@@ -349,12 +349,15 @@ def _freeze(mapping: Mapping[str, _FrozenValue]) -> Mapping[str, _FrozenValue]:
 
 
 # What one key of a ``Caveat``'s or ``Unresolved``'s ``data`` may hold, as a
-# caller writes it: one value, several values, or a tally. The three serialize
-# as the three JSON shapes a client already knows — a string, an array, an
-# object (:func:`atlas.contract.data_contract`) — and the sequence is the one
-# this vocabulary insists on: a list of file names, keys or regions is a list,
+# caller writes it: one value, several values, or one value said about each of
+# several subjects. The three serialize as the three JSON shapes a client
+# already knows — a string, an array, an object
+# (:func:`atlas.contract.data_contract`) — and the sequence is the one this
+# vocabulary insists on: a list of file names, keys or regions is a list,
 # never a string a client has to split on ``", "``. Order inside a sequence is
-# contractual, because it is the emitter's stated order.
+# contractual, because it is the emitter's stated order. The mapping is what a
+# list cannot be read out of step with: where two facts are said about each of
+# several files, each is keyed by the file rather than indexed beside it.
 DataValue: TypeAlias = "str | Sequence[str] | Mapping[str, str]"
 # The same values once a frozen dataclass holds them: sequences are tuples and
 # mappings are read-only.
@@ -877,10 +880,11 @@ class Caveat:
     data: Mapping[str, "DataValue"] = field(default_factory=dict)
     """The machine-readable specifics a client acts on, as a read-only mapping.
 
-    One value, several values or a tally — see :data:`DataValue`. Sequences
-    arrive as any sequence of strings and are kept as tuples; the mapping
-    form belongs to the two pairs the guide documents, the alternative-
-    emulator tally and this code's read card-index options.
+    One value, several values, or one value per subject — see
+    :data:`DataValue`. Sequences arrive as any sequence of strings and are
+    kept as tuples. The mapping form belongs to the pairs the guide documents:
+    the alternative-emulator tally, the card-index options
+    ``core-mode-unestablished`` reads, and the BIOS search's listing.
     """
 
     def __post_init__(self) -> None:
@@ -1512,6 +1516,26 @@ UNRESOLVED_EMULATOR_CONFIG_UNREADABLE = "emulator-config-unreadable"
 REASON_KEY_UNREAD = "key-unread"
 EMULATOR_CONFIG_UNREADABLE_REASONS = (*REFUSAL_CODES, REASON_KEY_UNREAD)
 
+# Every file a BIOS search kept and hashed, keyed by path, beside what the
+# emulator's own table made of each one's bytes. Built by
+# :func:`atlas.firmware._duckstation_candidate_listing`, one module over with
+# the rest of the search family's codes; this one is written here because its
+# ``readings`` key is a closed vocabulary and :data:`ENUMERATED_DATA` below is
+# what closes it. It states what the search already read and changes nothing
+# the answer said before it, so a client that ignores it reads the answer it
+# read without it.
+CAVEAT_FIRMWARE_SEARCH_CANDIDATES = "firmware-search-candidates"
+READING_IDENTIFIED: SearchReading = "identified"
+"""A row of the emulator's own table holds these bytes, so it is an image it recognises."""
+READING_UNRECOGNISED: SearchReading = "unrecognised"
+"""The bytes came back and no row of the table holds them — read, and not an image it knows."""
+READING_UNREADABLE: SearchReading = "unreadable"
+"""The bytes did not come back, so nothing about this file's content was established."""
+# The closed vocabulary those three make up: everything a listing may say
+# about one candidate's bytes, and nothing else.
+FIRMWARE_SEARCH_READINGS = (READING_IDENTIFIED, READING_UNRECOGNISED, READING_UNREADABLE)
+SearchReading = Literal["identified", "unrecognised", "unreadable"]
+
 # The ``(code, key)`` pairs whose value is an enumeration, and the vocabulary
 # each comes from. Checked at construction, the way
 # :class:`CfgSource` checks its kind and the card loader checks its tokens —
@@ -1530,6 +1554,10 @@ ENUMERATED_DATA: "Mapping[tuple[str, str], tuple[str, ...]]" = MappingProxyType(
         (CAVEAT_FILENAMES_CONTENT_CONDITIONAL, "files_established_for"): (
             FILES_ESTABLISHED_FOR_TOKENS
         ),
+        # A mapping-valued pair: the listing states one reading per kept file,
+        # keyed by its path, so the vocabulary closes the mapped words rather
+        # than the mapping as a whole.
+        (CAVEAT_FIRMWARE_SEARCH_CANDIDATES, "readings"): FIRMWARE_SEARCH_READINGS,
         (CAVEAT_INVALID_SAVE_DIRECTORY, "layer"): CFG_LAYER_KINDS,
         # The world-knowledge mark carries two keys and only one of them is
         # closed: the evidence level, as the contract spells it rather than in
@@ -1543,13 +1571,33 @@ ENUMERATED_DATA: "Mapping[tuple[str, str], tuple[str, ...]]" = MappingProxyType(
 
 
 def _check_enumerations(what: str, code: str, data: "Mapping[str, DataValue]") -> None:
-    """Refuse a value outside the vocabulary its ``(code, key)`` names."""
+    """Refuse a value outside the vocabulary its ``(code, key)`` names.
+
+    The vocabulary closes each word rather than the shape carrying them: the
+    search listing's ``readings`` is a word per kept file, keyed by the path
+    it is about, and neither a mapping nor a list could ever equal a member —
+    so checking one as a single value would refuse every one of them rather
+    than the wrong word inside it. A mapping's KEYS are the subjects the words
+    are said about and are left alone.
+    """
     for key, value in data.items():
         allowed = ENUMERATED_DATA.get((code, key))
-        if allowed is not None and value not in allowed:
-            raise ValueError(
-                f"{what}: {code}.{key} must be one of {list(allowed)}, got {value!r}"
-            )
+        if allowed is None:
+            continue
+        for stated in _stated_words(value):
+            if stated not in allowed:
+                raise ValueError(
+                    f"{what}: {code}.{key} must be one of {list(allowed)}, got {stated!r}"
+                )
+
+
+def _stated_words(value: "DataValue") -> tuple[str, ...]:
+    """The words one data value states: itself, its members, or its mapped values."""
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, Mapping):
+        return tuple(value.values())
+    return tuple(value)
 # The emulator's configuration was read, and the absolute path it states has
 # no spelling on this host from here: the value names a location only the
 # emulator's sandbox can read, and the whole answer hangs on that one path,

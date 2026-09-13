@@ -1752,10 +1752,12 @@ again.
 
 **The question is asked per platform, and the scope is what makes the two seams different.**
 `firmware_for_system(<system>, verify=True)` answers for every emulator ES-DE offers for one system — libretro and
-standalone alike — and it is what every platform-scoped answer reads. `firmware_inventory()` enumerates the installed
-`.so` files instead, one entry each, so it carries **no standalone entry at all**; it is the right question only where
-the caller has no platform to name, which is two places: the RetroDECK-home migration's untracked-BIOS sweep, and
-`download_firmware(firmware_id)`.
+standalone alike — and it is what every platform-scoped answer reads. `firmware_inventory()` sweeps the machine instead
+— the installed `.so` files, one entry each, plus (since the resolver's 0.19.0) the standalone emulators a packaged card
+covers — and it is asked **unverified**, so a card that identifies its image by content names no file there at all. It
+is the right question only where the caller has no platform to name, which is two places: the RetroDECK-home migration's
+untracked-BIOS sweep, and `download_firmware(firmware_id)`. Both ask it for **placement** — where a file goes — never
+for readiness.
 
 **The per-platform reading is verified, and that is a contract rather than a tuning choice.** Two answers cannot be had
 without reading bytes. A packaged rule card may identify its image by CONTENT, so unverified it names no file while

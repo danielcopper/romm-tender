@@ -81,6 +81,13 @@ from glob import escape as _glob_escape
 from typing import Any, Iterable, Literal, Mapping, Protocol, Sequence, TypeAlias, cast
 
 from ._data import packaged_text
+from .core_firmware import (
+    FIRMWARE_LOCATING,
+    LOCATING_UNESTABLISHED,
+    FirmwareLocating,
+    locating_of_card,
+    locating_of_core,
+)
 from .core_info import (
     UNREAD_EMPTY,
     UNREAD_NO_SLOT,
@@ -118,11 +125,17 @@ from .standalone_firmware import (
     StandaloneFirmwareConfigFile,
     StandaloneFirmwareSearch,
     lookup_standalone_firmware_card,
+    standalone_firmware_cards,
 )
 from .placement import (
     CAVEAT_CORE_MODE_UNESTABLISHED,
+    CAVEAT_FIRMWARE_SEARCH_CANDIDATES,
     CAVEAT_SANDBOX_PATH_UNTRANSLATED,
+    READING_IDENTIFIED,
+    READING_UNREADABLE,
+    READING_UNRECOGNISED,
     REASON_REGION_DECIDED_BY_DISC,
+    SearchReading,
     HOLE_CWD,
     ROOT_SYSTEM_DIRECTORY,
     TEMPLATE_CWD,
@@ -191,7 +204,9 @@ DECLARED_DIRECTORY: DeclaredKind = "directory"
 
 FIRMWARE_DECLARED_KINDS = ("file", "directory")
 
-FirmwareChecked = Literal["verified", "mismatch", "unchecked", "unknown", "not-comparable"]
+FirmwareChecked = Literal[
+    "verified", "mismatch", "unchecked", "unknown", "not-comparable", "unrecognised", "refused", "unread"
+]
 
 CHECKED_VERIFIED: FirmwareChecked = "verified"
 """The bytes were compared with the packaged identity and match: this file is the right one.
@@ -210,12 +225,12 @@ costs one ``verify=True`` query.
 """
 CHECKED_UNKNOWN: FirmwareChecked = "unknown"
 """Nothing was compared and nothing is pending: no packaged identity exists for this
-destination, or its bytes would not come back, or its shape answered instead of its bytes — a
-directory where the core opens a file, a file where the core lists a folder, a folder answered
-by what it holds. It is no verdict on the entry: ``satisfied`` beside it is ``True`` for a plain
-file with no identity, ``False`` for a file where a folder is opened, ``None`` where the bytes
-were unreadable or a directory stands where a file is opened, and whatever the listing
-established for a listed folder — ``True``, ``False`` or ``None``.
+destination, or its shape answered instead of its bytes — a directory where the core opens a
+file, a file where the core lists a folder, a folder answered by what it holds. Bytes that were
+asked for and did not come back are ``unread``, not this. It is no verdict on the entry:
+``satisfied`` beside it is ``True`` for a plain file with no identity, ``False`` for a file where
+a folder is opened, ``None`` where a directory stands where a file is opened, and whatever the
+listing established for a listed folder — ``True``, ``False`` or ``None``.
 """
 # The bytes differ from the pinned ones and that settles nothing, because the
 # identity is not whole-file comparable (:data:`FIRMWARE_IDENTITY_KINDS`). It
@@ -228,8 +243,49 @@ CHECKED_NOT_COMPARABLE: FirmwareChecked = "not-comparable"
 difference settles nothing. It is a withheld verdict and never a failure: an exact hit on the
 same file still answers ``verified``.
 """
+# The bytes were read and the emulator's own recognition table does not know
+# them. It is deliberately not ``unknown``: that value means nothing was
+# compared, and the rule beside it — ``unknown`` with no identity is
+# ``satisfied`` — would turn a file nobody recognised into an all-clear. Here a
+# comparison did run and came back without a name, which is a third answer.
+CHECKED_UNRECOGNISED: FirmwareChecked = "unrecognised"
+"""The bytes were read and the emulator's own table does not know them, so what the file is
+stays open. It is no failure — DuckStation boots such an image and says it is using an unknown
+BIOS — and no proof either, so ``satisfied`` beside it is ``None``.
+"""
+# The emulator will not open this file at all, and the reason is a property of
+# the file the machine answers with a stat. It is the one ``checked`` value
+# that settles a ``False`` BY ITSELF without ``verify``: ``mismatch``, the
+# other value that fails a present file, needs the bytes compared. Other
+# values answer without a content check too, and a shape can fail a file
+# without one — ``unknown`` where the core lists a folder is ``False`` off
+# ``found`` — but no other value carries the failure on its own. It is about the EMULATOR refusing a file, never about atlas
+# refusing to follow a declaration (:class:`RefusedDeclaration`), which is the
+# other thing "refused" names in this answer.
+CHECKED_REFUSED: FirmwareChecked = "refused"
+"""The emulator refuses this file before reading a byte of it, so the launch boots nothing
+from it — DuckStation's size gate is the case: a named image whose size is none of the three it
+accepts. A stat settles it, so it is the one value in this vocabulary that by itself fails a
+present file without ``verify`` — a shape can fail one too, but then ``found`` carries the
+failure — and ``satisfied`` beside it is ``False`` with no identity to carry.
+"""
+# The bytes were asked for and did not come back. It is a statement about
+# atlas's own read, never about the emulator's: this process could not read
+# the file, which is no evidence the launch cannot. Before it existed the fact
+# rode ``unknown`` with an identity beside it, which read as "no table covers
+# this" to anything that looked at the value alone.
+CHECKED_UNREAD: FirmwareChecked = "unread"
+"""The bytes were asked for under ``verify`` and did not come back, so the comparison the
+emulator makes never happened and ``satisfied`` beside it is ``None``. It says nothing about
+whether the emulator can read the file — the read that failed is atlas's own. An identity rides
+it where a table pins one for the declared name, and stays ``None`` where the table is keyed by
+content, because without the bytes there is no row to find.
+"""
 
-FIRMWARE_CHECKED = ("verified", "mismatch", "unchecked", "unknown", "not-comparable")
+FIRMWARE_CHECKED = (
+    "verified", "mismatch", "unchecked", "unknown", "not-comparable", "unrecognised", "refused",
+    "unread",
+)
 
 # What kind of thing one packaged identity is — a statement the table carries
 # per entry, because ``System.dat`` pins an md5 over the whole file and says
@@ -259,6 +315,36 @@ ARCHIVE_ROMSET: ArchiveReason = "romset"
 ARCHIVE_CORE_BUNDLED: ArchiveReason = "core-bundled"
 
 FIRMWARE_ARCHIVE_REASONS = ("romset", "core-bundled")
+
+# How one installed emulator is concerned with a file nobody declared
+# (:class:`Concern`). Two words, because two different things put an emulator
+# beside such a file and a client acts differently on each: one of them holds
+# the bytes in a table of its own, the other names a file name the bytes are
+# known under. Neither is a requirement — an unclaimed entry states what is
+# known about a file and satisfies nothing.
+UnclaimedRelation = Literal["recognises", "declares"]
+
+# The emulator carries its own recognition table and that table holds these
+# bytes. DuckStation is the case: it names no BIOS file, so nothing it declares
+# could ever name one, and content is the only way its concern can be stated.
+RELATION_RECOGNISES: UnclaimedRelation = "recognises"
+"""This emulator's own recognition table holds these bytes, so it would know the file by
+content wherever its search reaches — which is what makes the relation statable for an
+emulator that names no file at all. It is not a requirement: whether the file sits where
+that search looks is the emulator's own entry's business, not this one's.
+"""
+# The core's ``.info`` declares a file NAME, and the packaged libretro table
+# knows these bytes under that name. So the concern is by name via content: the
+# bytes are what the name is known to hold, and whether the file under that name
+# on this machine is these bytes is the core's own requirement to answer.
+RELATION_DECLARES: UnclaimedRelation = "declares"
+"""This core's own ``.info`` declares a name the packaged table pins these bytes for, so
+the bytes are what that declaration asks for. It says nothing about whether
+the core's requirement is met — the file here carries a name nobody declared, which is
+why it is in this list at all.
+"""
+
+UNCLAIMED_RELATIONS = (RELATION_RECOGNISES, RELATION_DECLARES)
 
 # Caveat codes — stable identifiers, like the placement ones.
 # The three below are the answer-level vocabulary for an empty requirement
@@ -441,6 +527,14 @@ CAVEAT_FIRMWARE_IMAGE_AMBIGUOUS = "firmware-image-ambiguous"
 # of them is a BIOS is unanswered — the degradation of asking a content
 # question without asking for a content check.
 CAVEAT_FIRMWARE_SEARCH_UNVERIFIED = "firmware-search-unverified"
+# A setting names a file the emulator will not open, because its size is none
+# of the ones it loads. It is the sentence beside :data:`CHECKED_REFUSED`, and
+# it carries the two numbers that decision was made from — the size read and
+# the sizes accepted — because "wrong size" without them tells a user nothing
+# they can act on. It rides a NAMED destination only: the search filters by
+# the same sizes before a file becomes a candidate at all, so nothing it picks
+# can be refused for one.
+CAVEAT_FIRMWARE_IMAGE_REFUSED = "firmware-image-refused"
 
 # The two ``.info`` files libretro ships as templates rather than as cores:
 # both declare firmware0_path = "filename.ext" with opt = "true/false". The
@@ -470,6 +564,39 @@ def _refuse_bad_kind(what: str, kind: object, archive_reason: object) -> None:
             )
     elif archive_reason is not None:
         raise ValueError(f"{what}: only an archive carries an archive_reason, got {archive_reason!r}")
+
+
+def _refuse_impossible_checked(
+    found: object, checked: object, identity: "FirmwareIdentity | None"
+) -> None:
+    """What a requirement's ``checked`` may be, given what is at the destination.
+
+    Two rules the shape settles and one the value does. Something at the
+    destination takes a value from the vocabulary and nothing there takes
+    none, because a verdict about bytes nobody could look at would be a state
+    that lies. And ``refused`` carries no identity: the emulator turned the
+    file down before any table was consulted, so there is nothing an identity
+    could have been read from.
+
+    ``unread`` is deliberately not held either way. A table keyed by the
+    declared name pins an identity before a byte is read, so a failed read
+    leaves it standing; one keyed by content has nothing to pin without the
+    bytes. Both are true states, and which one an entry is in says which kind
+    of table covers it.
+    """
+    if found in (KIND_FILE, KIND_DIRECTORY):
+        if checked not in FIRMWARE_CHECKED:
+            raise ValueError(
+                f"FirmwareRequirement: something is there, so checked must be one of {FIRMWARE_CHECKED}, "
+                f"got {checked!r}"
+            )
+    elif checked is not None:
+        raise ValueError("FirmwareRequirement: nothing is there to check, so checked must be None")
+    if checked == CHECKED_REFUSED and identity is not None:
+        raise ValueError(
+            "FirmwareRequirement: a file the emulator refuses was never looked up, so a "
+            "'refused' requirement carries no identity"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -507,6 +634,13 @@ class FirmwareIdentity:
     ``gb_bios.bin``, ``dc/boot.bin`` ≡ ``dc/dc_boot.bin``, …), which is what
     makes "you already have these bytes, under another name" a statable answer.
 
+    Two packaged tables state an identity here and the fields say which one
+    did. The libretro hash table pins an md5, a sha1 and a size per declared
+    name, so an identity off it carries all three and the names it goes by.
+    DuckStation's BIOS table recognises an image by md5 alone, names no file
+    and pins no sha1 (:mod:`atlas.duckstation`), so an identity off it answers
+    ``None`` for ``sha1`` and an empty ``known_as``.
+
     ``kind`` says whether these bytes are comparable whole-file at all, and it
     decides what a difference from them means: for a ``file`` it is a
     ``mismatch``, for an ``archive`` it is ``not-comparable``, because the
@@ -525,10 +659,18 @@ class FirmwareIdentity:
 
     md5: str
     """The MD5 the packaged table pins for this content."""
-    sha1: str
-    """The SHA-1 the packaged table pins for this content."""
+    sha1: str | None
+    """The SHA-1 the packaged table pins for this content, and ``None`` where the table that
+    named this content pins no SHA-1 at all — DuckStation's own BIOS table is such a table,
+    and it recognises an image by its MD5.
+    """
     size: int
-    """The size in bytes the packaged table pins for this content."""
+    """The size in bytes the packaged table pins for this content.
+
+    A table that pins one size per content states it per content. DuckStation's
+    states a small set of sizes it accepts at all and nothing per row, and the
+    value here is then the one of those sizes this content was read at.
+    """
     kind: FirmwareIdentityKind
     """Whether these bytes are comparable at all, which decides what a difference from
     them means: a ``mismatch`` for a ``file``, ``not-comparable`` for an ``archive``.
@@ -1222,6 +1364,13 @@ _SEVERAL_SYSTEMS_SEPARATOR = "/"
 
 SystemSource = Literal["override", "systemname", "slug", "none", "card"]
 
+# What a declaration is filed under when its core's ``.info`` states no
+# ``systemname`` at all. A token no ES-DE build declares, so nothing files
+# under it by accident — and a statement about that core rather than about a
+# machine, which is why the routes that ask "which system do these bytes belong
+# to" leave it out.
+_SYSTEM_UNKNOWN = "_unknown"
+
 SOURCE_OVERRIDE: SystemSource = "override"
 SOURCE_SYSTEMNAME: SystemSource = "systemname"
 SOURCE_SLUG: SystemSource = "slug"
@@ -1254,7 +1403,7 @@ def system_decision(file_name: str, systemname: str) -> tuple[str, SystemSource]
     if known is not None:
         return known, SOURCE_SYSTEMNAME
     slug = _NON_SLUG.sub("-", systemname.lower()).strip("-")
-    return (slug, SOURCE_SLUG) if slug else ("_unknown", SOURCE_NONE)
+    return (slug, SOURCE_SLUG) if slug else (_SYSTEM_UNKNOWN, SOURCE_NONE)
 
 
 def system_for(file_name: str, systemname: str) -> str:
@@ -1757,8 +1906,10 @@ class FirmwareRequirement:
     """
     description: str
     identity: FirmwareIdentity | None
-    """What the packaged table pins for the declared name, and ``None`` where the table
-    does not cover it.
+    """What a packaged table pins for this file — under the declared name where the table
+    names files, under the bytes found where the emulator recognises its firmware by
+    content — and ``None`` where no table covers this destination at all, or where the
+    bytes were read and no row of the covering table holds them.
     """
     found: PathKind
     """The path kind read at the destination — a file, a directory in the way, nothing,
@@ -1832,14 +1983,7 @@ class FirmwareRequirement:
                 "FirmwareRequirement: contents_satisfied is the verdict over a directory the core lists, "
                 f"and found is {self.found!r} at a {self.declared_kind!r} declaration"
             )
-        if self.found in (KIND_FILE, KIND_DIRECTORY):
-            if self.checked not in FIRMWARE_CHECKED:
-                raise ValueError(
-                    f"FirmwareRequirement: something is there, so checked must be one of {FIRMWARE_CHECKED}, "
-                    f"got {self.checked!r}"
-                )
-        elif self.checked is not None:
-            raise ValueError("FirmwareRequirement: nothing is there to check, so checked must be None")
+        _refuse_impossible_checked(self.found, self.checked, self.identity)
         if self.supplied_by is not None and self.found != KIND_FILE:
             raise ValueError(
                 "FirmwareRequirement: supplied_by states that the FILE at the destination is the "
@@ -1876,9 +2020,12 @@ class FirmwareRequirement:
         wrong *shape*: a plain file where the core lists a folder cannot be
         listed at all, so the core reaches nothing inside it — when the listed
         folder holds no file of a size the core would open, its own first
-        filter and a stat, so that one settles without a content check — or
-        when every file of an accepted size in it was read and fails the
-        core's own test. ``None`` for everything atlas did not establish:
+        filter and a stat, so that one settles without a content check — when
+        every file of an accepted size in it was read and fails the core's own
+        test — or when the emulator refuses the file outright (``refused``),
+        which is the same stat-cheap kind of ``False`` as the folder's first
+        filter and needs no ``verify`` either. ``None`` for everything atlas
+        did not establish:
 
         - the path could not be looked at;
         - a directory sits where the core reads a *file* (something is
@@ -1888,8 +2035,12 @@ class FirmwareRequirement:
           bytes could not be read, or one the table names and the core's own
           test denies, and none that passes — or the folder could not be
           listed at all (``contents_satisfied``);
-        - the identity is known and could not be read (unreadable bytes);
+        - the bytes were asked for and did not come back (``unread``), which
+          is a statement about atlas's read and none about the emulator's;
         - the identity is known and verification was **not asked for**;
+        - the bytes were read and the emulator's own table does not know them
+          (``unrecognised``): it boots such an image, so the reading is
+          neither a proof nor a refutation;
         - the identity is an archive and the bytes differ (``not-comparable``).
           It is there, and whether it is right is not establishable this way:
           no whole-file comparison can tell a repacking from a wrong file.
@@ -1916,11 +2067,14 @@ class FirmwareRequirement:
             return self.contents_satisfied
         if self.declared_kind == DECLARED_DIRECTORY:
             return False
-        if self.checked == CHECKED_MISMATCH:
+        if self.checked in (CHECKED_MISMATCH, CHECKED_REFUSED):
             return False
-        if self.checked in (CHECKED_UNCHECKED, CHECKED_NOT_COMPARABLE):
-            return None
-        if self.checked == CHECKED_UNKNOWN and self.identity is not None:
+        if self.checked in (
+            CHECKED_UNCHECKED,
+            CHECKED_NOT_COMPARABLE,
+            CHECKED_UNRECOGNISED,
+            CHECKED_UNREAD,
+        ):
             return None
         return True
 
@@ -2040,6 +2194,19 @@ DECLARATION_PACKAGED: CoreDeclarationState = "packaged"
 
 CORE_DECLARATION_STATES = ("read", "unreadable", "absent", "unsupported", "packaged")
 
+# Which declarations carry something to weigh, and which force
+# :attr:`CoreFirmware.requirements_met` to ``None`` before a file is looked at.
+# Both are written out because the field is a verdict about a declaration, and
+# a declaration a future value names would otherwise fall into whichever half
+# an inequality left it in — which is exactly what happened to ``packaged``,
+# judged by nothing for as long as the property read ``!= read``
+# (tests/test_firmware.py::TestEveryDeclarationIsJudgedOrExcusedByName).
+DECLARATIONS_JUDGED = (DECLARATION_READ, DECLARATION_PACKAGED)
+# Three ways to have nothing to weigh: the declaration could not be read, the
+# emulator is not installed, and atlas has no source for what it wants. None of
+# them is a statement about files on this machine.
+DECLARATIONS_UNJUDGED = (DECLARATION_UNREADABLE, DECLARATION_ABSENT, DECLARATION_UNSUPPORTED)
+
 
 # What atlas knows about the SYSTEM behind one emulator's declaration — the
 # half a libretro ``.info`` cannot state, read off the packaged table
@@ -2056,13 +2223,16 @@ CoreSystemFirmware = Literal[
 ]
 
 # The system does not start without a firmware image, and this core needs one
-# of the ones it declares. The state SwanStation is in over a machine with no
-# PlayStation BIOS: its five images all read ``optional``, because that is what
-# its ``.info`` says, and the system still will not boot.
+# of the ones it declares for that system. The state SwanStation is in over a
+# machine with no PlayStation BIOS: its five images all read ``optional``,
+# because that is what its ``.info`` says, and the system still will not boot.
 SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT: CoreSystemFirmware = "cannot-run-without-firmware"
 """The system does not start without a firmware image, and this core needs one of the ones it
-declares. It comes from the packaged table rather than from this machine, so it says nothing
-about whether an image is in place — that is ``requirements_met``.
+declares **for that system**. It comes from the packaged table rather than from this machine, so
+it says nothing about whether an image is in place — that is ``requirements_met``, which asks
+each such system for one of the images filed under it: a Game Boy dump is no answer for a Game
+Boy Advance, and a core two such systems speak about needs one image apiece. It is one question
+per system, and this value says one system is in that state without saying how many are.
 """
 # The system does not start without an image, and this core carries its own
 # substitute, so its all-optional declaration is correct. PCSX ReARMed's HLE
@@ -2192,16 +2362,18 @@ class CoreFirmware:
     display name it was rendered under. Where this answer was built from a
     catalogue entry the two carry the same string by construction
     (:attr:`atlas.installations.EmulatorEntry.emulator`); where it was built
-    from an installed core instead — the per-core route, the inventory — it
-    is that core's own ``.so`` name, which is what a catalogue entry loading
-    that core would have said.
+    from an installed core instead — the per-core route, and the inventory's
+    libretro entries — it is that core's own ``.so`` name, which is what a
+    catalogue entry loading that core would have said.
     """
     declared_index: int | None = None
     """The place, from 0, of the catalogue row this answer was built from — the shipped
     position ES-DE gives it, which promotion never touches, exactly as
     :attr:`atlas.installations.EmulatorEntry.declared_index` states it. ``null`` where no
-    catalogue row was behind this answer at all: the inventory, a question asked about a
-    core by name, and the derived enumeration (#133), which no layer declared. With
+    catalogue row was behind this answer at all: the inventory's libretro entries, a
+    question asked about a core by name, and the derived enumeration (#133), which no
+    layer declared. The inventory's carded standalone entries DO carry one — each was
+    built from a catalogue row, and the pair joins them the way it joins any other. With
     ``emulator`` it makes the join to a catalogue entry exact where the identity alone
     would not be, because two rows of one system can launch one emulator (EmuDeck
     declares its Cemu twice, native and under Proton) and the position is what tells
@@ -2219,6 +2391,32 @@ class CoreFirmware:
     ``<command>`` elements, it may skip a position, and it is not an index
     into any list a client holds.
     """
+    locating: FirmwareLocating = LOCATING_UNESTABLISHED
+    """Which door this emulator opens to find firmware — world knowledge, never a reading
+    of this machine, and never ``null``: an emulator that is uninstalled or whose
+    declaration could not be read is still the emulator the knowledge describes.
+
+    It is the qualifier :attr:`requirements` has always needed and could not
+    carry. A declaration is a list of names, and whether those names are what
+    the launch opens is a property of the core's code that no ``.info`` states.
+    Under ``by-name`` the list is the whole answer and a name is what a consumer
+    must get right; under ``by-name-then-content`` a missing named file is not
+    yet a failure, because a search by content may still answer it.
+
+    ``unestablished`` is the third value and it is a statement about atlas: no
+    source was read for this emulator, so the requirement list beside it is a
+    lower bound of unknown kind. It is the default rather than an omission,
+    because a core nobody looked at must not read as one that opens the names
+    it declares. For a libretro core the word comes from
+    ``atlas/data/core_firmware.json`` keyed by the ``.so`` short name
+    (:func:`~atlas.core_firmware.locating_of_core`); for a carded standalone
+    emulator it comes from the shape of that card
+    (:func:`~atlas.core_firmware.locating_of_card`).
+
+    It moves no verdict. ``requirements_met`` is unchanged by this field in
+    either direction — the two answer different questions, and a word about how
+    a file is found can neither satisfy a requirement nor fail one.
+    """
     system_firmware: CoreSystemFirmware | None = None
     """What is recorded about the SYSTEM this core declares firmware for — world
     knowledge, not a reading of this machine; ``null`` means nothing is recorded about
@@ -2233,10 +2431,10 @@ class CoreFirmware:
 
     The four stated values are :data:`CORE_SYSTEM_FIRMWARE_STATES`:
     ``cannot-run-without-firmware`` (the system needs an image and this core
-    needs one of the ones it declares), ``core-supplies-an-alternative`` (it
-    needs one and this core carries its own substitute),
-    ``runs-without-firmware`` (somebody established that it starts with none
-    present), and ``open`` (nobody has established which).
+    needs one of the ones it declares under that system),
+    ``core-supplies-an-alternative`` (it needs one and this core carries its
+    own substitute), ``runs-without-firmware`` (somebody established that it
+    starts with none present), and ``open`` (nobody has established which).
 
     :data:`CAVEAT_SYSTEM_FIRMWARE_WORLD_KNOWLEDGE` is stated per *system*
     rather than per value: one mark for each system whose entry states
@@ -2248,6 +2446,25 @@ class CoreFirmware:
     this same core — the word means the same thing as a value here and as an
     evidence level, and for that reason never reaches a client as an evidence
     level at all.
+    """
+    system_firmware_needs: tuple[str, ...] = ()
+    """The systems whose recorded need this core is not excused from, as system ids.
+
+    Which machines the need is about, which is what lets each of them be asked
+    over the images filed under it rather than over every image the core
+    declares: :attr:`_system_image_in_place` asks one disjunction per id here,
+    over that id's requirements alone, and every one of them has to be
+    answered. Empty under every other state, because
+    nothing else is a need — an excused one is this core's substitute, an open
+    question is nobody's answer, and a system established to run without needs
+    no image at all.
+
+    Every id here came off a requirement of this same core
+    (:attr:`FirmwareRequirement.system`), which is where the systems the table
+    was asked about came from — so the set it scopes is never empty. Out of
+    the contract for the reason ``unread`` is: what a client acts on is the
+    verdict and the mark beside it, and one fact serialized twice is one fact
+    that can disagree with itself.
     """
     refused: tuple[RefusedDeclaration, ...] = ()
     """The declarations atlas would not follow, each with its reason, so a dropped file
@@ -2273,26 +2490,65 @@ class CoreFirmware:
     (only a declaration that stated a path could have been about some
     particular file). Also out of the contract, and for the same reason.
     """
-    folder_claims: tuple[str, ...] = ()
-    """Every file a listed folder's read accounted for, as resolved paths, sorted.
+    claims: tuple[str, ...] = ()
+    """Every file this emulator's own read accounted for, as resolved paths, sorted.
 
-    An image the core's test passed, a candidate the table names and the test
-    denies, one whose header read did not come back, or one whose digest
-    could not be taken — as RESOLVED paths, because the exclusion compares
-    resolved spellings and a listed entry may be a link into another
-    directory. The caveats that state these files carry the listed entry
-    instead, the name the core lists and opens through the link. The
-    declaration claims them: the inventory's unclaimed scan skips them the
-    way it skips a declared destination, so a file the folder read stated is
-    not stated again as an unclaimed one. Out of the contract for the same
-    reason ``unread`` is — the caveats already carry the paths a consumer
-    acts on.
+    Three reads put a file here, and each of them is this entry's answer about a
+    file it looked at rather than the scan's about a file nobody declared: a
+    **listed folder's** contents — an image the core's test passed, a candidate
+    the table names and the test denies, one whose header read did not come
+    back, one whose digest could not be taken; a **card search's** candidates —
+    every file in the searched directory whose size the emulator accepts, which
+    is the set its own recognition runs over; and a **card's named
+    destinations** — the paths its requirements land on.
+
+    As RESOLVED paths, because the exclusion compares resolved spellings and a
+    listed entry may be a link into another directory. The caveats that state
+    these files carry the listed entry instead, the name the emulator lists and
+    opens through the link. The claim is what it says: the inventory's unclaimed
+    scan skips them the way it skips a declared destination, so a file this
+    entry's own read stated is not stated again as an unclaimed one. It never
+    widens that scan — where a card's destination lies outside the firmware
+    root, nothing there was ever going to be looked at. Out of the contract for
+    the same reason ``unread`` is — the caveats already carry the paths a
+    consumer acts on.
     """
+
+    def _check_no_plain_entry_is_region_scoped(self) -> None:
+        """A region-scoped requirement stands only inside an alternatives group.
+
+        Out of ``__post_init__`` rather than inline for two reasons, and the
+        second one is load-bearing. It is the one rule there that walks the
+        requirement list rather than reading a field, so it is a different kind
+        of check; and a rule that IS a field's closed vocabulary could not be
+        moved out the way this one is, because
+        ``scripts/generate_contract_reference.py`` learns which tuple a field's
+        values come from by reading that method's ``not in`` comparisons.
+
+        What it follows from there is narrow, and **arity is not what decides
+        it**: the helper table is built from the module's own top-level
+        functions, so a check moved into a *method* is not read at all, whether
+        or not the method is handed the attribute — and this one is a method.
+        Only a module-level function the ``__post_init__`` passes the attribute
+        to as an argument is followed, one hop. So a vocabulary check lifted
+        out of ``__post_init__`` into a method drops its tuple's name from the
+        published page while every gate stays green.
+        """
+        for entry in self.requirements:
+            if isinstance(entry, FirmwareRequirement) and entry.regions is not None:
+                raise ValueError(
+                    "CoreFirmware: a region-scoped requirement stands only inside a FirmwareAlternatives "
+                    "group — a plain entry carrying regions would smuggle a condition into the conjunction"
+                )
 
     def __post_init__(self) -> None:
         if self.declaration not in CORE_DECLARATION_STATES:
             raise ValueError(
                 f"CoreFirmware: declaration must be one of {CORE_DECLARATION_STATES}, got {self.declaration!r}"
+            )
+        if self.locating not in FIRMWARE_LOCATING:
+            raise ValueError(
+                f"CoreFirmware: locating must be one of {FIRMWARE_LOCATING}, got {self.locating!r}"
             )
         if self.declaration not in (DECLARATION_READ, DECLARATION_PACKAGED) and self.requirements:
             raise ValueError(
@@ -2310,12 +2566,13 @@ class CoreFirmware:
                 f"CoreFirmware: system_firmware must be one of {CORE_SYSTEM_FIRMWARE_STATES} or None, "
                 f"got {self.system_firmware!r}"
             )
-        for entry in self.requirements:
-            if isinstance(entry, FirmwareRequirement) and entry.regions is not None:
-                raise ValueError(
-                    "CoreFirmware: a region-scoped requirement stands only inside a FirmwareAlternatives "
-                    "group — a plain entry carrying regions would smuggle a condition into the conjunction"
-                )
+        if self.system_firmware == SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT and not self.system_firmware_needs:
+            raise ValueError(
+                f"CoreFirmware: {SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT!r} names the systems it is about — "
+                "without them the images that would answer the need cannot be told from the ones "
+                "filed under another system"
+            )
+        self._check_no_plain_entry_is_region_scoped()
 
     @property
     def unmet(self) -> tuple[FirmwareRequirement, ...]:
@@ -2364,50 +2621,80 @@ class CoreFirmware:
         answer is on a core that really is in the state
         :data:`SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT` names.
 
-        There the declared images are read as a **disjunction**: one of them
-        being usable is what the system asks for, and which image serves which
-        console region is a separate question this does not answer. So ``True``
-        the moment any declared image is satisfied, ``False`` only when every
-        one of them is demonstrably not, and ``None`` in between — an
-        undetermined image might be the one that would serve, and a refused
-        declaration is an image atlas would not follow to a destination, so
-        neither leaves the absence established.
+        **A disjunction inside each needing system, a conjunction across
+        them.** Every system in :attr:`system_firmware_needs` has to have one
+        of *its own* images (:meth:`_system_image_for`), because each of them
+        is a machine that does not start without one — so ``True`` only when
+        every needing system has one, ``False`` as soon as one of them
+        demonstrably has none, and ``None`` where what is left is unjudged.
+        ``False`` outranks ``None`` for the reason it does everywhere here: a
+        demonstrated absence is a demonstration, and one machine that will not
+        boot is the answer whatever is unsettled about another.
 
-        **Which set is asked, and the limit of that.** The disjunction spans
-        every image the core declares, not the images filed under the system
-        that needs one. Those two sets coincide exactly while a core in this
-        state declares for a single system, and a **multi-system** core would
-        pull them apart: mGBA declares Game Boy boot ROMs beside its GBA BIOS,
-        so an *established usable* Game Boy dump would answer for a Game Boy
-        Advance that needs a BIOS. A merely present dump would not — it leaves
-        the verdict unsaid, and wrong bytes make it ``False``; only a
-        satisfied image reads as the system's need met.
+        The two questions are separate, which is what the two steps buy. One
+        system's image can never answer another's: mGBA declares Game Boy boot
+        ROMs beside its GBA BIOS, so with both machines needing one, a
+        satisfied Game Boy dump beside an absent GBA BIOS is ``False`` — read
+        as one flat list over both systems it would be ``True``, over a
+        machine that will not boot a GBA game.
 
-        No core reaches that combination today — mGBA declares the spread,
-        it simply never reaches ``cannot-run-without-firmware`` while doing
-        so. What follows is the measurement behind that sentence, with the
-        rule it was counted by.
-        Counting rule: over every ``expected.firmware.cores[]`` block in
-        ``vectors/machines/*.json`` whose ``system_firmware`` is
-        ``cannot-run-without-firmware``, the distinct ``system`` values of its
-        ``requirements[]`` and their ``alternatives[]``; and the same reading
-        over :func:`firmware_inventory` on the reference machine. **37** corpus
+        Where a core in this state **declares for one system** it has one
+        needing system, the conjunction has one term, and its disjunction
+        spans the whole declaration — which is how this read before the scope
+        was drawn. That is every such core measured so far. Counting rule:
+        over every
+        ``expected.firmware.cores[]`` block in ``vectors/machines/*.json``
+        whose ``system_firmware`` is ``cannot-run-without-firmware``, the
+        distinct ``system`` values of its ``requirements[]`` and their
+        ``alternatives[]``; and the same reading over
+        :func:`firmware_inventory` on the reference machine. **37** corpus
         blocks, every one of them one system; **3** cores on the machine
         (``mednafen_psx``, ``mednafen_psx_hw`` and ``swanstation``), all
         ``psx``.
 
-        That is a floor on what has been looked at, not a proof that no such
-        core can appear: the day one does, this reading is wrong for it and
-        the fix is to scope the disjunction by system — a second decision,
-        about which of a multi-system core's images serve which machine, that
-        is not taken here and is related to issue #375.
+        Which system an image belongs to is as fine as the declaration and the
+        override table make it: a ``.info`` files every image under one
+        ``systemname``, so the images of a multi-system core are told apart
+        only where a per-file rule says so
+        (:attr:`FirmwareRequirement.system_source`). Where nothing separates
+        them the whole declaration is one system's images, so the table was
+        asked about one system and the scope is that whole list — the exact
+        scope for that core rather than a coarser stand-in for one, because
+        the images really are all filed under the system that needs them. It
+        reaches the same answer as the paragraph above for a different reason:
+        there the table names one of several systems, here the declaration
+        distinguishes only one to name.
         """
         if self.system_firmware != SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT:
             return True
+        verdicts = [self._system_image_for(system) for system in self.system_firmware_needs]
+        if any(verdict is False for verdict in verdicts):
+            return False
+        return None if any(verdict is None for verdict in verdicts) else True
+
+    def _system_image_for(self, system: str) -> bool | None:
+        """Does one needing *system* have an image of its own that is usable? Three-valued.
+
+        Its images are a **disjunction**: one of them being usable is what the
+        system asks for, and which image serves which console region is a
+        separate question this does not answer. So ``True`` the moment one is
+        satisfied, ``False`` only when every one of them is demonstrably not,
+        and ``None`` in between — an undetermined image might be the one that
+        would serve, so the absence is not established.
+
+        :attr:`refused` withholds that ``False`` for **every** needing system
+        rather than for the one it belongs to, and the asymmetry is deliberate:
+        a refused declaration never reached a destination, so atlas never read
+        which system's image it would have been. Scoping it by system would
+        mean deciding that, which is the guess this package does not make — and
+        the safe side of the guess is the one that withholds a demonstration,
+        never the one that invents it.
+        """
         images = [
             option
             for entry in self.requirements
             for option in (entry.options if isinstance(entry, FirmwareAlternatives) else (entry,))
+            if option.system == system
         ]
         if any(image.satisfied is True for image in images):
             return True
@@ -2419,11 +2706,27 @@ class CoreFirmware:
     def requirements_met(self) -> bool | None:
         """Are all *required* files in place and right? ``None`` when atlas cannot say —
         atlas's verdict on the :attr:`requirements` declaration, weighed against disk
-        *and* world knowledge about the system (:attr:`system_firmware`). Not a presence
+        *and* world knowledge about the system (:attr:`system_firmware`), over a
+        declaration read off the machine and over atlas's own packaged card alike
+        (:data:`DECLARATIONS_JUDGED`). Not a presence
         signal: with ``hash_checked`` false a required file of known identity answers
         ``None`` though the image is in place; read :attr:`~FirmwareRequirement.present`
         for presence. A ``False`` is always demonstrated; a ``True`` need not be, over a
-        required file the packaged table does not cover.
+        required file the packaged table does not cover. That world knowledge is asked per
+        system and answered per system: each system that cannot run without an image needs
+        one of the images filed under *that* system, so a core two such systems speak about
+        needs one image apiece — never one image between them.
+
+        The three declarations that force ``None`` are written out
+        (:data:`DECLARATIONS_UNJUDGED`) rather than left to an inequality
+        against ``read``: a declaration none of them names is judged, so a
+        vocabulary that grows again is judged or excused by name. What a
+        **card** adds to that is the empty list, which it reads differently
+        from a ``.info``: a core whose ``.info`` declares nothing needs
+        nothing, while a card with no requirement established nothing — a
+        probe whose switch is off, a search whose bytes were never read — so
+        an empty packaged list answers ``None`` where an empty read one
+        answers ``True``.
 
         That second source is what lets this field be right where the
         declaration alone cannot be: a ``.info`` has no way to say "this
@@ -2458,20 +2761,24 @@ class CoreFirmware:
         separated their answers was a flag in a text file that cannot express
         the requirement.
 
-        What that system-level need asks for is **one** of the images this
-        core declares — all of them, not the ones filed under the needing
-        system. The two sets coincide exactly while such a core declares for a
-        single system, which is the case for every core reaching that state in
-        the vector corpus (37 blocks) and on the reference machine (3 cores);
-        the counting rule is in :attr:`_system_image_in_place`. That is a
-        floor on what has been looked at rather than a proof that no other
-        core can appear. A multi-system core would pull the two sets apart —
-        an established usable Game Boy dump answering for a Game Boy Advance —
-        and scoping the set by system is a second decision, about which image
-        serves which machine, that is not taken here and is related to issue
-        #375.
+        What that system-level need asks for is **one** of the images filed
+        under the system that needs it, and where two systems need one it asks
+        that of each: a disjunction inside each system, a conjunction across
+        them, so ``True`` only when every needing system has an image of its
+        own. A multi-system core is where that differs from reading one flat
+        list, and mGBA is the case: it declares Game Boy boot ROMs beside its
+        GBA BIOS, and a usable Game Boy dump is no answer for a Game Boy
+        Advance that needs a BIOS. Where a core in this state declares for one system —
+        every core reaching this state measured so far, 37 blocks in the
+        vector corpus and 3 cores on the reference machine — the conjunction
+        has one term, its disjunction spans the whole declaration, and this
+        reads as it always did; the counting rule is in
+        :attr:`_system_image_in_place`, and which images a system's name
+        covers is as fine as the per-file override table makes it (#340).
         """
-        if self.declaration != DECLARATION_READ:
+        if self.declaration in DECLARATIONS_UNJUDGED:
+            return None
+        if self.declaration == DECLARATION_PACKAGED and not self.requirements:
             return None
         group_verdicts = [
             entry.satisfied for entry in self.requirements if isinstance(entry, FirmwareAlternatives)
@@ -2485,22 +2792,110 @@ class CoreFirmware:
 
 
 @dataclass(frozen=True, slots=True)
+class Concern:
+    """One installed emulator a file nobody declared concerns, and in which way.
+
+    ``relation`` is the whole of it: an emulator whose own table holds the bytes
+    (:data:`RELATION_RECOGNISES`) and a core whose ``.info`` declares a name the
+    bytes are known under (:data:`RELATION_DECLARES`) are beside the file for
+    different reasons, and a client offering to move, rename or delete it acts
+    differently on each. Neither is a requirement, and an entry carrying either
+    satisfies nothing (:class:`UnclaimedFile`).
+
+    ``emulator`` is the identity, never the display name — the same word
+    :attr:`CoreFirmware.emulator` carries, so a client can join this entry to
+    the answer's own entry for that emulator. An emulator the catalogue's
+    launch command identifies no word for states no concern at all rather than
+    one under a name nothing else uses.
+    """
+
+    emulator: str
+    """Which emulator this file concerns, in the spelling :attr:`CoreFirmware.emulator`
+    uses: a libretro core's ``.so`` basename, or the word a standalone emulator's own
+    launch command states.
+    """
+    relation: UnclaimedRelation
+    """How it is concerned — ``recognises`` for an emulator whose own table holds these
+    bytes, ``declares`` for a core whose ``.info`` declares a name the packaged table
+    pins these bytes for.
+    """
+
+    def __post_init__(self) -> None:
+        if self.relation not in UNCLAIMED_RELATIONS:
+            raise ValueError(
+                f"Concern: relation must be one of {UNCLAIMED_RELATIONS}, got {self.relation!r}"
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class UnclaimedFile:
-    """A file in the firmware tree that no installed core asks for.
+    """A file in the firmware tree that no installed emulator asks for or claims.
 
     ``identity`` is matched by **content**, not by name — the name is exactly
     what is not to be trusted about an unclaimed file. It is therefore only
     available when the caller asked for verification; without it atlas states
-    the file and says nothing about what it is.
+    the file and says nothing about what it is. The bytes are looked up in every
+    packaged table atlas carries (:data:`PACKAGED_IDENTITY_TABLES`), so a dump
+    filed by hand under a name no ``.info`` declares is still identified by the
+    emulator's own table that knows it.
+
+    **An entry here states what is known about a file and satisfies nothing.**
+    No requirement of any emulator is answered by it, no verdict moves because
+    of it: the file carries a name nobody declared, which is what puts it in
+    this list, and what an emulator wants is answered where that emulator's own
+    entry answers it. ``concerns`` says which installed emulators the bytes
+    matter to, which is a different statement from "one of them has what it
+    needs".
     """
 
     path: str
-    """The absolute path of the file in the firmware tree that no installed core asks
-    for.
+    """The absolute path of the file in the firmware tree that no installed emulator asks
+    for or claims.
     """
     identity: FirmwareIdentity | None
-    """What the packaged table says these bytes are, matched by content and never by name
-    — ``None`` without verification, and for bytes it cannot read or does not know.
+    """What the packaged tables say these bytes are, matched by content and never by name
+    — ``None`` without verification, and for bytes it cannot read or no table knows.
+
+    Where two tables know the bytes it is the libretro table's identity, because
+    that one carries a sha1 and the names the content goes by while a
+    content-keyed emulator table carries neither; the other table's reading is
+    not lost — it states its own ``concerns`` entry.
+    """
+    description: str | None = None
+    """The table's own name for this content, for a person to read — ``None`` without
+    verification and where no table knows the bytes.
+
+    One rule, and it is the identity's: the table that states the identity states
+    this too. For the libretro table that is the names the content goes by, joined
+    with ``", "`` the way every other sentence about ``known_as`` joins them; for
+    DuckStation's it is the row's own description (``SCPH-1001, DTL-H1001 (v2.0
+    05-07-95 A)``), which names no file because that emulator names none.
+    """
+    console: str | None = None
+    """Which machine these bytes belong to, and ``None`` wherever that does not follow.
+
+    Never inferred from the file name, which is the one thing not to be trusted
+    about a file nobody declared. Two sources state it: an emulator table's size
+    class, which is a console (:meth:`atlas.duckstation.BiosTable.system_of_size`),
+    and the system attribution of the declarations that name the content —
+    :attr:`FirmwareDeclaration.system` on every installed core whose own declared
+    path the table pins these bytes for. **Exactly one system has to result**: none does
+    without verification, for unknown bytes, and where the only declarations that
+    name them state no system of their own (``_unknown``, which is a statement
+    about a core rather than a system); and two or more make this ``None`` as
+    well, because a file two machines claim is not a file one of them owns. The
+    vocabulary is the one every other answer speaks — an ES-DE system id, or one
+    of the own spellings atlas publishes where no ES-DE build declares one.
+    """
+    concerns: tuple[Concern, ...] = ()
+    """Which installed emulators these bytes concern, each with the way it is concerned
+    — sorted, without duplicates, and empty without verification or where no table knows
+    the bytes.
+
+    An emulator whose card carries no recognition table of its own never appears
+    here: Cemu, PCSX2, melonDS and xemu name their files outright, so what they
+    want is stated by their own entries and nothing about content puts them
+    beside a file nobody declared.
     """
 
     @property
@@ -2530,7 +2925,7 @@ class FirmwareAnswer:
     cores: tuple[CoreFirmware, ...]
     """One entry per emulator this answer covers: what it wants, and how far that is met."""
     unclaimed: tuple[UnclaimedFile, ...]
-    """The files in the firmware tree no installed core asks for."""
+    """The files in the firmware tree no installed emulator asks for or claims."""
     hash_checked: bool
     """Whether identity verification ran at all, so a list of present files can never be
     mistaken for a list of verified ones.
@@ -2715,6 +3110,43 @@ class Catalogue:
     entries: tuple[CatalogueEntry, ...]
     read: bool = True
     hole: Caveat | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class InventoryCatalogue:
+    """A frontend's whole enumeration, as an answer about no single system needs it.
+
+    The same three states :class:`Catalogue` keeps apart, lifted one level: the
+    inventory asks the frontend which emulators it declares *at all*, so a read
+    that failed and an enumeration that declares nothing are as different here
+    as they are per system, and for the same reason — one is a look that
+    failed, the other a fact about the machine.
+
+    ``by_system`` holds one :class:`Catalogue` per system, and it need only
+    hold the systems a packaged card answers for (:func:`carded_systems`);
+    everything else in it is never looked at. ``read`` false means the
+    catalogue could not be consulted, and then it names no system at all:
+    whether the frontend declares a standalone emulator atlas has a card for is
+    unknown, which the answer states rather than passing over. ``hole`` is the
+    third state — part of the catalogue could not be consulted (EmuDeck's
+    bundled ``es_systems.xml``, sealed inside the AppImage) — and the caveat
+    here is the caller's statement of that fact, ridden once on the answer
+    rather than once per system, because this answer is about none of them in
+    particular.
+
+    ``findings`` is everything else the caller has established about this
+    catalogue's own health — a layer atlas read and the frontend refuses
+    wholesale, a custom layer that declared itself exclusive, and on EmuDeck
+    the statements that qualify which ES-DE was read at all. They are the
+    caller's own caveats, ridden after the status and before anything the
+    entries observed, and they carry no system for the same reason the status
+    does not: this answer is about none.
+    """
+
+    by_system: "Mapping[str, Catalogue]" = field(default_factory=dict)
+    read: bool = True
+    hole: Caveat | None = None
+    findings: tuple[Caveat, ...] = ()
 
 
 _SAVE_ARTIFACTS: frozenset[str] | None = None
@@ -2920,7 +3352,7 @@ def _observe(
         return (*_differs(identity, path, file_name), _ObservedBytes())
     digest = machine.file_digest(path, DIGEST_MD5)
     if digest is None:
-        return KIND_FILE, CHECKED_UNKNOWN, _unreadable_bytes(path), _ObservedBytes(unreadable=True)
+        return KIND_FILE, CHECKED_UNREAD, _unreadable_bytes(path), _ObservedBytes(unreadable=True)
     if digest.lower() == identity.md5.lower():
         return KIND_FILE, CHECKED_VERIFIED, None, _ObservedBytes(md5=digest)
     return (*_differs(identity, path, file_name), _ObservedBytes(md5=digest))
@@ -3782,10 +4214,10 @@ def _requirements_for(
     """Resolve one core's declarations: what it wants, what was refused, and why.
 
     Returns ``(requirements, refused, core_caveats, answer_caveats,
-    folder_claims)``. The refusal caveat belongs to the **core** — it is a
+    claims)``. The refusal caveat belongs to the **core** — it is a
     fact about that core's declaration, and if it only travelled on the
     answer, a caller reading one emulator's entry would see a requirement list
-    that silently lost a file. ``folder_claims`` is every file a listed
+    that silently lost a file. ``claims`` is every file a listed
     folder's read accounted for (:class:`_DirectoryContents`), which the
     inventory hands to the unclaimed scan so a stated file is not stated
     twice.
@@ -3796,7 +4228,7 @@ def _requirements_for(
     refused: list[RefusedDeclaration] = []
     core_caveats: list[Caveat] = []
     answer_caveats: list[Caveat] = []
-    folder_claims: list[str] = []
+    claims: list[str] = []
     for declaration in core.firmware:
         destination = destination_under(machine, root, declaration.path)
         if destination.path is None:
@@ -3832,7 +4264,7 @@ def _requirements_for(
             machine, context, core, declaration, path=path, found=found, verify=verify, folders=folders
         )
         answer_caveats.extend(contents.caveats)
-        folder_claims.extend(contents.claimed)
+        claims.extend(contents.claimed)
         requirements.append(
             FirmwareRequirement(
                 core_so=core.core_so,
@@ -3856,7 +4288,7 @@ def _requirements_for(
         tuple(refused),
         tuple(core_caveats),
         answer_caveats,
-        tuple(sorted(folder_claims)),
+        tuple(sorted(claims)),
     )
 
 
@@ -3885,8 +4317,9 @@ def _requirements_of(cores: tuple[CoreFirmware, ...]) -> tuple[FirmwareRequireme
 # What tells two caveats apart when an answer is assembled: the code and the
 # data, flattened. A data value is a string, a sequence (the file, key and
 # region lists) or a read-only mapping (the tally the alternative-emulator
-# code carries under ``emulators``); neither of the last two is hashable as it
-# stands, so each is spelled out — the mapping as its sorted items, the
+# code carries under ``emulators``, and the BIOS search's listing, which keys
+# what it found by the path it found it at); neither of the last two is
+# hashable as it stands, so each is spelled out — the mapping as its sorted
 # sequence as its own tuple, because its ORDER is part of the contract and two
 # caveats naming the same files in different orders are not the same statement.
 _FlatValue: TypeAlias = "str | tuple[str, ...] | tuple[tuple[str, str], ...]"
@@ -3942,11 +4375,12 @@ def stated_once(caveats: Iterable[Caveat]) -> tuple[Caveat, ...]:
     :func:`_unread_candidate` and :func:`_unclaimed_identity` each spell
     :data:`CAVEAT_FIRMWARE_UNREADABLE` in their own sentence — and keeping the
     first keeps the sentence of the reader that observed it first. A data
-    value can be a read-only mapping — the type permits one, and
-    :data:`~atlas.placement.CAVEAT_PER_GAME_ALTERNATIVE_EMULATOR` carries a
-    tally under ``emulators``, though no firmware caveat carries one today —
-    which no set can hold, so the key spells a mapping out as its sorted
-    items rather than hashing ``data.items()``.
+    value can be a read-only mapping — the alternative-emulator code carries a
+    tally under ``emulators``, and
+    :data:`~atlas.placement.CAVEAT_FIRMWARE_SEARCH_CANDIDATES`, a firmware
+    code, keys a word per candidate by its path — which no set can hold, so
+    the key spells a mapping out as its sorted items rather than hashing
+    ``data.items()``.
     """
     seen: set[_CaveatKey] = set()
     kept: list[Caveat] = []
@@ -4168,7 +4602,7 @@ def _read_core(
     ``_declared_without_requiring`` saw nothing declared and an empty
     ``firmware_for_system`` answer stopped saying which kind of empty it was.
     """
-    requirements, refused, core_caveats, observed, folder_claims = _requirements_for(
+    requirements, refused, core_caveats, observed, claims = _requirements_for(
         machine, context, core, verify=verify, folders=folders
     )
     return (
@@ -4186,7 +4620,7 @@ def _read_core(
             refused=refused,
             unread=core.unread,
             unread_stating_a_path=core.unread_stating_a_path,
-            folder_claims=folder_claims,
+            claims=claims,
         ),
         observed,
     )
@@ -4313,8 +4747,13 @@ def _core_alternative_key(core_so: str | None) -> str | None:
 
 def _system_firmware_state(
     core: CoreFirmware, recorded: Mapping[str, tuple[SystemFirmware, ...]]
-) -> tuple[CoreSystemFirmware | None, tuple[Caveat, ...]]:
+) -> tuple[CoreSystemFirmware | None, tuple[str, ...], tuple[Caveat, ...]]:
     """What the table says about the systems *core* declares firmware for.
+
+    Three things, because the state alone does not say *which* system it is
+    about: the state, the systems whose unexcused need it rests on (empty
+    under every other state, and what :attr:`CoreFirmware.system_firmware_needs`
+    carries so the need is asked over that system's images), and the marks.
 
     The systems come off the requirements already on the answer
     (:attr:`FirmwareRequirement.system`, alternatives flattened) rather than
@@ -4347,7 +4786,7 @@ def _system_firmware_state(
     )
     hits = [(system, entry) for system in systems for entry in recorded.get(system, ())]
     if not hits:
-        return None, ()
+        return None, (), ()
     # One mark per stated (system, evidence) pair rather than per entry: two
     # table keys can land on one system id, and where they also rest on the
     # same level the second mark would repeat the first word for word. The
@@ -4371,20 +4810,25 @@ def _system_firmware_state(
         for system, evidence in readings
     )
     alternative = _core_alternative_key(core.core_so)
-    needs = [entry for _, entry in hits if entry.verdict == VERDICT_CANNOT_RUN_WITHOUT]
-    excused = [
-        entry
-        for entry in needs
-        if any(candidate.core == alternative for candidate in entry.alternatives)
-    ]
-    if len(excused) < len(needs):
-        return SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT, caveats
+    needs = [(system, entry) for system, entry in hits if entry.verdict == VERDICT_CANNOT_RUN_WITHOUT]
+    # The systems, not the entries: which machine each need is about is what
+    # the image the need asks for is filed under, and two table keys landing
+    # on one id are one machine asking once.
+    unexcused = tuple(
+        dict.fromkeys(
+            system
+            for system, entry in needs
+            if not any(candidate.core == alternative for candidate in entry.alternatives)
+        )
+    )
+    if unexcused:
+        return SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT, unexcused, caveats
     if needs:
-        return SYSTEM_FIRMWARE_CORE_ALTERNATIVE, caveats
+        return SYSTEM_FIRMWARE_CORE_ALTERNATIVE, (), caveats
     if any(entry.verdict == VERDICT_OPEN for _, entry in hits):
-        return SYSTEM_FIRMWARE_OPEN, caveats
+        return SYSTEM_FIRMWARE_OPEN, (), caveats
     if any(entry.verdict == VERDICT_RUNS_WITHOUT for _, entry in hits):
-        return SYSTEM_FIRMWARE_RUNS_WITHOUT, caveats
+        return SYSTEM_FIRMWARE_RUNS_WITHOUT, (), caveats
     # Unreachable while this vocabulary is total over the table's verdicts,
     # and it refuses rather than answering ``None`` precisely because the day
     # it stops being total is the day a recorded verdict would silently become
@@ -4401,7 +4845,7 @@ def _system_firmware_state(
 def _stating_system_firmware(
     cores: tuple[CoreFirmware, ...], recorded: "Mapping[str, SystemFirmware]"
 ) -> tuple[CoreFirmware, ...]:
-    """Every core with what the packaged table adds to it, and the mark that it did.
+    """Every core with what the packaged tables add to it, and the mark that they did.
 
     The one place world knowledge enters a firmware answer. Every route that
     builds a :class:`FirmwareAnswer` with cores passes through here, so the
@@ -4411,17 +4855,37 @@ def _stating_system_firmware(
     core. A test reads this module's own source to hold that
     (``tests/test_firmware.py::TestTheSystemBehindTheCoreReachesTheAnswer``).
 
-    *recorded* is the context's snapshot of the packaged table, so one answer
-    can never mix two revisions of it.
+    Two tables are read here, and they answer about different things. The
+    system verdict is about the **machine** the core emulates and carries a
+    mark wherever it stated something; :attr:`CoreFirmware.locating` is about
+    the **core's own code** — which door it opens to find firmware — and
+    carries none, because it degrades no answer and moves no verdict. The
+    locating word is stated for a libretro core alone, identified by its
+    ``.so``; a carded standalone emulator has no ``.so``, and its word came
+    from its card at :func:`_carded_standalone_core`, which is the one door
+    every carded answer leaves through.
+
+    *recorded* is the context's snapshot of the packaged system table, so one
+    answer can never mix two revisions of it.
     """
     table = _recorded_by_system(recorded)
     stated: list[CoreFirmware] = []
     for core in cores:
-        state, caveats = _system_firmware_state(core, table)
-        stated.append(
+        located = (
             core
+            if core.core_so is None
+            else replace(core, locating=locating_of_core(core.core_so))
+        )
+        state, needs, caveats = _system_firmware_state(located, table)
+        stated.append(
+            located
             if state is None
-            else replace(core, system_firmware=state, caveats=(*core.caveats, *caveats))
+            else replace(
+                located,
+                system_firmware=state,
+                system_firmware_needs=needs,
+                caveats=(*located.caveats, *caveats),
+            )
         )
     return tuple(stated)
 
@@ -5378,8 +5842,9 @@ def _duckstation_named_image(
     name: str,
     bios_dir: str,
     purpose: str,
+    token: str,
     verify: bool,
-) -> tuple[FirmwareRequirement, Caveat | None]:
+) -> tuple[FirmwareRequirement, Caveat | None, Caveat | None]:
     """One region key that names an image: a file name, composed the way the emulator composes it.
 
     The value is joined onto the search directory rather than read as a path
@@ -5395,12 +5860,32 @@ def _duckstation_named_image(
     console region and reads exactly one of the three, bios.cpp:321-338) — it
     always ends up an option of the entry's alternatives group, never an
     unconditional requirement.
+
+    A named file is read for its content exactly as a searched one is, which
+    is not an atlas decision: ``GetBIOSImage`` hands the composed path to
+    ``LoadImageFromFile`` (bios.cpp:350), the same function the search calls
+    per candidate (:385), and that is where the size gate, the whole-file md5
+    and the table lookup sit (:183-190, :198, :203). So with *verify* the
+    option carries what the lookup found — the row as its identity and
+    ``verified``, or ``unrecognised`` where no row holds the bytes.
+
+    The first half of that gate is not a content read at all: a size the
+    emulator does not accept refuses the file before a byte of it is read
+    (:183-190), which a stat settles. So that verdict is answered on an
+    unverified query too, as ``refused`` with the caveat saying which size was
+    read and which three are accepted.
     """
     composed = qt_ini.path_combine(bios_dir, name)
     path = resolve_links(machine, composed) or composed
     found, checked, observed, _ = _observe(
         machine, path, None, verify=verify, file_name=os.path.basename(composed)
     )
+    identity: FirmwareIdentity | None = None
+    content: Caveat | None = None
+    if found == KIND_FILE:
+        identity, checked, content = _duckstation_named_content(
+            machine, path, checked, token=token, verify=verify
+        )
     requirement = FirmwareRequirement(
         core_so=None,
         system=system,
@@ -5413,24 +5898,138 @@ def _duckstation_named_image(
         path=path,
         declared=name,
         description=f"{purpose} — the image this launch opens for a {region} console ({key})",
-        identity=None,
+        identity=identity,
         found=found,
         checked=checked,
         regions=(region,),
     )
     del entry
-    return requirement, observed
+    return requirement, observed, content
+
+
+def _duckstation_named_images(
+    machine: Machine,
+    entry: CatalogueEntry,
+    card: StandaloneFirmwareCard,
+    *,
+    system: str,
+    search: StandaloneFirmwareSearch,
+    read: duckstation.SettingsRead,
+    bios_dir: str,
+    verify: bool,
+) -> tuple[list[FirmwareRequirement], list[Caveat], list[Caveat], list[str]]:
+    """Every region key that names an image, and the regions left to the search.
+
+    The four returns are the four places what a key says has to go: the
+    options themselves, the sentences that belong to this entry's declaration
+    (a refused image is one), the observations of the machine that belong to
+    the answer, and the regions no key claimed — the search speaks for those.
+    """
+    named: list[FirmwareRequirement] = []
+    observations: list[Caveat | None] = []
+    stated: list[Caveat | None] = []
+    searched: list[str] = []
+    for region, key in search.region_keys:
+        key_section, key_name = key.split("/", 1)
+        # The key the way the emulator matches it (#295): CSimpleIniA is
+        # ASCII case-insensitive (:func:`atlas.qt_ini.simpleini_value`).
+        value = qt_ini.simpleini_value(read.values, key_section, key_name)[0] or ""
+        if not value:
+            searched.append(region)
+            continue
+        requirement, observed, content = _duckstation_named_image(
+            machine,
+            entry,
+            system=system,
+            region=region,
+            key=key,
+            name=value,
+            bios_dir=bios_dir,
+            purpose=search.purpose,
+            token=card.token,
+            verify=verify,
+        )
+        named.append(requirement)
+        observations.append(observed)
+        stated.append(content)
+    # What the content read said rides the core beside the requirement's own
+    # verdict — a refused image, or bytes that would not come back — because
+    # it is a fact about this entry's declaration, the way the
+    # identified-image sentence is. The search states the read failure the
+    # same way; a refusal is the named route's alone, since the search keeps
+    # only files of a size the emulator accepts.
+    return (
+        named,
+        [caveat for caveat in stated if caveat is not None],
+        [caveat for caveat in observations if caveat is not None],
+        searched,
+    )
+
+
+def _duckstation_named_content(
+    machine: Machine,
+    path: str,
+    checked: FirmwareChecked | None,
+    *,
+    token: str,
+    verify: bool,
+) -> tuple[FirmwareIdentity | None, FirmwareChecked | None, Caveat | None]:
+    """What the emulator's own load of the file a region key names would establish.
+
+    Two readings in upstream's order, and only the second costs a content
+    check. ``LoadImageFromFile`` refuses a file whose size is none of the three
+    it accepts before reading a byte of it (bios.cpp:183-190 at
+    stenzek/duckstation@64655818e) — the same gate the search applies to a
+    listing (:378) — so a named file of another size is one this launch boots
+    nothing from, and that is answered whether or not ``verify`` was passed.
+
+    Where the gate passes, the whole file is hashed and looked up (:198,
+    :203), and an image no row holds is still returned to the launch with a
+    warning (:354-359) — so its option says ``unrecognised`` and withholds the
+    verdict rather than failing the file.
+
+    Bytes that will not come back are the third answer, and it is a statement
+    about atlas's look rather than about the file: this process could not read
+    it, which is no evidence that the launch cannot. So the option answers
+    ``unread`` — the comparison never happened — with the read failure stated
+    as :data:`CAVEAT_FIRMWARE_UNREADABLE`, the one code every other route
+    already uses for it (:func:`_unreadable_bytes`).
+    """
+    table = duckstation.bios_table()
+    size = machine.file_size(path)
+    if size is None:
+        return None, checked, None
+    if not table.accepts_size(size):
+        accepted = [str(accepted_size) for accepted_size in table.sizes]
+        return None, CHECKED_REFUSED, Caveat(
+            CAVEAT_FIRMWARE_IMAGE_REFUSED,
+            f"{path} is {size} bytes, and this emulator loads a BIOS image only at "
+            f"{', '.join(accepted)} bytes — it refuses this file before reading it, so the "
+            "setting that names it boots nothing",
+            {"path": path, "token": token, "size": str(size), "accepted": accepted},
+        )
+    if not verify:
+        return None, checked, None
+    digest = machine.file_digest(path, DIGEST_MD5)
+    if digest is None:
+        return None, CHECKED_UNREAD, _unreadable_bytes(path)
+    identity = _duckstation_identity(table, table.identify(digest), size)
+    return identity, CHECKED_VERIFIED if identity is not None else CHECKED_UNRECOGNISED, None
 
 
 def _duckstation_sized_files(
     machine: Machine, table: duckstation.BiosTable, bios_dir: str
-) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """Every file in the directory the search would keep, and where the walk stopped short.
+) -> tuple[tuple[tuple[str, int], ...], tuple[str, ...]]:
+    """Every file in the directory the search would keep with the size it was kept at,
+    and where the walk stopped short.
 
     Two globs, because upstream's ``FindFiles`` is asked for hidden names too
     (``FILESYSTEM_FIND_HIDDEN_FILES``) and a wildcard here never matches a
     leading dot. The size test is the emulator's own first filter, and it is
-    free: a wrong size settles the file without reading a byte of it.
+    free: a wrong size settles the file without reading a byte of it. The size
+    travels with the path because an identity built from this table needs it
+    and the stat that took it is here — asking the machine again would be a
+    second source for one fact.
     """
     matches: list[str] = []
     unreadable: list[str] = []
@@ -5438,12 +6037,13 @@ def _duckstation_sized_files(
         result = machine.glob(os.path.join(bios_dir, pattern))
         matches.extend(result.matches)
         unreadable.extend(result.unreadable)
-    kept = [path for path in sorted(set(matches)) if table.accepts_size(machine.file_size(path))]
+    sized = ((path, machine.file_size(path)) for path in sorted(set(matches)))
+    kept = [(path, size) for path, size in sized if size is not None and table.accepts_size(size)]
     return tuple(kept), tuple(sorted(set(unreadable)))
 
 
 def _duckstation_candidates(
-    machine: Machine, table: duckstation.BiosTable, paths: tuple[str, ...]
+    machine: Machine, table: duckstation.BiosTable, kept: tuple[tuple[str, int], ...]
 ) -> tuple[duckstation.BiosCandidate, ...]:
     """The kept files with their identities — the content read the emulator performs.
 
@@ -5453,16 +6053,111 @@ def _duckstation_candidates(
     route.
     """
     candidates = []
-    for path in paths:
+    for path, size in kept:
         digest = machine.file_digest(path, DIGEST_MD5)
         candidates.append(
             duckstation.BiosCandidate(
                 path=path,
                 image=None if digest is None else table.identify(digest),
+                size=size,
                 unreadable=digest is None,
             )
         )
     return tuple(candidates)
+
+
+def _duckstation_identity(
+    table: duckstation.BiosTable, image: duckstation.BiosImage | None, size: int
+) -> FirmwareIdentity | None:
+    """What the emulator's own table established about one file's bytes, read at *size*.
+
+    ``None`` where the table does not know them, which is not a verdict on the
+    file: DuckStation boots such an image and says so. The identity carries the
+    md5 the table pins and no sha1, because the table pins none — it recognises
+    an image by md5 alone — and the size the file was read at, since the table
+    states the sizes it accepts and nothing per row. ``known_as`` stays empty
+    because this emulator names no BIOS file at all, so there is no name these
+    bytes are known under.
+
+    Both routes to the table come through here, and upstream is why: a region
+    key that names a file hands that path to the very ``LoadImageFromFile``
+    the search calls for each candidate it kept (bios.cpp:350 and :385 at
+    stenzek/duckstation@64655818e), and the hash and the lookup live inside
+    that one function (:198, :203).
+    """
+    if image is None:
+        return None
+    return FirmwareIdentity(
+        md5=image.md5,
+        sha1=None,
+        size=size,
+        kind=IDENTITY_FILE,
+        # The loader refuses a table whose ``_meta`` states no revision
+        # (:func:`atlas.duckstation.load_bios_table`), so this pin always
+        # names one — a default here would say an identity may carry none.
+        table_version=str(table.meta["revision"]),
+    )
+
+
+def _duckstation_reading(candidate: duckstation.BiosCandidate) -> SearchReading:
+    """What the search's own hashing established about one candidate's bytes.
+
+    The three states :class:`~atlas.duckstation.BiosCandidate` already keeps
+    apart, as the one word a client branches on: a read failure settles
+    nothing and is never the verdict "the table does not know these bytes",
+    which is why the flag is tested before the row.
+    """
+    if candidate.unreadable:
+        return READING_UNREADABLE
+    return READING_IDENTIFIED if candidate.image is not None else READING_UNRECOGNISED
+
+
+def _duckstation_candidate_listing(
+    candidates: tuple[duckstation.BiosCandidate, ...],
+    *,
+    bios_dir: str,
+    card: StandaloneFirmwareCard,
+) -> Caveat:
+    """Every file the search kept, beside what the emulator's table made of its bytes.
+
+    The pick names one file, and what stands beside it is stated about that
+    file or about the ranking that reached it; this states the set those were
+    made from, so a client listing the directory can say which file is which.
+    It adds no read of its own — the search hashed every candidate to rank
+    them, and this is that reading written down.
+
+    Three mappings keyed by path, which is the shape that cannot be read out
+    of step: ``readings`` holds every kept file, and ``images`` and
+    ``image_regions`` hold only the files a row of the table names, so a path
+    missing from them IS the table holding no row for those bytes — there is
+    no placeholder to mistake for a name. Two paths mapped to one ``images`` value are one image
+    the directory holds twice, which is what the emulator sees: it recognises
+    a BIOS by hashing it, so a second copy under another name is that same row
+    reached again.
+    """
+    listed = sorted(candidates, key=lambda candidate: candidate.path)
+    named = [
+        (candidate.path, candidate.image) for candidate in listed if candidate.image is not None
+    ]
+    kept = "one file" if len(listed) == 1 else f"{len(listed)} files"
+    return Caveat(
+        CAVEAT_FIRMWARE_SEARCH_CANDIDATES,
+        f"{bios_dir} holds {kept} of a size this emulator accepts, listed here by path with "
+        "what DuckStation's own table makes of each one's bytes — two paths under one image "
+        "name are one image the directory holds twice, not two images",
+        {
+            "dir": bios_dir,
+            "token": card.token,
+            "readings": {
+                candidate.path: _duckstation_reading(candidate) for candidate in listed
+            },
+            "images": {path: image.name for path, image in named},
+            # Not ``regions``: three codes already spell that key as a list of
+            # the regions an answer speaks for, and one key name may not carry
+            # two shapes. This one is a region per image, keyed by its path.
+            "image_regions": {path: image.region for path, image in named},
+        },
+    )
 
 
 def _duckstation_region_caveats(
@@ -5519,7 +6214,8 @@ def _duckstation_search_caveats(
             "read, so what it is stays unestablished — a read failure, not a verdict on the "
             "file"
             + (
-                ", and it is the one the ranking reached first, so no image is named below"
+                ", and it is the one the ranking reached first, so the image named below is "
+                "stated as unread rather than as anything about its content"
                 if candidate.path == pick.chosen.path
                 else "; the emulator hashes it and may well boot it instead"
             ),
@@ -5528,11 +6224,13 @@ def _duckstation_search_caveats(
         for candidate in sorted(candidates, key=lambda c: c.path)
         if candidate.unreadable
     ]
-    # An unreadable pick is fully stated above, and nothing about its identity
-    # follows: the whole of what was established is that a read failed.
+    # Nothing about an unreadable pick's identity follows — the whole of what
+    # was established is that a read failed — so the sentences naming what it
+    # is are skipped while the ones about the ranking are not: a tie still
+    # decides which file the requirement names.
     image = pick.chosen.image
     if pick.chosen.unreadable:
-        return caveats
+        return caveats + _duckstation_ambiguity_caveats(entry, pick, bios_dir=bios_dir)
     if image is None:
         caveats.append(
             Caveat(
@@ -5558,27 +6256,41 @@ def _duckstation_search_caveats(
                     "image": image.name,
                     "region": image.region,
                     "token": card.token,
-                    "table": str(table.meta.get("revision", "")),
+                    "table": str(table.meta["revision"]),
                 },
             )
         )
     caveats.extend(_duckstation_region_caveats(candidates, bios_dir=bios_dir, card=card))
-    if not pick.decided:
-        caveats.append(
-            Caveat(
-                CAVEAT_FIRMWARE_IMAGE_AMBIGUOUS,
-                f"{entry.label} has {len(pick.tied)} images in {bios_dir} that rank exactly "
-                "alike, and the emulator keeps the last one the directory hands it — an order "
-                "no read reproduces, so which of them boots is not established here",
-                {
-                    "label": entry.label,
-                    "dir": bios_dir,
-                    "tied": str(len(pick.tied)),
-                    "chosen": pick.chosen.path,
-                },
-            )
+    return caveats + _duckstation_ambiguity_caveats(entry, pick, bios_dir=bios_dir)
+
+
+def _duckstation_ambiguity_caveats(
+    entry: CatalogueEntry, pick: duckstation.BiosPick, *, bios_dir: str
+) -> list[Caveat]:
+    """What a tie leaves unsaid, whether or not the tied files were read.
+
+    It rides beside an identified pick and an unreadable one alike, because it
+    is about the ranking rather than about the bytes: the requirement names
+    one file, and where several rank alike the directory's order is what chose
+    it. Suppressing it over an unreadable pick would name a file with nothing
+    saying that a second one has the same claim.
+    """
+    if pick.decided:
+        return []
+    return [
+        Caveat(
+            CAVEAT_FIRMWARE_IMAGE_AMBIGUOUS,
+            f"{entry.label} has {len(pick.tied)} images in {bios_dir} that rank exactly "
+            "alike, and the emulator keeps the last one the directory hands it — an order "
+            "no read reproduces, so which of them boots is not established here",
+            {
+                "label": entry.label,
+                "dir": bios_dir,
+                "tied": str(len(pick.tied)),
+                "chosen": pick.chosen.path,
+            },
         )
-    return caveats
+    ]
 
 
 # What a per-game file does to the firmware answer, and — the half worth as
@@ -5754,34 +6466,24 @@ def _duckstation_standalone_core(
             [],
         )
     bios_dir = resolve_links(machine, host) or host
-    named: list[FirmwareRequirement] = []
-    answer_caveats: list[Caveat] = []
-    searched: list[str] = []
-    for region, key in search.region_keys:
-        key_section, key_name = key.split("/", 1)
-        # The key the way the emulator matches it (#295): CSimpleIniA is
-        # ASCII case-insensitive (:func:`atlas.qt_ini.simpleini_value`).
-        value = qt_ini.simpleini_value(read.values, key_section, key_name)[0] or ""
-        if not value:
-            searched.append(region)
-            continue
-        requirement, observed = _duckstation_named_image(
-            machine,
-            entry,
-            system=system,
-            region=region,
-            key=key,
-            name=value,
-            bios_dir=bios_dir,
-            purpose=search.purpose,
-            verify=verify,
-        )
-        named.append(requirement)
-        if observed is not None:
-            answer_caveats.append(observed)
+    named, named_caveats, answer_caveats, searched = _duckstation_named_images(
+        machine,
+        entry,
+        card,
+        system=system,
+        search=search,
+        read=read,
+        bios_dir=bios_dir,
+        verify=verify,
+    )
+    caveats.extend(named_caveats)
     found: list[FirmwareRequirement] = []
+    # Every file the search kept, which is this entry's claim on the directory
+    # it searched. Empty where no region fell to the search at all: then the
+    # emulator reads no directory, and nothing in one is its answer.
+    kept: tuple[str, ...] = ()
     if searched:
-        found, search_caveats, observed = _duckstation_search(
+        found, search_caveats, observed, kept = _duckstation_search(
             machine,
             entry,
             card,
@@ -5813,6 +6515,7 @@ def _duckstation_standalone_core(
             declaration=DECLARATION_PACKAGED,
             requirements=requirements,
             caveats=tuple(caveats),
+            claims=kept,
         ),
         answer_caveats,
     )
@@ -5829,7 +6532,7 @@ def _duckstation_search(
     regions: tuple[str, ...],
     scoped: bool,
     verify: bool,
-) -> tuple[list[FirmwareRequirement], list[Caveat], list[Caveat]]:
+) -> tuple[list[FirmwareRequirement], list[Caveat], list[Caveat], tuple[str, ...]]:
     """The search itself: what the directory holds, and what that establishes.
 
     The regions left to it share one answer, because the pick differs between
@@ -5839,10 +6542,26 @@ def _duckstation_search(
     named key took another region away, so the search's answer is that
     group's leftover option, not what every launch needs — and unscoped it
     stays the unconditional requirement of the everything-searched state.
+
+    Where it states a requirement at all, the bytes behind it were read: the
+    pick is made by hashing, so the file carries what that hashing found —
+    ``verified`` with the table's row as its identity, ``unrecognised`` where
+    the table does not know the bytes, and ``unread`` where they would not
+    come back — the same three the named route answers, so one file reads
+    alike whichever key led to it. What states no requirement at all is a
+    search that never got to a file: an unverified query, or a directory
+    nothing was kept from (it holds no file of an accepted size, or it could
+    not be listed).
+
+    The kept files come back beside all of that, whether or not a requirement
+    was stated and whether or not ``verify`` ran: they are the set this
+    emulator's own recognition runs over, so they are its entry's claim on the
+    tree (:attr:`CoreFirmware.claims`) rather than files nobody asks for.
     """
     table = duckstation.bios_table()
     caveats: list[Caveat] = []
     kept, unreadable = _duckstation_sized_files(machine, table, bios_dir)
+    searched = tuple(path for path, _ in kept)
     if unreadable:
         caveats.append(
             Caveat(
@@ -5857,7 +6576,7 @@ def _duckstation_search(
             # The listing failed, so "this directory holds nothing of the right
             # size" is a statement about contents nobody saw. The incomplete
             # scan above is the whole of what was established here.
-            return [], caveats, []
+            return [], caveats, [], ()
         state = (
             "holds no file of a size this emulator accepts"
             if machine.path_kind(bios_dir) == KIND_DIRECTORY
@@ -5891,7 +6610,7 @@ def _duckstation_search(
                 },
             )
         )
-        return [], caveats, []
+        return [], caveats, [], ()
     if not verify:
         caveats.append(
             Caveat(
@@ -5912,39 +6631,68 @@ def _duckstation_search(
                 },
             )
         )
-        return [], caveats, []
+        return [], caveats, [], searched
     candidates = _duckstation_candidates(machine, table, kept)
     pick = table.pick(candidates, _DUCKSTATION_ANY_REGION)
     assert pick is not None  # kept is non-empty
+    # Every kept file first, then what the pick is and what it leaves open:
+    # the listing is the set those statements are made out of.
+    caveats.append(_duckstation_candidate_listing(candidates, bios_dir=bios_dir, card=card))
     caveats.extend(
         _duckstation_search_caveats(
             entry, card, bios_dir=bios_dir, pick=pick, candidates=candidates, table=table
         )
     )
-    if pick.chosen.unreadable:
-        # Nothing was established about the file that would boot, so there is
-        # no requirement to state — the same shape this route takes when no
-        # content check was asked for at all. Stating one would carry
-        # ``satisfied: true`` about bytes nobody read.
-        return [], caveats, []
-    found, checked, observed, _ = _observe(
-        machine, pick.chosen.path, None, verify=False, file_name=os.path.basename(pick.chosen.path)
+    requirement, observed = _duckstation_found_image(
+        machine, table, pick, system=system, search=search, regions=regions if scoped else None
     )
+    return [requirement], caveats, [] if observed is None else [observed], searched
+
+
+def _duckstation_found_image(
+    machine: Machine,
+    table: duckstation.BiosTable,
+    pick: duckstation.BiosPick,
+    *,
+    system: str,
+    search: StandaloneFirmwareSearch,
+    regions: tuple[str, ...] | None,
+) -> tuple[FirmwareRequirement, Caveat | None]:
+    """The picked file as a requirement: what sits at it, and what its bytes are.
+
+    The content read already happened — the pick was made by hashing these
+    bytes against the emulator's own table — so the byte question is answered
+    from that reading rather than by a second one: the table's row as the
+    identity and ``verified``, ``unrecognised`` where no row holds them, and
+    ``unread`` where the bytes did not come back at all, which is the answer
+    the named route gives the same file. ``_observe`` is asked only what sits
+    at the destination, which is the one thing that can have changed since the
+    listing, and where that is no longer a file it says so and no verdict
+    about bytes is carried.
+    """
+    name = os.path.basename(pick.chosen.path)
+    found, checked, observed, _ = _observe(machine, pick.chosen.path, None, verify=False, file_name=name)
+    identity: FirmwareIdentity | None = None
+    if found == KIND_FILE and pick.chosen.unreadable:
+        checked = CHECKED_UNREAD
+    elif found == KIND_FILE:
+        identity = _duckstation_identity(table, pick.chosen.image, pick.chosen.size)
+        checked = CHECKED_VERIFIED if identity is not None else CHECKED_UNRECOGNISED
     requirement = FirmwareRequirement(
         core_so=None,
         system=system,
         system_source=SOURCE_CARD,
         need=NEED_REQUIRED,
-        file_name=os.path.basename(pick.chosen.path),
+        file_name=name,
         path=pick.chosen.path,
-        declared=os.path.basename(pick.chosen.path),
+        declared=name,
         description=f"{search.purpose} — found by the search, not named by any setting",
-        identity=None,
+        identity=identity,
         found=found,
         checked=checked,
-        regions=regions if scoped else None,
+        regions=regions,
     )
-    return [requirement], caveats, [] if observed is None else [observed]
+    return requirement, observed
 
 
 _STANDALONE_CONFIG_RESOLVERS = {
@@ -5953,6 +6701,29 @@ _STANDALONE_CONFIG_RESOLVERS = {
     "MELONDS": _melonds_standalone_core,
     "DUCKSTATION": _duckstation_standalone_core,
 }
+
+
+def _claiming_what_it_read(machine: Machine, core: CoreFirmware) -> CoreFirmware:
+    """A card's answer, carrying every file its own read accounted for.
+
+    Two sources, one attribute (:attr:`CoreFirmware.claims`): the destinations
+    the card's requirements landed on, which is every path it named, and
+    whatever the route already put there — a search's kept candidates, the
+    files the emulator's own recognition runs over. Resolved, because the
+    unclaimed scan compares resolved spellings and an arrangement routinely
+    links a card's destination into the firmware tree; a path outside that tree
+    resolves the same way and is simply never met by a scan bounded to it.
+
+    Here rather than in each resolver because it is the same statement for all
+    of them, and a claim carried at four sites and forgotten at the fifth is
+    invisible: the answer still type-checks and the file comes back as one
+    nobody asks for.
+    """
+    claimed = {
+        resolve_links(machine, path) or path
+        for path in (*core.claims, *(r.path for r in _requirements_of((core,))))
+    }
+    return cast(CoreFirmware, replace(core, claims=tuple(sorted(claimed))))
 
 
 def _carded_standalone_core(
@@ -5974,9 +6745,19 @@ def _carded_standalone_core(
     and a ``search`` card's is a directory read, so both need a resolver
     registered beside them; a ``files`` card names its paths outright and the
     one packaged route serves it.
+
+    Whatever the shape, the answer leaves here through one exit, claiming what
+    it read (:func:`_claiming_what_it_read`) and stating how its emulator
+    locates firmware (:func:`~atlas.core_firmware.locating_of_card`). Both are
+    the same statement for every resolver, and both are read off the card or
+    the answer rather than decided per emulator, so neither can be carried at
+    four sites and forgotten at the fifth — a claim that goes missing turns a
+    file nobody asks for into an unclaimed one, and a locating word that goes
+    missing reads as an emulator nobody established, which is exactly the state
+    a card refutes.
     """
     if not card.config_files and card.search is None:
-        return _packaged_standalone_core(
+        core, observed = _packaged_standalone_core(
             machine,
             entry,
             card,
@@ -5985,29 +6766,32 @@ def _carded_standalone_core(
             config_home=config_home,
             verify=verify,
         )
-    resolver = _STANDALONE_CONFIG_RESOLVERS.get(card.token)
-    if resolver is None:
-        shape = "config_files" if card.config_files else "search"
-        raise ValueError(
-            f"standalone firmware card {card.token!r} states {shape} but has no "
-            "resolver registered — the card and the code shipped out of step"
+    else:
+        resolver = _STANDALONE_CONFIG_RESOLVERS.get(card.token)
+        if resolver is None:
+            shape = "config_files" if card.config_files else "search"
+            raise ValueError(
+                f"standalone firmware card {card.token!r} states {shape} but has no "
+                "resolver registered — the card and the code shipped out of step"
+            )
+        # Both bases go to every resolver: which one an emulator keeps its
+        # settings under is the emulator's business, not the route's — xemu's
+        # live under the data home while melonDS's and PCSX2's live under the
+        # config one.
+        core, observed = resolver(
+            machine,
+            entry,
+            card,
+            system,
+            data_home=data_home,
+            config_home=config_home,
+            flatpak=flatpak,
+            sandbox=sandbox,
+            xdg_pinned=xdg_pinned,
+            verify=verify,
         )
-    # Both bases go to every resolver: which one an emulator keeps its
-    # settings under is the emulator's business, not the route's — xemu's live
-    # under the data home while melonDS's and PCSX2's live under the config
-    # one.
-    return resolver(
-        machine,
-        entry,
-        card,
-        system,
-        data_home=data_home,
-        config_home=config_home,
-        flatpak=flatpak,
-        sandbox=sandbox,
-        xdg_pinned=xdg_pinned,
-        verify=verify,
-    )
+    located = cast(CoreFirmware, replace(core, locating=locating_of_card(card)))
+    return _claiming_what_it_read(machine, located), observed
 
 
 def _standalone_entry_core(
@@ -6298,13 +7082,105 @@ def firmware_for_system(
     )
 
 
-def _unclaimed_identity(
-    machine: Machine, context: FirmwareContext, path: str, *, verify: bool
-) -> tuple[FirmwareIdentity | None, Caveat | None]:
-    """What an unclaimed file *is*, by content — nothing at all without ``verify``.
+@dataclass(frozen=True, slots=True)
+class _ReadBytes:
+    """What atlas read off one file nobody declared: its digests and its size.
+
+    One read, shared by every table: the digests are taken once and each table
+    is asked what it makes of them. The size rides along because a table may
+    gate its own lookup on it — DuckStation reads no file whose size is none of
+    the three it accepts — and the stat that took it is the one the scan
+    already made.
+    """
+
+    md5: str
+    sha1: str
+    size: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class _TableReading:
+    """What one packaged table says about one file's bytes.
+
+    ``token`` is the standalone card whose own table this is, and ``None`` for
+    the libretro table, which belongs to no single emulator — it is what turns
+    a reading into a :data:`RELATION_RECOGNISES` concern for the emulators
+    the catalogue lists under that token.
+
+    ``console`` is what this table alone establishes about the machine the bytes
+    belong to, and ``None`` where it establishes nothing: the libretro table
+    states no system per entry, so its reading leaves this to the declarations
+    that name the content.
+    """
+
+    identity: FirmwareIdentity
+    description: str
+    token: str | None = None
+    console: str | None = None
+
+
+def _libretro_table_reading(context: FirmwareContext, read: _ReadBytes) -> _TableReading | None:
+    """The packaged libretro table's reading — by md5 and sha1 together.
+
+    Its description is the names the content goes by, joined with ``", "`` the
+    way every other sentence about ``known_as`` joins them
+    (:func:`identify_firmware`). The table belongs to no emulator: it is what
+    ``System.dat`` covers, and which cores ask for a name in it is a separate
+    reading of their declarations.
+    """
+    identity = context.hashes.for_content(md5=read.md5, sha1=read.sha1)
+    if identity is None:
+        return None
+    return _TableReading(identity=identity, description=", ".join(identity.known_as))
+
+
+def _duckstation_table_reading(context: FirmwareContext, read: _ReadBytes) -> _TableReading | None:
+    """DuckStation's own BIOS table, asked the way the emulator asks it.
+
+    The size gate first, because it is the emulator's own first filter and it
+    is free: a file of any other size is one ``LoadImageFromFile`` refuses
+    before reading a byte of it, so the table is not consulted for it here
+    either. Where the gate passes, the md5 the scan already took is the
+    lookup — this table recognises an image by md5 alone — and the size class
+    the file was kept at is the console it names.
+    """
+    del context  # this table is packaged beside the code, not read off the machine
+    table = duckstation.bios_table()
+    if not table.accepts_size(read.size):
+        return None
+    assert read.size is not None  # the gate above answered False for an unknown size
+    image = table.identify(read.md5)
+    if image is None:
+        return None
+    identity = _duckstation_identity(table, image, read.size)
+    assert identity is not None  # the row is what was just found
+    return _TableReading(
+        identity=identity,
+        description=image.name,
+        token=duckstation.TOKEN,
+        console=table.system_of_size(read.size),
+    )
+
+
+# Every packaged table a file nobody declared is looked up in, in the order
+# their readings are weighed: the libretro table first, because its identity is
+# the one an answer carries where two tables know the bytes — it pins a sha1
+# and the names the content goes by, and a content-keyed emulator table pins
+# neither. A later card's table joins this tuple; the route below iterates it
+# and nothing in that route names a table, so joining is registering rather
+# than editing a lookup. Today there are two, and no third exists to add.
+PACKAGED_IDENTITY_TABLES = (_libretro_table_reading, _duckstation_table_reading)
+
+
+def _unclaimed_read(
+    machine: Machine, path: str, *, verify: bool
+) -> tuple[_ReadBytes | None, Caveat | None]:
+    """The one read of an unclaimed file's bytes — nothing at all without ``verify``.
 
     The name is exactly what is not to be trusted about a file nobody declared,
-    so without hashing atlas states the file and says nothing about it.
+    so without hashing atlas states the file and says nothing about it. Both
+    digests are taken because the tables between them want both: the libretro
+    table matches an md5 and a sha1 together, DuckStation's matches an md5.
     """
     if not verify:
         return None, None
@@ -6316,7 +7192,92 @@ def _unclaimed_identity(
             f"{path} is there but its bytes cannot be read, so what it is stays unknown",
             {"path": path},
         )
-    return context.hashes.for_content(md5=digest, sha1=sha1), None
+    return _ReadBytes(md5=digest, sha1=sha1, size=machine.file_size(path)), None
+
+
+def _declaring_cores(
+    context: FirmwareContext, identity: FirmwareIdentity
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Which installed cores declare this content, and which systems they file it under.
+
+    A declaration names a path, and what the packaged table pins for that name
+    is :meth:`FirmwareHashes.for_path` — the same reading the requirement route
+    makes of the same declaration, which tries the path as declared and then
+    its base name, because the table keys 91 of its entries by a relative path
+    and the rest by a bare name. Comparing the declared spelling against
+    :attr:`FirmwareIdentity.known_as` directly would miss exactly those 91:
+    Flycast declares ``dc/dc_boot.bin`` and the requirement route resolves it,
+    while its file name alone matches no key.
+
+    The system is that route's own per-declaration attribution
+    (:attr:`FirmwareDeclaration.system`). ``_unknown`` is left out: it marks a
+    core that states no ``systemname`` at all, which is a fact about the core
+    and not a machine the bytes belong to.
+    """
+    emulators: set[str] = set()
+    systems: set[str] = set()
+    wanted = identity.md5.lower()
+    for core in context.cores:
+        declared = [d for d in core.firmware if _pins(context.hashes, d.path) == wanted]
+        if not declared:
+            continue
+        emulators.add(core.core_so)
+        systems.update(d.system for d in declared if d.system != _SYSTEM_UNKNOWN)
+    return tuple(sorted(emulators)), tuple(sorted(systems))
+
+
+def _pins(hashes: FirmwareHashes, declared: str) -> str | None:
+    """The md5 the packaged table pins for a declared path, or ``None``."""
+    expected = hashes.for_path(declared)
+    return None if expected is None else expected.md5.lower()
+
+
+def _identified_unclaimed(
+    context: FirmwareContext,
+    path: str,
+    read: _ReadBytes | None,
+    recognisers: Mapping[str, tuple[str, ...]],
+) -> UnclaimedFile:
+    """Everything the packaged tables and the installed declarations say about these bytes.
+
+    The path alone where nothing does: bytes that were never read, and bytes no
+    table holds. The identity and the description come from the first table that
+    knows them, which is one rule for both — the tuple's order is what "first"
+    means (:data:`PACKAGED_IDENTITY_TABLES`) — while every table that knows
+    them contributes its concern, and so does every installed core whose own
+    declared path that table pins these bytes for.
+
+    The console is the one system the two sources agree on, and ``None``
+    otherwise: a table's size class and the systems the declarations file the
+    content under go into one set, and only a set of exactly one states a
+    console. Two of them are a file two machines claim, which is not a file one
+    of them owns.
+    """
+    if read is None:
+        return UnclaimedFile(path=path, identity=None)
+    readings = [
+        reading
+        for table in PACKAGED_IDENTITY_TABLES
+        if (reading := table(context, read)) is not None
+    ]
+    if not readings:
+        return UnclaimedFile(path=path, identity=None)
+    first = readings[0]
+    declaring, systems = _declaring_cores(context, first.identity)
+    consoles = {reading.console for reading in readings if reading.console is not None} | set(systems)
+    concerns = {
+        Concern(emulator=emulator, relation=RELATION_RECOGNISES)
+        for reading in readings
+        if reading.token is not None
+        for emulator in recognisers.get(reading.token, ())
+    } | {Concern(emulator=emulator, relation=RELATION_DECLARES) for emulator in declaring}
+    return UnclaimedFile(
+        path=path,
+        identity=first.identity,
+        description=first.description,
+        console=next(iter(consoles)) if len(consoles) == 1 else None,
+        concerns=tuple(sorted(concerns, key=lambda c: (c.emulator, c.relation))),
+    )
 
 
 def _unclaimed_in(
@@ -6326,9 +7287,10 @@ def _unclaimed_in(
     claimed: set[str],
     artifacts: set[str],
     *,
+    recognisers: Mapping[str, tuple[str, ...]],
     verify: bool,
 ) -> tuple[list[UnclaimedFile], list[Caveat]]:
-    """The files in one directory that no installed core asks for.
+    """The files in one directory that no installed emulator asks for or claims.
 
     An entry that cannot be looked at is stated, not dropped: whether it is a
     file nobody declared is then unknown, and an unknown is the one thing this
@@ -6380,10 +7342,10 @@ def _unclaimed_in(
                 )
             )
             continue
-        identity, caveat = _unclaimed_identity(machine, context, entry, verify=verify)
+        read, caveat = _unclaimed_read(machine, entry, verify=verify)
         if caveat is not None:
             caveats.append(caveat)
-        found.append(UnclaimedFile(path=resolved_entry, identity=identity))
+        found.append(_identified_unclaimed(context, resolved_entry, read, recognisers))
     return found, caveats
 
 
@@ -6393,9 +7355,10 @@ def _unclaimed_files(
     claimed: set[str],
     *,
     accounted: set[str],
+    recognisers: Mapping[str, tuple[str, ...]],
     verify: bool,
 ) -> tuple[tuple[UnclaimedFile, ...], list[Caveat]]:
-    """Files sitting where a declaration points, that no installed core asks for.
+    """Files sitting where a declaration points, that no installed emulator asks for or claims.
 
     The scan is bounded to the directories declarations actually reference —
     the system directory itself plus every subdirectory named in a
@@ -6405,14 +7368,20 @@ def _unclaimed_files(
     Save data the rule cards claim is excluded outright
     (:func:`save_artifact_paths`).
 
-    *accounted* is what a listed folder's read already stated — an image the
-    core's test passed, a candidate the table names and the test denies, one
-    whose header read did not come back, or one whose digest could not be
-    taken (:attr:`CoreFirmware.folder_claims`).
-    Those files are claimed by that declaration and skipped here exactly as a
+    *accounted* is what an entry's own read already stated — a listed folder's
+    contents, a card search's candidates, a card's named destinations
+    (:attr:`CoreFirmware.claims`).
+    Those files are claimed by that entry and skipped here exactly as a
     declared destination is, so the
     read failure the folder read stated is not stated again as an unclaimed
     file's; they do not widen the scan, which *claimed* alone bounds.
+
+    *recognisers* says which installed emulators hold a recognition table of
+    their own, by the card token that names it, so an identified file can state
+    the emulators it concerns (:class:`Concern`). Empty on an arrangement whose
+    catalogue named no carded standalone emulator, and then no file states a
+    ``recognises`` concern — the table is still consulted for the identity,
+    because what the bytes are does not depend on who is installed.
 
     Every scanned directory is clamped to the root's subtree, and the root
     itself is the only one that may equal it. A claimed path is resolved and
@@ -6453,25 +7422,215 @@ def _unclaimed_files(
     caveats: list[Caveat] = []
     for directory in sorted(directories):
         in_directory, unreadable = _unclaimed_in(
-            machine, context, directory, claimed | accounted, artifacts, verify=verify
+            machine,
+            context,
+            directory,
+            claimed | accounted,
+            artifacts,
+            recognisers=recognisers,
+            verify=verify,
         )
         found.extend(in_directory)
         caveats.extend(unreadable)
     return tuple(sorted(found, key=lambda f: f.path)), caveats
 
 
-def firmware_inventory(machine: Machine, context: FirmwareContext, *, verify: bool = False) -> FirmwareAnswer:
-    """Every installed core's firmware, plus what is lying around unclaimed.
+def carded_systems() -> frozenset[str]:
+    """Every system a packaged standalone firmware card answers for.
+
+    Which systems an inventory needs a catalogue for, and the reason it is a
+    short list: an entry is run only where the card its token names declares
+    the system the entry was declared under, so a catalogue for any other
+    system contributes nothing to that answer and assembling one is cost with
+    no reading behind it. The set comes off the cards themselves, so a card
+    that adds a system reaches the inventory without a second list to keep in
+    step.
+    """
+    return frozenset(system for card in standalone_firmware_cards() for system in card.systems)
+
+
+@dataclass(frozen=True, slots=True)
+class _CardedEntries:
+    """The carded standalone emulators an inventory carries, and what they establish.
+
+    ``cores`` are their entries in catalogue order and ``recognisers`` the
+    emulator identities per card token — the half the unclaimed scan needs,
+    because a card's own recognition table concerns the emulators the
+    catalogue lists under that token and nobody else.
+
+    ``status`` and ``observations`` are two caveat lists and stay two because
+    they belong at different places in the answer: the first is what the
+    CATALOGUE says about itself, which precedes every finding any read made,
+    and the second is what these entries' own reads saw, which follows the
+    installed cores' observations the way the entries themselves follow the
+    installed cores.
+
+    ``enumerated`` is whether the frontend was actually asked. It is false
+    exactly where the catalogue could not be consulted — wholly, or in the part
+    that could have declared a card this answer names none from — and it is
+    what keeps an answer with nothing in it from claiming an absence it never
+    established. Without a catalogue at all it is true: the installed cores
+    were enumerated and nothing else was ever going to be.
+    """
+
+    cores: tuple[CoreFirmware, ...] = ()
+    status: tuple[Caveat, ...] = ()
+    observations: tuple[Caveat, ...] = ()
+    recognisers: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    enumerated: bool = True
+
+
+def _card_of(entry: CatalogueEntry, system: str) -> StandaloneFirmwareCard | None:
+    """The card this catalogue row answers under for *system*, or ``None``.
+
+    Three ways to be none of an inventory's business: a libretro row, whose
+    firmware is the installed core's own declaration; a standalone one whose
+    launch command identifies no token atlas has a card for; and one whose card
+    does not answer for the system the row was declared under, which is the
+    same gate :func:`_standalone_entry_core` applies.
+    """
+    if entry.kind == KIND_LIBRETRO:
+        return None
+    card = lookup_standalone_firmware_card(entry.standalone_token)
+    return card if card is not None and system in card.systems else None
+
+
+def _carded_entries(
+    machine: Machine,
+    context: FirmwareContext,
+    catalogue: InventoryCatalogue | None,
+    *,
+    verify: bool,
+) -> _CardedEntries:
+    """Every carded standalone entry the catalogue lists, resolved the one way.
+
+    The dispatch is :func:`_standalone_entry_core`, the same one
+    :func:`firmware_for_system` uses, over every system the mapping carries —
+    so a card answers here exactly what it answers there, and the two never
+    drift into two readings of one emulator. Each pair of system and entry is
+    visited once, which is what keeps a card's search from running twice: an
+    entry belongs to the catalogue of one system, and a card states the systems
+    it answers for.
+
+    Only carded entries. A standalone emulator atlas has no card for would join
+    the inventory as an ``unsupported`` entry per catalogue row — the same
+    statement :func:`firmware_for_system` already makes about it, said again
+    once per system it launches — while it claims nothing and states nothing
+    about the tree this answer is otherwise about.
+
+    Without a catalogue at all — a bare RetroArch — there is nothing to iterate
+    and the answer is the installed cores alone, exactly as before.
+
+    A catalogue that could not be READ is the other empty, and it is not that
+    one. It names no emulator here either, and it says so:
+    :data:`CAVEAT_EMULATOR_CATALOGUE_UNREADABLE` rides the answer and nothing
+    was enumerated, so the absence of a card entry is a look that failed rather
+    than a machine without standalone emulators. A catalogue with a ``hole``
+    answers between the two — its readable part is authoritative for what it
+    declares, and the hole is stated once, on an answer that is about no single
+    system.
+    """
+    if catalogue is None:
+        return _CardedEntries()
+    if not catalogue.read:
+        return _CardedEntries(
+            status=(
+                Caveat(
+                    CAVEAT_EMULATOR_CATALOGUE_UNREADABLE,
+                    "the frontend's emulator catalogue could not be read, so which standalone "
+                    "emulators it declares is unknown — this answer names none because atlas "
+                    "could not look, not because none is there, and what one of them would have "
+                    "claimed in the firmware tree is unknown with it",
+                    {},
+                ),
+                *catalogue.findings,
+            ),
+            enumerated=False,
+        )
+    cores: list[CoreFirmware] = []
+    observations: list[Caveat] = []
+    recognisers: dict[str, set[str]] = {}
+    for system, declared in catalogue.by_system.items():
+        for entry in declared.entries:
+            card = _card_of(entry, system)
+            if card is None:
+                continue
+            core, observed = _standalone_entry_core(
+                machine, context, entry, system, verify=verify
+            )
+            cores.append(core)
+            observations.extend(observed)
+            if entry.emulator is not None:
+                recognisers.setdefault(card.token, set()).add(entry.emulator)
+    # The catalogue's own statement first, the way every route that rides one
+    # states it: what was not consulted is read before what was found in the
+    # part that could be, and the caller's findings about the same catalogue
+    # follow it adjacently — the order firmware_for_system pins.
+    hole = () if catalogue.hole is None else (catalogue.hole,)
+    return _CardedEntries(
+        cores=tuple(cores),
+        status=(*hole, *catalogue.findings),
+        observations=tuple(observations),
+        recognisers={token: tuple(sorted(names)) for token, names in recognisers.items()},
+        # A hole that left this answer naming no carded emulator establishes
+        # nothing: the declaration may sit in the part nobody could consult,
+        # which is the same reading firmware_for_system makes of the same hole.
+        enumerated=catalogue.hole is None or bool(cores),
+    )
+
+
+def firmware_inventory(
+    machine: Machine,
+    context: FirmwareContext,
+    *,
+    catalogue: InventoryCatalogue | None = None,
+    verify: bool = False,
+) -> FirmwareAnswer:
+    """Every installed emulator's firmware, plus what is lying around unclaimed.
 
     The aggregate view: how much is in place, how much of that is
     hash-correct, what is missing, and what sits in the firmware tree that
     nothing asks for. Unclaimed files are identified by **content**, so
     ``verify`` is what turns their identity on — a name proves nothing about a
     file nobody declared.
+
+    *catalogue* is the frontend's whole enumeration
+    (:class:`InventoryCatalogue`), and what it adds is the **carded standalone
+    emulators**: their entries join ``cores`` after the installed cores, in
+    catalogue order (the systems in the order the mapping yields them, the
+    entries in the order their system declares them). Only the systems a
+    packaged card answers for are ever looked at (:func:`carded_systems`), so a
+    mapping holding just those is read the same as one holding every system the
+    frontend declares.
+
+    Its three states are three different answers, never one. ``None`` is a
+    bare RetroArch: no frontend enumerates anything, and this answer is the
+    installed cores alone exactly as it was before cards reached it. A
+    catalogue that could not be READ names no card either — and says so, with
+    :data:`CAVEAT_EMULATOR_CATALOGUE_UNREADABLE` and nothing enumerated, so the
+    missing entries are a look that failed rather than a machine without
+    standalone emulators. A ``hole`` is stated once on the answer and its
+    readable part answers.
+
+    A card's own read claims what it looked at, the way a listed folder's read
+    does: the files a DuckStation search keeps and the destinations a card
+    names are that entry's answer, so they leave ``unclaimed`` instead of being
+    reported twice — once as the card's satisfied requirement and once as a
+    file nobody asks for.
     """
     if context.root is None:
         return _empty_answer(context)
-    cores, caveats = _resolve_cores(machine, context, context.cores, verify=verify)
+    carded = _carded_entries(machine, context, catalogue, verify=verify)
+    installed, observed = _resolve_cores(machine, context, context.cores, verify=verify)
+    # Three groups, in the order the entries themselves are in. The catalogue's
+    # own health leads: a statement about what could not be consulted at all
+    # precedes every finding a read made. Then the installed cores'
+    # observations, then the carded entries' — the same order ``cores`` puts
+    # them in, so a caller reading the two lists side by side walks them
+    # together instead of finding the entries one way round and their
+    # observations the other.
+    caveats = [*carded.status, *observed, *carded.observations]
+    cores = (*installed, *carded.cores)
     # Only declarations that stay under the root define the scan, so a config
     # pointing outside it can never widen where atlas reads or hashes.
     claimed: set[str] = set()
@@ -6480,23 +7639,43 @@ def firmware_inventory(machine: Machine, context: FirmwareContext, *, verify: bo
             landing = destination_under(machine, context.root, declaration.path).path
             if landing is not None:
                 claimed.add(landing)
-    # What a listed folder's read already stated is that declaration's, not
-    # the scan's — stated once, by the read that saw it.
-    accounted = {path for core in cores for path in core.folder_claims}
+    # What an entry's own read already stated is that entry's, not the scan's —
+    # stated once, by the read that saw it.
+    accounted = {path for core in cores for path in core.claims}
     unclaimed, unclaimed_caveats = _unclaimed_files(
-        machine, context, claimed, accounted=accounted, verify=verify
+        machine,
+        context,
+        claimed,
+        accounted=accounted,
+        recognisers=carded.recognisers,
+        verify=verify,
     )
     caveats.extend(unclaimed_caveats)
-    if not claimed:
-        caveats.append(
-            _empty_answer_caveat(
-                cores,
-                enumerated=context.cores_read,
-                declared=_declared_without_requiring(cores),
-                subject="any firmware",
-                data={},
-            )
+    # Every one of the three codes is a statement about an answer with NO
+    # requirement in it, so one requirement anywhere silences all three — the
+    # guard :func:`_empty_system_statement` applies first on the per-system
+    # route, and the one a carded entry made load-bearing here: a card that
+    # names a file it found produced a requirement, and "nothing that declares
+    # any firmware produced one" is then simply false.
+    if not claimed and not any(core.requirements for core in cores):
+        # Which KIND of empty this is stays a question about the installed
+        # cores and about whether the frontend could be asked at all: a
+        # catalogue nobody could read leaves it unknown whether a card would
+        # have been declared, so no absence may be established beside it.
+        statement = _empty_answer_caveat(
+            installed,
+            enumerated=context.cores_read and carded.enumerated,
+            declared=_declared_without_requiring(installed),
+            subject="any firmware",
+            data={},
         )
+        # Only ONE of the three is a sentence a carded entry contradicts. A
+        # packaged declaration was read, so "no installed core declares any
+        # firmware" would be wrong beside one — while "a read did not happen"
+        # and "declared without becoming a requirement" stay true either way,
+        # and suppressing them would hide the very hole they exist to state.
+        if statement.code != CAVEAT_NO_FIRMWARE_DECLARATION or not carded.cores:
+            caveats.append(statement)
     return FirmwareAnswer(
         root=context.root,
         cores=_stating_system_firmware(cores, context.system_firmware),

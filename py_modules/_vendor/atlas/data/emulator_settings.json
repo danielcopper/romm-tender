@@ -146,7 +146,7 @@
       },
       "directory": {
         "name": "Cemu",
-        "citation": "[V-script] components/cemu/component_functions.sh:3 pins $XDG_CONFIG_HOME/Cemu/settings.xml and :8 $XDG_DATA_HOME/Cemu/graphicPacks",
+        "citation": "[V-script] components/cemu/component_functions.sh:3 pins $XDG_CONFIG_HOME/Cemu/settings.xml and component_functions.sh:8 $XDG_DATA_HOME/Cemu/graphicPacks",
         "anchors": {
           "binary": "cemu/bin/Cemu_relwithdebinfo",
           "names": {
@@ -173,7 +173,7 @@
       },
       "directory": {
         "name": "azahar-emu",
-        "citation": "[V-script] components/azahar/component_functions.sh:3 pins $XDG_CONFIG_HOME/azahar-emu and :5-9 the load, shader, log and cheat trees below $XDG_DATA_HOME/azahar-emu",
+        "citation": "[V-script] components/azahar/component_functions.sh:3 pins $XDG_CONFIG_HOME/azahar-emu and component_functions.sh:5-9 the load, shader, log and cheat trees below $XDG_DATA_HOME/azahar-emu",
         "anchors": {
           "binary": "azahar/bin/azahar",
           "names": {
@@ -316,7 +316,7 @@
       },
       "directory": {
         "name": "Vita3K",
-        "citation": "[V-script] components/vita3k/component_functions.sh:3-4 pin $XDG_CONFIG_HOME/Vita3K and :9-10 the language and patch trees below $XDG_DATA_HOME/Vita3K",
+        "citation": "[V-script] components/vita3k/component_functions.sh:3-4 pin $XDG_CONFIG_HOME/Vita3K and component_functions.sh:9-10 the language and patch trees below $XDG_DATA_HOME/Vita3K",
         "anchors": {
           "binary": "vita3k/bin/Vita3K",
           "names": {

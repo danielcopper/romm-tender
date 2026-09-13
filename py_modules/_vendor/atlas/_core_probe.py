@@ -23,6 +23,16 @@ core that crashes in phase 2, or registers its options only later (e.g. in
 ``retro_init``), simply yields no ``options`` — the caller treats that as
 *unknown*, never as "registers nothing".
 
+Opening the ``.so`` carries a third outcome, and it gets a line of its own:
+where opening it raises ``OSError``,
+``{"unloadable": "<the message the loader gave>"}``, exit status 1 — a file
+that opens but exports no entry point is not this case; it exits with a
+traceback and no line, and reads as unknown like any other empty read. Not an
+empty read — the binary can be sound and this process still unable to open
+it, typically because a library the core declares it needs is not resolvable
+from the running interpreter; a file the loader can make no sense of lands
+here too. The same message goes to stderr for whoever runs this by hand.
+
 This is the same read RetroArch performs when it loads a core — a live read of
 the binary on disk, not a lookup.
 """
@@ -225,6 +235,10 @@ def main(argv: list[str]) -> int:
         info = _RetroSystemInfo()
         lib.retro_get_system_info(ctypes.byref(info))
     except OSError as exc:
+        # Stated on both channels: the JSON line is what the parent reads, so
+        # that "the loader refused this" cannot arrive as an empty answer, and
+        # the stderr message is for a person running the probe by hand.
+        print(json.dumps({"unloadable": str(exc)}), flush=True)
         print(f"cannot load core: {exc}", file=sys.stderr)
         return 1
     name = _decode(info.library_name)

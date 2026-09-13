@@ -62,6 +62,11 @@ if TYPE_CHECKING:
 
 _ROOT = "/home/deck/retrodeck/bios"
 
+# The system every requirement here is filed under. One spelling, because the
+# resolver holds a core's stated system need to the systems its own requirements
+# name, so the two builders below have to agree about it.
+_REQUIREMENT_SYSTEM = "gba"
+
 
 def _requirement(
     *,
@@ -87,7 +92,7 @@ def _requirement(
     """
     return FirmwareRequirement(
         core_so=core_so,
-        system="gba",
+        system=_REQUIREMENT_SYSTEM,
         system_source="systemname",
         need=need,
         file_name=file_name,
@@ -122,11 +127,19 @@ def _core(
     resolver states for every libretro entry. A test spells it out for a
     standalone emulator, and passes ``None`` for the entry the resolver could not
     identify at all.
+
+    ``system_firmware_needs`` is derived rather than taken, like the caveats
+    above: the resolver requires ``cannot-run-without-firmware`` to name the
+    systems it is about, and every id there came off a requirement of the same
+    entry — which for these doubles is :func:`_requirement`'s own ``"gba"``.
+    Nothing in this module reads the field, so a test that wanted a different
+    id would be testing the resolver rather than the adapter.
     """
     if declaration != "read" and not caveats:
         caveats = (Caveat(code="core-info-unreadable", message="its .info could not be read"),)
     if refused and not caveats:
         caveats = (Caveat(code="firmware-declaration-leaves-root", message="leaves the root"),)
+    needs = (_REQUIREMENT_SYSTEM,) if system_firmware == SYSTEM_FIRMWARE_CANNOT_RUN_WITHOUT else ()
     return CoreFirmware(
         core_so=core_so,
         label=label,
@@ -137,6 +150,7 @@ def _core(
         caveats=caveats,
         refused=refused,
         system_firmware=system_firmware,
+        system_firmware_needs=needs,
     )
 
 

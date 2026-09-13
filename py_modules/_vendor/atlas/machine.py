@@ -399,6 +399,37 @@ class CoreInfo:
             object.__setattr__(self, "options", MappingProxyType(dict(self.options)))
 
 
+@dataclass(frozen=True, slots=True)
+class CoreReading:
+    """What one probe of a ``.so`` came back with: the core's answer, or the loader's refusal.
+
+    ``query_core`` answers ``CoreInfo | None`` because that is all a resolver
+    acts on — everything it cannot have is *unknown*. This is the same read
+    with the one distinction a resolver has no use for and a measurement
+    cannot do without: a core the loader would not open said nothing, and
+    "said nothing" is not "registers no options". The probe loads the binary
+    with ``ctypes``, which needs every library that core declares it needs
+    resolvable from the interpreter running the probe; where one is not, a
+    sound core reads as empty (#408). ``unloadable`` carries the loader's own
+    message then, and ``info`` is ``None``.
+
+    ``unloadable`` is ``None`` for every other empty read — nothing at that
+    path, no interpreter to probe with, a core that crashed or hung — because
+    the loader is not what refused those, and a reading states only what was
+    observed.
+    """
+
+    info: CoreInfo | None
+    unloadable: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.info is not None and self.unloadable is not None:
+            raise ValueError(
+                "CoreReading: a core the loader refused reported nothing about itself "
+                f"(got info for {self.info.library_name!r} with {self.unloadable!r})"
+            )
+
+
 _GLOB_MAGIC = frozenset("*?[")
 
 
@@ -829,11 +860,13 @@ class RealMachine:
     Where no interpreter can be named nothing is launched at all and every core
     answers *unknown*. The child is pointed back at this package
     (:func:`_probe_environment`) and answers with whatever it printed before it
-    stopped (:func:`_parse_probe_output`).
+    stopped (:func:`_parse_probe_output`). ``read_core`` is the same read with
+    the loader's refusal kept (:class:`CoreReading`), for the caller that must
+    tell a core it could not open from one that answered nothing.
     """
 
     def __init__(self) -> None:
-        self._core_cache: dict[tuple[str, int, int], CoreInfo | None] = {}
+        self._core_cache: dict[tuple[str, int, int], CoreReading] = {}
 
     def read_text(self, path: str) -> ReadResult:
         # Regular files only, checked BEFORE opening — for the same reason
@@ -1063,25 +1096,38 @@ class RealMachine:
         return digest.hexdigest()
 
     def query_core(self, so_path: str) -> CoreInfo | None:
+        return self.read_core(so_path).info
+
+    def read_core(self, so_path: str) -> CoreReading:
+        """The whole probe reading, loader refusal included — see :class:`CoreReading`.
+
+        ``query_core`` is this without the refusal, because a resolver acts on
+        the core's answer and on nothing else. A measurement that holds cards
+        against the deployed binaries needs the difference, or a core this
+        interpreter cannot open is read as one that registers nothing.
+        """
         try:
             st = os.stat(so_path)
         except OSError:
-            return None
+            return CoreReading(None)
         key = (so_path, st.st_mtime_ns, st.st_size)
         if key in self._core_cache:
             return self._core_cache[key]
-        info, timed_out = self._probe(so_path)
+        reading, timed_out = self._probe(so_path)
         # An answer is memoized, and so is the absence of one after a timeout —
         # whatever the hung core managed to print, no usable line came out of
-        # it, or info would be that answer. A core that hung once hangs again,
-        # and that retry is the only empty answer costing the caller the whole
-        # _CORE_PROBE_TIMEOUT_SECONDS. Every other empty answer is asked again,
-        # because it can be transient (missing host library installed later)
-        # even while the .so is unchanged. The memory is this object's and goes
-        # no further: a caller that builds a machine per question re-probes.
-        if info is not None or timed_out:
-            self._core_cache[key] = info
-        return info
+        # it, or the reading would be that answer. A core that hung once hangs
+        # again, and that retry is the only empty answer costing the caller the
+        # whole _CORE_PROBE_TIMEOUT_SECONDS. Every other empty answer is asked
+        # again, because it can be transient (missing host library installed
+        # later) even while the .so is unchanged — the refused load above all,
+        # whose message often names a host library a later install would
+        # resolve, though it is also where a .so this loader can make no sense
+        # of at all lands. The memory is this object's and goes no further: a
+        # caller that builds a machine per question re-probes.
+        if reading.info is not None or timed_out:
+            self._core_cache[key] = reading
+        return reading
 
     @staticmethod
     def _probe(so_path: str) -> _ProbeResult:
@@ -1094,7 +1140,7 @@ class RealMachine:
             # Unknown is the honest answer, and the caller already handles it.
             # Nothing ran, so nothing timed out: the next question asks again,
             # and it is free — an interpreter may be registered by then.
-            return _ProbeResult(None, timed_out=False)
+            return _ProbeResult(CoreReading(None), timed_out=False)
         try:
             proc = subprocess.run(
                 [interpreter.path, "-m", "atlas._core_probe", so_path],
@@ -1108,21 +1154,21 @@ class RealMachine:
             return _ProbeResult(_parse_probe_output(expired.stdout), timed_out=True)
         except OSError:
             # The probe never ran — nothing was read, nothing can be said.
-            return _ProbeResult(None, timed_out=False)
+            return _ProbeResult(CoreReading(None), timed_out=False)
         return _ProbeResult(_parse_probe_output(proc.stdout), timed_out=False)
 
 
 class _ProbeResult(NamedTuple):
     """What one probe read, and whether the process had to be killed to end it.
 
-    Two facts, because ``query_core`` decides on both. What was read is the
+    Two facts, because ``read_core`` decides on both. What was read is the
     answer; how the run ended is what tells an empty answer that will stay
     empty from one that may not. A probe that timed out and printed no usable
-    line would hang the same way next time, so ``query_core`` remembers that
+    line would hang the same way next time, so ``read_core`` remembers that
     nothing and pays ``_CORE_PROBE_TIMEOUT_SECONDS`` once per ``.so`` for the
     life of that :class:`RealMachine`; every other empty answer is asked again,
-    because the host library that was missing can be installed while the
-    ``.so`` never changes.
+    because what emptied it can be gone by the next question — a host library
+    installed, a file replaced — while the ``.so`` is unchanged.
 
     The ending is carried here rather than folded into the answer because
     :func:`_parse_probe_output` reads bytes and nothing else — a timeout that
@@ -1130,11 +1176,11 @@ class _ProbeResult(NamedTuple):
     success it is.
     """
 
-    info: CoreInfo | None
+    reading: CoreReading
     timed_out: bool
 
 
-def _parse_probe_output(stdout: bytes | None) -> CoreInfo | None:
+def _parse_probe_output(stdout: bytes | None) -> CoreReading:
     """Read the core's answer out of whatever the probe printed before it stopped.
 
     The probe prints one JSON object per line and later lines enrich earlier
@@ -1143,8 +1189,12 @@ def _parse_probe_output(stdout: bytes | None) -> CoreInfo | None:
     crash — in ``retro_set_environment``, the option-capture phase — and by
     then the phase-1 answer carrying ``library_name`` has already been
     delivered. Discarding it on a non-zero exit would throw away a read that
-    succeeded. A run that printed no usable line is ``None``: unknown, whether
-    it exited cleanly or not.
+    succeeded. A run that printed no usable line reads as unknown, whether it
+    exited cleanly or not.
+
+    One line is not an answer about the core at all: ``unloadable`` is the
+    probe stating that the loader refused the ``.so``, and it is passed on as
+    the refusal it is rather than as an empty read (:class:`CoreReading`).
     """
     data: dict[str, object] | None = None
     for line in (stdout or b"").decode("utf-8", "replace").splitlines():
@@ -1155,19 +1205,22 @@ def _parse_probe_output(stdout: bytes | None) -> CoreInfo | None:
         if isinstance(candidate, dict):
             data = candidate
     if data is None:
-        return None
+        return CoreReading(None)
     name = data.get("library_name")
     if not isinstance(name, str) or not name:
-        return None
+        unloadable = data.get("unloadable")
+        return CoreReading(None, unloadable if isinstance(unloadable, str) and unloadable else None)
     version = data.get("library_version")
     extensions = data.get("valid_extensions")
     block_extract = data.get("block_extract")
-    return CoreInfo(
-        library_name=name,
-        library_version=version if isinstance(version, str) else None,
-        valid_extensions=extensions if isinstance(extensions, str) else None,
-        options=_parse_core_options(data.get("options")),
-        block_extract=block_extract if isinstance(block_extract, bool) else None,
+    return CoreReading(
+        CoreInfo(
+            library_name=name,
+            library_version=version if isinstance(version, str) else None,
+            valid_extensions=extensions if isinstance(extensions, str) else None,
+            options=_parse_core_options(data.get("options")),
+            block_extract=block_extract if isinstance(block_extract, bool) else None,
+        )
     )
 
 
