@@ -156,10 +156,11 @@ proxy (Pangolin, Cloudflare Access, Authelia, Authentik forward-auth) lets the p
 user-intent config (`settings.json` `romm_custom_headers`, a list so the entry order survives), and its value is a
 **credential**: write-only to the frontend, absent from every log line and refusal message.
 
-Bound to the **destination**, not to a request's purpose: every request to the configured RomM origin carries them,
-sign-in included, and no request to any other host ever does. A custom header never carries a name the transport sets
-itself — that would not add a header but replace one. _Avoid_: "auth header" (that is the RomM bearer), "proxy
-settings", "header override".
+Bound to the **destination**, not to a request's purpose: the plugin attaches them to every request it issues to the
+configured RomM origin, sign-in included, and to no other request it issues. Attachment is the claim — a redirect the
+server answers with is followed by urllib, which carries them onward whatever the new host is (#1889). A custom header
+never carries a name the transport sets itself — that would not add a header but replace one. _Avoid_: "auth header"
+(that is the RomM bearer), "proxy settings", "header override".
 
 ### Rom (aggregate) vs ROM (file) vs RomM (server)
 

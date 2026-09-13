@@ -1589,14 +1589,33 @@ The one deliberate exclusion is `download_external`, which fetches a ROM's `url_
 and keeps the bare `User-Agent` it always had. A proxy access token is a credential for the user's own front door and
 has no business reaching a foreign host — the same reasoning that keeps the RomM bearer off that request.
 
-A configured header may never displace one the adapter sets itself, and three independent things hold that. The names
-are refused at validation time, case-insensitively (`domain/custom_headers.py`, `RESERVED_NAMES`) — `authorization` with
-a message of its own, because a proxy's own documentation suggests that header and it is exactly the one the RomM bearer
-occupies. And `stored_custom_headers`, the single reading of the persisted list, skips any entry the validation would
-have refused, so a hand-edited `settings.json` cannot put one on the wire either. Ordering is the third: the configured
-headers go on FIRST, so a later `req.add_header` wins on the same name whatever came before it. `host` is in the
-reserved set for a reason nothing in this repo would reveal — `http.client._send_request` suppresses its own derived
-`Host` header when the caller supplied one.
+A configured header may never displace one the adapter sets itself, and two mechanisms hold that — unevenly.
+
+The first is validation: the names are refused case-insensitively (`domain/custom_headers.py`, `RESERVED_NAMES`), with
+`authorization` carrying a message of its own, because a proxy's own documentation suggests that header and it is
+exactly the one the RomM bearer occupies. It is reached from two places — `resolve_custom_headers` for what arrives over
+the wire, and `stored_custom_headers`, the single reading of the persisted list, which re-runs it on every request so a
+hand-edited `settings.json` cannot put a reserved name on the wire either. Those two gates are **one mechanism read
+twice**, not two: both consult the same frozenset, so removing a name from it opens both in a single edit.
+
+The second is ordering: the configured headers go on FIRST, so a later `req.add_header` wins the same name whatever came
+before it. This one is **partial**, and the gap is worth knowing. It covers only the names the adapter re-adds after
+`_apply_origin_headers` — `User-Agent`, `Authorization`, `Content-Type`, and conditionally `Range`, `If-None-Match` and
+`If-Modified-Since`. It does nothing for `Host` or `Content-Length`, which the adapter never sets: `http.client`
+supplies both itself and skips its own when the caller already did. So for `host` — reserved precisely because
+`http.client._send_request` suppresses its derived `Host` when the caller supplied one, which would retarget every
+request's virtual host — the frozenset is the only defence that exists.
+
+Nothing pins the ordering leg. `test_a_stored_authorization_never_displaces_the_bearer` and
+`test_a_stored_host_never_retargets_the_request` read as though they do, but both pass because `stored_custom_headers`
+has already dropped the entry before `add_header` is reached; reverse the order inside `_apply_default_headers` and both
+stay green.
+
+One thing the attachment rule does not reach at all: what the plugin attaches is not the same as what arrives.
+`_urlopen` uses urllib's default opener, whose redirect handler copies every header except `content-length` /
+`content-type` onto the followed request with no same-origin test, so a 30x from the RomM origin to a foreign host
+delivers the configured header — and the RomM bearer with it. That is the transport's long-standing behaviour rather
+than anything this feature introduced, and it is tracked in #1889.
 
 The values are read from the live settings dict at call time, the way `romm_url` is: a value captured in `__init__`
 would go stale the moment the user edits it. They never reach a log line — `CustomHeader.__repr__` prints the name

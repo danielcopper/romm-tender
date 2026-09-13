@@ -85,13 +85,18 @@ The way through is a header the proxy accepts. Tap **Edit** on the **Custom head
 its name and value, and save. From then on every request the plugin sends to your RomM server carries them — including
 the sign-in itself, since the proxy sits in front of that too.
 
-**Where they go.** To the RomM server you configured, and nowhere else — they are credentials for your front door, so no
-request to any other host carries them. The plugin does reach other hosts: SteamGridDB for artwork, and a metadata
-provider's CDN for a cover image RomM has no local copy of.
+**Where they go.** The plugin puts them on the requests it sends to the RomM server you configured, and on no other
+request it sends — they are credentials for your front door. The plugin does reach other hosts: SteamGridDB for artwork,
+and a metadata provider's CDN for a cover image RomM has no local copy of. Neither carries them.
 
-**What they cannot be.** A header the plugin sets itself is refused when you save, so nothing you enter can quietly
-replace it: `Authorization`, `User-Agent`, `Content-Type`, `Content-Length`, `Host`, `Range`, `If-None-Match` and
-`If-Modified-Since`.
+One case is outside the plugin's hands: if your server answers with a redirect to a **different** host, the HTTP library
+carries the headers along to it, the same way it already carries your RomM API token. That is worth knowing if your RomM
+URL is plain `http://`, where anyone on the network between you and the server could insert such a redirect. Over
+`https://` to a server you control it is not a practical concern.
+
+**What they cannot be.** These names are refused when you save, so nothing you enter can quietly replace a header the
+plugin or its HTTP library already sets: `Authorization`, `User-Agent`, `Content-Type`, `Content-Length`, `Host`,
+`Range`, `If-None-Match` and `If-Modified-Since`.
 
 `Authorization` is the one worth explaining. Proxy documentation often suggests it — Pangolin documents a Basic-auth
 `Authorization` header — but that is exactly the header your RomM API token travels in. One request cannot carry both,

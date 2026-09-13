@@ -64,10 +64,11 @@ class RommHttpAdapter:
         loop-threadsafe emit after construction (the loop/emit only exist at
         service-wiring time), and tests can pass a spy at construction.
     log_debug:
-        Optional ``DebugLogger`` seam — the only route to a log line a user can
-        actually read, since it is what the ``log_level`` setting gates. Omitted
-        by a caller that wants no trace; the transport then stays silent rather
-        than falling back to ``logger.debug``, which reaches nothing.
+        The ``DebugLogger`` seam — the only route to a log line a user can
+        actually read, since it is what the ``log_level`` setting gates. Required
+        and keyword-only, like every other adapter taking this seam: a
+        ``logger.debug`` fallback would reach nothing, so an omission would not
+        degrade the trace but delete it.
     """
 
     _CONNECT_TIMEOUT = 30
@@ -81,7 +82,8 @@ class RommHttpAdapter:
         logger: logging.Logger,
         user_agent: str,
         on_retry: RetryListener | None = None,
-        log_debug: Callable[[str], None] | None = None,
+        *,
+        log_debug: Callable[[str], None],
     ) -> None:
         self._settings = settings
         self._plugin_dir = plugin_dir
@@ -230,8 +232,6 @@ class RommHttpAdapter:
         if names == self._logged_header_names:
             return
         self._logged_header_names = names
-        if self._log_debug is None:
-            return
         if names:
             self._log_debug(f"[headers] attaching to RomM requests: {', '.join(names)}")
         else:

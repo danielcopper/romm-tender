@@ -48,7 +48,11 @@ _HEADER_REFUSAL_MESSAGES: dict[HeaderProblem, str] = {
         "'{name}' is not a valid header name — it may not contain a space or a colon; "
         "letters, digits and - _ . are safe."
     ),
-    HeaderProblem.RESERVED_NAME: "'{name}' is set by the plugin itself and cannot be overridden.",
+    # Not "set by the plugin": two of the eight reserved names are not. `Host`
+    # is set by nobody here (it is reserved because http.client suppresses its
+    # own derived one once a caller supplies it) and `Content-Length` is set by
+    # http.client, so a message naming the plugin is false for both.
+    HeaderProblem.RESERVED_NAME: "'{name}' is set for you when the request is sent and cannot be overridden.",
     HeaderProblem.AUTHORIZATION_RESERVED: (
         "'Authorization' already carries your RomM API token, so it cannot also carry a proxy credential. "
         "Ask your proxy for a header of its own (Pangolin uses P-Access-Token and P-Access-Token-Id)."

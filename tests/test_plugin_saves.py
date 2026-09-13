@@ -53,7 +53,11 @@ def plugin(tmp_path):
         "log_level": "warn",
     }
     p._http_adapter = RommHttpAdapter(
-        p.settings, __import__("decky").DECKY_PLUGIN_DIR, logging.getLogger("test"), "romm-tender/9.9.9"
+        p.settings,
+        __import__("decky").DECKY_PLUGIN_DIR,
+        logging.getLogger("test"),
+        "romm-tender/9.9.9",
+        log_debug=lambda _msg: None,
     )
     p._romm_api = MagicMock()
 

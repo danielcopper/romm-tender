@@ -75,7 +75,9 @@ def plugin():
     p.settings = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
     import decky
 
-    p._http_adapter = RommHttpAdapter(p.settings, decky.DECKY_PLUGIN_DIR, logging.getLogger("test"), _USER_AGENT)
+    p._http_adapter = RommHttpAdapter(
+        p.settings, decky.DECKY_PLUGIN_DIR, logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
+    )
     p._romm_api = MagicMock()
     p._prune_service = MagicMock()
     p._prune_service.is_active.return_value = False
@@ -339,7 +341,13 @@ class TestCustomProxyHeaders:
             "romm_url": "http://romm.local",
             "romm_custom_headers": self._PROXY,
         }
-        adapter = RommHttpAdapter(settings, "/fake/plugin_dir", logging.getLogger("test"), "decky-romm-sync/9.9.9")
+        adapter = RommHttpAdapter(
+            settings,
+            "/fake/plugin_dir",
+            logging.getLogger("test"),
+            "decky-romm-sync/9.9.9",
+            log_debug=lambda _msg: None,
+        )
         dest = str(tmp_path / "cover.png")
         resp = _make_resp(200, {"Content-Length": "1"}, b"x")
 
@@ -1026,7 +1034,9 @@ class TestPlatformMap:
         """
         import logging
 
-        adapter = RommHttpAdapter({}, str(tmp_path), logging.getLogger("test"), _USER_AGENT)
+        adapter = RommHttpAdapter(
+            {}, str(tmp_path), logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
+        )
         assert adapter.load_platform_map() == {}
         # resolve_system survives the empty map and passes the slug through unchanged.
         assert adapter.resolve_system("dc") == "dc"
@@ -1036,7 +1046,9 @@ class TestPlatformMap:
         import logging
 
         (tmp_path / "config.json").write_text("{ this is not valid json")
-        adapter = RommHttpAdapter({}, str(tmp_path), logging.getLogger("test"), _USER_AGENT)
+        adapter = RommHttpAdapter(
+            {}, str(tmp_path), logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
+        )
         assert adapter.load_platform_map() == {}
         assert adapter.resolve_system("dc") == "dc"
 
@@ -1741,6 +1753,7 @@ class TestTranslateHttpStatus:
             "/tmp",
             logging.getLogger("test"),
             _USER_AGENT,
+            log_debug=lambda _msg: None,
         )
 
     def test_400_bad_request(self):
@@ -1894,7 +1907,9 @@ class TestDownloadTimeout:
         import logging
 
         settings = {"romm_url": "http://romm.local", "romm_user": "user", "romm_pass": "pass"}
-        return RommHttpAdapter(settings, "/fake/plugin_dir", logging.getLogger("test"), _USER_AGENT)
+        return RommHttpAdapter(
+            settings, "/fake/plugin_dir", logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
+        )
 
     # ------------------------------------------------------------------
     # _stream_to_file direct tests
@@ -2155,7 +2170,9 @@ def _resume_adapter():
     import logging
 
     settings = {"romm_url": "http://romm.local", "romm_user": "u", "romm_pass": "p"}
-    return RommHttpAdapter(settings, "/fake/plugin_dir", logging.getLogger("test"), _USER_AGENT)
+    return RommHttpAdapter(
+        settings, "/fake/plugin_dir", logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
+    )
 
 
 class TestIsCloudflare:
@@ -2350,7 +2367,9 @@ class TestDownloadExternal:
             "romm_api_token": "rmm_secret",
             "romm_api_token_origin": "http://romm.local",
         }
-        return RommHttpAdapter(settings, "/fake/plugin_dir", logging.getLogger("test"), _USER_AGENT)
+        return RommHttpAdapter(
+            settings, "/fake/plugin_dir", logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
+        )
 
     def test_omits_authorization_even_with_stored_token(self, tmp_path):
         """The host-bound RomM bearer must NEVER reach the external url_cover host."""
@@ -2540,7 +2559,9 @@ class TestDownloadConditional:
             "romm_api_token": "rmm_secret",
             "romm_api_token_origin": "http://romm.local",
         }
-        adapter = RommHttpAdapter(settings, "/fake/plugin_dir", logging.getLogger("test"), _USER_AGENT)
+        adapter = RommHttpAdapter(
+            settings, "/fake/plugin_dir", logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
+        )
         dest = str(tmp_path / "c.png")
         resp = _make_resp(200, {"Content-Length": "1"}, b"x")
         with patch("urllib.request.urlopen", return_value=resp) as mock_open:

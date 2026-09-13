@@ -37,6 +37,7 @@ def adapter():
         "/tmp",
         logging.getLogger("test"),
         "romm-tender/9.9.9",
+        log_debug=lambda _msg: None,
     )
 
 
@@ -79,6 +80,7 @@ class TestWithRetryOnRetryListener:
             logging.getLogger("test"),
             "romm-tender/9.9.9",
             on_retry=on_retry,
+            log_debug=lambda _msg: None,
         )
 
     def test_fires_per_retry_with_1_based_attempt_numbers(self):

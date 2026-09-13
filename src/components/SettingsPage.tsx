@@ -336,10 +336,14 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   // The modal owns closing (on success) and error display (on failure), so the
   // verdict — and a rejection — is handed straight back to it rather than caught
   // here. Only the row's own count is updated, from the list that was accepted.
+  //
+  // Trimmed, because the backend stores a name stripped of its surrounding
+  // whitespace: taking the sent spelling would leave the row showing "  X-Token  "
+  // until the next settings read, over a header stored as "X-Token".
   const handleSaveCustomHeaders = async (headers: CustomHeaderEntry[]) => {
     const result = await saveCustomHeaders(headers);
     if (result.success) {
-      setCustomHeaderNames(headers.map((h) => h.name));
+      setCustomHeaderNames(headers.map((h) => h.name.trim()));
     }
     return result;
   };

@@ -407,23 +407,33 @@ Format: **invariant** — tier — enforced by.
   `BiosChecker` has one method, so there is no cheap cached twin to reach for — and an absence is exactly what a future
   change restores without noticing. Re-adding a stored answer would look like a performance win and would put a previous
   page open's requirement on this page
-- **A configured custom header reaches the RomM origin and never a foreign one, and never displaces a header the adapter
-  sets itself** — test + prompt-only — `tests/domain/test_custom_headers.py` pins the validation in both directions
-  (every reserved name case-insensitively, a CRLF in a value, and what the persisted reading skips), and
-  `tests/adapters/romm/test_http.py::TestCustomProxyHeaders` pins the three attachment points, the one exclusion, and
-  that a hand-planted `Authorization` / `Host` still loses. **Nothing joins them.** The rule spans
+- **The plugin attaches a configured custom header to a RomM-origin request and to no other request it issues, and never
+  over a header the adapter sets itself** — test + prompt-only — `tests/domain/test_custom_headers.py` pins the
+  validation in both directions (every reserved name case-insensitively, a CRLF in a value, and what the persisted
+  reading skips), and `tests/adapters/romm/test_http.py::TestCustomProxyHeaders` pins the three attachment points, the
+  one exclusion, and that a hand-planted `Authorization` / `Host` still loses. **Nothing joins them.** The rule spans
   `domain/custom_headers.py`, the transport's `_apply_origin_headers` and its three callers — `_apply_default_headers`
   (every authenticated route), `unauthenticated_post_json` (the pairing-code exchange) and `basic_auth_request` (the
   token mint) — plus the one place that must NOT call it, `download_external`. Both directions fail in silence and each
   one is worse than it looks. A fourth request method that forgets the helper works perfectly for the user who has no
   proxy and 403s for the user who has one, on that path only. Adding it to `download_external` hands the user's proxy
-  credential to a third-party metadata CDN, which no test would notice because the fetch still succeeds. And the
-  reserved set is held by three independent things rather than one: validation refuses the name; `stored_custom_headers`
-  skips what validation would have refused, so a hand edit cannot route around it; and attachment ORDER puts the
-  configured headers on before the adapter's own, so the adapter's `add_header` wins the same name whatever preceded it.
-  Weaken any one of the three and the other two still pass green today, which is exactly how the guarantee becomes a
-  coincidence. `host` is in the set for a reason nothing here reveals: `http.client._send_request` suppresses its own
-  derived `Host` when the caller supplied one, so a configured `Host` retargets every request's virtual host. Detail:
+  credential to a third-party metadata CDN, which no test would notice because the fetch still succeeds. **What the
+  plugin issues is the whole of the claim**: `_urlopen` uses the default opener, so urllib's redirect handler follows a
+  30x by copying every header but `content-length` / `content-type` onto the next request with no same-origin test —
+  measured, not read: a cross-host 302 delivers both the configured header and the RomM bearer to the foreign host. That
+  is the transport's behaviour and predates this rule (the bearer always travelled it), which is why the invariant is
+  worded about attachment rather than about arrival; #1889 holds the gap. The reserved set is held by **two**
+  mechanisms, not three, and they are not equally strong. One is validation — `_name_refusal` against `RESERVED_NAMES`,
+  reached from both `resolve_custom_headers` (the wire) and `stored_custom_headers` (every request, so a hand-edited
+  `settings.json` cannot route around it). Those are two call sites of ONE frozenset: drop a name from it and both gates
+  open in a single edit. The other is attachment ORDER, and it covers only a name the adapter itself re-adds after
+  `_apply_origin_headers` — `User-Agent`, `Authorization`, `Content-Type`, and conditionally `Range` / `If-None-Match` /
+  `If-Modified-Since`. It covers `Host` and `Content-Length` **not at all**, because the adapter sets neither:
+  `http.client._send_request` suppresses its own derived `Host` when the caller supplied one, so a configured `Host`
+  retargets every request's virtual host — and for that name, the one this list singles out as dangerous, the frozenset
+  is the only defence there is. Nothing pins the ordering leg either: the two tests that look like they do
+  (`..._never_displaces_the_bearer`, `..._never_retargets_the_request`) pass because `stored_custom_headers` drops the
+  entry long before `add_header` is reached, so both stay green if the ordering is reversed. Detail:
   `docs/architecture/backend-architecture.md` → "the headers every RomM-origin request carries"
 - **Aggregate state mutated only via verb-named methods (no field assignment)** — check —
   `scripts/check_aggregate_field_assignment.py`
