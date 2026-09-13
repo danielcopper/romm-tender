@@ -751,6 +751,14 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
     files,
     firmware.bios_level ?? null,
   );
+  // The library's own ratio rides along behind the sentence, in every one of the
+  // seven states and in the same words the game page uses — the two surfaces say
+  // one thing about a platform, so a fact one of them carries is a fact the other
+  // is missing. It stays OUTSIDE the summary module because it counts a third set:
+  // what the RomM library holds for this platform, where the sentence counts what
+  // the launching emulator requires. A library with nothing in it for the platform
+  // gets no ratio at all — "(0/0 files held)" counts a set that does not exist.
+  const heldRatio = total > 0 ? ` (${done}/${total} files held)` : "";
   // The narrowest of the declines: not one row on the platform was answered, so
   // the pane has nothing to point the reader at and says where a file can be put
   // instead. A withheld required row and an unsettled console demand are both
@@ -816,7 +824,7 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
           pass, and its width was what wrapped that line three times. Two places
           state a platform's BIOS state and they now agree by construction. */}
       <SectionTitle title="BIOS files" note={summaryLabel} noteColor={biosColorForLevel(firmware.bios_level ?? null)} />
-      <Muted>{summaryDescription}</Muted>
+      <Muted>{`${summaryDescription}${heldRatio}`}</Muted>
       {/* The route the summary above cannot name: nothing here could say which
           files this system wants, so the reader has to be told that placing one
           by hand still works. The line used to open "BIOS management is not

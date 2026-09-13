@@ -1038,6 +1038,22 @@ describe("Library › Platforms", () => {
       expect(buttonByText(container, "Remove shortcuts")).not.toBeDisabled();
     });
 
+    it("states the library's ratio behind the pane's sentence, the way the game page does", async () => {
+      // The pane carried the ratio as a description line of its own, and only in
+      // the state that said nothing was required; the shared sentence replaced
+      // that line and the ratio went with it, while the game page kept appending
+      // it to every sentence. One platform, two surfaces, two different amounts
+      // said about it. It rides behind EVERY sentence here now, in the same
+      // words, because what it counts is a third set: the files the RomM library
+      // holds for the platform, where the sentence counts what the launching
+      // emulator requires.
+      mockFirmware([firmwarePlatform({ active_core_label: "mGBA", server_count: 3, local_count: 1 })]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      expect(container.textContent).toContain("The one file mGBA requires is not in place (1/3 files held)");
+    });
+
     it("tells a failed BIOS read apart from a platform the overview cannot speak for", async () => {
       vi.mocked(backend.getFirmwareStatus).mockRejectedValue(new Error("net"));
       const { container } = render(<LibraryPage onBack={vi.fn()} />);

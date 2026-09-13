@@ -37,10 +37,11 @@
  * on `missing` rather than on `unknown`; the order is a guard rather than a rule
  * about a live case, and it is now a guard in one place rather than three.
  *
- * What this module does NOT hold is the library's own ratio — `(d/t files held)`
- * on the game page. That counts what the RomM library holds for the platform, a
- * third set again, and the surface that shows it appends it to the sentence
- * itself.
+ * What this module does NOT hold is the library's own ratio — `(d/t files held)`.
+ * That counts what the RomM library holds for the platform, a third set again,
+ * and each surface appends it to the sentence itself. Both do, in the same form
+ * and in every one of the seven states: two true statements about two sets, where
+ * one number built out of both would be true of neither.
  */
 
 import type { BiosLevel, FirmwareWanted, SystemImage } from "../types/firmware";

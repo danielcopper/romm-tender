@@ -955,19 +955,22 @@ it, for the focused platform:
   such a switch either committed or never ran and there is no pane left to report to either way.
 - **BIOS files** — the summary, which this pane words nowhere: `src/utils/biosSummary.ts` holds all seven states and
   answers each in two lengths, and the pane takes both — the short `status` as the section's coloured note beside
-  `BIOS FILES`, the `sentence` under it. (`system_image: "absent"` outranks the counts and the decline alike, tested
-  before either inside that module, because the console asks for one of the images and no count can state that;
-  `"unsettled"` and `required_withheld` are declined VERDICTS over rows that answered, so neither reaches
-  `nothingEstablished` — which is now the narrowest decline and decides one extra LINE only, the by-hand route.) Then a
-  table: File, On disk, Contents, and a **Download** button on every row that is missing and in the RomM library (#164)
-  — never on a folder declaration, whatever its state, because the emulator opens that name as a directory — and a
-  **Delete** button on every row a download record of ours still holds. That covers a declared **folder** too, where no
-  record carries the row's name and the button counts the distinct files our records name underneath it (`Delete (N)`):
-  a folder is never a download, which says nothing about the files already inside one. Same authority as `Delete BIOS`,
-  described below. Below the table one row of buttons: Download required (_N_), Download all, Delete BIOS behind a
-  `ConfirmModal`. **All three are always rendered and disable when there is nothing to do**, the ruling the Remove group
-  already had: on PS2 all three vanished at once, and a button that disappears is a state the reader has to work out. A
-  disabled `DialogButton` is still a focus stop, so the row stays walkable.
+  `BIOS FILES`, the `sentence` under it, with the library's own `(d/t files held)` ratio behind the sentence in every
+  one of the seven. The ratio was a description line of its own here, and only in the state that said nothing was
+  required; the shared sentence replaced that line and took the ratio with it, while the game page went on appending it
+  to every sentence — one platform, two surfaces, two different amounts said about it. (`system_image: "absent"`
+  outranks the counts and the decline alike, tested before either inside that module, because the console asks for one
+  of the images and no count can state that; `"unsettled"` and `required_withheld` are declined VERDICTS over rows that
+  answered, so neither reaches `nothingEstablished` — which is now the narrowest decline and decides one extra LINE
+  only, the by-hand route.) Then a table: File, On disk, Contents, and a **Download** button on every row that is
+  missing and in the RomM library (#164) — never on a folder declaration, whatever its state, because the emulator opens
+  that name as a directory — and a **Delete** button on every row a download record of ours still holds. That covers a
+  declared **folder** too, where no record carries the row's name and the button counts the distinct files our records
+  name underneath it (`Delete (N)`): a folder is never a download, which says nothing about the files already inside
+  one. Same authority as `Delete BIOS`, described below. Below the table one row of buttons: Download required (_N_),
+  Download all, Delete BIOS behind a `ConfirmModal`. **All three are always rendered and disable when there is nothing
+  to do**, the ruling the Remove group already had: on PS2 all three vanished at once, and a button that disappears is a
+  state the reader has to work out. A disabled `DialogButton` is still a focus stop, so the row stays walkable.
 
   **Every sentence names the emulator**, off the firmware payload's own `active_core_label` — the label half of the pick
   those very counts were filtered by, never the core read beside it on the page. An empty `required_count` is worded
@@ -981,8 +984,9 @@ it, for the focused platform:
   name fits. "Emulator" and never "core": what a platform launches with can be a STANDALONE emulator, which is not a
   core, and the whole answer is keyed on the emulator's identity for that reason.
 
-  **The game page's BIOS tab reads the same module** and shows the `sentence` alone, with the library's own
-  `(d/t files held)` ratio appended — a third set again, which is why it rides along rather than being folded in. What
+  **The game page's BIOS tab reads the same module** and shows the `sentence` alone, with the same ratio appended in the
+  same words — a third set again, which is why it rides along on both rather than being folded in. Neither surface
+  prints it where the library holds nothing for the platform: `(0/0 files held)` counts a set that does not exist. What
   stops a surface writing one of these sentences back into itself is `src/utils/biosSummary.test.ts`, which reads both
   components as SOURCE and fails on any phrase the module builds its answers from. The **Platforms list's row tooltip**
   (`PlatformsTab.tsx`'s `biosTooltip`) still words these states itself: it has three answers the module has no input for

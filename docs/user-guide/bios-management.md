@@ -42,7 +42,8 @@ unknown/ok/partial/missing verdict used everywhere in the plugin:
 Every one of those sentences is written in one place and both surfaces read it, so the game page and the Library page's
 platform pane can never word the same state differently. The pane has a heading to hang a short form on, so it shows
 that short form beside **BIOS FILES** — "Nothing required", "Readiness unknown", "1 / 2 required" — with the sentence
-under it.
+under it. Both pages put the same library ratio behind the sentence, whichever state it is in, and neither prints one
+where your library holds nothing for the platform.
 
 The sentence says what the dot says, and both are about the **required** files. Where the system has none, the dot is
 green because nothing required is missing — so the line says that the emulator you launch with requires none of the
@@ -248,11 +249,11 @@ and the row you focus is the one the right-hand pane describes.
    hover it. Where the reason is a problem rather than simply nothing to choose — no emulator for the platform, or
    RetroDECK not found — a line under the header says so as well, since a tooltip needs a mouse
 7. **BIOS files** states how many required files are ready (e.g. "1 / 2 required") when the system needs any, and
-   otherwise names the emulator and says it requires none of the files it lists (e.g. "SwanStation requires none of the
-   files it names"), with the inventory of your library's files beside it (e.g. "3 / 5 files held"). Where no emulator
-   can be pinned for the platform there is no name to print, and the line says "The launching emulator" instead. A
-   console that will not start without one of the listed images, with none of them in place, reads **"Needs at least one
-   BIOS file"**, and the line under it names the emulator whose images are missing — see
+   otherwise names the emulator and says it marks none of its BIOS files as required. Under that heading is the same
+   sentence the game page shows, with the inventory of your library's files behind it (e.g. "(3/5 files held)"). Where
+   no emulator can be pinned for the platform there is no name to print, and the line says "The launching emulator"
+   instead. A console that will not start without one of the listed images, with none of them in place, reads **"Needs
+   at least one BIOS file"**, and the line under it names the emulator whose images are missing — see
    [When the console needs a BIOS image](#when-the-console-needs-a-bios-image). A system with a required row the plugin
    could not judge — a declared folder it could not read, say — reads "Readiness unknown" instead — see
    [When readiness cannot be stated](#when-readiness-cannot-be-stated). Everything here is about the emulator named on
