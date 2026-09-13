@@ -47,7 +47,9 @@ describe("BiosTab", () => {
     const { container } = render(
       <BiosTab biosStatus={biosStatus} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
     );
-    expect(container.textContent).toContain("0 of 1 files the launching emulator requires are in place");
+    expect(container.textContent).toContain(
+      "The one file the launching emulator requires is not in place (0/1 files held)",
+    );
     expect(container.textContent).toContain("Snes9x");
   });
 

@@ -97,6 +97,11 @@ const IMAGE_UNSETTLED_TAIL = "needs is in place could not be established";
 const NOTHING_ESTABLISHED_HEAD = "Nothing could be established about what";
 const NOTHING_ESTABLISHED_TAIL = "needs";
 const REQUIRES_ARE_IN_PLACE = "requires are in place";
+// The same tail for a requirement of exactly one file. It is a separate run
+// rather than a built one because the verb moves with the count, and a
+// sentence assembled out of "are"/"is" would be searchable as neither.
+const REQUIRES_IS_IN_PLACE = "requires is in place";
+const REQUIRES_IS_NOT_IN_PLACE = "requires is not in place";
 const MARKS_NONE_REQUIRED = "marks none of its BIOS files as required";
 const OPTIONAL_MISSING_TAIL = "optional missing";
 
@@ -124,6 +129,8 @@ export const BIOS_SUMMARY_PHRASES: readonly string[] = [
   IMAGE_UNSETTLED_TAIL,
   NOTHING_ESTABLISHED_HEAD,
   REQUIRES_ARE_IN_PLACE,
+  REQUIRES_IS_IN_PLACE,
+  REQUIRES_IS_NOT_IN_PLACE,
   MARKS_NONE_REQUIRED,
   OPTIONAL_MISSING_TAIL,
   STATUS_NEEDS_IMAGE,
@@ -196,19 +203,27 @@ export function biosSummary(
     //        decides it on exactly this comparison — the fallback is that same
     //        comparison, not a second rule.
     const ready = level === null ? requiredDone >= requiredCount : level === "ok";
+    // A requirement of ONE file is worded on its own, because the two count
+    // sentences read "All 1 files" and "0 of 1 files" there, and both halves are
+    // reachable rather than theoretical: DuckStation requires exactly one image
+    // on a stock RetroDECK (`scph1001.bin`), so a PlayStation reads state 5 while
+    // that file is in place and state 6 while it is not.
+    const one = requiredCount === 1;
     if (ready) {
       const optionalMissing = rows.filter(
         (row) => row.wanted === "optional" && !row.required_by_active && !row.downloaded,
       ).length;
       const tail = optionalMissing > 0 ? ` (${optionalMissing} ${OPTIONAL_MISSING_TAIL})` : "";
-      return {
-        status: ratio,
-        sentence: `All ${requiredCount} files ${named} ${REQUIRES_ARE_IN_PLACE}${tail}`,
-      };
+      const held = one
+        ? `The one file ${named} ${REQUIRES_IS_IN_PLACE}`
+        : `All ${requiredCount} files ${named} ${REQUIRES_ARE_IN_PLACE}`;
+      return { status: ratio, sentence: `${held}${tail}` };
     }
     return {
       status: ratio,
-      sentence: `${requiredDone} of ${requiredCount} files ${named} ${REQUIRES_ARE_IN_PLACE}`,
+      sentence: one
+        ? `The one file ${named} ${REQUIRES_IS_NOT_IN_PLACE}`
+        : `${requiredDone} of ${requiredCount} files ${named} ${REQUIRES_ARE_IN_PLACE}`,
     };
   }
 

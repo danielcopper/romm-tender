@@ -27,11 +27,12 @@ When you open a game whose platform has BIOS files — on your RomM server, or a
 unknown/ok/partial/missing verdict used everywhere in the plugin:
 
 - **Green** — nothing required is missing: "All 2 files mGBA requires are in place", or "mGBA marks none of its BIOS
-  files as required (3/5 files held)" when the emulator you launch with lists no file it needs
+  files as required (3/5 files held)" when the emulator you launch with lists no file it needs. An emulator that asks
+  for exactly one file — DuckStation, on a stock RetroDECK — reads "The one file DuckStation requires is in place"
 - **Orange** — some required files present: "1 of 2 files mGBA requires are in place"
-- **Red** — no required files present yet, or "mGBA cannot start this system without a BIOS image" where the console
-  itself will not start without one of them (see
-  [When the console needs a BIOS image](#when-the-console-needs-a-bios-image))
+- **Red** — no required files present yet ("The one file DuckStation requires is not in place" where there is only the
+  one), or "mGBA cannot start this system without a BIOS image" where the console itself will not start without one of
+  them (see [When the console needs a BIOS image](#when-the-console-needs-a-bios-image))
 - **Grey** — no readiness claim, in one of two wordings: "Nothing could be established about what mGBA needs", where the
   plugin could not work the requirement out at all (see
   [When the requirement is unknown](#when-the-requirement-is-unknown)), or "One file mGBA requires could not be

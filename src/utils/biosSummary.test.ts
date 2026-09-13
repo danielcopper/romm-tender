@@ -72,15 +72,32 @@ describe("the seven states", () => {
       { wanted: "optional", required_by_active: false, downloaded: false },
       { wanted: "optional", required_by_active: false, downloaded: true },
     ];
-    expect(summary({ required_count: 1, required_downloaded: 1 }, "ok", rows).sentence).toBe(
-      "All 1 files SwanStation requires are in place (2 optional missing)",
+    expect(summary({ required_count: 2, required_downloaded: 2 }, "ok", rows).sentence).toBe(
+      "All 2 files SwanStation requires are in place (2 optional missing)",
     );
+  });
+
+  it("says ONE file rather than `All 1 files`, and keeps the optional gap behind it", () => {
+    // Reachable on the reference machine rather than a theoretical count:
+    // DuckStation requires exactly one image on a stock RetroDECK.
+    const rows: BiosSummaryRow[] = [{ wanted: "optional", required_by_active: false, downloaded: false }];
+    expect(summary({ required_count: 1, required_downloaded: 1 }, "ok", rows)).toEqual({
+      status: "1 / 1 required",
+      sentence: "The one file SwanStation requires is in place (1 optional missing)",
+    });
   });
 
   it("states the shortfall where the level is not ready", () => {
     expect(summary({ required_count: 4, required_downloaded: 1 }, "partial")).toEqual({
       status: "1 / 4 required",
       sentence: "1 of 4 files SwanStation requires are in place",
+    });
+  });
+
+  it("says ONE file rather than `0 of 1 files` where that one is not there", () => {
+    expect(summary({ required_count: 1, required_downloaded: 0 }, "missing")).toEqual({
+      status: "0 / 1 required",
+      sentence: "The one file SwanStation requires is not in place",
     });
   });
 
