@@ -81,6 +81,7 @@ class RommHttpAdapter:
         self._logger = logger
         self._user_agent = user_agent
         self._retry = RetryLadder(logger, on_retry=on_retry)
+        self._logged_header_names: tuple[str, ...] | None = None
 
     @property
     def on_retry(self) -> RetryListener | None:
@@ -190,9 +191,35 @@ class RommHttpAdapter:
         edits it. ``download_external`` deliberately does not call this — its
         host is a third-party CDN, not the RomM origin.
         """
+        attached: list[str] = []
         for header in stored_custom_headers(self._settings.get("romm_custom_headers")):
             req.add_header(header.name, header.value)
+            attached.append(header.name)
+        self._log_attached_header_names(attached)
         req.add_header("User-Agent", self._user_agent)
+
+    def _log_attached_header_names(self, attached: list[str]) -> None:
+        """Record which custom headers go out, whenever that set changes.
+
+        Names only: a value is the credential the proxy checks (#1822). This is
+        the only place that can answer whether the plugin attached anything at
+        all — the first question a "my proxy still rejects me" report raises,
+        and one nothing else on the machine can settle, since the request
+        leaves over TLS and the plugin is the last reader of its own headers.
+
+        Logged on CHANGE rather than per request because this helper runs on
+        every outgoing call: a library sync would otherwise write one identical
+        line per request. The empty set is logged too — "nothing configured" is
+        the answer that separates a mis-saved setting from a rejected one.
+        """
+        names = tuple(attached)
+        if names == self._logged_header_names:
+            return
+        self._logged_header_names = names
+        if names:
+            self._logger.debug("Attaching custom headers to RomM requests: %s", ", ".join(names))
+        else:
+            self._logger.debug("No custom headers configured for RomM requests")
 
     def _apply_default_headers(self, req: urllib.request.Request) -> None:
         """Attach the origin headers plus ``Authorization``, when a Client API Token is stored."""
