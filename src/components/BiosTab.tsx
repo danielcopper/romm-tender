@@ -38,6 +38,7 @@
 import { FC, type ReactElement } from "react";
 import type { BiosFileStatus, BiosLevel, BiosStatus, CoreInfo, FirmwareWanted } from "../types";
 import { biosColorForLevel } from "../utils/biosColor";
+import { isFetchable } from "../utils/biosFetchable";
 import { biosFileDescription, biosFileNote } from "../utils/biosFileNote";
 import { infoRow, section } from "./panelSection";
 
@@ -326,23 +327,38 @@ function fileLines(description: string | null, lines: string[], coreLines: React
  *   standing over a list with no image in it — SwanStation's five, on a library
  *   holding none of them.
  * - **present** — the verdict is met, so the row is the evidence for it.
- * - **fetchable** — the platform page offers a download for it. The condition is
- *   the one that page's buttons are built from (`PlatformDetail.tsx`), read off
- *   there rather than invented here: a row this page treats as actionable and
+ * - **fetchable** — `isFetchable`, the same predicate the platform page's
+ *   download buttons are built from: a row this page treats as actionable and
  *   that page offers no button for is a dead end pointed at.
  * - **withheld** — nothing could judge the row (`satisfied === null`). An
  *   ignorance is something to say, never something to summarise away.
  *
- * What is left over is declared, not required here, demonstrably absent, and has
- * no affordance on any page — nothing a reader of THIS page could do anything
- * with. It is counted on one line instead, which names where the rows are.
+ * **The candidate answer is only as narrow as the set the disjunction is counted
+ * over, and that set is an emulator's WHOLE declaration**
+ * (`FirmwareCatalogue.emulators_needing_one_of_their_files`). For a core serving
+ * several systems it is too wide: were a demand ever recorded for the Dreamcast,
+ * all eight of Flycast's files would become candidates at once — the six Naomi
+ * and AtomisWave arcade BIOSes among them, and no Dreamcast disc starts from one
+ * of those. It is unreachable today, and NOT because Flycast marks anything
+ * required: on the reference machine it marks all eight optional, `dc_boot.bin`
+ * included. What keeps it out is the first of that method's two gates — the
+ * catalogue records the Dreamcast's `system_firmware` as `open`, which is the
+ * resolver's word for nobody having established WHICH image rather than for a
+ * console that runs without one, so `system_needs_an_image` is false, Flycast is
+ * not in `demanding`, and no row of its gets `needs_one_of`. The arcade rows are
+ * left out by the plain rule below instead.
+ *
+ * What is left over is declared, not required for this launch, demonstrably
+ * absent, and fetchable from nowhere — nothing a reader of THIS page could do
+ * anything with. It is counted on one line instead, which names where the rows
+ * are.
  */
 function rowBelongsOnThisPage(file: BiosFileStatus): boolean {
   if (file.required_by_active || file.system_image_candidate) return true;
   // Present and withheld in one test: `false` is the only verdict that leaves a
   // row with nothing to say here.
   if (rowVerdict(file) !== false) return true;
-  return file.on_server === true && !file.downloaded && file.declared_kind !== "directory";
+  return isFetchable(file);
 }
 
 /**
@@ -417,19 +433,24 @@ function buildBiosFileList(bios: BiosStatus, coreInfo: CoreInfo | null): ReactEl
     </div>
   );
 
-  // A summary that does not say where the summarised rows ARE hides them, so
-  // this one names the surface that lists every file: the Library page's
-  // Platforms tab, which is what the user guide calls it too. It says "missing"
-  // because a row with a met verdict is kept above, and "not required here"
-  // because both spellings of the launch's requirement are kept as well — so
-  // both halves are true of every row it counts, not of most of them.
+  // Three facts, and the third is what keeps this from being a way to hide rows:
+  // how many, that this launch needs none of them, and WHERE they are — the
+  // Library page's Platforms tab, which is the name the user guide gives that
+  // surface. Both claims hold of every row counted rather than of most of them:
+  // "required" covers both spellings of the launch's requirement, and "to
+  // download" is `isFetchable`, so a row that fails neither is kept above. Two
+  // sentences rather than a pluralised one, because "none required" over a set
+  // of one reads as a slip.
   const elsewhere = wantedFiles.length - shownFiles.length;
   if (elsewhere > 0) {
     fileElements.push(
       summaryLine(
         "elsewhere-note",
-        `${elsewhere} more file${elsewhere === 1 ? "" : "s"} an installed emulator asks for, ` +
-          "missing and not required here — see the Library page's Platforms tab",
+        elsewhere === 1
+          ? "1 more file an installed emulator asks for — not required for this launch, " +
+              "nothing to download; the Library page's Platforms tab lists it"
+          : `${elsewhere} more files an installed emulator asks for — none required for this launch, ` +
+              "none to download; the Library page's Platforms tab lists them",
       ),
     );
   }

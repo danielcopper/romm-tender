@@ -807,11 +807,12 @@ describe("BiosTab", () => {
           isActive={true}
         />,
       );
-      // Both halves of the sentence are true of every row it counts, and the
-      // third clause is the whole point: a summary that does not say where the
-      // summarised rows are hides them.
+      // Both claims hold of every row counted, and the last clause is the whole
+      // point: a summary that does not say where the summarised rows are hides
+      // them.
       expect(container.textContent).toContain(
-        "6 more files an installed emulator asks for, missing and not required here — see the Library page's Platforms tab",
+        "6 more files an installed emulator asks for — none required for this launch, none to download; " +
+          "the Library page's Platforms tab lists them",
       );
     });
 
@@ -824,7 +825,12 @@ describe("BiosTab", () => {
           isActive={true}
         />,
       );
-      expect(container.textContent).toContain("1 more file an installed emulator asks for");
+      // Every noun and verb, not just the count: "none required" over a set of
+      // one reads as a slip, so the singular is its own sentence.
+      expect(container.textContent).toContain(
+        "1 more file an installed emulator asks for — not required for this launch, nothing to download; " +
+          "the Library page's Platforms tab lists it",
+      );
     });
 
     it("moves no number in the header", () => {
@@ -839,7 +845,7 @@ describe("BiosTab", () => {
         );
         return {
           label: container.querySelector(".romm-panel-value")?.textContent ?? null,
-          hasNote: container.textContent.includes("more files an installed emulator asks for"),
+          hasNote: container.textContent.includes("more files an installed emulator asks for —"),
         };
       };
 

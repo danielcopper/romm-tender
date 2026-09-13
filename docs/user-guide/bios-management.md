@@ -115,8 +115,8 @@ Below the readiness line the tab lists individual files — not every file the p
 you something to do or to know: files the emulator you launch with requires, files the console itself will not start
 without one of, files you already have, files you can still download, and files the plugin could not judge. What is left
 over — an installed emulator names it, this launch does not require it, it is not there, and no page offers a download
-for it — is counted on one line instead: _6 more files an installed emulator asks for, missing and not required here —
-see the Library page's Platforms tab_.
+for it — is counted on one line instead: _6 more files an installed emulator asks for — none required for this launch,
+none to download; the Library page's Platforms tab lists them_.
 
 A Dreamcast is the everyday case. Flycast also emulates Naomi and AtomisWave, so it declares six arcade BIOS files
 beside the two the Dreamcast itself needs, and none of the six is anything a Dreamcast game's page could act on. The

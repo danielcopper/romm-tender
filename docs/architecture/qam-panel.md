@@ -988,19 +988,20 @@ it, for the focused platform:
   emulator's identity for that reason.
 
   **What the two Download buttons and the per-row one are built off is the fetchable set, and none of the three reads
-  the verdict** — one filter, in this file, over `on_server && !downloaded && declared_kind !== "directory"`. The same
-  three clauses are written a second time on the game page's BIOS tab (`rowBelongsOnThisPage`), where they answer a
-  different question — whether a row is worth a line at all, since a file no page offers a download for is nothing a
-  game's page can act on — so the two copies have to move together, and the invariant register in `CLAUDE.md` carries
-  that. Back to this file's three: neither `bios_level` nor `required_withheld` nor `system_image` is read anywhere
-  among them. Two further inputs sit beside that filter and are of the same two kinds rather than readiness gates:
-  `Download required` counts `required_by_active`, the launching emulator's own declaration, and `Download all` stops at
-  the library's own finished ratio. Readiness is not an input to any of them, in any of its shapes: what the resolver
-  could establish is the EMULATOR's demand and what is fetchable is what the RomM library holds, and neither answers the
-  other. Gating on the verdict is what took the buttons off PS2, GameCube and PSP when a BIOS answer was first scoped to
-  the emulator that launches — those three launch standalone emulators the resolver holds no card for, so the verdict
-  declines over a library that still holds their files, and the pane then offered nothing to press on exactly the
-  platforms that need one.
+  the verdict** — one predicate, `isFetchable` in `src/utils/biosFetchable.ts`, over
+  `on_server && !downloaded && declared_kind !== "directory"`, and neither `bios_level` nor `required_withheld` nor
+  `system_image` is read anywhere among them. The predicate lives outside this file because the game page's BIOS tab
+  asks it too — there it is one of the answers that earn a row a line at all, since a file no page can fetch, that the
+  launch does not require and that is not there, is nothing that page can act on. What each surface DOES with the answer
+  stays its own: the game page's rule for keeping a row is four further answers wide and belongs to that page, and this
+  one has no such rule. Two further inputs sit beside that filter and are of the same two kinds rather than readiness
+  gates: `Download required` counts `required_by_active`, the launching emulator's own declaration, and `Download all`
+  stops at the library's own finished ratio. Readiness is not an input to any of them, in any of its shapes: what the
+  resolver could establish is the EMULATOR's demand and what is fetchable is what the RomM library holds, and neither
+  answers the other. Gating on the verdict is what took the buttons off PS2, GameCube and PSP when a BIOS answer was
+  first scoped to the emulator that launches — those three launch standalone emulators the resolver holds no card for,
+  so the verdict declines over a library that still holds their files, and the pane then offered nothing to press on
+  exactly the platforms that need one.
 
   **A running download is said by the button that started it.** The pressed button — bulk or per-row — becomes a
   spinner, every other download button on the pane disables, and when it finishes the rows re-read. There is no

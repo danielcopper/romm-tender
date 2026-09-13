@@ -18,6 +18,7 @@ import { ConfirmModal, DialogButton, Focusable, showContextMenu, showModal, Spin
 import { FaMicrochip } from "react-icons/fa";
 import type { FirmwarePlatformExt, SystemCoreInfo, SystemImage } from "../../types";
 import { biosColorForLevel } from "../../utils/biosColor";
+import { isFetchable } from "../../utils/biosFetchable";
 import { biosFileDescription, biosFileNote } from "../../utils/biosFileNote";
 import { buildEmulatorMenu } from "../../utils/emulatorMenu";
 import { getEventTarget } from "../../utils/events";
@@ -957,10 +958,10 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   // verdict declines — which says nothing whatever about the files their
   // library offers.
   //
-  // A folder declaration is out whatever its state: the emulator lists that
-  // name, so there is no file to fetch into it — what would satisfy it is a
-  // BIOS image inside the folder, which is a different row.
-  const fetchableMissing = files.filter((f) => f.on_server && !f.downloaded && f.declared_kind !== "directory");
+  // Which rows are fetchable at all — the library's side of it, including why a
+  // declared folder is out — is `isFetchable`, shared with the game page's BIOS
+  // tab so the two surfaces cannot disagree about what can be downloaded.
+  const fetchableMissing = files.filter(isFetchable);
   const requiredMissing = fetchableMissing.filter((f) => f.required_by_active).length;
   const hasOptionalMissing = fetchableMissing.some((f) => !f.required_by_active);
   const showRequired = requiredMissing > 0 && !state.serverOffline;
