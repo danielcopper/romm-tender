@@ -13,19 +13,23 @@
  *
  * Two axes are rendered side by side and must not be conflated. A file's
  * `wanted` is what the whole machine says about it; `required_by_active` is what
- * the core this game launches with says. The readiness line is about the second
- * — a file another core demands is not a missing prerequisite for this launch —
- * while the rows below it show the first, so nothing is silently dropped from
- * the list for belonging to a core the user is not using.
+ * the emulator this game launches with says. The readiness line is about the
+ * second — a file another emulator demands is not a missing prerequisite for
+ * this launch — while the rows below it are drawn from the first, narrowed to
+ * what this page can say or do something about (`rowBelongsOnThisPage`). What
+ * the narrowing leaves out is counted on a line that names the page listing it,
+ * so a row is never dropped silently; the page that leaves nothing out is the
+ * Library page's Platforms tab, which is the management surface.
  *
  * A row can also be a file an emulator wants that the RomM library does not hold
  * (`on_server` false). No page in the plugin can fetch it, so it says so rather
  * than looking like a download nobody has started. Not holding it is a separate
  * question from not having it: RetroDECK ships `dolphin-emu/Sys/codehandler.bin`
  * into the BIOS directory, so that row is unfetchable and satisfied at once —
- * and where the reading establishes whose copy is there, it reads as the
- * distribution's own file rather than as a gap in a library that will never
- * hold it (`utils/biosFileNote`).
+ * which is also what keeps it on the page, since a met verdict is one of the
+ * answers a row is kept for — and where the reading establishes whose copy is
+ * there, it reads as the distribution's own file rather than as a gap in a
+ * library that will never hold it (`utils/biosFileNote`).
  *
  * CSS classes prefixed with `romm-panel-` are injected separately by
  * styleInjector.
@@ -214,13 +218,25 @@ function buildBiosHeader(bios: BiosStatus, biosLevel: BiosTabProps["biosLevel"])
   ];
 }
 
+/**
+ * Is this row's requirement met? `null` where nothing established it.
+ *
+ * The row's VERDICT, not `downloaded`: for a declared folder the two come apart,
+ * since the folder is there on every RetroDECK install and what satisfies the
+ * core is a file inside it. A payload with no verdict at all falls back to
+ * `downloaded`, which is what the verdict is for a plain file.
+ *
+ * The dot beside a row and the decision to show that row at all read this one
+ * function, so a reader cannot be shown a row whose dot answers a different
+ * question from the one that kept it.
+ */
+function rowVerdict(file: BiosFileStatus): boolean | null {
+  return file.satisfied === undefined ? file.downloaded : file.satisfied;
+}
+
 /** The dot beside one file row: what it means for THIS launch, then for others. */
 function fileDotColor(file: BiosFileStatus): string {
-  // The row's VERDICT, not `downloaded`: for a declared folder the two come
-  // apart, since the folder is there on every RetroDECK install and what
-  // satisfies the core is a file inside it. A payload with no verdict at all
-  // falls back to `downloaded`, which is what the verdict is for a plain file.
-  const verdict = file.satisfied === undefined ? file.downloaded : file.satisfied;
+  const verdict = rowVerdict(file);
   // Amber is the colour this surface already gives a row it cannot call
   // settled, and a null verdict is exactly that.
   if (verdict === null) return "#d4a72c";
@@ -288,13 +304,58 @@ function fileLines(description: string | null, lines: string[], coreLines: React
 }
 
 /**
- * One row per firmware file an installed emulator asks for, plus a note for the rest.
+ * Which of the files an emulator asks for this pane puts a row on.
+ *
+ * The platform page is the management surface and lists every one of them. This
+ * is a game's page, and a row earns its place here by saying something about
+ * THIS launch or by being something the reader can act on. A Dreamcast page
+ * listed eight rows, six of them arcade BIOSes Flycast declares because it also
+ * emulates Naomi and AtomisWave — not required, not present, not in the library
+ * — and they pushed the two rows that mattered off the top.
+ *
+ * Five answers keep a row, and the first two are one requirement in its two
+ * spellings:
+ *
+ * - **required for this launch** (`required_by_active`).
+ * - **the console's own image** (`system_image_candidate`) — the same demand
+ *   written the only other way an emulator has for it. A libretro declaration
+ *   cannot say "one of these", so an emulator whose console will not start
+ *   without an image and that marks every one of them optional carries the
+ *   demand here instead, and `required_by_active` is false on every such row by
+ *   construction. Dropping it leaves the header's "Needs at least one BIOS file"
+ *   standing over a list with no image in it — SwanStation's five, on a library
+ *   holding none of them.
+ * - **present** — the verdict is met, so the row is the evidence for it.
+ * - **fetchable** — the platform page offers a download for it. The condition is
+ *   the one that page's buttons are built from (`PlatformDetail.tsx`), read off
+ *   there rather than invented here: a row this page treats as actionable and
+ *   that page offers no button for is a dead end pointed at.
+ * - **withheld** — nothing could judge the row (`satisfied === null`). An
+ *   ignorance is something to say, never something to summarise away.
+ *
+ * What is left over is declared, not required here, demonstrably absent, and has
+ * no affordance on any page — nothing a reader of THIS page could do anything
+ * with. It is counted on one line instead, which names where the rows are.
+ */
+function rowBelongsOnThisPage(file: BiosFileStatus): boolean {
+  if (file.required_by_active || file.system_image_candidate) return true;
+  // Present and withheld in one test: `false` is the only verdict that leaves a
+  // row with nothing to say here.
+  if (rowVerdict(file) !== false) return true;
+  return file.on_server === true && !file.downloaded && file.declared_kind !== "directory";
+}
+
+/**
+ * One row per firmware file this launch can act on, plus a note for the rest.
  *
  * The rows are the files with an owning emulator — the ones whose per-core lines
- * say something. The note below them keeps the two remaining answers apart
- * (#1762): files nothing asks for are a finished answer, files nothing could be
- * asked about are not, and the old single line called both "not required by any
- * known core" while counting neither.
+ * say something — narrowed to those {@link rowBelongsOnThisPage} keeps. The
+ * notes below them keep the remaining answers apart (#1762): files nothing asks
+ * for are a finished answer, files nothing could be asked about are not, and the
+ * old single line called both "not required by any known core" while counting
+ * neither. A third note counts what the narrowing left out, and is printed
+ * first of the three: those rows are the nearest relatives of the rows above
+ * them — a file an installed emulator does ask for.
  */
 function buildBiosFileList(bios: BiosStatus, coreInfo: CoreInfo | null): ReactElement[] {
   // Build identity -> label lookup from the dedicated core-info path (#923).
@@ -313,9 +374,10 @@ function buildBiosFileList(bios: BiosStatus, coreInfo: CoreInfo | null): ReactEl
 
   const files = bios.files ?? [];
   const wantedFiles = files.filter((f) => f.wanted === "needed" || f.wanted === "optional");
+  const shownFiles = wantedFiles.filter(rowBelongsOnThisPage);
   const countOf = (wanted: FirmwareWanted) => files.filter((f) => f.wanted === wanted).length;
 
-  const fileElements = wantedFiles.map((f) => {
+  const fileElements = shownFiles.map((f) => {
     const coreLines = f.cores ? buildBiosCoreLines(f.cores, emulatorLabels, coreInfo?.active_core) : [];
     const { note, lines } = biosFileNote(f);
     // The row is headed by the file the emulator DECLARED — `declared_path`, not
@@ -345,21 +407,40 @@ function buildBiosFileList(bios: BiosStatus, coreInfo: CoreInfo | null): ReactEl
     );
   });
 
+  const summaryLine = (key: string, text: string) => (
+    <div
+      key={key}
+      className="romm-panel-file-row"
+      style={{ color: "rgba(255, 255, 255, 0.4)", fontSize: "12px", marginTop: "8px" }}
+    >
+      {text}
+    </div>
+  );
+
+  // A summary that does not say where the summarised rows ARE hides them, so
+  // this one names the surface that lists every file: the Library page's
+  // Platforms tab, which is what the user guide calls it too. It says "missing"
+  // because a row with a met verdict is kept above, and "not required here"
+  // because both spellings of the launch's requirement are kept as well — so
+  // both halves are true of every row it counts, not of most of them.
+  const elsewhere = wantedFiles.length - shownFiles.length;
+  if (elsewhere > 0) {
+    fileElements.push(
+      summaryLine(
+        "elsewhere-note",
+        `${elsewhere} more file${elsewhere === 1 ? "" : "s"} an installed emulator asks for, ` +
+          "missing and not required here — see the Library page's Platforms tab",
+      ),
+    );
+  }
+
   for (const [wanted, phrase] of [
     ["not_needed", "no installed emulator asks for"],
     ["unknown", "nothing installed could answer for"],
   ] as const) {
     const count = countOf(wanted);
     if (count === 0) continue;
-    fileElements.push(
-      <div
-        key={`${wanted}-note`}
-        className="romm-panel-file-row"
-        style={{ color: "rgba(255, 255, 255, 0.4)", fontSize: "12px", marginTop: "8px" }}
-      >
-        {`${count} file${count === 1 ? "" : "s"} on server ${phrase}`}
-      </div>,
-    );
+    fileElements.push(summaryLine(`${wanted}-note`, `${count} file${count === 1 ? "" : "s"} on server ${phrase}`));
   }
 
   return fileElements;

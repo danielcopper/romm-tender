@@ -51,19 +51,22 @@ console the plugin says nothing about it either — so a line reading only "noth
 all-clear nobody gave.
 
 Both numbers on the line count the same thing. Where the system has required files the ratio is of those; where it has
-none, the ratio is of the files your RomM library holds — never one of each. Files your emulator asks for that are not
-in your library are listed, but they are not part of that ratio: it tracks what you can still download, and those you
-cannot.
+none, the ratio is of the files your RomM library holds — never one of each. A file your emulator asks for that your
+library does not hold is never part of that ratio: it tracks what you can still download, and that one you cannot. It
+still gets its own row wherever it matters — a file this game requires, or one the console itself needs, is listed
+whether your library holds it or not.
 
 The readiness line is computed against the **active core** for that game — so switching to a core that needs no BIOS (or
 that treats a file as optional) clears the warning, while switching to a core that requires a missing file surfaces it.
 
-Under the line the tab lists the files an installed emulator asks for, one per row. The rest are counted on a line of
-their own below them rather than listed — one line for the files nothing installed asks for, one for the files nothing
-installed could answer about. A row is headed by the file the emulator declares, with its folder where it asks for one
-(`dc/dc_boot.bin`) — that is where the file has to go, and it is the one thing you need when placing one by hand.
-Whatever the emulator's packager wrote about the file goes on its own line under the row, and only where it says
-something the name does not: those descriptions usually repeat the file name, and many are nothing else.
+Under the line the tab lists, one per row, the files an installed emulator asks for that this game gives you something
+to do or to know about. The rest are counted on lines of their own below them rather than listed — one line for the
+files an installed emulator asks for that this game does not need and no page can fetch, one for the files nothing
+installed asks for, one for the files nothing installed could answer about. A row is headed by the file the emulator
+declares, with its folder where it asks for one (`dc/dc_boot.bin`) — that is where the file has to go, and it is the one
+thing you need when placing one by hand. Whatever the emulator's packager wrote about the file goes on its own line
+under the row, and only where it says something the name does not: those descriptions usually repeat the file name, and
+many are nothing else.
 
 Beside the Play button there is also a short **BIOS** badge, which is a shortcut into this tab. Two things raise it, and
 nothing else does. The first: a file the active core **requires** is shown to be absent from your BIOS folder. If that
@@ -108,9 +111,21 @@ emulator itself, and what you already have comes from your BIOS folder. Your ser
 while it is unreachable you still see what is needed and what is missing, you just cannot fetch anything, and files that
 exist only in your RomM library are not listed.
 
-Below the readiness line the tab lists the individual files and which ones are present or missing. Each file lists the
-cores that use it (e.g. _Beetle PSX HW (required)_, _PCSX ReARMed (optional)_); the **active core**'s line is
-highlighted in amber so you can spot at a glance which core's requirements the file applies to.
+Below the readiness line the tab lists individual files — not every file the platform has, but the ones this game gives
+you something to do or to know: files the emulator you launch with requires, files the console itself will not start
+without one of, files you already have, files you can still download, and files the plugin could not judge. What is left
+over — an installed emulator names it, this launch does not require it, it is not there, and no page offers a download
+for it — is counted on one line instead: _6 more files an installed emulator asks for, missing and not required here —
+see the Library page's Platforms tab_.
+
+A Dreamcast is the everyday case. Flycast also emulates Naomi and AtomisWave, so it declares six arcade BIOS files
+beside the two the Dreamcast itself needs, and none of the six is anything a Dreamcast game's page could act on. The
+**Platforms** tab of the **Library** page lists every file without exception — that is where BIOS files are managed, and
+it is the page the summary line points at.
+
+Each row shows whether that file is present or missing, and lists the cores that use it (e.g. _Beetle PSX HW
+(required)_, _PCSX ReARMed (optional)_); the **active core**'s line is highlighted in amber so you can spot at a glance
+which core's requirements the file applies to.
 
 A core's word for a file is the core's own, and the plugin prints it unchanged. Where a core marks _every_ file it asks
 for optional and its console does not start without one of them, the line states that instead, with the count:

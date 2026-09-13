@@ -8,7 +8,7 @@ import { describe, it, expect } from "vitest";
 import { render } from "@testing-library/react";
 import { BiosTab } from "./BiosTab";
 import { libretroEmu, standaloneEmu } from "../test-utils/coreFixtures";
-import type { BiosStatus, CoreInfo, EmulatorOption } from "../types";
+import type { BiosFileStatus, BiosStatus, CoreInfo, EmulatorOption } from "../types";
 
 const coreInfo: CoreInfo = {
   active_core: "snes9x_libretro.so",
@@ -727,6 +727,132 @@ describe("BiosTab", () => {
       // no key here, so a payload still sending it highlights nothing — which is
       // the regression this pins, not a state the backend can reach.
       expect(line("swanstation_libretro")?.style.fontWeight).toBe("normal");
+    });
+  });
+
+  describe("which rows the pane shows", () => {
+    // The Dreamcast this was written for listed eight rows, six of them arcade
+    // BIOSes Flycast declares because it also emulates Naomi and AtomisWave.
+    // Not required for the launch, not present, not in the RomM library —
+    // nothing a reader of a Dreamcast game's page could do with any of them,
+    // and they pushed the two rows that mattered off the top. The platform page
+    // keeps listing every one of them; it is the management surface.
+    const row = (file_name: string, over: Partial<BiosFileStatus> = {}): BiosFileStatus => ({
+      file_name,
+      downloaded: false,
+      local_path: "",
+      declared_path: file_name,
+      description: "",
+      wanted: "optional",
+      required_by_active: false,
+      cores: { "flycast_libretro.so": { required: false } },
+      on_server: false,
+      declared_kind: "file",
+      satisfied: false,
+      ...over,
+    });
+
+    /** The six arcade rows, in the spelling the device showed them in. */
+    const arcadeRows = ["airlbios.zip", "f355bios.zip", "f355dlx.zip", "hod2bios.zip", "naomi.zip", "naomi2.zip"].map(
+      (name) => row(name, { declared_path: `dc/${name}` }),
+    );
+
+    /** Header aggregates held fixed, so a row's fate can never move a number. */
+    const statusWith = (files: BiosFileStatus[]): BiosStatus => ({
+      needs_bios: true,
+      server_count: 20,
+      local_count: 1,
+      all_downloaded: false,
+      required_count: 0,
+      required_downloaded: 0,
+      required_withheld: 0,
+      files,
+    });
+
+    /** The declared path each row is headed with — `biosFileNote`'s note rides
+     *  on the same span behind a dash, and which rows are drawn is the question
+     *  here, not what each of them says about itself. */
+    const namesOf = (files: BiosFileStatus[]): string[] => {
+      const { container } = render(
+        <BiosTab biosStatus={statusWith(files)} biosLevel="ok" coreInfo={coreInfo} isActive={true} />,
+      );
+      return [...container.querySelectorAll(".romm-panel-file-name")].map((el) => el.textContent.split(" — ")[0] ?? "");
+    };
+
+    it.each([
+      ["the launching emulator requires it", { required_by_active: true }],
+      // The same requirement in the only other spelling an emulator has for it:
+      // a libretro declaration cannot say "one of these", so SwanStation marks
+      // all five PlayStation images optional and the demand arrives here. Drop
+      // this answer and "Needs at least one BIOS file" stands over a list with
+      // no image in it.
+      ["the console's own image rests on it", { system_image_candidate: true }],
+      ["it is there", { satisfied: true, downloaded: true }],
+      // The condition the platform page's download buttons are built from.
+      ["the platform page can fetch it", { on_server: true }],
+      ["nothing could judge it", { satisfied: null }],
+    ] as const)("keeps a row where %s", (_why, over) => {
+      expect(namesOf([row("dc_boot.bin", over)])).toContain("dc_boot.bin");
+    });
+
+    it("leaves the rest to the platform page, counted and pointed at", () => {
+      const names = namesOf([row("dc_boot.bin", { required_by_active: true }), ...arcadeRows]);
+      expect(names).toEqual(["dc_boot.bin"]);
+
+      const { container } = render(
+        <BiosTab
+          biosStatus={statusWith([row("dc_boot.bin", { required_by_active: true }), ...arcadeRows])}
+          biosLevel="ok"
+          coreInfo={coreInfo}
+          isActive={true}
+        />,
+      );
+      // Both halves of the sentence are true of every row it counts, and the
+      // third clause is the whole point: a summary that does not say where the
+      // summarised rows are hides them.
+      expect(container.textContent).toContain(
+        "6 more files an installed emulator asks for, missing and not required here — see the Library page's Platforms tab",
+      );
+    });
+
+    it("counts a single left-out row in the singular", () => {
+      const { container } = render(
+        <BiosTab
+          biosStatus={statusWith([row("dc_boot.bin", { required_by_active: true }), row("naomi.zip")])}
+          biosLevel="ok"
+          coreInfo={coreInfo}
+          isActive={true}
+        />,
+      );
+      expect(container.textContent).toContain("1 more file an installed emulator asks for");
+    });
+
+    it("moves no number in the header", () => {
+      // This is a display decision and nothing else: every count on the header
+      // line is the backend's, over the set it counted, and none of them may
+      // follow what this page chose to draw. One payload, rendered with the six
+      // left-out rows and again with them taken out of `files` — the aggregates
+      // are identical in both, so the header has to be too.
+      const headerOf = (files: BiosFileStatus[]): { label: string | null; hasNote: boolean } => {
+        const { container } = render(
+          <BiosTab biosStatus={statusWith(files)} biosLevel="ok" coreInfo={coreInfo} isActive={true} />,
+        );
+        return {
+          label: container.querySelector(".romm-panel-value")?.textContent ?? null,
+          hasNote: container.textContent.includes("more files an installed emulator asks for"),
+        };
+      };
+
+      const kept = row("dc_boot.bin", { satisfied: true, downloaded: true });
+      const withLeftOut = headerOf([kept, ...arcadeRows]);
+      const withoutThem = headerOf([kept]);
+
+      expect(withLeftOut.label).toBe("The launching emulator requires none of the files it names (1/20 files held)");
+      expect(withLeftOut.label).toBe(withoutThem.label);
+      // Non-vacuous: the first render really did leave rows out, so the equality
+      // above is over two different lists rather than two identical ones.
+      expect(withLeftOut.hasNote).toBe(true);
+      expect(withoutThem.hasNote).toBe(false);
     });
   });
 });
