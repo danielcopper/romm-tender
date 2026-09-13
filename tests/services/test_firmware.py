@@ -850,6 +850,102 @@ class TestAFolderRowCountsWhatWePutInside:
         assert plat["deletable_count"] == 1
 
 
+class TestWhatBecameOfARowsBytes:
+    """``checked`` reaches the wire, because the verdict beside it cannot carry it.
+
+    A withheld verdict has several causes and one of them is not a withholding at
+    all: a file the emulator READ and does not recognise was checked, and the
+    surfaces said it could not be. The resolver states which, and the row has to
+    carry the word rather than a reading of it — the vocabulary is upstream's and
+    narrowing it here would be our own claim about it.
+    """
+
+    _CORE = "swanstation"
+
+    def _page(self, plugin, tmp_path, checked: str | None):
+        resolver = FakeFirmwareResolver()
+        resolver.declare("scph1001.bin", required_by=[_id(self._CORE)], present=True, checked=checked)
+        fw = _make_firmware_service(
+            romm_api=plugin._romm_api,
+            uow_factory=FakeUnitOfWorkFactory(plugin._uow),
+            firmware_resolver=resolver,
+            core_info=FakeCoreInfoProvider(
+                active_core=(self._CORE, "SwanStation"), options=[libretro_option(self._CORE, "SwanStation")]
+            ),
+            retrodeck_paths=FakeRetroDeckPaths(bios=str(tmp_path / "bios")),
+        )
+        _inline_executor(fw)
+        _stub_listing(fw, [])
+        return fw.check_platform_bios("psx")
+
+    @pytest.mark.asyncio
+    async def test_the_resolvers_own_word_reaches_the_row(self, plugin, tmp_path):
+        result = await self._page(plugin, tmp_path, "unrecognised")
+        row = next(row for row in result["files"] if row["file_name"] == "scph1001.bin")
+
+        assert row["checked"] == "unrecognised"
+
+    @pytest.mark.asyncio
+    async def test_a_different_reading_travels_as_itself(self, plugin, tmp_path):
+        """The non-vacuity check: a row hardcoding one value would pass the first."""
+        result = await self._page(plugin, tmp_path, "unread")
+        row = next(row for row in result["files"] if row["file_name"] == "scph1001.bin")
+
+        assert row["checked"] == "unread"
+
+    @pytest.mark.asyncio
+    async def test_a_reading_that_asked_no_byte_question_says_nothing(self, plugin, tmp_path):
+        """The ordinary case, and it must stay a stated absence rather than a word."""
+        result = await self._page(plugin, tmp_path, None)
+        row = next(row for row in result["files"] if row["file_name"] == "scph1001.bin")
+
+        assert row["checked"] is None
+
+    @pytest.mark.asyncio
+    async def test_it_moves_no_verdict(self, plugin, tmp_path):
+        """It says what was DONE, never whether the requirement is met.
+
+        ``unrecognised`` is the case that makes the two come apart: the bytes
+        were read and the requirement is still unsettled, so a row folding this
+        into ``satisfied`` would claim a readiness nobody established.
+        """
+        result = await self._page(plugin, tmp_path, "unrecognised")
+        row = next(row for row in result["files"] if row["file_name"] == "scph1001.bin")
+
+        assert row["satisfied"] is True
+        assert row["downloaded"] is True
+
+    @pytest.mark.asyncio
+    async def test_the_platform_pane_gets_the_same_word(self, plugin, tmp_path):
+        """The two pages are built by two row builders, and this asks the other one.
+
+        The game page's rows come off ``asdict`` and carry every field the entry
+        has; the platform pane's are a hand-written projection
+        (``_wanted_fields``), so a field added to the entry reaches that page
+        only if somebody adds it there too. The two surfaces word this from ONE
+        module, so a field on one and not the other means one of them silently
+        words a state it cannot see.
+        """
+        resolver = FakeFirmwareResolver()
+        resolver.declare("scph1001.bin", required_by=[_id(self._CORE)], present=True, checked="unrecognised")
+        fw = _make_firmware_service(
+            romm_api=plugin._romm_api,
+            uow_factory=FakeUnitOfWorkFactory(plugin._uow),
+            firmware_resolver=resolver,
+            core_info=FakeCoreInfoProvider(
+                active_core=(self._CORE, "SwanStation"), options=[libretro_option(self._CORE, "SwanStation")]
+            ),
+            retrodeck_paths=FakeRetroDeckPaths(bios=str(tmp_path / "bios")),
+        )
+        _set_loop(fw, asyncio.get_running_loop())
+
+        with patch.object(plugin._romm_api, "list_firmware", return_value=[]):
+            result = await fw.get_platform_firmware_status("psx")
+
+        row = next(row for row in result["platform"]["files"] if row["file_name"] == "scph1001.bin")
+        assert row["checked"] == "unrecognised"
+
+
 class TestAFolderRequirementIsAnsweredByItsContents:
     """LRPS2's ``pcsx2/bios`` is answered by what is inside it, never by its being there.
 

@@ -170,6 +170,18 @@ broken permissions, or storage going bad — the row says _its location could no
 missing, so you know to check the folder instead of hunting for a download. It still counts as not ready, because an
 emulator will not get in there either.
 
+Where a file **is** there and the emulator looked at its contents, the row says what came of that, because "not ready"
+covers three quite different situations and only one of them is a problem you can fix by downloading:
+
+- _the emulator does not recognise this file_ — it read the file and no list it keeps matches these bytes. That is not a
+  failure: DuckStation starts such an image and calls it an unknown BIOS. It is also not a clean bill of health, which
+  is why the row stays neutral rather than going green — a dump nobody has catalogued and a wrong file look the same
+  from here.
+- _its bytes could not be read_ — the plugin asked for the contents and did not get them. This says nothing about
+  whether your emulator can read the file; it says this plugin could not.
+- _the emulator refuses a file of this size_ — your emulator will not even open it, so whatever is in it, the game will
+  not start from it. This one is red, and the fix is a different copy of the file rather than a different setting.
+
 Some rows say something better than that. Where the file sitting at the destination is byte-for-byte the copy your
 emulator distribution ships, the row names the distribution instead — _provided by RetroDECK_ — because it is the
 distribution's file, and if it ever went missing the repair is a RetroDECK component reset rather than a download.
@@ -266,9 +278,9 @@ and the row you focus is the one the right-hand pane describes.
    column — that a file was provided by RetroDECK, that a folder holds no image, that a location could not be read
 9. **Contents** answers for a required **folder**: how many BIOS images it holds — and the images themselves are listed
    under the row, in the emulator's own words so you can match one against its picker — or that it holds none, or that
-   its contents could not be established. A plain file reads an em dash, which means the question was never asked:
-   checking a file's contents is still to come, and until it lands the em dash must not be read as "checked, and nothing
-   there"
+   its contents could not be established. A plain file reads an em dash in this column, which must not be read as
+   "checked, and nothing there": filling it for file rows is still to come. Where the emulator did look at a file's
+   contents, what came of that is printed **under** the row with the rest of its notes
 10. A **Download** button sits on every row that is missing and in your RomM library, and a **Delete** button on every
     row this plugin downloaded and still has on disk — that is the only thing it will remove, so a file your emulator
     came with never offers one. A **folder** row (PS2's `pcsx2/bios`) offers `Delete (N)` for the files we downloaded

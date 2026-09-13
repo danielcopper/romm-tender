@@ -4,7 +4,7 @@
 // with that surface.
 
 import { describe, it, expect } from "vitest";
-import type { FirmwareDeclaredKind } from "../types";
+import type { FirmwareChecked, FirmwareDeclaredKind } from "../types";
 import { biosFileDescription, biosFileNote, type BiosNoteRow } from "./biosFileNote";
 
 /** The sentence half, for the cases that are about wording alone. */
@@ -107,6 +107,65 @@ describe("biosFileNote", () => {
         caveats: ["firmware-path-inaccessible"],
       }),
     ).toBe("its location could not be read");
+  });
+
+  describe("what became of a file's bytes", () => {
+    // Three of the resolver's eight `checked` values are three different things
+    // behind one verdict, and the surfaces said "could not be checked" about all
+    // of them. Only one of the three is that.
+    /** A declared file row carrying the reading the payload states. */
+    const file = (satisfied: boolean | null, checked: FirmwareChecked | null): BiosNoteRow => ({
+      downloaded: true,
+      on_server: true,
+      declared_kind: "file",
+      satisfied,
+      checked,
+    });
+
+    it("says the emulator read the file and does not know it, never that it could not be read", () => {
+      // Reachable, and no failure: DuckStation boots such an image and calls it
+      // an unknown BIOS. The verdict stays withheld — the read is neither proof
+      // nor refutation — but a read DID happen, so the old sentence was untrue.
+      const note = noteOf(file(null, "unrecognised"));
+
+      expect(note).toBe("the emulator does not recognise this file");
+      expect(note).not.toContain("could not");
+    });
+
+    it("says the bytes could not be read where they were asked for and did not come back", () => {
+      // The one the single old sentence was right about, and it is a statement
+      // about THIS process's read rather than about the emulator's.
+      expect(noteOf(file(null, "unread"))).toBe("its bytes could not be read");
+    });
+
+    it("gives a refused file the reason beside its already-red verdict", () => {
+      // `refused` arrives with the verdict settled `false` — the emulator will
+      // not open a file of this size at all — so this row is red with or without
+      // the note. Without it the page says a file sitting right there is
+      // missing.
+      expect(noteOf(file(false, "refused"))).toBe("the emulator refuses a file of this size");
+    });
+
+    it("says nothing for the values that are the row's ordinary answer", () => {
+      // `verified` is the met row and `mismatch` an unmet one the surfaces
+      // already word; `null` is a reading that asked no byte question, which is
+      // every absent file.
+      expect(noteOf(file(true, "verified"))).toBe("");
+      expect(noteOf(file(false, "mismatch"))).toBe("");
+      expect(noteOf(file(false, null))).toBe("");
+      // A payload from before the field existed carries no key at all, which is
+      // a third shape and has to read like the stated absence.
+      expect(noteOf({ downloaded: true, on_server: true, declared_kind: "file", satisfied: false })).toBe("");
+    });
+
+    it("lets the destination's own shape speak first", () => {
+      // A folder standing where a file is opened says nothing about bytes,
+      // because there were none to read — and the resolver still carries
+      // whatever its last content question answered.
+      expect(noteOf({ ...file(null, "unread"), caveats: ["firmware-path-obstructed"] })).toBe(
+        "a folder is here, where the emulator opens a file",
+      );
+    });
   });
 
   it("leaves an unreadable folder to the withheld wording it already has", () => {

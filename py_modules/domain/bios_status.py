@@ -125,6 +125,13 @@ class BiosFileEntry:
     the file or atlas explaining the requirement in sentences. ``None`` for a row
     no emulator declared, whose ``description`` is the file name itself.
 
+    ``checked`` is what became of the row's BYTES, carried from the same entry
+    ``declaration`` is. It exists because ``satisfied`` cannot distinguish the
+    reasons a verdict was withheld, and one of them is not a withholding at all:
+    a file the emulator READ and does not recognise is a file that was checked,
+    and saying it could not be was untrue. ``None`` is no statement — the
+    ordinary answer for a file that is simply absent.
+
     ``declared_path`` is where the emulator said the file goes, relative to the
     firmware root — ``dc/dc_boot.bin`` where a subdirectory was declared, the
     bare name otherwise. It is carried because ``file_name`` is its basename and
@@ -162,6 +169,7 @@ class BiosFileEntry:
     declaration: str | None = None
     caveats: tuple[str, ...] = ()
     images: tuple[str, ...] = ()
+    checked: str | None = None
 
 
 @dataclass(frozen=True)
@@ -228,6 +236,7 @@ def format_bios_status(
                 declaration=f.get("declaration"),
                 caveats=tuple(f.get("caveats", ())),
                 images=tuple(f.get("images", ())),
+                checked=f.get("checked"),
             )
             for f in raw_files
         )
@@ -312,6 +321,7 @@ def build_file_entry(
         declaration=placement.declaration if placement is not None else None,
         caveats=placement.caveats if placement is not None else (),
         images=folder.images if folder is not None else (),
+        checked=placement.checked if placement is not None else None,
     )
 
 

@@ -386,6 +386,8 @@ a destination the emulator opens as a file — because the verdict is deliberate
 it. What the verdict does decide is which family of codes can apply, and what a surface says when none of them is
 recognised.
 
+For a declared **file** the cause is the **byte reading** below, which the row carries beside the verdict.
+
 Not every unestablished thing is withheld here. A declared file whose _bytes_ were never verified is not — and for
 almost every such file the reason is simply that nobody asked: the verified question is put to one core at a time and
 only where a folder row is open, so on a platform whose cores declare no folder nothing is verified at all. Where it
@@ -393,6 +395,24 @@ _is_ asked, it verifies that core's declared files too — each one the packaged
 and no others — and their **verdicts** are dropped unread. Either way, reading an unasked content question as a withheld
 verdict would decline readiness for every row on every platform. The foil to **not on server**, which is a settled
 absence and does count towards readiness.
+
+### Byte reading (firmware): what became of a row's bytes
+
+What the reading DID to a declared file, carried on the row beside its **verdict** in the resolver's own vocabulary and
+never re-derived here. It answers a different question: the verdict says whether the requirement is met, this says what
+was done to establish it.
+
+It is needed because a withheld verdict has several causes and one of them is not a withholding at all. A file the
+emulator **read and does not recognise** was checked — DuckStation boots such an image and calls it an unknown BIOS — so
+the verdict stays withheld while "could not be checked" is simply untrue of it. Beside that sit a file whose **bytes did
+not come back**, which is a statement about the plugin's own read and no evidence the launch cannot read it, and one the
+emulator **refuses** on its size before reading a byte, which arrives with the verdict already unmet and needs the
+reason rather than a verdict. Everything else — the bytes matched, they did not, nothing asked — leaves the row to the
+axes it always had.
+
+Where each of the three is worded is `src/utils/biosFileNote.ts`, the one place both surfaces derive a row's note from.
+The mark in the platform pane's `On disk` cell stays the verdict alone and says only that nothing was settled either
+way.
 
 ### System image (firmware): held / absent / unsettled / not demanded
 

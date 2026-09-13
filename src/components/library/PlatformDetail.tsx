@@ -83,7 +83,15 @@ const MARK_REQUIRED_MISSING = "required, missing";
 const MARK_REQUIRED_HERE = "required, here";
 const MARK_HERE = "here, not required";
 const MARK_MISSING = "missing, not required";
-const MARK_UNCHECKED = "could not be checked";
+// The `?` glyph's word, and it has to be true of every way a verdict is
+// withheld — which since the `checked` vocabulary arrived includes a file the
+// emulator READ and does not recognise. "could not be checked" was untrue of
+// exactly that one, and it is the reachable case: DuckStation reads such an
+// image, boots it, and calls it an unknown BIOS. So the mark says what the
+// verdict is — nothing settled, in either direction — and WHY is the row's own
+// note beside the name (`biosFileNote`), which is the one place a cause is
+// worded.
+const MARK_UNCHECKED = "nothing could establish this either way";
 const MARK_HERE_NEED_UNKNOWN = "here; nothing could say whether this is wanted";
 const MARK_MISSING_NEED_UNKNOWN = "missing; nothing could say whether this is wanted";
 const MARK_STARTS_THE_SYSTEM = "this starts the system";

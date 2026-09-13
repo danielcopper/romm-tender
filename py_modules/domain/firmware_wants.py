@@ -239,6 +239,20 @@ class FirmwarePlacement:
     (``adapters.atlas_firmware._placement_for``), so any other entry's word for
     it would describe prose this row does not carry.
 
+    ``checked`` is what became of the BYTES at that destination, in the
+    resolver's own stable vocabulary, and it is read off the same entry
+    ``declaration`` is — the first of the pairs under this name. It is carried
+    rather than interpreted because the eight values are not one axis: three of
+    them say a comparison HAPPENED and differ only in what it found, and folding
+    them into the verdict beside them is what made a file the emulator read and
+    did not recognise indistinguishable from one whose bytes never came back.
+    ``None`` is no statement at all — the ordinary answer for a file that is
+    simply absent, and for every reading that asked no content question.
+
+    It is not a second verdict. ``present`` and ``folder`` say whether the
+    requirement is met; this says what was done to establish it, which is what a
+    surface needs to word a withheld answer honestly.
+
     ``wants`` is never empty: a placement exists because at least one emulator
     declared the file, and a placement without an owning emulator is exactly the
     orphaned entry this model removes.
@@ -254,6 +268,7 @@ class FirmwarePlacement:
     caveats: tuple[str, ...] = ()
     folder: FolderVerdict | None = None
     supplied_by: str | None = None
+    checked: str | None = None
 
     @property
     def required_by_any(self) -> bool:

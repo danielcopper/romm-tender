@@ -45,6 +45,29 @@ export type FirmwareDeclaredKind = "file" | "directory";
 export type FirmwareDeclarationState = "read" | "packaged" | "absent" | "unreadable" | "unsupported";
 
 /**
+ * What became of a row's BYTES, in the resolver's own stable vocabulary, carried
+ * verbatim like {@link FirmwareDeclarationState}.
+ *
+ * Eight values and they are not one axis. Three say a comparison HAPPENED and
+ * differ in what it found — `verified` (the bytes are the pinned ones),
+ * `mismatch` (they are not), `unrecognised` (they were read and no table the
+ * emulator keeps knows them, which DuckStation boots anyway with a warning) —
+ * while `unread` says the bytes were asked for and did not come back, and
+ * `unchecked` that nothing asked. `refused` is the emulator declining to open
+ * the file at all on its size, before reading a byte.
+ *
+ * It is not a second verdict and never read as one: `satisfied` says whether the
+ * requirement is met, this says what was done to establish it. What it exists
+ * for is that `satisfied: null` alone cannot tell "the file was read and is
+ * unknown to the emulator" from "its bytes could not be read", and the surfaces
+ * worded both as the second. Absent for a payload from before the field existed
+ * and `null` wherever the reading asked no content question at all, which is the
+ * ordinary answer for a file that is simply not there.
+ */
+export type FirmwareChecked =
+  "verified" | "mismatch" | "unchecked" | "unknown" | "not-comparable" | "unrecognised" | "refused" | "unread";
+
+/**
  * The reading's answer about one row, carried on both row shapes.
  *
  * `satisfied` is the verdict and the axis the REQUIRED counts key off: the
@@ -70,6 +93,8 @@ interface FirmwareVerdict {
    *  {@link FirmwareDeclarationState}. Absent for a row nothing declared, and
    *  for a payload from before the field existed. */
   declaration?: FirmwareDeclarationState;
+  /** What became of this row's bytes — see {@link FirmwareChecked}. */
+  checked?: FirmwareChecked | null;
   caveats?: string[];
   images?: string[];
 }

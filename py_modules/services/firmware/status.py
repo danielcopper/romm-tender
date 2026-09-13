@@ -731,4 +731,5 @@ def _wanted_fields(entry) -> dict[str, Any]:
         "declaration": entry.declaration,
         "caveats": entry.caveats,
         "images": entry.images,
+        "checked": entry.checked,
     }

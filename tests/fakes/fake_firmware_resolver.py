@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from domain.firmware_wants import (
@@ -101,6 +102,7 @@ class FakeFirmwareResolver:
         folder: FolderVerdict | None = None,
         caveats: tuple[str, ...] = (),
         supplied_by: str | None = None,
+        checked: str | None = None,
     ) -> FirmwarePlacement:
         """State that some emulators ask for *file_name*, and return the placement.
 
@@ -118,6 +120,11 @@ class FakeFirmwareResolver:
         ``folder`` is the verdict about its contents; leaving it unset is the
         reading that established nothing about them, which is what a row nobody
         looked inside answers.
+
+        ``checked`` is what became of the bytes, in the resolver's own words.
+        Unset is the ordinary answer — a reading that asked no byte question —
+        and a test spells it out only where what was DONE to the file is what it
+        is pinning, which ``present`` cannot say.
         """
         placement = FirmwarePlacement(
             file_name=file_name,
@@ -132,26 +139,23 @@ class FakeFirmwareResolver:
             caveats=caveats,
             folder=folder,
             supplied_by=supplied_by,
+            checked=checked,
         )
         self.placements.append(placement)
         return placement
 
     def _read(self, placement: FirmwarePlacement) -> FirmwarePlacement:
-        """The placement as the reading would answer it, looked up under ``bios_root``."""
+        """The placement as the reading would answer it, looked up under ``bios_root``.
+
+        ``replace`` rather than a fresh construction: this changes ONE field, and
+        a field-by-field copy silently drops whatever the placement grows next —
+        which would make a seeded value vanish only on the tests that pass a
+        ``bios_root``, and only for the fields a test happens to seed.
+        """
         if placement.present is not None or not self.bios_root:
             return placement
         there = self.present_probe(os.path.join(self.bios_root, placement.destination))
-        return FirmwarePlacement(
-            file_name=placement.file_name,
-            relative_path=placement.relative_path,
-            description=placement.description,
-            wants=placement.wants,
-            present=there,
-            declared_kind=placement.declared_kind,
-            caveats=placement.caveats,
-            folder=placement.folder,
-            supplied_by=placement.supplied_by,
-        )
+        return replace(placement, present=there)
 
     def __call__(self, system: str | None = None) -> FirmwareCatalogue:
         self.calls.append("" if system is None else system)

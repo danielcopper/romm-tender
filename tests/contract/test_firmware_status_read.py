@@ -78,6 +78,7 @@ _ROW_KEYS = {
     "satisfied",
     "declared_kind",
     "declaration",
+    "checked",
     "caveats",
     "images",
     "deletable_count",

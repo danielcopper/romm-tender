@@ -42,7 +42,7 @@ import type { BiosFileStatus } from "../types";
  *  satisfy it, so neither has to be converted into the other's. */
 export type BiosNoteRow = Pick<
   BiosFileStatus,
-  "downloaded" | "on_server" | "supplied_by" | "satisfied" | "declared_kind" | "caveats" | "images"
+  "downloaded" | "on_server" | "supplied_by" | "satisfied" | "declared_kind" | "caveats" | "images" | "checked"
 >;
 
 /** The subset {@link biosFileDescription} reads — the same both-surfaces rule. */
@@ -129,7 +129,7 @@ const PATH_INACCESSIBLE = "firmware-path-inaccessible";
  */
 function verdictNote(row: BiosNoteRow): BiosFileWords {
   const has = (code: string) => (row.caveats ?? []).includes(code);
-  if (row.declared_kind !== "directory") return fileAtItsDestination(has);
+  if (row.declared_kind !== "directory") return fileAtItsDestination(has, row.checked);
   if (row.satisfied === true) return folderHolding(row.images ?? []);
   if (row.satisfied === false) return folderUnmet(has);
   return folderWithheld(row.satisfied, has);
@@ -138,10 +138,39 @@ function verdictNote(row: BiosNoteRow): BiosFileWords {
 /** One line and nothing under it — every group but a satisfied folder's. */
 const said = (note: string): BiosFileWords => ({ note, lines: [], fromLibrary: false });
 
-/** A declared FILE: what the reading found at the place the emulator opens. */
-function fileAtItsDestination(has: (code: string) => boolean): BiosFileWords {
+/**
+ * A declared FILE: what the reading found at the place the emulator opens.
+ *
+ * The shape of the destination comes first — a folder standing where a file is
+ * opened says nothing about bytes, because there were none to read. Then what
+ * became of the bytes, which is `checked` and is three distinct things the row's
+ * verdict cannot tell apart:
+ *
+ * - **`unrecognised`** — the emulator read the file and no table it keeps knows
+ *   these bytes. It WAS checked, which is why it may not be worded as a read
+ *   that failed; and it is no failure either — DuckStation boots such an image
+ *   and says it is using an unknown BIOS — so the verdict stays withheld and the
+ *   note says what was established rather than what was not.
+ * - **`unread`** — the bytes were asked for and did not come back. This is the
+ *   one the old single sentence was right about, and it is a statement about the
+ *   PLUGIN's read rather than about the emulator's: that this process could not
+ *   read the file is no evidence the launch cannot.
+ * - **`refused`** — the emulator will not open the file at all, on its size,
+ *   before reading a byte. It arrives with the verdict already `false`, so the
+ *   row is red with or without this note; what the note adds is the reason, and
+ *   without it the row says a file that is sitting right there is missing.
+ *
+ * `verified` and `mismatch` get no note: the first is the ordinary met row and
+ * the second is an unmet one whose surfaces already say so. Every other value,
+ * and the absent field, leave the note to the library half below.
+ */
+function fileAtItsDestination(has: (code: string) => boolean, checked: BiosNoteRow["checked"]): BiosFileWords {
   if (has(PATH_OBSTRUCTED)) return said("a folder is here, where the emulator opens a file");
-  return said(has(PATH_INACCESSIBLE) ? "its location could not be read" : "");
+  if (has(PATH_INACCESSIBLE)) return said("its location could not be read");
+  if (checked === "unrecognised") return said("the emulator does not recognise this file");
+  if (checked === "unread") return said("its bytes could not be read");
+  if (checked === "refused") return said("the emulator refuses a file of this size");
+  return said("");
 }
 
 /**

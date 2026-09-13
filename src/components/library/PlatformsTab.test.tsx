@@ -1687,7 +1687,9 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(diskMarks(container)).toEqual([{ glyph: "?", color: AMBER }]);
-      expect(container.textContent).toContain("could not be checked");
+      // The row's own note says what the read did not settle; the mark beside it
+      // says only that nothing was settled either way.
+      expect(container.textContent).toContain("its contents could not be checked");
       expect(container.textContent).not.toContain("required, missing");
     });
 
@@ -1722,7 +1724,7 @@ describe("Library › Platforms", () => {
       // own summary says exactly that two lines above.
       expect(container.textContent).toContain("here; nothing could say whether this is wanted");
       expect(container.textContent).toContain("missing; nothing could say whether this is wanted");
-      expect(container.textContent).not.toContain("could not be checked");
+      expect(container.textContent).not.toContain("nothing could establish this either way");
       expect(container.textContent).not.toContain("nothing asked for it");
       // …and the sentence the table's own line carries is not repeated up in the
       // summary, where it would be the same words twice on one screen.
@@ -1947,7 +1949,7 @@ describe("Library › Platforms", () => {
           { glyph: "✗", color: AMBER },
         ]);
         expect(diskMarkTitles(container)).toEqual([
-          "could not be checked",
+          "nothing could establish this either way",
           "missing; nothing could say whether this is wanted",
         ]);
       });

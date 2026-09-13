@@ -330,6 +330,76 @@ class TestPlacements:
         assert placement.description == packaged_prose
         assert placement.declaration == "packaged"
 
+    def test_a_rows_bytes_answer_comes_from_the_entry_the_description_did(self, adapter, monkeypatch):
+        """``checked`` rides with the destination half, off the same pair as the description.
+
+        Two emulators declare one image and each entry carries its own reading of
+        the bytes at it. The placement describes ONE destination, so it keeps one
+        answer, and it has to be the first pair's — the same rule the description
+        and its declaration follow. Taking a later entry's would report a read of
+        a place this row does not describe.
+        """
+        answer = _answer(
+            _core(
+                core_so=None,
+                emulator="DUCKSTATION",
+                declaration="packaged",
+                requirements=(
+                    _requirement(core_so=None, file_name="scph1001.bin", found=KIND_FILE, checked="unrecognised"),
+                ),
+            ),
+            _core(
+                core_so="swanstation_libretro.so",
+                requirements=(
+                    _requirement(
+                        core_so="swanstation_libretro.so",
+                        file_name="scph1001.bin",
+                        found=KIND_FILE,
+                        checked="verified",
+                    ),
+                ),
+            ),
+        )
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+
+        assert adapter().placements[0].checked == "unrecognised"
+
+    def test_a_row_whose_reading_asked_no_byte_question_carries_no_answer(self, adapter, monkeypatch):
+        """``None`` is the ordinary answer, and it is carried as such.
+
+        A file that is simply absent has no bytes to read, and the resolver says
+        so by answering nothing. That is not a value to invent a word for.
+        """
+        answer = _answer(_core(requirements=(_requirement(),)))
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+
+        assert adapter().placements[0].checked is None
+
+    def test_a_declaration_with_no_location_under_the_root_carries_no_byte_answer(self, adapter, monkeypatch):
+        """The destination half goes silent together, and this is part of it.
+
+        A standalone emulator's own XDG tree holding the file says nothing about
+        the BIOS root the caller writes to, so the reading is dropped rather than
+        travelling on to describe a place the caller will never look at.
+        """
+        answer = _answer(
+            _core(
+                requirements=(
+                    _requirement(
+                        declared="/opt/elsewhere/gba_bios.bin",
+                        path="/opt/elsewhere/gba_bios.bin",
+                        found=KIND_FILE,
+                        checked="verified",
+                    ),
+                )
+            )
+        )
+        monkeypatch.setattr("adapters.atlas_firmware.detect", _detecting(_Installation(answer)))
+
+        placement = adapter().placements[0]
+        assert placement.relative_path is None
+        assert placement.checked is None
+
     def test_an_entry_the_resolver_could_not_identify_still_owns_its_file(self, adapter, monkeypatch):
         """EmuDeck's ``n3ds`` rows: a launch atlas classifies standalone and cannot name.
 

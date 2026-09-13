@@ -1911,14 +1911,17 @@ takes both `compute_bios_level` and `compute_bios_label` to `unknown` while ever
 count travels as `required_withheld` because three surfaces need it: the platform detail tells its two unknowns apart
 with it, the shared `utils/biosSummary.ts` picks between "Nothing could be established about what X needs" and "One file
 X requires could not be checked", and the play-row badge subtracts it so a required file whose absence _was_ established
-still warns. What a withheld row SAYS comes from its caveat codes, because the verdict is the answer alone and carries
-none of its causes; the verdict decides only which family of codes can apply and what to say when none of them is
-recognised, which is the one sentence written off it — `src/utils/biosFileNote.ts` is the one place both surfaces derive
-what a row says from — a sentence, the lines under it, which is how a satisfied folder's images arrive as a list rather
-than folded into the row's own name, and the description on its own line under the row (`biosFileDescription`). A row is
-headed by the file it declares on both surfaces and never by its description: that is the packager's prose out of a
-core's `.info`, outside the resolver's contract, and it routinely spells the row's own name into its words — so the
-shared rule takes the name back out and answers `null` where nothing is left.
+still warns. What a withheld row SAYS comes from its caveat codes and, for a declared FILE, from its `checked` — the
+resolver's own word for what became of the bytes, carried from the same entry `declaration` is, because a file the
+emulator read and does not recognise WAS checked while one whose bytes never came back was not, and one withheld verdict
+cannot say which. The verdict is the answer alone and carries none of its causes; the verdict decides only which family
+of codes can apply and what to say when none of them is recognised, which is the one sentence written off it —
+`src/utils/biosFileNote.ts` is the one place both surfaces derive what a row says from — a sentence, the lines under it,
+which is how a satisfied folder's images arrive as a list rather than folded into the row's own name, and the
+description on its own line under the row (`biosFileDescription`). A row is headed by the file it declares on both
+surfaces and never by its description: that is the packager's prose out of a core's `.info`, outside the resolver's
+contract, and it routinely spells the row's own name into its words — so the shared rule takes the name back out and
+answers `null` where nothing is left.
 
 **No unknown withdraws a download, because the two questions are independent.** What the resolver could establish is the
 emulator's DEMAND; what is fetchable is what the RomM library HOLDS, and neither answers the other. A platform nothing

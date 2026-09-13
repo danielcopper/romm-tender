@@ -1082,6 +1082,16 @@ it, for the focused platform:
   `biosFileNote`'s caveat wording ("its location could not be read", "a folder is here, where the emulator opens a
   file") appears wherever a destination cannot be read, which no corpus predicts.
 
+  **A declared FILE's note also carries what became of its bytes** — the row's `checked`, the resolver's own word,
+  carried from the same entry `declaration` is. Three of its eight values are three different things behind one withheld
+  verdict and the surfaces worded all of them "could not be checked": `unrecognised` is a file the emulator READ and
+  does not recognise (DuckStation boots such an image and calls it an unknown BIOS), so that sentence was untrue of it;
+  `unread` is bytes that did not come back, which the sentence fitted; and `refused` arrives with the verdict already
+  `false` — the emulator will not open a file of that size at all — so what it needs is the REASON beside a mark that is
+  already red, not a withheld wording. On a stock RetroDECK all three come from DuckStation's standalone route alone,
+  and `refused` needs a per-region BIOS key naming a file, which RetroDECK leaves unset. Mark 1 stays the verdict and
+  says only that nothing was settled either way; the cause is the note's.
+
   The file name is printed once. The description under it is **not RomM's** — `_server_files` builds no description at
   all and `_wanted_fields` overwrites what came in, so what arrives is the core's own `firmwareN_desc`, or the file name
   itself for a row no placement covers.

@@ -419,6 +419,10 @@ def _placement_for(
     is the declaration — its kind is what the emulator OPENS, not what is there,
     and its ``declaration`` state says which register the description is written
     in, which is a property of the entry that stated it rather than of the place.
+
+    ``checked`` goes with the destination half, and off the same entry the
+    declaration does: it is what became of the bytes AT that place, so carrying
+    it past the early return would describe a read of somewhere else.
     """
     first_core, first = pairs[0]
     directory = first.declared_kind == DECLARED_DIRECTORY
@@ -449,6 +453,7 @@ def _placement_for(
         caveats=tuple(dict.fromkeys(caveat.code for caveat in speaking)),
         folder=folder,
         supplied_by=supplied.label if supplied is not None else None,
+        checked=first.checked,
     )
 
 

@@ -578,7 +578,12 @@ Format: **invariant** — tier — enforced by.
   rendered a satisfied requirement as missing. `services/firmware/status.py` holds that store itself, for
   `_stamp_deletable`'s records-still-on-disk probe, so the wrong probe is one line away from every row builder that
   should be asking `FirmwareDemand`. Related and separate: presence is not the row's verdict (CONTEXT.md → Row verdict),
-  and a withheld verdict is not an absence — its cause is read off the row's caveat codes, never off the verdict itself
+  and a withheld verdict is not an absence — its cause is read off the row's caveat codes and, for a declared FILE, off
+  its `checked` (CONTEXT.md → Byte reading), never off the verdict itself. Three of that vocabulary's eight values sit
+  behind one withheld verdict and are three different statements: a file the emulator READ and does not recognise was
+  checked, so wording it "could not be checked" is untrue; `refused` is not withheld at all, arriving with the verdict
+  already `false`. Nothing checks that a consumer keeps them apart — `checked` is a plain string on the row beside a
+  `satisfied` that reads like its summary
 - **A firmware row's verdict is `BiosFileEntry.satisfied`, and for a folder declaration it is what the folder HOLDS —
   never that the folder is there** — test + prompt-only —
   `tests/services/test_firmware.py::TestAFolderRequirementIsAnsweredByItsContents` pins all three answers end-to-end,
