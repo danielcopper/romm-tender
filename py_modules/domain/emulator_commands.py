@@ -110,6 +110,17 @@ class LaunchingEmulator(Protocol):
     for a platform's pick, :class:`~domain.shortcut_data.EmulatorInvocation` for
     a ROM's — and a wrapper would be a third spelling of what they already are.
 
+    **Those two answer two different questions**, and this type does not merge
+    them: it carries the pick the CALLER's question is about — a platform's, for
+    a question about a platform; a ROM's, for a question about a ROM — never "the
+    platform's pick" as such. A parameter typed with it therefore takes its
+    caller's question and chooses nothing itself; where the caller has no pick to
+    state, ``None`` says so and the callee falls back in its own terms. The
+    distinction is the one ``ActiveCoreResolver`` exists to make (a per-game pin
+    over the per-platform override over the es_systems default), and a common
+    type is exactly where it would go quiet: a ROM's pick handed to a
+    platform-scoped answer, or the reverse, is well typed and wrong.
+
     ``label`` is presentation, and a resolution may carry none. ``emulator`` is
     ``None`` for an emulator the resolver could not identify, and nothing may be
     scoped to it.
