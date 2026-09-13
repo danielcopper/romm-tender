@@ -26,9 +26,9 @@ export type FirmwareDeclaredKind = "file" | "directory";
  * the resolver's own vocabulary and carried verbatim.
  *
  * `"read"` is a libretro core's own `.info`, read off the machine beside it, and
- * its description is the packager's LABEL for the file — `"(PS1 JP BIOS)"`,
- * which says what the file is where its name does not (`ps1_rom.bin` is a
- * PlayStation 3 image). `"packaged"` is the card atlas keeps for an emulator
+ * its description is the packager's LABEL for the file — `"(PS1 JP BIOS)"` on a
+ * row named `scph5500.bin`, which is a region the name does not state.
+ * `"packaged"` is the card atlas keeps for an emulator
  * shipping no declaration of its own, and its description is atlas explaining
  * the REQUIREMENT in whole sentences — "a PlayStation BIOS image — the console
  * runs it before any disc, and DuckStation starts nothing without one". The two

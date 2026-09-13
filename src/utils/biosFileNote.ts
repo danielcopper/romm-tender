@@ -184,9 +184,9 @@ function folderWithheld(satisfied: boolean | null | undefined, has: (code: strin
  * `else file_name`). Both spell the name into the words.
  *
  * **Only a `read` declaration's prose is shown at all**, which is the first
- * thing decided here. That prose is a packager's LABEL for the file and is the
- * one thing the row's own name cannot say — `ps1_rom.bin` is a PlayStation 3
- * image, and nothing about the name says so. A `packaged` row's is a different
+ * thing decided here. That prose is a packager's LABEL for the file and says
+ * what the row's own name does not — `(PS1 JP BIOS)` on `scph5500.bin`, a
+ * region the name never states. A `packaged` row's is a different
  * kind of writing under the same field: atlas explaining the requirement in
  * whole sentences ("a PlayStation BIOS image — the console runs it before any
  * disc, and DuckStation starts nothing without one — found by the search, not
