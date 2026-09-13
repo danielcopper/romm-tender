@@ -20,14 +20,21 @@ import { render, fireEvent, act, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { showContextMenu, showModal } from "@decky/ui";
 import { LibraryPage } from "../LibraryPage";
+import { BiosTab } from "../BiosTab";
 import * as backend from "../../api/backend";
 import { removeShortcut, setLaunchOptionsConfirmed } from "../../utils/steamShortcuts";
 import { clearPlatformCollection } from "../../utils/collections";
 import { setSyncProgress } from "../../utils/syncProgress";
 import { biosColorForLevel } from "../../utils/biosColor";
-import type { FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo, SystemImage } from "../../types";
+import type { CoreInfo, FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo, SystemImage } from "../../types";
 
-vi.mock("../../utils/scrollHelpers", () => ({ scrollToTop: vi.fn(), scrollElementToTop: vi.fn() }));
+// `scrollFocusedToCenter` is the game page tab's, not this page's: one test
+// below renders that tab beside the pane to compare what the two say.
+vi.mock("../../utils/scrollHelpers", () => ({
+  scrollToTop: vi.fn(),
+  scrollElementToTop: vi.fn(),
+  scrollFocusedToCenter: vi.fn(),
+}));
 vi.mock("../../utils/steamShortcuts", () => ({
   removeShortcut: vi.fn(),
   setLaunchOptionsConfirmed: vi.fn(),
@@ -56,6 +63,17 @@ const VBA = {
   is_default: false,
   bakeable: true,
   reason: null,
+};
+
+/** What the game page's BIOS tab needs to render beside its sentence — the same
+ *  platform the pane below is showing, so the two are answering about one thing. */
+const GBA_CORE_INFO: CoreInfo = {
+  emulators: [MGBA],
+  emulator_data_available: true,
+  active_core: MGBA.emulator,
+  active_core_label: MGBA.label,
+  platform_core_label: null,
+  has_game_override: false,
 };
 
 function coreInfo(overrides: Partial<SystemCoreInfo> = {}): SystemCoreInfo {
@@ -1052,6 +1070,33 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(container.textContent).toContain("The one file mGBA requires is not in place (1/3 files held)");
+    });
+
+    it("states the same ratio on the pane and on the game page from one pair of counts", async () => {
+      // The join the two surfaces' own tests cannot make: each pins its own
+      // numbers, so nothing compared them until one payload was put through
+      // both. The template stood in both components at once and their fallbacks
+      // had already come apart — one answered from the rows, the other said
+      // nothing — so the amounts agreed only where the backend supplied the
+      // pair. It lives in this file because the pane needs the whole page around
+      // it and the game page's tab needs three props.
+      const counts = { server_count: 3, local_count: 1 };
+      const heldRun = (text: string) => text.match(/\(\d+\/\d+ files held\)/)?.[0] ?? null;
+
+      mockFirmware([firmwarePlatform({ active_core_label: "mGBA", ...counts })]);
+      const pane = render(<LibraryPage onBack={vi.fn()} />).container;
+      await flushAsync();
+      const gamePage = render(
+        <BiosTab
+          biosStatus={{ needs_bios: true, required_count: 1, required_downloaded: 0, ...counts }}
+          biosLevel="missing"
+          coreInfo={GBA_CORE_INFO}
+          isActive={true}
+        />,
+      ).container;
+
+      expect(heldRun(pane.textContent)).toBe("(1/3 files held)");
+      expect(heldRun(gamePage.textContent)).toBe(heldRun(pane.textContent));
     });
 
     it("tells a failed BIOS read apart from a platform the overview cannot speak for", async () => {

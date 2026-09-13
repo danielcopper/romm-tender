@@ -39,9 +39,11 @@
  *
  * What this module does NOT hold is the library's own ratio — `(d/t files held)`.
  * That counts what the RomM library holds for the platform, a third set again,
- * and each surface appends it to the sentence itself. Both do, in the same form
- * and in every one of the seven states: two true statements about two sets, where
- * one number built out of both would be true of neither.
+ * so it is written next door (`utils/biosHeldRatio.ts`) and appended by both
+ * surfaces to every one of the seven sentences: two true statements about two
+ * sets, where one number built out of both would be true of neither. Sharing its
+ * form between the two is a different move from folding it into a sentence —
+ * what stays apart is what each of them counts.
  */
 
 import type { BiosLevel, FirmwareWanted, SystemImage } from "../types/firmware";

@@ -40,6 +40,7 @@ import type { BiosFileStatus, BiosLevel, BiosStatus, CoreInfo, FirmwareWanted } 
 import { biosColorForLevel } from "../utils/biosColor";
 import { isFetchable } from "../utils/biosFetchable";
 import { biosFileDescription, biosFileNote } from "../utils/biosFileNote";
+import { biosHeldRatio } from "../utils/biosHeldRatio";
 import { biosSummary } from "../utils/biosSummary";
 import { infoRow, section } from "./panelSection";
 
@@ -137,21 +138,18 @@ function buildBiosCoreLines(
  * a game page has no adjacent heading to hang a short note on) and what is
  * appended to it.
  *
- * What is appended is the library's ratio, and it is a different set from
- * anything the sentence counts: `local_count` / `server_count` is what the RomM
- * library holds for this platform, where the sentence counts what the launching
- * emulator requires. It rides along rather than being folded in for exactly that
- * reason — "0/20 files held" beside "SwanStation marks none of its BIOS files as
- * required" is two true statements about two sets, and one number built out of
- * both would be true of neither.
+ * What is appended is the library's ratio, and it counts a different set from
+ * anything the sentence counts — which is why it rides along rather than being
+ * folded in, and why it is written by `utils/biosHeldRatio.ts` rather than here.
+ * The platform pane appends the same tail to the same sentences, so a second
+ * spelling of it on this surface is what would let one platform be described in
+ * two amounts.
  *
  * The dot's colour is the backend's verdict through the shared helper and is
  * never re-derived here.
  */
 function buildBiosHeader(bios: BiosStatus, biosLevel: BiosTabProps["biosLevel"]): ReactElement[] {
-  const localCount = bios.local_count ?? 0;
-  const serverCount = bios.server_count ?? 0;
-  const heldRatio = serverCount > 0 ? ` (${localCount}/${serverCount} files held)` : "";
+  const heldRatio = biosHeldRatio(bios);
 
   const biosColor = biosColorForLevel(biosLevel);
   const biosLabel = `${biosSummary(bios, bios.files ?? [], biosLevel).sentence}${heldRatio}`;

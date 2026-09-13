@@ -20,6 +20,7 @@ import type { FirmwarePlatformExt, SystemCoreInfo, SystemImage } from "../../typ
 import { biosColorForLevel } from "../../utils/biosColor";
 import { isFetchable } from "../../utils/biosFetchable";
 import { biosFileDescription, biosFileNote } from "../../utils/biosFileNote";
+import { biosHeldRatio } from "../../utils/biosHeldRatio";
 import { biosSummary } from "../../utils/biosSummary";
 import { buildEmulatorMenu } from "../../utils/emulatorMenu";
 import { getEventTarget } from "../../utils/events";
@@ -728,12 +729,12 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
   firmware,
 }) => {
   const files = firmware.files;
-  // Display counts come from the backend aggregates (computed from the same
-  // core-aware files); fall back to local derivation only if a payload omits
-  // them. `total` is the LIBRARY's file count, not the row count — the rows
-  // include files no library holds, and a progress ratio over those would
-  // report work the user cannot do. The optional-missing breakdown stays a
-  // local file-level axis — the level doesn't model it.
+  // The library's own progress, read nowhere but `allDone`, which is one of
+  // `showAll`'s conditions. Counted over what the LIBRARY holds, not over the
+  // rows — the rows include files no library holds, and offering to fetch those
+  // is work the user cannot do. What the pane STATES is a separate reader of the
+  // same pair (`utils/biosHeldRatio`), and the optional-missing breakdown below
+  // is a local file-level axis the level doesn't model.
   const total = firmware.server_count ?? files.filter((f) => f.on_server).length;
   const done = firmware.local_count ?? files.filter((f) => f.on_server && f.downloaded).length;
   const allDone = done === total;
@@ -752,13 +753,10 @@ const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: F
     firmware.bios_level ?? null,
   );
   // The library's own ratio rides along behind the sentence, in every one of the
-  // seven states and in the same words the game page uses — the two surfaces say
-  // one thing about a platform, so a fact one of them carries is a fact the other
-  // is missing. It stays OUTSIDE the summary module because it counts a third set:
-  // what the RomM library holds for this platform, where the sentence counts what
-  // the launching emulator requires. A library with nothing in it for the platform
-  // gets no ratio at all — "(0/0 files held)" counts a set that does not exist.
-  const heldRatio = total > 0 ? ` (${done}/${total} files held)` : "";
+  // seven states and in the words the game page uses — `utils/biosHeldRatio`
+  // writes it for both, because the two surfaces say one thing about a platform
+  // and a fact one of them carries is a fact the other is missing.
+  const heldRatio = biosHeldRatio(firmware);
   // The narrowest of the declines: not one row on the platform was answered, so
   // the pane has nothing to point the reader at and says where a file can be put
   // instead. A withheld required row and an unsettled console demand are both
