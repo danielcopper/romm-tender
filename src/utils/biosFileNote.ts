@@ -158,7 +158,13 @@ const said = (note: string): BiosFileWords => ({ note, lines: [], fromLibrary: f
  * - **`refused`** — the emulator will not open the file at all, on its size,
  *   before reading a byte. It arrives with the verdict already `false`, so the
  *   row is red with or without this note; what the note adds is the reason, and
- *   without it the row says a file that is sitting right there is missing.
+ *   without it the row says a file that is sitting right there is missing. **It
+ *   is not reachable on an unmodified RetroDECK**: the resolver reaches that
+ *   size gate only for a file one of DuckStation's per-region BIOS keys NAMES
+ *   (`PathNTSCU` / `PathNTSCJ` / `PathPAL`), and RetroDECK sets `SearchDirectory`
+ *   alone and leaves all three empty — cited, with the upstream line numbers, on
+ *   the DuckStation card in `py_modules/_vendor/atlas/data/standalone_firmware.json`.
+ *   A user who fills one of those keys in reaches it.
  *
  * `verified` and `mismatch` get no note: the first is the ordinary met row and
  * the second is an unmet one whose surfaces already say so. Every other value,
