@@ -145,15 +145,16 @@ export const BIOS_SUMMARY_PHRASES: readonly string[] = [
 /**
  * The seven states, in the order the surfaces read them.
  *
- * **This is where the order lives**, all seven of it: the console's own demand,
- * then the level's decline, then the emulator's required files, then the
- * finished answer. The two middle rungs are groups rather than single states,
- * and what each of them SAYS is written next door — {@link declinedSummary}
- * holds states 2-4 and {@link requiredFilesSummary} states 5-6. Each of those
- * orders its own members, and that is the whole reason they are separate: one
- * function holding both would read as a single list of seven tests where it is
- * a list of four with two nested lists inside it, and a state moved between the
- * levels would look like a state moved within one.
+ * **What is decided here is the order of the four rungs**: the console's own
+ * demand, then the level's decline, then the emulator's required files, then
+ * the finished answer. Two of those rungs hold more than one state and are
+ * worded next door — {@link declinedSummary} holds states 2-4, which are a
+ * precedence of their own, and {@link requiredFilesSummary} holds states 5-6,
+ * which are one comparison read two ways. So the seven are two orders and not
+ * one: the console's demand standing ahead of the decline and the withheld row
+ * standing ahead of the unsettled console are different statements, resting on
+ * different reasons, and a body holding all seven tests in a row says they are
+ * the same kind of thing.
  *
  * *level* is the backend's own readiness verdict and is taken as an argument
  * rather than off *source*: the game page holds it beside the payload (a
@@ -203,10 +204,10 @@ export function biosSummary(
  *
  * The withheld row comes first because it is the half that can name a file —
  * it states a count, and the file list is where each row's own caveat explains
- * itself. The console's own unsettled demand can point at no row at all, and
- * the last state has nothing to point at but the emulator. So the order runs
- * from the most specific gap to the least, and the two `Readiness unknown`
- * states sit together above the one that is not about readiness at all.
+ * itself. The unsettled console demand names no row, and the last state names
+ * nothing but the emulator, so the order runs from the gap that points
+ * furthest to the one that points nowhere. The two `Readiness unknown` states
+ * fall together above the one that is not about readiness at all.
  */
 function declinedSummary(named: string, withheld: number, systemImage: SystemImage): BiosSummary {
   // 2. The requirement IS known and the readiness is not — a required row the
