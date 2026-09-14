@@ -14,7 +14,9 @@
  * - `status` is the short coloured note — the platform pane sets it beside
  *   `BIOS FILES`, where the colour comes from the level and this says what the
  *   colour means;
- * - `sentence` is the line itself, and it is what the game page shows.
+ * - `sentence` is the line itself: what the game page shows, what the pane puts
+ *   under its note, and what the platform list's row tooltip carries, since a
+ *   tooltip has no heading beside it to give the short note its subject.
  *
  * They are one answer in two lengths and never two answers: a surface showing
  * both shows a heading and its own sentence, never two facts to reconcile.
@@ -39,11 +41,13 @@
  *
  * What this module does NOT hold is the library's own ratio — `(d/t files held)`.
  * That counts what the RomM library holds for the platform, a third set again,
- * so it is written next door (`utils/biosHeldRatio.ts`) and appended by both
- * surfaces to every one of the seven sentences: two true statements about two
- * sets, where one number built out of both would be true of neither. Sharing its
- * form between the two is a different move from folding it into a sentence —
- * what stays apart is what each of them counts.
+ * so it is written next door (`utils/biosHeldRatio.ts`) and appended to every
+ * one of the seven sentences by the two surfaces that state it at all — the game
+ * page and the platform pane, not the list's row tooltip, which has never
+ * carried the library's ratio. Two true statements about two sets, where one
+ * number built out of both would be true of neither. Sharing its form between
+ * those two is a different move from folding it into a sentence — what stays
+ * apart is what each of them counts.
  */
 
 import type { BiosLevel, FirmwareWanted, SystemImage } from "../types/firmware";

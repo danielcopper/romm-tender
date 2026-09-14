@@ -46,19 +46,31 @@ describe("biosHeldRatio", () => {
 
 /**
  * The same drift lock `biosSummary.test.ts` puts on the seven sentences, over
- * the one tail both of those surfaces append to them.
+ * the one tail the surfaces append to them.
  *
- * The template stood in both components at once, which is the state this module
+ * The template stood in two components at once, which is the state this module
  * removed; nothing but a search of the sources can say it has not come back. The
  * phrase comes from the module the answer is built from, so a wording change
  * moves the lock with it rather than leaving a second copy of it here.
+ *
+ * **The list below is read the same way its twin is: what is not on it carries
+ * no lock.** Both lists held two while three surfaces rendered a BIOS state, and
+ * the sentence half of that omission is what let the third drift. This half was
+ * green for a different reason — the Platforms list states no ratio, and never
+ * did — so the entry here pins that rather than repairing a drift, which is the
+ * only shape a lock can hold something in before it happens. A surface is added
+ * to both lists at once or to neither.
  *
  * It reads the components as TEXT, so a comment quoting the ratio fails it too —
  * deliberately: the words belong to the module, and so does the reasoning about
  * them.
  */
 describe("no surface writes the ratio itself", () => {
-  const surfaces = ["../components/BiosTab.tsx", "../components/library/PlatformDetail.tsx"];
+  const surfaces = [
+    "../components/BiosTab.tsx",
+    "../components/library/PlatformDetail.tsx",
+    "../components/library/PlatformsTab.tsx",
+  ];
 
   it.each(surfaces)("%s carries no spelling of its own", (relative) => {
     const source = readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8");

@@ -367,23 +367,26 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       // The list carries the dot and the name; the number lives in the detail
-      // pane a keypress away, and in the row's title for a mouse.
+      // pane a keypress away, and in the row's title for a mouse — which is the
+      // pane's own sentence, so the count arrives inside it rather than as a
+      // ratio of the row's own devising.
       const rows = [...container.querySelectorAll<HTMLElement>("[title]")];
       const gba = rows.find((el) => el.textContent.includes("Game Boy Advance"));
       const n64 = rows.find((el) => el.textContent.includes("Nintendo 64"));
-      expect(gba?.title).toBe("3 / 5 required BIOS files ready");
+      expect(gba?.title).toBe("3 of 5 files the launching emulator requires are in place");
       // The set the count was taken over, and this payload names no pick, so
       // the sentence says which emulator it is about the only way it can.
-      expect(n64?.title).toBe("The launching emulator requires none of the files it names");
+      expect(n64?.title).toBe("The launching emulator marks none of its BIOS files as required");
       expect(gba?.textContent).not.toContain("3 / 5");
       expect(container.querySelector('[data-testid="bios-dot-n64"]')).toBeTruthy();
     });
 
     it("names the emulator an empty required count is about, where the pick has a name", async () => {
-      // The row's words are the detail pane's own, so a reader who hovers here
-      // and then opens the pane meets one sentence rather than two. The name
-      // comes off the same firmware payload the count came off — never off the
-      // core read beside it, which is a second resolution of one question.
+      // The row's words are literally the detail pane's: both read
+      // `utils/biosSummary.ts`, so a reader who hovers here and then opens the
+      // pane meets one sentence rather than two. The name comes off the same
+      // firmware payload the count came off — never off the core read beside
+      // it, which is a second resolution of one question.
       mockFirmware([firmwarePlatform({ required_count: 0, bios_level: "ok", active_core_label: "mGBA", files: [] })]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -391,13 +394,15 @@ describe("Library › Platforms", () => {
       const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
         el.textContent.includes("Game Boy Advance"),
       );
-      expect(row?.title).toBe("mGBA requires none of the files it names");
+      expect(row?.title).toBe("mGBA marks none of its BIOS files as required");
     });
 
     it("says in words what the dot could not say, for a platform the read cannot speak for", async () => {
       // The dot is now the only BIOS signal in the row, so its title has to
       // carry every state the number used to distinguish — including the two
-      // the detail pane words apart.
+      // the detail pane words apart. This is the narrower of them: the ONE
+      // emulator this platform launches with could not be asked, which the
+      // shared sentence says and the old short note did not.
       mockFirmware([firmwarePlatform({ bios_level: "unknown", required_count: 0, required_withheld: 0 })]);
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
@@ -405,7 +410,7 @@ describe("Library › Platforms", () => {
       const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
         el.textContent.includes("Game Boy Advance"),
       );
-      expect(row?.title).toBe("BIOS requirement unknown");
+      expect(row?.title).toBe("Nothing could be established about what the launching emulator needs");
     });
 
     it("states the ratio once, beside BIOS FILES, in the dot's own colour", async () => {
@@ -422,7 +427,10 @@ describe("Library › Platforms", () => {
         el.textContent.includes("Game Boy Advance"),
       );
       expect(row?.textContent).not.toContain("0 / 2");
-      expect(row?.title).toBe("0 / 2 required BIOS files ready");
+      // The ratio's one home is the pane's coloured note, asserted below. The
+      // row's title states the same shortfall in the shared sentence, which is
+      // the pane's other half — not a second spelling of the note.
+      expect(row?.title).toBe("0 of 2 files the launching emulator requires are in place");
       expect(container.querySelector<HTMLElement>('[data-testid="bios-dot-gba"]')!.style.backgroundColor).toBe(
         biosColorForLevel("missing"),
       );
@@ -2924,7 +2932,11 @@ describe("Library › Platforms", () => {
       const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
         el.textContent.includes("Game Boy Advance"),
       );
-      expect(row?.title).toBe("Needs at least one BIOS file");
+      // The same string the pane is asserted to show above, and deliberately
+      // written out twice: the row and the pane stating one sentence is what
+      // this cut restored, and an assertion that read it off the other would be
+      // green with the two saying different things.
+      expect(row?.title).toBe("The launching emulator cannot start this system without a BIOS image");
       // The rows were answered, so what the library still holds stays fetchable.
       expect(buttonByText(container, "Download all")).not.toBeDisabled();
     });
@@ -2954,12 +2966,13 @@ describe("Library › Platforms", () => {
 
     it("says the console needs at least one file even where the level declines", async () => {
       // The order the pane, the row tooltip and the game page's BIOS headline
-      // have to share. Today the backend never sends this pair — `absent` lands
-      // on `missing` — and what would keep the three agreeing if it did is that
-      // each carries the test itself. Nothing joins them, so each pins its own:
-      // lose it here and this surface alone would say nothing could be
-      // established about what its emulator needs, and offer the by-hand route
-      // in place of a requirement the rows demonstrated.
+      // have to share — and now DO share by construction, since all three read
+      // `utils/biosSummary.ts` and the test sits once inside it. Today the
+      // backend never sends this pair (`absent` lands on `missing`), so what
+      // this pins is that both of this page's surfaces really do reach that
+      // order rather than keeping a copy: lose it and the pane alone would say
+      // nothing could be established about what its emulator needs, and offer
+      // the by-hand route in place of a requirement the rows demonstrated.
       mockFirmware([
         firmwarePlatform({
           bios_level: "unknown",
@@ -2984,7 +2997,7 @@ describe("Library › Platforms", () => {
       const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
         el.textContent.includes("Game Boy Advance"),
       );
-      expect(row?.title).toBe("Needs at least one BIOS file");
+      expect(row?.title).toBe("The launching emulator cannot start this system without a BIOS image");
       // The rows were answered, so the downloads are not withdrawn either.
       expect(buttonByText(container, "Download all")).not.toBeDisabled();
     });
@@ -3016,7 +3029,13 @@ describe("Library › Platforms", () => {
       const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
         el.textContent.includes("Game Boy Advance"),
       );
-      expect(row?.title).toBe("BIOS readiness unknown");
+      // The row states the pane's sentence, which is the half of the answer
+      // that says WHICH gap declined the verdict. The short `Readiness unknown`
+      // asserted above is the pane's coloured note and covers two gaps, so it
+      // is not what a tooltip with no heading beside it can carry.
+      expect(row?.title).toBe(
+        "Whether the BIOS image the launching emulator needs is in place could not be established",
+      );
     });
 
     it("names the unjudged row, not the console, when both ignorances hold at once", async () => {

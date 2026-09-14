@@ -12,8 +12,8 @@
  * the dot now carries the signal alone rather than reinforcing a number: it
  * takes the shared mapping's answer, it is drawn on every row even where there
  * is no level (one that came and went shifted every name beside it), and the
- * words behind it are the row's `title`, which is where the number went rather
- * than away.
+ * words behind it are the row's `title` — the shared module's sentence, which is
+ * where the number went rather than away.
  *
  * A platform's answer arrives on its own, after the list is already standing, so
  * the dot has a fourth appearance that is not a level at all: an outline, for a
@@ -30,51 +30,43 @@ import { ListDetail, type ListDetailItem } from "../qam/ListDetail";
 import { ROW_CONTENT_INSET, ROW_MARKER_GAP, ROW_MARKER_WIDTH, SELECTION_ACCENT } from "../qam/pane";
 import { LoadingRow } from "../LoadingRow";
 import { biosColorForLevel } from "../../utils/biosColor";
+import { biosSummary } from "../../utils/biosSummary";
 import { PlatformDetail } from "./PlatformDetail";
 import type { PlatformRow, PlatformsPageState } from "./usePlatformsPage";
 
 /**
- * What the row's dot means, in words — its `title`, and the only place the list
- * still states the number.
+ * What the row's dot means, in words — its `title`.
  *
- * The wording is the detail pane's own, so a reader who hovers here and then
- * opens the pane meets the same vocabulary rather than two names for one state.
+ * **The BIOS states are not this surface's to word.** `utils/biosSummary.ts`
+ * holds all seven, and this is the third surface to read it. It worded them for
+ * itself until it drifted: the list went on saying an emulator "requires none of
+ * the files it names" after the other two had moved to naming the declaration,
+ * so one platform was described in two vocabularies a keypress apart — the exact
+ * state the module was written to end, surviving in the one place its drift lock
+ * did not look.
+ *
+ * Of the module's two answers the row takes the `sentence`. The short `status`
+ * is a heading and says what a colour means, which needs the heading beside it
+ * to land; a tooltip has no heading and has room for the longer form, and the
+ * pane it is meant to agree with shows both.
+ *
+ * What stays here are the three answers that are not BIOS states at all — they
+ * are about the READ, which the module has no input for and no business knowing.
+ * Each is taken off the STATE rather than off the payload being absent:
+ * `firmware` is non-null in the `answered` state alone, so all three of these
+ * share `firmware === null` and a truthiness test cannot tell them apart —
+ * saying one thing about a row still waiting and a row whose read settled
+ * nothing is how a reader takes an answer where none has arrived. A failed
+ * RE-read keeps the answer it could not replace and the dot goes on showing it,
+ * so only a failure with nothing behind it is worded as one — the pane is where
+ * a kept answer is flagged as possibly out of date.
  */
 function biosTooltip(row: PlatformRow): string {
-  // Read off the STATE, not off the answer being absent: a row still waiting for
-  // its answer and a row nothing could be established for are both `firmware ===
-  // null`, and saying the same thing about them is how a reader takes an answer
-  // where none has arrived.
   if (row.firmwareState === "pending") return "Checking this platform's BIOS files…";
-  // A failed RE-read keeps the answer it could not replace, and the dot goes on
-  // showing it — so the tooltip words that answer, and the pane one keypress
-  // away is where the reader is told it may be out of date. Only a failure with
-  // nothing behind it is worded as one.
   if (row.firmwareState === "failed") return "Could not read this platform's BIOS state";
   const firmware = row.firmware;
   if (!firmware) return "Nothing is known about this platform's BIOS files";
-  // The console's own demand outranks the counts here for the reason it does in
-  // the pane: it is the one requirement no count can state, so "Nothing
-  // required" would stand over a system that will not boot.
-  if (firmware.system_image === "absent") return "Needs at least one BIOS file";
-  if (firmware.bios_level === "unknown") {
-    return (firmware.required_withheld ?? 0) > 0 || firmware.system_image === "unsettled"
-      ? "BIOS readiness unknown"
-      : "BIOS requirement unknown";
-  }
-  const required = firmware.required_count ?? 0;
-  if (required === 0) {
-    // The set the count was taken over, named. A bare "Nothing required" was
-    // read as the CONSOLE needing no BIOS, which is a different axis and one
-    // the catalogue answers `not_demanded` for a console nobody has asked
-    // about. The name comes off the firmware payload the count came off, never
-    // off the core read beside it.
-    const label = firmware.active_core_label;
-    return label
-      ? `${label} requires none of the files it names`
-      : "The launching emulator requires none of the files it names";
-  }
-  return `${firmware.required_downloaded ?? 0} / ${required} required BIOS files ready`;
+  return biosSummary(firmware, firmware.files, firmware.bios_level ?? null).sentence;
 }
 
 const GroupHeading: FC<{ title: string; count: number }> = ({ title, count }) => (

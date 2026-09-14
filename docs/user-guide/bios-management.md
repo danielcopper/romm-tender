@@ -228,7 +228,8 @@ and the row you focus is the one the right-hand pane describes.
 1. From the main QAM page, tap **Library**, then move to the **Platforms** tab with L1/R1
 2. Each row is a coloured dot, the platform's name and the sync toggle. The dot is the BIOS state at a glance — green
    ready, amber partly there, red missing, grey where there is nothing to say — and the numbers behind it are on the
-   right-hand pane, which also states them in full. With a mouse, hovering the row says the same thing in words
+   right-hand pane, which also states them in full. With a mouse, hovering the row gives you the pane's own sentence,
+   word for word, so you are never told two different things about one platform
 3. The dots fill in one platform at a time, from the top, and the platform you are on is always looked at next — so the
    pane you have open does not wait behind the rows above it. A row that is still being checked draws its dot as an
    **outline** rather than a filled circle, and its pane says "Checking what this platform needs…"; that is why a grey

@@ -157,17 +157,30 @@ describe("reading the payload", () => {
  *
  * The whole point of the module is that no surface words these states for
  * itself, and the cheapest way to undo it is to write one sentence back into a
- * component "just this once". So the two surfaces are read as SOURCE and searched
+ * component "just this once". So the surfaces are read as SOURCE and searched
  * for the phrases the module builds its answers from — which come from the module
  * itself, so a wording change moves the lock with it rather than leaving a second
  * copy of the list here to drift.
  *
+ * **The list below is what the lock looks at, and a surface missing from it is a
+ * surface with no lock on it at all.** It held two while three surfaces rendered
+ * these states, and the third went on spelling an older wording of them — green
+ * suite, one platform described two ways a keypress apart. So the list is the
+ * enforcement here, not a description of it: a fourth surface that reads
+ * `biosSummary` is added here in the same change.
+ *
  * What it can see is a summary string in a component. What it cannot see is a
  * component inventing a NEW wording for one of these states, which no string
- * search could catch.
+ * search could catch — the gap the list's own omission fell straight through,
+ * since a surface left out of it is indistinguishable from one that never
+ * drifted.
  */
 describe("no surface words a summary itself", () => {
-  const surfaces = ["../components/BiosTab.tsx", "../components/library/PlatformDetail.tsx"];
+  const surfaces = [
+    "../components/BiosTab.tsx",
+    "../components/library/PlatformDetail.tsx",
+    "../components/library/PlatformsTab.tsx",
+  ];
 
   it.each(surfaces)("%s carries no summary phrase of its own", (relative) => {
     const source = readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8");

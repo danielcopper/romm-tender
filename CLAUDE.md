@@ -614,17 +614,17 @@ Format: **invariant** — tier — enforced by.
   and nothing joins them** — counted one per file the answer passes through, four backend and four frontend: the adapter
   (`adapters/atlas_firmware.py`) carries `CoreFirmware.system_firmware` and `requirements_met` per core,
   `domain/firmware_wants.py::CoreFirmwareVerdict` holds the four spellings apart from the absence,
-  `domain/bios_status.py::classify_system_image` decides, `services/firmware/status.py` stamps it beside the counts, two
-  frontend surfaces word it through ONE module (`src/utils/biosSummary.ts`, read by `BiosTab.tsx` and
-  `library/PlatformDetail.tsx`), `library/PlatformsTab.tsx`'s row tooltip still words it itself, and a fourth reads it
-  without wording it (below). A libretro `.info` can mark a file required or optional and nothing else — no way to say
-  "one of these", none to say the console will not start without one — so an author who knows it will not has two lossy
-  moves, and the deployed catalogue takes both: SwanStation marks all five of its PlayStation images **optional**,
-  Beetle PSX marks three of its own **required**. Which is why no count can be relied on to carry this: it is ONE
-  requirement over the whole list, and putting it in `required_count` reports every image the core declares as required
-  — `0 of 5 files SwanStation requires are in place` under the SwanStation this was observed on. The twenty in that
-  page's own `0/20 files held` is the library's inventory for the platform, a different set again, and reading the two
-  as one is how the wrong ratio gets written. Each fold fails its own way and all of them silently. Fold it into the
+  `domain/bios_status.py::classify_system_image` decides, `services/firmware/status.py` stamps it beside the counts,
+  every frontend surface that words it does so through ONE module (`src/utils/biosSummary.ts` — its readers are the
+  `surfaces` list in `biosSummary.test.ts`, which is the drift lock's own input rather than a tally kept here), and a
+  fourth reads it without wording it (below). A libretro `.info` can mark a file required or optional and nothing else —
+  no way to say "one of these", none to say the console will not start without one — so an author who knows it will not
+  has two lossy moves, and the deployed catalogue takes both: SwanStation marks all five of its PlayStation images
+  **optional**, Beetle PSX marks three of its own **required**. Which is why no count can be relied on to carry this: it
+  is ONE requirement over the whole list, and putting it in `required_count` reports every image the core declares as
+  required — `0 of 5 files SwanStation requires are in place` under the SwanStation this was observed on. The twenty in
+  that page's own `0/20 files held` is the library's inventory for the platform, a different set again, and reading the
+  two as one is how the wrong ratio gets written. Each fold fails its own way and all of them silently. Fold it into the
   counts and the page states a ratio over the wrong set. Read `system_firmware: null` as "this console needs nothing" —
   a truthiness test, a `!= "runs-without-firmware"` bucket, a default — and the plugin claims an all-clear over a
   console nobody has looked at, which is the collapse the `unknown`/`not_needed` entry above is about, one axis over.
@@ -656,29 +656,29 @@ Format: **invariant** — tier — enforced by.
   be the only one, since another image the core declares can be unjudged too; it is the only half of the pair that can
   name a file, and naming it points at the file list, where its caveat explains itself. **`"absent"` is tested BEFORE
   the level's decline**, and the pair never arrives at all today because the backend lands `absent` on `missing`. Since
-  #1863 that order lives ONCE, in `biosSummary`, which is what the two wording surfaces read — so the divergence this
-  used to guard against (one surface losing its own test while the other two kept theirs) is no longer representable
-  between them. What is still unjoined is `PlatformsTab.tsx`'s row tooltip, which carries its own copy of the order:
-  lose it there and the list would read "BIOS readiness unknown" over a row whose pane says the console cannot start.
-  `biosSummary.test.ts` pins the order in the module and `PlatformsTab.test.tsx` pins the tooltip's; nothing joins those
-  two. **The module's own drift lock is a test that reads both components as SOURCE** (`biosSummary.test.ts`, over the
-  phrase list the module builds its answers from) — it catches a sentence written back into a component and cannot catch
-  a component inventing a NEW wording for one of these states. **A narrower form of the same answer is read PER CORE
-  onto every row** (`FirmwareCatalogue.emulators_needing_one_of_their_files` → `build_file_entry`'s
-  `cores[<emulator>]["needs_one_of"]` and the row's own `system_image_candidate`, worded by `BiosTab.tsx`'s
-  `coreLineSuffix` and marked by `library/PlatformDetail.tsx`'s `diskMark`), and there the rule is that the two keys on
-  that entry are two SPEAKERS: `required` is the core's own `.info`, the other is the packaged table about that core's
-  console counted over the core's whole declaration, and `optional` beside `needs_one_of: 5` is the informative pair
-  rather than a contradiction to resolve. Rewriting the declaration off the demand — printing "required" where the core
-  said optional — puts words in the emulator's mouth and loses the only fact the row had to add; folding the pair the
-  other way loses the demand. **A core is in that narrower answer only where it marks NOTHING required**, which is
-  deliberate and is the second thing nothing checks: a core whose console needs an image and that does state required
-  files says so through those rows' `required_by_active`, so annotating its optional rows too states one requirement
-  twice — it put "the console will not start without one" under `ps1_rom.bin`, which Beetle PSX marks optional while
-  hard-requiring three other images. The same narrowing makes `system_image_candidate` a strict subset of the rows
-  `classify_system_image` weighs, and widening either to match the other is the fix that reintroduces one of those two
-  defects. Nothing checks any of it: `needs_one_of` is a plain int-or-null on a dict a surface may read either key of,
-  and the candidate flag is a plain bool beside a `required_by_active` that reads like its sibling
+  #1863 that order lives ONCE, in `biosSummary`, which is what every wording surface reads — `PlatformsTab.tsx`'s row
+  tooltip last, since it kept a copy of the order and an older spelling of the states for a cut longer and described one
+  platform in two vocabularies a keypress apart. **The module's own drift lock is a test that reads those components as
+  SOURCE** (`biosSummary.test.ts`, over the phrase list the module builds its answers from, with the ratio's twin in
+  `biosHeldRatio.test.ts`) — and its `surfaces` list is the enforcement, not a description of it: a surface missing from
+  it carries no lock at all and is indistinguishable from one that never drifted, which is exactly how the tooltip's
+  wording survived the cut that unified the other two. A surface reading `biosSummary` goes on both lists in the same
+  change. What neither lock can catch is a component inventing a NEW wording for one of these states. **A narrower form
+  of the same answer is read PER CORE onto every row** (`FirmwareCatalogue.emulators_needing_one_of_their_files` →
+  `build_file_entry`'s `cores[<emulator>]["needs_one_of"]` and the row's own `system_image_candidate`, worded by
+  `BiosTab.tsx`'s `coreLineSuffix` and marked by `library/PlatformDetail.tsx`'s `diskMark`), and there the rule is that
+  the two keys on that entry are two SPEAKERS: `required` is the core's own `.info`, the other is the packaged table
+  about that core's console counted over the core's whole declaration, and `optional` beside `needs_one_of: 5` is the
+  informative pair rather than a contradiction to resolve. Rewriting the declaration off the demand — printing
+  "required" where the core said optional — puts words in the emulator's mouth and loses the only fact the row had to
+  add; folding the pair the other way loses the demand. **A core is in that narrower answer only where it marks NOTHING
+  required**, which is deliberate and is the second thing nothing checks: a core whose console needs an image and that
+  does state required files says so through those rows' `required_by_active`, so annotating its optional rows too states
+  one requirement twice — it put "the console will not start without one" under `ps1_rom.bin`, which Beetle PSX marks
+  optional while hard-requiring three other images. The same narrowing makes `system_image_candidate` a strict subset of
+  the rows `classify_system_image` weighs, and widening either to match the other is the fix that reintroduces one of
+  those two defects. Nothing checks any of it: `needs_one_of` is a plain int-or-null on a dict a surface may read either
+  key of, and the candidate flag is a plain bool beside a `required_by_active` that reads like its sibling
 - **Which emulator a set of answers is about is ONE pick per scope — a platform's, and a ROM's — and every answer in
   that scope is a projection of it** — test + prompt-only —
   `tests/services/test_firmware.py::TestOnePlatformOneEmulator` asserts the two surfaces AGREE across every way a

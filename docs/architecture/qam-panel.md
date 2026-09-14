@@ -834,8 +834,9 @@ BIOS signal, through the shared mapping every platform-level BIOS dot renders th
 complete, amber partial, red missing, grey for a missing level; the per-file rows on the platform detail and the game
 page hard-code the same four colours). It is drawn on every row, taking exactly the helper's grey where there is no
 level to state: one that came and went shifted every name beside it, and the list is meant to be scanned down its left
-edge — which matters more now that the dot carries the state alone rather than reinforcing a number beside it. The
-number itself is the row's `title`, in the detail pane's own wording, and the pane's header badge states it in full.
+edge — which matters more now that the dot carries the state alone rather than reinforcing a number beside it. What the
+dot means in words is the row's `title`, and it is literally the pane's sentence: both come from `biosSummary` (see the
+BIOS files bullet below), so the number the row used to print arrives inside that sentence wherever the state has one.
 
 **The row carried the ratio (`3 / 5`, an em dash where nothing is required) until the second device round, and that is
 superseded rather than forgotten.** The first device round asked for it and it was added; using it decided the opposite
@@ -987,11 +988,21 @@ it, for the focused platform:
   **The game page's BIOS tab reads the same module** and shows the `sentence` alone, with the same ratio appended in the
   same words — a third set again, which is why it rides along on both rather than being folded in. Neither surface
   prints it where the library holds nothing for the platform: `(0/0 files held)` counts a set that does not exist. What
-  stops a surface writing one of these sentences back into itself is `src/utils/biosSummary.test.ts`, which reads both
-  components as SOURCE and fails on any phrase the module builds its answers from. The **Platforms list's row tooltip**
-  (`PlatformsTab.tsx`'s `biosTooltip`) still words these states itself: it has three answers the module has no input for
-  — a row whose read has not arrived, one whose re-read failed, and one with no payload at all — so it is the one
-  surface not yet folded in.
+  stops a surface writing one of these sentences back into itself is `src/utils/biosSummary.test.ts`, which reads the
+  components as SOURCE and fails on any phrase the module builds its answers from, with `biosHeldRatio.test.ts` doing
+  the same over the ratio. **The `surfaces` list in each of those two tests IS the lock**: what is not on it is not
+  searched, and a surface left off is indistinguishable from one that never drifted.
+
+  **The Platforms list's row tooltip reads the same module too** (`PlatformsTab.tsx`'s `biosTooltip`) and takes the
+  `sentence`, so hovering a row and opening its pane give one wording rather than two. It was the last one in, and while
+  it was outside the module it was also outside both locks — so it went on saying an emulator "requires none of the
+  files it names" after the other two had moved to naming the declaration, and one platform was described two ways a
+  keypress apart with a green suite. It words three answers itself, and none of them is a BIOS state: a row whose read
+  has not arrived, one whose re-read failed, and one with no payload at all. Those are about the READ, which the module
+  has no input for, and each is taken off `firmwareState` rather than off the payload being absent — `firmware` is
+  non-null in the `answered` state alone, so all three of these share it and a truthiness test cannot tell them apart.
+  Of the module's two lengths it takes the `sentence`, because a tooltip carries no heading beside it and the short
+  `status` needs one to mean anything.
 
   **What the two Download buttons and the per-row one are built off is the fetchable set, and none of the three reads
   the verdict** — one predicate, `isFetchable` in `src/utils/biosFetchable.ts`, over
