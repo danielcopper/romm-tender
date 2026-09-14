@@ -145,6 +145,16 @@ export const BIOS_SUMMARY_PHRASES: readonly string[] = [
 /**
  * The seven states, in the order the surfaces read them.
  *
+ * **This is where the order lives**, all seven of it: the console's own demand,
+ * then the level's decline, then the emulator's required files, then the
+ * finished answer. The two middle rungs are groups rather than single states,
+ * and what each of them SAYS is written next door — {@link declinedSummary}
+ * holds states 2-4 and {@link requiredFilesSummary} states 5-6. Each of those
+ * orders its own members, and that is the whole reason they are separate: one
+ * function holding both would read as a single list of seven tests where it is
+ * a list of four with two nested lists inside it, and a state moved between the
+ * levels would look like a state moved within one.
+ *
  * *level* is the backend's own readiness verdict and is taken as an argument
  * rather than off *source*: the game page holds it beside the payload (a
  * requirement nothing could be established for arrives as a placeholder status
@@ -171,63 +181,14 @@ export function biosSummary(
     return { status: STATUS_NEEDS_IMAGE, sentence: `${leading} ${CANNOT_START}` };
   }
 
+  // 2 / 3 / 4. The level declined, over one of three gaps.
   if (level === "unknown") {
-    // 2. The requirement IS known and the readiness is not — a required row the
-    //    resolver could not judge, a declared folder it could not read. It names
-    //    a file count because the file list is where each row's own caveat
-    //    explains itself.
-    if (withheld > 0) {
-      const files = withheld === 1 ? "One file" : `${withheld} files`;
-      return {
-        status: STATUS_READINESS_UNKNOWN,
-        sentence: `${files} ${named} ${REQUIRES_UNCHECKED}`,
-      };
-    }
-    // 3. The same gap one axis over: the console's demand is known and whether
-    //    it is met is not.
-    if (systemImage === "unsettled") {
-      return {
-        status: STATUS_READINESS_UNKNOWN,
-        sentence: `${IMAGE_UNSETTLED_HEAD} ${named} ${IMAGE_UNSETTLED_TAIL}`,
-      };
-    }
-    // 4. Narrower than the branch reaching it looks: the ONE emulator this
-    //    platform launches with could not be asked what it wants. Every other
-    //    installed emulator may have answered perfectly well.
-    return {
-      status: STATUS_REQUIREMENT_UNKNOWN,
-      sentence: `${NOTHING_ESTABLISHED_HEAD} ${named} ${NOTHING_ESTABLISHED_TAIL}`,
-    };
+    return declinedSummary(named, withheld, systemImage);
   }
 
+  // 5 / 6. The emulator's own required files, held or short.
   if (requiredCount > 0) {
-    const ratio = `${requiredDone} / ${requiredCount} required`;
-    // 5 / 6. The emulator's own required files. "Ready" is the level, which
-    //        decides it on exactly this comparison — the fallback is that same
-    //        comparison, not a second rule.
-    const ready = level === null ? requiredDone >= requiredCount : level === "ok";
-    // A requirement of ONE file is worded on its own, because the two count
-    // sentences read "All 1 files" and "0 of 1 files" there, and both halves are
-    // reachable rather than theoretical: DuckStation requires exactly one image
-    // on a stock RetroDECK (`scph1001.bin`), so a PlayStation reads state 5 while
-    // that file is in place and state 6 while it is not.
-    const one = requiredCount === 1;
-    if (ready) {
-      const optionalMissing = rows.filter(
-        (row) => row.wanted === "optional" && !row.required_by_active && !row.downloaded,
-      ).length;
-      const tail = optionalMissing > 0 ? ` (${optionalMissing} ${OPTIONAL_MISSING_TAIL})` : "";
-      const held = one
-        ? `The one file ${named} ${REQUIRES_IS_IN_PLACE}`
-        : `All ${requiredCount} files ${named} ${REQUIRES_ARE_IN_PLACE}`;
-      return { status: ratio, sentence: `${held}${tail}` };
-    }
-    return {
-      status: ratio,
-      sentence: one
-        ? `The one file ${named} ${REQUIRES_IS_NOT_IN_PLACE}`
-        : `${requiredDone} of ${requiredCount} files ${named} ${REQUIRES_ARE_IN_PLACE}`,
-    };
+    return requiredFilesSummary(named, rows, requiredDone, requiredCount, level);
   }
 
   // 7. A finished answer, and the set it was taken over is named: a bare
@@ -235,4 +196,87 @@ export function biosSummary(
   //    axis above and one the catalogue answers `not_demanded` for a console
   //    nobody has looked at as readily as for one shown to start with nothing.
   return { status: STATUS_NOTHING_REQUIRED, sentence: `${leading} ${MARKS_NONE_REQUIRED}` };
+}
+
+/**
+ * States 2-4: what a declined level declined over.
+ *
+ * The withheld row comes first because it is the half that can name a file —
+ * it states a count, and the file list is where each row's own caveat explains
+ * itself. The console's own unsettled demand can point at no row at all, and
+ * the last state has nothing to point at but the emulator. So the order runs
+ * from the most specific gap to the least, and the two `Readiness unknown`
+ * states sit together above the one that is not about readiness at all.
+ */
+function declinedSummary(named: string, withheld: number, systemImage: SystemImage): BiosSummary {
+  // 2. The requirement IS known and the readiness is not — a required row the
+  //    resolver could not judge, a declared folder it could not read. It names
+  //    a file count because the file list is where each row's own caveat
+  //    explains itself.
+  if (withheld > 0) {
+    const files = withheld === 1 ? "One file" : `${withheld} files`;
+    return {
+      status: STATUS_READINESS_UNKNOWN,
+      sentence: `${files} ${named} ${REQUIRES_UNCHECKED}`,
+    };
+  }
+  // 3. The same gap one axis over: the console's demand is known and whether
+  //    it is met is not.
+  if (systemImage === "unsettled") {
+    return {
+      status: STATUS_READINESS_UNKNOWN,
+      sentence: `${IMAGE_UNSETTLED_HEAD} ${named} ${IMAGE_UNSETTLED_TAIL}`,
+    };
+  }
+  // 4. Narrower than the branch reaching it looks: the ONE emulator this
+  //    platform launches with could not be asked what it wants. Every other
+  //    installed emulator may have answered perfectly well.
+  return {
+    status: STATUS_REQUIREMENT_UNKNOWN,
+    sentence: `${NOTHING_ESTABLISHED_HEAD} ${named} ${NOTHING_ESTABLISHED_TAIL}`,
+  };
+}
+
+/**
+ * States 5-6: the emulator's own required files, held or short.
+ *
+ * They are one function because they are one answer read two ways: both state
+ * the same ratio, and which sentence stands is the level's verdict over exactly
+ * the comparison that ratio is. Splitting them would put the ratio in two
+ * places and invite a second readiness rule beside the one the level already
+ * made.
+ */
+function requiredFilesSummary(
+  named: string,
+  rows: readonly BiosSummaryRow[],
+  requiredDone: number,
+  requiredCount: number,
+  level: BiosLevel | null,
+): BiosSummary {
+  const ratio = `${requiredDone} / ${requiredCount} required`;
+  // "Ready" is the level, which decides it on exactly this comparison — the
+  // fallback is that same comparison, not a second rule.
+  const ready = level === null ? requiredDone >= requiredCount : level === "ok";
+  // A requirement of ONE file is worded on its own, because the two count
+  // sentences read "All 1 files" and "0 of 1 files" there, and both halves are
+  // reachable rather than theoretical: DuckStation requires exactly one image
+  // on a stock RetroDECK (`scph1001.bin`), so a PlayStation reads state 5 while
+  // that file is in place and state 6 while it is not.
+  const one = requiredCount === 1;
+  if (ready) {
+    const optionalMissing = rows.filter(
+      (row) => row.wanted === "optional" && !row.required_by_active && !row.downloaded,
+    ).length;
+    const tail = optionalMissing > 0 ? ` (${optionalMissing} ${OPTIONAL_MISSING_TAIL})` : "";
+    const held = one
+      ? `The one file ${named} ${REQUIRES_IS_IN_PLACE}`
+      : `All ${requiredCount} files ${named} ${REQUIRES_ARE_IN_PLACE}`;
+    return { status: ratio, sentence: `${held}${tail}` };
+  }
+  return {
+    status: ratio,
+    sentence: one
+      ? `The one file ${named} ${REQUIRES_IS_NOT_IN_PLACE}`
+      : `${requiredDone} of ${requiredCount} files ${named} ${REQUIRES_ARE_IN_PLACE}`,
+  };
 }
