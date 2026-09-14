@@ -397,6 +397,28 @@ describe("Library › Platforms", () => {
       expect(row?.title).toBe("mGBA marks none of its BIOS files as required");
     });
 
+    it("words a payload that carries no level from the counts alone", async () => {
+      // `bios_level` is optional on the wire, so the row has to word a payload
+      // without one. The module answers it from the comparison the level itself
+      // makes rather than defaulting into one of the seven states by fiat —
+      // and the row shows whatever that answer is, having none of its own.
+      const platform = firmwarePlatform({
+        required_count: 2,
+        required_downloaded: 2,
+        active_core_label: "mGBA",
+        files: [],
+      });
+      delete platform.bios_level;
+      mockFirmware([platform]);
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await flushAsync();
+
+      const row = [...container.querySelectorAll<HTMLElement>("[title]")].find((el) =>
+        el.textContent.includes("Game Boy Advance"),
+      );
+      expect(row?.title).toBe("All 2 files mGBA requires are in place");
+    });
+
     it("says in words what the dot could not say, for a platform the read cannot speak for", async () => {
       // The dot is now the only BIOS signal in the row, so its title has to
       // carry every state the number used to distinguish — including the two
