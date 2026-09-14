@@ -990,8 +990,12 @@ it, for the focused platform:
   prints it where the library holds nothing for the platform: `(0/0 files held)` counts a set that does not exist. What
   stops a surface writing one of these sentences back into itself is `src/utils/biosSummary.test.ts`, which reads the
   components as SOURCE and fails on any phrase the module builds its answers from, with `biosHeldRatio.test.ts` doing
-  the same over the ratio. **The `surfaces` list in each of those two tests IS the lock**: what is not on it is not
-  searched, and a surface left off is indistinguishable from one that never drifted.
+  the same over the ratio. **Both SWEEP the set they search rather than naming it** — every non-test `.tsx` under
+  `src/components`, via `src/test-utils/componentSources.ts` — because naming it is what failed: the lists held two
+  while three surfaces rendered these states, and a surface left off a list cannot be told from one that never drifted.
+  Deriving the set from who imports the module would be worse still, since a surface wording a state for itself is
+  precisely one that does not import it. **What the sweep cannot see is a NEW wording** invented for one of these seven
+  states; no string search can, so a green run is evidence about copied sentences alone.
 
   **The Platforms list's row tooltip reads the same module too** (`PlatformsTab.tsx`'s `biosTooltip`) and takes the
   `sentence`, so hovering a row and opening its pane give one wording rather than two. It was the last one in, and while

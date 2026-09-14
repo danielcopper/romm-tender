@@ -8,6 +8,14 @@
  * each surface's own expectations passed while the three said different things
  * about one platform, which is what a reader moving between them saw.
  *
+ * **Every claim below is about what the code does today, never about where it is
+ * headed**, and that is a rule this file earned the hard way: it named all three
+ * surfaces as readers from the first cut, while the list's tooltip was in fact
+ * still wording its own — a sentence describing the INTENDED state as the
+ * reached one, which then read as evidence that nothing was left to do. The
+ * drift lock is the only claim here that checks itself; when the rest of this
+ * prose runs ahead of the code, nothing at all says so.
+ *
  * So the states are decided here and the sentences are written here, and a
  * surface chooses only WHICH of the two answers it has room for:
  *

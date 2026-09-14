@@ -946,8 +946,8 @@ describe("BiosTab", () => {
       // The same requirement in the only other spelling an emulator has for it:
       // a libretro declaration cannot say "one of these", so SwanStation marks
       // all five PlayStation images optional and the demand arrives here. Drop
-      // this answer and "Needs at least one BIOS file" stands over a list with
-      // no image in it.
+      // this answer and the header states the console's own demand
+      // (`system_image: "absent"`) over a list with no image in it.
       ["the console's own image rests on it", { system_image_candidate: true }],
       ["it is there", { satisfied: true, downloaded: true }],
       // The condition the platform page's download buttons are built from.

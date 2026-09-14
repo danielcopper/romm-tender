@@ -252,8 +252,9 @@ function refreshMetadataInBackground(binding: RomBinding): Promise<void> {
 /** The status the BIOS tab stands on when the requirement could not be
  *  established — the wire payload for that answer, kept whole rather than
  *  restated: `check_platform_bios` says exactly this, and `BiosTab` renders the
- *  grey dot and "BIOS requirement unknown" off the level beside it. No file rows,
- *  because there is nothing the plugin could say about any file. */
+ *  grey dot off the level beside it, over the sentence `utils/biosSummary.ts`
+ *  gives a declined level with no gap it can name. No file rows, because there is
+ *  nothing the plugin could say about any file. */
 const UNKNOWN_REQUIREMENT_STATUS: BiosStatus = { needs_bios: false, bios_status_unknown: true };
 
 /** The panel's two BIOS fields as a BIOS answer carries them — a cached game

@@ -985,10 +985,11 @@ class TestGetBiosStatusNotFound:
 
         Both ship an absent ``bios_status`` and both leave a shown requirement
         standing, so the flag cannot separate them — but only one of them is an
-        ANSWER, and the frontend renders that one as "BIOS requirement unknown"
-        instead of dropping the BIOS tab. A read that raised carries no level, so
-        it stays a non-answer; the pair is asserted together because a change to
-        either side is only a defect against the other.
+        ANSWER, and the frontend words that one as its requirement-unknown state
+        (``src/utils/biosSummary.ts``) instead of dropping the BIOS tab. A read
+        that raised carries no level, so it stays a non-answer; the pair is
+        asserted together because a change to either side is only a defect
+        against the other.
         """
         _seed_rom(plugin, 42, app_id=50000, name="Game", platform_slug="ps3")
         game_detail_service._bios_checker.check_platform_bios = AsyncMock(

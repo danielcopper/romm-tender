@@ -259,9 +259,10 @@ function fileLines(lines: string[], coreLines: ReactElement[]): ReactElement | n
  *   cannot say "one of these", so an emulator whose console will not start
  *   without an image and that marks every one of them optional carries the
  *   demand here instead, and `required_by_active` is false on every such row by
- *   construction. Dropping it leaves the header's "Needs at least one BIOS file"
- *   standing over a list with no image in it — SwanStation's five, on a library
- *   holding none of them.
+ *   construction. Dropping it leaves the header stating the console's own demand
+ *   — `system_image: "absent"`, the first state `utils/biosSummary.ts` tests for
+ *   — over a list with no image in it: SwanStation's five, on a library holding
+ *   none of them.
  * - **present** — the verdict is met, so the row is the evidence for it.
  * - **fetchable** — `isFetchable`, the same predicate the platform page's
  *   download buttons are built from: a row this page treats as actionable and

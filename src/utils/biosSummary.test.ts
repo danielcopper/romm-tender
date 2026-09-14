@@ -1,7 +1,6 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { BIOS_SUMMARY_PHRASES, biosSummary, type BiosSummaryRow, type BiosSummarySource } from "./biosSummary";
+import { componentSources } from "../test-utils/componentSources";
 import type { BiosLevel } from "../types/firmware";
 
 const EMULATOR = "SwanStation";
@@ -157,33 +156,28 @@ describe("reading the payload", () => {
  *
  * The whole point of the module is that no surface words these states for
  * itself, and the cheapest way to undo it is to write one sentence back into a
- * component "just this once". So the surfaces are read as SOURCE and searched
+ * component "just this once". So every component is read as SOURCE and searched
  * for the phrases the module builds its answers from — which come from the module
  * itself, so a wording change moves the lock with it rather than leaving a second
  * copy of the list here to drift.
  *
- * **The list below is what the lock looks at, and a surface missing from it is a
- * surface with no lock on it at all.** It held two while three surfaces rendered
- * these states, and the third went on spelling an older wording of them — green
- * suite, one platform described two ways a keypress apart. So the list is the
- * enforcement here, not a description of it: a fourth surface that reads
- * `biosSummary` is added here in the same change.
+ * **The searched set is swept, never listed** (`test-utils/componentSources.ts`),
+ * because a hand-kept list is what failed here: it named two components while
+ * three rendered these states, and the third went on spelling an older wording
+ * of them with the suite green. A surface missing from such a list cannot be
+ * told from one that never drifted, so correcting the list's count would have
+ * left the failure intact and merely moved it to the next surface added.
  *
- * What it can see is a summary string in a component. What it cannot see is a
- * component inventing a NEW wording for one of these states, which no string
- * search could catch — the gap the list's own omission fell straight through,
- * since a surface left out of it is indistinguishable from one that never
- * drifted.
+ * **What this lock sees is a phrase standing in a component as text.** What it
+ * does NOT see is a component inventing a NEW wording for one of these seven
+ * states — a fourth spelling of "nothing is required here", written from
+ * scratch, passes every search there is, and no string comparison could ever
+ * catch it. That is the gap, it is permanent, and it is why a green run here is
+ * evidence about copied sentences and about nothing else. Reviewing a new BIOS
+ * surface still means reading it.
  */
 describe("no surface words a summary itself", () => {
-  const surfaces = [
-    "../components/BiosTab.tsx",
-    "../components/library/PlatformDetail.tsx",
-    "../components/library/PlatformsTab.tsx",
-  ];
-
-  it.each(surfaces)("%s carries no summary phrase of its own", (relative) => {
-    const source = readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8");
+  it.each(componentSources())("$path carries no summary phrase of its own", ({ source }) => {
     const found = BIOS_SUMMARY_PHRASES.filter((phrase) => source.includes(phrase));
     expect(found).toEqual([]);
   });
@@ -191,5 +185,20 @@ describe("no surface words a summary itself", () => {
   it("searches for something — an empty phrase list would pass over anything", () => {
     expect(BIOS_SUMMARY_PHRASES.length).toBeGreaterThan(0);
     for (const phrase of BIOS_SUMMARY_PHRASES) expect(phrase.length).toBeGreaterThan(8);
+  });
+
+  it("searches the surfaces that render these states, not an empty sweep", () => {
+    // The sweep throws on an empty result, so this pins the other half: that it
+    // really reaches the three components rendering a BIOS state today. A glob
+    // narrowed to one directory would still find files and would silently stop
+    // covering the rest.
+    const paths = componentSources().map((entry) => entry.path);
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "components/BiosTab.tsx",
+        "components/library/PlatformDetail.tsx",
+        "components/library/PlatformsTab.tsx",
+      ]),
+    );
   });
 });
