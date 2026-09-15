@@ -1,0 +1,561 @@
+/**
+ * WidePage tests — the frame's own contract: the Back row, the title, a body
+ * with a definite measured height, whose regions and entry focus it owns and
+ * whose it leaves to the page, a tab bar that survives Steam's `Tabs` probe
+ * coming back undefined, and the two ends of the width the frame is for.
+ *
+ * `Tabs` is read at module scope, so each test loads a fresh copy of the
+ * component through `loadWidePage` with the probe answer it wants. What the
+ * width levers themselves do once engaged is pinned in
+ * `frontend/src/utils/qamExpansion.test.tsx`, against its own fake page; what
+ * is pinned here is that this frame is what engages them.
+ */
+
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
+import type { FC, ReactNode } from "react";
+import { ENTRY_STOP_ATTR } from "../../utils/entryFocus";
+import { WIDE_ROOT_CLASS } from "../../utils/qamExpansion";
+import { OWNS_ENTRY_FOCUS_ATTR, type WidePageProps, type WidePageTab } from "./WidePage";
+
+interface StubTabsProps {
+  tabs: WidePageTab[];
+  activeTab: string;
+  onShowTab: (tabId: string) => void;
+  autoFocusContents?: boolean;
+  /** Steam's own, and the reason B reaches the router: with it unset the tabbed
+   *  page binds the content pane's cancel to focusing the tab row. */
+  cancelSkipTabHeader?: boolean;
+}
+
+/** Steam's own value for the B button, which is not `@decky/ui`'s: the two
+ *  enums disagree, so the number the chip passes is worth pinning. */
+const GLYPH_BUTTON_B = 1;
+
+interface StubGlyphProps {
+  button: number;
+  bKnockout?: boolean;
+}
+
+/** Stand-in for Steam's controller glyph, which is an `<img>` whose source is
+ *  chosen from the controller in the user's hands. What matters here is which
+ *  button the chip asked for. */
+const StubGlyph: FC<StubGlyphProps> = ({ button, bKnockout }) => (
+  <span data-testid="controller-glyph" data-button={String(button)} data-knockout={String(Boolean(bKnockout))} />
+);
+
+/**
+ * Stand-in for Steam's tabbed page: a bar of titles plus the active content.
+ * `autoFocusContents` is surfaced as an attribute — the real page consumes it to
+ * place focus, which happy-dom's gamepad-free DOM cannot show happening.
+ */
+const StubTabs: FC<StubTabsProps> = ({ tabs, activeTab, onShowTab, autoFocusContents }) => (
+  <div data-testid="steam-tabs" data-auto-focus-contents={String(Boolean(autoFocusContents))}>
+    {tabs.map((tab) => (
+      <button key={tab.id} onClick={() => onShowTab(tab.id)}>
+        {tab.title}
+      </button>
+    ))}
+    <div>{tabs.find((tab) => tab.id === activeTab)?.content}</div>
+  </div>
+);
+
+/** Stand-in for Steam's scroll panel, which the frame reaches via `ScrollRegion`. */
+const StubScrollPanel: FC<{ children?: ReactNode }> = ({ children }) => (
+  <div data-testid="scroll-panel">{children}</div>
+);
+
+async function loadWidePage(
+  tabs: FC<StubTabsProps> | undefined,
+  scrollPanel?: FC<{ children?: ReactNode }>,
+  glyph?: FC<StubGlyphProps>,
+): Promise<FC<WidePageProps>> {
+  vi.resetModules();
+  // Every export the graph under test imports has to be named here — Vitest
+  // throws on an import of a name the factory left out, which is how the scroll
+  // panel reaches this file at all: `ScrollRegion` asks for it, `WidePage` does not.
+  vi.doMock("../../utils/deckyUiInternals", () => ({
+    quickAccessMenuClasses: undefined,
+    Tabs: tabs,
+    ScrollPanel: scrollPanel,
+    ControllerGlyph: glyph,
+    GLYPH_BUTTON_B: GLYPH_BUTTON_B,
+  }));
+  return (await import("./WidePage")).WidePage;
+}
+
+const TAB_SET: WidePageTab[] = [
+  { id: "platforms", title: "Platforms", content: <div>platform detail</div> },
+  { id: "collections", title: "Collections", content: <div>collection detail</div> },
+];
+
+function body(): HTMLElement {
+  return screen.getByTestId("wide-page-body");
+}
+
+/**
+ * The frame's two-part fit under a mocked layout: a 600 px scrolling panel whose
+ * top is the viewport top, the page body 100 px down its content, and the body's
+ * own ancestors hanging `overhang` px below their parents.
+ *
+ * happy-dom performs no layout, so every rect here is a mock and the arithmetic
+ * is the whole of what these tests can pin. **Whether the panel then stops
+ * scrolling is a device question** — no test in this repo can see the defect
+ * this pair was written for, or its return.
+ */
+async function measuredFit(overhang: number): Promise<{ height: number; rootMarginBottom: string }> {
+  const WidePage = await loadWidePage(StubTabs);
+  // Only the document body scrolls, so the page's own body has real ancestors
+  // between it and the scroller — which is the shape the overhang lives in.
+  vi.spyOn(window, "getComputedStyle").mockImplementation(
+    (el: Element) => ({ overflowY: el.tagName === "BODY" ? "auto" : "visible" }) as CSSStyleDeclaration,
+  );
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    const isPageBody = this.dataset.testid === "wide-page-body";
+    return (isPageBody ? { top: 100, bottom: 600 + overhang } : { top: 0, bottom: 600 }) as DOMRect;
+  });
+  vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600);
+  vi.spyOn(HTMLElement.prototype, "clientTop", "get").mockReturnValue(0);
+  vi.spyOn(Element.prototype, "scrollTop", "get").mockReturnValue(0);
+
+  try {
+    const { container } = render(
+      <WidePage title="Settings" onBack={vi.fn()}>
+        <div>page body</div>
+      </WidePage>,
+    );
+    return {
+      height: Number.parseFloat(body().style.height),
+      rootMarginBottom: (container.firstElementChild as HTMLElement).style.marginBottom,
+    };
+  } finally {
+    vi.restoreAllMocks();
+    cleanup();
+  }
+}
+
+describe("WidePage", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("puts Back and the title on one line, above the page body", async () => {
+    const WidePage = await loadWidePage(StubTabs);
+    const onBack = vi.fn();
+
+    render(
+      <WidePage title="Settings" onBack={onBack}>
+        <div>page body</div>
+      </WidePage>,
+    );
+    const chip = screen.getByRole("button", { name: "‹ Back" });
+    fireEvent.click(chip);
+
+    expect(screen.getByText("Settings")).toBeInTheDocument();
+    expect(screen.getByText("page body")).toBeInTheDocument();
+    expect(onBack).toHaveBeenCalledTimes(1);
+    // One line: the title is the chip's own sibling, not a row under it.
+    expect(chip.parentElement).toBe(screen.getByText("Settings").parentElement);
+  });
+
+  it("puts the B glyph on the chip, in Steam's own numbering", async () => {
+    // Back is on B, so the chip names that button the way Steam names it —
+    // drawn for the controller in the user's hands rather than typed as a
+    // letter, which would be wrong on a PlayStation pad.
+    const WidePage = await loadWidePage(StubTabs, undefined, StubGlyph);
+
+    render(
+      <WidePage title="Settings" onBack={vi.fn()}>
+        <div>page body</div>
+      </WidePage>,
+    );
+
+    const glyph = screen.getByTestId("controller-glyph");
+    // 1 is B in Steam's action-button enum and A in @decky/ui's — passing the
+    // wrong one draws the wrong glyph and nothing fails.
+    expect(glyph.dataset.button).toBe(String(GLYPH_BUTTON_B));
+    expect(glyph.dataset.knockout).toBe("true");
+    expect(screen.getByRole("button", { name: /Back/ })).toContainElement(glyph);
+    expect(screen.queryByText("‹ Back")).not.toBeInTheDocument();
+  });
+
+  it("keeps a readable chip when the glyph probe misses", async () => {
+    // The probe is a module lookup in someone else's bundle: the day it misses,
+    // the chip has to still say what it does.
+    const WidePage = await loadWidePage(StubTabs);
+
+    render(
+      <WidePage title="Settings" onBack={vi.fn()}>
+        <div>page body</div>
+      </WidePage>,
+    );
+
+    expect(screen.getByRole("button", { name: "‹ Back" })).toBeInTheDocument();
+    expect(screen.queryByTestId("controller-glyph")).not.toBeInTheDocument();
+  });
+
+  it("lets B out of the tabbed page instead of spending it on the tab row", async () => {
+    // Steam binds the content pane's onCancelButton to "focus the tab row"
+    // unless cancelSkipTabHeader is passed, so without it the first B inside a
+    // tab never reaches the router's binding.
+    const seen: StubTabsProps[] = [];
+    const RecordingTabs: FC<StubTabsProps> = (props) => {
+      seen.push(props);
+      return <div data-testid="stub-tabs" />;
+    };
+    const WidePage = await loadWidePage(RecordingTabs);
+
+    render(<WidePage title="Library" onBack={vi.fn()} tabs={TAB_SET} activeTab="platforms" onShowTab={vi.fn()} />);
+
+    expect(seen[0]?.cancelSkipTabHeader).toBe(true);
+  });
+
+  it("gives the body a definite height taken from the remaining viewport", async () => {
+    const WidePage = await loadWidePage(StubTabs);
+
+    const { container } = render(
+      <WidePage title="Settings" onBack={vi.fn()}>
+        <div>page body</div>
+      </WidePage>,
+    );
+
+    // happy-dom reports every rect at the origin, so the body's top is 0 and the
+    // measurement is the whole viewport: nothing is held back under the page.
+    expect(window.innerHeight).toBeGreaterThan(240);
+    expect(body().style.height).toBe(`${window.innerHeight}px`);
+    // Steam's tabbed page fills its parent instead of growing: a min-height
+    // leaves the body with no height at all and the page clips.
+    expect(body().style.minHeight).toBe("");
+    // Nothing computes `overflow-y: auto` here, so this is the no-scroller
+    // fallback — the one branch that measures no ancestor box. It must pull the
+    // root up by nothing: the height it just paid out is viewport-relative and
+    // counts no overhang, so a margin here would shorten the page against
+    // nothing, and the branch is what a chain this frame has never seen falls
+    // into. Every other case in this file takes the scroller branch.
+    expect((container.firstElementChild as HTMLElement).style.marginBottom).toBe("0px");
+  });
+
+  it("measures the same height however far the scrolling panel is scrolled", async () => {
+    // The defect this pins is self-amplifying, which is why it reached a device
+    // as a page that scrolled as one piece: a body measured part-way down the
+    // panel came out that much too tall, the panel then had that much more to
+    // scroll, and nothing re-measured. It can be measured part-way down because
+    // the panel's scroll reset runs a frame after this page's layout effect.
+    //
+    // The two mounts are one DOM at two offsets of the PANEL'S OWN scroll,
+    // which is the device shape and the only one that can go wrong: it slides
+    // the body up and leaves the panel's own box exactly where it is. An
+    // ancestor scrolling above the panel moves both boxes together and cancels
+    // in any formula, so it would prove nothing.
+    const measure = async (scrollTop: number) => {
+      const WidePage = await loadWidePage(StubTabs);
+      const isBody = (el: HTMLElement) => el.dataset.testid === "wide-page-body";
+      vi.spyOn(window, "getComputedStyle").mockReturnValue({ overflowY: "auto" } as CSSStyleDeclaration);
+      // A panel 600px tall whose top is the viewport top, with the body 100px
+      // down its content — so the body's own top is 100 - scrollTop.
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+        return (isBody(this) ? { top: 100 - scrollTop, bottom: 0 } : { top: 0, bottom: 600 }) as DOMRect;
+      });
+      vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(600);
+      vi.spyOn(HTMLElement.prototype, "clientTop", "get").mockReturnValue(0);
+      vi.spyOn(Element.prototype, "scrollTop", "get").mockReturnValue(scrollTop);
+      try {
+        render(
+          <WidePage title="Settings" onBack={vi.fn()}>
+            <div>page body</div>
+          </WidePage>,
+        );
+        return Number.parseFloat(body().style.height);
+      } finally {
+        vi.restoreAllMocks();
+        cleanup();
+      }
+    };
+
+    // 600 − 100 both times. The panel-rect form answers 500 and then 1000,
+    // because the body's top has moved and the panel's has not; the original
+    // `innerHeight − top` fails at the FIRST assertion instead, since
+    // happy-dom's viewport is 768 rather than the panel's 600.
+    expect(await measure(0)).toBe(500);
+    expect(await measure(500)).toBe(500);
+  });
+
+  it("claims the space its ancestors hang below the panel, and pulls them back inside it", async () => {
+    // Decky wraps a plugin's content in a box that overhangs its parent, from
+    // its own inset plus padding. Nothing of ours is painted in those pixels,
+    // but the panel scrolls by them, and that is enough to take the frame's
+    // Back row off the top. Giving the height up instead is what left a band of
+    // the panel empty under every wide page; the pull-up cancels the overhang
+    // without buying room for it.
+    const fitWithOverhang = await measuredFit(50);
+
+    // 600 − 100, the whole of the panel below the body's top. Subtracting the
+    // overhang from the height as well leaves it at 450 — the band, in this
+    // fixture's terms. The 50 is the fixture's own parameter, not a fact about
+    // any panel: the next case runs the same page at 30.
+    expect(fitWithOverhang.height).toBe(500);
+    expect(fitWithOverhang.rootMarginBottom).toBe("-50px");
+  });
+
+  it("takes the pull-up from the same measurement as the height, not a constant", async () => {
+    // The two are one decision: a height counting the overhang without the
+    // margin that cancels it overflows the scroller by exactly that much, and
+    // the panel then scrolls the Back row off the top. So the margin has to
+    // follow whatever this chain actually overhangs by, whatever the display,
+    // scale or Decky version makes that — the whole reason it is measured
+    // rather than written down.
+    const shallower = await measuredFit(30);
+
+    expect(shallower.height).toBe(500);
+    expect(shallower.rootMarginBottom).toBe("-30px");
+  });
+
+  it("pulls the root up by nothing where no ancestor overhangs", async () => {
+    const flush = await measuredFit(0);
+
+    expect(flush.height).toBe(500);
+    expect(flush.rootMarginBottom).toBe("0px");
+  });
+
+  it("never measures the body below its floor", async () => {
+    // Undone by the `vi.unstubAllGlobals()` in frontend/src/test-setup.ts's
+    // global afterEach, so the viewport is back to its default for the next
+    // test.
+    vi.stubGlobal("innerHeight", 100);
+    const WidePage = await loadWidePage(StubTabs);
+
+    render(
+      <WidePage title="Settings" onBack={vi.fn()}>
+        <div>page body</div>
+      </WidePage>,
+    );
+
+    expect(body().style.height).toBe("240px");
+  });
+
+  it("renders tabs through Steam's tabbed page and reports a switch", async () => {
+    const WidePage = await loadWidePage(StubTabs);
+    const onShowTab = vi.fn();
+
+    render(<WidePage title="Library" onBack={vi.fn()} tabs={TAB_SET} activeTab="platforms" onShowTab={onShowTab} />);
+    fireEvent.click(screen.getByRole("button", { name: "Collections" }));
+
+    expect(screen.getByTestId("steam-tabs")).toBeInTheDocument();
+    expect(screen.getByText("platform detail")).toBeInTheDocument();
+    expect(onShowTab).toHaveBeenCalledWith("collections");
+  });
+
+  it("renders the active tab's content without a bar when the Tabs probe missed", async () => {
+    const WidePage = await loadWidePage(undefined);
+
+    render(<WidePage title="Library" onBack={vi.fn()} tabs={TAB_SET} activeTab="collections" onShowTab={vi.fn()} />);
+
+    expect(screen.queryByTestId("steam-tabs")).not.toBeInTheDocument();
+    expect(screen.getByText("collection detail")).toBeInTheDocument();
+    expect(screen.queryByText("platform detail")).not.toBeInTheDocument();
+  });
+
+  it("marks its root with the class the injected width rule matches", async () => {
+    const WidePage = await loadWidePage(StubTabs);
+
+    const { container } = render(
+      <WidePage title="Settings" onBack={vi.fn()}>
+        <div>page body</div>
+      </WidePage>,
+    );
+
+    // The injected `:has()` rule keys on this class: drop it and every wide page
+    // renders 300 px wide inside an 854 px panel, with nothing raised anywhere.
+    // It sits on the root because that is the element the width hook is handed —
+    // one decision, which this pins as one.
+    expect(container.firstElementChild).toHaveClass(WIDE_ROOT_CLASS);
+  });
+
+  it("engages the panel's width levers while it is mounted", async () => {
+    const WidePage = await loadWidePage(StubTabs);
+    const post = vi.spyOn(window, "postMessage").mockImplementation(() => {});
+
+    render(
+      <WidePage title="Settings" onBack={vi.fn()}>
+        <div>page body</div>
+      </WidePage>,
+    );
+
+    // The frame holding `useWideQamPanel` is the whole reason a page is wide.
+    // Dropping the hook while the module stays imported elsewhere leaves the
+    // rest of this file green.
+    expect(post).toHaveBeenCalledWith({ message: "QamFriendsExpanded" }, window.origin);
+  });
+
+  it("gives an untabbed body a scroll panel of its own", async () => {
+    const WidePage = await loadWidePage(StubTabs, StubScrollPanel);
+
+    render(
+      <WidePage title="Settings" onBack={vi.fn()}>
+        <div>page body</div>
+      </WidePage>,
+    );
+
+    expect(screen.getByTestId("scroll-panel")).toContainElement(screen.getByText("page body"));
+  });
+
+  it("gives a tabbed body no region, leaving its tabs' content to the page", async () => {
+    const WidePage = await loadWidePage(StubTabs, StubScrollPanel);
+
+    render(<WidePage title="Library" onBack={vi.fn()} tabs={TAB_SET} activeTab="platforms" onShowTab={vi.fn()} />);
+
+    // Steam's tabbed page already scrolls each tab's content in this same panel,
+    // so a region here would nest a second scroller around all of them — and a
+    // tab that needs regions of its own could no longer place them.
+    expect(screen.queryByTestId("scroll-panel")).not.toBeInTheDocument();
+    expect(screen.getByTestId("steam-tabs")).toBeInTheDocument();
+  });
+
+  it("has Steam's tabbed page place entry focus, and says so on its root", async () => {
+    const WidePage = await loadWidePage(StubTabs);
+
+    const { container } = render(
+      <WidePage title="Library" onBack={vi.fn()} tabs={TAB_SET} activeTab="platforms" onShowTab={vi.fn()} />,
+    );
+
+    // Focus in the content is also what draws the L1/R1 glyphs: Steam's tab row
+    // shows them only while focus is within the tabbed page, and the Back row
+    // is above the tabs. The marker is what keeps the router's own focus —
+    // which would land on that Back row — away from the page.
+    expect(screen.getByTestId("steam-tabs")).toHaveAttribute("data-auto-focus-contents", "true");
+    expect(container.firstElementChild).toHaveAttribute(OWNS_ENTRY_FOCUS_ATTR);
+  });
+
+  it("claims entry focus without tabs too, and puts it in the body", async () => {
+    const WidePage = await loadWidePage(StubTabs);
+    vi.useFakeTimers();
+    try {
+      const { container } = render(
+        <WidePage title="Settings" onBack={vi.fn()}>
+          <button>a page row</button>
+        </WidePage>,
+      );
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+
+      // The frame's first button is the Back chip, which is above the body: the
+      // router's own focus would land there, which is why the page claims it.
+      const row = screen.getByRole("button", { name: "a page row" });
+      expect(body()).toContainElement(row);
+      expect(row).toHaveFocus();
+      expect(row).toHaveClass("gpfocus");
+      expect(screen.getByRole("button", { name: "‹ Back" })).not.toHaveFocus();
+      expect(container.firstElementChild).toHaveAttribute(OWNS_ENTRY_FOCUS_ATTR);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("opens on the area the body declared rather than on its first stop", async () => {
+    const WidePage = await loadWidePage(StubTabs);
+    vi.useFakeTimers();
+    try {
+      render(
+        <WidePage title="Settings" onBack={vi.fn()}>
+          <button>Connections</button>
+          <div {...{ [ENTRY_STOP_ATTR]: "" }}>
+            <button>Controller</button>
+          </div>
+        </WidePage>,
+      );
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+
+      // A NON-first declaration, because the first one passes whether the frame
+      // reads the declaration or not — which is exactly how Settings shipped
+      // opening on Connections whatever section it was sent to.
+      expect(screen.getByRole("button", { name: "Controller" })).toHaveFocus();
+      expect(screen.getByRole("button", { name: "Connections" })).not.toHaveFocus();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("places entry focus in the active tab's content when the Tabs probe missed", async () => {
+    const WidePage = await loadWidePage(undefined);
+    const tabs: WidePageTab[] = [{ id: "platforms", title: "Platforms", content: <button>a tab row</button> }];
+    vi.useFakeTimers();
+    try {
+      const { container } = render(
+        <WidePage title="Library" onBack={vi.fn()} tabs={tabs} activeTab="platforms" onShowTab={vi.fn()} />,
+      );
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+
+      // The fallback renders the tab's content raw, with no `autoFocusContents`
+      // to consume it — so the frame's own timer is what places focus, and the
+      // claim on the root stays true.
+      const row = screen.getByRole("button", { name: "a tab row" });
+      expect(row).toHaveFocus();
+      expect(row).toHaveClass("gpfocus");
+      expect(container.firstElementChild).toHaveAttribute(OWNS_ENTRY_FOCUS_ATTR);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("leaves entry focus to Steam's tabbed page, placing none itself", async () => {
+    const WidePage = await loadWidePage(StubTabs);
+    vi.useFakeTimers();
+    try {
+      render(<WidePage title="Library" onBack={vi.fn()} tabs={TAB_SET} activeTab="platforms" onShowTab={vi.fn()} />);
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+
+      // `autoFocusContents` has already done it. A second placement from here
+      // would race Steam's for the same page and could land elsewhere in it.
+      expect(screen.getByTestId("steam-tabs")).toHaveAttribute("data-auto-focus-contents", "true");
+      expect(document.querySelector(".gpfocus")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("wraps no region around a body whose page builds its own", async () => {
+    const WidePage = await loadWidePage(StubTabs, StubScrollPanel);
+
+    render(
+      <WidePage title="Sync" onBack={vi.fn()} ownRegions>
+        <div>page body</div>
+      </WidePage>,
+    );
+
+    // A page laying regions out side by side would get one wrapped around both
+    // of them, which is a scroller over the two that must not scroll together.
+    expect(screen.queryByTestId("scroll-panel")).not.toBeInTheDocument();
+    expect(body().firstElementChild).toBe(screen.getByText("page body"));
+  });
+
+  it("takes no children beside tabs, whose body is the active tab's content", async () => {
+    const WidePage = await loadWidePage(StubTabs);
+
+    render(
+      // @ts-expect-error `children` sits in the no-tabs branch of WidePageProps: passed here it would render nowhere.
+      <WidePage title="Library" onBack={vi.fn()} tabs={TAB_SET} activeTab="platforms" onShowTab={vi.fn()}>
+        <div>dropped</div>
+      </WidePage>,
+    );
+
+    expect(screen.getByText("platform detail")).toBeInTheDocument();
+    expect(screen.queryByText("dropped")).not.toBeInTheDocument();
+  });
+
+  it("still renders the frame when the active tab has no content", async () => {
+    const WidePage = await loadWidePage(undefined);
+    const emptyTabs: WidePageTab[] = [{ id: "platforms", title: "Platforms", content: null as ReactNode }];
+
+    render(<WidePage title="Library" onBack={vi.fn()} tabs={emptyTabs} activeTab="missing" onShowTab={vi.fn()} />);
+
+    expect(screen.getByText("Library")).toBeInTheDocument();
+    expect(body()).toBeEmptyDOMElement();
+  });
+});

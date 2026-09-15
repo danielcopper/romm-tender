@@ -1,7 +1,8 @@
 """Contract tests for ``reconcile_playtime`` — the flush → GET → max() path.
 
-Driven frontend-shaped per ``src/api/backend.ts``: ``reconcile_playtime`` takes
-one positional ROM id and returns ``{total_seconds, session_count, server_query_failed}``.
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
+``reconcile_playtime`` takes one positional ROM id and returns
+``{total_seconds, session_count, server_query_failed}``.
 
 The reconcile drains the local outbox into RomM's native ``/api/play-sessions``
 ingest, then reads the ROM's cross-device session union back and folds its summed

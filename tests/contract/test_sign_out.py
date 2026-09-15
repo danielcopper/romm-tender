@@ -1,6 +1,6 @@
 """Contract test for the ``sign_out`` callable.
 
-Driven frontend-shaped per ``src/api/backend.ts``:
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``signOut = callable<[], BackendResult>("sign_out")`` — no arguments.
 
 Pins the response SHAPE over the real ``Plugin``: signing out returns the

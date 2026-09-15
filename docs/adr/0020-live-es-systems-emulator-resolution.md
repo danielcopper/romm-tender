@@ -144,7 +144,7 @@ payload renames `available_cores` → `emulators` and gains `emulator_data_avail
 `EmulatorOption`; `CoreInfo.cores` → `emulators`). The callable **surface is unchanged** — same names, same arity, 112
 callables — so the manifest-parity gate is green without touching `backend.ts` names.
 
-Both pickers share one builder (`src/utils/emulatorMenu.ts` → `buildEmulatorMenu`): the game-detail menu
+Both pickers share one builder (`frontend/src/utils/emulatorMenu.tsx` → `buildEmulatorMenu`): the game-detail menu
 (`RomMPlaySection`) and the System-page control (`SystemPage`, now a `ButtonItem` that opens the same context menu
 instead of a `DropdownItem`). Menu keys are the emulator LABEL. Bakeable entries are clickable, the default is marked
 `(default)`, and un-bakeable entries are **disabled** with reason copy — `inject` → "needs setup files (launch via ES-DE

@@ -171,10 +171,10 @@ def build_launch_options(invocation: str, path: str) -> str:
 
     Empty is the established uninstalled state, not a new one invented here:
     ``addShortcut`` leaves a new shortcut's options untouched when the command
-    is ``""`` (``src/utils/steamShortcuts.ts``), the sync update/adoption path
-    writes ``""`` explicitly (``rewriteShortcutIdentity`` in
-    ``src/utils/syncManager.ts``), and an uninstall records ``""`` as the ROM's
-    ``applied_launch_options`` (``services/rom_removal.py``).
+    is ``""`` (``frontend/src/utils/steamShortcuts.ts``), the sync
+    update/adoption path writes ``""`` explicitly (``rewriteShortcutIdentity``
+    in ``frontend/src/utils/syncManager.ts``), and an uninstall records ``""``
+    as the ROM's ``applied_launch_options`` (``services/rom_removal.py``).
 
     The path is double-quoted so paths with spaces survive the launcher's
     ``exec "$@"``. Embedded ``\\`` and ``"`` in the path are backslash-escaped

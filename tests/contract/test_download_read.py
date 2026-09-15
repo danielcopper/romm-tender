@@ -1,6 +1,6 @@
 """Contract tests for the download read-surface callables.
 
-Driven frontend-shaped per ``src/api/backend.ts``:
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``getDownloadQueue = callable<[], {downloads: DownloadItem[]}>`` and
 ``getInstalledRom = callable<[number], InstalledRom | null>``.
 

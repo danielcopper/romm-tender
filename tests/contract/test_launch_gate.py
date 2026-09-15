@@ -1,7 +1,7 @@
 """Contract tests for the ``evaluate_launch`` launch-gate callable.
 
-Driven frontend-shaped per ``src/api/backend.ts``: ``evaluate_launch`` takes a
-single positional Steam app id and returns the ``LaunchVerdict`` dict
+Driven frontend-shaped per ``frontend/src/api/backend.ts``: ``evaluate_launch``
+takes a single positional Steam app id and returns the ``LaunchVerdict`` dict
 (``action`` / ``reason`` / ``toast_title`` / ``toast_body``).
 
 The save-sync-disabled cases are the #1056 regression guard: with the feature

@@ -9,8 +9,8 @@
     "size": "size-limit",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
-    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
+    "format": "prettier --write \"frontend/src/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"frontend/src/**/*.{ts,tsx}\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

@@ -1,6 +1,6 @@
 """Contract tests for the adopt-an-existing-ROM surface (#260).
 
-Driven frontend-shaped per ``src/api/backend.ts``:
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``startDownload = callable<[number, boolean], BackendResult | TargetOccupiedResult>``,
 ``adoptExistingRom = callable<[number], AdoptResult>`` and
 ``verifyExistingContent = callable<[number], VerifyContentResult>``.

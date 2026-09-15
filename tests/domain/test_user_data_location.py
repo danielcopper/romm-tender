@@ -96,7 +96,8 @@ class TestLauncherPath:
         )
 
     def test_it_ends_in_the_suffix_shortcut_ownership_is_read_off(self):
-        """``src/utils/steamShortcuts.ts`` and ``services/prune/requests.py`` match this suffix.
+        """``frontend/src/utils/steamShortcuts.ts`` and
+        ``services/prune/requests.py`` match this suffix.
 
         A launcher moved to a root whose last two components are anything else
         would leave every shortcut written before the move unrecognised as ours

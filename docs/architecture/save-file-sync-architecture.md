@@ -1091,8 +1091,8 @@ good server copy being overwritten (#1062).
 
 ### The modal
 
-`SyncConflictModal` (`src/components/SyncConflictModal.tsx`) shows the local-save row and the picked server-save row
-side by side, each with size and timestamp. Three actions:
+`SyncConflictModal` (`frontend/src/bigpicture/SyncConflictModal.tsx`) shows the local-save row and the picked
+server-save row side by side, each with size and timestamp. Three actions:
 
 - **Keep Local** → `resolveSyncConflict(rom_id, filename, "keep_local")` → backend POSTs local content as a new server
   version with `overwrite=true` (the old server save is retained, not overwritten in place).
@@ -1441,8 +1441,8 @@ RomM", "Saves downloaded from RomM", or "Saves synced with RomM (1 up, 2 down)" 
 that transferred nothing shows no toast. **Exception (#1486):** the manual per-game "Sync Saves" click is an explicit
 user action, so when it moves nothing and hits no conflicts it acknowledges with a "Saves already up to date" toast
 rather than staying silent; the automatic surfaces (pre-launch, post-exit) keep the silent zero-case. The wording lives
-in exactly one place: the frontend helper `saveSyncToastBody` (`src/utils/saveSyncToast.ts`), which every surface
-renders through — pre-launch (`CustomPlayButton`), post-exit (`sessionManager`, from the counts on the
+in exactly one place: the frontend helper `saveSyncToastBody` (`frontend/src/utils/saveSyncToast.ts`), which every
+surface renders through — pre-launch (`CustomPlayButton`), post-exit (`sessionManager`, from the counts on the
 `finalize_game_session` payload), and the manual per-game sync (`RomMPlaySection`). The backend delivers the counts as
 data, never the directional copy (#1481); the offline/failure body it still owns rides a separate `failure_toast` field
 on `SessionFinalizeSyncResult`.

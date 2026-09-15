@@ -1,7 +1,7 @@
 ---
 paths:
   - "main.py"
-  - "src/api/**"
+  - "frontend/src/api/**"
 ---
 
 # Callable response shapes `[ours]`
@@ -26,5 +26,5 @@ Two adjacent rules that bite when adding or changing a callable:
 
 - **Decky callables must be async** — even if the body is synchronous, Decky's callable framework requires `async def`.
 - **Frontend↔backend parity** (name + arity) is enforced by `scripts/check_callable_manifest.py`, which derives the
-  frontend surface from every `callable<[Args], Return>("name")` in `src/**/*.ts`. A rename lands on both sides or not
-  at all.
+  frontend surface from every `callable<[Args], Return>("name")` in `frontend/src/**/*.ts`. A rename lands on both sides
+  or not at all.

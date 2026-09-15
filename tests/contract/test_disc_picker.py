@@ -1,6 +1,6 @@
 """Contract tests for the disc-picker callables over the real Plugin/bootstrap.
 
-Driven frontend-shaped per ``src/api/backend.ts``:
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``getDiscSelection = callable<[number], DiscSelection>`` and
 ``selectDisc = callable<[number, string | null], SelectDiscResult>`` — the
 ``null`` argument is passed as literal Python ``None``.

@@ -835,7 +835,8 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # state. The migration-blocked page
     # renders the card itself, so the callable has to answer while a migration is
     # pending; that the card actually gets there is pinned in
-    # src/components/MigrationBlockedPage.test.tsx, not by this whitelist entry.
+    # frontend/src/bigpicture/MigrationBlockedPage.test.tsx, not by this
+    # whitelist entry.
     "get_legacy_install_notice",
     # The one-time move of the shortcuts onto the launcher's home: the plan, the
     # completion stamp, and the user's answer to the card that ends the
@@ -856,8 +857,9 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # All three have to answer while a migration is pending, because the
     # migration-blocked page carries this notice — and one of its two conditions
     # is a question only the user can answer, which is what a block would make
-    # unanswerable as well as invisible (src/components/MigrationBlockedPage.tsx
-    # pins that it gets there).
+    # unanswerable as well as invisible
+    # (frontend/src/bigpicture/MigrationBlockedPage.tsx pins that it gets
+    # there).
     "get_data_location_notice",
     "get_data_location_candidates",
     "choose_data_location",

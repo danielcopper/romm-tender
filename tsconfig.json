@@ -20,6 +20,6 @@
     "allowSyntheticDefaultImports": true,
     "types": ["vitest/globals", "@testing-library/jest-dom/vitest", "node"]
   },
-  "include": ["src"],
+  "include": ["frontend/src"],
   "exclude": ["node_modules"]
 }

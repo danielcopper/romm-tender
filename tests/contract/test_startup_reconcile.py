@@ -1,6 +1,6 @@
 """Contract tests for the startup launch-options reconcile read callable.
 
-Driven frontend-shaped per ``src/api/backend.ts``:
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``getInstalledRelaunchOptions = callable<[], {app_id, launch_options}[]>``.
 
 The frontend pulls this on mount (after backend reachability is proven) and

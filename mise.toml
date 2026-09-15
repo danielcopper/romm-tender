@@ -263,7 +263,7 @@ mise run deploy
 # into BPM. The helper also places the window on the chosen display (default:
 # internal panel) via a short-lived KWin script, and doesn't wait on Steam.
 bash scripts/dev_open_bpm.sh "$usage_display"
-# Rebuild on every src/ change, then cp the bundle into the deployed dist/.
+# Rebuild on every frontend/src/ change, then cp the bundle into the deployed dist/.
 # cp (in-place modify), never mv/rsync: decky-loader's watcher reacts only to
 # create/modify events on dist/index.js + main.py — moves/renames are ignored.
 # The sourcemap goes first so the watched trigger file (index.js) lands last.

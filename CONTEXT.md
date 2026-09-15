@@ -71,9 +71,9 @@ records that chain in full. So being machine-read does not make a name the ident
 cannot be changed casually.
 
 The display name has **three** homes, and nothing checks that they agree: `DISPLAY_NAME` in
-`py_modules/domain/identity.py`, `PLUGIN_NAME` in `src/utils/toast.ts`, and `plugin.json`'s `name`. Inside a user-facing
-**sentence** it stays literal text — interpolating a constant into prose costs readability and buys nothing. A
-**heading** is not a sentence: a headline and the rule under it are one thing, so the headline is interpolated and the
+`py_modules/domain/identity.py`, `PLUGIN_NAME` in `frontend/src/utils/toast.ts`, and `plugin.json`'s `name`. Inside a
+user-facing **sentence** it stays literal text — interpolating a constant into prose costs readability and buys nothing.
+A **heading** is not a sentence: a headline and the rule under it are one thing, so the headline is interpolated and the
 underline derived from its length.
 
 The identifier has **five** homes, separate because they answer five questions that must stay free to disagree:
@@ -84,8 +84,8 @@ The identifier has **five** homes, separate because they answer five questions t
   derives its settings, data, log and plugin directories from. The packaging smoke test beside it guards that answer; it
   does not decide it.
 - `_LEGACY_PLUGIN_FOLDER` (`services/legacy_install.py`) — the folder releases up to 0.30.1 unpacked into.
-- `SESSION_BREADCRUMB_KEY` (`src/utils/sessionManager.ts`) — the `localStorage` key naming the open-session breadcrumb,
-  so a rename orphans every row written under the old one.
+- `SESSION_BREADCRUMB_KEY` (`frontend/src/utils/sessionManager.ts`) — the `localStorage` key naming the open-session
+  breadcrumb, so a rename orphans every row written under the old one.
 
 Two places restate a home rather than being one: `SOURCE_FOLDER_NAMES`, beside `APP_DIR_NAME`, spells the first and the
 fourth out again as the migration's search list rather than composing them from either, and `mise.toml`'s deploy target
@@ -410,9 +410,9 @@ emulator **refuses** on its size before reading a byte, which arrives with the v
 reason rather than a verdict. Everything else — the bytes matched, they did not, nothing asked — leaves the row to the
 axes it always had.
 
-Where each of the three is worded is `src/utils/biosFileNote.ts`, the one place both surfaces derive a row's note from.
-The mark in the platform pane's `On disk` cell stays the verdict alone and says only that nothing was settled either
-way.
+Where each of the three is worded is `frontend/src/utils/biosFileNote.ts`, the one place both surfaces derive a row's
+note from. The mark in the platform pane's `On disk` cell stays the verdict alone and says only that nothing was settled
+either way.
 
 ### System image (firmware): held / absent / unsettled / not demanded
 
@@ -668,9 +668,9 @@ non-authoritative and cannot mutate Steam.
 
 ### Game-detail store
 
-The single holder of the state one Steam game page shares across its surfaces (`src/utils/gameDetailStore.ts`): the
-bound `rom_id`, install state, save-sync status, BIOS level and core selection, plus the reads that produce them. One
-entry per appId — the first surface to subscribe opens it, the last to unsubscribe closes it, so a page that is off
+The single holder of the state one Steam game page shares across its surfaces (`frontend/src/utils/gameDetailStore.ts`):
+the bound `rom_id`, install state, save-sync status, BIOS level and core selection, plus the reads that produce them.
+One entry per appId — the first surface to subscribe opens it, the last to unsubscribe closes it, so a page that is off
 screen holds nothing and listens to nothing. The `romm_data_changed` DOM bus keeps carrying the notifications and
 carries no state: one handler per appId folds an event into the entry, and every subscriber renders from that one fold
 rather than from its own copy. Overlapping reads for one appId share a single request, so a payload-less notification
@@ -707,15 +707,32 @@ Computed backend-side at the reporter's union key (`domain/collection_label.py`)
 and the frontend needs no change; the mode flip is applied by the ordinary complete-set reconcile on the next normal
 sync (no Force Full Sync). Same-name-**within-one-label** still unions.
 
+### Surface (bigpicture / desktop)
+
+One of the two UIs the plugin draws, each with its own directory under `frontend/src/`: **bigpicture** is the gamepad
+surface — the QAM panel and the patch into Steam's game-detail route (`frontend/src/bigpicture/`) — and **desktop** is
+the keyboard-and-mouse client (`frontend/src/desktop/`, which holds a README and nothing else so far). They are **peers,
+not layers**: the two share data and logic and almost nothing visual, so neither may import from the other, and anything
+that turns out to belong to both moves _down_ into `api/`, `utils/` or `types/` rather than sideways —
+`import-x/no-restricted-paths` in `eslint.config.js` enforces both directions.
+
+The word predates the directories and the older use is still current: `docs/architecture/qam-panel.md` and
+`frontend/src/utils/gameDetailStore.ts` call the components subscribed to one game page's **game-detail store** that
+page's **surfaces** — an open-ended set ("however many surfaces are mounted"), never a fixed number (see **Game-detail
+store**). Every one of them lives inside `bigpicture/`, so in the sense above they are viewers of one surface, and only
+the scope tells the readings apart: a surface of the plugin is a directory, a surface of a game page is a component
+subscribed to that page's game-detail store. _Avoid_: platform, target; _frontend_ (the whole of `frontend/src/` — both
+surfaces and everything below them).
+
 ### QAM page / Main / wide page
 
 What the plugin's Quick Access Menu panel shows at one time, chosen by the panel's router (`Page` in
-`src/types/navigation.ts`). Exactly one page is mounted at a time; navigating to another unmounts it. **Main** is the
-page the panel opens on: notices, status, the conditional slot, the download summary and the menu. A **wide page** is a
-page that widens the panel from 348 px to 854 px for as long as it is mounted — the full screen width on the Deck, whose
-Big Picture viewport is 854 CSS px across. The width belongs to the page, not to a view inside it, and it collapses
-again when the page unmounts, the QAM tab changes, the panel closes or the plugin is dismounted. Every page is one or
-the other, and the page table in `docs/architecture/qam-panel.md` is where each page's width is decided. _Avoid_:
+`frontend/src/types/navigation.ts`). Exactly one page is mounted at a time; navigating to another unmounts it. **Main**
+is the page the panel opens on: notices, status, the conditional slot, the download summary and the menu. A **wide
+page** is a page that widens the panel from 348 px to 854 px for as long as it is mounted — the full screen width on the
+Deck, whose Big Picture viewport is 854 CSS px across. The width belongs to the page, not to a view inside it, and it
+collapses again when the page unmounts, the QAM tab changes, the panel closes or the plugin is dismounted. Every page is
+one or the other, and the page table in `docs/architecture/qam-panel.md` is where each page's width is decided. _Avoid_:
 sub-page, screen, route (a **route** is a Steam page outside the QAM, such as the game detail page).
 
 ### List and detail

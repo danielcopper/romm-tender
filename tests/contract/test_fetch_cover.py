@@ -1,6 +1,6 @@
 """Contract tests for ``fetch_cover_base64`` over the real Plugin/bootstrap.
 
-Driven frontend-shaped per ``src/api/backend.ts``:
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``fetchCoverBase64 = callable<[number], { base64: string | null }>`` — a single
 positional rom_id, asserting the literal ``{"base64": ...}`` data shape. It is a
 data callable, not a ``{success, reason, message}`` result: every failure —

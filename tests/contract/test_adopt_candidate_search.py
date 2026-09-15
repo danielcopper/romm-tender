@@ -1,6 +1,6 @@
 """Contract tests for adopting a ROM already on disk under a different name (#260).
 
-Driven frontend-shaped per ``src/api/backend.ts``:
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``startDownload = callable<[number, boolean, string | null, CollisionChoice | null],
 BackendResult | TargetOccupiedResult | CandidatesFoundResult | RenameCollisionsResult>``
 and ``adoptExistingRom = callable<[number, string | null, CollisionChoice | null], AdoptResult>``.

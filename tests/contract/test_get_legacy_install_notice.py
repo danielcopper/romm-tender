@@ -1,6 +1,6 @@
 """Contract test for the legacy-install notice callable.
 
-Driven frontend-shaped per ``src/api/backend.ts``:
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``getLegacyInstallNotice = callable<[], {pending: boolean; legacy_data_present: boolean}>``.
 
 The harness roots the real ``bootstrap()`` at ``tmp_path/plugin`` and

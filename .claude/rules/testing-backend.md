@@ -59,15 +59,15 @@ Clock/UuidGen/Sleeper, `emit`, and `http_adapter.with_retry` as a single-attempt
 `tests/contract/_harness.py`; seeding helpers in `tests/contract/_seed.py`.
 
 - **Call callables exactly as the frontend does** — positional, JSON-shaped arguments with the arg types declared in
-  `src/api/backend.ts` (literal `None` where the TS type says `null`).
+  `frontend/src/api/backend.ts` (literal `None` where the TS type says `null`).
 - **Assert the response SHAPE + behavior, not delegation.** Pin the literal dict keys, the canonical failure shape, the
   discriminated-status union, and the partial-success carve-outs. Where a callable has a server-reachable failure mode,
   exercise BOTH the happy path AND the failure path.
 - The `harness` fixture is **async** so it binds the test's running event loop. Each test gets a fresh `tmp_path`.
 
 `scripts/check_callable_manifest.py` derives the frontend surface from every `callable<[Args], Return>("name")` in
-`src/**/*.ts` and the backend surface from the public `async def` methods on `Plugin`, failing on any name or arity
-divergence. It runs standalone in CI and inside pytest via `tests/contract/test_callable_manifest.py`.
+`frontend/src/**/*.ts` and the backend surface from the public `async def` methods on `Plugin`, failing on any name or
+arity divergence. It runs standalone in CI and inside pytest via `tests/contract/test_callable_manifest.py`.
 
 ## Gate tests — `tests/scripts/`
 

@@ -1,0 +1,1135 @@
+/**
+ * Everything about one platform, in the Platforms tab's right-hand pane: what
+ * it holds, which core launches it, the BIOS files that core wants, and the two
+ * ways to take it back out of Steam.
+ *
+ * The pane scrolls by moving focus, so every row a reader must reach is a focus
+ * stop — the BIOS table's rows included, which is why a row with nothing to
+ * press still carries an activate handler.
+ *
+ * The sync toggle is deliberately absent: it lives in the list row, where the
+ * focus already is.
+ *
+ * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Library.
+ */
+
+import type { FC, ReactNode } from "react";
+import { ConfirmModal, DialogButton, Focusable, showContextMenu, showModal, Spinner } from "@decky/ui";
+import { FaMicrochip } from "react-icons/fa";
+import type { FirmwarePlatformExt, SystemCoreInfo, SystemImage } from "../../types";
+import { biosColorForLevel } from "../../utils/biosColor";
+import { isFetchable } from "../../utils/biosFetchable";
+import { biosFileDescription, biosFileNote } from "../../utils/biosFileNote";
+import { biosHeldRatio } from "../../utils/biosHeldRatio";
+import { biosSummary } from "../../utils/biosSummary";
+import { buildEmulatorMenu } from "../../utils/emulatorMenu";
+import { getEventTarget } from "../../utils/events";
+import { pluralize } from "../../utils/pluralize";
+import { SYNC_RUNNING_HINT, useSyncRunning } from "../../utils/syncRunning";
+import {
+  AMBER,
+  BusyElsewhere,
+  ButtonRow,
+  FLAT_BUTTON,
+  GREEN,
+  GroupStatus,
+  MUTED,
+  Muted,
+  PALE_GREEN,
+  PaneTableHeader,
+  PaneTableRow,
+  RED,
+  ROW_BUTTON,
+  SECONDARY_FONT,
+  SectionTitle,
+  VIOLET,
+  type ScopedStatus,
+} from "../layout/pane";
+import type { CoreAnswer, DetailStatus, PlatformRow, PlatformsPageState, StatusScope } from "./usePlatformsPage";
+
+/** The page's status line as the pane primitives read it: on this page the key
+ *  a line is bound to is the platform slug. The scope type travels with it, so
+ *  the literal each `GroupStatus` names is checked against the page's groups. */
+const scopedStatus = (status: DetailStatus | null): ScopedStatus<StatusScope> | null =>
+  status && { key: status.slug, scope: status.scope, text: status.text };
+
+/**
+ * The second mark: your RomM library does not hold this file.
+ *
+ * It sits BESIDE the verdict mark and never in place of it — the two are
+ * different questions, and a row that is present but unfetchable ("you have it,
+ * but you could not fetch it again") is exactly the combination a single
+ * channel would lose. Which is why it also carries no need axis of its own: the
+ * mark it stands next to already says whether the file is wanted.
+ *
+ * `⊘` is not one of the verdict shapes and reads as "not available" rather than
+ * as a degree of wrong; DejaVu Sans carries U+2298, the same fontconfig
+ * fallback the `✓`/`✗` glyphs already rely on for this table.
+ */
+const LIBRARY_MARK = { glyph: "⊘", color: VIOLET, title: "not in your RomM library" } as const;
+
+/**
+ * What each mark means — the row's own tooltip AND the legend's line for it, one
+ * string serving both.
+ *
+ * They are the mark's IDENTITY, which is what the legend filters and keys on.
+ * Glyph plus colour cannot be: since the console's own demand became a state of
+ * its own, red `✗` is two different sentences (a required file that is absent, a
+ * console with none of its images) and so are green `✓`, muted `✗` and amber
+ * `✗`. Keyed on the pair, the legend would have shown one of each and given the
+ * second one React's duplicate key; keyed on the sentence, it shows exactly the
+ * ones the table is in.
+ */
+const MARK_REQUIRED_MISSING = "required, missing";
+const MARK_REQUIRED_HERE = "required, here";
+const MARK_HERE = "here, not required";
+const MARK_MISSING = "missing, not required";
+// The `?` glyph's word, and it has to be true of every way a verdict is
+// withheld — which since the `checked` vocabulary arrived includes a file the
+// emulator READ and does not recognise. "could not be checked" was untrue of
+// exactly that one, and it is the reachable case: DuckStation reads such an
+// image, boots it, and calls it an unknown BIOS. So the mark says what the
+// verdict is — nothing settled, in either direction — and WHY is the row's own
+// note beside the name (`biosFileNote`), which is the one place a cause is
+// worded.
+const MARK_UNCHECKED = "nothing could establish this either way";
+const MARK_HERE_NEED_UNKNOWN = "here; nothing could say whether this is wanted";
+const MARK_MISSING_NEED_UNKNOWN = "missing; nothing could say whether this is wanted";
+const MARK_STARTS_THE_SYSTEM = "this starts the system";
+const MARK_ONE_OF_THESE_MISSING = "one of these — any one starts the system";
+const MARK_ONE_OF_THESE_SPARE = "not needed — one of these is already in place";
+const MARK_ONE_OF_THESE_UNSETTLED = "one of these — whether one is in place could not be checked";
+
+/**
+ * The core picker's button in the header line — the game page's icon button, at
+ * this line's scale.
+ *
+ * The chrome is written out rather than reusing `.romm-gear-btn`, for a reason
+ * that needs no claim about which document the class reaches: that class is
+ * 36×36 (`styleInjector.ts`), which is the game page's play row, and this line
+ * is 28px tall. What IS shared is what the user asked to be shared — the icon
+ * and its two colours.
+ */
+const CORE_BUTTON = {
+  alignSelf: "center",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "28px",
+  minWidth: "28px",
+  height: "28px",
+  padding: 0,
+  borderRadius: "4px",
+  flexShrink: 0,
+} as const;
+
+/** One row of the firmware overview's per-platform file list. Named off the
+ *  payload rather than restated, so a field added to it reaches here. */
+type FirmwareRow = FirmwarePlatformExt["files"][number];
+
+/**
+ * The first mark in one row's `On disk` cell, as a glyph and a colour.
+ *
+ * Two facts, two channels, so neither has to be read off the other:
+ *
+ * - **the glyph is the VERDICT** — `✓` met, `✗` not met, `?` nothing could
+ *   establish it. It is `BiosFileEntry.satisfied`, **never presence**: for a
+ *   declared folder the two come apart completely, since RetroDECK links
+ *   LRPS2's `pcsx2/bios` onto the BIOS root, so the folder is always there and
+ *   what satisfies the core is a file inside it.
+ * - **the colour is the NEED** — strong where the core the platform launches
+ *   with requires the file, muted where it does not, **amber where nothing
+ *   could say**. Keyed on `required_by_active`, not `wanted`, because the
+ *   summary above the table counts the same way and the two must not disagree
+ *   about what "required" means.
+ *
+ * The two axes are read in that order, and the order is load-bearing. A row with
+ * no placement is `wanted: "unknown"` — no installed emulator could be asked —
+ * and its verdict is `downloaded` all the same (`domain/bios_status.py`,
+ * `_row_verdict(None, …)`), so it IS established. Testing the need axis first
+ * would spend the glyph on a need-axis fact and throw that verdict away, and a
+ * platform nothing could be asked about is made entirely of such rows: that is
+ * the pane telling the reader they can place BIOS files by hand, so which ones
+ * are already there is the one thing it must not stop saying.
+ *
+ * So the four states the device pass asked for come out as required + met green
+ * `✓`, required + unmet red `✗`, spare + met pale green `✓`, spare + unmet grey
+ * `✗`; a need nothing could establish keeps its glyph and goes amber; and only a
+ * verdict nothing could establish becomes `?`.
+ *
+ * `not_needed` and `optional` share the muted branch on purpose: for the core
+ * about to launch, a file it does not require is not a gap either way.
+ *
+ * **A `system_image_candidate` row is the one need the two channels above cannot
+ * carry**, and it is the fifth state rather than a shade of the fourth. Its mark
+ * is {@link systemImageCandidateMark}'s, and it is asked between the two above
+ * and the required/spare pair below: only the muted answer is replaced — an
+ * unestablished verdict is still `?`, and an unestablished NEED is still amber,
+ * both tested first.
+ *
+ * The `Contents` cell reads the same `satisfied`, so the two columns are two
+ * renderings of one field and cannot contradict each other.
+ */
+function diskMark(file: FirmwareRow, systemImage: SystemImage): { glyph: string; color: string; title: string } {
+  const verdict = rowVerdict(file);
+  if (verdict === null) return { glyph: "?", color: AMBER, title: MARK_UNCHECKED };
+
+  const needUnknown = file.wanted === "unknown";
+  const required = file.required_by_active;
+  const candidate = file.system_image_candidate === true;
+  if (verdict) {
+    if (needUnknown) return { glyph: "✓", color: AMBER, title: MARK_HERE_NEED_UNKNOWN };
+    if (candidate) return systemImageCandidateMark(verdict, systemImage);
+    return { glyph: "✓", color: required ? GREEN : PALE_GREEN, title: required ? MARK_REQUIRED_HERE : MARK_HERE };
+  }
+  if (needUnknown) return { glyph: "✗", color: AMBER, title: MARK_MISSING_NEED_UNKNOWN };
+  if (candidate) return systemImageCandidateMark(verdict, systemImage);
+  return { glyph: "✗", color: required ? RED : MUTED, title: required ? MARK_REQUIRED_MISSING : MARK_MISSING };
+}
+
+/**
+ * The row's verdict, as the payload states it or as its silence leaves it.
+ *
+ * A folder's verdict is what it HOLDS, never that the folder is there — the
+ * register's rule — so a payload carrying no verdict for one leaves the row
+ * unestablished rather than falling back to presence. For a declared file
+ * `downloaded` IS the verdict, which is the only thing the fallback is for.
+ */
+function rowVerdict(file: FirmwareRow): boolean | null {
+  const declaredFolder = file.declared_kind === "directory";
+  const fallback = declaredFolder ? null : file.downloaded;
+  return file.satisfied !== undefined ? file.satisfied : fallback;
+}
+
+/**
+ * The `On disk` mark for a row that could start the console on its own.
+ *
+ * Its core marks every such file optional — that is all a libretro `.info` can
+ * say about one of five images any of which starts the console — so
+ * `required_by_active` is false for all of them and {@link diskMark}'s muted
+ * branch would draw five grey "missing, not required" marks under a red headline
+ * saying the console needs one.
+ *
+ * What is true of such a row depends on the PLATFORM's `system_image`, not on
+ * the row: with none of them in place each is a way to fix it (red), with one in
+ * place the rest are genuinely spare (muted), and where nothing could be
+ * established the row inherits that doubt (amber). A verdict of true needs none
+ * of that: such a row IS the console's held image — the candidates are a subset
+ * of the rows `classify_system_image` reads, so the platform is `held` and this
+ * row is why.
+ */
+function systemImageCandidateMark(
+  verdict: boolean,
+  systemImage: SystemImage,
+): { glyph: string; color: string; title: string } {
+  if (verdict) return { glyph: "✓", color: GREEN, title: MARK_STARTS_THE_SYSTEM };
+  if (systemImage === "absent") return { glyph: "✗", color: RED, title: MARK_ONE_OF_THESE_MISSING };
+  if (systemImage === "held") return { glyph: "✗", color: MUTED, title: MARK_ONE_OF_THESE_SPARE };
+  return { glyph: "✗", color: AMBER, title: MARK_ONE_OF_THESE_UNSETTLED };
+}
+
+/**
+ * The row's second mark, or `null` where the library holds the file.
+ *
+ * One field, one rule, no conditionality on the verdict: a file downloaded
+ * before it left the library is still one that cannot be fetched again, so the
+ * mark appears beside a `✓` exactly as it does beside a `✗`.
+ *
+ * `on_server` absent is not `false` — it is a payload that never spoke about
+ * the library — so an unstated row carries no mark rather than a claim.
+ *
+ * A declared FOLDER is out, and not as a special case: no RomM library holds a
+ * folder, so `_overview_row` stamps every folder row `on_server: False`
+ * unconditionally and the mark would say "your library does not hold this"
+ * about something no library can. That is the sentence `biosFileNote` already
+ * refuses to produce for the same reason, and the same reason keeps folder rows
+ * out of the download filter and out of the download batch.
+ */
+function libraryMark(file: FirmwareRow): typeof LIBRARY_MARK | null {
+  return file.on_server === false && file.declared_kind !== "directory" ? LIBRARY_MARK : null;
+}
+
+// File, On disk, Contents, and the row's own button. Every column but the first
+// is sized for the widest thing it can hold, measured on the device at the
+// Deck's scale: the `On disk` heading is 38.7px and two marks are ~34px; the
+// widest Contents value ("12 images") is 76.8px against a 46.1px heading; the
+// Download button's label is ~55px. What that leaves goes to the file name,
+// which is the column with something to say. None of them is conditional — a
+// column that appears and disappears per platform is worse than a narrow one,
+// and `Contents` is about to be filled for file rows (#1803).
+const TABLE_COLUMNS = "1fr 48px 84px 92px";
+
+const BiosTableHeader: FC = () => (
+  <PaneTableHeader columns={TABLE_COLUMNS} cells={["File", "On disk", "Contents", ""]} />
+);
+
+/**
+ * The Contents cell — what a read of the row's destination found inside it.
+ *
+ * The em dash means **nothing was asked**, and must never come to mean "asked
+ * and found nothing": the whole-machine inventory is deliberately unverified, so
+ * a plain file row carries no content answer at all and #1803 is the work that
+ * will give it one. A declared folder does carry one, because the resolver lists
+ * that folder the way the core does, and the row's `satisfied` verdict is what
+ * came back.
+ *
+ * "no image" covers both ways a folder fails its core — one holding nothing the
+ * core would boot, and a plain file sitting where the core opens a folder —
+ * because the core's listing reaches no image either way. Which of the two it is
+ * belongs to the line under the row, whose wording is {@link biosFileNote}'s.
+ */
+function contentsCell(file: FirmwareRow): string {
+  if (file.declared_kind !== "directory") return "—";
+  if (file.satisfied === true) {
+    const held = file.images?.length ?? 0;
+    if (held === 0) return "an image";
+    return held === 1 ? "1 image" : `${held} images`;
+  }
+  return file.satisfied === false ? "no image" : "unknown";
+}
+
+/**
+ * What a row says under itself: its note, and the images a folder holds.
+ *
+ * Full width, because the alternative is a 48px cell wrapping one sentence
+ * across three lines — the cost the marks were introduced to stop paying. A
+ * note here is also rare in the ordinary case: over the `.info` corpus the rows
+ * that carry one are the handful RetroDECK supplies itself and PS2's folder
+ * row. That is a statement about a healthy install, not about the vocabulary —
+ * `biosFileNote`'s caveat wording appears wherever a destination cannot be
+ * read, which no corpus can predict.
+ *
+ * Each image string is the resolver's verbatim, and `pre-wrap` keeps the column
+ * padding PCSX2 puts in its own option labels — that alignment is what makes a
+ * line matchable against the emulator's own picker. They sit under the row
+ * rather than in the Contents cell because the cell is 84px and one of these
+ * labels is not; the cell counts them instead.
+ */
+const BiosRowLines: FC<{ lines: string[] }> = ({ lines }) =>
+  lines.length === 0 ? null : (
+    <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginLeft: "18px", marginTop: "2px" }}>
+      {lines.map((line) => (
+        <div key={line} style={{ fontSize: SECONDARY_FONT, color: MUTED, whiteSpace: "pre-wrap" }}>
+          {line}
+        </div>
+      ))}
+    </div>
+  );
+
+/**
+ * The folder the emulator declared this file in, with its trailing slash, or
+ * `null` for a file that belongs at the root of the BIOS directory.
+ *
+ * The row's own name is a basename, so without this the pane cannot answer the
+ * one question a user placing a file by hand has: which folder. 207 of the 695
+ * declarations a stock RetroDECK ships name a subdirectory — `dc/dc_boot.bin`,
+ * `ep128emu/roms/exos21.rom` — and their descriptions spell it in only 115 of
+ * those, so the description is not a substitute for the declaration.
+ */
+function declaredFolder(file: FirmwareRow): string | null {
+  const declared = file.declared_path;
+  if (!declared?.includes("/")) return null;
+  return `${declared.slice(0, declared.lastIndexOf("/"))}/`;
+}
+
+/**
+ * What the marks in `On disk` mean, under the table that uses them.
+ *
+ * One entry per line, which is what makes a two-mark cell readable and is what
+ * keeps the filter doing real work: only the entries the table actually
+ * contains, because a line for a state no row is in explains nothing and costs
+ * a row, the scarce thing on this pane. Mark 2 is inside that filter as well —
+ * a platform whose library holds every file shows no line for it — and gets one
+ * line rather than one per pairing, since it means the same beside every
+ * verdict. The order is the order a reader cares about: what is wrong first,
+ * then the second channel — and each of the console's own four states sits
+ * beside the ordinary mark it shares a colour with, since a reader meeting two
+ * red `✗` lines is being told what separates them.
+ *
+ * The entries carry the same strings the rows' tooltips do, and match on them:
+ * see the `MARK_*` block for why the glyph and colour cannot be the identity.
+ */
+const BiosLegend: FC<{ files: FirmwareRow[]; systemImage: SystemImage }> = ({ files, systemImage }) => {
+  const marks = files.map((file) => diskMark(file, systemImage));
+  const shown = [
+    { glyph: "✗", color: RED, text: MARK_REQUIRED_MISSING },
+    { glyph: "✗", color: RED, text: MARK_ONE_OF_THESE_MISSING },
+    { glyph: "✓", color: GREEN, text: MARK_REQUIRED_HERE },
+    { glyph: "✓", color: GREEN, text: MARK_STARTS_THE_SYSTEM },
+    { glyph: "✗", color: AMBER, text: MARK_MISSING_NEED_UNKNOWN },
+    { glyph: "✗", color: AMBER, text: MARK_ONE_OF_THESE_UNSETTLED },
+    { glyph: "✓", color: AMBER, text: MARK_HERE_NEED_UNKNOWN },
+    { glyph: "?", color: AMBER, text: MARK_UNCHECKED },
+    { glyph: "✓", color: PALE_GREEN, text: MARK_HERE },
+    { glyph: "✗", color: MUTED, text: MARK_MISSING },
+    { glyph: "✗", color: MUTED, text: MARK_ONE_OF_THESE_SPARE },
+  ].filter((entry) => marks.some((mark) => mark.title === entry.text));
+  if (files.some((file) => libraryMark(file) !== null)) {
+    shown.push({ glyph: LIBRARY_MARK.glyph, color: LIBRARY_MARK.color, text: LIBRARY_MARK.title });
+  }
+  if (shown.length === 0) return null;
+  return (
+    <div
+      data-testid="bios-legend"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        padding: "2px 16px 6px",
+        fontSize: SECONDARY_FONT,
+        lineHeight: 1.3,
+      }}
+    >
+      {shown.map((entry) => (
+        <span key={entry.text} style={{ color: MUTED }}>
+          <span style={{ color: entry.color }}>{entry.glyph}</span> {entry.text}
+        </span>
+      ))}
+    </div>
+  );
+};
+
+const BiosFileRow: FC<{ file: FirmwareRow; systemImage: SystemImage; action: ReactNode }> = ({
+  file,
+  systemImage,
+  action,
+}) => {
+  const { note, lines, fromLibrary } = biosFileNote(file);
+  const mark = diskMark(file, systemImage);
+  const library = libraryMark(file);
+  const description = biosFileDescription(file);
+  const folder = declaredFolder(file);
+  // The library note is the one sentence the cell's second mark now carries, and
+  // on a platform whose library holds little it was the same words under nearly
+  // every row. Everything else moves under the row rather than into the cell.
+  const rowLines = fromLibrary ? [] : [...(note ? [note] : []), ...lines];
+  return (
+    // The row is a focus stop only while it has nothing to press: an action cell
+    // holds a button that is already a stop, and a second one on the wrapper
+    // would put a dead step in front of every one of them. `action` is therefore
+    // a NODE that may be null and never a component element — an element is
+    // always truthy, which is how this branch went dead once while the comment
+    // on it went on explaining it.
+    <PaneTableRow
+      columns={TABLE_COLUMNS}
+      focusStop={!action}
+      cells={[
+        {
+          // With the folder in front of it what gets cut is the NAME rather
+          // than the description that used to sit here —
+          // `scummvm/extra/hadesch_translations.dat` does not fit 202px in any
+          // arrangement. The title is the mouse's way back to it; a reader on
+          // the controller has none, and the only real fix is width the list
+          // column currently holds.
+          content: (
+            <>
+              {folder && <span style={{ color: MUTED }}>{folder}</span>}
+              {file.file_name}
+            </>
+          ),
+          title: file.declared_path ?? file.file_name,
+        },
+        {
+          // Glyphs rather than a run of text: nothing to ellipsise, and the
+          // pair is laid out rather than flowed.
+          content: (
+            <>
+              <span data-testid="disk-mark" style={{ color: mark.color }} title={mark.title}>
+                {mark.glyph}
+              </span>
+              {library && (
+                <span data-testid="library-mark" style={{ color: library.color }} title={library.title}>
+                  {library.glyph}
+                </span>
+              )}
+            </>
+          ),
+          style: { display: "flex", gap: "4px", fontSize: "14px", whiteSpace: "nowrap" },
+          clip: false,
+        },
+        { content: contentsCell(file), style: { color: MUTED, fontSize: SECONDARY_FONT } },
+        // The button draws its focus ring outside its own box (the injected
+        // sheet's outline), so this cell must not hide its overflow.
+        { content: action, clip: false },
+      ]}
+    >
+      {/* A muted line UNDER the row, where the game page's BIOS tab puts the
+          same label beside the file's name. That is a column width rather than
+          a difference of opinion, and it is why the two are not "unified": this
+          name lives in a ~202px table cell that clips, and it already gives up
+          its folder prefix to the same shortage — hanging the label off it would
+          take the NAME off the screen, which is the one thing a reader placing a
+          file by hand needs. Under the row there is a whole width for it, on one
+          clipped line, and no list of emulators below to be mistaken for. */}
+      {description && (
+        <div
+          style={{
+            marginLeft: "18px",
+            fontSize: SECONDARY_FONT,
+            color: MUTED,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {description}
+        </div>
+      )}
+      <BiosRowLines lines={rowLines} />
+    </PaneTableRow>
+  );
+};
+
+/**
+ * What the pane can offer for this platform's core: a pick, or a sentence
+ * saying why there is nothing to pick.
+ *
+ * One decision, because the answer is rendered in two places — the header's
+ * icon button and the line under it — and splitting it would let the two
+ * disagree, which is a sentence saying there is nothing to switch under a
+ * button that switches.
+ */
+/**
+ * What the header's core control can do, and what to say about it.
+ *
+ * `pick` opens the menu. `blocked` renders the SAME chip, disabled, with
+ * `reason` in its tooltip — a control that is always there and greyed when
+ * there is nothing to press, which is the ruling the Remove group already
+ * follows. A sentence costs a row to report that nothing can be done; the
+ * tooltip costs none and keeps the header's shape constant across panes.
+ *
+ * `notice` is for the branches that are not "nothing to switch" but a problem
+ * with the platform or the install — a failed read, no RetroDECK, no emulator
+ * at all. Those keep their line, because a greyed chip would hide a failure
+ * behind a hover the Deck's controller has no way to perform.
+ */
+type CoreOffer = { kind: "pick"; core: SystemCoreInfo } | { kind: "blocked"; reason: string; notice?: string };
+
+function coreOffer(row: PlatformRow, core: CoreAnswer): CoreOffer {
+  // Strictly zero, so an unread shortcut count does not withdraw the picker:
+  // "sync this first" would be a claim about a platform nothing was learned
+  // about, and the core read is independent of the count anyway.
+  if (row.shortcutCount === 0) {
+    return { kind: "blocked", reason: "Sync this platform first — the core applies to the games it puts in Steam." };
+  }
+  if (core === undefined) return { kind: "blocked", reason: "Reading the emulators for this platform…" };
+  if (core === null) {
+    const failed = "Could not read the emulators for this platform. Reopen the page to try again.";
+    return { kind: "blocked", reason: failed, notice: failed };
+  }
+  if (!core.emulator_data_available) {
+    const absent = "RetroDECK was not found, so there is no emulator list to choose from.";
+    return { kind: "blocked", reason: absent, notice: absent };
+  }
+  // An EMPTY menu first, because it is the one case where the fallback fails
+  // too. `_resolve_system` hands back the raw RomM slug for a platform its map
+  // does not name, and `get_emulator_options` answers `available: true` with no
+  // options for a system `es_systems.xml` does not list — `vic-20`,
+  // `acorn-electron`, `nintendo-dsi`, `ps5`, `browser` and `win` are in neither
+  // on this machine. RetroDECK's own launch then reads `command[1]` for the
+  // system, finds nothing, logs "No valid emulator found for system" and exits
+  // 1 (`libexec/run_game.sh`), so the games really do not start.
+  if (core.emulators.length === 0) {
+    const none = "RetroDECK lists no emulator for this platform, so its games will not launch.";
+    return { kind: "blocked", reason: none, notice: none };
+  }
+  // Then the not-bakeable menu, ahead of the counts because it is not one:
+  // `active_core_label` is null when nothing ES-DE lists is BAKEABLE, which says
+  // nothing about how many entries there are. A platform whose only entry is a
+  // standalone emulator this RetroDECK has not installed lands here with one
+  // option, and one with two uninstalled ones lands here with two — where a
+  // count-shaped branch would have said "offers one emulator" or nothing at all.
+  //
+  // What the fallback then DOES splits the state in two, and the payload can
+  // tell them apart. `run_game.sh` takes `command[1]` for the system when no
+  // alternate emulator is set, and `options` keeps ES-DE's document order, so
+  // `emulators[0]` IS that command. If its emulator is the one RetroDECK has
+  // not installed, the fallback names a binary that is not there and the games
+  // do not start. Every other reason leaves the muted branch, which is where
+  // Apple I lands: run through this repo's own `classify_command` over the
+  // shipped `es_systems.xml`, its two commands come back
+  // `no_rom_target` and `quoting`, both `kind: "standalone"` with a null
+  // `core_so`. The first is unbakeable because its whole MAME invocation is one
+  // quoted argument, so it does not end in `%ROM%` — a different reason from
+  // the second's, and neither is `not_installed`.
+  if (core.active_core_label === null) {
+    const fallback = core.emulators[0];
+    if (fallback?.reason === "not_installed") {
+      return {
+        kind: "blocked",
+        reason: `RetroDECK would launch these with ${fallback.label}, which is not installed — and nothing here can pin a different one.`,
+        notice: `RetroDECK would launch these with ${fallback.label}, which is not installed — and nothing here can pin a different one.`,
+      };
+    }
+    return {
+      kind: "blocked",
+      reason: "None of this platform's emulators can be pinned from here, so RetroDECK picks one when a game launches.",
+      notice: "None of this platform's emulators can be pinned from here, so RetroDECK picks one when a game launches.",
+    };
+  }
+  // One count branch, and it is exactly true: an empty menu was answered two
+  // branches up and a not-bakeable one the branch after it, so a single option
+  // here is a single BAKEABLE one — there really is nothing to switch to.
+  if (core.emulators.length === 1) {
+    return { kind: "blocked", reason: "This platform offers one emulator, so there is nothing to switch." };
+  }
+  return { kind: "pick", core };
+}
+
+/**
+ * The line under the header when there is no core to pick, and the place a
+ * refused switch is reported.
+ *
+ * There is no heading and no button: the button moved into the header line the
+ * platform is already named on, which is where the game page keeps its own. The
+ * save-compatibility warning moved with it — into the picker, where
+ * `buildEmulatorMenu` has always rendered it, so a copy here was the same
+ * sentence on the page that opens the menu carrying it.
+ */
+const CoreNotice: FC<{ row: PlatformRow; state: PlatformsPageState; offer: CoreOffer }> = ({ row, state, offer }) => (
+  <>
+    {offer.kind === "blocked" && offer.notice !== undefined && <Muted>{offer.notice}</Muted>}
+    <GroupStatus status={scopedStatus(state.status)} forKey={row.slug} scope="core" />
+  </>
+);
+
+/**
+ * What a download button shows instead of its label: a spinner while its own run
+ * is going, a red `Failed` for the moment after one fails, or nothing.
+ *
+ * Both are keyed on the run's slug as well as the button's identity, because
+ * `downloadPending` and `downloadFailed` name the button and every pane reads
+ * the same state — without the slug a spinner would appear on the pane the
+ * reader walked to. That pane shows disabled buttons and the line naming the
+ * platform that is busy, which is what it always did.
+ */
+function downloadState(row: PlatformRow, state: PlatformsPageState, id: string): "spinner" | "failed" | null {
+  if (state.busySlug !== row.slug) return null;
+  if (state.downloadPending === id) return "spinner";
+  return state.downloadFailed === id ? "failed" : null;
+}
+
+const FAILED_LABEL = <span style={{ color: RED }}>Failed</span>;
+
+/** The removal confirmation's title. The count is interleaved with the
+ *  platform's name, so this is the one of the three count labels `pluralize`
+ *  cannot spell; an unread count drops the number rather than guessing one. */
+function removeShortcutsTitle(row: PlatformRow): string {
+  if (row.shortcutCount === null) return `Remove ${row.name} shortcuts?`;
+  return `Remove ${row.shortcutCount} ${row.name} shortcut${row.shortcutCount === 1 ? "" : "s"}?`;
+}
+
+/**
+ * The colour the header's core clause and its chip both take.
+ *
+ * Three outcomes in priority order, which is what the nested form obscured:
+ * nothing can be pinned at all is red, an override the user chose is gold, and
+ * everything else — including a platform running its default — is muted. Both
+ * callers read it from here so the icon and the words beside it cannot disagree.
+ */
+function coreClauseColour(unpinnable: boolean, isOverride: boolean): string {
+  if (unpinnable) return RED;
+  return isOverride ? AMBER : MUTED;
+}
+
+/** What the header's core clause reads where no option can be pinned: which of
+ *  the three unpinnable states the platform is in, said in the fewest words the
+ *  state supports. */
+function fallbackLabel(noEmulator: boolean, fallbackMissing: boolean): string {
+  if (noEmulator) return "no emulator";
+  return fallbackMissing ? "no emulator installed" : "RetroDECK decides";
+}
+
+/** The label a download button carries right now — its own word unless its run
+ *  is speaking. */
+function downloadLabel(
+  row: PlatformRow,
+  state: PlatformsPageState,
+  id: string,
+  label: string,
+  size: number,
+): ReactNode {
+  const showing = downloadState(row, state, id);
+  if (showing === "spinner") return <Spinner width={size} height={size} />;
+  return showing === "failed" ? FAILED_LABEL : label;
+}
+
+/**
+ * A BIOS row's one action: fetch it, or remove the copy we fetched — or
+ * nothing, which is a `null` the row needs in order to wrap itself in a
+ * `Focusable`.
+ *
+ * The two buttons are alternatives in every state the pane can show, so one
+ * narrow column carries both. They are not mutually exclusive by construction,
+ * though: a file downloaded before an emu-atlas bump moved its placement is
+ * absent at the new destination (so fetchable) and present at the recorded one
+ * (so deletable). Download wins there, which is the useful half — the file the
+ * core will look for is the one that is missing.
+ *
+ * **The delete's condition is `deletable_count` and nothing else.** That field
+ * says how many of the plugin's own downloads a delete here would take, which
+ * is the whole authority; `downloaded` is `os.path.exists` and is equally true
+ * of `dolphin-emu/Sys/codehandler.bin`, which RetroDECK ships, no library can
+ * hand back, and which sits one row above a real download on the GameCube pane.
+ * The unlink itself re-reads the records and takes the path each one holds, so
+ * this button cannot widen what it removes.
+ *
+ * A declared FOLDER offers it too, and that is a different rule from the one
+ * that keeps a folder out of the downloads: there is no file to FETCH into a
+ * name the emulator lists, but the files already inside it are ours wherever a
+ * record names them. Its button carries the count and its delete is addressed
+ * by the folder rather than by a file name, because no record carries the
+ * folder's name.
+ */
+function rowAction(
+  row: PlatformRow,
+  state: PlatformsPageState,
+  file: FirmwareRow,
+  fetchable: Set<string>,
+): ReactNode | null {
+  const busy = state.busySlug !== null;
+  if (fetchable.has(file.file_name) && !state.serverOffline) {
+    return (
+      <DialogButton
+        style={ROW_BUTTON}
+        disabled={busy}
+        onClick={() => {
+          state.downloadOne(row.slug, file.file_name);
+        }}
+      >
+        {downloadLabel(row, state, file.file_name, "Download", 11)}
+      </DialogButton>
+    );
+  }
+  const count = file.deletable_count ?? 0;
+  if (count === 0) return null;
+  const folder = file.declared_kind === "directory";
+  const confirm = () =>
+    showModal(
+      <ConfirmModal
+        strTitle={folder ? `Delete ${count} file(s) in ${file.file_name}?` : `Delete ${file.file_name}?`}
+        strDescription="This deletes only what this plugin downloaded, at the places it wrote them. Files your emulator came with, or that you put there yourself, are never touched — and a folder the emulator lists is never removed. Games that need them won't launch until you download them again."
+        strOKButtonText="Delete"
+        strCancelButtonText="Cancel"
+        onOK={() => {
+          if (folder) state.deleteBiosFolder(row.slug, file.local_path);
+          else state.deleteBiosFile(row.slug, file.file_name);
+        }}
+      />,
+    );
+  return (
+    <DialogButton style={ROW_BUTTON} disabled={busy} onClick={confirm}>
+      <span style={{ color: RED }}>{folder ? `Delete (${count})` : "Delete"}</span>
+    </DialogButton>
+  );
+}
+
+const BiosSection: FC<{ row: PlatformRow; state: PlatformsPageState; firmware: FirmwarePlatformExt }> = ({
+  row,
+  state,
+  firmware,
+}) => {
+  const files = firmware.files;
+  // The library's own progress, read nowhere but `allDone`, which is one of
+  // `showAll`'s conditions. Counted over what the LIBRARY holds, not over the
+  // rows — the rows include files no library holds, and offering to fetch those
+  // is work the user cannot do. What the pane STATES is a separate reader of the
+  // same pair (`utils/biosHeldRatio`), and the optional-missing breakdown below
+  // is a local file-level axis the level doesn't model.
+  const total = firmware.server_count ?? files.filter((f) => f.on_server).length;
+  const done = firmware.local_count ?? files.filter((f) => f.on_server && f.downloaded).length;
+  const allDone = done === total;
+
+  const requiredWithheld = firmware.required_withheld ?? 0;
+  const systemImage = firmware.system_image ?? "not_demanded";
+  // **The pane words none of the seven states itself** — `utils/biosSummary.ts`
+  // holds them, and this surface takes both halves of one answer: the short
+  // `status` as the section's coloured note, where the title beside it says what
+  // is being counted, and the `sentence` under it. The console's own demand
+  // outranking the level's decline is decided in there too, which is what stops
+  // this pane from reading that order differently from the game page's.
+  const { status: summaryLabel, sentence: summaryDescription } = biosSummary(
+    firmware,
+    files,
+    firmware.bios_level ?? null,
+  );
+  // The library's own ratio rides along behind the sentence, in every one of the
+  // seven states and in the words the game page uses — `utils/biosHeldRatio`
+  // writes it for both, because the two surfaces say one thing about a platform
+  // and a fact one of them carries is a fact the other is missing.
+  const heldRatio = biosHeldRatio(firmware);
+  // The narrowest of the declines: not one row on the platform was answered, so
+  // the pane has nothing to point the reader at and says where a file can be put
+  // instead. A withheld required row and an unsettled console demand are both
+  // declined VERDICTS over rows that DID answer, and neither reaches this. It
+  // decides one extra LINE only — what the pane offers to fetch is a separate
+  // question with a separate input, below.
+  const nothingEstablished =
+    firmware.bios_level === "unknown" &&
+    systemImage !== "absent" &&
+    requiredWithheld === 0 &&
+    systemImage !== "unsettled";
+
+  // The download affordances key off what is missing AND fetchable, and read
+  // the VERDICT nowhere — not `bios_level`, not `required_withheld`, not
+  // `system_image`. They are two independent questions: what the RESOLVER could
+  // establish is the emulator's demand, what is FETCHABLE is what the RomM
+  // library holds, and neither answers the other. A required file the library
+  // does not hold leaves the platform not ready and still gives the user
+  // nothing to press here; a platform nothing could be read for still has a
+  // library behind it, and fetching from it is the one action that moves the
+  // platform along at all.
+  //
+  // The two further inputs below are of those same two kinds, and neither is a
+  // readiness gate either: `required_by_active` is the launching emulator's own
+  // declaration, and `allDone` is the library's own finished ratio.
+  //
+  // Reading readiness here is what took the buttons off PS2, GameCube and PSP
+  // the moment a BIOS answer was scoped to the emulator that actually launches:
+  // those launch standalone emulators the resolver holds no card for, so the
+  // verdict declines — which says nothing whatever about the files their
+  // library offers.
+  //
+  // Which rows are fetchable at all — the library's side of it, including why a
+  // declared folder is out — is `isFetchable`, shared with the game page's BIOS
+  // tab so the two surfaces cannot disagree about what can be downloaded.
+  const fetchableMissing = files.filter(isFetchable);
+  const requiredMissing = fetchableMissing.filter((f) => f.required_by_active).length;
+  const hasOptionalMissing = fetchableMissing.some((f) => !f.required_by_active);
+  const showRequired = requiredMissing > 0 && !state.serverOffline;
+  const showAll = !allDone && (hasOptionalMissing || requiredMissing > 0) && !state.serverOffline;
+  const fetchable = new Set(fetchableMissing.map((f) => f.file_name));
+  // What Delete BIOS would remove — a record count, not a library one. There is
+  // no local fallback: the rows say nothing about who downloaded a file, so a
+  // payload without the field offers no delete rather than guessing.
+  const deletable = firmware.deletable_count ?? 0;
+  const unanswered = files.filter((f) => f.wanted === "unknown").length;
+
+  const confirmDeleteBios = () =>
+    showModal(
+      <ConfirmModal
+        strTitle={`Delete BIOS files for ${row.name}?`}
+        strDescription="This deletes only the BIOS files this plugin downloaded for this system. Files your emulator came with, or that you put there yourself, are left where they are. Games that need the deleted files won't launch until you download them again."
+        strOKButtonText="Delete BIOS Files"
+        strCancelButtonText="Cancel"
+        onOK={() => state.deleteBios(row.slug)}
+      />,
+    );
+
+  return (
+    <>
+      {/* The ratio is stated once, here, and takes the same mapping the list's
+          dot takes — the header carried a second copy of it until the device
+          pass, and its width was what wrapped that line three times. Two places
+          state a platform's BIOS state and they now agree by construction. */}
+      <SectionTitle title="BIOS files" note={summaryLabel} noteColor={biosColorForLevel(firmware.bios_level ?? null)} />
+      <Muted>{`${summaryDescription}${heldRatio}`}</Muted>
+      {/* The route the summary above cannot name: nothing here could say which
+          files this system wants, so the reader has to be told that placing one
+          by hand still works. The line used to open "BIOS management is not
+          supported for this system yet", which is a claim about the plugin and
+          not what the state means: install an emulator that declares firmware
+          for this platform and the pane answers, with nothing changed here. */}
+      {nothingEstablished && <Muted>You can still put BIOS files in your BIOS folder by hand.</Muted>}
+      {files.length > 0 && <BiosTableHeader />}
+      {files.map((file) => (
+        <BiosFileRow
+          key={file.file_name}
+          file={file}
+          systemImage={systemImage}
+          action={rowAction(row, state, file, fetchable)}
+        />
+      ))}
+      {files.length > 0 && <BiosLegend files={files} systemImage={systemImage} />}
+      {unanswered > 0 && (
+        <Muted>
+          {unanswered === 1 ? "1 file" : `${unanswered} files`} nothing installed could answer for. Report at
+          github.com/danielcopper/romm-tender/issues if needed.
+        </Muted>
+      )}
+      {/* One row of buttons rather than three stacked full-width ones. Each
+          `ButtonItem` is a `Field` row around a button and costs the pane a row
+          of its own; the three here fit on one.
+
+          All three are always rendered and disable when there is nothing to do,
+          the ruling the user gave for the Remove group and for the same reason:
+          a button that vanishes is a state the reader has to work out, and on
+          PS2 all three vanished at once. A disabled `DialogButton` is still a
+          focus stop, so the row stays walkable.
+
+          Delete is local-only (no server needed). Its number is the backend's
+          `deletable_count` — the plugin's own download records that are still on
+          disk, which is exactly what the delete unlinks. The library ratio
+          counts a different set and was wrong here in both directions,
+          including hiding the button over downloads RomM had stopped listing. */}
+      <ButtonRow padding="2px 16px 6px">
+        <DialogButton
+          style={FLAT_BUTTON}
+          disabled={!showRequired || state.busySlug !== null}
+          onClick={() => state.downloadRequired(row.slug)}
+        >
+          {downloadLabel(row, state, "required", `Download required (${requiredMissing})`, 12)}
+        </DialogButton>
+        <DialogButton
+          style={FLAT_BUTTON}
+          disabled={!showAll || state.busySlug !== null}
+          onClick={() => state.downloadAll(row.slug)}
+        >
+          {downloadLabel(row, state, "all", "Download all", 12)}
+        </DialogButton>
+        <DialogButton
+          style={FLAT_BUTTON}
+          disabled={deletable === 0 || state.busySlug !== null}
+          onClick={confirmDeleteBios}
+        >
+          <span style={{ color: RED }}>{`Delete BIOS (${deletable})`}</span>
+        </DialogButton>
+      </ButtonRow>
+      <GroupStatus status={scopedStatus(state.status)} forKey={row.slug} scope="bios" />
+    </>
+  );
+};
+
+/**
+ * Taking a platform back out of Steam, and taking its save files off the disk.
+ *
+ * Neither button is hidden when its own count is zero. Hiding the group on the
+ * shortcut count alone strands a platform whose shortcuts were removed but whose
+ * saves remain: those saves are then unreachable, and this is the only page that
+ * offers them.
+ *
+ * The saves count is its own read (`count_platform_saves`) rather than a number
+ * taken from somewhere cheaper, because nowhere else has it — the delete finds
+ * its files through the platform's installed ROMs and counts only what it
+ * removed, afterwards.
+ */
+const RemoveSection: FC<{ row: PlatformRow; state: PlatformsPageState }> = ({ row, state }) => {
+  const syncRunning = useSyncRunning();
+  const saveCount = state.saveCountFor(row.slug);
+  const confirmDeleteSaves = () =>
+    showModal(
+      <ConfirmModal
+        strTitle={`Delete all save files for ${row.name}?`}
+        strDescription="This will delete every local save file for ROMs on this platform. Any local changes that haven't been uploaded to RomM yet will be lost permanently. Make sure saves are synced first."
+        strOKButtonText="Delete Save Files"
+        strCancelButtonText="Cancel"
+        onOK={() => state.deleteSaves(row)}
+      />,
+    );
+  const confirmRemoveShortcuts = () =>
+    showModal(
+      <ConfirmModal
+        strTitle={removeShortcutsTitle(row)}
+        strDescription="This takes this platform's games out of your Steam library. Downloaded ROM files and save files are left where they are, and the games come back on the next sync while the platform stays enabled."
+        strOKButtonText="Remove Shortcuts"
+        strCancelButtonText="Cancel"
+        onOK={() => state.removeShortcuts(row)}
+      />,
+    );
+  return (
+    <>
+      {/* One row, and no REMOVE heading over it: both buttons say what they
+          remove and are drawn in red, so a title above them names nothing the
+          buttons do not — and it would cost the pane a row. */}
+      <ButtonRow padding="6px 16px 4px">
+        <DialogButton
+          style={FLAT_BUTTON}
+          disabled={state.busySlug !== null || syncRunning || row.shortcutCount === 0}
+          onClick={confirmRemoveShortcuts}
+        >
+          <span style={{ color: RED }}>
+            {row.shortcutCount === null ? "Remove shortcuts" : `Remove ${pluralize(row.shortcutCount, "shortcut")}`}
+          </span>
+        </DialogButton>
+        {/* Unread is not zero and is not a failure either, and the button must
+            not look like either: while the count is still coming it is disabled
+            and spins, which claims nothing. A pressable plain label would invite
+            a press over an unknown set; a `0` would state an emptiness nobody
+            established. A failed read is the third case and says so below. */}
+        <DialogButton
+          style={FLAT_BUTTON}
+          disabled={state.busySlug !== null || saveCount === undefined || saveCount === 0}
+          onClick={confirmDeleteSaves}
+        >
+          <span style={{ color: RED, display: "inline-flex", alignItems: "center", gap: "6px" }}>
+            {saveCount === undefined && <Spinner width={12} height={12} />}
+            {typeof saveCount === "number" ? `Delete ${pluralize(saveCount, "save file")}` : "Delete save files"}
+          </span>
+        </DialogButton>
+      </ButtonRow>
+      {/* The one read of the five whose failure had nothing to say. With the
+          spinner above it that became worse rather than better — a spinner that
+          never stops — so the two land together. */}
+      {saveCount === null && (
+        <Muted>Could not read how many save files this platform holds. Pick the platform again to retry.</Muted>
+      )}
+      {/* The hint was a ButtonItem `description`, attached to the one button it
+          was about; under a row it has nowhere to hang, so it names that button
+          instead. Only the shortcut removal is sync-gated — `main.py`'s
+          `remove_platform_shortcuts` carries `@sync_active_blocked` and
+          `delete_platform_saves` deliberately does not — so an unscoped sentence
+          claims a restriction the backend does not impose. Scoping the sentence
+          rather than gating the delete: the gate is the authority on what a sync
+          blocks, and widening it to make a line true would be the tail wagging
+          the dog. */}
+      {syncRunning && <Muted>{`Removing shortcuts: ${SYNC_RUNNING_HINT}`}</Muted>}
+      <GroupStatus status={scopedStatus(state.status)} forKey={row.slug} scope="remove" />
+    </>
+  );
+};
+
+export const PlatformDetail: FC<{ row: PlatformRow; state: PlatformsPageState }> = ({ row, state }) => {
+  const core = state.coreFor(row.slug);
+  const firmware = row.firmware;
+  const offer = coreOffer(row, core);
+  // The core clause is absent while this platform's core read is in flight, and
+  // stays absent if it failed — the read is issued per selection, so walking the
+  // list shows each newly focused platform's header without a core until its own
+  // answer lands. That, and a failed shortcut-count read dropping "· N in
+  // Steam", are the two ways this line loses a piece; both failures now say so
+  // on the pane, and the in-flight one is a beat rather than a state.
+  //
+  // The clause NAMES the core, and "Default" is not one of the names it can
+  // take: `resolve_platform_label` answers with the real label in both ordinary
+  // cases — the per-platform override where it still resolves, else the
+  // es_systems default. Printing "Default" said the opposite of what was true.
+  //
+  // `null` splits in two, and only one half is a failure. With options on the
+  // menu it means none is BAKEABLE, and `select_default_option` says what
+  // follows: the plain RetroDECK launch is baked and RetroDECK resolves the
+  // emulator itself, so the games still start and the clause says who is
+  // choosing. With NO options there is nothing for RetroDECK to resolve either
+  // — its own launch exits 1 — and the clause says so, in red.
+  const activeLabel = core ? core.active_core_label : null;
+  // Everything the clause says rests on the emulator list having been READ.
+  // `get_emulator_options` answers `available: false` with an EMPTY list when
+  // `es_systems.xml` cannot be read at all, so a clause keyed on the list's
+  // length alone said "no emulator" in red over a state where nothing was
+  // established — the definite failure claim this pane keeps having to remove,
+  // and beside a sentence saying RetroDECK was not found. One premise, named
+  // once, so the two readings below cannot drift apart.
+  // S6582 is raised on the declaration line, so its NOSONAR must sit there; prettier-ignore keeps
+  // the formatter from wrapping the trailing comment onto its own line, which would unsuppress it.
+  // prettier-ignore
+  const emulatorsKnown = core != null && core.emulator_data_available; // NOSONAR(typescript:S6582) — `core?.emulator_data_available` loses the aliased narrowing TypeScript takes from this form, and `core.emulators` two lines below then fails TS18049 twice. The optional chain is shorter and does not type-check.
+  const noEmulator = emulatorsKnown && core.emulators.length === 0;
+  // The fallback RetroDECK would use is missing, so the clause says that rather
+  // than naming a core nothing can run. Same shape as the empty menu: a state
+  // the games do not start in, in red.
+  const fallbackMissing = emulatorsKnown && activeLabel === null && core.emulators[0]?.reason === "not_installed";
+  // The platform-level twin of the game page's `activeCoreIsDefault`, read off
+  // the payload's own `is_default`, which marks the single option
+  // `select_default_option` picks. One expression feeds the clause AND the
+  // icon, so the two cannot disagree — and no active label is muted rather than
+  // gold, because `find` on a null label returns nothing and "not the default"
+  // is not the same statement as "an override".
+  const activeIsDefault = core?.emulators.find((option) => option.label === activeLabel)?.is_default ?? false;
+  const coreColor = coreClauseColour(noEmulator || fallbackMissing, activeLabel !== null && !activeIsDefault);
+  // No clause at all where the list could not be read — the same silence a
+  // failed or in-flight core read gets, and for the same reason.
+  const coreClause = !emulatorsKnown
+    ? null
+    : { text: activeLabel ?? fallbackLabel(noEmulator, fallbackMissing), color: coreColor };
+
+  return (
+    <>
+      {/* One header line rather than a Sync section: the toggle is in the list
+          row, so what is left here is what the platform IS — and, since the
+          device round, the core picker too: a full-width button under this line
+          cost the pane a `Field`-height row and a warning line to say what the
+          picker itself says. */}
+      <Focusable
+        flow-children="horizontal"
+        style={{ display: "flex", alignItems: "baseline", gap: "10px", padding: "8px 16px 0" }}
+      >
+        <span style={{ fontSize: "16px", fontWeight: 600, color: "#dcdedf", minWidth: 0 }}>{row.name}</span>
+        <span style={{ flex: "1 1 auto", fontSize: SECONDARY_FONT, color: MUTED }}>
+          {/* Both halves count ROM FILES, which is what makes the pair readable:
+              one shortcut serves a whole sibling group and the game's page
+              switches versions across it, so a version that did not win the
+              binding is still reachable and still belongs on the right. Counting
+              shortcuts there instead read as "207 are missing" on a platform
+              where nothing was. The Remove button below keeps the shortcut
+              count — that one really is about Steam entries. */}
+          {`${row.romCount} on RomM`}
+          {row.reachableCount === null ? "" : ` · ${row.reachableCount} in Steam`}
+          {coreClause && <span style={{ color: coreClause.color }}>{` · ${coreClause.text}`}</span>}
+        </span>
+        {/* Always rendered, disabled when there is nothing to pick, with the
+            reason in the tooltip — the same ruling the Remove group follows.
+            A disabled button is still a focus stop, and the wide page's own
+            sheet gives it Steam's focus outline, so a reader walking the header
+            still lands on it and is told why it is dead. */}
+        <DialogButton
+          style={CORE_BUTTON}
+          title={offer.kind === "pick" ? "Emulator Core" : offer.reason}
+          disabled={offer.kind !== "pick" || state.busySlug !== null}
+          onClick={(e: MouseEvent) => {
+            if (offer.kind !== "pick") return;
+            showContextMenu(
+              buildEmulatorMenu({
+                emulators: offer.core.emulators,
+                emulatorDataAvailable: offer.core.emulator_data_available,
+                activeLabel: offer.core.active_core_label,
+                // Null on purpose: this pane IS the platform level, so marking
+                // an entry "(system)" would restate where the reader already is.
+                platformCoreLabel: null,
+                onPick: (label) => state.changeCore(row.slug, label),
+              }),
+              getEventTarget(e),
+            );
+          }}
+        >
+          <FaMicrochip size={16} color={coreColor} />
+        </DialogButton>
+      </Focusable>
+      {/* The count is what failed, not the removal: taking the platform's games
+          out of Steam needs only the slug. So the line says the number is
+          missing and stops there — the buttons below stay live. */}
+      {state.shortcutCountsFailed && (
+        <Muted>
+          Could not read how many of these games are in Steam. Removing them still works, it just cannot say how many.
+          Reopen the page to try again.
+        </Muted>
+      )}
+      {state.removalProgress?.slug === row.slug && (
+        <Muted>{`Removing ${state.removalProgress.removed} of ${state.removalProgress.total}…`}</Muted>
+      )}
+      <BusyElsewhere
+        busyKey={state.busySlug}
+        ownKey={row.slug}
+        busyName={state.rows.get(state.busySlug ?? "")?.name ?? "another platform"}
+      />
+      <CoreNotice row={row} state={state} offer={offer} />
+      {/* A failed RE-read keeps the answer it could not replace, so what is
+          below is the state from before whatever changed it — which is exactly
+          where a reader needs telling, and where the notice used to be silent.
+          A read that failed with nothing behind it says so where the rows would
+          be, below. */}
+      {row.firmwareStale && (
+        <Muted>
+          Could not re-read the BIOS state, so what is below may be out of date. Pick the platform again to retry.
+        </Muted>
+      )}
+      {firmware ? (
+        <BiosSection row={row} state={state} firmware={firmware} />
+      ) : (
+        <>
+          <SectionTitle title="BIOS files" />
+          {/* Three ways to have no rows, and they are three different
+              sentences. A read still out is a question nobody has answered yet
+              — said as one, because the alternative is the reader taking the
+              silence for "nothing needed" on a platform whose turn simply has
+              not come. A read that did not come back is a question that could
+              not be asked. What is left is a finished answer: there is nothing
+              to manage here. */}
+          {row.firmwareState === "pending" && <Muted>Checking what this platform needs…</Muted>}
+          {row.firmwareState === "failed" && (
+            <Muted>Could not read the BIOS state. Pick the platform again to retry.</Muted>
+          )}
+          {row.firmwareState === "nothing" && <Muted>Nothing is known about this platform&apos;s BIOS files.</Muted>}
+        </>
+      )}
+      <RemoveSection row={row} state={state} />
+    </>
+  );
+};

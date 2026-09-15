@@ -62,8 +62,8 @@ if TYPE_CHECKING:
 # "then Resume Sync" until the button stopped saying that for most readers, and
 # the toast then instructed them to press something that was not on screen. The
 # banner had the same defect and was fixed by taking the label from the panel
-# (#1789, ``src/components/SessionBudgetBanner.tsx``); a toast has no panel to ask,
-# so it says what to DO instead.
+# (#1789, ``frontend/src/bigpicture/SessionBudgetBanner.tsx``); a toast has no
+# panel to ask, so it says what to DO instead.
 SYNC_PAUSED_BUDGET = (
     "Sync paused: Steam's memory is nearly full. Restart Steam when convenient, then sync again to continue."
 )

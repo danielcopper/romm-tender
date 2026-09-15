@@ -354,7 +354,7 @@ class TestClipCoverRefreshes:
 class TestPauseGuidanceNamesNoControl:
     """``SYNC_PAUSED_BUDGET`` is the one backend sentence the panel shows to the
     reader verbatim — as the pause toast, through ``buildSyncCompleteToast`` in
-    ``src/index.tsx`` — and it may not name a button.
+    ``frontend/src/index.tsx`` — and it may not name a button.
 
     Nothing on this side can know what the Sync page's start button says: the name
     turns on the frontend's Skip-preview setting and on a resume question read from
@@ -363,10 +363,11 @@ class TestPauseGuidanceNamesNoControl:
     the toast then told them to press something that was not on screen.
 
     **What this can see is the names the panel puts on that button today**, read
-    off ``src/utils/syncResume.ts`` and ``useSyncPage.ts`` and repeated here
-    because no import crosses the two languages — a fifth label added there passes
-    green here. What it cannot see at all is whether the sentence names an ACTION,
-    which is the half a reader has to judge; the constant's own comment carries it.
+    off ``frontend/src/utils/syncResume.ts`` and ``useSyncPage.ts`` and repeated
+    here because no import crosses the two languages — a fifth label added there
+    passes green here. What it cannot see at all is whether the sentence names an
+    ACTION, which is the half a reader has to judge; the constant's own comment
+    carries it.
     """
 
     def test_the_paused_reason_names_no_button_the_panel_renders(self):

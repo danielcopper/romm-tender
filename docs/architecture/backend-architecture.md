@@ -858,17 +858,17 @@ the `get_sync_status` seed. So the run-in-flight case is refused where the truth
 the read: a run in flight owns the body, so a preview held while one is going is **kept and not shown**, and its card
 appears the moment the run ends.
 
-**Frontend side: the pending preview is a module store, not panel state.** `src/utils/pendingPreviewStore.ts` owns it.
-The reason is the same lifetime mismatch from the other end — `sync_preview` is an awaited callable, so its answer is
-delivered to the closure of whichever `MainPage` pressed Sync, and leaving the main page unmounts that instance while
-the run carries on. The card then never appeared for the instance actually on screen: the panel showed the idle Sync
-buttons over a preview the backend was holding, and only the _next_ mount's `get_pending_preview` recovered it. The
-store is not a second source of truth — it holds the backend's answer verbatim, is only ever filled from `sync_preview`
-/ `get_pending_preview`, and never derives or repairs one. Its ordering rule (a write takes a ticket when its
-information was issued; an answer applies only if no later-issued write already has; a read only ever fills, because
-`preview: None` conflates three different situations) is stated in full in that module's docstring. Two triggers fill it
-— the panel's mount, and a preview run reaching its terminal stage with the store still empty — and, because both write
-to the same destination, the race between them is "who writes first", not "which copy wins".
+**Frontend side: the pending preview is a module store, not panel state.** `frontend/src/utils/pendingPreviewStore.ts`
+owns it. The reason is the same lifetime mismatch from the other end — `sync_preview` is an awaited callable, so its
+answer is delivered to the closure of whichever `MainPage` pressed Sync, and leaving the main page unmounts that
+instance while the run carries on. The card then never appeared for the instance actually on screen: the panel showed
+the idle Sync buttons over a preview the backend was holding, and only the _next_ mount's `get_pending_preview`
+recovered it. The store is not a second source of truth — it holds the backend's answer verbatim, is only ever filled
+from `sync_preview` / `get_pending_preview`, and never derives or repairs one. Its ordering rule (a write takes a ticket
+when its information was issued; an answer applies only if no later-issued write already has; a read only ever fills,
+because `preview: None` conflates three different situations) is stated in full in that module's docstring. Two triggers
+fill it — the panel's mount, and a preview run reaching its terminal stage with the store still empty — and, because
+both write to the same destination, the race between them is "who writes first", not "which copy wins".
 
 **Withheld, not discarded.** A run in flight suppresses the snapshot for the duration and nothing else — the same
 payload is handed back on the next mount after the run ends, as long as it is still inside its TTL. And the withholding
@@ -933,8 +933,8 @@ reliable reset.
 #### Sync time estimate and live ETA (frontend)
 
 The QAM's time readout is a two-stage design layered on the `sync_progress` stream. It is pure frontend logic
-(`src/utils/syncEstimate.ts` and `src/utils/syncEta.ts`, both unit-tested); the backend supplies the plan (per-unit
-weights + planned totals, via `sync_plan`) and the applying frames.
+(`frontend/src/utils/syncEstimate.ts` and `frontend/src/utils/syncEta.ts`, both unit-tested); the backend supplies the
+plan (per-unit weights + planned totals, via `sync_plan`) and the applying frames.
 
 - **The plan is skip-aware (#1382).** At plan time the fetcher stamps every platform `WorkUnit` with two estimate-only
   riders read in one short UoW (`_read_plan_estimates` + the pure `domain/skip_prediction.py`): `predicted_skip` —
@@ -1063,13 +1063,13 @@ lengthens. Both latches touch only the bar output; the live ETA still reads the 
 (no run, unit-count mismatch, zero total weight) pass through the wrapper un-latched.
 
 The **within-unit fill is itself split into three monotonic sub-slices** (#1407, `withinUnitFraction` in
-`src/utils/syncProgress.ts`): fetch (`FETCH_SHARE` 15%) → covers (`COVERS_SHARE` 25%) → apply (`APPLY_SHARE` 60%). A
-unit is worked in that order — paginate the ROM list, download/refresh cover art, then create the shortcuts — and each
-phase fills its own slice by its own `current/total`, with a later phase's floor sitting at the sum of the earlier
-phases' shares. So the bar advances continuously through a unit's fetch and cover phases instead of resting frozen at
-the unit floor until `applying`, and it never jumps backwards at a phase boundary even though each phase restarts
-`current/total` from zero (each phase's frames land in a strictly-higher band than the phase before). The phase is
-tagged on the `sync_progress` payload's additive `subStage` field (camelCase, matching the sibling `totalSteps` /
+`frontend/src/utils/syncProgress.ts`): fetch (`FETCH_SHARE` 15%) → covers (`COVERS_SHARE` 25%) → apply (`APPLY_SHARE`
+60%). A unit is worked in that order — paginate the ROM list, download/refresh cover art, then create the shortcuts —
+and each phase fills its own slice by its own `current/total`, with a later phase's floor sitting at the sum of the
+earlier phases' shares. So the bar advances continuously through a unit's fetch and cover phases instead of resting
+frozen at the unit floor until `applying`, and it never jumps backwards at a phase boundary even though each phase
+restarts `current/total` from zero (each phase's frames land in a strictly-higher band than the phase before). The phase
+is tagged on the `sync_progress` payload's additive `subStage` field (camelCase, matching the sibling `totalSteps` /
 `runId` keys — the `emit_progress` Python kwarg is `sub_stage`, the emitted key is `subStage`): the fetcher's per-page
 frames carry `subStage: "fetch"`, the artwork cover-refresh **and** download frames carry `subStage: "covers"` (both
 share the covers slice), and the frontend-driven apply frames are keyed on the `applying` stage alone — so a merged
@@ -1263,8 +1263,8 @@ stays **in** the `installed_paths` map (it _is_ downloaded, and `collapse_siblin
 sibling group's representative) and maps to the empty path.
 
 Empty is the **established** uninstalled state, not one invented here: `addShortcut` leaves a new shortcut's options
-untouched when the command is `""` (`src/utils/steamShortcuts.ts`), the sync update/adoption path writes `""` explicitly
-(`rewriteShortcutIdentity`, `src/utils/syncManager.ts`), and an uninstall records `""` as the ROM's
+untouched when the command is `""` (`frontend/src/utils/steamShortcuts.ts`), the sync update/adoption path writes `""`
+explicitly (`rewriteShortcutIdentity`, `frontend/src/utils/syncManager.ts`), and an uninstall records `""` as the ROM's
 `applied_launch_options` (`services/rom_removal.py`). **An empty launch command therefore means two things, and nothing
 may infer which**: "not downloaded" and "downloaded but not launchable" are indistinguishable at the Steam-shortcut
 layer — the shortcut holds `""` either way. Only the data layer separates them (no `rom_installs` row versus a row with
@@ -1916,8 +1916,8 @@ resolver's own word for what became of the bytes, carried from the same entry `d
 emulator read and does not recognise WAS checked while one whose bytes never came back was not, and one withheld verdict
 cannot say which. The verdict is the answer alone and carries none of its causes; the verdict decides only which family
 of codes can apply and what to say when none of them is recognised, which is the one sentence written off it —
-`src/utils/biosFileNote.ts` is the one place both surfaces derive what a row says from — a sentence, the lines under it,
-which is how a satisfied folder's images arrive as a list rather than folded into the row's own name, and the
+`frontend/src/utils/biosFileNote.ts` is the one place both surfaces derive what a row says from — a sentence, the lines
+under it, which is how a satisfied folder's images arrive as a list rather than folded into the row's own name, and the
 description on its own line under the row (`biosFileDescription`). A row is headed by the file it declares on both
 surfaces and never by its description: that is the packager's prose out of a core's `.info`, outside the resolver's
 contract, and it routinely spells the row's own name into its words — so the shared rule takes the name back out and

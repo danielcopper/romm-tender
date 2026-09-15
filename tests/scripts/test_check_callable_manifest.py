@@ -36,7 +36,8 @@ check = _load_check_module()
 
 
 def _write_ts(tmp_path: Path, name: str, body: str) -> Path:
-    """Write a ``.ts`` file under a fake ``src/`` tree and return the src dir."""
+    """Write a ``.ts`` file under a fake ``frontend/src/`` tree and return the
+    src dir."""
     src = tmp_path / "src"
     src.mkdir(exist_ok=True)
     (src / name).write_text(body, encoding="utf-8")
@@ -367,9 +368,9 @@ class TestMainEntryPoint:
         assert check.main(["-h"]) == 0
 
     def test_real_repo_run_is_clean(self, capsys: pytest.CaptureFixture[str]):
-        # Locks the actual src/**/*.ts callable declarations in sync with the
-        # Plugin async methods in main.py. If this fails, a callable was
-        # added/renamed/removed on one side only, or an arity drifted.
+        # Locks the actual frontend/src/**/*.ts callable declarations in sync
+        # with the Plugin async methods in main.py. If this fails, a callable
+        # was added/renamed/removed on one side only, or an arity drifted.
         rc = check.main([])
         assert rc == 0
         assert "OK:" in capsys.readouterr().out

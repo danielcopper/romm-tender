@@ -1,6 +1,6 @@
 """Contract test for the ``connect_with_token`` callable (pasted API token).
 
-Driven frontend-shaped per ``src/api/backend.ts``:
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``connectWithToken = callable<[string, string, boolean], BackendResult>("connect_with_token")``
 — positional ``(romm_url, token, allow_insecure_ssl)``.
 

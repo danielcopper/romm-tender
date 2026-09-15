@@ -42,7 +42,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PY_MODULES_DIR = REPO_ROOT / "py_modules"
 VENDOR_DIR = PY_MODULES_DIR / "_vendor"
-SRC_DIR = REPO_ROOT / "src"
+SRC_DIR = REPO_ROOT / "frontend" / "src"
 MAIN_PY = REPO_ROOT / "main.py"
 
 # Event names deliberately excluded from the parity check. Empty today; add an
@@ -197,13 +197,13 @@ def parse_frontend_listeners(src_dir: Path) -> set[str]:
     """Parse every bare ``addEventListener("name", ...)`` under *src_dir*.
 
     Scans all ``.ts``/``.tsx`` files as text (calls may span multiple lines),
-    EXCLUDING test files (``*.test.*``), ``src/test-utils/`` and
-    ``src/test-setup.ts``. Comments are stripped first so a commented-out
-    listener isn't mistaken for a live one. Only the bare ``addEventListener``
-    needle counts: the char immediately before it must be neither ``.`` (rejects
-    ``globalThis.addEventListener`` / ``el.addEventListener`` — DOM CustomEvents,
-    not backend emits) nor an identifier char. Returns the set of literal event
-    names.
+    EXCLUDING test files (``*.test.*``), ``frontend/src/test-utils/`` and
+    ``frontend/src/test-setup.ts``. Comments are stripped first so a
+    commented-out listener isn't mistaken for a live one. Only the bare
+    ``addEventListener`` needle counts: the char immediately before it must be
+    neither ``.`` (rejects ``globalThis.addEventListener`` /
+    ``el.addEventListener`` — DOM CustomEvents, not backend emits) nor an
+    identifier char. Returns the set of literal event names.
     """
     result: set[str] = set()
     if not src_dir.is_dir():
@@ -327,7 +327,7 @@ def main(argv: list[str]) -> int:
             print(line)
         print()
         print(
-            "ERROR: the backend (py_modules emit calls) and frontend (src/**/*.ts "
+            "ERROR: the backend (py_modules emit calls) and frontend (frontend/src/**/*.ts "
             "addEventListener calls) event surfaces have drifted. Every emitted event "
             "must have a frontend listener and vice versa (or be explicitly EXEMPT) so "
             "the event channel stays one source of truth."

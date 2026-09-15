@@ -2,8 +2,8 @@
 paths:
   - "py_modules/**/*.py"
   - "main.py"
-  - "src/**/*.ts"
-  - "src/**/*.tsx"
+  - "frontend/src/**/*.ts"
+  - "frontend/src/**/*.tsx"
 ---
 
 # Inline comments — the exception, never the default

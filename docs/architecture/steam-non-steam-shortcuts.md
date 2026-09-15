@@ -52,10 +52,10 @@ there on every start, once the data migration's own half has landed.
 Shortcuts written before that move are repointed once, at plugin load. The **backend** decides which: it parses
 `shortcuts.vdf` and returns the app IDs whose `exe` still ends in `/bin/rom-launcher` but is not the launcher's home,
 plus the `exe` and `startDir` to write (`get_shortcut_relocation`). The frontend writes exactly those and reports; it
-records nothing (`src/utils/launcherRelocation.ts`). The transition is stamped by the NEXT start's own reading of that
-file, once Steam has written its in-memory shortcuts out — after which no start reads it again. An app **overview**
-carries no `exe`, so the frontend's own route to the same fact would be a `RegisterForAppDetails` per shortcut at every
-start.
+records nothing (`frontend/src/utils/launcherRelocation.ts`). The transition is stamped by the NEXT start's own reading
+of that file, once Steam has written its in-memory shortcuts out — after which no start reads it again. An app
+**overview** carries no `exe`, so the frontend's own route to the same fact would be a `RegisterForAppDetails` per
+shortcut at every start.
 
 Three properties of that path are load-bearing:
 
@@ -111,7 +111,7 @@ placeholder an uninstalled ROM carries until it is downloaded — is valid and c
 The real hazard is not the set: heavy removal-churn can corrupt Steam's in-memory shortcut state. A Steam restart clears
 it. The sync engine processes removals before additions to minimise churn.
 
-See: `src/utils/steamShortcuts.ts`
+See: `frontend/src/utils/steamShortcuts.ts`
 
 ### Recovery after a server switch / re-import
 
@@ -145,7 +145,7 @@ three lanes:
   cost); each orphan is adopted at most once per run; a name collision adopts the lowest appId deterministically; a
   `null` live scan (store unreadable) disables adoption for the run rather than guess. An adoption counts as "added" in
   the post-sync toast (a game came under management) but skips the `AddShortcut` a duplicate would cost. See
-  `resolveShortcutAppId` in `src/utils/syncManager.ts`.
+  `resolveShortcutAppId` in `frontend/src/utils/syncManager.ts`.
 
 Two guards keep a re-import from wiping a freshly-bound shortcut (`#1036`):
 
@@ -261,13 +261,13 @@ The fix is a **frontend-assisted reconcile at sync start**, because only the fro
 It runs **before** the sync builds its work queue — so the unbind lands before the incremental-skip decision — on both
 the skip-preview (`start_sync`) and preview (`sync_preview`) paths:
 
-1. `getLiveRomMShortcutAppIds()` (`src/utils/steamShortcuts.ts`) scans Steam's live shortcuts and returns the raw appIds
-   of every RomM-owned shortcut (exe ends with `/bin/rom-launcher`), regardless of any backend binding. It returns
-   `null` when the store was **unreadable** (`collectionStore` absent) versus `[]` when the scan **ran and found none**
-   — a load-bearing distinction.
-2. `reconcileStaleShortcuts()` (`src/utils/syncManager.ts`) skips the reconcile on a `null` scan (reconciling against
-   "couldn't look" would unbind every binding), and otherwise calls the `reconcile_shortcuts` callable with the live
-   set. It is best-effort: a scan or backend failure is logged and swallowed, never blocking the sync.
+1. `getLiveRomMShortcutAppIds()` (`frontend/src/utils/steamShortcuts.ts`) scans Steam's live shortcuts and returns the
+   raw appIds of every RomM-owned shortcut (exe ends with `/bin/rom-launcher`), regardless of any backend binding. It
+   returns `null` when the store was **unreadable** (`collectionStore` absent) versus `[]` when the scan **ran and found
+   none** — a load-bearing distinction.
+2. `reconcileStaleShortcuts()` (`frontend/src/utils/syncManager.ts`) skips the reconcile on a `null` scan (reconciling
+   against "couldn't look" would unbind every binding), and otherwise calls the `reconcile_shortcuts` callable with the
+   live set. It is best-effort: a scan or backend failure is logged and swallowed, never blocking the sync.
 3. `ShortcutRemovalService.reconcile_live_shortcuts` unbinds every bound `roms` row whose `shortcut_app_id` is **not**
    in the live set — clearing only the binding (`Rom.unbind_shortcut`, ADR-0007), never deleting the row or its per-ROM
    children. An empty live set is the correct "they're all gone" signal and unbinds every binding.
@@ -294,7 +294,7 @@ path when `BIsModOrShortcut()` returns `false`.
 The current approach owns the entire game detail UI via custom React components (`RomMPlaySection`, `RomMGameInfoPanel`,
 `CustomPlayButton`) injected through route patching. This avoids fighting Steam's internal rendering logic.
 
-See: `src/patches/gameDetailPatch.tsx`, `src/components/RomMPlaySection.tsx`
+See: `frontend/src/bigpicture/patches/gameDetailPatch.tsx`, `frontend/src/bigpicture/RomMPlaySection.tsx`
 
 ## Overview metadata mutations (readiness-gated)
 
@@ -317,7 +317,8 @@ metadata, and the pass is idempotent), in its own detached block with its own er
 touches the toast, collections, or playtime paths (#1207). The backend commits metadata per unit during the sync (before
 the terminal emit), so this re-fetch always sees the new ROMs.
 
-See: `src/patches/metadataPatches.ts`, `src/utils/metadataCache.ts` (paged fetch), `onSyncComplete` in `src/index.tsx`
+See: `frontend/src/utils/metadataPatches.ts`, `frontend/src/utils/metadataCache.ts` (paged fetch), `onSyncComplete` in
+`frontend/src/index.tsx`
 
 ## VDF Format Notes
 
@@ -365,8 +366,8 @@ See: `py_modules/adapters/steam_config.py`
 Steam collections are managed entirely on the frontend via `collectionStore`, not by writing the shortcut's `tags` VDF
 field. The plugin owns machine-scoped collections named `RomM: <platform> (<hostname>)` for platforms and
 `RomM: [<name>] (<hostname>)` for synced RomM collections. The `sync_complete` event carries `platform_app_ids` and
-`romm_collection_app_ids` maps; `onSyncComplete` (`src/index.tsx`) creates/updates the collections for the maps it
-receives and then runs a **stale-collection cleanup** that deletes any `RomM: …` collection for this machine whose
+`romm_collection_app_ids` maps; `onSyncComplete` (`frontend/src/index.tsx`) creates/updates the collections for the maps
+it receives and then runs a **stale-collection cleanup** that deletes any `RomM: …` collection for this machine whose
 platform/collection name is absent from those maps.
 
 The cleanup is **gated on a completed (non-cancelled) sync** (`!data.cancelled`). On a cancelled run the maps are
@@ -394,14 +395,15 @@ setting:
   share **both** name and label still union.
 
 The label strings **must** match the frontend collection-type vocabulary (`SUB_TAB_LABELS` / `VIRTUAL_TYPE_LABELS` in
-`src/components/LibraryPage.tsx`) so the type a user sees on the Collections page is the type baked into the Steam name.
-The reporter needs the kind/virtual_type at its union key, so `WorkUnit.virtual_type` and `CollectionMembership.kind` +
-`CollectionMembership.virtual_type` thread that identity through the fetcher → orchestrator → reporter.
+`frontend/src/bigpicture/LibraryPage.tsx`) so the type a user sees on the Collections page is the type baked into the
+Steam name. The reporter needs the kind/virtual_type at its union key, so `WorkUnit.virtual_type` and
+`CollectionMembership.kind` + `CollectionMembership.virtual_type` thread that identity through the fetcher →
+orchestrator → reporter.
 
-**Label-format constraint:** the reconcile parses the collection name with `/^RomM: \[([^\]]+)\]/` (`src/index.tsx`), so
-a label must contain **no** `]` character — it sits inside the single existing bracket pair. Parens (`(Franchise)`) are
-safe; a bracket would truncate the parsed name and orphan the collection. Every produced label is bracket-free (asserted
-in `tests/domain/test_collection_label.py`).
+**Label-format constraint:** the reconcile parses the collection name with `/^RomM: \[([^\]]+)\]/`
+(`frontend/src/index.tsx`), so a label must contain **no** `]` character — it sits inside the single existing bracket
+pair. Parens (`(Franchise)`) are safe; a bracket would truncate the parsed name and orphan the collection. Every
+produced label is bracket-free (asserted in `tests/domain/test_collection_label.py`).
 
 **No Force Full Sync on a mode flip.** Because the create-name and the reconcile's `activeNames` both derive from the
 same `romm_collection_app_ids` keys, flipping the mode is applied by the ordinary **complete-set reconcile** on the next
@@ -509,18 +511,18 @@ immediate remount cannot let the old chain write launch options or invoke `RunGa
 
 ## Key Files
 
-| File                                      | Purpose                                                                                                                                                                                                                                                                                                                                        |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/utils/steamShortcuts.ts`             | `addShortcut()`, `removeShortcut()`, `getExistingRomMShortcuts()`, `getLiveRomMShortcutAppIds()` (raw live appId scan for the sync-start reconcile) — frontend shortcut CRUD. The existing-shortcut scan emits a sync heartbeat every 10s between batches so a large library can't stall the run past the backend's per-unit heartbeat timeout |
-| `src/utils/syncManager.ts`                | Listens for sync events, orchestrates shortcut creation/removal, artwork application, collection management. `reconcileStaleShortcuts()` runs the sync-start reconcile of Steam-UI-deleted shortcuts. Caches the existing-shortcut scan per run (keyed by the `sync_apply_unit` `run_id`) so it scans Steam once per run, not once per unit    |
-| `py_modules/services/shortcut_removal.py` | `ShortcutRemovalService` — resolves shortcut-removal sets, unbinds removed ROMs, and runs `reconcile_live_shortcuts` (the sync-start reconcile of Steam-UI-deleted bindings)                                                                                                                                                                   |
-| `src/utils/collections.ts`                | Machine-scoped Steam collection management                                                                                                                                                                                                                                                                                                     |
-| `src/patches/gameDetailPatch.tsx`         | Route patch for `/library/app/:appid` — injects RomMPlaySection for custom game detail UI                                                                                                                                                                                                                                                      |
-| `src/patches/metadataPatches.ts`          | Store patches for description, associations, categories, release date display                                                                                                                                                                                                                                                                  |
-| `py_modules/adapters/steam_config.py`     | `SteamConfigAdapter` — VDF read/write, grid dir, shortcut icon write, Steam Input config                                                                                                                                                                                                                                                       |
-| `py_modules/services/library/`            | LibraryService — builds shortcut data, drives per-unit sync apply                                                                                                                                                                                                                                                                              |
-| `py_modules/domain/sgdb_artwork.py`       | `to_signed_app_id`, SGDB asset-type/endpoint maps                                                                                                                                                                                                                                                                                              |
-| `bin/rom-launcher`                        | Pure `exec "$@"` wrapper invoked by Steam — runs the full launch command baked into the shortcut's launch options; owns no state, no path resolution, no emulator knowledge. Shipped here, **run from `<data root>/bin/rom-launcher`**: `bootstrap()` installs this copy there at every start (ADR-0032)                                       |
+| File                                                  | Purpose                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `frontend/src/utils/steamShortcuts.ts`                | `addShortcut()`, `removeShortcut()`, `getExistingRomMShortcuts()`, `getLiveRomMShortcutAppIds()` (raw live appId scan for the sync-start reconcile) — frontend shortcut CRUD. The existing-shortcut scan emits a sync heartbeat every 10s between batches so a large library can't stall the run past the backend's per-unit heartbeat timeout |
+| `frontend/src/utils/syncManager.ts`                   | Listens for sync events, orchestrates shortcut creation/removal, artwork application, collection management. `reconcileStaleShortcuts()` runs the sync-start reconcile of Steam-UI-deleted shortcuts. Caches the existing-shortcut scan per run (keyed by the `sync_apply_unit` `run_id`) so it scans Steam once per run, not once per unit    |
+| `py_modules/services/shortcut_removal.py`             | `ShortcutRemovalService` — resolves shortcut-removal sets, unbinds removed ROMs, and runs `reconcile_live_shortcuts` (the sync-start reconcile of Steam-UI-deleted bindings)                                                                                                                                                                   |
+| `frontend/src/utils/collections.ts`                   | Machine-scoped Steam collection management                                                                                                                                                                                                                                                                                                     |
+| `frontend/src/bigpicture/patches/gameDetailPatch.tsx` | Route patch for `/library/app/:appid` — injects RomMPlaySection for custom game detail UI                                                                                                                                                                                                                                                      |
+| `frontend/src/utils/metadataPatches.ts`               | Store patches for description, associations, categories, release date display                                                                                                                                                                                                                                                                  |
+| `py_modules/adapters/steam_config.py`                 | `SteamConfigAdapter` — VDF read/write, grid dir, shortcut icon write, Steam Input config                                                                                                                                                                                                                                                       |
+| `py_modules/services/library/`                        | LibraryService — builds shortcut data, drives per-unit sync apply                                                                                                                                                                                                                                                                              |
+| `py_modules/domain/sgdb_artwork.py`                   | `to_signed_app_id`, SGDB asset-type/endpoint maps                                                                                                                                                                                                                                                                                              |
+| `bin/rom-launcher`                                    | Pure `exec "$@"` wrapper invoked by Steam — runs the full launch command baked into the shortcut's launch options; owns no state, no path resolution, no emulator knowledge. Shipped here, **run from `<data root>/bin/rom-launcher`**: `bootstrap()` installs this copy there at every start (ADR-0032)                                       |
 
 ## Common Pitfalls
 
@@ -545,7 +547,7 @@ has been narrowed. The remaining hazard is **removal-churn**: adding and removin
 Steam's in-memory shortcut state. A Steam restart clears it. Two things keep churn down. The sync engine processes
 removals before additions, and every launch-options write uses the fire-then-poll `setLaunchOptionsConfirmed` so a
 silently dropped write is observable rather than assumed. And **mass removals are awaited and chunk-paced** through the
-shared `removeShortcutsPaced` helper (`src/utils/shortcutRemoval.ts`, over `pacedForEach`,
+shared `removeShortcutsPaced` helper (`frontend/src/utils/shortcutRemoval.ts`, over `pacedForEach`,
 [#977](https://github.com/danielcopper/decky-romm-sync/issues/977)): every bulk removal path — the DangerZone actions
 (per-platform, Remove-All-RomM including the live-orphan sweep, and the Remove-Non-Steam bulk action) **and** the
 sync-run stale-shortcut cleanup (`sync_stale`, fired at run finalize) — awaits each `removeShortcut` in sequence and
@@ -558,16 +560,16 @@ the first breather, so the paced removal can't leave the count partial when `syn
 
 Bulk shortcut loops corrupt Steam's internal store if driven too fast — added shortcuts may silently fail to register,
 and removals churn the in-memory state (above). Both cadences live in one place: the shared paced loop `pacedForEach` in
-`src/utils/pacedOps.ts`, which iterates awaiting each item and yields a breather between chunks (no trailing delay). The
-two callers differ only in chunk size:
+`frontend/src/utils/pacedOps.ts`, which iterates awaiting each item and yields a breather between chunks (no trailing
+delay). The two callers differ only in chunk size:
 
 - **Add** (`syncManager.ts` — `processUnitShortcuts`, `processCoverRefreshes`) paces **one item at a time**: a 50ms
   breather after every `addShortcut()` / cover apply, plus the per-unit heartbeat + cancel hooks.
-- **Remove** (`removeShortcutsPaced` in `src/utils/shortcutRemoval.ts`, shared by the DangerZone actions and the
-  `sync_stale` cleanup) paces in **25-item chunks with a 50ms breather** between them. A removal is a single cheap call,
-  so chunked yielding keeps a 5000-game teardown at ~seconds of overhead instead of the ~4 minutes strict 50ms/item
-  would cost, while still letting the renderer breathe. DangerZone and `sync_stale` removals hold renewable prune
-  conflict leases for the complete paced loop even though the backend does not await the frontend's stale removal.
+- **Remove** (`removeShortcutsPaced` in `frontend/src/utils/shortcutRemoval.ts`, shared by the DangerZone actions and
+  the `sync_stale` cleanup) paces in **25-item chunks with a 50ms breather** between them. A removal is a single cheap
+  call, so chunked yielding keeps a 5000-game teardown at ~seconds of overhead instead of the ~4 minutes strict
+  50ms/item would cost, while still letting the renderer breathe. DangerZone and `sync_stale` removals hold renewable
+  prune conflict leases for the complete paced loop even though the backend does not await the frontend's stale removal.
 
 ### The apply is chunked; a heartbeat timeout must not discard a chunk's delivered bindings
 

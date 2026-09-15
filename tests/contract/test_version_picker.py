@@ -1,6 +1,6 @@
 """Contract tests for the version-picker callables over the real Plugin/bootstrap.
 
-Driven frontend-shaped per ``src/api/backend.ts``:
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``getVersionList = callable<[number], VersionList>`` and
 ``switchVersion = callable<[number, number, boolean], SwitchVersionResult>`` —
 positional JSON-shaped args (the Steam appId, the target rom_id, and the

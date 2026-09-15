@@ -1,6 +1,6 @@
 """Contract tests for the data-location callables.
 
-Driven frontend-shaped per ``src/api/backend.ts``:
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``getDataLocationNotice = callable<[], DataLocationNotice>``,
 ``getDataLocationCandidates = callable<[], DataLocationCandidates | CallableFailure>``,
 ``chooseDataLocation = callable<[string], {success: true} | CallableFailure>``.

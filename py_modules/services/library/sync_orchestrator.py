@@ -601,7 +601,8 @@ class SyncOrchestrator:
         opposite holds. It exists because the frontend cannot tell "the backend
         has no run" from "the backend has not said anything about this run yet"
         by looking at a frame — and the difference decides whether a panel may
-        retract a run it believes is live. See ``src/components/MainPage.tsx``.
+        retract a run it believes is live. See
+        ``frontend/src/bigpicture/MainPage.tsx``.
         """
         box = self._sync_state
         return {**box.sync_progress, "inFlight": box.is_in_flight()}

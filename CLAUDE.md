@@ -340,36 +340,36 @@ Format: **invariant** — tier — enforced by.
   end by `tests/services/library/test_sync_orchestrator.py::TestRunKindOnTheWire` (every frame of a preview run and of
   an apply run, both terminal frames, and the `get_sync_status` snapshot) and
   `tests/services/library/test_state.py::TestRunKind` (claimed with the run slot, cleared with it); the frontend half by
-  `src/utils/syncRunView.test.ts` and the slot's three labels in `src/components/MainPage.test.tsx`. **Nothing joins the
-  eleven sites it passes through**, counted one per site at the granularity this list names them: `LibrarySyncStateBox`
-  holds it with the slot, three separate backend frame builders carry it (`emit_progress`, `_finish_sync`'s CANCELLED
-  terminal, and the per-unit ERROR dict literal in `sync_orchestrator.py`), three frontend start paths stamp it
-  themselves on the optimistic frame they show before the first real one arrives (`useSyncPage`'s `computePreview` as
-  `preview`, its `applyPreview` and `startRunDirectly` as `apply`), `SyncProgress.runKind` and `useSyncRunView` pass it
-  through, and `MainPage` both seeds it from the `get_sync_status` snapshot onto the store at mount and maps it to the
-  slot's label. **Nothing mechanical stands behind the seam between them**: a fourth frame builder that omits the key, a
-  fourth start path that stamps the kind it is not, or a reader that spends the absent case on one of the two answers —
-  a `runKind ?? "preview"`, a `=== "preview"` where the neutral branch was — goes green, because each test above pins
-  one half and none of them pins the join. The failure is silent and worst exactly where the frontend cannot help
-  itself: after a plugin reload mid-run the store starts empty, the snapshot is the only thing that can say what the run
-  is doing, and Main then tells the reader a real apply run is merely checking for changes. Why the kind cannot be
-  derived at all is stated at `domain/sync_run_kind.py` and in `docs/architecture/qam-panel.md`'s Main section; do not
-  restate it here
+  `frontend/src/utils/syncRunView.test.ts` and the slot's three labels in `frontend/src/bigpicture/MainPage.test.tsx`.
+  **Nothing joins the eleven sites it passes through**, counted one per site at the granularity this list names them:
+  `LibrarySyncStateBox` holds it with the slot, three separate backend frame builders carry it (`emit_progress`,
+  `_finish_sync`'s CANCELLED terminal, and the per-unit ERROR dict literal in `sync_orchestrator.py`), three frontend
+  start paths stamp it themselves on the optimistic frame they show before the first real one arrives (`useSyncPage`'s
+  `computePreview` as `preview`, its `applyPreview` and `startRunDirectly` as `apply`), `SyncProgress.runKind` and
+  `useSyncRunView` pass it through, and `MainPage` both seeds it from the `get_sync_status` snapshot onto the store at
+  mount and maps it to the slot's label. **Nothing mechanical stands behind the seam between them**: a fourth frame
+  builder that omits the key, a fourth start path that stamps the kind it is not, or a reader that spends the absent
+  case on one of the two answers — a `runKind ?? "preview"`, a `=== "preview"` where the neutral branch was — goes
+  green, because each test above pins one half and none of them pins the join. The failure is silent and worst exactly
+  where the frontend cannot help itself: after a plugin reload mid-run the store starts empty, the snapshot is the only
+  thing that can say what the run is doing, and Main then tells the reader a real apply run is merely checking for
+  changes. Why the kind cannot be derived at all is stated at `domain/sync_run_kind.py` and in
+  `docs/architecture/qam-panel.md`'s Main section; do not restate it here
 - **A press that starts a run clears the previous run's per-unit rows — unless that press is a RESUME, the one start
-  they are still true for** — test + prompt-only — `src/components/SyncPage.test.tsx`'s "a previous run's rows at the
-  next press" pins all three start paths in both directions, and `src/utils/runUnitsStore.test.ts` pins the clear
-  itself. **The rule spans three modules and nothing joins them.** `utils/runUnitsStore.ts` holds the rows and offers
-  `clearRunUnits`; `useSyncPage` decides, at each of the three presses that write an optimistic frame (`computePreview`,
-  `applyPreview`, `startRunDirectly` — the same three the entry above names); and `index.tsx`'s `sync_plan` listener is
-  the only OTHER thing that ever replaces the rows, which is what makes the press the moment that matters. The plan
-  arrives after `build_work_queue()` on the two apply paths and never at all on the preview path, so a fourth start path
-  that forgets the clear leaves the previous run's `done` rows — with its apply results, and with the unit it died in
-  dressed as running by this run's frames — standing over the new run for the length of a work-queue build, or for the
-  whole of it. The store's own guards cannot help: they REFUSE a foreign frame, and refusing is not clearing. The
-  discriminator can be nothing but the frontend's `syncResumeState(stats).canResume` at the press, because a resume is a
-  new run with a new id and the backend has no resume concept at all — no frame, kind or id tells the two apart. Both
-  directions fail in silence: forget the clear and another run's rows read as this run's progress, clear on a resume and
-  the one start whose rows are true loses them
+  they are still true for** — test + prompt-only — `frontend/src/bigpicture/SyncPage.test.tsx`'s "a previous run's rows
+  at the next press" pins all three start paths in both directions, and `frontend/src/utils/runUnitsStore.test.ts` pins
+  the clear itself. **The rule spans three modules and nothing joins them.** `utils/runUnitsStore.ts` holds the rows and
+  offers `clearRunUnits`; `useSyncPage` decides, at each of the three presses that write an optimistic frame
+  (`computePreview`, `applyPreview`, `startRunDirectly` — the same three the entry above names); and `index.tsx`'s
+  `sync_plan` listener is the only OTHER thing that ever replaces the rows, which is what makes the press the moment
+  that matters. The plan arrives after `build_work_queue()` on the two apply paths and never at all on the preview path,
+  so a fourth start path that forgets the clear leaves the previous run's `done` rows — with its apply results, and with
+  the unit it died in dressed as running by this run's frames — standing over the new run for the length of a work-queue
+  build, or for the whole of it. The store's own guards cannot help: they REFUSE a foreign frame, and refusing is not
+  clearing. The discriminator can be nothing but the frontend's `syncResumeState(stats).canResume` at the press, because
+  a resume is a new run with a new id and the backend has no resume concept at all — no frame, kind or id tells the two
+  apart. Both directions fail in silence: forget the clear and another run's rows read as this run's progress, clear on
+  a resume and the one start whose rows are true loses them
 - **A firmware answer nothing could establish is `unknown`, never `not_needed` — and the distinction survives every
   layer it crosses** — test + prompt-only — `tests/adapters/test_atlas_firmware.py` pins the adapter's degradation (a
   raising resolver, a missing installation, an answer with no root all come back with `resolved` clear, never as an
@@ -394,18 +394,18 @@ Format: **invariant** — tier — enforced by.
 - **A firmware row the RomM library does not hold (`on_server: False`) counts towards readiness, and never towards a
   download affordance or a progress ratio** — test + prompt-only — `tests/services/test_firmware.py` pins the row's
   shape (`id` absent, `on_server` clear), that it raises `required_count`, and that it stays out of `server_count`;
-  `src/components/library/PlatformsTab.test.tsx` pins that the buttons key off the fetchable set. **The three axes live
-  in three places and nothing joins them.** `domain/bios_status.py::count_required` is readiness and counts every
-  required row; `services/firmware/status.py::_bios_aggregates` scopes `server_count` / `local_count` to `on_server`
-  rows; the download buttons' condition is `isFetchable` (`src/utils/biosFetchable.ts`), called from
-  `src/components/library/PlatformDetail.tsx` — and since #1815 the per-row Download button reads the same filtered set,
-  so a fourth reader of the axis now exists in that one file. A fifth reads it in the same file for the On-disk cell's
-  second mark (`⊘`), and that one is display alone: it neither counts nor gates, which is what keeps it out of all three
-  folds below. **A sixth reader is the game page's BIOS tab** (`BiosTab.tsx`'s `rowBelongsOnThisPage`), and it is
-  display alone in the same sense: it decides whether a row gets a LINE — a file no page can fetch, that this launch
-  does not require and that is not there, is nothing that page can act on — and gates no count and offers no action, so
-  it belongs to none of the three folds below either. What holds the two surfaces together is that they call one
-  predicate rather than spelling the three clauses twice: a second copy would let the game page point at a download
+  `frontend/src/bigpicture/library/PlatformsTab.test.tsx` pins that the buttons key off the fetchable set. **The three
+  axes live in three places and nothing joins them.** `domain/bios_status.py::count_required` is readiness and counts
+  every required row; `services/firmware/status.py::_bios_aggregates` scopes `server_count` / `local_count` to
+  `on_server` rows; the download buttons' condition is `isFetchable` (`frontend/src/utils/biosFetchable.ts`), called
+  from `frontend/src/bigpicture/library/PlatformDetail.tsx` — and since #1815 the per-row Download button reads the same
+  filtered set, so a fourth reader of the axis now exists in that one file. A fifth reads it in the same file for the
+  On-disk cell's second mark (`⊘`), and that one is display alone: it neither counts nor gates, which is what keeps it
+  out of all three folds below. **A sixth reader is the game page's BIOS tab** (`BiosTab.tsx`'s `rowBelongsOnThisPage`),
+  and it is display alone in the same sense: it decides whether a row gets a LINE — a file no page can fetch, that this
+  launch does not require and that is not there, is nothing that page can act on — and gates no count and offers no
+  action, so it belongs to none of the three folds below either. What holds the two surfaces together is that they call
+  one predicate rather than spelling the three clauses twice: a second copy would let the game page point at a download
   button the platform page does not offer, or leave off a row it does. What must NOT be shared is the game page's rule
   around it — required for this launch, the console's own image, present, fetchable, or unjudged — which is that page's
   alone; the platform detail has no such rule, and a shared "visibility" module would invent a notion only one surface
@@ -524,16 +524,20 @@ Format: **invariant** — tier — enforced by.
   modules that predate the gate are grandfathered at their exact size. A ceiling goes up only for a change that adds no
   code — a rename, a reformat — and only with the reason recorded at its `ALLOWLIST` entry; a raise taken silently has
   retired the gate. Entries only ever come out, when the module drops back under the threshold. `main.py`, `_vendor/`,
-  `tests/`, `scripts/` and `src/` are out of scope, each for a reason recorded at `SCOPE_DIRS`)
+  `tests/`, `scripts/` and `frontend/src/` are out of scope, each for a reason recorded at `SCOPE_DIRS`)
 - **Service-independence contract list stays complete** — check — `scripts/check_service_independence_contract.py`
 - **Layer import direction (services ↛ adapters, adapters ↛ services, …)** — check — `.importlinter` (`lint-imports`)
-- **Frontend direction: `src/utils/` and `src/api/` never import `src/components/`, and no `src/` module takes part in
-  an import cycle** — check — `eslint.config.js` (`import-x/no-restricted-paths`, `import-x/no-cycle`). These rules go
-  inert rather than loud when misconfigured: `import-x/extensions` ships as `['.js']`, so until it names `.ts`/`.tsx`
-  the plugin resolves an import but never opens the target to read its imports, and `no-cycle` reports nothing on any
-  codebase. `src/eslintBoundaries.test.ts` lints known-bad fixtures through the real config and fails if any of the
-  three stops reporting — a green `pnpm lint` alone proves nothing. Type-only imports are not edges (erased at runtime),
-  which is why the `api/backend.ts` ⇄ `utils/cachedGameDetailStore.ts` back-reference is not a cycle
+- **Frontend direction: `frontend/src/utils/` and `frontend/src/api/` never import either surface
+  (`frontend/src/bigpicture/`, `frontend/src/desktop/`); the two surfaces never import each other; and no
+  `frontend/src/` module takes part in an import cycle** — check — `eslint.config.js` (`import-x/no-restricted-paths`,
+  `import-x/no-cycle`). The surface pair is a peer rule, not a layer rule: the two share data and logic and almost
+  nothing visual, so anything that turns out to belong to both moves DOWN into `api/`, `utils/` or `types/`, never
+  sideways. These rules go inert rather than loud when misconfigured: `import-x/extensions` ships as `['.js']`, so until
+  it names `.ts`/`.tsx` the plugin resolves an import but never opens the target to read its imports, and `no-cycle`
+  reports nothing on any codebase. `frontend/src/eslintBoundaries.test.ts` lints known-bad fixtures through the real
+  config and fails if any of the seven stops reporting — a green `pnpm lint` alone proves nothing. Type-only imports are
+  not edges (erased at runtime), which is why the `api/backend.ts` ⇄ `utils/cachedGameDetailStore.ts` back-reference is
+  not a cycle
 - **No bare `# type: ignore` / blanket suppressions** — check — `scripts/check_no_bare_ignores.sh`
 - **Every pinned version in `requirements-*.lock` satisfies its `requirements-*.txt` source constraint** — check —
   `scripts/check_lock_sync.py`
@@ -610,13 +614,13 @@ Format: **invariant** — tier — enforced by.
   `::TestTheVerdictOverTheSystemImage` pins what the level and the token do with each, and
   `tests/services/test_firmware.py::TestTheConsolesOwnFirmwareDemand` pins the PlayStation case end to end including
   that the overview and the game page stamp one answer. The frontend halves are pinned per surface
-  (`src/components/BiosTab.test.tsx`, `src/components/library/PlatformsTab.test.tsx`). **The rule spans eight modules
-  and nothing joins them** — counted one per file the answer passes through, four backend and four frontend: the adapter
-  (`adapters/atlas_firmware.py`) carries `CoreFirmware.system_firmware` and `requirements_met` per core,
-  `domain/firmware_wants.py::CoreFirmwareVerdict` holds the four spellings apart from the absence,
+  (`frontend/src/bigpicture/BiosTab.test.tsx`, `frontend/src/bigpicture/library/PlatformsTab.test.tsx`). **The rule
+  spans eight modules and nothing joins them** — counted one per file the answer passes through, four backend and four
+  frontend: the adapter (`adapters/atlas_firmware.py`) carries `CoreFirmware.system_firmware` and `requirements_met` per
+  core, `domain/firmware_wants.py::CoreFirmwareVerdict` holds the four spellings apart from the absence,
   `domain/bios_status.py::classify_system_image` decides, `services/firmware/status.py` stamps it beside the counts,
-  every frontend surface that words it does so through ONE module (`src/utils/biosSummary.ts`; which components those
-  are is answered by reading them, not by a tally kept here), and a fourth reads it without wording it (below). A
+  every frontend surface that words it does so through ONE module (`frontend/src/utils/biosSummary.ts`; which components
+  those are is answered by reading them, not by a tally kept here), and a fourth reads it without wording it (below). A
   libretro `.info` can mark a file required or optional and nothing else — no way to say "one of these", none to say the
   console will not start without one — so an author who knows it will not has two lossy moves, and the deployed
   catalogue takes both: SwanStation marks all five of its PlayStation images **optional**, Beetle PSX marks three of its
@@ -642,49 +646,49 @@ Format: **invariant** — tier — enforced by.
   are built off the fetchable set and read the verdict nowhere, because what the resolver could establish is the
   emulator's demand and what is fetchable is what the library holds; the two further inputs they do read
   (`required_by_active`, and the library's own finished ratio) are demand and inventory, not readiness gates. **A fourth
-  frontend reader is the play row's BIOS badge** (`src/utils/playSection.ts::extractBiosInfo`), where `"absent"` is a
-  second established absence beside the required count. Whether the count sees the same thing is the core author's
-  choice, which is why the badge may not be left to it: under SwanStation every image is optional, `required_count` is 0
-  and the comparison beside it is vacuously false, while under Beetle PSX three of the same images are required and the
-  count raises the badge by itself. One console, one BIOS folder, two answers — and `"absent"` is the same under both.
-  `"unsettled"` deliberately raises no badge, the same reading a withheld required row gets: the badge claims a file is
-  NOT THERE, and nothing established that. **Where BOTH ignorances hold** — a console needing an image whose required
-  folder row could not be judged, the LRPS2 shape and a reachable one — `biosSummary` names the withheld ROW rather than
-  the console. They are not two gaps over two different file sets: a `required_by_active` row always carries the active
-  core, so it is always one of the rows the disjunction is read over. It is always one of the unjudged rows that verdict
-  is read over rather than a finding beside it — the decline needs at least one such row, and this is one — and need not
-  be the only one, since another image the core declares can be unjudged too; it is the only half of the pair that can
-  name a file, and naming it points at the file list, where its caveat explains itself. **`"absent"` is tested BEFORE
-  the level's decline**, and the pair never arrives at all today because the backend lands `absent` on `missing`. Since
-  #1863 that order lives ONCE, in `biosSummary`, which is what every wording surface reads — `PlatformsTab.tsx`'s row
-  tooltip last, since it kept a copy of the order and an older spelling of the states for a cut longer and described one
-  platform in two vocabularies a keypress apart. **The module's own drift lock is a test that reads components as
-  SOURCE** (`biosSummary.test.ts`, over the phrase list the module builds its answers from, with the ratio's twin in
-  `biosHeldRatio.test.ts`) — and since #1866 it SWEEPS the set it searches rather than naming it
-  (`src/test-utils/componentSources.ts`, every non-test `.tsx` under `src/components`), because the naming is what
-  failed: both locks listed two components while three rendered these states, and a surface missing from such a list
-  carries no lock at all and cannot be told from one that never drifted. Deriving the set from who IMPORTS the module
-  would be worse than the list — a surface wording a state for itself is exactly one that does not import it. **What
-  neither lock can catch is a component inventing a NEW wording for one of these states**: only a copied phrase is
-  searchable, so a green run there is evidence about copied sentences and about nothing else. Two limits of the sweep,
-  both deliberate: it is `.tsx` only, so a wording helper extracted into a `.ts` beside its component is unsearched
-  (`src/components/panelState.ts` is such a file and quotes BIOS prose today), and `src/utils` is out of scope because
-  that is where the phrases legitimately live **A narrower form of the same answer is read PER CORE onto every row**
-  (`FirmwareCatalogue.emulators_needing_one_of_their_files` → `build_file_entry`'s `cores[<emulator>]["needs_one_of"]`
-  and the row's own `system_image_candidate`, worded by `BiosTab.tsx`'s `coreLineSuffix` and marked by
-  `library/PlatformDetail.tsx`'s `diskMark`), and there the rule is that the two keys on that entry are two SPEAKERS:
-  `required` is the core's own `.info`, the other is the packaged table about that core's console counted over the
-  core's whole declaration, and `optional` beside `needs_one_of: 5` is the informative pair rather than a contradiction
-  to resolve. Rewriting the declaration off the demand — printing "required" where the core said optional — puts words
-  in the emulator's mouth and loses the only fact the row had to add; folding the pair the other way loses the demand.
-  **A core is in that narrower answer only where it marks NOTHING required**, which is deliberate and is the second
-  thing nothing checks: a core whose console needs an image and that does state required files says so through those
-  rows' `required_by_active`, so annotating its optional rows too states one requirement twice — it put "the console
-  will not start without one" under `ps1_rom.bin`, which Beetle PSX marks optional while hard-requiring three other
-  images. The same narrowing makes `system_image_candidate` a strict subset of the rows `classify_system_image` weighs,
-  and widening either to match the other is the fix that reintroduces one of those two defects. Nothing checks any of
-  it: `needs_one_of` is a plain int-or-null on a dict a surface may read either key of, and the candidate flag is a
-  plain bool beside a `required_by_active` that reads like its sibling
+  frontend reader is the play row's BIOS badge** (`frontend/src/utils/playSection.ts::extractBiosInfo`), where
+  `"absent"` is a second established absence beside the required count. Whether the count sees the same thing is the
+  core author's choice, which is why the badge may not be left to it: under SwanStation every image is optional,
+  `required_count` is 0 and the comparison beside it is vacuously false, while under Beetle PSX three of the same images
+  are required and the count raises the badge by itself. One console, one BIOS folder, two answers — and `"absent"` is
+  the same under both. `"unsettled"` deliberately raises no badge, the same reading a withheld required row gets: the
+  badge claims a file is NOT THERE, and nothing established that. **Where BOTH ignorances hold** — a console needing an
+  image whose required folder row could not be judged, the LRPS2 shape and a reachable one — `biosSummary` names the
+  withheld ROW rather than the console. They are not two gaps over two different file sets: a `required_by_active` row
+  always carries the active core, so it is always one of the rows the disjunction is read over. It is always one of the
+  unjudged rows that verdict is read over rather than a finding beside it — the decline needs at least one such row, and
+  this is one — and need not be the only one, since another image the core declares can be unjudged too; it is the only
+  half of the pair that can name a file, and naming it points at the file list, where its caveat explains itself.
+  **`"absent"` is tested BEFORE the level's decline**, and the pair never arrives at all today because the backend lands
+  `absent` on `missing`. Since #1863 that order lives ONCE, in `biosSummary`, which is what every wording surface reads
+  — `PlatformsTab.tsx`'s row tooltip last, since it kept a copy of the order and an older spelling of the states for a
+  cut longer and described one platform in two vocabularies a keypress apart. **The module's own drift lock is a test
+  that reads components as SOURCE** (`biosSummary.test.ts`, over the phrase list the module builds its answers from,
+  with the ratio's twin in `biosHeldRatio.test.ts`) — and since #1866 it SWEEPS the set it searches rather than naming
+  it (`frontend/src/test-utils/componentSources.ts`, every non-test `.tsx` under `frontend/src/bigpicture`), because the
+  naming is what failed: both locks listed two components while three rendered these states, and a surface missing from
+  such a list carries no lock at all and cannot be told from one that never drifted. Deriving the set from who IMPORTS
+  the module would be worse than the list — a surface wording a state for itself is exactly one that does not import it.
+  **What neither lock can catch is a component inventing a NEW wording for one of these states**: only a copied phrase
+  is searchable, so a green run there is evidence about copied sentences and about nothing else. Two limits of the
+  sweep, both deliberate: it is `.tsx` only, so a wording helper extracted into a `.ts` beside its component is
+  unsearched (`frontend/src/bigpicture/panelState.ts` is such a file and quotes BIOS prose today), and
+  `frontend/src/utils` is out of scope because that is where the phrases legitimately live **A narrower form of the same
+  answer is read PER CORE onto every row** (`FirmwareCatalogue.emulators_needing_one_of_their_files` →
+  `build_file_entry`'s `cores[<emulator>]["needs_one_of"]` and the row's own `system_image_candidate`, worded by
+  `BiosTab.tsx`'s `coreLineSuffix` and marked by `library/PlatformDetail.tsx`'s `diskMark`), and there the rule is that
+  the two keys on that entry are two SPEAKERS: `required` is the core's own `.info`, the other is the packaged table
+  about that core's console counted over the core's whole declaration, and `optional` beside `needs_one_of: 5` is the
+  informative pair rather than a contradiction to resolve. Rewriting the declaration off the demand — printing
+  "required" where the core said optional — puts words in the emulator's mouth and loses the only fact the row had to
+  add; folding the pair the other way loses the demand. **A core is in that narrower answer only where it marks NOTHING
+  required**, which is deliberate and is the second thing nothing checks: a core whose console needs an image and that
+  does state required files says so through those rows' `required_by_active`, so annotating its optional rows too states
+  one requirement twice — it put "the console will not start without one" under `ps1_rom.bin`, which Beetle PSX marks
+  optional while hard-requiring three other images. The same narrowing makes `system_image_candidate` a strict subset of
+  the rows `classify_system_image` weighs, and widening either to match the other is the fix that reintroduces one of
+  those two defects. Nothing checks any of it: `needs_one_of` is a plain int-or-null on a dict a surface may read either
+  key of, and the candidate flag is a plain bool beside a `required_by_active` that reads like its sibling
 - **Which emulator a set of answers is about is ONE pick per scope — a platform's, and a ROM's — and every answer in
   that scope is a projection of it** — test + prompt-only —
   `tests/services/test_firmware.py::TestOnePlatformOneEmulator` asserts the two surfaces AGREE across every way a
@@ -727,27 +731,28 @@ Format: **invariant** — tier — enforced by.
   declared default the way `AtlasCatalogueAdapter` does, and every other fixture on the bare fake still exercises the
   weaker resolution
 - **A platform's BIOS answer is asked for one platform at a time, and a row that has not got one yet is never rendered
-  as a row nothing could be established for** — test + prompt-only — `src/components/library/PlatformsTab.test.tsx` pins
-  the four halves that can be seen from a test: the two renderings apart (an outline dot and "Checking…" against the
-  solid grey dot and "Nothing is known"), the focused row asked ahead of the rows above it, the walk stopping at
-  unmount, and a read issued before a core change not overwriting the one issued after it. Each was mutation-checked.
-  **The JOIN between the two calls is pinned once**, in `tests/contract/test_firmware_status_read.py`: it composes them
-  over the real wiring and holds the result against the key set the single whole-page call answered with, which is the
-  one thing the service tier cannot do — its ~25 whole-page tests compose through a local helper that would reproduce a
-  composition bug rather than catch it. **The rule spans three frontend modules and one backend split, and nothing joins
-  them.** `services/firmware/status.py` answers `get_firmware_status` (which platforms the page can speak for) and
-  `get_platform_firmware_status` (one platform's whole entry — 106-486 ms each against 4.6 ms for the overview,
-  measured); `usePlatformsPage` owns the walk, the per-slug ordering counter and the four-valued `firmwareState`;
-  `PlatformsTab` draws the dot; `PlatformDetail` words the pane. Every failure here is silent and looks like an answer.
-  A state-bearing field creeping back onto the overview payload gets rendered over a platform nobody has asked about
-  yet. A fifth rendering path reading `firmware === null` instead of the state says "nothing could be established" about
-  most of the list for the first seconds of every visit — which is the confusion this cut exists to remove, restored by
-  a truthiness test. An answer already held is not taken back by a later failure (`firmwareStale` beside the state,
-  never instead of it), and "the overview did not name this platform" is one of the two ways to hold one. **Two halves
-  no test reaches**: the `alive` guard in the hook's `accept` is unobservable under React Testing Library, which drops a
-  write to an unmounted tree itself — what a test can see is the walk stopping, so the guard states the rule rather than
-  being held to it; and whether an 8px outline reads as "not yet" against a filled dot is device-only, like everything
-  else about this list's legibility
+  as a row nothing could be established for** — test + prompt-only —
+  `frontend/src/bigpicture/library/PlatformsTab.test.tsx` pins the four halves that can be seen from a test: the two
+  renderings apart (an outline dot and "Checking…" against the solid grey dot and "Nothing is known"), the focused row
+  asked ahead of the rows above it, the walk stopping at unmount, and a read issued before a core change not overwriting
+  the one issued after it. Each was mutation-checked. **The JOIN between the two calls is pinned once**, in
+  `tests/contract/test_firmware_status_read.py`: it composes them over the real wiring and holds the result against the
+  key set the single whole-page call answered with, which is the one thing the service tier cannot do — its ~25
+  whole-page tests compose through a local helper that would reproduce a composition bug rather than catch it. **The
+  rule spans three frontend modules and one backend split, and nothing joins them.** `services/firmware/status.py`
+  answers `get_firmware_status` (which platforms the page can speak for) and `get_platform_firmware_status` (one
+  platform's whole entry — 106-486 ms each against 4.6 ms for the overview, measured); `usePlatformsPage` owns the walk,
+  the per-slug ordering counter and the four-valued `firmwareState`; `PlatformsTab` draws the dot; `PlatformDetail`
+  words the pane. Every failure here is silent and looks like an answer. A state-bearing field creeping back onto the
+  overview payload gets rendered over a platform nobody has asked about yet. A fifth rendering path reading
+  `firmware === null` instead of the state says "nothing could be established" about most of the list for the first
+  seconds of every visit — which is the confusion this cut exists to remove, restored by a truthiness test. An answer
+  already held is not taken back by a later failure (`firmwareStale` beside the state, never instead of it), and "the
+  overview did not name this platform" is one of the two ways to hold one. **Two halves no test reaches**: the `alive`
+  guard in the hook's `accept` is unobservable under React Testing Library, which drops a write to an unmounted tree
+  itself — what a test can see is the walk stopping, so the guard states the rule rather than being held to it; and
+  whether an 8px outline reads as "not yet" against a filled dot is device-only, like everything else about this list's
+  legibility
 - **The whole-machine firmware inventory is never asked with content verification, and the per-platform reading is never
   asked without it** — prompt-only — `firmware_inventory()` (`FirmwareResolver`, `AtlasFirmwareAdapter`) is asked
   unverified: `verify=True` there sweeps every unclaimed file under the BIOS root plus each declared file the packaged
@@ -902,8 +907,8 @@ Format: **invariant** — tier — enforced by.
   stray, the wait then stalls the full 60-second heartbeat window, and the run ends by stashing a chunk the frontend had
   already applied — slow, plausible-looking, and silent (#1052 / #1367)
 - **Every path on which the user answers the preview question leaves a live snapshot on neither side — the
-  pending-preview store (`src/utils/pendingPreviewStore.ts`) and the backend's `pending_delta`** — prompt-only — three
-  paths clear the store and tell the backend, and all three are the Sync page's: Apply (`applyPreview`), Cancel
+  pending-preview store (`frontend/src/utils/pendingPreviewStore.ts`) and the backend's `pending_delta`** — prompt-only
+  — three paths clear the store and tell the backend, and all three are the Sync page's: Apply (`applyPreview`), Cancel
   (`cancelPreview`) and Refresh (`computePreview(true)`, which discards before asking for the next one). The fourth is
   the cancel that lands just after a preview was staged, which never adopted it into the store and so discharges the
   rule by discarding server-side alone. A fifth path is not an answer at all and is held to the same rule: a successful
@@ -921,7 +926,7 @@ Format: **invariant** — tier — enforced by.
   matrix; new conflicting entry points are prompt-only
 - **A prune frontend action mutates Steam only after atomically claiming its exact run/token/discriminant/binding;
   repeats are idempotent and an outcome lost in transit is ambiguous, never success** — test + prompt-only — prune
-  service claim tests + `src/utils/pruneActions.test.ts`; new action kinds are prompt-only
+  service claim tests + `frontend/src/utils/pruneActions.test.ts`; new action kinds are prompt-only
 - **Every installed-content mutation is authorized by a descriptor-relative no-follow claim (root identity, descendant
   identities, and — where a bundle exists — regular-file hashes) revalidated immediately before it, never by a path
   re-lookup; refusal, partial mutation and ambiguity are reported, never rewritten into success. The hashes bind a
@@ -938,28 +943,30 @@ Format: **invariant** — tier — enforced by.
   adapters are prompt-only
 - **Every prune frame carries its originating preview ID; only a matching pending preview may adopt a run, and an
   accepted contiguous terminal result seals it against every later frame** — test + prompt-only — prune service frame
-  tests + `src/utils/pruneStore.test.ts`; new prune frame types are prompt-only
+  tests + `frontend/src/utils/pruneStore.test.ts`; new prune frame types are prompt-only
 - **Every destructive RomM proof is bound to one canonical server-origin/token-origin/user namespace from preview
   through every exact-ID request; a namespace change is uncertainty, never a 404 deletion authority** — test +
   prompt-only — prune service namespace-race tests; new destructive RomM proof paths are prompt-only
 - **Every write into per-rom detail state that crosses an `await` is bound to a rom identity — the store
-  (`src/utils/gameDetailStore.ts`) via `writerForRom`, or the answer's own `rom_id` in `applySaveStatus`; the panel's
-  state, event and tab-content modules (`src/components/panelState.ts`, `src/components/panelEvents.ts`,
-  `src/components/panelTabContent.tsx` — the panel component itself holds none of these writes) via `RomBinding`, built
-  by `bindRom` for a read a run of the `[appId]` effect issued and by `bindRomInState` for the active tab's panes, whose
-  writer is built during render; the achievements tab (`src/components/AchievementsTab.tsx`) by construction, its React
-  key being the rom id, so its state cannot outlive the identity it was read for. A version switch re-keys without
-  closing, so neither the store's generation counter nor the panel's `[appId]` effect sees this class. Binding answers
-  the wrong-rom question only; two answers for the SAME rom are ordered instead, by a sequence taken when the read is
-  issued — the store's `loadSeq`, the panel's `takeReadTicket` (#1717). Four writes are unbound: the two identity writes
-  install what a binding would compare against, so ordering is all they can have, and both have it. The other two have
-  neither — the store's `cached.bios_status` fold runs in the same synchronous run as its guard, and the event lane's
-  `handleBiosChange` answers for the platform's default core and can overwrite a rom-keyed answer (#1718). The panel's
-  remaining lazy lane writes through the raw setter, ordered by the same ticket. The play button is NOT covered
-  (#1714)** — test + prompt-only — the panel's thirteen bound sites each carry a version-switch test
-  (`src/components/RomMGameInfoPanel.test.tsx`); the store side and every new write site on either are prompt-only,
-  because a checker scoped to the store's own function bodies would be green on the case this rule was written for. The
-  reasons behind the two writer mechanisms live at `writerForRom` and `RomBinding` — do not restate them here
+  (`frontend/src/utils/gameDetailStore.ts`) via `writerForRom`, or the answer's own `rom_id` in `applySaveStatus`; the
+  panel's state, event and tab-content modules (`frontend/src/bigpicture/panelState.ts`,
+  `frontend/src/bigpicture/panelEvents.ts`, `frontend/src/bigpicture/panelTabContent.tsx` — the panel component itself
+  holds none of these writes) via `RomBinding`, built by `bindRom` for a read a run of the `[appId]` effect issued and
+  by `bindRomInState` for the active tab's panes, whose writer is built during render; the achievements tab
+  (`frontend/src/bigpicture/AchievementsTab.tsx`) by construction, its React key being the rom id, so its state cannot
+  outlive the identity it was read for. A version switch re-keys without closing, so neither the store's generation
+  counter nor the panel's `[appId]` effect sees this class. Binding answers the wrong-rom question only; two answers for
+  the SAME rom are ordered instead, by a sequence taken when the read is issued — the store's `loadSeq`, the panel's
+  `takeReadTicket` (#1717). Four writes are unbound: the two identity writes install what a binding would compare
+  against, so ordering is all they can have, and both have it. The other two have neither — the store's
+  `cached.bios_status` fold runs in the same synchronous run as its guard, and the event lane's `handleBiosChange`
+  answers for the platform's default core and can overwrite a rom-keyed answer (#1718). The panel's remaining lazy lane
+  writes through the raw setter, ordered by the same ticket. The play button is NOT covered (#1714)** — test +
+  prompt-only — the panel's thirteen bound sites each carry a version-switch test
+  (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`); the store side and every new write site on either are
+  prompt-only, because a checker scoped to the store's own function bodies would be green on the case this rule was
+  written for. The reasons behind the two writer mechanisms live at `writerForRom` and `RomBinding` — do not restate
+  them here
 - **Every row a reader must be able to reach on a QAM page is a row Steam can focus — a toggle, a button, or a
   `Focusable` carrying an activate handler, including a table row with no action of its own, so the reader can walk the
   table** — check + prompt-only — `tender/qam-focusable-row` checks the narrow syntactic slice where an `@decky/ui`
@@ -977,31 +984,31 @@ Format: **invariant** — tier — enforced by.
   total below the last, each unreachable for the same reason and with no neighbour to ride along with — so
   `ScrollRegion` scrolls itself to the top when focus reaches the first stop in it and to its end when focus reaches the
   last (`revealEdge`, over `revealTop` and `revealBottom`). Both halves are pinned by
-  `src/components/qam/ScrollRegion.test.tsx` over mocked geometry, so what is tested is the DECISION and not the scroll:
-  whether the panel and the reader agree about which element is topmost or last stays device-only, like the rest of this
-  entry. **Reachable is not near, and the same mechanism decides where a page puts its controls**: focus moves one row
-  at a time, so a button under a list of N focusable rows is N presses from the top of the column — sixteen, measured on
-  the device for the Cancel that stops a sixteen-unit run. That is why the Sync page's two button rows sit ABOVE their
-  tables, which is the reading the layout wants anyway: what you can do, then why. Nothing checks that half either, and
-  the suite is blind to it for the same reason — a page whose only control is a library's length below the point it
-  opens at renders exactly like one whose control is a press away. Detail: `docs/architecture/qam-panel.md`, "Building
-  blocks"
+  `frontend/src/bigpicture/layout/ScrollRegion.test.tsx` over mocked geometry, so what is tested is the DECISION and not
+  the scroll: whether the panel and the reader agree about which element is topmost or last stays device-only, like the
+  rest of this entry. **Reachable is not near, and the same mechanism decides where a page puts its controls**: focus
+  moves one row at a time, so a button under a list of N focusable rows is N presses from the top of the column —
+  sixteen, measured on the device for the Cancel that stops a sixteen-unit run. That is why the Sync page's two button
+  rows sit ABOVE their tables, which is the reading the layout wants anyway: what you can do, then why. Nothing checks
+  that half either, and the suite is blind to it for the same reason — a page whose only control is a library's length
+  below the point it opens at renders exactly like one whose control is a press away. Detail:
+  `docs/architecture/qam-panel.md`, "Building blocks"
 - **A list-and-detail page opens on the row it was opened WITH, not on its first row — because on that layout focus
   selects, so entry focus landing anywhere selects what it lands on** — test + prompt-only — `ListDetail.test.tsx` pins
   the mark and that it moves with the selection, `WidePage.test.tsx` pins that the frame asks for the declared stop, and
   both use a **non-first** row deliberately. **The rule spans three modules and nothing joins them**:
-  `utils/entryFocus.ts` owns `ENTRY_STOP_ATTR` and `pageEntryStop`, `qam/WidePage.tsx` places entry focus through it
-  rather than through `firstBodyStop`, and `qam/ListDetail.tsx` marks its selected row — plus whatever page passes a
-  starting selection at all, `SettingsPage` today. A fourth wide page that opens on a non-first row and forgets the mark
-  selects its first row instead, and every test still passes. **The end to end is unreachable here**: happy-dom performs
-  no layout and does not reproduce Steam's focus resolution, so what the suite pins is the declaration and the finder,
-  never the press. Only a controller confirms it. **What hid this for a whole review round is the shape of the failure,
-  not its size**: Main has three notices that name a section, and the one naming the FIRST section keeps working, so a
-  reader checking Open Connections sees the feature working while Open Controller and Open Save Sync both land on
-  Connections. A check that exercises the first row proves nothing about the rule. The mark sits on a
-  `display: contents` wrapper AROUND each row rather than on the row, and that is load-bearing rather than stylistic:
-  `pageEntryStop` calls `firstBodyStop(declared)`, which searches DESCENDANTS — a mark on the row itself finds no
-  candidate inside it, falls back to the first row, and ships the defect under a comment saying it does not
+  `utils/entryFocus.ts` owns `ENTRY_STOP_ATTR` and `pageEntryStop`, `bigpicture/layout/WidePage.tsx` places entry focus
+  through it rather than through `firstBodyStop`, and `bigpicture/layout/ListDetail.tsx` marks its selected row — plus
+  whatever page passes a starting selection at all, `SettingsPage` today. A fourth wide page that opens on a non-first
+  row and forgets the mark selects its first row instead, and every test still passes. **The end to end is unreachable
+  here**: happy-dom performs no layout and does not reproduce Steam's focus resolution, so what the suite pins is the
+  declaration and the finder, never the press. Only a controller confirms it. **What hid this for a whole review round
+  is the shape of the failure, not its size**: Main has three notices that name a section, and the one naming the FIRST
+  section keeps working, so a reader checking Open Connections sees the feature working while Open Controller and Open
+  Save Sync both land on Connections. A check that exercises the first row proves nothing about the rule. The mark sits
+  on a `display: contents` wrapper AROUND each row rather than on the row, and that is load-bearing rather than
+  stylistic: `pageEntryStop` calls `firstBodyStop(declared)`, which searches DESCENDANTS — a mark on the row itself
+  finds no candidate inside it, falls back to the first row, and ships the defect under a comment saying it does not
 
 When a change applies a guard / sanitize / backup / grouping pattern, sweep for sibling sites of the same pattern — the
 register is what that sweep checks against.

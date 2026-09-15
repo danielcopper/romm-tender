@@ -28,17 +28,18 @@ export default tseslint.config(
   jsxA11y.flatConfigs.recommended,
   // Global so eslint-plugin-react resolves the version for every linted file —
   // including root config files (eslint.config.js, vitest.config.ts, …) that the
-  // react flat configs apply to but that the src-scoped block below never matches.
+  // react flat configs apply to but that the frontend-scoped block below never matches.
   // Without it the plugin prints a "React version not specified" warning.
   { settings: { react: { version: "detect" } } },
-  // Direction rules for `src/`. The backend gets this from `.importlinter`, which
-  // is Python-only; without an equivalent here nothing in the frontend toolchain
-  // has an opinion about which module may reach which. The three rules below make
-  // the WRONG seam fail — they cannot certify that a seam is right. A helper
-  // imported by exactly one parent, taking a dozen parameters and doing nothing on
-  // its own, is neither a cycle nor a direction violation and still passes.
+  // Direction rules for `frontend/src/`. The backend gets this from
+  // `.importlinter`, which is Python-only; without an equivalent here nothing
+  // in the frontend toolchain has an opinion about which module may reach
+  // which. The seven rules below make the WRONG seam fail — they cannot certify
+  // that a seam is right. A helper imported by exactly one parent, taking a
+  // dozen parameters and doing nothing on its own, is neither a cycle nor a
+  // direction violation and still passes.
   {
-    files: ["src/**/*.{ts,tsx}"],
+    files: ["frontend/src/**/*.{ts,tsx}"],
     plugins: { "import-x": importX },
     settings: {
       // Resolution decides what these rules see. The TS resolver handles path
@@ -52,7 +53,7 @@ export default tseslint.config(
       // one edge deep and reports nothing, on any codebase, forever. `parsers`
       // supplies the TS parser it needs to do that reading. A probe cycle is the
       // only way to tell this apart from "no cycles exist"; see
-      // tests/scripts/test_frontend_boundaries.* for the one that stays.
+      // frontend/src/eslintBoundaries.test.ts for the one that stays.
       "import-x/extensions": [".ts", ".tsx"],
       "import-x/parsers": { "@typescript-eslint/parser": [".ts", ".tsx"] },
     },
@@ -68,15 +69,38 @@ export default tseslint.config(
         {
           zones: [
             {
-              target: "./src/utils",
-              from: "./src/components",
+              target: "./frontend/src/utils",
+              from: "./frontend/src/bigpicture",
               message:
-                "utils/ is the bottom layer and must not reach up into components/. Declare what you need to ask (see LaunchPrompts in utils/launchInterceptor.ts) and let index.tsx supply it.",
+                "utils/ is the bottom layer and must not reach up into a surface. Declare what you need to ask (see LaunchPrompts in utils/launchInterceptor.ts) and let index.tsx supply it.",
             },
             {
-              target: "./src/api",
-              from: "./src/components",
+              target: "./frontend/src/utils",
+              from: "./frontend/src/desktop",
+              message:
+                "utils/ is the bottom layer and must not reach up into a surface. Declare what you need to ask (see LaunchPrompts in utils/launchInterceptor.ts) and let the surface's entry point supply it.",
+            },
+            {
+              target: "./frontend/src/api",
+              from: "./frontend/src/bigpicture",
               message: "api/ is the wire layer and has no business reaching into the view.",
+            },
+            {
+              target: "./frontend/src/api",
+              from: "./frontend/src/desktop",
+              message: "api/ is the wire layer and has no business reaching into the view.",
+            },
+            {
+              target: "./frontend/src/bigpicture",
+              from: "./frontend/src/desktop",
+              message:
+                "bigpicture/ and desktop/ are peers, not layers: the two surfaces share data and logic and almost nothing visual, so neither may reach into the other. Anything that turns out to belong to both moves DOWN into api/, utils/ or types/ — never sideways.",
+            },
+            {
+              target: "./frontend/src/desktop",
+              from: "./frontend/src/bigpicture",
+              message:
+                "desktop/ and bigpicture/ are peers, not layers: the two surfaces share data and logic and almost nothing visual, so neither may reach into the other. Anything that turns out to belong to both moves DOWN into api/, utils/ or types/ — never sideways.",
             },
           ],
         },
@@ -85,16 +109,16 @@ export default tseslint.config(
   },
   {
     files: [
-      "src/index.tsx",
-      "src/components/{MainPage,SyncPage,LibraryPage,SettingsPage,DangerZone,RemovedGamesCleanup,DownloadQueue}.tsx",
-      "src/components/{SessionBudgetBanner,MigrationBlockedPage,SettingsResetBanner,PlaytimeScopeBanner,DownloadProgressRow,LoadingRow}.tsx",
-      "src/components/{qam,sync,library,settings}/**/*.tsx",
+      "frontend/src/index.tsx",
+      "frontend/src/bigpicture/{MainPage,SyncPage,LibraryPage,SettingsPage,DangerZone,RemovedGamesCleanup,DownloadQueue}.tsx",
+      "frontend/src/bigpicture/{SessionBudgetBanner,MigrationBlockedPage,SettingsResetBanner,PlaytimeScopeBanner,DownloadProgressRow,LoadingRow}.tsx",
+      "frontend/src/bigpicture/{layout,sync,library,settings}/**/*.tsx",
     ],
     // A test renders no row a reader walks, and a modal is not a panel row at all —
     // it mounts in Steam's `ModalRoot`, outside the region that scrolls by focus.
     // Neither exemption is load-bearing today: with both removed the rule still
-    // reports nothing across `src/**/*.tsx`.
-    ignores: ["src/**/*.test.tsx", "src/components/**/*Modal.tsx"],
+    // reports nothing across `frontend/src/**/*.tsx`.
+    ignores: ["frontend/src/**/*.test.tsx", "frontend/src/bigpicture/**/*Modal.tsx"],
     plugins: {
       tender: {
         rules: { "qam-focusable-row": qamFocusableRow },
@@ -105,7 +129,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/**/*.{ts,tsx}"],
+    files: ["frontend/src/**/*.{ts,tsx}"],
     languageOptions: {
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
       globals: {
@@ -124,7 +148,7 @@ export default tseslint.config(
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
       ],
       // Promoted back to error in #617 cleanup. Untyped sites that genuinely
-      // need `any` (Steam internal React tree walking in src/patches/) carry
+      // need `any` (Steam internal React tree walking in bigpicture/patches/) carry
       // an inline `// eslint-disable-next-line @typescript-eslint/no-explicit-any`
       // with a documented reason.
       "@typescript-eslint/no-explicit-any": "error",
@@ -148,7 +172,11 @@ export default tseslint.config(
   {
     // Vitest globals (describe/it/expect/vi/...) are injected at runtime via
     // vitest.config.ts `globals: true` + tsconfig "types": ["vitest/globals"].
-    files: ["src/**/*.{test,spec}.{ts,tsx}", "src/test-setup.ts", "src/test-utils/**/*.ts"],
+    files: [
+      "frontend/src/**/*.{test,spec}.{ts,tsx}",
+      "frontend/src/test-setup.ts",
+      "frontend/src/test-utils/**/*.ts",
+    ],
     languageOptions: {
       globals: { ...globals.vitest },
     },

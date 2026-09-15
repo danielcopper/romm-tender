@@ -1,7 +1,7 @@
 """Contract tests for the save-sync read-surface callables.
 
-Driven frontend-shaped per ``src/api/backend.ts`` (positional args, the TS
-arg types). The failure-shape assertions are the ones that guard the
+Driven frontend-shaped per ``frontend/src/api/backend.ts`` (positional args, the
+TS arg types). The failure-shape assertions are the ones that guard the
 #1009-class bug (frontend ignoring ``success: false``) and the #1004-class
 partial-success carve-outs: proving the backend returns the canonical /
 discriminated / additive-flag shapes makes the contract explicit.

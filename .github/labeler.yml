@@ -7,7 +7,7 @@
 area:ui:
   - changed-files:
       - any-glob-to-any-file:
-          - 'src/**'
+          - 'frontend/src/**'
 
 area:saves:
   - changed-files:

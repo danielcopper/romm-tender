@@ -695,12 +695,11 @@ def _overview_row(item: dict[str, Any]) -> dict[str, Any]:
     """The overview row for a file the library does not hold.
 
     ``on_server: False`` is the load-bearing field: every download affordance
-    filters on it (``src/components/library/PlatformDetail.tsx``), and so do the
-    platform detail's own progress totals. ``id``
-    is ``None`` as an honest absence — there is no server record to name — and
-    no consumer reads it, so filling it in with a placeholder would withhold
-    nothing but would make a row that cannot be fetched look fetchable to the
-    next reader.
+    filters on it (``frontend/src/bigpicture/library/PlatformDetail.tsx``), and
+    so do the platform detail's own progress totals. ``id`` is ``None`` as an
+    honest absence — there is no server record to name — and no consumer reads
+    it, so filling it in with a placeholder would withhold nothing but would
+    make a row that cannot be fetched look fetchable to the next reader.
     """
     return {
         "id": None,

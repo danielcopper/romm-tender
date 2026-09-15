@@ -16,27 +16,27 @@ without restating it. The width mechanism's decision record is
 
 ## Where the code lives
 
-| Module                                                        | Responsibility                                                                                                                                                      |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/index.tsx` (`QAMPanel`)                                  | The router: one `Page` value, one mounted page, a module-level `currentPage` that survives a QAM remount                                                            |
-| `src/types/navigation.ts`                                     | The `Page` union — every page the router can land on                                                                                                                |
-| `src/components/MainPage.tsx`                                 | Main                                                                                                                                                                |
-| `src/components/SyncPage.tsx`, `src/components/sync/`         | Sync — the frame and its three left-column bodies, plus `useSyncPage` (its reads and actions) and the register both its tables are set in                           |
-| `src/components/LibraryPage.tsx`                              | Library — the frame, the two tabs and their state                                                                                                                   |
-| `src/components/SettingsPage.tsx`, `src/components/settings/` | Settings and its sections                                                                                                                                           |
-| `src/components/DangerZone.tsx`, `RemovedGamesCleanup.tsx`    | Data Management                                                                                                                                                     |
-| `src/components/DownloadQueue.tsx`                            | Downloads                                                                                                                                                           |
-| `src/components/library/`                                     | The Library page's tabs: `usePlatformsPage` (its reads and actions), `PlatformsTab`, `PlatformDetail`                                                               |
-| `src/utils/deckyUiInternals.ts`                               | Honest typing for `@decky/ui` values that come from a webpack probe: the frame's class names, `Tabs`, `ScrollPanel`, the controller glyph                           |
-| `src/utils/qamExpansion.ts`                                   | The panel's width: the expand and hide messages, the injected `max-width` rule, and the four paths that clear both                                                  |
-| `src/components/qam/`                                         | The wide-page frame: `WidePage` (the Back/title line, tabs, measured height, entry focus), `ScrollRegion`, `Columns`, `ListDetail`, `pane`                          |
-| `src/utils/entryFocus.ts`                                     | Which stop a body opens on, a page's declaration when that stop is not it, the rule for a body that swaps under the reader, and the `.focus()` + `gpfocus` pair     |
-| `src/utils/syncRunView.ts`                                    | `useSyncRunView` — the run in flight as a page renders it: stage label, coarse bar, position within the running unit, fine-detail line, estimate, and the run's end |
-| `src/utils/runUnitsStore.ts`                                  | The run's work queue, one row per unit: the plan's riders, how far the run has got, and what each unit's apply produced                                             |
-| `src/utils/previewState.ts`                                   | What a page asks of a pending preview: has it anything to apply, and how long is it still accepted (the half Main reads)                                            |
-| `src/utils/syncResume.ts`                                     | Whether the next sync continues a run or starts one over, and what that puts on the Sync page's start button — the name the session-budget card quotes              |
-| `src/utils/syncProgress.ts`                                   | The frame every page reads a run from, and the one rule it enforces on its writers: a run that has ended stays ended                                                |
-| `src/utils/` module stores                                    | State that must outlive a page: sync progress, pending preview, downloads, prune, the game-detail caches                                                            |
+| Module                                                                          | Responsibility                                                                                                                                                      |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `frontend/src/index.tsx` (`QAMPanel`)                                           | The router: one `Page` value, one mounted page, a module-level `currentPage` that survives a QAM remount                                                            |
+| `frontend/src/types/navigation.ts`                                              | The `Page` union — every page the router can land on                                                                                                                |
+| `frontend/src/bigpicture/MainPage.tsx`                                          | Main                                                                                                                                                                |
+| `frontend/src/bigpicture/SyncPage.tsx`, `frontend/src/bigpicture/sync/`         | Sync — the frame and its three left-column bodies, plus `useSyncPage` (its reads and actions) and the register both its tables are set in                           |
+| `frontend/src/bigpicture/LibraryPage.tsx`                                       | Library — the frame, the two tabs and their state                                                                                                                   |
+| `frontend/src/bigpicture/SettingsPage.tsx`, `frontend/src/bigpicture/settings/` | Settings and its sections                                                                                                                                           |
+| `frontend/src/bigpicture/DangerZone.tsx`, `RemovedGamesCleanup.tsx`             | Data Management                                                                                                                                                     |
+| `frontend/src/bigpicture/DownloadQueue.tsx`                                     | Downloads                                                                                                                                                           |
+| `frontend/src/bigpicture/library/`                                              | The Library page's tabs: `usePlatformsPage` (its reads and actions), `PlatformsTab`, `PlatformDetail`                                                               |
+| `frontend/src/utils/deckyUiInternals.ts`                                        | Honest typing for `@decky/ui` values that come from a webpack probe: the frame's class names, `Tabs`, `ScrollPanel`, the controller glyph                           |
+| `frontend/src/utils/qamExpansion.ts`                                            | The panel's width: the expand and hide messages, the injected `max-width` rule, and the four paths that clear both                                                  |
+| `frontend/src/bigpicture/layout/`                                               | The wide-page frame: `WidePage` (the Back/title line, tabs, measured height, entry focus), `ScrollRegion`, `Columns`, `ListDetail`, `pane`                          |
+| `frontend/src/utils/entryFocus.ts`                                              | Which stop a body opens on, a page's declaration when that stop is not it, the rule for a body that swaps under the reader, and the `.focus()` + `gpfocus` pair     |
+| `frontend/src/utils/syncRunView.ts`                                             | `useSyncRunView` — the run in flight as a page renders it: stage label, coarse bar, position within the running unit, fine-detail line, estimate, and the run's end |
+| `frontend/src/utils/runUnitsStore.ts`                                           | The run's work queue, one row per unit: the plan's riders, how far the run has got, and what each unit's apply produced                                             |
+| `frontend/src/utils/previewState.ts`                                            | What a page asks of a pending preview: has it anything to apply, and how long is it still accepted (the half Main reads)                                            |
+| `frontend/src/utils/syncResume.ts`                                              | Whether the next sync continues a run or starts one over, and what that puts on the Sync page's start button — the name the session-budget card quotes              |
+| `frontend/src/utils/syncProgress.ts`                                            | The frame every page reads a run from, and the one rule it enforces on its writers: a run that has ended stays ended                                                |
+| `frontend/src/utils/` module stores                                             | State that must outlive a page: sync progress, pending preview, downloads, prune, the game-detail caches                                                            |
 
 ## Two widths
 
@@ -252,33 +252,34 @@ the paused-run notice; Downloads opens from **View All** in the download summary
 not empty. A notice can carry a door of its own, and three of them name a Settings SECTION rather than the page — **Open
 Controller**, **Open Save Sync**, **Open Connections** — but a notice and the slot are both there only while their
 condition is, so the menu is the navigation a reader can go looking for. A target is a page id, or
-`{ page: "settings", section }` for those three (`src/types/navigation.ts`); the section rides on the page rather than
-beside it, so no target can pair a section with a page that has none, and the router (`src/index.tsx`) stays the only
-thing that decides what is mounted. A navigation naming no section opens Settings on its first, exactly as the menu's
-own entry does. Every page but Main opens with a **Back** chip, which returns to Main. The chip shares its line with the
-page title — one row, not the three a full-width button plus a title line used to cost, which on the Deck's body is most
-of what a detail pane has to spend. Back is also on **B**, and the binding lives in the panel's router (`src/index.tsx`)
-rather than on a page: one `Focusable` with `onCancelButton` wraps the mounted content **only while `page` is not
-`main`**, so every sub-page — wide and narrow — answers B from wherever focus sits, and Main answers nothing, so Decky's
-own B still leaves the plugin. That condition is what makes taking B safe: the escape route is never removed, it is
-exactly as far away as the user walked in, and the last press is never swallowed. Steam already prints "B ZURÜCK" in its
-footer legend, which this makes true rather than misleading, so no legend entry of ours is needed. The chip stays as the
-discoverable half and as the mouse path, and it carries **Steam's own B glyph** — drawn for the controller in the user's
-hands, so it is ○ on a PlayStation pad and the swapped face button under a Nintendo layout. `@decky/ui` does not
-re-export that component, so `src/utils/deckyUiInternals.ts` reaches it by a module probe and types it as possibly
-absent; the chip falls back to its chevron the day the probe misses. The button number it passes is Steam's own
-action-button enum (`A=0, B=1, X=2, Y=3`), **not** `@decky/ui`'s `GamepadButton`, where 1 is A — the two disagree on
-every value, and the wrong one draws the wrong glyph without failing.
+`{ page: "settings", section }` for those three (`frontend/src/types/navigation.ts`); the section rides on the page
+rather than beside it, so no target can pair a section with a page that has none, and the router
+(`frontend/src/index.tsx`) stays the only thing that decides what is mounted. A navigation naming no section opens
+Settings on its first, exactly as the menu's own entry does. Every page but Main opens with a **Back** chip, which
+returns to Main. The chip shares its line with the page title — one row, not the three a full-width button plus a title
+line used to cost, which on the Deck's body is most of what a detail pane has to spend. Back is also on **B**, and the
+binding lives in the panel's router (`frontend/src/index.tsx`) rather than on a page: one `Focusable` with
+`onCancelButton` wraps the mounted content **only while `page` is not `main`**, so every sub-page — wide and narrow —
+answers B from wherever focus sits, and Main answers nothing, so Decky's own B still leaves the plugin. That condition
+is what makes taking B safe: the escape route is never removed, it is exactly as far away as the user walked in, and the
+last press is never swallowed. Steam already prints "B ZURÜCK" in its footer legend, which this makes true rather than
+misleading, so no legend entry of ours is needed. The chip stays as the discoverable half and as the mouse path, and it
+carries **Steam's own B glyph** — drawn for the controller in the user's hands, so it is ○ on a PlayStation pad and the
+swapped face button under a Nintendo layout. `@decky/ui` does not re-export that component, so
+`frontend/src/utils/deckyUiInternals.ts` reaches it by a module probe and types it as possibly absent; the chip falls
+back to its chevron the day the probe misses. The button number it passes is Steam's own action-button enum
+(`A=0, B=1, X=2, Y=3`), **not** `@decky/ui`'s `GamepadButton`, where 1 is A — the two disagree on every value, and the
+wrong one draws the wrong glyph without failing.
 
 **A tabbed wide page has to get out of the way for that to work.** Steam's tabbed page renders its content pane as
 `onCancelButton: !cancelSkipTabHeader && <focus the tab row>` (`chunk~2dcc5aaf7.js`), so without the flag the first B
 inside a tab is spent moving focus to the tab row and never reaches the router. `WidePage` passes `cancelSkipTabHeader`
 — Steam's own prop, which it uses in its controller-configurator dialogs, and which upstream's `TabsProps` predates;
-`src/utils/deckyUiInternals.ts` types it. After a navigation the router scrolls the panel to the top, and gamepad focus
-is placed where the page opens — by the router for a narrow page, at the area the page declared or at its first stop
-where it declared none, and by the frame itself for a wide one, which says so on its root so the router leaves it alone
-(see "Building blocks → Tabs"). The module-level `currentPage` survives a QAM remount, so reopening the QAM lands on the
-page that was open, and a wide page re-expands on mount.
+`frontend/src/utils/deckyUiInternals.ts` types it. After a navigation the router scrolls the panel to the top, and
+gamepad focus is placed where the page opens — by the router for a narrow page, at the area the page declared or at its
+first stop where it declared none, and by the frame itself for a wide one, which says so on its root so the router
+leaves it alone (see "Building blocks → Tabs"). The module-level `currentPage` survives a QAM remount, so reopening the
+QAM lands on the page that was open, and a wide page re-expands on mount.
 
 ## Building blocks
 
@@ -340,12 +341,12 @@ first stop and the first button, so the router's default already opens them ther
 searches is the plugin's own content and nothing above it — Decky renders its panel title and the back arrow beside it
 outside that box, 34 px above it (the same inset whose bottom `WidePage`'s `ancestorOverhang` measures) — so no rule
 here could reach Decky's own chrome. The declaration, the finder, the shared set of shapes and the `.focus()` +
-`gpfocus` pair are `src/utils/entryFocus.ts`. It is a second attribute rather than a second use of the wide frame's
-`OWNS_ENTRY_FOCUS_ATTR` because the two answer different questions: that one says WHO places entry focus — it tells the
-router to place none, because the frame places its own — and this one says WHERE, for whichever of them places it. **So
-a wide page carries both**, Settings being one: the root says "I place my own" and the list's selected row says "here".
-The router never reaches the second, because it looks for `OWNS_ENTRY_FOCUS_ATTR` first and, finding it, sets no timer
-at all.
+`gpfocus` pair are `frontend/src/utils/entryFocus.ts`. It is a second attribute rather than a second use of the wide
+frame's `OWNS_ENTRY_FOCUS_ATTR` because the two answer different questions: that one says WHO places entry focus — it
+tells the router to place none, because the frame places its own — and this one says WHERE, for whichever of them places
+it. **So a wide page carries both**, Settings being one: the root says "I place my own" and the list's selected row says
+"here". The router never reaches the second, because it looks for `OWNS_ENTRY_FOCUS_ATTR` first and, finding it, sets no
+timer at all.
 
 **A tab's content is the page's business, not the frame's.** The frame wraps an untabbed body in a `ScrollRegion` and a
 tabbed one in nothing: Steam's tabbed page already wraps each tab's content in this same plain scroll panel, so a region
@@ -377,12 +378,12 @@ List and detail is `Columns` with two columns. The Sync page's table beside its 
 
 ### The pane primitives
 
-The pieces a detail pane is built from, in `src/components/qam/pane.tsx` so that the next pane is written against the
-same scale rather than a second literal for the same size: the 11 px every secondary line is set in, the verdict
-palette, the two button shapes (`FLAT_BUTTON` for a button sharing a row, `ROW_BUTTON` for a table row's action column),
-a section title, a muted line, a row of buttons, and the two lines that report an action — the status line bound to the
-entry and the group it belongs under, and the sentence saying which other entry is working while this pane's buttons are
-disabled.
+The pieces a detail pane is built from, in `frontend/src/bigpicture/layout/pane.tsx` so that the next pane is written
+against the same scale rather than a second literal for the same size: the 11 px every secondary line is set in, the
+verdict palette, the two button shapes (`FLAT_BUTTON` for a button sharing a row, `ROW_BUTTON` for a table row's action
+column), a section title, a muted line, a row of buttons, and the two lines that report an action — the status line
+bound to the entry and the group it belongs under, and the sentence saying which other entry is working while this
+pane's buttons are disabled.
 
 ### List and detail
 
@@ -418,11 +419,12 @@ were once folded into a field's label and description, which is why #1803's thir
 System page drew; the platform detail's BIOS table is where that column now sits.
 
 **There is one table, and a page passes the register it is set in** (`PaneTableHeader` / `PaneTableRow` in
-`src/components/qam/pane.tsx`). The shape is shared — a grid of a page's own columns, an 8 px gutter between them, the
-header's names in the secondary size and colour, a row that is a focus stop, a cell that clips — and what a page varies
-is the type size, the leading, the row and header padding, and whether a hairline sits under the column names. That is a
-`TableRegister`, and the default is what a pane uses unless it says otherwise. It is one component rather than three
-because three drifted: the same header was written three times, and only one of the three clipped its cells.
+`frontend/src/bigpicture/layout/pane.tsx`). The shape is shared — a grid of a page's own columns, an 8 px gutter between
+them, the header's names in the secondary size and colour, a row that is a focus stop, a cell that clips — and what a
+page varies is the type size, the leading, the row and header padding, and whether a hairline sits under the column
+names. That is a `TableRegister`, and the default is what a pane uses unless it says otherwise. It is one component
+rather than three because three drifted: the same header was written three times, and only one of the three clipped its
+cells.
 
 A row is a focus stop **unless one of its own cells carries a control** — the BIOS table's action column is the case,
 and there the button is already the stop, so a second one on the wrapper would put a dead step in front of every one of
@@ -467,8 +469,8 @@ full-width ones: Main is the narrow page, and a notice costing three rows pushes
 screen. Its jump is not an answer either — only a fresh sign-in ends the condition, so **Open Connections** leaves it
 standing and **Dismiss** remains the way to put it away for this view.
 
-**The two data-location conditions are one card in one component** (`src/components/DataLocationNotice.tsx`), because
-they are two outcomes of the same start-up step and only ever one of them stands. The choice's modal
+**The two data-location conditions are one card in one component** (`frontend/src/bigpicture/DataLocationNotice.tsx`),
+because they are two outcomes of the same start-up step and only ever one of them stands. The choice's modal
 (`DataLocationModal.tsx`) shows both candidates with path, size and last-changed date — with the **year**, which
 `formatTimestamp` drops and which is the whole difference between two copies a year apart — and **records** the answer
 rather than acting on it: the plugin is running from one of the two candidates with its database open, so the copy
@@ -482,10 +484,10 @@ both.
 **The restart it offers is `SteamClient.System.RestartPC`, not the session budget's client restart** — and the two are
 different mechanisms rather than one shared helper, because restarting the Steam client reloads the frontend and does
 **not** start the plugin's backend again (`services/library/_state.py` states the same fact from the backend side),
-while this move runs before the database is opened. Both live in `src/utils/steamRestart.ts` so the distinction is
-visible at the point of choosing between them, and both refuse while a game is running. The button is feature-detected
-at render (`canRestartDevice`): where a Steam build carries no `RestartPC` the sentence stands on its own rather than a
-button that would do nothing.
+while this move runs before the database is opened. Both live in `frontend/src/utils/steamRestart.ts` so the distinction
+is visible at the point of choosing between them, and both refuse while a game is running. The button is
+feature-detected at render (`canRestartDevice`): where a Steam build carries no `RestartPC` the sentence stands on its
+own rather than a button that would do nothing.
 
 **Restart device now** asks before it acts — the press opens a `ConfirmModal` and only its OK reboots, the modal shape
 the destructive-action rule above names, here on a button that takes the whole machine down. A label cannot settle on
@@ -522,8 +524,8 @@ condition ends when the folder does. The dismissal is the exception and rides th
 the statements are chosen by is a directory question: "this version starts empty" needs the `roms` count from
 `get_sync_stats`, which the panel already holds, and "the shortcuts have been repointed" is what the relocation pass
 reported — the backend knows which shortcuts needed the write, never whether the write happened. `LegacyInstallNotice`
-(`src/components/LegacyInstallBanner.tsx`) joins the three frontend stores, which is what keeps the statement that
-prevents the irreversible removal independent of any database read.
+(`frontend/src/bigpicture/LegacyInstallBanner.tsx`) joins the three frontend stores, which is what keeps the statement
+that prevents the irreversible removal independent of any database read.
 
 **It is also the one condition BOTH full-page states carry inside their own content** — the version error and the
 pending RetroDECK migration; the data-location pair above reaches only the second of the two. That is not a card stacked
@@ -830,13 +832,14 @@ Wide, two tabs.
 **Platforms** is list and detail. The list holds every platform RomM reports with at least one ROM — what
 `get_platforms` returns; a platform with nothing to sync is not listed — in two groups, **Synced** (the toggle is on)
 above **Available**, each alphabetical: **a dot, the name, the toggle, and nothing else**. The dot is the row's whole
-BIOS signal, through the shared mapping every platform-level BIOS dot renders through (`src/utils/biosColor.ts`: green
-complete, amber partial, red missing, grey for a missing level; the per-file rows on the platform detail and the game
-page hard-code the same four colours). It is drawn on every row, taking exactly the helper's grey where there is no
-level to state: one that came and went shifted every name beside it, and the list is meant to be scanned down its left
-edge — which matters more now that the dot carries the state alone rather than reinforcing a number beside it. What the
-dot means in words is the row's `title`, and it is literally the pane's sentence: both come from `biosSummary` (see the
-BIOS files bullet below), so the number the row used to print arrives inside that sentence wherever the state has one.
+BIOS signal, through the shared mapping every platform-level BIOS dot renders through
+(`frontend/src/utils/biosColor.ts`: green complete, amber partial, red missing, grey for a missing level; the per-file
+rows on the platform detail and the game page hard-code the same four colours). It is drawn on every row, taking exactly
+the helper's grey where there is no level to state: one that came and went shifted every name beside it, and the list is
+meant to be scanned down its left edge — which matters more now that the dot carries the state alone rather than
+reinforcing a number beside it. What the dot means in words is the row's `title`, and it is literally the pane's
+sentence: both come from `biosSummary` (see the BIOS files bullet below), so the number the row used to print arrives
+inside that sentence wherever the state has one.
 
 **The row carried the ratio (`3 / 5`, an em dash where nothing is required) until the second device round, and that is
 superseded rather than forgotten.** The first device round asked for it and it was added; using it decided the opposite
@@ -954,10 +957,10 @@ it, for the focused platform:
   and the acting pane says `Switching to <emulator>…` in the same status line the outcome lands in — a success takes
   that line back, a refusal replaces it, and a continuation cancelled by leaving the page takes it back too, because
   such a switch either committed or never ran and there is no pane left to report to either way.
-- **BIOS files** — the summary, which this pane words nowhere: `src/utils/biosSummary.ts` holds all seven states and
-  answers each in two lengths, and the pane takes both — the short `status` as the section's coloured note beside
-  `BIOS FILES`, the `sentence` under it, with the library's own `(d/t files held)` ratio behind the sentence in every
-  one of the seven. The ratio was a description line of its own here, and only in the state that said nothing was
+- **BIOS files** — the summary, which this pane words nowhere: `frontend/src/utils/biosSummary.ts` holds all seven
+  states and answers each in two lengths, and the pane takes both — the short `status` as the section's coloured note
+  beside `BIOS FILES`, the `sentence` under it, with the library's own `(d/t files held)` ratio behind the sentence in
+  every one of the seven. The ratio was a description line of its own here, and only in the state that said nothing was
   required; the shared sentence replaced that line and took the ratio with it, while the game page went on appending it
   to every sentence — one platform, two surfaces, two different amounts said about it. (`system_image: "absent"`
   outranks the counts and the decline alike, tested before either inside that module, because the console asks for one
@@ -988,14 +991,15 @@ it, for the focused platform:
   **The game page's BIOS tab reads the same module** and shows the `sentence` alone, with the same ratio appended in the
   same words — a third set again, which is why it rides along on both rather than being folded in. Neither surface
   prints it where the library holds nothing for the platform: `(0/0 files held)` counts a set that does not exist. What
-  stops a surface writing one of these sentences back into itself is `src/utils/biosSummary.test.ts`, which reads the
-  components as SOURCE and fails on any phrase the module builds its answers from, with `biosHeldRatio.test.ts` doing
-  the same over the ratio. **Both SWEEP the set they search rather than naming it** — every non-test `.tsx` under
-  `src/components`, via `src/test-utils/componentSources.ts` — because naming it is what failed: the lists held two
-  while three surfaces rendered these states, and a surface left off a list cannot be told from one that never drifted.
-  Deriving the set from who imports the module would be worse still, since a surface wording a state for itself is
-  precisely one that does not import it. **What the sweep cannot see is a NEW wording** invented for one of these seven
-  states; no string search can, so a green run is evidence about copied sentences alone.
+  stops a surface writing one of these sentences back into itself is `frontend/src/utils/biosSummary.test.ts`, which
+  reads the components as SOURCE and fails on any phrase the module builds its answers from, with
+  `biosHeldRatio.test.ts` doing the same over the ratio. **Both SWEEP the set they search rather than naming it** —
+  every non-test `.tsx` under `frontend/src/bigpicture`, via `frontend/src/test-utils/componentSources.ts` — because
+  naming it is what failed: the lists held two while three surfaces rendered these states, and a surface left off a list
+  cannot be told from one that never drifted. Deriving the set from who imports the module would be worse still, since a
+  surface wording a state for itself is precisely one that does not import it. **What the sweep cannot see is a NEW
+  wording** invented for one of these seven states; no string search can, so a green run is evidence about copied
+  sentences alone.
 
   **The Platforms list's row tooltip reads the same module too** (`PlatformsTab.tsx`'s `biosTooltip`) and takes the
   `sentence`, so hovering a row and opening its pane give one wording rather than two. It was the last one in, and while
@@ -1009,7 +1013,7 @@ it, for the focused platform:
   `status` needs one to mean anything.
 
   **What the two Download buttons and the per-row one are built off is the fetchable set, and none of the three reads
-  the verdict** — one predicate, `isFetchable` in `src/utils/biosFetchable.ts`, over
+  the verdict** — one predicate, `isFetchable` in `frontend/src/utils/biosFetchable.ts`, over
   `on_server && !downloaded && declared_kind !== "directory"`, and neither `bios_level` nor `required_withheld` nor
   `system_image` is read anywhere among them. The predicate lives outside this file because the game page's BIOS tab
   asks it too — there it is one of the answers that earn a row a line at all, since a file no page can fetch, that the
@@ -1136,11 +1140,11 @@ it, for the focused platform:
   (`"7800 BIOS (U).rom (7800 BIOS)"`). Surrounding quotes are stripped before that comparison, which is what reaches the
   corpus's one folder declaration (`"'pcsx2/bios' folder"`, on a row whose name line already shows that path). Together
   they fire on 690 of the 695; of the five printed whole, three name a folder the file sits in and two are upstream
-  misspellings of the file. The rule is `biosFileDescription` in `src/utils/biosFileNote.ts` and **both** surfaces apply
-  it, because a rule applied on one is a row reading two ways: the game page's BIOS tab used to head its rows with the
-  raw description, which put the packager's prose where the file's identity belongs — and heading such a row with the
-  declared file instead prints the name a second time under it on every shape that opens with the name, unless this rule
-  takes it back out. There the row's head is the declared path whole rather than a prefix and a name.
+  misspellings of the file. The rule is `biosFileDescription` in `frontend/src/utils/biosFileNote.ts` and **both**
+  surfaces apply it, because a rule applied on one is a row reading two ways: the game page's BIOS tab used to head its
+  rows with the raw description, which put the packager's prose where the file's identity belongs — and heading such a
+  row with the declared file instead prints the name a second time under it on every shape that opens with the name,
+  unless this rule takes it back out. There the row's head is the declared path whole rather than a prefix and a name.
 
   **Where the result GOES is each surface's own, and the two differ because their name lines do.** On the game page's
   BIOS tab the label follows the name on the SAME line, in the packager's own punctuation — `scph5500.bin (PS1 JP BIOS)`

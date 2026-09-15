@@ -1,8 +1,8 @@
 """Contract tests for the library / sync read-surface callables.
 
 Each callable is driven exactly as the frontend declares it in
-``src/api/backend.ts`` — positional, JSON-shaped arguments with the TS arg
-types — and the assertions pin the *response shape* (the contract), not the
+``frontend/src/api/backend.ts`` — positional, JSON-shaped arguments with the TS
+arg types — and the assertions pin the *response shape* (the contract), not the
 delegation. Covered here:
 
 - ``get_sync_status`` / ``sync_heartbeat`` / ``get_sync_stats`` / ``get_sync_runs``

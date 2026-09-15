@@ -1,6 +1,6 @@
 """Contract test for the ``stop_running_game`` callable over the real ``Plugin``.
 
-Driven frontend-shaped per ``src/api/backend.ts``:
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``stopRunningGame = callable<[number], StopGameResult>`` — the rom id, passed
 positionally.
 

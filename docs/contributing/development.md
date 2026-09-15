@@ -93,8 +93,8 @@ is gitignored. See `.claude/rules/testing-backend.md` for the convention on pinn
 mocked idea of the other, the contract tier builds the **real** `Plugin` through the **real** `bootstrap()` +
 `wire_services()` (real settings dict, real SQLite + migrations, real file-store adapters, all under `tmp_path`) and
 drives the actual `main.py` callables **exactly as the frontend does** — positional, JSON-shaped arguments with the arg
-types declared in `src/api/backend.ts` (literal `None` where the TS type says `null`). The assertions pin the response
-_shape_ (canonical failure shape, discriminated-status unions, partial-success flags), not delegation. Only the
+types declared in `frontend/src/api/backend.ts` (literal `None` where the TS type says `null`). The assertions pin the
+response _shape_ (canonical failure shape, discriminated-status unions, partial-success flags), not delegation. Only the
 outermost edges are faked: the RomM + SteamGridDB network transports, the Clock/UuidGen/Sleeper seams, `emit`, and the
 retry backoff. Run them like any other test:
 
@@ -249,10 +249,10 @@ without `--check` for a report-mode inventory.
 
 `mise run lint` (and CI) also runs `scripts/check_callable_manifest.py`, which pins the frontend↔backend callable
 surface to one source of truth: it derives the frontend names + arities from every `callable<[Args], Return>("name")` in
-`src/**/*.ts` and the backend surface from the public `async def` methods on the `Plugin` class in `main.py`, then fails
-if they diverge — a callable declared on only one side (either direction) or a matching name whose arity (positional
-param count) differs. Arg types stay out of scope (Python signatures carry no hints), so arity is the only mechanically
-checkable shape. The same parity assertion is surfaced inside the pytest run by
+`frontend/src/**/*.ts` and the backend surface from the public `async def` methods on the `Plugin` class in `main.py`,
+then fails if they diverge — a callable declared on only one side (either direction) or a matching name whose arity
+(positional param count) differs. Arg types stay out of scope (Python signatures carry no hints), so arity is the only
+mechanically checkable shape. The same parity assertion is surfaced inside the pytest run by
 `tests/contract/test_callable_manifest.py`.
 
 `mise run lint` (and CI) also runs `scripts/check_event_parity.py`, which fails if a backend `emit("name", ...)` event
@@ -276,25 +276,26 @@ than any module's size. The pin list lives in the script and entries only ever c
 the threshold has to leave it, and the gate fails until it does — while a module that banks 50+ lines of slack gets a
 non-fatal note asking for its ceiling to be lowered. What the gate does not walk is listed at `SCOPE_DIRS` with the
 reason for each: `main.py` grows with the callable surface by design, `_vendor/` holds checksum-pinned upstream copies,
-a large file under `tests/` is the one-file-per-source-module rule working, `scripts/` never ships, and `src/` needs a
-per-scope glob before it can be added. There is deliberately no `--update` flag — re-baselining should be a reviewable
-diff, never a command someone runs to get back to green.
+a large file under `tests/` is the one-file-per-source-module rule working, `scripts/` never ships, and `frontend/src/`
+needs a per-scope glob before it can be added. There is deliberately no `--update` flag — re-baselining should be a
+reviewable diff, never a command someone runs to get back to green.
 
 The frontend has no size gate — deliberately, because a threshold only works when something else forbids the cheap way
-of getting under it, and `src/` has no equivalent of `service-independence`. What it has instead is direction rules, in
-`eslint.config.js` via `eslint-plugin-import-x`: `src/utils/` and `src/api/` may not import `src/components/`, and no
-module in `src/` may take part in an import cycle. The cycle rule is the one that matters most, because a cycle is the
-signature of a split whose two halves still call each other — the wrong seam, detectable without judgment. What none of
-them catch is a helper imported by exactly one parent that takes a dozen parameters and does nothing on its own: it is
-neither a cycle nor a direction violation. These rules make the worst seam fail; they do not certify that a seam is
-right.
+of getting under it, and `frontend/src/` has no equivalent of `service-independence`. What it has instead is direction
+rules, in `eslint.config.js` via `eslint-plugin-import-x`: `frontend/src/utils/` and `frontend/src/api/` may not import
+either surface (`frontend/src/bigpicture/` or `frontend/src/desktop/`), the two surfaces may not import each other, and
+no module in `frontend/src/` may take part in an import cycle. The cycle rule is the one that matters most, because a
+cycle is the signature of a split whose two halves still call each other — the wrong seam, detectable without judgment.
+What none of them catch is a helper imported by exactly one parent that takes a dozen parameters and does nothing on its
+own: it is neither a cycle nor a direction violation. These rules make the worst seam fail; they do not certify that a
+seam is right.
 
 Two settings in that config are load-bearing and neither is the plugin's default. `import-x/extensions` ships as
 `['.js']`, so until it names `.ts`/`.tsx` the plugin resolves an import but never opens the target file to read _its_
 imports — `no-cycle` then walks a graph one edge deep and reports nothing, on any codebase. `import-x/parsers` supplies
 the parser it needs for that reading. Because the failure mode is silence rather than noise,
-`src/eslintBoundaries.test.ts` lints known-bad fixtures through the real config and fails if any of the three rules
-stops reporting. A green `pnpm lint` on its own does not distinguish a working rule from an inert one.
+`frontend/src/eslintBoundaries.test.ts` lints known-bad fixtures through the real config and fails if any of the seven
+rules stops reporting. A green `pnpm lint` on its own does not distinguish a working rule from an inert one.
 
 See [Backend Architecture](../architecture/backend-architecture.md) for details.
 
@@ -392,13 +393,17 @@ py_modules/
     README.md                        # Provenance per package: upstream URL, version/commit, local patches
     vdf/                             # Valve Data Format parser (Steam shortcuts.vdf)
       LICENSE                        # Upstream MIT license — preserved on redistribution
-src/                                 # Frontend TypeScript
+frontend/src/                        # Frontend TypeScript
   index.tsx                          # Plugin entry, event listeners, QAM router
-  components/                        # React components (QAM pages, game detail UI)
-  patches/                           # Route and store patches
+  bigpicture/                        # The gamepad surface: React components (QAM pages, game detail UI)
+    layout/                          # Wide-page frame primitives: WidePage, ScrollRegion, Columns, ListDetail, pane
+    library/ settings/ sync/         # Component groups for the Library, Settings and Sync pages
+    saves/                           # Slot and save-file components, shared across the game-detail panel's tabs
+    patches/                         # The game-detail route patch
+  desktop/                           # The desktop-client surface — peer of bigpicture/, see its README
   api/backend.ts                     # callable() wrappers (typed)
   types/                             # TypeScript interfaces and Steam API declarations
-  utils/                             # Shortcut CRUD, sync, downloads, collections, session manager
+  utils/                             # Shortcut CRUD, sync, downloads, collections, session manager, store patches
 bin/rom-launcher                     # Pure exec wrapper — installed to <data root>/bin at every start, and run from there
 defaults/config.json                 # platform_map: 153 platform slug -> RetroDECK system mappings
 tests/                               # Backend unit tests, mirroring py_modules/ layout

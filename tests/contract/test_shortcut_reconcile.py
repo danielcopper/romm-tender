@@ -1,6 +1,6 @@
 """Contract tests for the sync-start shortcut reconcile callable.
 
-Driven frontend-shaped per ``src/api/backend.ts``:
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``reconcileShortcuts = callable<[number[]], {success, reason?, message, unbound_count?}>``.
 
 The frontend reads Steam's live RomM-shortcut appIds at sync start and passes

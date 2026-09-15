@@ -1,6 +1,6 @@
 """Contract tests for the paged metadata cache read callable.
 
-``get_metadata_cache_page`` is driven exactly as ``src/api/backend.ts``
+``get_metadata_cache_page`` is driven exactly as ``frontend/src/api/backend.ts``
 declares it — positional ``(offset, limit)`` numbers — and the assertions pin
 the ``{items, total}`` response shape (the contract), not delegation. The
 frontend pages this callable at plugin start so a large library never sends a

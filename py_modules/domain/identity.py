@@ -23,8 +23,8 @@ that have to stay free to disagree:
   pinned it, and inheriting it is what moved every user's data at 0.31.0.
 - ``services.legacy_install._LEGACY_PLUGIN_FOLDER`` is the folder releases up to
   0.30.1 unpacked into. It is finished history and follows nothing at all.
-- ``src/utils/sessionManager.ts``'s ``SESSION_BREADCRUMB_KEY`` names the
-  ``localStorage`` row that carries the open play sessions across a plugin
+- ``frontend/src/utils/sessionManager.ts``'s ``SESSION_BREADCRUMB_KEY`` names
+  the ``localStorage`` row that carries the open play sessions across a plugin
   reload. It is a key over persisted state, so it follows nothing either: a
   rename is a migration nothing can perform, and every row written under the
   old key is simply orphaned.
@@ -45,7 +45,7 @@ running game whose session is forgotten at the next reload.
 from __future__ import annotations
 
 # Must match ``plugin.json``'s ``name`` and the frontend's ``PLUGIN_NAME``
-# (``src/utils/toast.ts``, which is what ``definePlugin`` hands back) — Decky
-# reads the first for its plugin list and the second for the QAM header. Nothing
-# checks that the three agree.
+# (``frontend/src/utils/toast.ts``, which is what ``definePlugin`` hands back)
+# — Decky reads the first for its plugin list and the second for the QAM
+# header. Nothing checks that the three agree.
 DISPLAY_NAME = "Tender"

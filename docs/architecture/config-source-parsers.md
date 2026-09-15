@@ -312,8 +312,8 @@ conflate them). The `root_missing` disk probe (`os.path.isdir`) only runs when t
 `main.py` exposes this via the `get_retrodeck_status()` callable, a discriminated-status union
 (`{status, config_path, resolved_home}`) — the [Callable response shapes](backend-architecture.md) carve-out for >2
 outcomes. The backend returns only the discriminant plus the probed paths; the frontend owns the human-readable copy
-(`src/utils/retrodeckHealth.ts`) and renders the shared `WarningCard` in the QAM Status panel for the two loud states.
-`ok` and `absent` render no banner.
+(`frontend/src/utils/retrodeckHealth.ts`) and renders the shared `WarningCard` in the QAM Status panel for the two loud
+states. `ok` and `absent` render no banner.
 
 ## Known consumer gaps
 

@@ -1,8 +1,9 @@
 """Contract tests for the ``finalize_game_session`` end-of-session callable.
 
-Driven frontend-shaped per ``src/api/backend.ts``: ``finalize_game_session``
-takes ONE positional arg — the RomM ROM id — and returns the
-``SessionFinalizeResult`` dict (``total_seconds`` / ``sync`` / ``migration``).
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
+``finalize_game_session`` takes ONE positional arg — the RomM ROM id — and
+returns the ``SessionFinalizeResult`` dict (``total_seconds`` / ``sync`` /
+``migration``).
 
 The suspend-exclusion cases (#1148) are the regression guard: the counted
 ``total_seconds`` is the AWAKE span derived from the monotonic clock — wall time

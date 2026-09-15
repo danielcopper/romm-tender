@@ -709,8 +709,8 @@ def count_wanted(files: tuple[BiosFileEntry, ...]) -> tuple[int, int]:
     and decides on ``reading_complete`` alone; nothing weighs either count
     against ``server_count`` or against anything else. ``unknown_count`` has no
     reader in either half: it travels to the wire and the frontend declares its
-    type (``src/types/firmware.ts``) without ever using it. So the pair is a
-    supplied/not-supplied flag beside a value nobody asks.
+    type (``frontend/src/types/firmware.ts``) without ever using it. So the pair
+    is a supplied/not-supplied flag beside a value nobody asks.
 
     **Scoped to ``on_server`` rows**, and no consumer can currently tell that
     scoping from any other. A row the library does not hold exists only because

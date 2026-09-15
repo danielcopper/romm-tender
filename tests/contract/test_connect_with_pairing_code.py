@@ -1,6 +1,6 @@
 """Contract test for the ``connect_with_pairing_code`` callable (pairing-code sign-in).
 
-Driven frontend-shaped per ``src/api/backend.ts``:
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``connectWithPairingCode = callable<[string, string, boolean], BackendResult>("connect_with_pairing_code")``
 — positional ``(romm_url, code, allow_insecure_ssl)``.
 

@@ -1,0 +1,680 @@
+/**
+ * The Library page: what of RomM is synced into Steam, in two L1/R1 tabs.
+ *
+ * **Platforms** is list and detail — the platform list on the left with its sync
+ * toggle in the row, everything else about the focused platform on the right.
+ * **Collections** is one list with its filters above it.
+ *
+ * Both tabs' state lives here rather than in the tab components. Steam's tabbed
+ * page renders only the active tab and keys it by tab id, so a tab component
+ * owning its own reads would re-issue every one of them on each switch back.
+ *
+ * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Library.
+ */
+
+import { useState, useEffect, useMemo, useRef, FC } from "react";
+import {
+  PanelSection,
+  PanelSectionRow,
+  ToggleField,
+  DialogButton,
+  Field,
+  Focusable,
+  TextField,
+  ConfirmModal,
+  showModal,
+} from "@decky/ui";
+import {
+  getCollections,
+  saveCollectionSync,
+  saveCollectionsSync,
+  setAllCollectionsSync,
+  setCollectionOwnerScope,
+  getSettings,
+} from "../api/backend";
+import type {
+  CollectionSyncSetting,
+  CollectionKind,
+  CollectionScope,
+  CollectionOwnerScope,
+  VirtualCollectionType,
+} from "../types";
+import { scrollElementToTop } from "../utils/scrollHelpers";
+import { detach } from "../utils/detach";
+import { fuzzyMatch } from "../utils/fuzzyMatch";
+import { LoadingRow } from "./LoadingRow";
+import { WidePage, type WidePageTab } from "./layout/WidePage";
+import { PlatformsTab } from "./library/PlatformsTab";
+import { SYNC_WRITE_FAILED, usePlatformsPage } from "./library/usePlatformsPage";
+
+type CollectionSubTab = "standard" | "smart" | "virtual";
+
+const SUB_TAB_ORDER: readonly CollectionSubTab[] = ["standard", "smart", "virtual"];
+
+const SUB_TAB_LABELS: Record<CollectionSubTab, string> = {
+  standard: "Standard",
+  smart: "Smart",
+  virtual: "Virtual",
+};
+
+const SUB_TAB_HEADERS: Record<CollectionSubTab, string> = {
+  standard: "STANDARD COLLECTIONS",
+  smart: "SMART COLLECTIONS",
+  virtual: "VIRTUAL",
+};
+
+// Hard ceiling on how many collection rows are ever painted at once. A large
+// library's Virtual list runs to many hundreds of entries; rendering them all
+// strains the CEF renderer, so the list is capped and the overflow is surfaced
+// as a single "refine your search" hint instead. Search + the per-type filter
+// narrow BELOW this cap.
+const COLLECTION_RENDER_CAP = 50;
+
+// The Virtual sub-tab's per-type segmented filter. "all" shows both virtual
+// types; the others narrow to one `virtual_type`.
+type VirtualTypeFilter = "all" | VirtualCollectionType;
+
+const VIRTUAL_TYPE_FILTER_ORDER: readonly VirtualTypeFilter[] = ["all", "franchise", "collection"];
+
+// Row-description label per virtual type. "IGDB Collection" (not "Collection")
+// disambiguates from the Collections page it lives inside — RomM's own label.
+const VIRTUAL_TYPE_LABELS: Record<VirtualCollectionType, string> = {
+  franchise: "Franchise",
+  collection: "IGDB Collection",
+};
+
+// Segmented-control labels for the per-type filter. "All" reuses the plain word;
+// the two types reuse the row labels so the control and the rows read alike.
+const VIRTUAL_TYPE_FILTER_LABELS: Record<VirtualTypeFilter, string> = {
+  all: "All",
+  franchise: VIRTUAL_TYPE_LABELS.franchise,
+  collection: VIRTUAL_TYPE_LABELS.collection,
+};
+
+// A virtual row shows its type ("Franchise" / "IGDB Collection") before the ROM
+// count; standard/smart rows (and a virtual row missing its type on an older
+// backend) show the plain count.
+function collectionRowDescription(c: CollectionSyncSetting): string {
+  if (c.kind === "virtual" && c.virtual_type) {
+    return `${VIRTUAL_TYPE_LABELS[c.virtual_type]} · ${c.rom_count} ROMs`;
+  }
+  return `${c.rom_count} ROMs`;
+}
+
+function filterCollectionsBySubTab(
+  collections: CollectionSyncSetting[],
+  subTab: CollectionSubTab,
+  // When the favorites toggle isn't shown (zero or >1 favorites), the "Standard"
+  // sub-tab includes favorites too so they remain reachable. Defaults to
+  // false because the optimistic-update callsite in handleSetAllCollections
+  // doesn't care — it only ever inspects the favorites-excluded "Standard" set,
+  // and the favorites toggle owns favorites mutations independently.
+  includeFavoritesInMy = false,
+): CollectionSyncSetting[] {
+  switch (subTab) {
+    case "standard":
+      return collections.filter((c) => c.kind === "standard" && (includeFavoritesInMy || !c.is_favorite));
+    case "smart":
+      return collections.filter((c) => c.kind === "smart");
+    case "virtual":
+      return collections.filter((c) => c.kind === "virtual");
+  }
+}
+
+// Owner-scope filter (#1532): under "Own", hide collections owned by another
+// user so foreign ones can't be toggled on while the scope excludes them from
+// the sync. An absent `is_own` (older backend, or unknown own identity) is
+// treated as own, so "Own" never hides a collection it can't classify —
+// matching the backend's degrade-to-"All" fallback.
+function filterCollectionsByOwnerScope(
+  collections: CollectionSyncSetting[],
+  ownerScope: CollectionOwnerScope,
+): CollectionSyncSetting[] {
+  if (ownerScope === "all") return collections;
+  return collections.filter((c) => c.is_own !== false);
+}
+
+function favoritesDescription(romCount: number): string {
+  if (romCount === 1) return "Includes 1 favorited ROM";
+  return `Includes ${romCount} favorited ROMs`;
+}
+
+interface LibraryPageProps {
+  onBack: () => void;
+}
+
+export const LibraryPage: FC<LibraryPageProps> = ({ onBack }) => {
+  const [activeTab, setActiveTab] = useState<"platforms" | "collections">("platforms");
+  const platformsState = usePlatformsPage();
+
+  // --- Collections tab state ---
+  const [collections, setCollections] = useState<CollectionSyncSetting[]>([]);
+  const [collectionsLoading, setCollectionsLoading] = useState(true);
+  const [collectionsError, setCollectionsError] = useState(false);
+  const collectionsLoaded = useRef(false);
+  const [ownerScope, setOwnerScope] = useState<CollectionOwnerScope>("all");
+  const [activeSubTab, setActiveSubTab] = useState<CollectionSubTab>("standard");
+  // Search + per-type filter narrow the active sub-tab's list. Both reset when
+  // the sub-tab changes so each sub-tab is entered unfiltered.
+  const [search, setSearch] = useState("");
+  const [virtualTypeFilter, setVirtualTypeFilter] = useState<VirtualTypeFilter>("all");
+  // Why the last collection write did not take, or `null`. Every one of them is
+  // optimistic, so a refusal puts the rows — or the scope — back, and a revert
+  // with nothing said is what a control that never moved looks like. Cleared by
+  // the next write that succeeds, and by leaving the view it is about.
+  const [collectionsStatus, setCollectionsStatus] = useState<string | null>(null);
+  // Wraps the search field's label + input so it can be lifted to the top of
+  // the scroll view when the on-screen keyboard opens over the lower half of
+  // the screen (#1539).
+  const searchFieldRef = useRef<HTMLDivElement>(null);
+  const scrollSearchToTop = () => {
+    // Element-to-top rather than scrollIntoView (which centers the field
+    // on-device) or a plain panel scrollToTop (the field sits below the
+    // owner-scope + sub-tab controls, so a panel-top scroll can leave it under
+    // the keyboard). Lift the field itself to just below the QAM header at the
+    // top of the outermost scroller (the clearance scales with the viewport).
+    scrollElementToTop(searchFieldRef.current);
+  };
+
+  // The favorites collection (a standard collection with is_favorite=true) is
+  // promoted to a top-level toggle. RomM's schema theoretically allows more
+  // than one — if that ever happens, drop the toggle and let the "Standard" sub-tab
+  // surface them all, since a single toggle can't represent the set.
+  const favoritesCollection = useMemo(() => {
+    const favs = collections.filter((c) => c.kind === "standard" && c.is_favorite);
+    if (favs.length === 0) return null;
+    if (favs.length > 1) {
+      console.warn(
+        `romm-tender: expected at most one favorites collection, got ${favs.length}. ` +
+          `Falling back to listing them in the Standard sub-tab.`,
+      );
+      return null;
+    }
+    return favs[0] ?? null;
+  }, [collections]);
+
+  // Load collections data lazily on first switch to collections tab.
+  // Sub-tab is reset to "standard" in the tab-click handler (not here);
+  // that's an event-driven concern, not state synchronisation.
+  //
+  // The two fetches are DECOUPLED so the slow one never blocks the fast one:
+  // getSettings() is quick and only supplies the owner-scope, so it populates
+  // that control right away; getCollections() is slow (a large virtual list)
+  // and drives the list area's own loading/error/empty states. The controls
+  // render immediately regardless of the list fetch (#1539). A settings-read
+  // failure leaves the owner-scope at its "all" default rather than blanking
+  // the list — only a collections-read failure is a list error.
+  useEffect(() => {
+    if (activeTab === "collections" && !collectionsLoaded.current) {
+      collectionsLoaded.current = true;
+      getSettings()
+        .then((settingsResult) => {
+          setOwnerScope(settingsResult.collection_owner_scope === "own" ? "own" : "all");
+        })
+        .catch(() => {
+          // Owner-scope stays at its "all" default; the list is unaffected.
+        });
+      getCollections()
+        .then((collResult) => {
+          if (collResult.success) {
+            setCollections(collResult.collections);
+          } else {
+            setCollectionsError(true);
+          }
+        })
+        .catch(() => setCollectionsError(true))
+        .finally(() => setCollectionsLoading(false));
+    }
+  }, [activeTab]);
+
+  // Reset the collections sub-tab (and its search + per-type filter) on every
+  // entry into the Collections tab so the user lands on a predictable view (no
+  // persistence). The status line goes with them: it is about a write on the
+  // view being left, so keeping it would stand a Virtual refusal over the
+  // Standard list the reader comes back to.
+  const handleCollectionsTabClick = () => {
+    setActiveSubTab("standard");
+    setSearch("");
+    setVirtualTypeFilter("all");
+    setCollectionsStatus(null);
+    setActiveTab("collections");
+  };
+
+  // Switch sub-tabs and reset the per-sub-tab filters so a query typed in one
+  // sub-tab never silently hides another sub-tab's list. The status line is
+  // per-view for the same reason.
+  const handleSubTabChange = (sub: CollectionSubTab) => {
+    setActiveSubTab(sub);
+    setSearch("");
+    setVirtualTypeFilter("all");
+    setCollectionsStatus(null);
+  };
+
+  // --- Collections tab handlers ---
+  // All four writes on this tab treat a refusal and a rejection as one outcome:
+  // the write did not take, the optimistic flip goes back, and the reader is
+  // told. None of these callables throws to refuse. The three sync writes are
+  // `@migration_blocked`, and the whole-kind one also answers a failure when the
+  // collection listings behind it cannot be fetched; the owner-scope write is
+  // not gated and refuses a scope it does not recognise.
+  const handleCollectionToggle = async (id: string, kind: CollectionKind, enabled: boolean) => {
+    const revert = () =>
+      setCollections((prev) =>
+        prev.map((c) => (c.id === id && c.kind === kind ? { ...c, sync_enabled: !enabled } : c)),
+      );
+    setCollections((prev) => prev.map((c) => (c.id === id && c.kind === kind ? { ...c, sync_enabled: enabled } : c)));
+    try {
+      const result = await saveCollectionSync(id, kind, enabled);
+      if (!result.success) {
+        revert();
+        setCollectionsStatus(result.message || SYNC_WRITE_FAILED);
+        return;
+      }
+      setCollectionsStatus(null);
+    } catch {
+      revert();
+      setCollectionsStatus(SYNC_WRITE_FAILED);
+    }
+  };
+
+  // Whole-kind Enable/Disable All: flip every collection in the sub-tab and
+  // persist via the whole-kind callable (the server re-fetches the kind), so a
+  // huge id list never crosses the wire. Gated behind a confirm at the callsite.
+  const handleSetAllCollections = async (enabled: boolean, scope: CollectionScope) => {
+    const previous = collections.map((c) => ({ ...c }));
+    // Optimistically flip only the entries in the active sub-tab.
+    setCollections((prev) =>
+      prev.map((c) => (filterCollectionsBySubTab([c], scope).length > 0 ? { ...c, sync_enabled: enabled } : c)),
+    );
+    try {
+      const result = await setAllCollectionsSync(enabled, scope);
+      if (!result.success) {
+        setCollections(previous);
+        setCollectionsStatus(result.message || SYNC_WRITE_FAILED);
+        return;
+      }
+      setCollectionsStatus(null);
+    } catch {
+      setCollections(previous);
+      setCollectionsStatus(SYNC_WRITE_FAILED);
+    }
+  };
+
+  // Filtered-subset Enable/Disable All (a search or per-type filter is active):
+  // flip exactly the matched ids and persist them in one batch write, so the
+  // whole kind is never touched.
+  const handleBatchCollectionsSync = async (enabled: boolean, kind: CollectionKind, ids: string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    const previous = collections.map((c) => ({ ...c }));
+    setCollections((prev) =>
+      prev.map((c) => (c.kind === kind && idSet.has(c.id) ? { ...c, sync_enabled: enabled } : c)),
+    );
+    try {
+      const result = await saveCollectionsSync(ids, kind, enabled);
+      if (!result.success) {
+        setCollections(previous);
+        setCollectionsStatus(result.message || SYNC_WRITE_FAILED);
+        return;
+      }
+      setCollectionsStatus(null);
+    } catch {
+      setCollections(previous);
+      setCollectionsStatus(SYNC_WRITE_FAILED);
+    }
+  };
+
+  // Enable/Disable All entry point. When the current view is the whole kind
+  // (no search, and for Virtual no per-type filter) the whole-kind callable is
+  // used behind a ConfirmModal — it can flip a very large number. Otherwise the
+  // bounded matched set goes through the batch callable directly.
+  const handleCollectionsSetAll = (enabled: boolean, isWholeKind: boolean, matchedIds: string[]) => {
+    const kind = activeSubTab as CollectionKind;
+    if (isWholeKind) {
+      const label = SUB_TAB_LABELS[activeSubTab];
+      showModal(
+        <ConfirmModal
+          strTitle={enabled ? `Enable all ${label} collections?` : `Disable all ${label} collections?`}
+          strDescription={
+            enabled
+              ? `This turns on syncing for every collection in the ${label} tab, including any not currently shown. On a large library this can be a lot of collections.`
+              : `This turns off syncing for every collection in the ${label} tab, including any not currently shown.`
+          }
+          strOKButtonText={enabled ? "Enable All" : "Disable All"}
+          strCancelButtonText="Cancel"
+          onOK={() => {
+            detach(handleSetAllCollections(enabled, activeSubTab));
+          }}
+        />,
+      );
+      return;
+    }
+    detach(handleBatchCollectionsSync(enabled, kind, matchedIds));
+  };
+
+  const handleOwnerScopeChange = async (scope: CollectionOwnerScope) => {
+    if (scope === ownerScope) return;
+    const previous = ownerScope;
+    setOwnerScope(scope);
+    try {
+      const result = await setCollectionOwnerScope(scope);
+      if (!result.success) {
+        setOwnerScope(previous);
+        setCollectionsStatus(result.message || SYNC_WRITE_FAILED);
+        return;
+      }
+      setCollectionsStatus(null);
+    } catch {
+      setOwnerScope(previous);
+      setCollectionsStatus(SYNC_WRITE_FAILED);
+    }
+  };
+
+  // --- Collections tab content ---
+  const renderCollectionsContent = () => {
+    // The control shell (favorites, scope, the kind-selector row, search,
+    // per-type filter, Enable/Disable All) renders IMMEDIATELY — the slow
+    // getCollections fetch only gates the list AREA, not the controls (#1539).
+    // `hasCollections` gates the per-kind button counts (so they never flash
+    // "(0)"), the header count, and the Enable/Disable All buttons.
+    const hasCollections = collections.length > 0;
+
+    // When the favorites toggle isn't rendered (zero or multi-favorites case),
+    // include any favorites in the "Standard" sub-tab so they stay reachable.
+    const includeFavoritesInMy = favoritesCollection === null;
+    const kindFiltered = filterCollectionsBySubTab(collections, activeSubTab, includeFavoritesInMy);
+    // Owner-scope filter runs OVER the kind sub-tab filter — under "Mine" a
+    // foreign collection is hidden from every kind tab (#1532).
+    const scopeFiltered = filterCollectionsByOwnerScope(kindFiltered, ownerScope);
+    // Per-type filter (Virtual sub-tab only) narrows by virtual_type.
+    const showTypeFilter = activeSubTab === "virtual";
+    const typeFiltered =
+      showTypeFilter && virtualTypeFilter !== "all"
+        ? scopeFiltered.filter((c) => c.virtual_type === virtualTypeFilter)
+        : scopeFiltered;
+    // Search filter (fuzzy name match) is last, over the type-narrowed set.
+    const matched = search ? typeFiltered.filter((c) => fuzzyMatch(search, c.name)) : typeFiltered;
+    // The list is capped so the renderer never paints an unbounded set; the
+    // overflow is surfaced as a single hint row.
+    const rendered = matched.slice(0, COLLECTION_RENDER_CAP);
+    const overflow = matched.length - rendered.length;
+    // Whole-kind = nothing filtered (no search, "All" owner-scope, and for
+    // Virtual no per-type filter). Only then does Enable/Disable All use the
+    // whole-kind callable — under "Mine" the owner-scoped `matched` set is a
+    // bounded subset, so it goes through the batch path instead of letting
+    // set_all_collections_sync stamp foreign collections.
+    const isWholeKind = search === "" && ownerScope === "all" && !(showTypeFilter && virtualTypeFilter !== "all");
+    const matchedIds = matched.map((c) => c.id);
+
+    const activeLabel = SUB_TAB_LABELS[activeSubTab];
+    // The header count only appears once the list has loaded, so it doesn't
+    // flash "(0)" while getCollections is still pending.
+    const sectionTitle = hasCollections
+      ? `${SUB_TAB_HEADERS[activeSubTab]} (${matched.length})`
+      : SUB_TAB_HEADERS[activeSubTab];
+
+    return (
+      <>
+        {/* The favorites toggle ALWAYS renders so it never pops in late. It's
+            interactive only when exactly one favorites collection exists;
+            otherwise (still loading, zero favorites, or the multi-favorites
+            fallback that lists them in the "Standard" sub-tab) it sits disabled
+            and grayed rather than disappearing. */}
+        <PanelSection>
+          <PanelSectionRow>
+            <ToggleField
+              label="Sync RomM favorites"
+              description={favoritesCollection ? favoritesDescription(favoritesCollection.rom_count) : undefined}
+              checked={favoritesCollection ? favoritesCollection.sync_enabled : false}
+              disabled={favoritesCollection === null}
+              onChange={(value: boolean) => {
+                if (!favoritesCollection) return;
+                detach(handleCollectionToggle(favoritesCollection.id, favoritesCollection.kind, value));
+              }}
+            />
+          </PanelSectionRow>
+        </PanelSection>
+        <PanelSection>
+          <PanelSectionRow>
+            {/* Pull the label up toward the section separator above it — the
+                default gap reads too large under the favorites toggle (#1539). */}
+            <div style={{ marginTop: "-8px" }}>
+              <Field
+                label="Show collections"
+                description={
+                  ownerScope === "own"
+                    ? "Only your own collections (virtual collections have no owner, so they always appear)."
+                    : "Every collection on the server, including other users' public ones."
+                }
+              />
+            </div>
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
+              {(["all", "own"] as CollectionOwnerScope[]).map((scope) => (
+                <DialogButton
+                  key={scope}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    padding: "8px 0",
+                    opacity: ownerScope === scope ? 1 : 0.5,
+                    borderBottom: ownerScope === scope ? "2px solid #1a9fff" : "2px solid transparent",
+                  }}
+                  onClick={() => {
+                    detach(handleOwnerScopeChange(scope));
+                  }}
+                >
+                  {scope === "own" ? "Mine" : "All"}
+                </DialogButton>
+              ))}
+            </Focusable>
+          </PanelSectionRow>
+        </PanelSection>
+        {/* Kind selector — a plain Standard/Smart/Virtual button row, styled
+            exactly like the scope (Mine/All) buttons. NOT the native Tabs: its
+            L1/R1 bumper glyphs eat width and truncate labels in the narrow QAM
+            (#1539). The per-kind count lives once in the section header below
+            rather than on every button, so the buttons stay compact.
+            handleSubTabChange keeps the reset-on-switch semantics (search /
+            per-type filter reset). */}
+        <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px", padding: "0 16px 12px" }}>
+          {SUB_TAB_ORDER.map((sub) => (
+            <DialogButton
+              key={sub}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                padding: "8px 0",
+                opacity: activeSubTab === sub ? 1 : 0.5,
+                borderBottom: activeSubTab === sub ? "2px solid #1a9fff" : "2px solid transparent",
+              }}
+              onClick={() => handleSubTabChange(sub)}
+            >
+              {SUB_TAB_LABELS[sub]}
+            </DialogButton>
+          ))}
+        </Focusable>
+        <PanelSection title={sectionTitle}>
+          <PanelSectionRow>
+            <div ref={searchFieldRef}>
+              <TextField
+                // "(fuzzy)" in the heading signals the match is a subsequence,
+                // so a partial/loose query hitting more than the exact name
+                // reads as intended.
+                label="Search collections (fuzzy)"
+                value={search}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  // Lift the field to the top of the view on the first keystroke
+                  // (empty → non-empty), when the on-screen keyboard is actually
+                  // in use and would otherwise cover the field (#1539).
+                  if (search === "" && value !== "") {
+                    scrollSearchToTop();
+                  }
+                  setSearch(value);
+                }}
+                // onFocus covers the "press A to edit" case; the scroll is a
+                // no-op when the field is already at the top, so this is harmless.
+                onFocus={scrollSearchToTop}
+              />
+            </div>
+          </PanelSectionRow>
+          {showTypeFilter && (
+            <PanelSectionRow>
+              <Focusable
+                flow-children="horizontal"
+                // alignItems:stretch makes every button as tall as the tallest,
+                // so the wrapped "IGDB Collection" label reads as intentional
+                // rather than leaving the single-line buttons short. marginBottom
+                // separates this row from the Enable/Disable All row below (#1539).
+                style={{ display: "flex", gap: "8px", alignItems: "stretch", marginBottom: "12px" }}
+              >
+                {VIRTUAL_TYPE_FILTER_ORDER.map((type) => (
+                  <DialogButton
+                    key={type}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      padding: "8px 4px",
+                      // Center the label in the stretched button so a wrapped
+                      // two-line label sits centered like the single-line ones.
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      textAlign: "center",
+                      opacity: virtualTypeFilter === type ? 1 : 0.5,
+                      borderBottom: virtualTypeFilter === type ? "2px solid #1a9fff" : "2px solid transparent",
+                    }}
+                    onClick={() => setVirtualTypeFilter(type)}
+                  >
+                    {VIRTUAL_TYPE_FILTER_LABELS[type]}
+                  </DialogButton>
+                ))}
+              </Focusable>
+            </PanelSectionRow>
+          )}
+          <PanelSectionRow>
+            <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
+              {/* Disabled until the list has loaded — acting on an unloaded set
+                  would stamp the whole kind server-side sight-unseen (#1539). */}
+              <DialogButton
+                style={{ flex: 1, minWidth: 0 }}
+                disabled={!hasCollections}
+                onClick={() => handleCollectionsSetAll(true, isWholeKind, matchedIds)}
+              >
+                Enable All
+              </DialogButton>
+              <DialogButton
+                style={{ flex: 1, minWidth: 0 }}
+                disabled={!hasCollections}
+                onClick={() => handleCollectionsSetAll(false, isWholeKind, matchedIds)}
+              >
+                Disable All
+              </DialogButton>
+            </Focusable>
+          </PanelSectionRow>
+          {/* Why a write did not take, under the two buttons and above the list
+              it is about. Plain text, so it accompanies the rows rather than
+              adding a focus stop between the buttons and the first of them. */}
+          {collectionsStatus && (
+            <PanelSectionRow>
+              <div data-testid="collections-status" style={{ fontSize: "12px", color: "#dcdedf" }}>
+                {collectionsStatus}
+              </div>
+            </PanelSectionRow>
+          )}
+          {renderCollectionListBody(matched, rendered, overflow, activeLabel)}
+        </PanelSection>
+      </>
+    );
+  };
+
+  // The list AREA only: a spinner while getCollections is pending, then the
+  // error / empty-library / empty-sub-tab / rows states. The controls above it
+  // stay visible in every one of these states (#1539).
+  const renderCollectionListBody = (
+    matched: CollectionSyncSetting[],
+    rendered: CollectionSyncSetting[],
+    overflow: number,
+    activeLabel: string,
+  ) => {
+    if (collectionsLoading) {
+      return <LoadingRow />;
+    }
+    if (collectionsError) {
+      return (
+        <PanelSectionRow>
+          <Field label="Failed to load collections" description="Check your connection and try again" />
+        </PanelSectionRow>
+      );
+    }
+    if (collections.length === 0) {
+      return (
+        <PanelSectionRow>
+          <Field label="No collections found" description="Create collections in RomM to sync them here" />
+        </PanelSectionRow>
+      );
+    }
+    if (matched.length === 0) {
+      return (
+        <PanelSectionRow>
+          <Field
+            label={
+              search
+                ? `No ${activeLabel.toLowerCase()} collections match your search`
+                : `No ${activeLabel.toLowerCase()} collections`
+            }
+          />
+        </PanelSectionRow>
+      );
+    }
+    return (
+      <>
+        {rendered.map((collection) => (
+          <PanelSectionRow key={`${collection.kind}:${collection.id}`}>
+            <ToggleField
+              label={collection.name}
+              description={collectionRowDescription(collection)}
+              checked={collection.sync_enabled}
+              onChange={(value: boolean) => {
+                detach(handleCollectionToggle(collection.id, collection.kind, value));
+              }}
+            />
+          </PanelSectionRow>
+        ))}
+        {overflow > 0 && (
+          <PanelSectionRow>
+            <Field
+              label={`${overflow} more — refine your search`}
+              description="Type in the search box above to narrow the list."
+            />
+          </PanelSectionRow>
+        )}
+      </>
+    );
+  };
+
+  const tabs: WidePageTab[] = [
+    { id: "platforms", title: "Platforms", content: <PlatformsTab state={platformsState} /> },
+    // The Collections tab keeps the narrow page's controls and list until its
+    // own rebuild (#1815, part two) turns it into one wide table.
+    { id: "collections", title: "Collections", content: <>{renderCollectionsContent()}</> },
+  ];
+
+  return (
+    <WidePage
+      title="Library"
+      onBack={onBack}
+      tabs={tabs}
+      activeTab={activeTab}
+      onShowTab={(tabId) => {
+        if (tabId === "collections") {
+          handleCollectionsTabClick();
+          return;
+        }
+        setActiveTab("platforms");
+      }}
+    />
+  );
+};

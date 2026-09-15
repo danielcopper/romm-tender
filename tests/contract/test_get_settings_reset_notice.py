@@ -1,6 +1,6 @@
 """Contract test for the persistent corrupt-settings-reset notice callables.
 
-Driven frontend-shaped per ``src/api/backend.ts``:
+Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``getSettingsResetNotice = callable<[], {pending: boolean; backed_up_to: string | null}>``
 and ``dismissSettingsResetNotice = callable<[], {success: boolean}>``.
 

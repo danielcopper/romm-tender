@@ -285,12 +285,12 @@ Validate a panel at 1.5 (the device) and at 2.4 (the worst case) before calling 
 mise run dev:push-backend
 ```
 
-`dev:watch` only watches `src/`, so **frontend** edits reload automatically but **backend** (Python) edits do not — push
-them on demand with this task. It rsyncs `py_modules/` and `main.py` into the deployed plugin during a `dev:watch`
-session. The watcher matches only `dist/index.js` and `main.py`, so a `py_modules/`-only push never triggers a reload —
-the task therefore copies `main.py` **last**, and that copy is the modify event that reloads the plugin. Every reload is
-a full one regardless of which file changed: decky-loader restarts the backend subprocess **and** re-imports the
-frontend bundle. For `bin/` or `defaults/` changes, run the full `mise run deploy` instead.
+`dev:watch` only watches `frontend/src/`, so **frontend** edits reload automatically but **backend** (Python) edits do
+not — push them on demand with this task. It rsyncs `py_modules/` and `main.py` into the deployed plugin during a
+`dev:watch` session. The watcher matches only `dist/index.js` and `main.py`, so a `py_modules/`-only push never triggers
+a reload — the task therefore copies `main.py` **last**, and that copy is the modify event that reloads the plugin.
+Every reload is a full one regardless of which file changed: decky-loader restarts the backend subprocess **and**
+re-imports the frontend bundle. For `bin/` or `defaults/` changes, run the full `mise run deploy` instead.
 
 ## DevTools
 

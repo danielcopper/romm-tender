@@ -3,12 +3,12 @@
 The QAM panel derives "a sync run is in flight" from the emitted frame's
 ``running`` flag, and keys the run's end — the status line the run gets, the
 live-ETA teardown, the stats and session-budget re-reads — on the frame's
-*stage* (``src/components/MainPage.tsx``). A frame emitted with ``running``
-false and a non-terminal stage would therefore collapse the in-progress rows
-while ending nothing: no completion line, no re-read, and a coarse bar frozen
-where it stood. Neither side's call site shows the coupling, and the frontend
-cannot defend against it — a bare ``running: false`` is indistinguishable from
-the panel's own retraction of an optimistic start.
+*stage* (``frontend/src/bigpicture/MainPage.tsx``). A frame emitted with
+``running`` false and a non-terminal stage would therefore collapse the
+in-progress rows while ending nothing: no completion line, no re-read, and a
+coarse bar frozen where it stood. Neither side's call site shows the coupling,
+and the frontend cannot defend against it — a bare ``running: false`` is
+indistinguishable from the panel's own retraction of an optimistic start.
 
 The scan is structural rather than behavioural because the rule is about every
 path that *can* emit, error paths included, not the ones a fixture happens to

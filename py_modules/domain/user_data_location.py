@@ -78,11 +78,11 @@ def launcher_path(root: str) -> str:
     answers for both.
 
     Those two components are not free. A shortcut is recognised as ours by its
-    ``exe`` ENDING in :data:`LAUNCHER_EXE_SUFFIX` — ``src/utils/steamShortcuts.ts``
-    and ``services/prune/requests.py`` both match that suffix as their own
-    literal — so a launcher kept anywhere but a ``bin`` directory, or under any
-    other name, makes every shortcut written before the move stop being
-    recognised as ours.
+    ``exe`` ENDING in :data:`LAUNCHER_EXE_SUFFIX` —
+    ``frontend/src/utils/steamShortcuts.ts`` and ``services/prune/requests.py``
+    both match that suffix as their own literal — so a launcher kept anywhere
+    but a ``bin`` directory, or under any other name, makes every shortcut
+    written before the move stop being recognised as ours.
     """
     return os.path.join(root, *_LAUNCHER_COMPONENTS)
 

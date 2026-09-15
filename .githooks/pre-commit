@@ -76,7 +76,7 @@ if [ -z "$PRETTIER" ]; then
     echo "pre-commit: prettier not found (run 'mise run setup'), skipping frontend format"
 else
     # Get staged frontend files. Skip the frontend step if none changed.
-    STAGED_FE=$(git diff --cached --name-only --diff-filter=ACM -- 'src/*.ts' 'src/*.tsx')
+    STAGED_FE=$(git diff --cached --name-only --diff-filter=ACM -- 'frontend/src/*.ts' 'frontend/src/*.tsx')
     if [ -n "$STAGED_FE" ]; then
         # Before formatting, or every formatted file reads as dirty.
         DIRTY_FE=$(git diff --name-only -- $STAGED_FE)

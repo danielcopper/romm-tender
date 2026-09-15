@@ -8,16 +8,16 @@ collections of different types stay separate Steam collections
 (``RomM: [<name> (Franchise)] (host)``). No I/O, no state.
 
 The label strings MUST match the frontend vocabulary exactly — ``SUB_TAB_LABELS``
-and ``VIRTUAL_TYPE_LABELS`` in ``src/components/LibraryPage.tsx`` — so the type a
-user sees on the Collections page is the type baked into the Steam name. Keep the
-two in sync.
+and ``VIRTUAL_TYPE_LABELS`` in ``frontend/src/bigpicture/LibraryPage.tsx`` — so
+the type a user sees on the Collections page is the type baked into the Steam
+name. Keep the two in sync.
 
 Label-format safety: a label is appended inside the single bracket pair of
 ``RomM: [<name> (<label>)]``, and the frontend reconcile parses that name with
-``/^RomM: \\[([^\\]]+)\\]/`` (``src/index.tsx``). So a label must contain **no**
-``]`` character (parens are safe, brackets would truncate the parsed name and
-orphan the collection). Every label below is bracket-free; the fallback
-capitalises a controlled kind literal, which is too.
+``/^RomM: \\[([^\\]]+)\\]/`` (``frontend/src/index.tsx``). So a label must
+contain **no** ``]`` character (parens are safe, brackets would truncate the
+parsed name and orphan the collection). Every label below is bracket-free; the
+fallback capitalises a controlled kind literal, which is too.
 """
 
 from __future__ import annotations

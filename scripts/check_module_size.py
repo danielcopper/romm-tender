@@ -58,8 +58,8 @@ SLACK_ADVISORY = 50
 #     (.claude/rules/testing-backend.md), so a large test file is that rule
 #     working — gating it here would put two of our own rules in conflict.
 #   ``scripts/`` is developer tooling that never ships.
-#   ``src/`` has the same god-class problem and no enforcement, but needs a
-#     per-scope glob first: ``in_scope`` hardcodes ``*.py``.
+#   ``frontend/src/`` has the same god-class problem and no enforcement, but
+#     needs a per-scope glob first: ``in_scope`` hardcodes ``*.py``.
 SCOPE_DIRS = (
     "py_modules/adapters",
     "py_modules/bootstrap",

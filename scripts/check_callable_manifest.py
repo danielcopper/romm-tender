@@ -40,7 +40,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SRC_DIR = REPO_ROOT / "src"
+SRC_DIR = REPO_ROOT / "frontend" / "src"
 MAIN_PY = REPO_ROOT / "main.py"
 
 # Wire names deliberately excluded from the parity check. Empty today; add an
@@ -349,8 +349,8 @@ def find_discrepancies(
     are skipped for the name-presence checks (a)/(b).
     """
     findings: list[str] = [
-        f"{name}: declared more than once on the frontend "
-        f"(src/**/*.ts callable<...>) — remove the duplicate declaration."
+        f"{name}: declared more than once on the frontend (frontend/src/**/*.ts"
+        f" callable<...>) — remove the duplicate declaration."
         for name in sorted(frontend)
         if frontend[name] == -1
     ]
@@ -400,7 +400,7 @@ def main(argv: list[str]) -> int:
             print(line)
         print()
         print(
-            "ERROR: the frontend (src/**/*.ts callable declarations) and backend "
+            "ERROR: the frontend (frontend/src/**/*.ts callable declarations) and backend "
             "(Plugin async methods in main.py) callable surfaces have drifted. Every "
             "callable must be declared on both sides with matching arity (or be "
             "explicitly EXEMPT) so the frontend↔backend wire stays one source of truth."

@@ -14,7 +14,7 @@
 #     - `# noqa` must name a rule: `# noqa: CODE`. A bare `# noqa`
 #       (not followed by `:`) is rejected.
 #
-#   TypeScript (src/):
+#   TypeScript (frontend/src/):
 #     - `eslint-disable` / `eslint-disable-next-line` / `eslint-disable-line`
 #       must carry the ESLint native description separator ` -- reason`.
 #     - `@ts-ignore` is rejected outright — use `@ts-expect-error` with a
@@ -32,7 +32,7 @@
 set -euo pipefail
 
 readonly PY_PATHS=("py_modules" "main.py" "tests")
-readonly TS_DIR="src"
+readonly TS_DIR="frontend/src"
 
 # Shared exclusions for generated / vendored trees.
 readonly EXCLUDE_DIRS=(--exclude-dir=_vendor --exclude-dir=dist --exclude-dir=node_modules --exclude-dir=.worktrees)

@@ -8,8 +8,8 @@ real ``settings.json``, and un-toggling exactly ONE platform
 and in the sync-time platform filter.
 
 Each callable is driven exactly as the frontend declares it in
-``src/api/backend.ts``: ``get_platforms()`` zero-arg, ``save_platform_sync``
-with ``(platform_id: number, enabled: boolean)``.
+``frontend/src/api/backend.ts``: ``get_platforms()`` zero-arg,
+``save_platform_sync`` with ``(platform_id: number, enabled: boolean)``.
 """
 
 from __future__ import annotations

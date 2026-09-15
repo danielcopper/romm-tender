@@ -2,9 +2,9 @@
 
 The fine display label appended to a Steam collection name under the ``by_label``
 naming mode. The strings MUST match the frontend vocabulary (``SUB_TAB_LABELS`` /
-``VIRTUAL_TYPE_LABELS`` in ``src/components/LibraryPage.tsx``), and no label may
-contain ``]`` (it sits inside the ``RomM: [<name> (<label>)]`` bracket pair the
-frontend reconcile parses).
+``VIRTUAL_TYPE_LABELS`` in ``frontend/src/bigpicture/LibraryPage.tsx``), and no
+label may contain ``]`` (it sits inside the ``RomM: [<name> (<label>)]`` bracket
+pair the frontend reconcile parses).
 """
 
 from __future__ import annotations

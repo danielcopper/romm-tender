@@ -46,7 +46,7 @@ page changes it. Main and Downloads stay narrow; Sync, Library, Settings and Dat
 A wide page, while mounted, holds both levers: it posts `QamFriendsExpanded` to `window` with `window.origin` as the
 target origin, and it injects one stylesheet whose `:has()` rule lifts the tab panel's `max-width` for a marker class on
 the plugin's own subtree. The class names come from `quickAccessMenuClasses`, a webpack probe that can be `undefined`
-and is therefore read through the repo's honest-typing module (`src/utils/deckyUiInternals.ts`), with
+and is therefore read through the repo's honest-typing module (`frontend/src/utils/deckyUiInternals.ts`), with
 `[id^="quickaccess_content_"]` as the fallback selector.
 
 Whoever sets the flag clears it. The page posts `QamFriendsHidden` on unmount (navigation away, plugin closed), when the

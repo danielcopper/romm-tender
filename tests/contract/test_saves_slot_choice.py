@@ -2,8 +2,9 @@
 ``switch_slot``, and ``delete_slot`` — where they reject the retired,
 read-only legacy slot.
 
-``confirm_slot_choice`` is driven frontend-shaped per ``src/api/backend.ts``:
-positional ``(rom_id, chosen_slot, migrate, migrate_from_slot)`` with the TS arg
+``confirm_slot_choice`` is driven frontend-shaped per
+``frontend/src/api/backend.ts``: positional
+``(rom_id, chosen_slot, migrate, migrate_from_slot)`` with the TS arg
 types (``string | null`` for the slot, ``boolean`` for migrate, ``string | null``
 for the source). These pin the explicit-contract fix: ``migrate`` is a real bool
 (no ``"__no_migration__"`` sentinel string) and the default call runs no
@@ -222,8 +223,8 @@ async def test_confirm_legacy_migration_server_unreachable_holds_wizard(harness)
 async def test_switch_slot_empty_rejected(harness):
     """switch_slot("") is rejected — the legacy bucket is not a switch target (#1276).
 
-    Driven frontend-shaped per ``src/api/backend.ts`` (``switchSlot`` is
-    ``callable<[number, string], …>``). The callable returns the canonical
+    Driven frontend-shaped per ``frontend/src/api/backend.ts`` (``switchSlot``
+    is ``callable<[number, string], …>``). The callable returns the canonical
     ``invalid_slot_name`` failure and never switches the ROM into legacy mode.
     """
     enable_save_sync(harness)
@@ -246,8 +247,8 @@ async def test_switch_slot_empty_rejected(harness):
 async def test_delete_slot_legacy_rejected(harness):
     """delete_slot("") is refused — the legacy bucket is read-only (#1478).
 
-    Driven frontend-shaped per ``src/api/backend.ts`` (``deleteSlot`` is
-    ``callable<[number, string], …>``). The callable returns the canonical
+    Driven frontend-shaped per ``frontend/src/api/backend.ts`` (``deleteSlot``
+    is ``callable<[number, string], …>``). The callable returns the canonical
     ``invalid_slot_name`` failure before any server I/O, so the game's
     web-player bucket can never be torn down from the plugin.
     """
