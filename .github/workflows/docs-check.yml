@@ -75,14 +75,22 @@ jobs:
           if [[ "$docs_touched" == "true" ]]; then
             echo "::notice::Source changed AND docs/ updated. OK."
             echo "Source files:"
-            printf '  - %s\n' "${requires_docs[@]}" | head -20
+            # Slice the array rather than piping through `head`: under
+            # `set -o pipefail`, head closing the pipe after 20 lines makes
+            # printf fail with EPIPE and takes the whole step down — in the
+            # SUCCESS branch. A PR with more than 20 doc-requiring files
+            # would fail this gate for printing its own OK message.
+            printf '  - %s\n' "${requires_docs[@]:0:20}"
+            if [[ ${#requires_docs[@]} -gt 20 ]]; then
+              echo "  ... and $(( ${#requires_docs[@]} - 20 )) more"
+            fi
             exit 0
           fi
 
           echo "::error::PR touches source code but no docs/ updates and no opt-out marker."
           echo ""
           echo "Source files changed that require docs updates:"
-          printf '  - %s\n' "${requires_docs[@]}" | head -20
+          printf '  - %s\n' "${requires_docs[@]:0:20}"
           if [[ ${#requires_docs[@]} -gt 20 ]]; then
             echo "  ... and $(( ${#requires_docs[@]} - 20 )) more"
           fi
