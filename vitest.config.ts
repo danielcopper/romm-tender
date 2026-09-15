@@ -27,7 +27,6 @@ export default defineConfig({
         "frontend/src/test-utils/**",
         "frontend/src/test-setup.ts",
         "frontend/src/bigpicture/patches/gameDetailPatch.tsx",
-        "frontend/src/utils/metadataPatches.ts",
         "frontend/src/utils/styleInjector.ts",
       ],
     },

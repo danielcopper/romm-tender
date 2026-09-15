@@ -1,11 +1,17 @@
-// coverage-exempt: inherited whole from the old `src/patches/**` glob rather
-// than claimed for this file — half of what is here is decision logic its own
-// tests already cover, and the exclusion stands over both halves until they are
-// separated.
+/**
+ * Which Steam app gets which metadata and playtime, and when.
+ *
+ * Everything that reaches into a `SteamAppOverview` lives one module over, in
+ * `steamOverview.ts`: this file decides which appId a value belongs to, which
+ * items are still pending, how long to keep retrying an overview Steam has not
+ * loaded yet, and what never gets written at all. Neither half is exempt from
+ * coverage, and `metadataPatches.test.ts` covers both — it is the only test
+ * over either.
+ */
 import type { RomMetadata } from "../types";
 import { debugLog, logInfo } from "../api/backend";
 import { detach } from "./detach";
-import { stateTransaction } from "./steamState";
+import { overviewFor, writeMetadataFields, writePlaytimeFields } from "./steamOverview";
 
 // Module-level state
 let metadataCache: Record<string, RomMetadata> = {};
@@ -27,22 +33,10 @@ function getMetadataForAppId(appId: number): RomMetadata | null {
  * available yet (the caller retries those — see {@link applyAllMetadata}).
  */
 function applyDirectMutations(appId: number, metadata: RomMetadata): boolean {
-  const overview = appStore.GetAppOverviewByAppID(appId);
+  const overview = overviewFor(appId);
   if (!overview) return false;
 
-  stateTransaction(() => {
-    overview.controller_support = 2;
-
-    if (metadata.average_rating != null) {
-      overview.metacritic_score = Math.round(metadata.average_rating);
-    }
-
-    if (overview.m_setStoreCategories && metadata.steam_categories) {
-      for (const cat of metadata.steam_categories) {
-        overview.m_setStoreCategories.add(cat);
-      }
-    }
-  });
+  writeMetadataFields(overview, metadata);
   return true;
 }
 
@@ -144,7 +138,7 @@ export function updatePlaytimeDisplay(appId: number, totalSeconds: number, updat
     detach(debugLog(`updatePlaytimeDisplay: appId=${appId} invalid total=${totalSeconds}, skipping`));
     return false;
   }
-  const overview = appStore.GetAppOverviewByAppID(appId);
+  const overview = overviewFor(appId);
   if (!overview) {
     detach(debugLog(`updatePlaytimeDisplay: appId=${appId} overview=null, skipping`));
     return false;
@@ -153,17 +147,10 @@ export function updatePlaytimeDisplay(appId: number, totalSeconds: number, updat
   const totalMinutes = Math.floor(totalSeconds / 60);
   if (totalMinutes <= 0) return true; // Nothing to write, but not a failure
 
-  const prevMinutes = overview.minutes_playtime_forever;
-  const prevLastPlayed = overview.rt_last_time_played;
-  stateTransaction(() => {
-    overview.minutes_playtime_forever = totalMinutes;
-    if (updateLastPlayed) {
-      overview.rt_last_time_played = Math.floor(Date.now() / 1000);
-    }
-  });
+  const previous = writePlaytimeFields(overview, totalMinutes, updateLastPlayed);
   detach(
     debugLog(
-      `updatePlaytimeDisplay: appId=${appId} wrote ${totalMinutes}min (was ${prevMinutes}), rt_last_time_played was ${prevLastPlayed}`,
+      `updatePlaytimeDisplay: appId=${appId} wrote ${totalMinutes}min (was ${previous.minutes}), rt_last_time_played was ${previous.lastPlayed}`,
     ),
   );
   // Single write-chokepoint for `minutes_playtime_forever` — emit a DOM signal

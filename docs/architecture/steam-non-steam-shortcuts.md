@@ -317,8 +317,9 @@ metadata, and the pass is idempotent), in its own detached block with its own er
 touches the toast, collections, or playtime paths (#1207). The backend commits metadata per unit during the sync (before
 the terminal emit), so this re-fetch always sees the new ROMs.
 
-See: `frontend/src/utils/metadataPatches.ts`, `frontend/src/utils/metadataCache.ts` (paged fetch), `onSyncComplete` in
-`frontend/src/index.tsx`
+See: `frontend/src/utils/metadataPatches.ts` (which appId gets which value, and the retry ladder),
+`frontend/src/utils/steamOverview.ts` (`writeMetadataFields`, where all three assignments onto the overview are made),
+`frontend/src/utils/metadataCache.ts` (paged fetch), `onSyncComplete` in `frontend/src/index.tsx`
 
 ## VDF Format Notes
 
