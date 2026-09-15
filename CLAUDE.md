@@ -539,6 +539,24 @@ Format: **invariant** — tier — enforced by.
   not edges (erased at runtime), which is why the `api/backend.ts` ⇄ `utils/cachedGameDetailStore.ts` back-reference is
   not a cycle
 - **No bare `# type: ignore` / blanket suppressions** — check — `scripts/check_no_bare_ignores.sh`
+- **A coverage exclusion names a property of the code, never a place: every frontend-scoped entry stands in BOTH
+  `vitest.config.ts`'s `coverage.exclude` and `sonar-project.properties`' `sonar.coverage.exclusions`, every file entry
+  carries its reason as a `// coverage-exempt:` marker in the file's own first lines, and every marked file is listed**
+  — check — `scripts/check_coverage_exclusions.py` (a folder entry is admitted only from the script's `FOLDER_ENTRIES`,
+  where membership in the folder IS the property; the backend/config entries are Sonar-only and the frontend test glob
+  Vitest-only, each declared there with its reason so the asymmetry is stated rather than tolerated). Two accidents it
+  removes, both silent: `src/patches/**` excluded a FOLDER, so a file's coverage obligation changed when it was moved
+  out of the folder and nothing said so; and `steamShortcuts.ts` sat on Sonar's list and not on Vitest's under a comment
+  claiming the two were aligned. **What the check cannot see is MEMBERSHIP in a folder entry's directory** — the two
+  admitted folders are checked to exist and their contents are never read, so a real module filed into
+  `frontend/src/types/` or `frontend/src/test-utils/` is exempted by its PLACE, with no marker asked for and nothing
+  failing: the very accident above, still live for those two directories. It is declared rather than mechanized on
+  purpose — "is this really only a type declaration" is not a cheap check, and a half-check would exempt on a property
+  nobody stated while reading as enforcement. **Nor can it see the marker's SENTENCE** — a false reason passes green,
+  which is what the three stated reasons this cut found were: "no logic to assert" over a file with four passing tests,
+  "no isolated logic to assert" over 88.65% line coverage, and "thin plugin-entry shim" over 89.09%. Only the first was
+  replaced by a truer marker; the other two files lost their exclusions outright, which is also how their list drift was
+  settled
 - **Every pinned version in `requirements-*.lock` satisfies its `requirements-*.txt` source constraint** — check —
   `scripts/check_lock_sync.py`
 - **Every local markdown link in tracked docs resolves (file target + heading/attr-list anchor)** — check —

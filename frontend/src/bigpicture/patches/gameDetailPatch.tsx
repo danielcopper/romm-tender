@@ -1,3 +1,6 @@
+// coverage-exempt: a monkey-patch into Steam's own game-detail route — its
+// subject is Steam's React tree, which happy-dom does not have, so every path
+// here can only be exercised on the device.
 /**
  * React-tree patch that swaps Steam's native app-details overview panel for
  * our RomMPlaySection + RomMGameInfoPanel pair on RomM shortcuts. Everything

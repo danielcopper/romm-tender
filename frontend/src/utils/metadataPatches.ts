@@ -1,3 +1,7 @@
+// coverage-exempt: inherited whole from the old `src/patches/**` glob rather
+// than claimed for this file — half of what is here is decision logic its own
+// tests already cover, and the exclusion stands over both halves until they are
+// separated.
 import type { RomMetadata } from "../types";
 import { debugLog, logInfo } from "../api/backend";
 import { detach } from "./detach";

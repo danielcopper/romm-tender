@@ -1,3 +1,10 @@
+// coverage-exempt: a CSS payload — the bulk of this file is one template
+// literal, so a percentage over it counts string lines rather than assertions,
+// and what a rule DOES lands in Steam's SteamRoot document, which happy-dom has
+// not got. styleInjector.test.ts pins the TEXT of one family of those rules —
+// the vanished-version trash, whose colour a component can only reference by
+// class name — and of nothing else the file injects: a drift lock on those
+// rules, not coverage of the stylesheet or of its effect.
 import { findSP } from "./deckyUiInternals";
 
 const ROMM_PLAY_HIDE_ID = "romm-hide-native-play";

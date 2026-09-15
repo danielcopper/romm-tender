@@ -1,3 +1,5 @@
+// coverage-exempt: the harness every suite runs inside — global mocks and
+// teardown only, so it has no behaviour of its own a test could assert.
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
