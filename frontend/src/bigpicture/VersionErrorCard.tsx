@@ -1,6 +1,5 @@
 import { FC, useEffect, useState } from "react";
 import { getVersionError, onVersionErrorChange } from "../utils/connectionState";
-import { LegacyInstallNotice } from "./LegacyInstallBanner";
 import { WarningCard } from "./WarningCard";
 
 /**
@@ -34,6 +33,5 @@ interface VersionErrorCardProps {
 export const VersionErrorCard: FC<VersionErrorCardProps> = ({ message, compact = false }) => (
   <>
     <WarningCard title="RomM Server Update Required" message={message} compact={compact} />
-    <LegacyInstallNotice />
   </>
 );

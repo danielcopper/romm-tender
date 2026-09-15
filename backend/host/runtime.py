@@ -36,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import signal
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from host.server import DEFAULT_PORT, HostServer
@@ -50,6 +51,20 @@ if TYPE_CHECKING:
     from host.status import HostStatus
 
 
+@dataclass(frozen=True)
+class BackendBuild:
+    """What building the backend produced that the host itself needs.
+
+    The identity comes from here rather than from the caller because it is read
+    off the package manifest during the build, and reading that file a second
+    time in the entry point would be a second spelling of the program's name,
+    free to drift from the one every outgoing request already carries.
+    """
+
+    dispatcher: CallDispatcher
+    server_identity: str
+
+
 class AlreadyRunningError(RuntimeError):
     """Raised when another backend holds the lock.
 
@@ -61,7 +76,7 @@ class AlreadyRunningError(RuntimeError):
 
 async def run_backend(
     *,
-    build: Callable[[], Awaitable[CallDispatcher]],
+    build: Callable[[], Awaitable[BackendBuild]],
     after_bind: Callable[[], Awaitable[None]],
     shutdown: Callable[[], Awaitable[None]],
     events: EventSink,
@@ -70,13 +85,16 @@ async def run_backend(
     lock_path: str,
     port_file_path: str,
     logger: logging.Logger,
-    server_identity: str,
+    token: str,
     preferred_port: int = DEFAULT_PORT,
 ) -> None:
     """Start the backend, serve until a termination signal, then shut it down.
 
     *build* performs the schema migration, the wiring and the start-up routines
-    and answers with the dispatcher for the object calls reach. *after_bind* is
+    and answers with the dispatcher for the object calls reach, plus the identity
+    this server answers under. *token* is this process's admission token, created
+    by the caller because the logging filter that keeps it out of the log file
+    has to exist before the first line is written. *after_bind* is
     the network-touching start-up step, run once the port has been announced.
     *shutdown* is awaited before the process ends — an interrupted unload would
     leave the very state the start-up routines exist to repair. *preferred_port*
@@ -98,17 +116,19 @@ async def run_backend(
     stop = _listen_for_termination()
     server: HostServer | None = None
     try:
-        dispatcher = await build()
+        built = await build()
 
         server = HostServer(
-            dispatcher=dispatcher,
+            dispatcher=built.dispatcher,
             events=events,
             static_root=static_root,
             logger=logger,
-            server_identity=server_identity,
+            server_identity=built.server_identity,
+            token=token,
             preferred_port=preferred_port,
         )
         status.port = await server.start()
+        status.count_dropped_messages = lambda: server.dropped_messages
         port_file.write(status.port)
 
         # Once, at start-up, with the token in it: this is the address the panel

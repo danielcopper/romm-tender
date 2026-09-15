@@ -6,7 +6,7 @@
 // Both surface through the rendered <Field label={migrateResult} /> — the
 // catch tests below assert that label text.
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import { createElement, type ComponentProps, type ReactElement } from "react";
 import { showModal } from "@decky/ui";
@@ -14,10 +14,6 @@ import { toaster } from "@decky/api";
 import { MigrationBlockedPage } from "./MigrationBlockedPage";
 import * as backend from "../api/backend";
 import { setMigrationStatus, clearMigration, getMigrationState } from "../utils/migrationStore";
-import { setLegacyInstallState } from "../utils/legacyInstallStore";
-import { setDataLocationState } from "../utils/dataLocationStore";
-import { LEGACY_INSTALL_TITLE } from "./LegacyInstallBanner";
-import { DATA_LOCATION_CHOICE_TITLE, DATA_LOCATION_FAILED_TITLE } from "./DataLocationNotice";
 import type { MigrationStatus, MigrationResult } from "../types";
 // Type-only — vi.mock("./MigrationConflictModal") below replaces the runtime
 // impl; the captured-props type stays pinned to the real component.
@@ -42,11 +38,6 @@ type CapturedConflictModalProps = ComponentProps<typeof MigrationConflictModal>;
 vi.mock("./MigrationConflictModal", () => ({
   MigrationConflictModal: () => createElement("div", { "data-testid": "migration-conflict-modal" }),
 }));
-
-function buttonByText(container: HTMLElement, text: string): HTMLButtonElement | undefined {
-  return Array.from(container.querySelectorAll("button")).find((b) => b.textContent === text) as
-    HTMLButtonElement | undefined;
-}
 
 // Helpers — pull props off the React element passed to showModal.
 function lastShownModalProps<T = Record<string, unknown>>(): T | null {
@@ -123,76 +114,6 @@ describe("MigrationBlockedPage component", () => {
     it("does not render the result Field until migrateResult is non-empty", () => {
       const { queryByTestId } = render(<MigrationBlockedPage migration={defaultMigration} />);
       expect(queryByTestId("field")).toBeNull();
-    });
-  });
-
-  describe("legacy-install notice", () => {
-    // This page replaces the panel, so it carries the pre-rename install warning
-    // itself — a blocked plugin is what makes a user tidy the older install out
-    // of Decky, and every one of their games launches through it. The store is a
-    // module singleton; act-wrapped so the notify reaches the still-mounted
-    // subscriber before RTL's cleanup.
-    afterEach(() => {
-      act(() => {
-        setLegacyInstallState({ pending: false, legacyDataPresent: false, dismissed: false });
-      });
-    });
-
-    it("carries the warning while the pre-rename install stands beside this one", () => {
-      act(() => {
-        setLegacyInstallState({ pending: true, legacyDataPresent: false, dismissed: false });
-      });
-      const { container } = render(<MigrationBlockedPage migration={defaultMigration} />);
-      expect(container.textContent).toContain(LEGACY_INSTALL_TITLE);
-    });
-
-    it("keeps the migration's own explanation and actions first", () => {
-      act(() => {
-        setLegacyInstallState({ pending: true, legacyDataPresent: false, dismissed: false });
-      });
-      const { container } = render(<MigrationBlockedPage migration={defaultMigration} />);
-      expect(container.firstElementChild?.getAttribute("title")).toBe("RetroDECK Migration Required");
-    });
-
-    it("renders the page alone when no older install stands beside this one", () => {
-      const { container } = render(<MigrationBlockedPage migration={defaultMigration} />);
-      expect(container.textContent).toContain("RetroDECK location changed");
-      expect(container.textContent).not.toContain(LEGACY_INSTALL_TITLE);
-    });
-  });
-
-  describe("data-location notice", () => {
-    // Leaving this page needs a user action, so a condition that is invisible
-    // here is invisible for as long as the user takes to migrate RetroDECK —
-    // and the choice is itself a question only the user can answer.
-    afterEach(() => {
-      act(() => {
-        setDataLocationState({ pending: false, kind: null, message: null });
-      });
-    });
-
-    it("carries the two-libraries choice, so it can be answered from here", () => {
-      act(() => {
-        setDataLocationState({ pending: true, kind: "choice", message: null });
-      });
-      const { container } = render(<MigrationBlockedPage migration={defaultMigration} />);
-      expect(container.textContent).toContain(DATA_LOCATION_CHOICE_TITLE);
-      expect(buttonByText(container, "Choose a copy")).toBeDefined();
-    });
-
-    it("carries a failed move and the reason it failed", () => {
-      act(() => {
-        setDataLocationState({ pending: true, kind: "failed", message: "[Errno 28] No space left on device" });
-      });
-      const { container } = render(<MigrationBlockedPage migration={defaultMigration} />);
-      expect(container.textContent).toContain(DATA_LOCATION_FAILED_TITLE);
-      expect(container.textContent).toContain("No space left on device");
-    });
-
-    it("adds nothing to the page while no data-location condition stands", () => {
-      const { container } = render(<MigrationBlockedPage migration={defaultMigration} />);
-      expect(container.textContent).not.toContain(DATA_LOCATION_CHOICE_TITLE);
-      expect(container.textContent).not.toContain(DATA_LOCATION_FAILED_TITLE);
     });
   });
 

@@ -16,8 +16,11 @@
  *   - plugin load init in index.tsx (relocateShortcutsToLauncher)
  *
  * Read by:
- *   - bigpicture/LegacyInstallBanner.tsx through {@link useLauncherRelocated},
- *     which decides which of the card's two statements the panel shows
+ *   - nothing, today. The card that read it through {@link useLauncherRelocated}
+ *     asked whether the pre-rename plugin folder was safe to remove, and that
+ *     question went with the plugin loader. The pass itself still runs and still
+ *     records its answer here, because whether the shortcuts point at the
+ *     launcher is the same question under any host.
  *
  * Every write installs a NEW state object and notifies. That is what lets
  * {@link getLauncherState} serve as a `useSyncExternalStore` snapshot — React

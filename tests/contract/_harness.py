@@ -54,6 +54,8 @@ from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_steamgrid_db_api import FakeSteamGridDbApi
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
+from domain.app_directories import AppDirectories
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -87,9 +89,7 @@ _BOUND_SERVICE_ATTRS = {
     "_prune_service": "prune_service",
     "_connection_service": "connection_service",
     "_startup_healing_service": "startup_healing_service",
-    "_legacy_install_service": "legacy_install_service",
     "_shortcut_relocation_service": "shortcut_relocation_service",
-    "_data_location_service": "data_location_service",
     "_launch_gate_service": "launch_gate_service",
     "_session_lifecycle_service": "session_lifecycle_service",
     "_game_process_service": "game_process_service",
@@ -127,12 +127,15 @@ class ContractHarness:
     # The in-memory process table behind the stop-game ladder. Tests seed ``pids``
     # (and ``survive_stop`` / ``alive``) to stage what the kill should find.
     game_process: FakeGameProcessControlAdapter
-    # Where the real ``bootstrap()`` ended up reading and writing, which is the
-    # start-up migration's answer and not a path a test may compose: settings and
-    # the database live under the user's home now, and only a run whose migration
-    # could not finish is still in Decky's directories.
+    # The three directories a contract test ever has to look in, read back off
+    # what the run was TOLD rather than composed here: ``settings.json`` under
+    # the config root, the database under the data root, and everything
+    # re-derivable from the server — covers, artwork — under the cache root. The
+    # split is not filing tidiness: a system that clears caches must be able to
+    # clear one and not the other.
     settings_dir: str
     data_dir: str
+    cache_dir: str
 
 
 def _single_attempt_pass_through(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
@@ -173,9 +176,14 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
     # 1. Real bootstrap — real settings dict, real SQLite + migrations, real
     #    file-store adapters, all rooted under tmp_path.
     result = bootstrap(
-        settings_dir=str(tmp_path / "settings"),
-        runtime_dir=str(tmp_path / "runtime"),
-        plugin_dir=str(tmp_path / "plugin"),
+        directories=AppDirectories(
+            config_dir=str(tmp_path / "config"),
+            data_dir=str(tmp_path / "data"),
+            cache_dir=str(tmp_path / "cache"),
+            state_dir=str(tmp_path / "state"),
+            runtime_dir=str(tmp_path / "run"),
+            code_dir=str(tmp_path / "plugin"),
+        ),
         user_home=str(tmp_path / "home"),
         logger=logger,
     )
@@ -232,8 +240,6 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
         runtime=RuntimeBundle(
             loop=loop,
             logger=logger,
-            plugin_dir=str(tmp_path / "plugin"),
-            runtime_dir=str(tmp_path / "runtime"),
             emit=emit,
             clock=fake_clock,
             uuid_gen=fake_uuid,
@@ -243,7 +249,7 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
         ),
         callbacks=result.callbacks,
         min_required_version=Plugin._MIN_REQUIRED_VERSION,
-        locations=result.locations,
+        directories=result.directories,
         launcher=result.launcher,
     )
     services = wire_services(cfg)
@@ -273,6 +279,7 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
         uow_factory=result.callbacks.uow_factory,
         retrodeck_paths=result.callbacks.retrodeck_paths,
         game_process=fake_game_process,
-        settings_dir=result.locations.settings_dir,
-        data_dir=result.locations.data_dir,
+        settings_dir=result.directories.config_dir,
+        data_dir=result.directories.data_dir,
+        cache_dir=result.directories.cache_dir,
     )

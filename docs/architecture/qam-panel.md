@@ -445,101 +445,28 @@ backup-or-confirm rule in the invariant register.
 ### Notices and homes
 
 A notice on Main names a condition and jumps to its home; the action exists only there. A condition with no home in the
-plugin stays a card without a jump, with Dismiss where the condition has a sensible end. A condition answered **once and
-for all** — the user picks between named outcomes and the answering ends it — has no page to return to, so its home is a
-modal opened from the notice; that modal _is_ the home, not an exception to the rule.
+plugin stays a card without a jump, with Dismiss where the condition has a sensible end.
 
-| Condition                                   | On Main                                       | Home                                                  |
-| ------------------------------------------- | --------------------------------------------- | ----------------------------------------------------- |
-| Settings were reset                         | text, backup path, Dismiss                    | none — the card is the whole of it                    |
-| Cross-device playtime needs a fresh sign-in | text, **Open Connections**, Dismiss           | Settings › Connections, where the accounts are        |
-| RetroDECK paths missing or unreadable       | warning card, no action                       | none — the fix is outside the plugin                  |
-| "RomM Sync" is still installed              | warning card; Dismiss on its second statement | none — removing the folder ends it                    |
-| Two copies of the library were found        | text, **Choose a copy**                       | the choice modal — answered once, so nothing to open  |
-| Moving the data did not work                | warning card, no action                       | none — the next start tries again                     |
-| RetroArch `input_driver` is wrong           | text, **Open Controller**                     | Settings › Controller, which holds the Fix button     |
-| Save-file sorting changed                   | text, **Open Save Sync**                      | Settings › Save Sync, which holds Migrate and Dismiss |
-| Sync paused on the session budget           | text, **Open Sync**                           | Sync, which holds Restart Steam now and Resume        |
+| Condition                                   | On Main                             | Home                                                  |
+| ------------------------------------------- | ----------------------------------- | ----------------------------------------------------- |
+| Settings were reset                         | text, backup path, Dismiss          | none — the card is the whole of it                    |
+| Cross-device playtime needs a fresh sign-in | text, **Open Connections**, Dismiss | Settings › Connections, where the accounts are        |
+| RetroDECK paths missing or unreadable       | warning card, no action             | none — the fix is outside the plugin                  |
+| RetroArch `input_driver` is wrong           | text, **Open Controller**           | Settings › Controller, which holds the Fix button     |
+| Save-file sorting changed                   | text, **Open Save Sync**            | Settings › Save Sync, which holds Migrate and Dismiss |
+| Sync paused on the session budget           | text, **Open Sync**                 | Sync, which holds Restart Steam now and Resume        |
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
-migration — are not notices; they replace the page, and exactly one condition is carried inside them (below).
+migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
+was the pre-rename plugin folder, which went with the plugin loader.
 
 The playtime notice is the one that carries **two** buttons, and they sit side by side on one row rather than on two
 full-width ones: Main is the narrow page, and a notice costing three rows pushes the status block it sits above off the
 screen. Its jump is not an answer either — only a fresh sign-in ends the condition, so **Open Connections** leaves it
 standing and **Dismiss** remains the way to put it away for this view.
 
-**The two data-location conditions are one card in one component** (`frontend/src/bigpicture/DataLocationNotice.tsx`),
-because they are two outcomes of the same start-up step and only ever one of them stands. The choice's modal
-(`DataLocationModal.tsx`) shows both candidates with path, size and last-changed date — with the **year**, which
-`formatTimestamp` drops and which is the whole difference between two copies a year apart — and **records** the answer
-rather than acting on it: the plugin is running from one of the two candidates with its database open, so the copy
-happens at the plugin's next start. A candidate that has gone since the question was raised is still listed, saying so
-and offering no button, because a choice shown with one option is not the question that was asked. Cancel is a pure UI
-close and the condition re-fires. Neither condition carries a Dismiss, and for a reason of their own: each ends when a
-start has completed the move, not when the user has acknowledged it.
-[Backend Architecture → Where user data lives](backend-architecture.md#where-user-data-lives) has the ladder behind
-both.
-
-**The restart it offers is `SteamClient.System.RestartPC`, not the session budget's client restart** — and the two are
-different mechanisms rather than one shared helper, because restarting the Steam client reloads the frontend and does
-**not** start the plugin's backend again (`services/library/_state.py` states the same fact from the backend side),
-while this move runs before the database is opened. Both live in `frontend/src/utils/steamRestart.ts` so the distinction
-is visible at the point of choosing between them, and both refuse while a game is running. The button is
-feature-detected at render (`canRestartDevice`): where a Steam build carries no `RestartPC` the sentence stands on its
-own rather than a button that would do nothing.
-
-**Restart device now** asks before it acts — the press opens a `ConfirmModal` and only its OK reboots, the modal shape
-the destructive-action rule above names, here on a button that takes the whole machine down. A label cannot settle on
-its own which of the two restarts it means, and this panel offers both. Declining does nothing at all: the confirm
-carries no cancel handler, so the recorded answer stands and the choice modal is exactly where it was. The second button
-says the same thing once a copy has been picked — **Later**, not Close, because the answer is already recorded and only
-the restart is being put off.
-
-**Both conditions are also carried by the RetroDECK-migration full-page state**, which makes the pre-rename install no
-longer the only condition to reach it. What earns it here is stronger than what earns it there: leaving that page needs
-a user action, so a condition invisible on it is invisible for however long the user takes — and one of these two is
-itself a question only the user can answer, so it would be unanswerable as well as unseen.
-
-Five of the nine conditions above carry no Dismiss anywhere — RetroDECK paths, the two data-location conditions, the
-`input_driver` fix and the session budget — so the absence is ordinary.
-
-`"RomM Sync" is still installed` is not one of the five, and it is the one card that says two different things as its
-reason clears. Its condition is unchanged — the pre-rename plugin folder stands beside ours — and it still ends only
-when that folder does; what changes is what there is to say about it:
-
-1. **The shortcuts still point into it.** The launcher warning, no Dismiss: removing the folder stops every game from
-   starting, and nothing about that is optional. Since [ADR-0032](../adr/0032-shortcuts-are-rewritten-in-place.md) this
-   is the transient state — the shortcuts are repointed at plugin load — so it stands until that pass has run, or where
-   it could not: a start whose data migration is still outstanding installs no launcher and repoints nothing.
-2. **Nothing points into it any more.** The card says so, tells the reader where to remove the older install, and
-   carries a **Dismiss**. That Dismiss is the one in this panel that hides a condition which is STILL TRUE, and it is
-   allowed to because keeping the older install is a legitimate end state — so the answer is persisted as user intent in
-   `settings.json` (`legacy_install_notice_dismissed`) rather than held for the session: a card that came back at every
-   Steam start is exactly the standing warning it exists to prevent. It answers this statement alone, so a user who
-   dismissed it and later finds their shortcuts pointing back into the older install is told so again.
-
-Its two DIRECTORY answers are computed live on every call with no persisted marker, for the reason above — that
-condition ends when the folder does. The dismissal is the exception and rides the same payload. Neither of the two facts
-the statements are chosen by is a directory question: "this version starts empty" needs the `roms` count from
-`get_sync_stats`, which the panel already holds, and "the shortcuts have been repointed" is what the relocation pass
-reported — the backend knows which shortcuts needed the write, never whether the write happened. `LegacyInstallNotice`
-(`frontend/src/bigpicture/LegacyInstallBanner.tsx`) joins the three frontend stores, which is what keeps the statement
-that prevents the irreversible removal independent of any database read.
-
-**It is also the one condition BOTH full-page states carry inside their own content** — the version error and the
-pending RetroDECK migration; the data-location pair above reaches only the second of the two. That is not a card stacked
-on top of them — each renders it below the explanation it exists to give, after its own actions where it has any, and
-Main's two early returns are unchanged: the page is still replaced. What earns the exception is the path this warning
-exists for — the user updates across the folder rename, opens a Tender whose library looks empty, enters a server below
-the minimum, and is told the plugin cannot work, which is when they tidy the older plugin out of Decky while every one
-of their games is still launching through it. What earns a place on BOTH is an irreversible action the user is most
-likely to take _because_ the plugin looks broken; a condition the user cannot even see until they have finished
-something else earns the migration page alone. Of the two, the version-error card is also what the game detail page
-shows for the same condition — out of scope here — so the warning reaches that page too. The condition itself lives in
-`LegacyInstallNotice` and not at the three call sites, which would drift apart. See
-[Updating from a release before 0.31.0](../user-guide/getting-started.md#updating-from-a-release-before-0310) for what
-the user is being told.
+Three of the six conditions above carry no Dismiss anywhere — RetroDECK paths, the `input_driver` fix and the session
+budget — so the absence is ordinary.
 
 ## Main
 

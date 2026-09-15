@@ -21,7 +21,6 @@ from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolver
 from services.artwork import ArtworkService, ArtworkServiceConfig
 from services.connection import ConnectionService, ConnectionServiceConfig
 from services.cores import CoreService, CoreServiceConfig
-from services.data_location import DataLocationService, DataLocationServiceConfig
 from services.disc import DiscService, DiscServiceConfig
 from services.disc_launch_resolver import DiscLaunchResolver, DiscLaunchResolverConfig
 from services.downloads import DownloadService, DownloadServiceConfig
@@ -29,7 +28,6 @@ from services.firmware import FirmwareService, FirmwareServiceConfig
 from services.game_detail import GameDetailService, GameDetailServiceConfig
 from services.game_process import GameProcessService, GameProcessServiceConfig
 from services.launch_gate import LaunchGateService, LaunchGateServiceConfig
-from services.legacy_install import LegacyInstallService, LegacyInstallServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
 from services.metadata import MetadataService, MetadataServiceConfig
 from services.migration import MigrationService, MigrationServiceConfig
@@ -48,14 +46,12 @@ from services.startup_healing import StartupHealingService, StartupHealingServic
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
 from services.version_switch import VersionSwitchService, VersionSwitchServiceConfig
 
-from .adapters import DB_FILENAME
-
 if TYPE_CHECKING:
     from typing import Any
 
-    from models.data_location import UserDataLocations
     from models.shortcut_launcher import ShortcutLauncher
 
+    from domain.app_directories import AppDirectories
     from services.protocols import InstalledRomRemoverFn, SiblingSupersedeFn
 
     from .adapters import AdapterBundle, CallbackBundle, RuntimeBundle, StateBundle
@@ -67,14 +63,13 @@ class WiringConfig:
 
     Four bundles carry the wiring; ``min_required_version`` sits at the
     top level — it's plugin metadata, not a runtime seam, and only
-    ConnectionService consumes it. ``locations`` sits beside it for the
-    same reason: it is what the start-up migration settled, not a seam
-    anything calls, and it is the ONLY place the user's data directory
-    is read from — ``runtime.runtime_dir`` is Decky's own directory and
-    answers a different question. ``launcher`` sits beside it for the
-    same reason: it says where the launcher a Steam shortcut runs
-    through lives, and whether this start got it there. Its path is the
-    data directory's only where this start actually put the launcher
+    ConnectionService consumes it. ``directories`` sits beside it for the
+    same reason: it is where this program's directories are, resolved
+    from the environment by the entry point rather than derived, and it
+    is the ONLY place any of them is read from. ``launcher`` sits beside
+    it for the same reason: it says where the launcher a Steam shortcut
+    runs through lives, and whether this start got it there. Its path is
+    the data directory's only where this start actually put the launcher
     under it — otherwise it is the copy the release ships.
     """
 
@@ -83,7 +78,7 @@ class WiringConfig:
     runtime: RuntimeBundle
     callbacks: CallbackBundle
     min_required_version: tuple[int, ...]
-    locations: UserDataLocations
+    directories: AppDirectories
     launcher: ShortcutLauncher
 
 
@@ -218,7 +213,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         log_debug=cfg.callbacks.log_debug,
         get_core_name=cfg.callbacks.get_core_name,
         plugin_metadata=cfg.callbacks.plugin_metadata,
-        plugin_dir=cfg.runtime.plugin_dir,
+        plugin_dir=cfg.directories.code_dir,
         emit=cfg.runtime.emit,
         # StatusService reports the live layout so the SAVES tab can warn when
         # saves go to the content dir (#239).
@@ -257,7 +252,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
             romm_api=cfg.adapters.romm_api,
             steam_config=cfg.adapters.steam_config,
             cover_art_file_store=cfg.adapters.cover_art_file_store,
-            cover_cache_dir=os.path.join(cfg.locations.data_dir, "covers"),
+            cover_cache_dir=os.path.join(cfg.directories.cache_dir, "covers"),
             loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
             get_pending_sync=pending_sync_binding.get,
@@ -282,7 +277,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
             settings=cfg.stores.settings,
             loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
-            plugin_dir=cfg.runtime.plugin_dir,
+            plugin_dir=cfg.directories.code_dir,
             launcher_exe=cfg.launcher.path,
             emit=cfg.runtime.emit,
             clock=cfg.runtime.clock,
@@ -494,31 +489,6 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         ),
     )
 
-    data_location_service = DataLocationService(
-        config=DataLocationServiceConfig(
-            locations=cfg.locations,
-            store=cfg.adapters.data_location_store,
-            loop=cfg.runtime.loop,
-            logger=cfg.runtime.logger,
-        ),
-    )
-
-    # Asks about Decky's own layout, so it is handed Decky's own directories —
-    # the data root the migration may have moved everything to is a directory
-    # Decky never created, and this probe would answer about nothing.
-    legacy_install_service = LegacyInstallService(
-        config=LegacyInstallServiceConfig(
-            plugin_dir=cfg.runtime.plugin_dir,
-            runtime_dir=cfg.runtime.runtime_dir,
-            db_filename=DB_FILENAME,
-            path_exists=cfg.adapters.path_probe,
-            resolve_path=cfg.adapters.resolve_path,
-            settings=cfg.stores.settings,
-            settings_persister=cfg.callbacks.settings_persister,
-            logger=cfg.runtime.logger,
-        ),
-    )
-
     shortcut_relocation_service = ShortcutRelocationService(
         config=ShortcutRelocationServiceConfig(
             launcher_exe=cfg.launcher.path,
@@ -634,9 +604,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         "version_switch_service": version_switch_service,
         "connection_service": connection_service,
         "startup_healing_service": startup_healing_service,
-        "legacy_install_service": legacy_install_service,
         "shortcut_relocation_service": shortcut_relocation_service,
-        "data_location_service": data_location_service,
         "launch_gate_service": launch_gate_service,
         "session_lifecycle_service": session_lifecycle_service,
         "game_process_service": game_process_service,

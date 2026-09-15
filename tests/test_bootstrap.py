@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import pathlib
+from dataclasses import replace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -38,7 +39,6 @@ from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_sgdb_artwork_cache import FakeSgdbArtworkCache
 from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
-from models.data_location import UserDataLocations
 from models.shortcut_launcher import ShortcutLauncher
 
 from adapters.gavel_native import GavelNativeAdapter
@@ -46,8 +46,8 @@ from adapters.retrodeck_paths import RetroDeckPathsAdapter
 from adapters.romm.http import RommHttpAdapter
 from adapters.romm.romm_api import RommApiAdapter
 from adapters.steam_config import SteamConfigAdapter
+from domain.app_directories import AppDirectories
 from domain.save_layout import InSaveDir
-from domain.user_data_location import config_root
 from services.achievements import AchievementsService
 from services.cores import CoreService
 from services.disc import DiscService
@@ -65,11 +65,21 @@ from services.version_switch import VersionSwitchService
 _GAVEL = GavelNativeAdapter()
 
 
+def _directories_at(tmp_path) -> AppDirectories:
+    """The six directories a run is told about, all under ``tmp_path``."""
+    return AppDirectories(
+        config_dir=str(tmp_path / "config"),
+        data_dir=str(tmp_path / "data"),
+        cache_dir=str(tmp_path / "cache"),
+        state_dir=str(tmp_path / "state"),
+        runtime_dir=str(tmp_path / "run"),
+        code_dir=str(tmp_path / "plugin"),
+    )
+
+
 def _bootstrap_for(tmp_path) -> BootstrapResult:
     return bootstrap(
-        settings_dir=str(tmp_path / "settings"),
-        runtime_dir=str(tmp_path / "runtime"),
-        plugin_dir=str(tmp_path / "plugin"),
+        directories=_directories_at(tmp_path),
         user_home=str(tmp_path / "home"),
         logger=logging.getLogger("test"),
     )
@@ -164,9 +174,7 @@ class TestBootstrap:
         plugin_dir.mkdir()
         (plugin_dir / "package.json").write_text(json.dumps(payload))
         return bootstrap(
-            settings_dir=str(tmp_path / "settings"),
-            runtime_dir=str(tmp_path / "runtime"),
-            plugin_dir=str(plugin_dir),
+            directories=replace(_directories_at(tmp_path), code_dir=str(plugin_dir)),
             user_home=str(tmp_path / "home"),
             logger=logging.getLogger("test"),
         )
@@ -226,7 +234,7 @@ class TestBootstrapInstallsTheLauncher:
 
     @staticmethod
     def _home(tmp_path) -> pathlib.Path:
-        return tmp_path / "home" / ".local" / "share" / "romm-tender" / "bin" / "rom-launcher"
+        return tmp_path / "data" / "bin" / "rom-launcher"
 
     def test_the_launcher_is_installed_under_the_users_data_root(self, tmp_path):
         content = self._ship(tmp_path)
@@ -237,18 +245,19 @@ class TestBootstrapInstallsTheLauncher:
         assert result.launcher.at_home is True
         assert self._home(tmp_path).read_bytes() == content
 
-    def test_the_launcher_is_not_put_in_deckys_own_directory(self, tmp_path):
-        """``runtime_dir`` answers Decky's layout question and this one is the data root's.
+    def test_the_launcher_is_not_left_beside_the_program(self, tmp_path):
+        """The data root and the code root are two of six strings on one struct.
 
-        Both are plain strings on structs the composition root hands around, so
-        nothing but this pins which of the two the launcher followed.
+        Nothing but this pins which of them the launcher followed, and the whole
+        point of the launcher's home is that a shortcut's ``exe`` must not name a
+        file inside the directory the program itself was installed into.
         """
         self._ship(tmp_path)
 
         result = _bootstrap_for(tmp_path)
 
-        assert str(tmp_path / "runtime") not in result.launcher.path
         assert str(tmp_path / "plugin") not in result.launcher.path
+        assert str(tmp_path / "cache") not in result.launcher.path
 
     def test_a_launcher_the_release_did_not_ship_leaves_the_start_running(self, tmp_path):
         """The one thing that must not happen is the plugin failing to start over it.
@@ -263,126 +272,6 @@ class TestBootstrapInstallsTheLauncher:
         assert result.launcher.path == str(tmp_path / "plugin" / "bin" / "rom-launcher")
 
 
-class TestTheLauncherWaitsForTheDataMigration:
-    """The ordering that keeps the launcher from disarming the data migration.
-
-    ``UserDataMigrationAdapter._probe_root`` reads a target root holding ANY
-    entry as already migrated, so a launcher written into an empty data root
-    would settle that rung for the life of the install and the user's library
-    would never come across — silently. Every case here is about the start where
-    the data half has NOT landed.
-    """
-
-    @staticmethod
-    def _ship(tmp_path) -> None:
-        shipped = tmp_path / "plugin" / "bin" / "rom-launcher"
-        shipped.parent.mkdir(parents=True, exist_ok=True)
-        shipped.write_bytes(b'#!/bin/bash\nexec "$@"\n')
-        shipped.chmod(0o755)
-
-    @staticmethod
-    def _block_the_data_half(tmp_path) -> pathlib.Path:
-        """Make the data root unfillable, so the migration leaves that half behind.
-
-        The parent is read-only, so the staging directory beside the root cannot
-        be created and the copy reports a failure — the half keeps reading and
-        writing Decky's own directory, which is the state this is all about.
-        """
-        share = tmp_path / "home" / ".local" / "share"
-        share.mkdir(parents=True)
-        share.chmod(0o500)
-        return share
-
-    def test_nothing_is_installed_while_the_data_half_is_outstanding(self, tmp_path):
-        self._ship(tmp_path)
-        share = self._block_the_data_half(tmp_path)
-        try:
-            result = _bootstrap_for(tmp_path)
-        finally:
-            share.chmod(0o700)
-
-        assert result.launcher.at_home is False
-
-    def test_the_data_root_is_not_created_by_the_launcher(self, tmp_path):
-        """The whole safety property: an entry in that root reads as a finished move."""
-        self._ship(tmp_path)
-        share = self._block_the_data_half(tmp_path)
-        try:
-            _bootstrap_for(tmp_path)
-        finally:
-            share.chmod(0o700)
-
-        assert not (tmp_path / "home" / ".local" / "share" / "romm-tender").exists()
-
-    def test_new_shortcuts_still_name_a_launcher_that_exists(self, tmp_path):
-        """Not the dead path under Decky's directory: the copy the release ships.
-
-        A sync can run in this state, and a shortcut built against a path nothing
-        put a file at cannot start its game.
-        """
-        self._ship(tmp_path)
-        share = self._block_the_data_half(tmp_path)
-        try:
-            result = _bootstrap_for(tmp_path)
-        finally:
-            share.chmod(0o700)
-
-        assert result.launcher.path == str(tmp_path / "plugin" / "bin" / "rom-launcher")
-        assert pathlib.Path(result.launcher.path).is_file()
-
-    def test_a_later_start_installs_it_once_the_half_has_landed(self, tmp_path):
-        """The condition is retried, not settled — nothing about it is one-shot."""
-        self._ship(tmp_path)
-        share = self._block_the_data_half(tmp_path)
-        try:
-            _bootstrap_for(tmp_path)
-        finally:
-            share.chmod(0o700)
-
-        result = _bootstrap_for(tmp_path)
-
-        assert result.launcher.at_home is True
-        assert (tmp_path / "home" / ".local" / "share" / "romm-tender" / "bin" / "rom-launcher").is_file()
-
-    def test_a_launcher_that_cannot_be_written_leaves_the_start_running(self, tmp_path):
-        """The database is fatal to a start; the launcher is not, and says so instead.
-
-        The data root itself IS there — the migration filled it — so the failure
-        is the write, not the ordering the class above is about.
-        """
-        self._ship(tmp_path)
-        blocked = tmp_path / "home" / ".local" / "share" / "romm-tender" / "bin"
-        blocked.mkdir(parents=True)
-        blocked.chmod(0o500)
-        try:
-            result = _bootstrap_for(tmp_path)
-        finally:
-            blocked.chmod(0o700)
-
-        assert result.launcher.at_home is False
-        assert result.adapters.romm_api is not None
-
-    def test_a_failed_write_does_not_leave_new_shortcuts_naming_the_home(self, tmp_path):
-        """The path follows the INSTALL, not the migration.
-
-        A settled start whose write failed has an empty home, and a shortcut
-        built against it would name a file that is not there — for the whole
-        library, since every shortcut this run writes takes the same path.
-        """
-        self._ship(tmp_path)
-        blocked = tmp_path / "home" / ".local" / "share" / "romm-tender" / "bin"
-        blocked.mkdir(parents=True)
-        blocked.chmod(0o500)
-        try:
-            result = _bootstrap_for(tmp_path)
-        finally:
-            blocked.chmod(0o700)
-
-        assert result.launcher.path == str(tmp_path / "plugin" / "bin" / "rom-launcher")
-        assert pathlib.Path(result.launcher.path).is_file()
-        assert not (tmp_path / "home" / ".local" / "share" / "romm-tender" / "bin" / "rom-launcher").exists()
-
-
 class TestBootstrapSettingsResetMarker:
     """Bootstrap folds a corrupt-settings reset into the persistent
     ``_settings_reset_notice`` marker so it survives a plugin reload."""
@@ -392,9 +281,9 @@ class TestBootstrapSettingsResetMarker:
         import os
         import pathlib
 
-        # Seeded where bootstrap actually reads: the plugin's own config root
-        # under the user's home, not the directory Decky assigned.
-        settings_dir = pathlib.Path(config_root(str(tmp_path / "home")))
+        # Seeded where bootstrap actually reads: the config directory this run
+        # was TOLD about, which is the only place it looks.
+        settings_dir = pathlib.Path(_directories_at(tmp_path).config_dir)
         settings_dir.mkdir(parents=True, exist_ok=True)
         settings_path = settings_dir / "settings.json"
         settings_path.write_text("NOT VALID JSON {{{")
@@ -450,12 +339,9 @@ class TestWireServices:
             "recovery_store": MagicMock(),
             "prune_artifacts": MagicMock(),
             "steam_recovery": MagicMock(),
-            "data_location_store": MagicMock(),
             "settings": settings,
             "loop": asyncio.new_event_loop(),
             "logger": logger,
-            "plugin_dir": str(tmp_path / "plugin"),
-            "runtime_dir": str(tmp_path / "runtime"),
             "emit": AsyncMock(),
             "clock": FakeClock(),
             "uuid_gen": FakeUuidGen(),
@@ -483,12 +369,7 @@ class TestWireServices:
             "log_debug": MagicMock(),
             "plugin_metadata": FakePluginMetadataReader(version="0.14.0"),
             "uow_factory": FakeUnitOfWorkFactory(),
-            "locations": UserDataLocations(
-                settings_dir=str(tmp_path / "config"),
-                data_dir=str(tmp_path / "data"),
-                choice_required=False,
-                failure=None,
-            ),
+            "directories": _directories_at(tmp_path),
             "launcher": ShortcutLauncher(
                 path=str(tmp_path / "data" / "bin" / "rom-launcher"),
                 at_home=True,
@@ -526,7 +407,6 @@ class TestWireServices:
                 recovery_store=deps["recovery_store"],
                 prune_artifacts=deps["prune_artifacts"],
                 steam_recovery=deps["steam_recovery"],
-                data_location_store=deps["data_location_store"],
             ),
             stores=StateBundle(
                 settings=deps["settings"],
@@ -534,8 +414,6 @@ class TestWireServices:
             runtime=RuntimeBundle(
                 loop=deps["loop"],
                 logger=deps["logger"],
-                plugin_dir=deps["plugin_dir"],
-                runtime_dir=deps["runtime_dir"],
                 emit=deps["emit"],
                 clock=deps["clock"],
                 uuid_gen=deps["uuid_gen"],
@@ -560,7 +438,7 @@ class TestWireServices:
                 uow_factory=deps["uow_factory"],
             ),
             min_required_version=deps["min_required_version"],
-            locations=deps["locations"],
+            directories=deps["directories"],
             launcher=deps["launcher"],
         )
 
@@ -615,7 +493,7 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(result) == 28
+        assert len(result) == 26
         assert "migration_service" in result
         assert "game_detail_service" in result
         assert "rom_removal_service" in result
@@ -629,8 +507,6 @@ class TestWireServices:
         assert isinstance(result["prune_service"], PruneService)
         assert "connection_service" in result
         assert "startup_healing_service" in result
-        assert "legacy_install_service" in result
-        assert "data_location_service" in result
         assert "launch_gate_service" in result
         assert "session_lifecycle_service" in result
         assert "game_process_service" in result

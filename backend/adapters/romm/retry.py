@@ -39,7 +39,7 @@ class RetryLadder:
     Parameters
     ----------
     logger:
-        Logger instance (replaces ``decky.logger``).
+        Logger instance, injected rather than fetched.
     on_retry:
         Optional :data:`RetryListener` invoked once per retry (before the
         backoff sleep) so the UI can surface "connecting… (attempt N/M)". A

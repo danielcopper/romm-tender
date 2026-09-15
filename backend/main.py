@@ -4,17 +4,36 @@ import sys
 from dataclasses import asdict
 from typing import Any, Protocol, cast
 
-backend_dir = os.path.dirname(__file__)
+backend_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, backend_dir)
 
-import decky
+# Where the program sits, used only when nothing in the environment says. The
+# installed case always says — the installer resolves the directories once and
+# writes them into the unit — so this answers for a start by hand from a
+# checkout, where the manifest and the shipped launcher sit one level up.
+_CODE_DIR_FALLBACK = os.path.dirname(backend_dir)
+
 from bootstrap import (
     RuntimeBundle,
     WiringConfig,
     bootstrap,
     wire_services,
 )
+from bootstrap.startup import StartupSteps
 
+from domain.app_directories import resolve_directories
+from host import (
+    LOCK_FILENAME,
+    PORT_FILENAME,
+    AlreadyRunningError,
+    BackendBuild,
+    CallDispatcher,
+    EventSink,
+    HostStatus,
+    configure_logging,
+    new_token,
+    run_backend,
+)
 from lib.migration_gate import migration_blocked
 from lib.prune_gate import (
     acquire_prune_conflict_lease,
@@ -43,21 +62,6 @@ class PluginEventSink(Protocol):
     async def emit(self, name: str, /, *args: Any) -> bool: ...
 
 
-class _LoaderEventSink:
-    """The plugin loader's bridge, wearing the sink's shape.
-
-    Answers ``True`` unconditionally, because the bridge reports no delivery at
-    all: "nobody heard this" is a statement this transport cannot make, and
-    inventing it would release a prune claim while the panel is still holding
-    Steam work for it. The host's own sink answers honestly, which is the whole
-    reason this is a seam.
-    """
-
-    async def emit(self, name: str, /, *args: Any) -> bool:
-        await decky.emit(name, *args)
-        return True
-
-
 class Plugin:
     settings: dict[str, Any]
     loop: asyncio.AbstractEventLoop
@@ -76,6 +80,9 @@ class Plugin:
     # defaulted so a bare ``Plugin()`` that emits without setting one raises
     # instead of dropping every event into a no-op nobody would notice.
     _event_sink: PluginEventSink
+    # What the process hosting this backend knows about its own run. Set by the
+    # entry point once the build is through, for the one callable that reads it.
+    _host_status: HostStatus
     _http_adapter: Any
     _romm_api: Any
     _steam_config: Any
@@ -145,25 +152,29 @@ class Plugin:
         if lease_token is not None and not delivered:
             await release_prune_gate_lease(self, lease_token)
 
-    async def _main(self):  # Decky lifecycle — must be async
+    async def _main(self, *, directories, user_home, logger, events, status):
+        """Bring the backend up: adapters, services, then the start-up repairs.
+
+        Everything here must be through before the port is bound, which is what
+        makes the port file mean "ready". The one start-up step that talks to the
+        network is deliberately not here — see :meth:`_open_network`.
+        """
         self.loop = asyncio.get_running_loop()
         # Before anything can emit: the start-up routines below already send two
         # events, and wiring passes the funnel to every service.
-        self._event_sink = _LoaderEventSink()
+        self._event_sink = events
 
         # ── 1. Wire adapters ────────────────────────────────────────────────
         # Bootstrap loads + migrates settings as part of adapter construction
         # so RommHttpAdapter binds the live, migrated dict in one pass.
         result = bootstrap(
-            settings_dir=decky.DECKY_PLUGIN_SETTINGS_DIR,
-            runtime_dir=decky.DECKY_PLUGIN_RUNTIME_DIR,
-            plugin_dir=decky.DECKY_PLUGIN_DIR,
-            user_home=decky.DECKY_USER_HOME,
-            logger=decky.logger,
+            directories=directories,
+            user_home=user_home,
+            logger=logger,
         )
         self.settings = result.stores.settings
         self._debug_logger = result.handles.debug_logger
-        self._prune_gate_logger = decky.logger
+        self._prune_gate_logger = logger
         # Persistence adapter — held directly for the disk-touching callable
         # paths that read/write settings without routing through a service.
         self._persistence = result.handles.persistence
@@ -179,9 +190,7 @@ class Plugin:
                 stores=result.stores,
                 runtime=RuntimeBundle(
                     loop=self.loop,
-                    logger=decky.logger,
-                    plugin_dir=decky.DECKY_PLUGIN_DIR,
-                    runtime_dir=decky.DECKY_PLUGIN_RUNTIME_DIR,
+                    logger=logger,
                     emit=self._emit_with_prune_continuation,
                     clock=result.runtime_adapters.clock,
                     uuid_gen=result.runtime_adapters.uuid_gen,
@@ -191,7 +200,7 @@ class Plugin:
                 ),
                 callbacks=result.callbacks,
                 min_required_version=self._MIN_REQUIRED_VERSION,
-                locations=result.locations,
+                directories=directories,
                 launcher=result.launcher,
             )
         )
@@ -216,45 +225,53 @@ class Plugin:
         self._prune_service = services["prune_service"]
         self._connection_service = services["connection_service"]
         self._startup_healing_service = services["startup_healing_service"]
-        self._legacy_install_service = services["legacy_install_service"]
         self._shortcut_relocation_service = services["shortcut_relocation_service"]
-        self._data_location_service = services["data_location_service"]
         self._launch_gate_service = services["launch_gate_service"]
         self._session_lifecycle_service = services["session_lifecycle_service"]
         self._game_process_service = services["game_process_service"]
         self._relaunch_options_resolver = services["relaunch_options_resolver"]
 
-        # ── 4b. Legacy credential migration ─────────────────────────────────
-        # Upgrade a stored-password install to a Client API Token. The
-        # method swallows every failure (plugin stays inert, no Basic-auth
-        # fallback), so a mint failure here never blocks startup.
-        await self._connection_service.migrate_legacy_credentials()
-
-        # ── 5. Startup healing ──────────────────────────────────────────────
-        # Detect retrodeck path changes BEFORE pruning so the prune can skip
-        # entries living under a pending migration's previous home.
-        self._migration_service.detect_retrodeck_path_change()
-        self._startup_healing_service.prune_stale_installed_roms()
-        self._startup_healing_service.reconcile_orphaned_sync_runs()
+        # ── 5. Startup repairs ──────────────────────────────────────────────
+        # Each runs through the reporting wrapper: these are repairs, not
+        # prerequisites, and six of the nine catch nothing themselves — hosted,
+        # one raising would end the process and a restart policy would loop.
+        steps = StartupSteps(logger, status.record_failed_step)
+        # The prune may run only after a SUCCESSFUL detection: it reads the
+        # pending homes the detection writes, and without them it takes every
+        # install under the home RetroDECK just left for orphaned.
+        if steps.run("detect_retrodeck_path_change", self._migration_service.detect_retrodeck_path_change):
+            steps.run("prune_stale_installed_roms", self._startup_healing_service.prune_stale_installed_roms)
+        steps.run("reconcile_orphaned_sync_runs", self._startup_healing_service.reconcile_orphaned_sync_runs)
         # No save-sync orphan prune: roms rows are permanent identity anchors
         # and saves/playtime survive a ROM leaving RomM (ADR-0007).
-        self._sgdb_service.prune_orphaned_artwork_cache()
-        self._artwork_service.prune_orphaned_staging_artwork()
-        self._artwork_service.prune_orphaned_cover_cache()
-        self._download_service.cleanup_leftover_tmp_files()
+        steps.run("prune_orphaned_artwork_cache", self._sgdb_service.prune_orphaned_artwork_cache)
+        steps.run("prune_orphaned_staging_artwork", self._artwork_service.prune_orphaned_staging_artwork)
+        steps.run("prune_orphaned_cover_cache", self._artwork_service.prune_orphaned_cover_cache)
+        steps.run("cleanup_leftover_tmp_files", self._download_service.cleanup_leftover_tmp_files)
 
         # ── 6. Background tasks ─────────────────────────────────────────────
-        self._migration_service.detect_save_sort_change()
-        decky.logger.info("Tender pluginloaded")
+        steps.run("detect_save_sort_change", self._migration_service.detect_save_sort_change)
+        logger.info("Tender backend loaded")
+        return result.user_agent
 
-    async def _unload(self):  # Decky lifecycle — must be async
+    async def _open_network(self):
+        """The one start-up step that makes a network request.
+
+        Runs after the port is announced, so an unreachable or slow RomM costs
+        the panel nothing: readiness is not held hostage to a server this backend
+        does not control. Upgrades a stored-password install to a Client API
+        Token; the method swallows every failure, so a mint failure never blocks
+        anything.
+        """
+        await self._connection_service.migrate_legacy_credentials()
+
+    async def _unload(self):
         self._sync_service.shutdown()
         await self._prune_service.shutdown()
         await self._download_service.shutdown()
         await self._migration_service.shutdown()
         await self._session_lifecycle_service.shutdown()
         await self._cancel_playtime_flush_tasks()
-        decky.logger.info("Tender pluginunloaded")
 
     async def _cancel_playtime_flush_tasks(self):
         """Cancel and await any in-flight play-session flush tasks on unload.
@@ -1051,29 +1068,6 @@ class Plugin:
         """
         return self._settings_service.dismiss_settings_reset_notice()
 
-    async def get_legacy_install_notice(self):
-        """Report the pre-rename install still sitting beside this one.
-
-        Returns ``{"pending": bool, "legacy_data_present": bool, "dismissed": bool}``.
-        ``pending`` means the plugin folder releases used before 0.31.0 is on disk and is not
-        the one this plugin runs from — a shortcut launches through a launcher
-        inside the folder it was written from, so the frontend warns against
-        removing it.
-        ``legacy_data_present`` means that older install still has a database;
-        the panel pairs it with the ROM count it already reads to decide whether
-        to add "this version starts empty". False whenever ``pending`` is.
-        ``dismissed`` is the user's own answer to the card's removable statement,
-        the only persisted part of this: they have chosen to keep the older
-        install and the panel stops offering to be rid of it.
-
-        Two directory questions and nothing else — no database of ours is opened,
-        so the warning cannot be taken down by a library read, and a path error
-        while answering the narrower one degrades it to False rather than
-        failing the call. Computed live on every call and persisted nowhere: the
-        condition ends when the folder does, and a marker would outlive it.
-        """
-        return self._legacy_install_service.get_legacy_install_notice()
-
     async def get_shortcut_relocation(self):
         """Report which Steam shortcuts still have to be pointed at the launcher.
 
@@ -1094,49 +1088,91 @@ class Plugin:
         """
         return await self._shortcut_relocation_service.get_shortcut_relocation()
 
-    async def dismiss_legacy_install_notice(self):
-        """Acknowledge the pre-rename install for good, keeping its card down.
+    async def get_host_status(self):
+        """Report what only the process hosting this backend knows about its own run.
 
-        The user's explicit answer to the one statement that card makes which
-        they are free to ignore — that the older install can now be removed.
-        Persisted as user intent, so it survives restarts; the card is still
-        shown while the shortcuts point into that install, because nothing about
-        that statement is optional. Returns ``{"success": True}``.
+        Returns ``{"port": int, "failed_startup_steps": [str],
+        "dropped_messages": int}``.
+
+        Both counts exist because the alternative is a fault that lives only in a
+        log file. A start-up repair that fails on every start would otherwise be
+        noticed by nobody who did not go looking, and a panel and backend that
+        disagree about the protocol would show as nothing at all — the messages
+        are dropped and the connection is deliberately kept. Neither is worth an
+        event: an event is a statement about a moment, and both of these are
+        states, read when the panel opens.
         """
-        return self._legacy_install_service.dismiss_legacy_install_notice()
+        return {
+            "port": self._host_status.port,
+            "failed_startup_steps": list(self._host_status.failed_startup_steps),
+            "dropped_messages": self._host_status.count_dropped_messages(),
+        }
 
-    async def get_data_location_notice(self):
-        """Report what this start's data-location migration left standing.
+    @classmethod
+    def run(cls) -> int:
+        """Run the backend as a process of its own, until it is asked to stop.
 
-        Returns ``{"pending": bool, "kind": str | None, "message": str | None}``.
-        ``kind`` is ``"choice"`` where two older installs both hold a library, so
-        the plugin declined to pick and is still running from the directories
-        Decky assigned it; ``"failed"`` where a copy was attempted and did not
-        finish, with ``message`` saying what went wrong. Both stand until a start
-        completes the move — neither is dismissible, because neither ends by
-        being acknowledged.
+        The whole composition, in the order the host needs it: resolve where the
+        directories are, mint the admission token, configure logging around it, then
+        hand the host a build that wires everything and a plugin to dispatch onto.
+
+        Synchronous on purpose. Everything here is path and environment work that
+        belongs before a loop exists — and the token has to be minted before the
+        first log line, because the filter that keeps it out of the log file is
+        installed with the file handler.
+
+        Answers 0 for a clean stop, 1 when another backend already holds the lock.
         """
-        return self._data_location_service.get_data_location_notice()
+        user_home = os.path.expanduser("~")
+        directories = resolve_directories(os.environ, user_home, _CODE_DIR_FALLBACK)
+        token = new_token()
+        logger = configure_logging(directories.state_dir, token)
+        logger.info(f"host: code {directories.code_dir}, data {directories.data_dir}, cache {directories.cache_dir}")
 
-    async def get_data_location_candidates(self):
-        """Describe the older data locations the user is choosing between.
+        status = HostStatus()
+        events = EventSink(logger)
+        plugin = cls()
 
-        Returns ``{"candidates": [...]}``, one entry per older location the
-        plugin knows about — folder name, path, whether it is on disk, size in
-        bytes and when it last changed. A location that has gone is listed
-        saying so rather than dropped, because a choice shown with one option is
-        not the question that was asked. Read on demand rather than at startup:
-        measuring a location is a walk of every file in it.
-        """
-        return await self._data_location_service.get_data_location_candidates()
+        async def build() -> BackendBuild:
+            user_agent = await plugin._main(
+                directories=directories,
+                user_home=user_home,
+                logger=logger,
+                events=events,
+                status=status,
+            )
+            plugin._host_status = status
+            return BackendBuild(dispatcher=CallDispatcher(plugin, logger), server_identity=user_agent)
 
-    async def choose_data_location(self, source):
-        """Record which older data location the next start copies from.
+        try:
+            asyncio.run(
+                run_backend(
+                    build=build,
+                    after_bind=plugin._open_network,
+                    shutdown=plugin._unload,
+                    events=events,
+                    status=status,
+                    # Handed in, never searched for: a host that looked for its own
+                    # build output relative to ``__file__`` would be the only part of
+                    # this backend that knew the repository's layout.
+                    static_root=os.path.join(directories.code_dir, "dist"),
+                    # The lock lies beside what it protects, which is the database.
+                    lock_path=os.path.join(directories.data_dir, LOCK_FILENAME),
+                    port_file_path=os.path.join(directories.runtime_dir, PORT_FILENAME),
+                    logger=logger,
+                    token=token,
+                )
+            )
+        except AlreadyRunningError as exc:
+            print(f"tender: {exc}", file=sys.stderr)
+            return 1
+        return 0
 
-        Returns ``{"success": True}``. The copy is not performed here: this
-        plugin is running from one of the candidates with its database open, and
-        copying a live SQLite file risks a torn copy — so the answer is recorded
-        and the plugin's next start acts on it, which is why the panel offers a
-        device restart rather than reporting the move as done.
-        """
-        return await self._data_location_service.choose_data_location(source)
+
+def main() -> int:
+    """Process entry point."""
+    return Plugin.run()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

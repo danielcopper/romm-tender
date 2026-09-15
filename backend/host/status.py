@@ -15,6 +15,15 @@ statement about a moment, and both of these are states.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+
+def _no_messages_dropped() -> int:
+    """Before a server exists, nothing has been dropped."""
+    return 0
 
 
 @dataclass
@@ -23,6 +32,12 @@ class HostStatus:
 
     port: int = 0
     failed_startup_steps: list[str] = field(default_factory=list)
+
+    # Read rather than stored, because the count goes on changing for as long as
+    # the connection lives: a number copied in here at start-up would answer 0
+    # for the rest of the run, which is exactly the reading this counter exists
+    # to contradict.
+    count_dropped_messages: Callable[[], int] = _no_messages_dropped
 
     def record_failed_step(self, name: str) -> None:
         """Note that the start-up step *name* did not finish."""

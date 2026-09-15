@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from domain.identity import DISPLAY_NAME
-from domain.user_data_location import APP_DIR_NAME, SOURCE_FOLDER_NAMES
+from domain.user_data_location import APP_DIR_NAME
 
 
 class TestTheDisplayName:
@@ -33,18 +33,14 @@ class TestTheDisplayName:
         all, "the plugin's name" twice. Folding them makes one question's answer
         decide another's: the display name is prose a human reads and can be
         rewritten at will, while ``APP_DIR_NAME`` is where the user's library
-        lives and ``SOURCE_FOLDER_NAMES`` is what a migration searches. A
-        rebrand would then move a library, and nothing would fail.
+        lives. A rebrand would then move a library, and nothing would fail.
 
         Both ends are pinned by value elsewhere, so this asserts the seam
-        between them — and only a fold written as an identity, onto
-        ``APP_DIR_NAME`` or into ``SOURCE_FOLDER_NAMES``. Both assertions
-        compare values, so a fold through a transform passes:
-        ``DISPLAY_NAME.lower()``, and
-        ``f"romm-{DISPLAY_NAME.lower()}"``, which reproduces today's value
-        exactly and is for that reason the likeliest of the three to be written.
-        The rule those two need is stated at ``APP_DIR_NAME`` itself, where such
-        a diff would land.
+        between them — and only a fold written as an identity. The assertion
+        compares values, so a fold through a transform passes:
+        ``DISPLAY_NAME.lower()``, and ``f"romm-{DISPLAY_NAME.lower()}"``, which
+        reproduces today's value exactly and is for that reason the likelier of
+        the two to be written. The rule that needs is stated at ``APP_DIR_NAME``
+        itself, where such a diff would land.
         """
         assert DISPLAY_NAME != APP_DIR_NAME
-        assert DISPLAY_NAME not in SOURCE_FOLDER_NAMES

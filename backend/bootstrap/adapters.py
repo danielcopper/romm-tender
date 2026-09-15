@@ -39,7 +39,6 @@ from adapters.machine_id import MachineIdAdapter
 from adapters.migration_file import MigrationFileAdapter
 from adapters.path_probe import PathProbeAdapter, ResolvedPathAdapter
 from adapters.persistence import (
-    SETTINGS_FILENAME,
     PersistenceAdapter,
     PlatformCoreReaderAdapter,
     SettingsPersisterAdapter,
@@ -64,17 +63,15 @@ from adapters.steam_recovery import SteamRecoveryAdapter
 from adapters.steamgriddb import SteamGridDbAdapter
 from adapters.system_clock import SystemClock
 from adapters.system_uuid_gen import SystemUuidGen
-from adapters.user_data_migration import SourceLocation, UserDataMigrationAdapter
 from domain.state_migrations import fold_legacy_save_sync_settings, migrate_settings
-from domain.user_data_location import SOURCE_FOLDER_NAMES, config_root, data_root, launcher_path
+from domain.user_data_location import launcher_path
 
 if TYPE_CHECKING:
     import asyncio
     import logging
     from typing import Any
 
-    from models.data_location import UserDataLocations
-
+    from domain.app_directories import AppDirectories
     from services.protocols import (
         AdoptionMoveStore,
         Clock,
@@ -82,7 +79,6 @@ if TYPE_CHECKING:
         CoreInfoProvider,
         CoreNameProviderFn,
         CoverArtFileStore,
-        DataLocationStore,
         DebugLogger,
         DirectoryFileListerFn,
         DownloadFileStore,
@@ -135,7 +131,6 @@ DB_FILENAME = "romm_sync.db"
 # hands THIS install whichever candidate it is running from — so a start can find
 # the answer before it has decided anything. That directory is also one of the
 # candidates' own, which is why the migration's copy skips this file.
-DATA_LOCATION_ANSWER_FILENAME = "data-location-choice.json"
 
 
 @dataclass(frozen=True)
@@ -168,7 +163,6 @@ class AdapterBundle:
     recovery_store: RecoveryBundleStore
     prune_artifacts: PruneArtifactStore
     steam_recovery: SteamRecoveryStore
-    data_location_store: DataLocationStore
 
 
 @dataclass(frozen=True)
@@ -180,20 +174,16 @@ class StateBundle:
 
 @dataclass(frozen=True)
 class RuntimeBundle:
-    """Process-level runtime infrastructure (event loop, logger, paths, time/UUID/sleep seams)."""
+    """Process-level runtime infrastructure (event loop, logger, event funnel, time/UUID/sleep seams).
+
+    It carries no directory. Where anything lives is ``WiringConfig.directories``
+    and is answered there alone — this bundle used to hold two paths beside it,
+    which is how a question about the plugin loader's own layout came to sit
+    next to a question about the user's data.
+    """
 
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
-    plugin_dir: str
-    # The DECKY-ASSIGNED runtime directory, and nothing else. It is not where
-    # the user's data lives — that is ``WiringConfig.locations.data_dir``, which
-    # a migration may have moved out of Decky's tree entirely. What is asked of
-    # this one is a question about Decky's own layout: whether the folder the
-    # pre-rename release unpacked into still stands beside ours, which is
-    # answered by taking this directory's parent. Point it at the data root and
-    # that probe asks about a directory Decky never created, and the warning it
-    # carries goes quiet without failing.
-    runtime_dir: str
     emit: EventEmitter
     clock: Clock
     uuid_gen: UuidGen
@@ -277,15 +267,18 @@ class BootstrapResult:
     callbacks: CallbackBundle
     runtime_adapters: RuntimeAdaptersBundle
     handles: BootstrapHandles
-    locations: UserDataLocations
+    directories: AppDirectories
     launcher: ShortcutLauncher
+    # ``<package name>/<version>``, from the one read of the manifest that also
+    # produces the outgoing User-Agent. The host answers under it, so a second
+    # read in the entry point would be a second spelling of the program's name,
+    # free to drift from the one every request already carries.
+    user_agent: str
 
 
 def bootstrap(
     *,
-    settings_dir: str,
-    runtime_dir: str,
-    plugin_dir: str,
+    directories: AppDirectories,
     user_home: str,
     logger: logging.Logger,
 ) -> BootstrapResult:
@@ -299,96 +292,49 @@ def bootstrap(
 
     Parameters
     ----------
-    settings_dir:
-        ``decky.DECKY_PLUGIN_SETTINGS_DIR`` — where settings USED to live, and
-        where they still live for a run whose migration could not finish.
-    runtime_dir:
-        ``decky.DECKY_PLUGIN_RUNTIME_DIR`` — the same, for the data half, and
-        the directory a recorded data-location answer waits in.
-    plugin_dir:
-        ``decky.DECKY_PLUGIN_DIR``
+    directories:
+        Where this program's directories ARE — resolved from the environment by
+        the entry point and handed in, never derived here. Bootstrap composing
+        them itself is what used to make packaging decide where a user's library
+        lived.
     user_home:
-        ``decky.DECKY_USER_HOME`` — base for the plugin's own data roots, and
-        for RetroDECK and Steam path lookups.
+        The user's home directory, for RetroDECK and Steam path lookups and for
+        the recovery root.
     logger:
-        ``decky.logger``
+        The configured root logger.
 
     Returns
     -------
     :class:`BootstrapResult`
         Typed bundles consumed by ``wire_services`` (``adapters``,
-        ``stores``, ``callbacks``, ``locations``) plus the small set of
+        ``stores``, ``callbacks``, ``directories``) plus the small set of
         Plugin-only handles ``main.py`` itself binds
         (``handles.debug_logger``).
     """
     # SystemClock is dependency-free; construct it first so the single shared
-    # instance threads into the data-location migration (the date in the note it
-    # leaves behind), PersistenceAdapter (corrupt-settings backup stamp) and
-    # every later seam (uuid_gen/sleeper neighbours, runtime bundle).
+    # instance threads into PersistenceAdapter (corrupt-settings backup stamp)
+    # and every later seam (uuid_gen/sleeper neighbours, runtime bundle).
     clock = SystemClock()
 
-    # Before anything opens a file: bring the user's data to the plugin's own
-    # roots. Decky derives its per-plugin directories from the plugin's folder
-    # name, so the folder rename at 0.31.0 moved every user's data — putting the
-    # roots under the user's home takes that decision away from the packaging.
-    # Each older location's two halves are found by taking the parent of the
-    # directory Decky assigned US and looking for the folder name beside it,
-    # which asserts one layout fact less than composing ``DECKY_HOME`` here.
-    data_home = data_root(user_home)
-    data_location_store = UserDataMigrationAdapter(
-        settings_root=config_root(user_home),
-        data_root=data_home,
-        fallback_settings_dir=settings_dir,
-        fallback_data_dir=runtime_dir,
-        sources=[
-            SourceLocation(
-                name=name,
-                settings_dir=os.path.join(os.path.dirname(settings_dir), name),
-                data_dir=os.path.join(os.path.dirname(runtime_dir), name),
-            )
-            for name in SOURCE_FOLDER_NAMES
-        ],
-        answer_path=os.path.join(runtime_dir, DATA_LOCATION_ANSWER_FILENAME),
-        db_filename=DB_FILENAME,
-        settings_filename=SETTINGS_FILENAME,
-        clock=clock,
-        logger=logger,
-    )
-    locations = data_location_store.migrate()
-
-    # Then the launcher, which is code rather than data and moves for the other
-    # reason: Decky deletes the whole plugin folder before it unpacks an update,
-    # and every shortcut's ``exe`` used to name a file inside it. It is written
-    # on every start rather than once, so the launcher a shortcut runs is always
-    # the one this release ships — a launcher installed once would freeze at
+    # The launcher is code rather than data, and it lives under the data root
+    # rather than beside the program: a shortcut's ``exe`` names it, and that is
+    # the one thing about a shortcut this program cannot repair from inside. It
+    # is written on every start rather than once, so the launcher a shortcut runs
+    # is always the one this release ships — installed once, it would freeze at
     # whatever version the day of the move happened to bring.
     #
-    # IT MUST NOT RUN BEFORE THE DATA HALF HAS LANDED, and the reason is not
-    # tidiness. ``UserDataMigrationAdapter._probe_root`` (adapters/
-    # user_data_migration.py:332-334) reads a target root as already migrated the
-    # moment ``os.scandir`` yields ANY entry, so a launcher written into an empty
-    # data root would settle the migration's first rung for the life of the
-    # install and the user's library would never come across — with no failure,
-    # no notice and nothing in the log. Whether the half landed is read off what
-    # the migration just decided, never by probing the directory a second time.
-    # A start that has not got there installs nothing and creates nothing.
-    #
     # The path a new shortcut is built against follows the INSTALL, not the
-    # migration: it is the home only where this start actually got the launcher
-    # into it, and the copy the release ships otherwise — a start whose write
-    # failed is the second case, and pointing a shortcut at a home the write
-    # never reached would name a file that is not there.
-    data_settled = locations.data_dir == data_home
-    launcher_at_home = (
-        data_settled
-        and LauncherInstallAdapter(
-            source=launcher_path(plugin_dir),
-            destination=launcher_path(locations.data_dir),
-            logger=logger,
-        ).install()
-    )
+    # intent: the data root only where this start actually got the launcher into
+    # it, and the copy the release ships otherwise. A start whose write failed is
+    # the second case, and pointing a shortcut at a home the write never reached
+    # would name a file that is not there.
+    launcher_at_home = LauncherInstallAdapter(
+        source=launcher_path(directories.code_dir),
+        destination=launcher_path(directories.data_dir),
+        logger=logger,
+    ).install()
     launcher = ShortcutLauncher(
-        path=launcher_path(locations.data_dir) if launcher_at_home else launcher_path(plugin_dir),
+        path=launcher_path(directories.data_dir if launcher_at_home else directories.code_dir),
         at_home=launcher_at_home,
     )
 
@@ -398,7 +344,7 @@ def bootstrap(
     # unopenable database is fatal. Log the cause, then re-raise so bootstrap
     # aborts and the plugin stays inert — matching the RomM-minimum-version
     # gate's "inert until the environment is fixed" posture.
-    db_path = os.path.join(locations.data_dir, DB_FILENAME)
+    db_path = os.path.join(directories.data_dir, DB_FILENAME)
     try:
         apply_migrations(db_path, MIGRATIONS_DIR, logger=logger)
     except Exception:
@@ -415,7 +361,7 @@ def bootstrap(
     retroarch_core_info = RetroArchCoreInfoAdapter(user_home=user_home, logger=logger)
     es_find_rules = EsFindRulesAdapter(logger=logger, user_home=user_home)
 
-    persistence = PersistenceAdapter(locations.settings_dir, locations.data_dir, logger, clock=clock)
+    persistence = PersistenceAdapter(directories.config_dir, directories.data_dir, logger, clock=clock)
     settings = persistence.load_settings()
     # One-time JSON→JSON lift (ADR-0003): fold the legacy save-sync knobs +
     # device_name out of save_sync_state.json before the schema bump stamps
@@ -445,25 +391,25 @@ def bootstrap(
     # self-hosted RomM (#249). Both halves come from that one read: a literal
     # name here would be a second spelling of the package, free to drift away
     # from the recovery root built out of the same value below.
-    package_name, plugin_version = plugin_metadata.read_metadata(plugin_dir)
+    package_name, plugin_version = plugin_metadata.read_metadata(directories.code_dir)
     user_agent = f"{package_name}/{plugin_version}"
     recovery_store = RecoveryBundleAdapter(
         user_home=user_home,
         package_name=package_name,
         plugin_version=plugin_version,
     )
-    prune_artifacts = PruneArtifactAdapter(runtime_dir=locations.data_dir)
+    prune_artifacts = PruneArtifactAdapter(runtime_dir=directories.data_dir)
     steam_recovery = SteamRecoveryAdapter(user_home=user_home, logger=logger)
     # Built here rather than beside its peers below because the transport wants
     # it: a bare `logger.debug` never reaches the log the user reads, since
     # nothing sets a level on this logger and `log_level` gates this seam alone.
     debug_logger = SettingsAwareDebugLogger(settings=settings, logger=logger)
-    http_adapter = RommHttpAdapter(settings, plugin_dir, logger, user_agent, log_debug=debug_logger)
+    http_adapter = RommHttpAdapter(settings, directories.code_dir, logger, user_agent, log_debug=debug_logger)
     romm_api = RommApiAdapter(http_adapter)
     steam_config = SteamConfigAdapter(user_home=user_home, logger=logger)
     sgdb_adapter = SteamGridDbAdapter(settings=settings, logger=logger, user_agent=user_agent)
     cover_art_file_store = CoverArtFileStoreAdapter()
-    sgdb_artwork_cache = SgdbArtworkCacheAdapter(runtime_dir=locations.data_dir)
+    sgdb_artwork_cache = SgdbArtworkCacheAdapter(runtime_dir=directories.cache_dir)
     download_file_store = DownloadFileAdapter()
     adoption_move = AdoptionMoveAdapter()
     firmware_file_store = FirmwareFileAdapter()
@@ -545,7 +491,6 @@ def bootstrap(
         recovery_store=recovery_store,
         prune_artifacts=prune_artifacts,
         steam_recovery=steam_recovery,
-        data_location_store=data_location_store,
     )
     stores = StateBundle(
         settings=settings,
@@ -581,6 +526,7 @@ def bootstrap(
         callbacks=callbacks,
         runtime_adapters=runtime_adapters,
         handles=handles,
-        locations=locations,
+        directories=directories,
         launcher=launcher,
+        user_agent=user_agent,
     )

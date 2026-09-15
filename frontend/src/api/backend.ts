@@ -1129,19 +1129,6 @@ export const getSettingsResetNotice = callable<[], { pending: boolean; backed_up
 // persists, so the QAM banner + game-detail cards stay down across reloads.
 export const dismissSettingsResetNotice = callable<[], { success: boolean }>("dismiss_settings_reset_notice");
 
-// The pre-rename install standing beside this one. Releases before 0.31.0 unpack
-// into a `decky-romm-sync` plugin folder and this one does not; a user who
-// updated across that boundary has both, and a shortcut launches through a
-// launcher inside the folder it was written from. `pending` means it is there and is not the
-// folder we run from; `legacy_data_present` means that older install still has a
-// database. Two directory questions and nothing else — whether THIS install has
-// anything to show is `get_sync_stats`'s `roms`, which MainPage already reads and
-// joins with this. Read live, so there is no marker and no dismiss callable.
-export const getLegacyInstallNotice = callable<
-  [],
-  { pending: boolean; legacy_data_present: boolean; dismissed: boolean }
->("get_legacy_install_notice");
-
 /**
  * What the backend says is left of pointing the shortcuts at the launcher.
  *
@@ -1161,47 +1148,24 @@ export type ShortcutRelocation =
 
 export const getShortcutRelocation = callable<[], ShortcutRelocation>("get_shortcut_relocation");
 
-/** Persist the user's answer that they are keeping the pre-rename install. */
-export const dismissLegacyInstallNotice = callable<[], { success: boolean }>("dismiss_legacy_install_notice");
-
-/** What kind of data-location condition the last start left standing. */
-export type DataLocationKind = "choice" | "failed";
-
-export interface DataLocationNotice {
-  pending: boolean;
-  /** `null` exactly when nothing is pending. */
-  kind: DataLocationKind | null;
-  /** What went wrong, on a `failed` condition only. */
-  message: string | null;
+/**
+ * What only the process hosting this backend knows about its own run.
+ *
+ * `failed_startup_steps` names the start-up repairs that did not finish — each
+ * is reported and counted rather than being fatal, so a repair that fails on
+ * every start would otherwise live only in a log file. `dropped_messages`
+ * counts protocol messages the backend could not act on; it keeps the
+ * connection rather than closing it, so a panel and backend that disagree about
+ * the wire would otherwise show as nothing at all. Both are states, read when
+ * the panel opens, which is why neither is an event.
+ */
+export interface HostStatus {
+  port: number;
+  failed_startup_steps: string[];
+  dropped_messages: number;
 }
 
-export interface DataLocationCandidate {
-  /** The folder name the older location sits under, and the value a choice names. */
-  source: string;
-  path: string;
-  /** Whether the folder is on disk at all. A location that has gone is still listed. */
-  present: boolean;
-  /** `null` when the reading could not be completed — never an approximation. */
-  size_bytes: number | null;
-  /** ISO-8601, `null` alongside an unmeasurable size or an absent folder. */
-  changed_at: string | null;
-}
-
-export interface DataLocationCandidates {
-  candidates: DataLocationCandidate[];
-}
-
-// Where the plugin's own data lives. `get_data_location_notice` reports what the
-// start-up migration left standing — two older installs it declined to pick
-// between, or a copy that did not finish — and is read live off what that start
-// decided, so there is no dismiss callable: neither condition ends by being
-// acknowledged. The candidates are a separate read because measuring a location
-// walks every file in it, and only the modal ever needs the numbers; it carries
-// no failure shape because every partial answer is stated on the entry it is
-// about rather than collapsing the whole list.
-export const getDataLocationNotice = callable<[], DataLocationNotice>("get_data_location_notice");
-export const getDataLocationCandidates = callable<[], DataLocationCandidates>("get_data_location_candidates");
-export const chooseDataLocation = callable<[string], { success: true } | CallableFailure>("choose_data_location");
+export const getHostStatus = callable<[], HostStatus>("get_host_status");
 
 // Durable "re-sign-in for cross-device playtime" notice. The backend persists a
 // flag when a playtime reconcile is rejected because the Client API Token lacks

@@ -85,7 +85,7 @@ def _make_grid_resolvable(harness) -> None:
 
 
 def _cache_file(harness):
-    return pathlib.Path(harness.data_dir) / "covers" / "10.png"
+    return pathlib.Path(harness.cache_dir) / "covers" / "10.png"
 
 
 def _apply_unit_events(harness):

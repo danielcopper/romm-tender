@@ -1,9 +1,14 @@
-# Tender — Decky Loader Plugin
+# Tender — RomM library into Steam
 
 ## What This Is
 
-A Decky Loader plugin that syncs a self-hosted RomM library into Steam as Non-Steam shortcuts. Games launch via
-RetroDECK. The QAM panel handles settings, sync, downloads, and BIOS management.
+Syncs a self-hosted RomM library into Steam as Non-Steam shortcuts. Games launch via RetroDECK. The QAM panel handles
+settings, sync, downloads, and BIOS management.
+
+The backend runs as **its own process** and hosts the panel itself over a loopback port
+([ADR-0036](docs/adr/0036-the-backend-hosts-itself.md)); it was a Decky Loader plugin up to 0.33. Nothing reaches that
+server yet — the injector, the frontend transport and the installer are separate cuts — and `mise run deploy` still
+stages the old plugin layout, which no longer produces a loadable plugin.
 
 ## What belongs in this file
 
@@ -248,27 +253,21 @@ Format: **invariant** — tier — enforced by.
 - **Every backend `emit` event name has a frontend listener, and vice versa** — check — `scripts/check_event_parity.py`
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
   `scripts/check_settings_owner.py`
-- **Where the user's data lives is read only from `WiringConfig.locations`; `RuntimeBundle.runtime_dir` is the
-  Decky-assigned directory and answers Decky's own layout question, nothing else** — prompt-only — the two are different
-  questions and each half of the mix-up is silent. Six call sites read the data root, all in `bootstrap/`: the `db_path`
-  the schema runner and the UoW factory open, `PersistenceAdapter`'s two arguments, `PruneArtifactAdapter`,
-  `SgdbArtworkCacheAdapter`, `services.py`'s `cover_cache_dir`, and the launcher's home
-  (`launcher_path(locations.data_dir)`, carried on as `ShortcutLauncher.path` and baked into every shortcut's `exe`) —
-  the one whose mix-up would be visible to the user rather than only to the next start, since a shortcut's `exe` names a
-  directory Decky renames. That sixth site is also **ordered against the migration rather than merely reading its
-  answer**: the launcher is installed only where `locations.data_dir` IS the new root, because the migration reads a
-  target root holding anything at all as already migrated (`adapters/user_data_migration.py::_probe_root`), so writing a
-  launcher into an empty data root would settle that rung for the life of the install and strand the user's library —
-  with no failure, no notice and nothing in the log. Nothing mechanical holds that ordering either; it is stated at the
-  call in `bootstrap/adapters.py`. One reads `runtime_dir`: `LegacyInstallService`, which asks whether the pre-rename
-  plugin folder still stands beside ours by taking that directory's PARENT. Hand it `locations.data_dir` and it computes
-  `~/.local/share/decky-romm-sync`, a directory Decky never created — the card's second sentence goes quiet and nothing
-  fails, which is exactly the card that keeps a user from removing the install their every shortcut launches through.
-  The other direction is worse and equally quiet: a new consumer of the data root reaching for `runtime_dir` writes into
-  Decky's tree, where the next release's folder name moves it. Nothing mechanical tells the two apart — both are plain
-  `str` fields on structs the composition root hands around
-- **The identifier's four homes are never derived from one another — in particular `APP_DIR_NAME`
-  (`domain/user_data_location.py`) is never read from `package.json`** — prompt-only — the four homes and the question
+- **Where this program's directories are is resolved once from the environment and read only from
+  `WiringConfig.directories`** — prompt-only — `domain/app_directories.py` is the ladder (`TENDER_*`, then XDG, then the
+  built-in defaults) and it is pure: the environment is handed in, so every rung is checkable against a table. The entry
+  point resolves it once and hands it to `bootstrap()`, which derives nothing. `RuntimeBundle` carries **no** directory
+  at all, which is the shape that matters: it used to carry two, and a question about a plugin loader's own layout sat
+  beside a question about the user's data as two plain `str` fields on structs the composition root hands around. Both
+  of those consumers are gone with the loader. Seven call sites read a directory today, all in `bootstrap/`: the
+  `db_path` the schema runner and the UoW factory open, `PersistenceAdapter`'s two arguments (config and data),
+  `PruneArtifactAdapter`, `SgdbArtworkCacheAdapter` and `services.py`'s `cover_cache_dir` — those last two on the
+  **cache** root, because artwork and covers are re-derivable from the server and the database is not — and the
+  launcher's home (`launcher_path(directories.data_dir)`, carried on as `ShortcutLauncher.path` and baked into every
+  shortcut's `exe`), the one whose mix-up would be visible to a user rather than only to the next start. Nothing
+  mechanical tells the six fields apart; they are all plain `str` on one frozen struct
+- **The identifier's three homes are never derived from one another — in particular `APP_DIR_NAME`
+  (`domain/user_data_location.py`) is never read from `package.json`** — prompt-only — the three homes and the question
   each answers are enumerated in `backend/domain/identity.py`'s module docstring, and nothing mechanical detects a fold.
   `APP_DIR_NAME` and `package.json`'s `name` spell the same string today, so `APP_DIR_NAME = package_name` reproduces
   every current path exactly and the whole suite stays green; the cost arrives at the next manifest edit, which then

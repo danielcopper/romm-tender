@@ -17,7 +17,7 @@ import pytest
 
 from host.dispatch import CallDispatcher
 from host.events import EventSink
-from host.runtime import AlreadyRunningError, _where_the_running_one_is, run_backend
+from host.runtime import AlreadyRunningError, BackendBuild, _where_the_running_one_is, run_backend
 from host.single_instance import PortFile, SingleInstanceLock
 from host.status import HostStatus
 from tests.host.conftest import FakePlugin, free_port
@@ -37,12 +37,15 @@ class Recorder:
         self.lock_held_at_build: bool | None = None
         self.shutdown_ran = asyncio.Event()
 
-    async def build(self) -> CallDispatcher:
+    async def build(self) -> BackendBuild:
         self.steps.append("build")
         contender = SingleInstanceLock(self.lock_path, retry_seconds=0.0)
         self.lock_held_at_build = not contender.acquire()
         contender.release()
-        return CallDispatcher(FakePlugin(), LOGGER)
+        return BackendBuild(
+            dispatcher=CallDispatcher(FakePlugin(), LOGGER),
+            server_identity="romm-tender/0.0.0-test",
+        )
 
     async def after_bind(self) -> None:
         self.steps.append("after_bind")
@@ -77,7 +80,7 @@ async def _run(tmp_path, recorder: Recorder, status: HostStatus, port: int) -> N
         lock_path=recorder.lock_path,
         port_file_path=recorder.port_file.path,
         logger=LOGGER,
-        server_identity="romm-tender/0.0.0-test",
+        token="the-admission-token",
         preferred_port=port,
     )
 

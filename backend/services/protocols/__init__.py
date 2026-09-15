@@ -67,7 +67,6 @@ from services.protocols.determinism import Clock, Sleeper, UuidGen
 from services.protocols.files import (
     AdoptionMoveStore,
     CoverArtFileStore,
-    DataLocationStore,
     DirectoryFileListerFn,
     DownloadFileStore,
     FirmwareFileStore,
@@ -165,7 +164,6 @@ __all__ = [
     "CoreNameProviderFn",
     "CoreResolverFn",
     "CoverArtFileStore",
-    "DataLocationStore",
     "DebugLogger",
     "DeviceForgetFn",
     "DeviceIdProvider",

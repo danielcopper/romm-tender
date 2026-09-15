@@ -104,11 +104,11 @@ class PersistenceAdapter:
     Parameters
     ----------
     settings_dir:
-        Absolute path to the directory that holds ``settings.json``
-        (typically ``decky.DECKY_PLUGIN_SETTINGS_DIR``).
+        Absolute path to the directory that holds ``settings.json`` — the
+        config root this run was told about.
     runtime_dir:
-        Absolute path to the directory that holds ``save_sync_state.json``
-        (typically ``decky.DECKY_PLUGIN_RUNTIME_DIR``).
+        Absolute path to the directory that holds ``save_sync_state.json`` —
+        the data root this run was told about.
     logger:
         A standard-library ``logging.Logger`` instance.
     clock:

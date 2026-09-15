@@ -1,7 +1,7 @@
 """Adapter wrapping Steam VDF file access and shortcut ID generation.
 
 Mostly stateless helpers — the only external dependency is the user's
-Steam ``userdata`` directory (resolved from ``DECKY_USER_HOME``).
+Steam ``userdata`` directory (resolved from the user's home).
 """
 
 from __future__ import annotations

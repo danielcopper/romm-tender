@@ -24,7 +24,11 @@ Full convention paragraph: the `lib/list_result.py` module docstring.
 
 Two adjacent rules that bite when adding or changing a callable:
 
-- **Decky callables must be async** — even if the body is synchronous, Decky's callable framework requires `async def`.
+- **A callable must be `async def`** — even where the body is synchronous. The set a caller can reach is exactly the
+  public `async def` on `Plugin`: `host.dispatch.reachable_methods` resolves it off the loaded class and
+  `scripts/check_callable_manifest.py` derives the same set from the source, and `tests/host/test_dispatch.py` asserts
+  the two are equal. A synchronous method is not reachable at all, and a public async one is reachable whether or not
+  that was intended.
 - **Frontend↔backend parity** (name + arity) is enforced by `scripts/check_callable_manifest.py`, which derives the
   frontend surface from every `callable<[Args], Return>("name")` in `frontend/src/**/*.ts`. A rename lands on both sides
   or not at all.

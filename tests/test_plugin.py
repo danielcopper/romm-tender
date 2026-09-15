@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 from unittest.mock import AsyncMock, MagicMock
 
@@ -24,10 +25,11 @@ from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 from adapters.debug_logger import SettingsAwareDebugLogger
 from adapters.persistence import PersistenceAdapter, SettingsPersisterAdapter
 from adapters.steam_config import SteamConfigAdapter
+from host import HostStatus
 from lib.retrodeck_health import RetroDeckConfigHealth
 
 # conftest.py patches decky before this import
-from main import Plugin, _LoaderEventSink
+from main import Plugin
 from services.connection import ConnectionService, ConnectionServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
 from services.settings import SettingsService, SettingsServiceConfig
@@ -111,33 +113,6 @@ async def test_terminal_prune_completion_holds_publication_lease_before_release_
     assert blocked["reason"] == "operation_active"
     assert (await plugin.release_prune_conflict_lease(token))["success"] is True
     assert await plugin.start_prune({"confirmed": True}) == {"success": True, "run_id": "next"}
-
-
-class TestTheLoaderEventSink:
-    """The wrapper that puts the plugin loader's bridge behind the sink's shape."""
-
-    @pytest.mark.asyncio
-    async def test_it_forwards_the_event_to_the_bridge(self):
-        import decky
-
-        decky.emit.reset_mock()
-
-        await _LoaderEventSink().emit("sync_complete", {"total_games": 3})
-
-        decky.emit.assert_awaited_once_with("sync_complete", {"total_games": 3})
-
-    @pytest.mark.asyncio
-    async def test_it_always_answers_that_the_event_arrived(self):
-        """The bridge reports no delivery, so "nobody heard" is not a claim it can make.
-
-        Answering anything else would release a prune claim while the panel is
-        still holding Steam work for it.
-        """
-        import decky
-
-        decky.emit.reset_mock()
-
-        assert await _LoaderEventSink().emit("sync_complete", {}) is True
 
 
 @pytest.fixture
@@ -868,14 +843,6 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # user's explicit QAM ack must both work regardless of a pending migration.
     "get_settings_reset_notice",
     "dismiss_settings_reset_notice",
-    # Pre-rename-install notice — a read of two directory names under Decky's own
-    # plugin home (one under plugins/, one under data/), unrelated to RetroDECK
-    # state. The migration-blocked page
-    # renders the card itself, so the callable has to answer while a migration is
-    # pending; that the card actually gets there is pinned in
-    # frontend/src/bigpicture/MigrationBlockedPage.test.tsx, not by this
-    # whitelist entry.
-    "get_legacy_install_notice",
     # The one-time move of the shortcuts onto the launcher's home: the plan, the
     # completion stamp, and the user's answer to the card that ends the
     # transition. None of the three touches RetroDECK state — the reading is of
@@ -884,23 +851,16 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # same reason as the notice above: the frontend points the shortcuts at the
     # launcher at plugin load, whatever page the panel happens to be showing,
     # and a shortcut left naming a file inside the plugin folder is the
-    # condition that card exists to warn about.
+    # condition the relocation exists to end.
     "get_shortcut_relocation",
-    "dismiss_legacy_install_notice",
-    # Where the plugin's OWN data lives — the notice, the two candidates behind
-    # it, and the answer. None of the three touches RetroDECK state. The notice
-    # reads nothing at all: it hands back what the start already decided. The
-    # candidate listing reads DECKY's own directories, and the answer is a small
-    # file written into Decky's runtime directory that the NEXT start acts on.
-    # All three have to answer while a migration is pending, because the
-    # migration-blocked page carries this notice — and one of its two conditions
-    # is a question only the user can answer, which is what a block would make
-    # unanswerable as well as invisible
-    # (frontend/src/bigpicture/MigrationBlockedPage.tsx pins that it gets
-    # there).
-    "get_data_location_notice",
-    "get_data_location_candidates",
-    "choose_data_location",
+    # What the hosting process knows about its own run — the port it bound, the
+    # start-up repairs that failed, the protocol messages it could not act on.
+    # Touches no RetroDECK state and reads nothing from disk. It has to answer
+    # while a migration is pending for the strongest reason on this list: a
+    # blocked panel is exactly when a reader needs to see that a start-up repair
+    # has been failing, and blocking the call would hide the diagnosis behind
+    # the condition it might explain.
+    "get_host_status",
     # Read-only RetroDECK path-resolution health probe (for the frontend banner).
     "get_retrodeck_status",
     # Cancel / pause operations — must remain callable mid-operation when
@@ -1128,9 +1088,9 @@ class TestMainStartupOrdering:
             RuntimeAdaptersBundle,
             StateBundle,
         )
-        from models.data_location import UserDataLocations
         from models.shortcut_launcher import ShortcutLauncher
 
+        from domain.app_directories import AppDirectories
         from main import Plugin
 
         plugin = Plugin()
@@ -1190,9 +1150,7 @@ class TestMainStartupOrdering:
             "prune_service": MagicMock(shutdown=AsyncMock()),
             "connection_service": connection_service,
             "startup_healing_service": startup_healing_service,
-            "legacy_install_service": MagicMock(),
             "shortcut_relocation_service": MagicMock(),
-            "data_location_service": MagicMock(),
             "launch_gate_service": MagicMock(),
             "session_lifecycle_service": MagicMock(),
             "game_process_service": MagicMock(),
@@ -1227,7 +1185,6 @@ class TestMainStartupOrdering:
                 recovery_store=MagicMock(),
                 prune_artifacts=MagicMock(),
                 steam_recovery=MagicMock(),
-                data_location_store=MagicMock(),
             ),
             stores=StateBundle(
                 settings={},
@@ -1256,20 +1213,29 @@ class TestMainStartupOrdering:
                 machine_id_provider=MagicMock(),
             ),
             handles=BootstrapHandles(debug_logger=MagicMock(), persistence=MagicMock()),
-            locations=UserDataLocations(
-                settings_dir="/fake/config",
+            directories=AppDirectories(
+                config_dir="/fake/config",
                 data_dir="/fake/data",
-                choice_required=False,
-                failure=None,
+                cache_dir="/fake/cache",
+                state_dir="/fake/state",
+                runtime_dir="/fake/run",
+                code_dir="/fake/code",
             ),
             launcher=ShortcutLauncher(path="/fake/data/bin/rom-launcher", at_home=True),
+            user_agent="romm-tender/0.0.0-test",
         )
 
         with (
             patch("main.bootstrap", return_value=bootstrap_result),
             patch("main.wire_services", return_value=wired_services),
         ):
-            await plugin._main()
+            await plugin._main(
+                directories=bootstrap_result.directories,
+                user_home="/fake/home",
+                logger=logging.getLogger("test_startup_order"),
+                events=FakeEventSink(),
+                status=HostStatus(),
+            )
 
         assert "detect_retrodeck_path_change" in call_order
         assert "prune_stale_installed_roms" in call_order

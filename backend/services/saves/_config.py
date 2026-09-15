@@ -74,7 +74,7 @@ class SaveServiceConfig:
     loop:
         The plugin's ``asyncio`` event loop (for ``run_in_executor``).
     logger:
-        Standard-library logger (replaces ``decky.logger``).
+        Standard-library logger, injected rather than fetched.
     retrodeck_paths:
         Bundled accessor for the four RetroDECK runtime directory
         paths. SaveService consumes ``saves_path()`` and ``roms_path()``;
@@ -114,8 +114,8 @@ class SaveServiceConfig:
         :meth:`SaveService.__init__` to resolve the declared plugin
         version forwarded into user-agent strings and emitted events.
     plugin_dir:
-        Plugin install directory (``decky.DECKY_PLUGIN_DIR``) passed to
-        :meth:`PluginMetadataReader.read_version`.
+        The directory this program is installed in, passed to
+        :meth:`PluginMetadataReader.read_version` — it holds the manifest.
     emit:
         Event emitter for pushing save-sync progress to the frontend.
     get_save_layout:

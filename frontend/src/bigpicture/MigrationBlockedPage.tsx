@@ -4,8 +4,6 @@ import { showToast } from "../utils/toast";
 import { migrateRetroDeckFiles, dismissRetrodeckMigration } from "../api/backend";
 import type { MigrationStatus } from "../types";
 import { clearMigration } from "../utils/migrationStore";
-import { LegacyInstallNotice } from "./LegacyInstallBanner";
-import { DataLocationNoticeSection } from "./DataLocationNotice";
 import { MigrationConflictModal } from "./MigrationConflictModal";
 import { scrollToTop } from "../utils/scrollHelpers";
 import { detach } from "../utils/detach";
@@ -147,13 +145,11 @@ export const MigrationBlockedPage: FC<MigrationBlockedPageProps> = ({ migration 
           the migration's own explanation and actions, as a section of its own
           rather than a section nested inside this one, and renders nothing
           while no older install stands beside this one. */}
-      <LegacyInstallNotice />
       {/* And the data-location notice, for a stronger reason than the one
           above: leaving this page needs a user action, so a condition invisible
           here is invisible for as long as the user takes to migrate RetroDECK —
           and one of its two conditions is itself a question only the user can
           answer. It renders nothing while neither stands. */}
-      <DataLocationNoticeSection />
     </>
   );
 };

@@ -12,9 +12,21 @@ those bundles into service instances — protocols in, services out. `__init__.p
 consumers write `from bootstrap import …` and never deep-import a submodule. Adapter instantiation never happens in
 `main.py` — a Protocol-wrapped persister is built in `bootstrap()` and passed through `CallbackBundle`.
 
-**Process boundaries — `main.py` vs `bootstrap/`**: `[ours]` `main.py` owns the Decky lifecycle (`_main`, `_unload`) and
-the callable surface (one `async def` per `@callable`). `bootstrap/` owns adapter instantiation and service wiring. The
-split is binding — no callables in `bootstrap/`, no service wiring in `main.py`.
+**Process boundaries — `main.py` vs `bootstrap/`**: `[ours]` `main.py` owns the lifecycle (`_main`, `_open_network`,
+`_unload`), the process entry point (`Plugin.run`) and the callable surface (one public `async def` per callable).
+`bootstrap/` owns adapter instantiation and service wiring. The split is binding — no callables in `bootstrap/`, no
+service wiring in `main.py`.
+
+`main.py` is also the **only** module that may import `host/`, which is an `.importlinter` contract in both directions.
+Everything the host needs from the application it gets handed: a dispatcher, an event sink, and the directories the
+entry point resolved. `bootstrap()` is **told** where those directories are and derives none of them.
+
+**`Plugin.run` is a `classmethod` and synchronous, and both halves are load-bearing.** Synchronous because everything it
+does is path and environment work that belongs before a loop exists — and because the admission token has to be minted
+before the first log line, since the filter that keeps it out of the log file is installed with the file handler. A
+method on the class rather than a module function because the lifecycle it drives is private, and a module-level caller
+would be reaching across the class boundary to use it. It must stay **non-async**: every public `async def` on `Plugin`
+is a callable, both to the manifest gate and to the dispatcher.
 
 `main.py` grows with the callable surface it describes; that is unavoidable density, not god-class, and it is
 deliberately out of scope for the module-size gate.

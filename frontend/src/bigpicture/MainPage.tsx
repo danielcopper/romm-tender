@@ -31,8 +31,6 @@ import { WarningCard } from "./WarningCard";
 import { DownloadProgressRow } from "./DownloadProgressRow";
 import { MigrationBlockedPage } from "./MigrationBlockedPage";
 import { SettingsResetBanner } from "./SettingsResetBanner";
-import { LegacyInstallNotice } from "./LegacyInstallBanner";
-import { DataLocationNotice } from "./DataLocationNotice";
 import { PlaytimeScopeBanner } from "./PlaytimeScopeBanner";
 import type { SyncPreview, SyncProgress, SyncRunKind, SyncStats, NavTarget } from "../types";
 import { detach } from "../utils/detach";
@@ -574,7 +572,6 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
 
   return (
     <>
-      <LegacyInstallNotice />
       {settingsReset.pending && <SettingsResetBanner backedUpTo={settingsReset.backedUpTo} />}
       {playtimeScope.pending && (
         <PlaytimeScopeBanner onOpenConnections={() => onNavigate({ page: "settings", section: "connections" })} />
@@ -793,7 +790,6 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
             the plugin is running, so what is outstanding is only where its data
             ends up. Its button opens a modal rather than a page, because the
             condition is answered once and for all. */}
-        <DataLocationNotice />
         <BlockSeparator />
       </PanelSection>
 

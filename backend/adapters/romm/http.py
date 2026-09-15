@@ -49,7 +49,7 @@ class RommHttpAdapter:
     settings:
         Shared settings dict (held by reference — mutations are visible here).
     plugin_dir:
-        Absolute path to the plugin directory (replaces ``decky.DECKY_PLUGIN_DIR``).
+        Absolute path to the directory this program is installed in.
     logger:
         Logger instance (replaces ``decky.logger``).
     user_agent:
