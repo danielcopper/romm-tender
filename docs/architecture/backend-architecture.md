@@ -41,6 +41,7 @@ transport exists.
 | `access.py`          | The three admission checks — Host, Origin, Token — in that order                 |
 | `dispatch.py`        | Name resolution onto the plugin object, the exception boundary, the answer cap   |
 | `connection.py`      | One live WebSocket: frame reading, the frame cap, the heartbeat, calls in flight |
+| `events.py`          | Where an event leaves the process, and whether anybody heard it                  |
 | `server.py`          | The bind and its fallback, the file route, the upgrade, newest-connection-wins   |
 | `single_instance.py` | The `flock` beside the database, and the port file beside the session            |
 | `logging_setup.py`   | The root logger, and the token redaction on its file handler                     |
@@ -72,6 +73,20 @@ socket. Breaking the second rejects every call in flight, which is why one overs
 
 **No reply store.** A call whose answer was in flight when the socket went is not redelivered — its task is cancelled,
 and the caller's own pending register answers it `connection_lost`. A lost answer fails visibly; it never disappears.
+
+**Events leave through a seam `main.py` is handed, never a module-level call.** `Plugin._event_sink` is a
+`PluginEventSink` — one `emit(name, payload)` that answers **whether anybody heard**. Nothing is buffered: an event with
+no panel attached is dropped with a log line, because every event this backend sends is a statement about _now_ and
+"sync finished" delivered three hours later lands in a session that never started one.
+
+The answer is what `_emit_with_prune_continuation` needs. That funnel attaches a prune claim to the five events whose
+Steam-side work outlives the backend's, and a claim handed to a panel that is not there blocks every later operation
+until it expires — so the funnel gives it straight back the moment the sink says nobody heard. A sink that cannot know
+must answer `True`: the plugin loader's bridge reports no delivery at all, and inventing a "nobody heard" there would
+release a claim while the panel is still working. That is the whole reason the seam is an object rather than a call. Two
+consequences follow and neither is checked: **an event carrying a claim is awaited, never scheduled as a task** (the
+answer would arrive after the claim was handed out), and a second event argument is refused outright rather than given
+an invented wire form.
 
 **The start-up order** is what makes the port file meaningful:
 
@@ -2315,7 +2330,7 @@ only — consumers write `from bootstrap import …` and never deep-import a sub
    `*ServiceConfig`. Returns a dict of named service instances.
 
 The two-phase split exists because adapter instantiation and state loading happen first (`bootstrap()`), then `main.py`
-composes the runtime bundle (event loop, `decky.emit`) and calls `wire_services()`. Services receive the `settings` dict
+composes the runtime bundle (event loop, event funnel) and calls `wire_services()`. Services receive the `settings` dict
 (the only field on `StateBundle`) plus the SQLite Unit-of-Work factory / repository handles for all relational state —
 no plural in-memory state dicts remain. Some services are constructed before others to satisfy ordering constraints
 (e.g. `MigrationService` before `SaveService` so save sync observes fresh save-sort state). Forward references between

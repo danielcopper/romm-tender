@@ -9,6 +9,7 @@ import pytest
 from _factories import _make_retry, _make_testable_plugin
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
+from fakes.fake_event_sink import FakeEventSink
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_hostname_reader import FakeHostnameReader
 from fakes.fake_machine_id_reader import FakeMachineIdReader
@@ -60,6 +61,7 @@ def plugin(tmp_path):
         log_debug=lambda _msg: None,
     )
     p._romm_api = MagicMock()
+    p._event_sink = FakeEventSink()
 
     import decky
 
@@ -75,7 +77,10 @@ def plugin(tmp_path):
             logger=decky.logger,
             plugin_dir=decky.DECKY_PLUGIN_DIR,
             launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/rom-launcher",
-            emit=decky.emit,
+            # The service seam is fire-and-forget (``EventEmitter`` answers
+            # ``None``); the plugin's own sink answers whether anybody heard.
+            # Two seams, deliberately not one.
+            emit=AsyncMock(),
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             uuid_gen=FakeUuidGen(),
             sleeper=FakeSleeper(),

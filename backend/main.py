@@ -2,7 +2,7 @@ import asyncio
 import os
 import sys
 from dataclasses import asdict
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 backend_dir = os.path.dirname(__file__)
 sys.path.insert(0, backend_dir)
@@ -32,6 +32,32 @@ from lib.prune_gate import (
 from lib.sync_gate import sync_active_blocked
 
 
+class PluginEventSink(Protocol):
+    """Where an event leaves this process, and whether anybody heard it.
+
+    The answer is the half a module-level ``emit`` could never give. One caller
+    acts on it — the continuation funnel below — and it can only act on it
+    because the seam is an object it was handed rather than a call it makes.
+    """
+
+    async def emit(self, name: str, /, *args: Any) -> bool: ...
+
+
+class _LoaderEventSink:
+    """The plugin loader's bridge, wearing the sink's shape.
+
+    Answers ``True`` unconditionally, because the bridge reports no delivery at
+    all: "nobody heard this" is a statement this transport cannot make, and
+    inventing it would release a prune claim while the panel is still holding
+    Steam work for it. The host's own sink answers honestly, which is the whole
+    reason this is a seam.
+    """
+
+    async def emit(self, name: str, /, *args: Any) -> bool:
+        await decky.emit(name, *args)
+        return True
+
+
 class Plugin:
     settings: dict[str, Any]
     loop: asyncio.AbstractEventLoop
@@ -46,6 +72,10 @@ class Plugin:
     # regression remains green).
     _persistence: Any
     _settings_persister: Any
+    # Where events leave this process. Wired by ``_main``; annotated rather than
+    # defaulted so a bare ``Plugin()`` that emits without setting one raises
+    # instead of dropping every event into a no-op nobody would notice.
+    _event_sink: PluginEventSink
     _http_adapter: Any
     _romm_api: Any
     _steam_config: Any
@@ -103,14 +133,23 @@ class Plugin:
             payload["prune_lease_token"] = lease_token
             args = (payload, *args[1:])
         try:
-            await decky.emit(event, *args)
+            delivered = await self._event_sink.emit(event, *args)
         except BaseException:
             if lease_token is not None:
                 await release_prune_gate_lease(self, lease_token)
             raise
+        # A claim handed to a panel that is not there is held against every
+        # later operation until it expires, so it goes back the moment the sink
+        # says nobody heard. Only a sink that knows can say so — the loader's
+        # bridge always answers True.
+        if lease_token is not None and not delivered:
+            await release_prune_gate_lease(self, lease_token)
 
     async def _main(self):  # Decky lifecycle — must be async
         self.loop = asyncio.get_running_loop()
+        # Before anything can emit: the start-up routines below already send two
+        # events, and wiring passes the funnel to every service.
+        self._event_sink = _LoaderEventSink()
 
         # ── 1. Wire adapters ────────────────────────────────────────────────
         # Bootstrap loads + migrates settings as part of adapter construction

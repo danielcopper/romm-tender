@@ -1,8 +1,8 @@
 """Service half of the composition root — bundles in, live services out.
 
 Service construction is separated from adapter construction because it
-needs runtime state only ``main.py`` can supply (the event loop,
-``decky.emit``) plus plugin state that exists once ``bootstrap()`` has
+needs runtime state only ``main.py`` can supply (the event loop, the event
+funnel) plus plugin state that exists once ``bootstrap()`` has
 run. Services never reach each other by import: every cross-service
 reference is threaded through a ``*ServiceConfig`` here, or deferred
 through a ``LateBinding`` when the two constructors form a cycle.

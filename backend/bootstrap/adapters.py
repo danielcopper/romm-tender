@@ -228,7 +228,7 @@ class RuntimeAdaptersBundle:
 
     Bootstrap owns adapter instantiation, but the ``RuntimeBundle``
     handed to ``wire_services`` also needs runtime-only state ``main.py``
-    introduces (the ``asyncio`` loop, ``decky.emit``). This sub-bundle
+    introduces (the ``asyncio`` loop, the event funnel). This sub-bundle
     carries the seams bootstrap builds so ``main.py`` can compose the
     final ``RuntimeBundle`` without instantiating any adapters itself.
     """
