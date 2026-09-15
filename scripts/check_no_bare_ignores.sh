@@ -8,7 +8,7 @@
 #
 # Enforced conventions:
 #
-#   Python (py_modules/, main.py, tests/ — _vendor/ excluded):
+#   Python (backend/, tests/ — _vendor/ excluded):
 #     - `# type: ignore` must be scoped: `# type: ignore[code]`. A bare
 #       `# type: ignore` (not immediately followed by `[`) is rejected.
 #     - `# noqa` must name a rule: `# noqa: CODE`. A bare `# noqa`
@@ -31,7 +31,7 @@
 
 set -euo pipefail
 
-readonly PY_PATHS=("py_modules" "main.py" "tests")
+readonly PY_PATHS=("backend" "tests")
 readonly TS_DIR="frontend/src"
 
 # Shared exclusions for generated / vendored trees.

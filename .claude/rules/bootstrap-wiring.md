@@ -1,7 +1,7 @@
 ---
 paths:
-  - "py_modules/bootstrap/*.py"
-  - "main.py"
+  - "backend/bootstrap/*.py"
+  - "backend/main.py"
 ---
 
 # Composition root and process boundaries

@@ -41,7 +41,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = REPO_ROOT / "frontend" / "src"
-MAIN_PY = REPO_ROOT / "main.py"
+MAIN_PY = REPO_ROOT / "backend" / "main.py"
 
 # Wire names deliberately excluded from the parity check. Empty today; add an
 # entry only as a conscious decision (see the module docstring). Do NOT add a

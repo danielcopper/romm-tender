@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Vendored-tree integrity gate.
 
-Every package under ``py_modules/_vendor/`` is a copy of code we do not own and
+Every package under ``backend/_vendor/`` is a copy of code we do not own and
 have no source for in this repo — verbatim, or verbatim plus a documented local
 patch — pinned by its own ``<pkg>.SHA256SUMS``, so the only thing separating
 "the copy we pinned" from "whatever happens to be on disk" is a checksum. A tree
@@ -18,7 +18,7 @@ for a tree taken verbatim from a release it is upstream's own manifest, so the
 digests additionally prove identity with the tagged release; for a tree carrying
 a deliberate local patch it is our own digest of the patched copy, so they prove
 only that nobody has since reached into it. Which kind each one is, is recorded
-per package in ``py_modules/_vendor/README.md``.
+per package in ``backend/_vendor/README.md``.
 
 Three assertions per tree:
 
@@ -63,7 +63,7 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-VENDOR_DIR = ROOT / "py_modules" / "_vendor"
+VENDOR_DIR = ROOT / "backend" / "_vendor"
 
 MANIFEST_SUFFIX = ".SHA256SUMS"
 LICENSE_SUFFIX = ".LICENSE"
@@ -277,7 +277,7 @@ def collect_discrepancies(vendor_dir: pathlib.Path) -> list[str]:
             discrepancies.append(
                 f"{package}/: no {package}{MANIFEST_SUFFIX} — the tree is pinned by nothing. Vendor the "
                 "upstream release manifest beside it, or generate one from the tree if the copy carries a "
-                "local patch (py_modules/_vendor/README.md)"
+                "local patch (backend/_vendor/README.md)"
             )
             continue
         discrepancies.extend(tree_discrepancies(vendor_dir, package, manifest_path))
@@ -287,7 +287,7 @@ def collect_discrepancies(vendor_dir: pathlib.Path) -> list[str]:
 def main() -> int:
     discrepancies = collect_discrepancies(VENDOR_DIR)
     if discrepancies:
-        print("ERROR: py_modules/_vendor/ is not what its manifests pin:", file=sys.stderr)
+        print("ERROR: backend/_vendor/ is not what its manifests pin:", file=sys.stderr)
         for line in discrepancies:
             print(f"  {line}", file=sys.stderr)
         print(
@@ -297,14 +297,14 @@ def main() -> int:
             "copy carries a deliberate local patch, reapply the patch to the fresh copy\n"
             "and regenerate its manifest from the result:\n"
             "\n"
-            "  cd py_modules/_vendor && find <pkg> -type f -not -path '*/__pycache__/*' \\\n"
+            "  cd backend/_vendor && find <pkg> -type f -not -path '*/__pycache__/*' \\\n"
             f"      | LC_ALL=C sort | xargs sha256sum > <pkg>{MANIFEST_SUFFIX}\n"
             "\n"
             "Regenerating a manifest is also how this gate is silenced without fixing\n"
             "anything, so it is only ever the last step of such a re-copy, never the answer\n"
             "to a failure above.\n"
             "\n"
-            "Per-package provenance and the full update procedure: py_modules/_vendor/README.md",
+            "Per-package provenance and the full update procedure: backend/_vendor/README.md",
             file=sys.stderr,
         )
         return 1

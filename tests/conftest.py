@@ -20,10 +20,10 @@ settings.register_profile(
 )
 settings.load_profile("ci")
 
-# Mirror Decky's sys.path setup: add py_modules/ so `from lib.xxx import` works
+# Mirror Decky's sys.path setup: add backend/ so `from lib.xxx import` works
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _tests_root = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(_project_root, "py_modules"))
+sys.path.insert(0, os.path.join(_project_root, "backend"))
 # Add tests/ root so subdirectory tests can still import from fakes/ and conftest
 sys.path.insert(0, _tests_root)
 

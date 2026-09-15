@@ -12,71 +12,76 @@ area:ui:
 area:saves:
   - changed-files:
       - any-glob-to-any-file:
-          - 'py_modules/services/saves/**'
-          - 'py_modules/adapters/save_file.py'
-          - 'py_modules/domain/save_attribution.py'
-          - 'py_modules/domain/save_answer.py'
-          - 'py_modules/domain/save_path.py'
-          - 'py_modules/domain/save_state.py'
-          - 'py_modules/domain/save_status.py'
+          - 'backend/services/saves/**'
+          - 'backend/adapters/save_file.py'
+          - 'backend/domain/save_answer.py'
+          - 'backend/domain/save_attribution.py'
+          - 'backend/domain/save_backup.py'
+          - 'backend/domain/save_hash.py'
+          - 'backend/domain/save_layout.py'
+          - 'backend/domain/save_path.py'
+          - 'backend/domain/save_slot.py'
+          - 'backend/domain/save_status.py'
+          - 'backend/domain/save_status_builders.py'
+          - 'backend/domain/rom_save_sync_state.py'
           - 'tests/services/saves/**'
 
 area:sync:
   - changed-files:
       - any-glob-to-any-file:
-          - 'py_modules/services/library/**'
-          - 'py_modules/services/migration.py'
-          - 'py_modules/adapters/migration_file.py'
-          - 'py_modules/domain/sync_action.py'
-          - 'py_modules/domain/sync_diff.py'
-          - 'py_modules/domain/sync_state.py'
+          - 'backend/services/library/**'
+          - 'backend/services/migration/**'
+          - 'backend/adapters/migration_file.py'
+          - 'backend/domain/sync_action.py'
+          - 'backend/domain/sync_diff.py'
+          - 'backend/domain/sync_state.py'
 
 area:downloads:
   - changed-files:
       - any-glob-to-any-file:
-          - 'py_modules/services/downloads.py'
-          - 'py_modules/adapters/download_file.py'
+          - 'backend/services/downloads.py'
+          - 'backend/adapters/download_file.py'
 
 area:firmware:
   - changed-files:
       - any-glob-to-any-file:
-          - 'py_modules/services/firmware.py'
-          - 'py_modules/adapters/firmware_file.py'
-          - 'py_modules/adapters/atlas_firmware.py'
-          - 'py_modules/domain/firmware_paths.py'
-          - 'py_modules/domain/firmware_wants.py'
-          - 'py_modules/domain/bios_status.py'
+          - 'backend/services/firmware/**'
+          - 'backend/adapters/firmware_file.py'
+          - 'backend/adapters/atlas_firmware.py'
+          - 'backend/domain/firmware_paths.py'
+          - 'backend/domain/firmware_wants.py'
+          - 'backend/domain/bios_status.py'
 
 area:artwork:
   - changed-files:
       - any-glob-to-any-file:
-          - 'py_modules/services/steamgrid.py'
-          - 'py_modules/services/artwork.py'
-          - 'py_modules/adapters/cover_art_file_store.py'
-          - 'py_modules/adapters/sgdb_artwork_cache.py'
-          - 'py_modules/adapters/steamgriddb.py'
-          - 'py_modules/domain/artwork_paths.py'
-          - 'py_modules/domain/sgdb_artwork.py'
+          - 'backend/services/steamgrid.py'
+          - 'backend/services/artwork.py'
+          - 'backend/adapters/cover_art_file_store.py'
+          - 'backend/adapters/sgdb_artwork_cache.py'
+          - 'backend/adapters/steamgriddb.py'
+          - 'backend/domain/artwork_paths.py'
+          - 'backend/domain/sgdb_artwork.py'
 
 area:achievements:
   - changed-files:
       - any-glob-to-any-file:
-          - 'py_modules/services/achievements.py'
-          - 'py_modules/domain/achievements.py'
+          - 'backend/services/achievements.py'
+          - 'backend/domain/achievements.py'
 
 area:playtime:
   - changed-files:
       - any-glob-to-any-file:
-          - 'py_modules/services/playtime.py'
-          - 'py_modules/services/session_lifecycle.py'
+          - 'backend/services/playtime.py'
+          - 'backend/services/session_lifecycle.py'
 
 area:architecture:
   - changed-files:
       - any-glob-to-any-file:
-          - 'py_modules/bootstrap/**'
-          - 'py_modules/services/protocols/**'
-          - 'py_modules/domain/**'
-          - 'py_modules/lib/**'
+          - 'backend/bootstrap/**'
+          - 'backend/services/protocols/**'
+          - 'backend/domain/**'
+          - 'backend/lib/**'
           - 'CLAUDE.md'
 
 area:ci:

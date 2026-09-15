@@ -1,9 +1,6 @@
 """Tests for domain.rom_files — pure M3U and launch file detection functions."""
 
 import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "py_modules"))
 
 from domain.rom_files import (
     build_m3u_content,

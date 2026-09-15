@@ -102,7 +102,7 @@ write resolves the freshly-written value rather than a stale snapshot.
 
 ## The single read seam: `ActiveCoreResolver`
 
-`ActiveCoreResolver` (`py_modules/services/active_core_resolver.py`) is the one place that answers "which emulator will
+`ActiveCoreResolver` (`backend/services/active_core_resolver.py`) is the one place that answers "which emulator will
 this ROM actually launch with?" It exposes two methods over the **same** three-layer resolution:
 
 - **`active_emulator_for_rom(rom_id) -> EmulatorInvocation | None`** — the **launch-bake seam**. Returns the full
@@ -349,10 +349,10 @@ es_systems is unavailable, enumeration falls back to the full disc set rather th
 
 ### The read seam: `DiscLaunchResolver`
 
-`DiscLaunchResolver` (`py_modules/services/disc_launch_resolver.py`) is the single place that answers "which file will
-this multi-disc ROM actually launch with?", mirroring `ActiveCoreResolver`. It scans the install directory recursively
-(the file-lister Protocol), reads the live accept-list, enumerates the discs (`domain/disc_selection.enumerate_discs`),
-and resolves the persisted `selected_disc` over them (`domain/disc_selection.resolve_launch_path`):
+`DiscLaunchResolver` (`backend/services/disc_launch_resolver.py`) is the single place that answers "which file will this
+multi-disc ROM actually launch with?", mirroring `ActiveCoreResolver`. It scans the install directory recursively (the
+file-lister Protocol), reads the live accept-list, enumerates the discs (`domain/disc_selection.enumerate_discs`), and
+resolves the persisted `selected_disc` over them (`domain/disc_selection.resolve_launch_path`):
 
 ```text
 resolve_for_install(install, selected_disc):
@@ -424,8 +424,8 @@ resolver yields the **path**, `ActiveCoreResolver` yields the **`EmulatorInvocat
 
 ### The picker callables
 
-Two service methods on `DiscService` (`py_modules/services/disc.py`) drive the inline `DiscSelector` dropdown on the
-game detail page:
+Two service methods on `DiscService` (`backend/services/disc.py`) drive the inline `DiscSelector` dropdown on the game
+detail page:
 
 - **`get_disc_selection(rom_id)`** reports `{multi_disc: false}` for an unknown, not-installed, single-file, or
   fewer-than-two-disc ROM (the frontend renders no picker), else `{multi_disc: true, discs: [...], selected, default}`.

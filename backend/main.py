@@ -4,9 +4,8 @@ import sys
 from dataclasses import asdict
 from typing import Any, cast
 
-plugin_dir = os.path.dirname(__file__)
-sys.path.insert(0, os.path.join(plugin_dir, "py_modules"))
-sys.path.insert(0, plugin_dir)
+backend_dir = os.path.dirname(__file__)
+sys.path.insert(0, backend_dir)
 
 import decky
 from bootstrap import (

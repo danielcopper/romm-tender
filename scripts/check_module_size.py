@@ -52,7 +52,7 @@ SLACK_ADVISORY = 50
 #   ``main.py`` owns the Decky lifecycle plus one ``async def`` per callable,
 #     so it grows with the callable surface by design (CLAUDE.md, "Process
 #     boundaries").
-#   ``py_modules/_vendor`` holds checksum-pinned upstream copies; their size
+#   ``backend/_vendor`` holds checksum-pinned upstream copies; their size
 #     is upstream's decision (.claude/rules/vendored-assets.md).
 #   ``tests/`` is one file per source module by rule
 #     (.claude/rules/testing-backend.md), so a large test file is that rule
@@ -61,12 +61,12 @@ SLACK_ADVISORY = 50
 #   ``frontend/src/`` has the same god-class problem and no enforcement, but
 #     needs a per-scope glob first: ``in_scope`` hardcodes ``*.py``.
 SCOPE_DIRS = (
-    "py_modules/adapters",
-    "py_modules/bootstrap",
-    "py_modules/domain",
-    "py_modules/lib",
-    "py_modules/models",
-    "py_modules/services",
+    "backend/adapters",
+    "backend/bootstrap",
+    "backend/domain",
+    "backend/lib",
+    "backend/models",
+    "backend/services",
 )
 
 # Modules that were already over the threshold when this gate landed, each
@@ -77,12 +77,12 @@ SCOPE_DIRS = (
 # Never taken silently: a number raised without that reasoning has retired the
 # gate, and that costs more than any module's size.
 ALLOWLIST = {
-    "py_modules/services/downloads.py": 1119,
+    "backend/services/downloads.py": 1119,
     # Lowered 1150 → 1085 (#1815): the per-platform ``collapsed_count`` garnish
     # on ``get_platforms`` was deleted once it was established that nothing read
     # it, which banked 65 lines. Reclaimed rather than left as headroom, because
     # headroom nobody has argued for is how a ceiling stops meaning anything.
-    "py_modules/services/library/fetcher.py": 1085,
+    "backend/services/library/fetcher.py": 1085,
 }
 
 

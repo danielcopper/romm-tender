@@ -1,9 +1,9 @@
 ---
 paths:
-  - "py_modules/adapters/**"
-  - "py_modules/domain/**"
-  - "py_modules/lib/**"
-  - "py_modules/models/**"
+  - "backend/adapters/**"
+  - "backend/domain/**"
+  - "backend/lib/**"
+  - "backend/models/**"
 ---
 
 # Adapters, domain, and aggregates

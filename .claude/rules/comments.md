@@ -1,7 +1,6 @@
 ---
 paths:
-  - "py_modules/**/*.py"
-  - "main.py"
+  - "backend/**/*.py"
   - "frontend/src/**/*.ts"
   - "frontend/src/**/*.tsx"
 ---

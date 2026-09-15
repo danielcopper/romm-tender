@@ -45,7 +45,7 @@ would freeze the launcher at whatever version happened to be running the day it 
 comparing it costs a read.
 
 The last two components are load-bearing: a shortcut is recognised as this plugin's by its `exe` **ending** in
-`/bin/rom-launcher` (`frontend/src/utils/steamShortcuts.ts`, `py_modules/services/prune/requests.py`). The new home ends
+`/bin/rom-launcher` (`frontend/src/utils/steamShortcuts.ts`, `backend/services/prune/requests.py`). The new home ends
 the same way, so every shortcut written before the move is still ours, with nothing to change on either side.
 
 **It waits for the data migration, and that ordering is load-bearing.**

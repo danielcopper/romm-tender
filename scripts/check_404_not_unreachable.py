@@ -18,7 +18,7 @@ these sites is green there. This check inspects the slug *choice* instead.
 The rule
 ========
 
-Inside ``py_modules/services/``, a **catch-all** exception handler (``except
+Inside ``backend/services/``, a **catch-all** exception handler (``except
 Exception``, ``except BaseException``, or a bare ``except:``) may not *return* a
 hardcoded ``server_unreachable`` verdict. A handler returns one when a dict
 literal in its body binds a verdict key — ``reason``, ``status``, or
@@ -80,7 +80,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SERVICES_DIR = REPO_ROOT / "py_modules" / "services"
+SERVICES_DIR = REPO_ROOT / "backend" / "services"
 
 # The canonical slug, in both spellings a service can write it.
 UNREACHABLE_ENUM_MEMBER = "SERVER_UNREACHABLE"
@@ -282,7 +282,7 @@ def _print_violations(findings: list[Finding]) -> None:
         print(f"  {finding.render()}")
     print()
     print(
-        "ERROR: a catch-all 'except Exception' in py_modules/services/ must not hardcode "
+        "ERROR: a catch-all 'except Exception' in backend/services/ must not hardcode "
         "ErrorCode.SERVER_UNREACHABLE — a definitive 404 is the server ANSWERING, and must "
         "reach the frontend as 'not_found'. Route the exception through classify_error() "
         "(lib/errors.py), or peel the 404 off with a sibling 'except RommNotFoundError' "

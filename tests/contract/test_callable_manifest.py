@@ -24,7 +24,7 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SCRIPT_PATH = _REPO_ROOT / "scripts" / "check_callable_manifest.py"
 _SRC_DIR = _REPO_ROOT / "frontend" / "src"
-_MAIN_PY = _REPO_ROOT / "main.py"
+_MAIN_PY = _REPO_ROOT / "backend" / "main.py"
 
 
 def _load_gate():

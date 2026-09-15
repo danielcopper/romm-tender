@@ -37,7 +37,7 @@ interface LibrarySectionProps {
 export const AUTO_REGION = "auto";
 
 // The fixed anchor regions, in the build-time default order. MIRRORS the backend
-// constant DEFAULT_REGION_PRIORITY (py_modules/domain/sibling_resolution.py) —
+// constant DEFAULT_REGION_PRIORITY (backend/domain/sibling_resolution.py) —
 // keep the two in sync. This is a fixed order, NOT language/system detection.
 export const ANCHOR_REGIONS: readonly string[] = ["World", "USA", "Europe", "Japan"];
 

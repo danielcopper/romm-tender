@@ -7,7 +7,7 @@
 
 /**
  * Canonical failure-`reason` slugs the backend emits on the `{success: false,
- * reason, message}` shape (see py_modules/lib/list_result.py `ErrorCode` + the
+ * reason, message}` shape (see backend/lib/list_result.py `ErrorCode` + the
  * gate scripts/check_failure_shape.py). The Lean enum plus the bespoke
  * plain-string reasons the frontend actually routes on. Transport failures
  * collapse onto `server_unreachable`; 401/403 onto `auth_failed` (distinguished

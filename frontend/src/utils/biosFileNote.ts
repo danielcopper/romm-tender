@@ -163,7 +163,7 @@ const said = (note: string): BiosFileWords => ({ note, lines: [], fromLibrary: f
  *   size gate only for a file one of DuckStation's per-region BIOS keys NAMES
  *   (`PathNTSCU` / `PathNTSCJ` / `PathPAL`), and RetroDECK sets `SearchDirectory`
  *   alone and leaves all three empty — cited, with the upstream line numbers, on
- *   the DuckStation card in `py_modules/_vendor/atlas/data/standalone_firmware.json`.
+ *   the DuckStation card in `backend/_vendor/atlas/data/standalone_firmware.json`.
  *   A user who fills one of those keys in reaches it.
  *
  * `verified` and `mismatch` get no note: the first is the ordinary met row and

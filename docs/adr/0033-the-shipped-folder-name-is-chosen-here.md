@@ -2,6 +2,9 @@
 
 ## Status
 
+**Superseded by [ADR-0035](0035-the-release-builds-no-decky-artifact.md)**, which removes the Decky build path this
+decision's pin and smoke test lived in; decision 4 below still stands.
+
 Accepted. **Closes the exposure [ADR-0031](0031-user-data-lives-outside-the-plugin-directory.md) described but could not
 remove** — that the name Decky knows this plugin by "is decided by a string this project does not control, that a
 routine repository operation can change, and whose change is silent and irreversible from inside". ADR-0031 took the

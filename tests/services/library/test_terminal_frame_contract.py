@@ -12,7 +12,7 @@ indistinguishable from the panel's own retraction of an optimistic start.
 
 The scan is structural rather than behavioural because the rule is about every
 path that *can* emit, error paths included, not the ones a fixture happens to
-provoke. It reaches three producer shapes across ``py_modules/services``, all
+provoke. It reaches three producer shapes across ``backend/services``, all
 three of which exist today:
 
 * a call to the orchestrator's ``emit_progress``, which the reporter reaches
@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_SERVICES_ROOT = _REPO_ROOT / "py_modules" / "services"
+_SERVICES_ROOT = _REPO_ROOT / "backend" / "services"
 _TERMINAL_STAGES = frozenset({"DONE", "CANCELLED", "ERROR"})
 _EMIT_PROGRESS_NAMES = frozenset({"emit_progress", "_emit_progress"})
 _EMIT_NAMES = frozenset({"emit", "_emit"})
@@ -88,7 +88,7 @@ class _Site(NamedTuple):
 
 
 def _modules() -> Iterator[tuple[str, ast.Module]]:
-    """Every module under ``py_modules/services``, recursively."""
+    """Every module under ``backend/services``, recursively."""
     for path in sorted(_SERVICES_ROOT.rglob("*.py")):
         yield (
             path.relative_to(_SERVICES_ROOT.parent).as_posix(),
@@ -248,12 +248,11 @@ class TestScanScope:
 
     def test_no_frame_producer_lives_outside_the_scanned_root(self):
         # The root is the other half of the scope: a producer added outside
-        # py_modules/services would be invisible rather than wrong. Nothing emits a
-        # frame from there today — main.py and the rest of py_modules reach the
-        # sync only through the service — and this is what says so if that changes.
+        # backend/services would be invisible rather than wrong. Nothing emits a
+        # frame from there today — backend/main.py and the rest of backend reach
+        # the sync only through the service — and this is what says so if that changes.
         outside: list[str] = []
-        candidates = [_REPO_ROOT / "main.py", *(_REPO_ROOT / "py_modules").rglob("*.py")]
-        for path in sorted(candidates):
+        for path in sorted((_REPO_ROOT / "backend").rglob("*.py")):
             if _SERVICES_ROOT in path.parents or "_vendor" in path.parts:
                 continue
             tree = ast.parse(path.read_text(encoding="utf-8"))

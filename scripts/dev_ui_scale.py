@@ -83,12 +83,12 @@ debuggable targets; ``SharedJSContext`` is where ``SteamClient`` lives, and the
 ``Big-Picture-*`` / ``QuickAccess_*`` page targets are the two views we measure.
 
 The RFC 6455 client below is a deliberate copy of the one in
-``py_modules/adapters/renderer_gc.py`` rather than a shared import: that adapter is
+``backend/adapters/renderer_gc.py`` rather than a shared import: that adapter is
 shipped plugin code with a fail-open, single-command, payload-discarding contract, while
 this dev tool needs the evaluate *result*, several commands per run, and loud failures.
 Sharing would mean either widening the shipped adapter's contract for a dev-only need or
-adding a generic client to shipped ``lib/`` that no production path uses (it would land in
-the release zip and in Sonar's scope). RFC 6455 is frozen; these ~80 lines don't drift.
+adding a generic client to shipped ``lib/`` that no production path uses (it would ship
+with the plugin and land in Sonar's scope). RFC 6455 is frozen; these ~80 lines don't drift.
 """
 
 from __future__ import annotations

@@ -60,8 +60,8 @@ shortcut at every start.
 Three properties of that path are load-bearing:
 
 - **It ends in `/bin/rom-launcher`.** Ownership is decided by that suffix and nothing else (`isRomMShortcutDetails`,
-  `domain/shortcut_data.py::select_shortcuts_to_relocate`, and `py_modules/services/prune/requests.py`), so a launcher
-  kept under any other last two components makes every shortcut written before the move stop being recognised as ours.
+  `domain/shortcut_data.py::select_shortcuts_to_relocate`, and `backend/services/prune/requests.py`), so a launcher kept
+  under any other last two components makes every shortcut written before the move stop being recognised as ours.
 - **A shortcut nobody has repointed still launches.** The package still ships `bin/rom-launcher`, so the old path stays
   a real file; the rewrite is a repair, not a cutover, and nothing is written at all while the backend reports the
   launcher as not at its home.
@@ -360,7 +360,7 @@ editing `shortcuts.vdf` directly. Pass raw, **unquoted** paths through those API
 and on-device inspection confirms `AddShortcut`-created entries are stored unquoted; pre-quoting double-quotes the path
 and breaks launches (see [Exe quoting](#exe-quoting)).
 
-See: `py_modules/adapters/steam_config.py`
+See: `backend/adapters/steam_config.py`
 
 ## Collection management
 
@@ -444,7 +444,7 @@ The frontend stores the returned `appId` and the backend persists it as `shortcu
 synced-ROM registry; reverse-lookupable by `shortcut_app_id`). The frontend resolves rom_id ↔ appId through the
 backend's `get_app_id_rom_id_map()` callable, which reads that binding.
 
-The signed-int32 helper `to_signed_app_id(app_id)` remains in `py_modules/domain/sgdb_artwork.py` (alongside the SGDB
+The signed-int32 helper `to_signed_app_id(app_id)` remains in `backend/domain/sgdb_artwork.py` (alongside the SGDB
 endpoint/asset-type maps) for the `shortcuts.vdf` record format, but no longer has a production caller now that the icon
 write goes through `SteamClient` rather than editing the VDF.
 
@@ -516,13 +516,13 @@ immediate remount cannot let the old chain write launch options or invoke `RunGa
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `frontend/src/utils/steamShortcuts.ts`                | `addShortcut()`, `removeShortcut()`, `getExistingRomMShortcuts()`, `getLiveRomMShortcutAppIds()` (raw live appId scan for the sync-start reconcile) — frontend shortcut CRUD. The existing-shortcut scan emits a sync heartbeat every 10s between batches so a large library can't stall the run past the backend's per-unit heartbeat timeout |
 | `frontend/src/utils/syncManager.ts`                   | Listens for sync events, orchestrates shortcut creation/removal, artwork application, collection management. `reconcileStaleShortcuts()` runs the sync-start reconcile of Steam-UI-deleted shortcuts. Caches the existing-shortcut scan per run (keyed by the `sync_apply_unit` `run_id`) so it scans Steam once per run, not once per unit    |
-| `py_modules/services/shortcut_removal.py`             | `ShortcutRemovalService` — resolves shortcut-removal sets, unbinds removed ROMs, and runs `reconcile_live_shortcuts` (the sync-start reconcile of Steam-UI-deleted bindings)                                                                                                                                                                   |
+| `backend/services/shortcut_removal.py`                | `ShortcutRemovalService` — resolves shortcut-removal sets, unbinds removed ROMs, and runs `reconcile_live_shortcuts` (the sync-start reconcile of Steam-UI-deleted bindings)                                                                                                                                                                   |
 | `frontend/src/utils/collections.ts`                   | Machine-scoped Steam collection management                                                                                                                                                                                                                                                                                                     |
 | `frontend/src/bigpicture/patches/gameDetailPatch.tsx` | Route patch for `/library/app/:appid` — injects RomMPlaySection for custom game detail UI                                                                                                                                                                                                                                                      |
 | `frontend/src/utils/metadataPatches.ts`               | Store patches for description, associations, categories, release date display                                                                                                                                                                                                                                                                  |
-| `py_modules/adapters/steam_config.py`                 | `SteamConfigAdapter` — VDF read/write, grid dir, shortcut icon write, Steam Input config                                                                                                                                                                                                                                                       |
-| `py_modules/services/library/`                        | LibraryService — builds shortcut data, drives per-unit sync apply                                                                                                                                                                                                                                                                              |
-| `py_modules/domain/sgdb_artwork.py`                   | `to_signed_app_id`, SGDB asset-type/endpoint maps                                                                                                                                                                                                                                                                                              |
+| `backend/adapters/steam_config.py`                    | `SteamConfigAdapter` — VDF read/write, grid dir, shortcut icon write, Steam Input config                                                                                                                                                                                                                                                       |
+| `backend/services/library/`                           | LibraryService — builds shortcut data, drives per-unit sync apply                                                                                                                                                                                                                                                                              |
+| `backend/domain/sgdb_artwork.py`                      | `to_signed_app_id`, SGDB asset-type/endpoint maps                                                                                                                                                                                                                                                                                              |
 | `bin/rom-launcher`                                    | Pure `exec "$@"` wrapper invoked by Steam — runs the full launch command baked into the shortcut's launch options; owns no state, no path resolution, no emulator knowledge. Shipped here, **run from `<data root>/bin/rom-launcher`**: `bootstrap()` installs this copy there at every start (ADR-0032)                                       |
 
 ## Common Pitfalls

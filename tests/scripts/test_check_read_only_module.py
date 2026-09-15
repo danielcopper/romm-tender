@@ -29,9 +29,9 @@ if TYPE_CHECKING:
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SCRIPT_PATH = _REPO_ROOT / "scripts" / "check_read_only_module.py"
-_PROTOCOLS_PATH = _REPO_ROOT / "py_modules" / "services" / "protocols" / "repositories.py"
+_PROTOCOLS_PATH = _REPO_ROOT / "backend" / "services" / "protocols" / "repositories.py"
 
-_MODULE = "py_modules/services/library/local_library_reader.py"
+_MODULE = "backend/services/library/local_library_reader.py"
 _REASON = "it only ever reads"
 
 # The classification the gate must produce for every method the repository
@@ -142,7 +142,7 @@ class TestWritesAreFlagged:
 
     def test_a_missing_declared_module_is_a_finding(self, tmp_path: Path):
         # A stale entry must fail rather than pass vacuously.
-        findings = check.find_violations({"py_modules/nope.py": _REASON}, root=tmp_path)
+        findings = check.find_violations({"backend/nope.py": _REASON}, root=tmp_path)
         assert len(findings) == 1
         assert "could not be read" in findings[0]
 
@@ -229,7 +229,7 @@ class TestDocumentedBlindSpots:
 class TestTables:
     def test_repository_attrs_match_the_unit_of_work_protocol(self):
         # The scan's whole precision rests on this list being the UoW's own.
-        source = (_REPO_ROOT / "py_modules/services/protocols/uow.py").read_text(encoding="utf-8")
+        source = (_REPO_ROOT / "backend/services/protocols/uow.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
         uow_class = next(
             node for node in ast.walk(tree) if isinstance(node, ast.ClassDef) and node.name == "UnitOfWork"

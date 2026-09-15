@@ -66,31 +66,30 @@ the one a machine spends — folder names, the outgoing `User-Agent`, the `local
 **`plugin.json`'s `name` is the display name; `package.json`'s `name` is the identifier.** Two manifests side by side,
 alike enough to be read past, carrying different values — which is the confusion this entry exists to prevent. And
 `plugin.json`'s is read by a machine: Decky compares it against each installed manifest to decide whether a plugin is
-already installed, which is what ties the release asset's `Tender.zip` name to it — `.github/workflows/release.yml`
-records that chain in full. So being machine-read does not make a name the identifier, and this is the display name that
-cannot be changed casually.
+already installed, which is what tied the release asset's `Tender.zip` name to it for as long as one was published. No
+build here publishes that asset now. So being machine-read does not make a name the identifier, and this is the display
+name that cannot be changed casually.
 
 The display name has **three** homes, and nothing checks that they agree: `DISPLAY_NAME` in
-`py_modules/domain/identity.py`, `PLUGIN_NAME` in `frontend/src/utils/toast.ts`, and `plugin.json`'s `name`. Inside a
+`backend/domain/identity.py`, `PLUGIN_NAME` in `frontend/src/utils/toast.ts`, and `plugin.json`'s `name`. Inside a
 user-facing **sentence** it stays literal text — interpolating a constant into prose costs readability and buys nothing.
 A **heading** is not a sentence: a headline and the rule under it are one thing, so the headline is interpolated and the
 underline derived from its length.
 
-The identifier has **five** homes, separate because they answer five questions that must stay free to disagree:
+The identifier has **four** homes, separate because they answer four questions that must stay free to disagree:
 
 - `APP_DIR_NAME` (`domain/user_data_location.py`) — where the user's own data lives.
 - `package.json`'s `name` — the recovery root and the `User-Agent`, both through bootstrap, and nothing else.
-- `BUILD_ROOT` (`.github/workflows/release.yml`) — the folder a release unpacks into, and therefore the one Decky
-  derives its settings, data, log and plugin directories from. The packaging smoke test beside it guards that answer; it
-  does not decide it.
 - `_LEGACY_PLUGIN_FOLDER` (`services/legacy_install.py`) — the folder releases up to 0.30.1 unpacked into.
 - `SESSION_BREADCRUMB_KEY` (`frontend/src/utils/sessionManager.ts`) — the `localStorage` key naming the open-session
   breadcrumb, so a rename orphans every row written under the old one.
 
-Two places restate a home rather than being one: `SOURCE_FOLDER_NAMES`, beside `APP_DIR_NAME`, spells the first and the
-fourth out again as the migration's search list rather than composing them from either, and `mise.toml`'s deploy target
-is a hand-kept copy of the third that has to agree with it. Why the five stay apart is argued once, in
-`py_modules/domain/identity.py`'s module docstring.
+One place restates a home rather than being one: `SOURCE_FOLDER_NAMES`, beside `APP_DIR_NAME`, spells the first and the
+third out again as the migration's search list rather than composing them from either. A fifth home used to sit between
+the second and the third — the folder a release unpacked into, which Decky derived its four per-plugin directories from.
+That question was Decky's, asked because Decky derived; hosting the backend ourselves derives nothing, so it dissolved
+rather than moving to a new owner ([ADR-0035](docs/adr/0035-the-release-builds-no-decky-artifact.md)). Why the four stay
+apart is argued once, in `backend/domain/identity.py`'s module docstring.
 
 _Avoid_: "the plugin name" for either, since it names neither; and reading "a machine parses it" as "so it is the
 identifier" — `plugin.json`'s `name` is the counter-example.

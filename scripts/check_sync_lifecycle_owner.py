@@ -10,8 +10,8 @@ leave a half-reset run id (#1202).
 
 This check enforces that confinement: a raw attribute assignment whose target
 attribute is exactly ``sync_state`` or ``current_sync_id`` may appear ONLY in
-the owner module (``py_modules/services/library/_state.py``). Any other module
-under ``py_modules/services/library/`` that assigns one of those two fields —
+the owner module (``backend/services/library/_state.py``). Any other module
+under ``backend/services/library/`` that assigns one of those two fields —
 ``box.sync_state = ...``, ``self._box.current_sync_id = ...``, etc. — bypasses
 the verb-method API and is flagged.
 
@@ -33,7 +33,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-LIBRARY_DIR = REPO_ROOT / "py_modules" / "services" / "library"
+LIBRARY_DIR = REPO_ROOT / "backend" / "services" / "library"
 
 # The single module allowed to assign the run-lifecycle fields — the box itself.
 OWNER = LIBRARY_DIR / "_state.py"

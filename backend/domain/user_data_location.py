@@ -28,8 +28,8 @@ APP_DIR_NAME = "romm-tender"
 # from that package name (``decky_loader/plugin/sandboxed_plugin.py``). Built
 # from the checkout, that made the delivered folder follow the GitHub
 # repository, so the rename at 0.31.0 moved every user's data without anything
-# in the plugin asking for it; ``.github/workflows/release.yml`` now builds from
-# a copy at a fixed name, so a repository rename cannot move it again. Both
+# in the plugin asking for it; the roots below no longer sit under a
+# Decky-derived directory at all, so no rename can move them again. Both
 # spellings are searched, and the order is what breaks a tie in the last rung of
 # the ladder below.
 SOURCE_FOLDER_NAMES = ("decky-romm-sync", "romm-tender")

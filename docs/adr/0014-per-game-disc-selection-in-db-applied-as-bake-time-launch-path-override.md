@@ -87,7 +87,7 @@ care whether a playlist exists.
 ### 3. The selection lives on `roms.selected_disc`, mirroring `emulator_override` exactly
 
 A nullable `roms.selected_disc TEXT` column (migration
-[`004_add_selected_disc.sql`](https://github.com/danielcopper/decky-romm-sync/blob/main/py_modules/db/migrations/004_add_selected_disc.sql))
+[`004_add_selected_disc.sql`](https://github.com/danielcopper/decky-romm-sync/blob/main/backend/db/migrations/004_add_selected_disc.sql))
 holds the **disc basename** the user pinned (e.g. `"Example Quest - Second Journey (USA) (Disc 2).cue"`). It follows the
 `emulator_override` template point for point:
 

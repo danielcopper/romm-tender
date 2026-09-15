@@ -99,7 +99,7 @@ use role-based names without the token when it reads more naturally (`SyncEngine
 
 ## Module Responsibilities
 
-### Services (`py_modules/services/`)
+### Services (`backend/services/`)
 
 Two services are large enough to be decomposed into sub-service packages (`services/library/` and `services/saves/`);
 the rest are single modules. A service over ~1000 LOC is the decomposition signal.
@@ -1490,7 +1490,7 @@ fire-then-poll. The pass is **idempotent and appId-safe**: re-confirming a corre
 instantly, and a `launch_options` write does not change the shortcut's appId, so artwork, collections, and the shortcut
 identity survive. This heals drift from every cause at the next plugin load.
 
-### Adapters (`py_modules/adapters/`)
+### Adapters (`backend/adapters/`)
 
 Adapters own all I/O, and implement the Protocols defined in `services/protocols/` wherever a service puts the question
 through a seam. One row below implements none — `atlas_host.py`, which grants a process-global capability rather than
@@ -1519,9 +1519,9 @@ answering anything. Selected adapters:
 | `retroarch_core_info.py`                                                   | `RetroArchCoreInfoAdapter` — reads RetroArch `.info` files (`corename`, metadata)                                                                                                                                                                                                                                        |
 | `atlas_catalogue.py`                                                       | `AtlasCatalogueAdapter` — the ES-DE emulator catalogue through the vendored emu-atlas resolver (the picker's list, the system-layer default, the libretro active core, the per-system accept-list). Sorts the resolver's effective order back to the declared one, so no gamelist selection moves the default (ADR-0030) |
 | `atlas_host.py`                                                            | `grant_core_probe_interpreter()` — the process-global capabilities this runtime grants the vendored resolver, owned by none of the three atlas modules. Today one: the interpreter its core probe spawns, since the frozen loader is not one. Answers a log line, because `bootstrap/` may not hold a `_vendor` type     |
-| `atlas_saves.py`                                                           | `AtlasSaveLocationAdapter` — where one ROM's save lives and what it consists of, asked of the catalogue entry the plugin resolved for it and always with the ROM's own content path, since the answer turns on the content file's extension (ADR-0031). Caches no answer; holds only the installation handle             |
+| `atlas_saves.py`                                                           | `AtlasSaveLocationAdapter` — where one ROM's save lives and what it consists of, asked of the catalogue entry the plugin resolved for it and always with the ROM's own content path, since the answer turns on the content file's extension (ADR-0034). Caches no answer; holds only the installation handle             |
 | `es_find_rules.py`                                                         | `EsFindRulesAdapter` — ES-DE `es_find_rules.xml`: whether a standalone emulator's binary is installed, and the sandbox component launcher the folder-boot bake execs                                                                                                                                                     |
-| `gavel_native.py`                                                          | `GavelNativeAdapter` — loads the compiled [romm-gavel](https://github.com/danielcopper/romm-gavel) core (`py_modules/native/libgavel-x86_64-linux.so`) via `ctypes`; is itself the `ResolveUploadConflictFn` seam and provides the `ComputeSyncActionFn` seam, the two save-sync decisions (no Python fallback)          |
+| `gavel_native.py`                                                          | `GavelNativeAdapter` — loads the compiled [romm-gavel](https://github.com/danielcopper/romm-gavel) core (`backend/native/libgavel-x86_64-linux.so`) via `ctypes`; is itself the `ResolveUploadConflictFn` seam and provides the `ComputeSyncActionFn` seam, the two save-sync decisions (no Python fallback)             |
 | `system_clock.py` / `system_uuid_gen.py` / `asyncio_sleeper.py`            | concrete `Clock` / `UuidGen` / `Sleeper` seams                                                                                                                                                                                                                                                                           |
 | `hostname.py` / `path_probe.py` / `plugin_metadata.py` / `debug_logger.py` | hostname, the generic path seams (exists, symlink-resolve), `package.json` name/version reader, settings-aware debug logger                                                                                                                                                                                              |
 | `renderer_rss.py` / `renderer_gc.py`                                       | `RendererRssFn` — max `steamwebhelper` `VmRSS` from `/proc`; `RendererGcFn` (`HeapProfiler.collectGarbage`) over the CEF debugger. The session-budget measure + settle seams (ADR-0024). The "free memory" action is a frontend `SteamClient.User.StartRestart`, not a backend adapter                                   |
@@ -1699,7 +1699,7 @@ rather than in-tree Python:
 - the upload-409 resolution (the decision, on a `409` from RomM's `add_save`, to either `download` the server head or
   surface a `conflict`).
 
-`GavelNativeAdapter` loads `py_modules/native/libgavel-x86_64-linux.so` via `ctypes` at construction and binds both
+`GavelNativeAdapter` loads `backend/native/libgavel-x86_64-linux.so` via `ctypes` at construction and binds both
 symbols. It is itself the `ResolveUploadConflictFn` seam, and its `compute_sync_action` method is the
 `ComputeSyncActionFn` seam (both in `services/protocols/infra.py`); both are injected through `SaveServiceConfig` →
 `SyncEngineConfig` → `MatrixExecutor`, which calls the decision once per file in `iter_matrix_outcomes` and the 409
@@ -1714,14 +1714,14 @@ backstop in `_handle_upload_409` (`services/saves/sync_engine/matrix.py`).
   measured is a real case, distinct from a missing one. The core answers with the chosen `server_save_id`, which the
   adapter resolves back to the caller's own save dict so `Download` / `Conflict` carry the full record their consumers
   read.
-- **What ships**: `py_modules/native/libgavel-x86_64-linux.so` (romm-gavel `v1.0.1`, a freestanding build with zero
-  library dependencies — it loads on any x86_64 Linux), vendored verbatim from the upstream release with a pinned
-  SHA-256 checksum. The C ABI has been part of upstream's promise since `v1.0.0`: struct layouts, signatures and
-  enumerator values now cost a major bump to change, which is what makes pinning a compiled artifact meaningful.
-  Provenance and the update procedure live in
-  [`native/README.md`](https://github.com/danielcopper/decky-romm-sync/blob/main/py_modules/native/README.md). The
-  checksum is re-verified by CI and the release smoke test asserts the `.so` is present in the plugin zip, so both a
-  swapped binary and a dropped artifact fail the pipeline.
+- **What ships**: `backend/native/libgavel-x86_64-linux.so` (romm-gavel `v1.0.1`, a freestanding build with zero library
+  dependencies — it loads on any x86_64 Linux), vendored verbatim from the upstream release with a pinned SHA-256
+  checksum. The C ABI has been part of upstream's promise since `v1.0.0`: struct layouts, signatures and enumerator
+  values now cost a major bump to change, which is what makes pinning a compiled artifact meaningful. Provenance and the
+  update procedure live in
+  [`native/README.md`](https://github.com/danielcopper/decky-romm-sync/blob/main/backend/native/README.md). The checksum
+  is re-verified by CI, so a swapped binary fails the pipeline; nothing asserts the `.so` reaches a built package,
+  because no build here produces one.
 - **No fallback**: if the library cannot load, `GavelNativeLoadError` propagates so `bootstrap()` aborts and the plugin
   stays inert — the same "fatal until the environment is fixed" posture as the SQLite migration gate. There is no Python
   implementation of either decision to fall back to: `domain/sync_action.py` holds only the `SyncAction` vocabulary the
@@ -1734,10 +1734,9 @@ backstop in `_handle_upload_409` (`services/saves/sync_engine/matrix.py`).
 
 Which firmware files an emulator wants is read **live off the machine** through two seams — `FirmwarePlatformResolver`
 for one platform, `FirmwareResolver` for the whole machine — both implemented by `adapters/atlas_firmware.py` over the
-vendored [emu-atlas](https://github.com/danielcopper/emu-atlas) copy in `py_modules/_vendor/atlas/` (provenance in
-[`_vendor/README.md`](https://github.com/danielcopper/decky-romm-sync/blob/main/py_modules/_vendor/README.md)). It
-replaced `defaults/bios_registry.json`, a frozen snapshot that no longer exists upstream and could never be refreshed
-again.
+vendored [emu-atlas](https://github.com/danielcopper/emu-atlas) copy in `backend/_vendor/atlas/` (provenance in
+[`_vendor/README.md`](https://github.com/danielcopper/decky-romm-sync/blob/main/backend/_vendor/README.md)). It replaced
+`defaults/bios_registry.json`, a frozen snapshot that no longer exists upstream and could never be refreshed again.
 
 - **The seam exists because of a contract, not a preference.** `domain/` may not import `_vendor` (the
   `domain-stdlib-only` import-linter contract), so the answer has to arrive through an adapter and `domain/` keeps only
@@ -2038,7 +2037,7 @@ rule warns against, because the copies would drift in silence. The same answer i
 which is what each row's button is offered on — never `downloaded`, which is `os.path.exists` and equally true of
 firmware RetroDECK ships.
 
-### Domain (`py_modules/domain/`)
+### Domain (`backend/domain/`)
 
 Domain modules contain pure logic with no I/O and no Decky imports. They take inputs and return outputs; anything
 stateless and I/O-free that would otherwise sit in a service lives here. Domain is stdlib + self only — it imports no
@@ -2054,7 +2053,7 @@ documented in [Database Design](database-design.md). Selected modules:
 | `work_unit.py`                                               | `WorkUnit` — the per-unit sync work item                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `rom_save_sync_state.py`                                     | `RomSaveSyncState` aggregate + `FileSyncState` value object — per-ROM save-sync state, backed by `rom_save_sync_states` + `rom_save_files`                                                                                                                                                                                                                                                                                                                                                                                         |
 | `save_path.py` / `save_attribution.py` / `save_status*.py`   | save path resolution, uploader attribution, status DTO building                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `save_answer.py`                                             | `SaveAnswer` / `SaveComponent` / `SaveGroup` and the rule that classifies one resolver reading into exactly one of the five save states. Holds the progress-vs-configuration role rule, the download-name fold, and the benign-skip reason the four refusing states produce (ADR-0031)                                                                                                                                                                                                                                             |
+| `save_answer.py`                                             | `SaveAnswer` / `SaveComponent` / `SaveGroup` and the rule that classifies one resolver reading into exactly one of the five save states. Holds the progress-vs-configuration role rule, the download-name fold, and the benign-skip reason the four refusing states produce (ADR-0034)                                                                                                                                                                                                                                             |
 | `firmware_paths.py` / `bios_status.py` / `firmware_wants.py` | BIOS path computation, the status shape, and the resolver's vocabulary. `bios_status.py` holds the status dataclasses (`BiosFileEntry`, `BiosStatus`) and owns the unknown/ok/partial/missing LEVEL (`compute_bios_level` / `compute_bios_label`) — the single source of truth all surfaces read; phrasing + color stay UI-layer. `firmware_wants.py` holds only the words a firmware answer arrives in (`FirmwareCatalogue` / `FirmwarePlacement`, the four `wanted` values) — the decisions are the resolver's, not this layer's |
 | `iso_time.py`                                                | `parse_iso` / `parse_iso_to_epoch` — ISO-8601 timestamp parsing (stdlib only)                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `achievements.py`                                            | achievement progress computation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
@@ -2067,13 +2066,13 @@ documented in [Database Design](database-design.md). Selected modules:
 | `state_migrations.py`                                        | `migrate_settings` (`settings.json`) + `fold_legacy_save_sync_settings` (one-time legacy `save_sync_state.json` fold)                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `sync_state.py`                                              | `SyncState` enum (idle, running, cancelling)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `emulator_tag.py` / `version.py`                             | emulator-tag formatting, version parsing, core-change detection                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `identity.py`                                                | `DISPLAY_NAME` — the plugin's name where a person reads it: the toast sender, the RomM token label, the registered-device client, and the headline of each of the three files opened by hand (a recovery bundle's README, the recovery root's, and the note a data migration leaves behind). The identifier `romm-tender` is deliberately not here and not in one place; which name a new string takes is CONTEXT.md's "Display name vs identifier" entry; why its five homes stay apart is this module's docstring                |
+| `identity.py`                                                | `DISPLAY_NAME` — the plugin's name where a person reads it: the toast sender, the RomM token label, the registered-device client, and the headline of each of the three files opened by hand (a recovery bundle's README, the recovery root's, and the note a data migration leaves behind). The identifier `romm-tender` is deliberately not here and not in one place; which name a new string takes is CONTEXT.md's "Display name vs identifier" entry; why its four homes stay apart is this module's docstring                |
 
 **Config-source parsers** follow a dedicated domain+adapter template (pure parse in domain, I/O in adapter, callback
 Protocol into services). The full pattern, source catalog, and decisions log are on the
 [Config Source Parsers](config-source-parsers.md) page.
 
-### Models (`py_modules/models/`)
+### Models (`backend/models/`)
 
 TypedDicts and dataclasses describing on-disk and in-flight data shapes (`state.py`, `metadata.py`). Models import
 nothing from the other layers.
@@ -2099,9 +2098,10 @@ The plugin's own data lives under the **user's home directory**, in two roots bu
 **Why not Decky's directories.** Decky derives every per-plugin directory from the plugin's folder name, which its CLI
 takes from the directory it builds from. Built from the checkout, that made the delivered folder follow the GitHub
 repository — so the rename at 0.31.0 silently moved every user's data, and nothing inside the plugin could have
-prevented it or noticed. `.github/workflows/release.yml` now builds from a copy at a fixed name and asserts the result,
-so a repository rename cannot move it again ([ADR-0033](../adr/0033-the-shipped-folder-name-is-chosen-here.md)); putting
-the roots under the home directory takes the decision away from packaging entirely
+prevented it or noticed. The release workflow pinned that name afterwards
+([ADR-0033](../adr/0033-the-shipped-folder-name-is-chosen-here.md)) and the pin went with the Decky zip, so nothing
+chooses a delivered folder here today. What keeps the data safe regardless is that the roots sit under the home
+directory, which takes the decision away from packaging entirely
 ([ADR-0031](../adr/0031-user-data-lives-outside-the-plugin-directory.md)). The two are separate on purpose: one decides
 where the user's data lives, the other what the plugin ships as, and neither may be derived from the other.
 
@@ -2188,8 +2188,8 @@ running right now is executing that file, and bash reads a script as it runs it.
 anything at all as already migrated, so a launcher written into an empty data root would settle that rung for the life
 of the install and the user's library would never come across, silently. Whether the half landed is read off what the
 migration just returned — `locations.data_dir` IS the new root — rather than by probing the directory a second time. A
-start that has not got there installs nothing and creates nothing, and `ShortcutLauncher.path` is then the copy the
-release ships inside the plugin folder: a real file, so a sync in that state still produces shortcuts that launch.
+start that has not got there installs nothing and creates nothing, and `ShortcutLauncher.path` is then the copy that
+ships inside the plugin folder: a real file, so a sync in that state still produces shortcuts that launch.
 
 `ShortcutLauncher` carries the two answers apart on purpose. `path` is what a newly built shortcut names, and follows
 the INSTALL rather than the migration: the home where this start actually got the launcher into it, the shipped copy
@@ -2350,11 +2350,11 @@ type = independence
 modules = services.library, services.saves, services.playtime, ...
 ```
 
-Run with `PYTHONPATH=py_modules lint-imports` (or `mise run lint`). CI gates on this.
+Run with `PYTHONPATH=backend lint-imports` (or `mise run lint`). CI gates on this.
 
 The `service-independence` `modules` list is hand-enumerated, so `scripts/check_service_independence_contract.py`
-(bundled into `mise run lint` and gated in CI) derives the expected services from `py_modules/services/` and fails if
-the contract omits a service or carries a stale entry — keeping the list self-healing rather than silently rotting.
+(bundled into `mise run lint` and gated in CI) derives the expected services from `backend/services/` and fails if the
+contract omits a service or carries a stale entry — keeping the list self-healing rather than silently rotting.
 
 ### 2. Cosmic Python call bans
 

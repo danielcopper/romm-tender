@@ -97,7 +97,7 @@ and together they make "mutate an aggregate's fields from a service" fail before
 
 ### 1. The `@cosmic_aggregate` decorator
 
-`py_modules/domain/_aggregate.py` defines the single canonical way to declare an aggregate root:
+`backend/domain/_aggregate.py` defines the single canonical way to declare an aggregate root:
 
 ```python
 from domain._aggregate import cosmic_aggregate
@@ -125,8 +125,8 @@ enforces the **mutation-only-via-methods** rule that a type checker cannot expre
 
 How it works:
 
-1. It walks `py_modules/domain/`, parses every file, and collects the class names decorated with `@cosmic_aggregate`.
-2. It walks `py_modules/services/` and flags every assignment whose target is `<receiver>.<field> = ...` where the
+1. It walks `backend/domain/`, parses every file, and collects the class names decorated with `@cosmic_aggregate`.
+2. It walks `backend/services/` and flags every assignment whose target is `<receiver>.<field> = ...` where the
    receiver's variable name matches an aggregate class name (exact snake_case identifier match — variable `rom` matches
    aggregate `Rom`, `rom_state` does not). It skips `self.x = ...` (method-body internals) and subscript receivers
    (`d["k"].x = ...`).
@@ -187,7 +187,7 @@ Tests are exempt via an execution-environment override:
 ```toml
 [[tool.basedpyright.executionEnvironments]]
 root = "tests"
-extraPaths = ["py_modules"]
+extraPaths = ["backend"]
 reportPrivateUsage = "none"
 ```
 
@@ -240,7 +240,7 @@ file, "savestate" (one word) always means the emulator snapshot; neither is ever
 
 The tables that back the aggregates, designed in [#780](https://github.com/danielcopper/decky-romm-sync/issues/780). The
 authoritative DDL — every column type, default, constraint, and the full decision rationale inline — is
-[`py_modules/db/migrations/001_initial.sql`](https://github.com/danielcopper/decky-romm-sync/blob/main/py_modules/db/migrations/001_initial.sql).
+[`backend/db/migrations/001_initial.sql`](https://github.com/danielcopper/decky-romm-sync/blob/main/backend/db/migrations/001_initial.sql).
 This section is the map, not a re-derivation.
 
 ### One table per aggregate
@@ -353,7 +353,7 @@ read-performance indexing is still deferred until profiling justifies it, per th
 
 The schema above is not loaded as a special case — it is migration `001`, applied by the same runner that applies every
 future schema change. The runner lives in
-[`py_modules/adapters/sqlite_migrations.py`](https://github.com/danielcopper/decky-romm-sync/blob/main/py_modules/adapters/sqlite_migrations.py)
+[`backend/adapters/sqlite_migrations.py`](https://github.com/danielcopper/decky-romm-sync/blob/main/backend/adapters/sqlite_migrations.py)
 ([#781](https://github.com/danielcopper/decky-romm-sync/issues/781)) — it does file + database I/O, so it is an adapter
 — and is invoked from `bootstrap()` at plugin startup, before any service is wired. stdlib `sqlite3` only; no Alembic or
 other third-party migration tooling.
@@ -364,10 +364,10 @@ other third-party migration tooling.
 is the whole mechanism (the same lean approach SDH-PlayTime and Junk-Store use). This is why the schema version is
 deliberately **not** a `kv_config` key.
 
-**Discovery — `NNN_descriptive_name.sql`.** Migrations are plain `.sql` files under `py_modules/db/migrations/`, named
-with a leading integer (`001_initial.sql`). At startup the runner scans that directory, parses the integer prefix off
-each filename, sorts ascending **numerically** (so `10` follows `2`, not lexically), and applies only the files whose
-number is greater than the database's current `user_version`. Files that don't match `NNN_*.sql` are ignored.
+**Discovery — `NNN_descriptive_name.sql`.** Migrations are plain `.sql` files under `backend/db/migrations/`, named with
+a leading integer (`001_initial.sql`). At startup the runner scans that directory, parses the integer prefix off each
+filename, sorts ascending **numerically** (so `10` follows `2`, not lexically), and applies only the files whose number
+is greater than the database's current `user_version`. Files that don't match `NNN_*.sql` are ignored.
 
 **Atomic per migration.** Each migration runs inside its own transaction: `BEGIN` → the migration's DDL →
 `PRAGMA user_version = NNN` → `COMMIT`. The version bump rides the same transaction as the DDL, so a migration is
@@ -396,14 +396,14 @@ silently) so a corrupt or unmigratable database never serves stale reads. The mi
 
 ### Adding a migration past v1
 
-Drop a new file `NNN_descriptive_name.sql` into `py_modules/db/migrations/` containing the schema change (e.g.
+Drop a new file `NNN_descriptive_name.sql` into `backend/db/migrations/` containing the schema change (e.g.
 `ALTER TABLE roms ADD COLUMN …;` or a fresh `CREATE TABLE …;`) as transaction-safe DDL with no `BEGIN`/`COMMIT`. That's
 the whole change — on the next startup the runner sees `NNN > user_version`, applies it inside its own transaction, and
 bumps `user_version` to `NNN`. Existing databases receive only the new migrations; fresh databases receive all of them
 in order. No code change is needed to register the file.
 
 The first migration past `001` is
-[`002_add_emulator_override.sql`](https://github.com/danielcopper/decky-romm-sync/blob/main/py_modules/db/migrations/002_add_emulator_override.sql)
+[`002_add_emulator_override.sql`](https://github.com/danielcopper/decky-romm-sync/blob/main/backend/db/migrations/002_add_emulator_override.sql)
 — a single `ALTER TABLE roms ADD COLUMN emulator_override TEXT;` for the per-game core override
 ([ADR-0011](https://github.com/danielcopper/decky-romm-sync/blob/main/docs/adr/0011-per-game-core-override-in-db-applied-via-e-flag.md)),
 which stamps `user_version = 2`.
@@ -628,10 +628,10 @@ both default to launchable.
 
 The schema is read and written at runtime through a **Unit of Work** (UoW) — the atomic transaction boundary one
 operation works inside. The concrete UoW and the eleven `sqlite3` repository adapters that back it live in
-[`py_modules/adapters/repositories/`](https://github.com/danielcopper/decky-romm-sync/tree/main/py_modules/adapters/repositories)
+[`backend/adapters/repositories/`](https://github.com/danielcopper/decky-romm-sync/tree/main/backend/adapters/repositories)
 ([#783](https://github.com/danielcopper/decky-romm-sync/issues/783)). The `UnitOfWork` / `UnitOfWorkFactory` Protocols
-services depend on live in `py_modules/services/protocols/uow.py`; the per-aggregate Repository Protocols in
-`py_modules/services/protocols/repositories.py` ([#782](https://github.com/danielcopper/decky-romm-sync/issues/782)).
+services depend on live in `backend/services/protocols/uow.py`; the per-aggregate Repository Protocols in
+`backend/services/protocols/repositories.py` ([#782](https://github.com/danielcopper/decky-romm-sync/issues/782)).
 
 **Synchronous `sqlite3`, not `aiosqlite`.** Per
 [ADR-0004](https://github.com/danielcopper/decky-romm-sync/blob/main/docs/adr/0004-sync-sqlite-unit-of-work.md) the

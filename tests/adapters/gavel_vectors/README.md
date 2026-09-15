@@ -22,5 +22,5 @@ There is no submodule and no network access in CI — a vector change must surfa
 Updating means deliberately re-copying the files from the matching upstream `vectors/<family>/` directory and updating
 the release tag above — upstream's `CONTRIBUTING.md` asks clients to pin a tag, not a raw commit, because a changed
 expected value has to arrive as a version bump. Do not reformat the copied files; they must stay byte-for-byte identical
-to upstream. The vendored `py_modules/native/libgavel-x86_64-linux.so` is pinned to the same release: bump the two
+to upstream. The vendored `backend/native/libgavel-x86_64-linux.so` is pinned to the same release: bump the two
 together, never one alone.

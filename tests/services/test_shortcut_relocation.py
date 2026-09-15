@@ -156,7 +156,7 @@ class TestTheStampHasOneWriter:
     under it from elsewhere would pass every assertion here.
     """
 
-    _SOURCE = _REPO_ROOT / "py_modules" / "services" / "shortcut_relocation.py"
+    _SOURCE = _REPO_ROOT / "backend" / "services" / "shortcut_relocation.py"
 
     @classmethod
     def _tree(cls) -> ast.Module:

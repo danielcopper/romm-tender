@@ -9,7 +9,7 @@ informs the implementation of [#196](https://github.com/danielcopper/decky-romm-
     retired.** The plugin now asks the machine which files a game's save consists of, per game and per the emulator
     that will launch it, and reads the answer fresh on every sync — see
     [Save sync coverage](../architecture/save-sync-coverage.md) and
-    [ADR-0031](https://github.com/danielcopper/decky-romm-sync/blob/main/docs/adr/0031-a-save-is-answered-by-the-emulator-that-writes-it.md).
+    [ADR-0034](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0034-a-save-is-answered-by-the-emulator-that-writes-it.md).
 
     Measuring the same systems against that live reading showed the table was wrong in both directions, and wrong in a
     way a table cannot fix: **the answer depends on the game file's own extension.** An Amiga `.adf` keeps its save

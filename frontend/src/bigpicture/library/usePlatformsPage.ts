@@ -311,7 +311,7 @@ export function usePlatformsPage(): PlatformsPageState {
   const [downloadFailed, setDownloadFailed] = useState<string | null>(null);
   // Cleared on unmount, so a page left during the window cannot set state on a
   // gone component. A plain timer is the right tool here: the injected-clock
-  // rule is scoped to `py_modules/services/**`, and this file's siblings
+  // rule is scoped to `backend/services/**`, and this file's siblings
   // (`CustomPlayButton`) already hold their timers in a ref this way.
   const failedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(

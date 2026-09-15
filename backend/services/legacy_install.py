@@ -25,9 +25,8 @@ if TYPE_CHECKING:
 # directory below is asked the same question. Built from the checkout, that made
 # the delivered folder follow the GitHub repository: the rename to
 # ``romm-tender`` at 0.31.0 moved every user's data with nothing in the plugin
-# asking for it. ``.github/workflows/release.yml`` now builds from a copy at a
-# fixed name and asserts it, so the delivered spelling is chosen in that
-# workflow — but this one is finished history and follows nothing.
+# asking for it. No build here delivers a folder at all now — but this one is
+# finished history either way, and follows nothing.
 _LEGACY_PLUGIN_FOLDER = "decky-romm-sync"
 
 # The user's answer to the one statement this card makes that they are free to

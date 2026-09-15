@@ -11,7 +11,7 @@ reaches is a property of the grant rather than of the module. The one below is
 read by a single question in :mod:`adapters.atlas_saves` and by nothing else.
 
 One grant today, and the shape is the reason it has a module of its own rather
-than a corner of one of those three: ``py_modules/_vendor/README.md`` names
+than a corner of one of those three: ``backend/_vendor/README.md`` names
 ``backports.zstd`` as the next package expected under ``_vendor/``, and the codec
 it carries reaches the resolver through ``register_zstd_provider`` — a different
 process-global slot of the same kind (``squashfs._registered_provider`` beside

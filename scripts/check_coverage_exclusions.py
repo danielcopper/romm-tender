@@ -97,7 +97,7 @@ FOLDER_ENTRIES = {
 SONAR_ONLY = {
     "**/tests/**": "the Python suite — Vitest's coverage scope is frontend/src only",
     "**/conftest.py": "pytest fixtures — Python, as above",
-    "py_modules/_vendor/**": "vendored third-party Python — not our code, and not TypeScript",
+    "backend/_vendor/**": "vendored third-party Python — not our code, and not TypeScript",
     "*.config.js": "root build/test/lint config — outside Vitest's frontend/src include",
     "*.config.ts": "root build/test/lint config — outside Vitest's frontend/src include",
 }
@@ -112,7 +112,7 @@ VITEST_ONLY = {
 # frontend/src, because a marked file that MOVED is exactly the accident this
 # gate exists for.
 MARKER_SUFFIXES = (".ts", ".tsx", ".js", ".jsx")
-MARKER_SKIP = ("node_modules/", "py_modules/_vendor/", "dist/", "site/", "coverage/")
+MARKER_SKIP = ("node_modules/", "backend/_vendor/", "dist/", "site/", "coverage/")
 
 
 def vitest_exclusions(text: str) -> list[str]:

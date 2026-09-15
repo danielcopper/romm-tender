@@ -1,9 +1,8 @@
 # Native binaries
 
-Compiled artifacts that ship inside `py_modules/` (one of the fixed directories the Decky CLI packs into the plugin zip;
-a top-level directory would be silently dropped). Unlike the Python packages under `py_modules/_vendor/`, these have no
-source in this repo — they are downloaded verbatim from an upstream release, so a pinned checksum (verified in CI and at
-release time) is what makes an update a deliberate, reviewable diff rather than a silent binary swap.
+Compiled artifacts that ship inside `backend/`. Unlike the Python packages under `backend/_vendor/`, these have no
+source in this repo — they are downloaded verbatim from an upstream release, so a pinned checksum (verified in CI) is
+what makes an update a deliberate, reviewable diff rather than a silent binary swap.
 
 The `.so` is loaded by [`adapters/gavel_native.py`](../adapters/gavel_native.py) via `ctypes`; there is no Python
 fallback, so a missing or mismatched artifact is a fatal, loud failure at bootstrap.
@@ -27,13 +26,13 @@ per-`(rom, filename, slot)` sync action (`gavel_compute_sync_action`) and the up
 1. Download the artifact and its checksum from a newer release:
 
    ```sh
-   gh release download <tag> -R danielcopper/romm-gavel -p 'libgavel-x86_64-linux.so*' -D py_modules/native/
+   gh release download <tag> -R danielcopper/romm-gavel -p 'libgavel-x86_64-linux.so*' -D backend/native/
    ```
 
 2. Verify the downloaded artifact against its checksum:
 
    ```sh
-   cd py_modules/native && sha256sum -c libgavel-x86_64-linux.so.sha256
+   cd backend/native && sha256sum -c libgavel-x86_64-linux.so.sha256
    ```
 
 3. Bump the **Release** tag above.
@@ -42,5 +41,4 @@ per-`(rom, filename, slot)` sync action (`gavel_compute_sync_action`) and the up
    vectors. A gavel major bump means at least one expected outcome changed, so re-copy the vectors
    (`tests/adapters/gavel_vectors/`) in the same change.
 
-The checksum is re-verified by CI (`.github/workflows/ci.yml`) and the release smoke test asserts the `.so` is present
-in the zip, so both a swapped binary and a dropped artifact fail the pipeline.
+The checksum is re-verified by CI (`.github/workflows/ci.yml`), so a swapped binary fails the pipeline.

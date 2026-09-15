@@ -4,7 +4,8 @@ The single seam through which save-sync reaches the compiled
 `romm-gavel <https://github.com/danielcopper/romm-gavel>`_ core for both of its
 decisions: the full per-``(rom, filename, slot)`` sync action and the upload-409
 resolution fallback. Owns the ``ctypes`` load of the vendored
-``py_modules/native/libgavel-x86_64-linux.so`` and the FFI marshalling around its C
+``native/libgavel-x86_64-linux.so`` beside this package, and the FFI
+marshalling around its C
 ABI. The adapter is itself the callable implementing the
 ``ResolveUploadConflictFn`` Protocol, and its :meth:`compute_sync_action` bound
 method implements ``ComputeSyncActionFn``, so services consume both decisions
@@ -44,9 +45,9 @@ from domain.sync_action import Conflict, Download, Skip, SyncAction, Upload
 
 # Module-relative path to the vendored shared object, mirroring
 # ``adapters.sqlite_migrations.MIGRATIONS_DIR``: resolving off ``__file__``
-# (not the plugin dir) locates the artifact identically in the installed
-# plugin (``<plugin>/py_modules/native/…``) and in the repo checkout tests
-# run from, so the no-fallback load succeeds in both.
+# (not the plugin dir) locates the artifact wherever the backend tree is
+# placed — an install and the repo checkout tests run from alike — so the
+# no-fallback load succeeds in both.
 _BUNDLED_LIB_PATH = os.path.normpath(
     os.path.join(os.path.dirname(__file__), os.pardir, "native", "libgavel-x86_64-linux.so")
 )

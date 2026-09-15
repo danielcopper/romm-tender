@@ -1,6 +1,6 @@
 ---
 paths:
-  - "py_modules/services/**"
+  - "backend/services/**"
 ---
 
 # Services — Cosmic Python rules

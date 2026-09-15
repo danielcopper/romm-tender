@@ -38,23 +38,22 @@ see [How this is built](../index.md). Install it from the URL below.
 4. Open the **Developer** tab and select **Install Plugin from URL**
 5. Enter the direct URL to the release zip
 
-   This one always points at the newest release, so it needs no version number — and pasting it again later is how you
-   update:
+   This names one fixed release, `tender-v0.33.0`:
 
    ```text
-   https://github.com/danielcopper/romm-tender/releases/latest/download/Tender.zip
+   https://github.com/danielcopper/romm-tender/releases/download/tender-v0.33.0/Tender.zip
    ```
 
-   To pin a specific version instead, name its tag:
+   Any other version is named the same way, by its tag:
 
    ```text
    https://github.com/danielcopper/romm-tender/releases/download/tender-v{VERSION}/Tender.zip
    ```
 
-   Every release from `tender-v0.31.0` on carries this asset — `tender-v0.31.0` itself published it as `tender.zip`, and
-   GitHub matches release-asset names case-insensitively, so the URL above still finds it. Most of the
-   `decky-romm-sync-v{VERSION}` releases before it published `decky-romm-sync.zip`; name that tag and that file for
-   those. Four have no asset at all: the three earliest and `v0.2.0`.
+   `tender-v0.33.0` is the newest release carrying this asset, and releases from `tender-v0.31.0` up to it all carry it
+   — `tender-v0.31.0` itself published it as `tender.zip`, and GitHub matches release-asset names case-insensitively, so
+   the URL still finds it. Most of the `decky-romm-sync-v{VERSION}` releases before it published `decky-romm-sync.zip`;
+   name that tag and that file for those. Four have no asset at all: the three earliest and `v0.2.0`.
 
 6. Decky downloads and installs the plugin automatically — no restart needed
 

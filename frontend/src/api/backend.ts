@@ -1213,7 +1213,7 @@ export const getPlaytimeScopeNotice = callable<[], { pending: boolean }>("get_pl
 
 // End-of-session orchestration — collapses recordSessionEnd + syncAchievementsAfterSession
 // + postExitSync + refreshMigrationState into a single backend round-trip.
-// See SessionLifecycleService in py_modules/services/session_lifecycle.py.
+// See SessionLifecycleService in backend/services/session_lifecycle.py.
 interface SessionFinalizeSyncResult {
   offline: boolean;
   success: boolean;

@@ -550,8 +550,8 @@ The algorithm runs in the compiled [romm-gavel](https://github.com/danielcopper/
 `ComputeSyncActionFn` seam that `GavelNativeAdapter` provides (see
 [GavelNativeAdapter notes](backend-architecture.md#gavelnativeadapter-notes-the-compiled-save-sync-core) for the
 marshalling and the no-fallback posture). It answers in the `SyncAction` dataclasses defined in
-`py_modules/domain/sync_action.py` — which is all that module holds, the decision itself living nowhere in Python. The
-`SaveService` aggregate (`py_modules/services/saves/`) calls the seam from two sub-services:
+`backend/domain/sync_action.py` — which is all that module holds, the decision itself living nowhere in Python. The
+`SaveService` aggregate (`backend/services/saves/`) calls the seam from two sub-services:
 
 - `SyncEngine.do_sync_rom_saves` (`services/saves/sync_engine/`) iterates local files and server-only-in-slot groups,
   dispatching each action via the matrix executor's `_dispatch_sync_action` (POST/GET + state update; the in-place PUT
@@ -811,9 +811,9 @@ This path varies depending on where RetroDECK was installed:
 - **Internal SSD**: `/home/deck/retrodeck/saves/`
 - **SD card**: `/run/media/deck/Emulation/retrodeck/saves/`
 
-The backend reads `retrodeck.json` → `paths.saves_path` as the source of truth
-(`py_modules/adapters/retrodeck_paths.py`). When that file is unreadable — e.g. a fresh install with no RetroDECK
-configured yet — it falls back to the hardcoded RetroDECK default `~/retrodeck/saves`.
+The backend reads `retrodeck.json` → `paths.saves_path` as the source of truth (`backend/adapters/retrodeck_paths.py`).
+When that file is unreadable — e.g. a fresh install with no RetroDECK configured yet — it falls back to the hardcoded
+RetroDECK default `~/retrodeck/saves`.
 
 The plugin deliberately does **not** read `savefile_directory` from `retroarch.cfg`; it takes the saves root from
 `retrodeck.json` → `paths.saves_path`. RetroDECK re-pins `savefile_directory = saves_path` only at **first-run
@@ -981,7 +981,7 @@ explicitly clicks the migrate button in Settings.
 
 ### Newest-wins conflict resolution
 
-Implemented in `_resolve_save_sort_conflict` in `py_modules/services/migration/save_sort.py`.
+Implemented in `_resolve_save_sort_conflict` in `backend/services/migration/save_sort.py`.
 
 **The scenario**: the user enables `sort_savefiles_enable` mid-game and saves in-game. RetroArch writes fresh progress
 to the new layout — e.g. `saves/gba/mGBA/Example Quest.srm`. The old file at the original layout — e.g.
@@ -1189,7 +1189,7 @@ This is the **only** path used for local writes. The server's stored `file_name`
 `file_name_no_tags` are **not** consulted. RetroArch identifies SRAM purely by `<rom_basename>.<ext>` filename match —
 content is opaque bytes — so writing to anything else would leave the save invisible to the emulator.
 
-The shared helper is `_local_save_target(server_save, rom_name)` in `py_modules/services/saves/_helpers.py` (wrapping
+The shared helper is `_local_save_target(server_save, rom_name)` in `backend/services/saves/_helpers.py` (wrapping
 `domain.save_path.compute_local_save_target`). It requires a non-None `rom_name`; there is no fallback to server-derived
 names. If a ROM is not installed (`RomInfoService.get_rom_save_info` returns `None`) the saves tab shows no entry for it
 and sync is a no-op for that ROM — by design, rather than guessing a path that may or may not match what RetroArch uses.
@@ -1840,10 +1840,10 @@ state is imported into it (this is a beta plugin — the library re-syncs from R
 rebuild, so the old `active_core` → `last_synced_core` rename and the `dismissed_newer_save_id` strip no longer happen.
 
 The one surviving legacy read is a single one-time settings fold at bootstrap. `fold_legacy_save_sync_settings`
-(`py_modules/domain/state_migrations.py`) lifts the old `settings` block (the save-sync feature toggles) plus
-`device_name` out of any pre-existing `save_sync_state.json` and folds them into `settings.json` — the `settings.json`
-v3 → v4 schema bump. After that fold, `save_sync_state.json` is never read or written again; the file is not a
-persistence store anymore.
+(`backend/domain/state_migrations.py`) lifts the old `settings` block (the save-sync feature toggles) plus `device_name`
+out of any pre-existing `save_sync_state.json` and folds them into `settings.json` — the `settings.json` v3 → v4 schema
+bump. After that fold, `save_sync_state.json` is never read or written again; the file is not a persistence store
+anymore.
 
 ## Session Detection
 

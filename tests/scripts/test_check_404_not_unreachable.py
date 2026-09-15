@@ -2,7 +2,7 @@
 
 The check is loaded via ``importlib`` because ``scripts/`` is not on
 ``sys.path`` (and is excluded from ruff/basedpyright). Fixtures use
-``tmp_path`` to lay out a small ``py_modules/services/`` tree the check
+``tmp_path`` to lay out a small ``backend/services/`` tree the check
 walks, passing that directory to ``collect_findings`` directly.
 
 Coverage centres on the positional rule — a catch-all handler is flagged
@@ -40,8 +40,8 @@ check = _load_check_module()
 
 
 def _make_services_tree(tmp_path: Path, files: dict[str, str]) -> Path:
-    """Build a fake ``py_modules/services/`` tree: ``name -> source``."""
-    services_dir = tmp_path / "py_modules" / "services"
+    """Build a fake ``backend/services/`` tree: ``name -> source``."""
+    services_dir = tmp_path / "backend" / "services"
     services_dir.mkdir(parents=True)
     for name, source in files.items():
         path = services_dir / name

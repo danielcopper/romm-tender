@@ -123,9 +123,10 @@ locally with `mise run docs`.
   read — no hardcoded name and no hardcoded version, so it and the recovery root come from that one read rather than
   from two literals that could drift (the root additionally through `sanitize_package_name`, which is the identity for a
   name shaped like this one). Those two are everything `package.json`'s `name` reaches; the folder the plugin ships as
-  is decided by the release workflow's build directory, not by this file. A missing or malformed `package.json` degrades
-  to the metadata adapter's documented fallback, `decky-plugin/0.0.0`. `adapters/renderer_gc.py` also speaks HTTP — to
-  Steam's debugger on `localhost` — and takes none.
+  is not decided by this file — and is decided nowhere in the tree today, the build that decided it having gone with the
+  Decky zip. A missing or malformed `package.json` degrades to the metadata adapter's documented fallback,
+  `decky-plugin/0.0.0`. `adapters/renderer_gc.py` also speaks HTTP — to Steam's debugger on `localhost` — and takes
+  none.
 - **Large payloads**: Never send bulk base64 through `decky.emit()` — the WebSocket bridge has size limits. Use per-item
   callables, and chunk bulk lists (the library apply emits shortcuts in batches; the metadata cache loads page-by-page).
 - **No `BIsModOrShortcut` bypass**: the bypass counter was removed deliberately. Shortcuts return `true` (natural
@@ -187,8 +188,8 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
 - **Build**: `pnpm build` (Rollup -> dist/index.js)
 - **Tests**: backend — `python -m pytest tests/ -q` or `mise run test`; frontend — `mise run test:frontend` (Vitest +
   happy-dom)
-- **Coverage**: backend — `python -m pytest tests/ -q --cov=py_modules --cov=main --cov-report=term --cov-branch`;
-  frontend — `mise run test:frontend:coverage`
+- **Coverage**: backend — `python -m pytest tests/ -q --cov=backend --cov-report=term --cov-branch`; frontend —
+  `mise run test:frontend:coverage`
 - **Lint**: `mise run lint` (import-linter, the `scripts/check_*` gates, markdownlint). Ruff and basedpyright run only
   inside `mise run gate`.
 - **Gate**: `mise run gate` (the full CI battery in one command — mirrors every PR check; slow. Run before pushing.)
@@ -266,13 +267,13 @@ Format: **invariant** — tier — enforced by.
   The other direction is worse and equally quiet: a new consumer of the data root reaching for `runtime_dir` writes into
   Decky's tree, where the next release's folder name moves it. Nothing mechanical tells the two apart — both are plain
   `str` fields on structs the composition root hands around
-- **The identifier's five homes are never derived from one another — in particular `APP_DIR_NAME`
-  (`domain/user_data_location.py`) is never read from `package.json`** — prompt-only — the five homes and the question
-  each answers are enumerated in `py_modules/domain/identity.py`'s module docstring, and nothing mechanical detects a
-  fold. `APP_DIR_NAME` and `package.json`'s `name` spell the same string today, so `APP_DIR_NAME = package_name`
-  reproduces every current path exactly and the whole suite stays green; the cost arrives at the next manifest edit,
-  which then moves every user's library on the following start with nothing failing and nothing said. The rule is stated
-  at `APP_DIR_NAME` itself, because a diff that folds it opens neither the docstring nor this file.
+- **The identifier's four homes are never derived from one another — in particular `APP_DIR_NAME`
+  (`domain/user_data_location.py`) is never read from `package.json`** — prompt-only — the four homes and the question
+  each answers are enumerated in `backend/domain/identity.py`'s module docstring, and nothing mechanical detects a fold.
+  `APP_DIR_NAME` and `package.json`'s `name` spell the same string today, so `APP_DIR_NAME = package_name` reproduces
+  every current path exactly and the whole suite stays green; the cost arrives at the next manifest edit, which then
+  moves every user's library on the following start with nothing failing and nothing said. The rule is stated at
+  `APP_DIR_NAME` itself, because a diff that folds it opens neither the docstring nor this file.
   `tests/domain/test_identity.py` pins only the seam between the DISPLAY name and the identifier, a different fold
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
@@ -323,7 +324,7 @@ Format: **invariant** — tier — enforced by.
   comment, which is the only place a move could not have carried it away from
 - **An emitted `sync_progress` frame stops a run (`running: False`) only with a terminal stage, and a terminal stage is
   only ever emitted with the run stopped** — test — `tests/services/library/test_terminal_frame_contract.py`
-  (structural, AST call sites and dict literals across all of `py_modules/services` — it covers the error paths a
+  (structural, AST call sites and dict literals across all of `backend/services` — it covers the error paths a
   behavioural test would have to provoke one at a time, but a frame assembled by a helper it cannot follow, or emitted
   through an aliased callable, slips past it; its own scope tests pin the producers and the root it reaches, so a
   narrowing fails rather than shrinking the rule in silence. Frame producers are not confined to `services/library/`:
@@ -563,7 +564,7 @@ Format: **invariant** — tier — enforced by.
   `scripts/check_markdown_links.py`
 - **Every stated RomM minimum version matches the enforced `Plugin._MIN_REQUIRED_VERSION`** — check —
   `scripts/check_romm_min_version.py` (ADRs excluded: frozen history)
-- **Every tree under `py_modules/_vendor/` is pinned by the `<pkg>.SHA256SUMS` beside it: every manifest entry under
+- **Every tree under `backend/_vendor/` is pinned by the `<pkg>.SHA256SUMS` beside it: every manifest entry under
   `<pkg>/` matches the vendored file's digest, the vendored file set EQUALS the manifest's set restricted to that
   prefix, and a package directory with NO manifest is a failure** — check — `scripts/check_vendored_trees.py` (the
   manifest is discovered, never named in the script, so the next vendored package is guarded by default rather than when
@@ -578,7 +579,7 @@ Format: **invariant** — tier — enforced by.
   the sibling `<pkg>.LICENSE` is checked exactly where the manifest carries a dist-info licence entry, and a sibling the
   manifest carries no entry for is reported as pinned by nothing — otherwise regenerating a wheel's manifest from its
   own tree would delete the licence check in the same step, silently, while the file stayed. Deliberately outside it:
-  `py_modules/native/` is pinned by its own `sha256sum -c` over one `.so`, and `__pycache__` is ignored wherever it
+  `backend/native/` is pinned by its own `sha256sum -c` over one `.so`, and `__pycache__` is ignored wherever it
   appears, on both sides of the comparison. **Two things are outside it by accident of shape, and neither is loud.** The
   gate sees **directories only** (`package_dirs` filters on `entry.is_dir()`), so a single-module dependency dropped in
   as `_vendor/six.py` is never asked for a manifest — and there is no shape here that could pin one: dropping a

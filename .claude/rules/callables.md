@@ -1,6 +1,6 @@
 ---
 paths:
-  - "main.py"
+  - "backend/main.py"
   - "frontend/src/api/**"
 ---
 

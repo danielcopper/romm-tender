@@ -38,7 +38,7 @@ The established fix is the same for both: snapshot the rows a seam needs
 Re-read anything the write then depends on: the second transaction runs on its
 own connection, so the snapshot may have gone stale.
 
-This check walks ``py_modules/services/`` and fails when either family's method
+This check walks ``backend/services/`` and fails when either family's method
 is called lexically inside an open ``with <...>uow_factory() as uow:`` block.
 The two seam lists and the bare-factory open (:data:`UOW_FACTORY_SUFFIX`, which
 catches a nested open under rule 1) live at the top of the file, so registering
@@ -141,7 +141,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SERVICES_DIR = REPO_ROOT / "py_modules" / "services"
+SERVICES_DIR = REPO_ROOT / "backend" / "services"
 
 # --- Rule 1: seams that open their own Unit of Work ----------------------
 # Method names whose implementation opens its OWN Unit of Work. Calling any

@@ -44,6 +44,10 @@ export interface ComponentSource {
 // finds no file, and the sweep refuses to answer with an empty set.
 const SRC_DIR = `${process.cwd()}/frontend/src/`;
 
+// Directories an eslint test plants and removes while the suite runs — see the
+// note on `componentSources` below.
+const FIXTURE_DIRS = ["__eslint_fixtures__", "__eslint_surface_fixtures__"];
+
 /**
  * Every component source a lock should search, sorted so the report is stable.
  *
@@ -51,10 +55,21 @@ const SRC_DIR = `${process.cwd()}/frontend/src/`;
  * set passes every `not.toContain` there is, which is the same vacuous green the
  * locks' own "searches for something" cases exist to refuse. A moved directory
  * or a broken glob then fails loudly instead of silently retiring both locks.
+ *
+ * A lint fixture is not a component, and skipping those directories is a
+ * correctness fix rather than tidiness. `eslintQamFocusable.test.ts` PLANTS
+ * `.tsx` fixtures into an `__eslint_fixtures__` directory while it runs and
+ * removes them afterwards, so a sweep racing it either saw them or did not: the
+ * suite reported 3706 tests on one run and 3698 on the next with no source
+ * change between them. A lock whose searched set depends on another test's
+ * timing is a lock nobody can read. `__eslint_surface_fixtures__` is the
+ * sibling `eslintBoundaries.test.ts` plants the same way; it writes only `.ts`
+ * today, and naming it here costs a word rather than a second incident.
  */
 export function componentSources(): ComponentSource[] {
   const files = globSync("bigpicture/**/*.tsx", { cwd: SRC_DIR })
     .filter((relative) => !relative.endsWith(".test.tsx"))
+    .filter((relative) => !FIXTURE_DIRS.some((dir) => relative.split(/[\\/]/).includes(dir)))
     .map((relative) => relative.split(/[\\/]/).join("/"))
     .sort();
   if (files.length === 0) {

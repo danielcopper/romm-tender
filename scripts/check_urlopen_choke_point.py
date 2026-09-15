@@ -13,7 +13,7 @@ never clears the bit. Nothing about that fails: the call succeeds, the tests
 pass, and the plugin simply stays in its degraded single-attempt mode until some
 other path happens to succeed. That is the regression this gate exists to catch.
 
-It enforces a **structural** rule: inside ``py_modules/adapters/romm/http.py``,
+It enforces a **structural** rule: inside ``backend/adapters/romm/http.py``,
 a call to ``urllib.request.urlopen`` may appear only in the body of
 ``RommHttpAdapter._urlopen``. It is an AST check over call sites, NOT dataflow
 analysis: it cannot catch an alias (``opener = urllib.request.urlopen``) or a
@@ -36,7 +36,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # The module whose reachability state depends on the choke point.
-TRANSPORT = REPO_ROOT / "py_modules" / "adapters" / "romm" / "http.py"
+TRANSPORT = REPO_ROOT / "backend" / "adapters" / "romm" / "http.py"
 
 # The one method allowed to call urlopen — it clears the known-unreachable bit.
 # Exemption is bound to the pair, not to the bare name: a helper called

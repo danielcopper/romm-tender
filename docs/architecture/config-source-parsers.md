@@ -144,7 +144,7 @@ and a callback Protocol that services depend on. The `.info` parser below (`doma
 └──────────────────────────────────────┘
 ```
 
-### 1. Pure parser in `py_modules/domain/<source>.py`
+### 1. Pure parser in `backend/domain/<source>.py`
 
 A module of pure functions. No I/O, no logging, no filesystem access. Takes text (or already-loaded data) as input and
 returns a structured representation.
@@ -166,7 +166,7 @@ Why in domain: parsing is pure logic. It's exhaustively testable with inline tex
 subprocess. This is the cleanest possible unit under test, and it's where format-level edge cases belong (comments,
 blank lines, unquoted values, escaped characters, line-continuation quirks, etc.).
 
-### 2. I/O-owning adapter in `py_modules/adapters/<source>.py`
+### 2. I/O-owning adapter in `backend/adapters/<source>.py`
 
 A class with a single responsibility: resolve the right file path(s), read bytes, delegate parsing to the domain module,
 cache the result, handle I/O errors.
@@ -191,7 +191,7 @@ Why in adapter: anything that touches the filesystem (open, read, stat, glob) is
 per the plugin's layering rules. Adapters are allowed to import domain modules — the reverse is not allowed (enforced by
 import-linter).
 
-### 3. Protocol(s) in `py_modules/services/protocols/`
+### 3. Protocol(s) in `backend/services/protocols/`
 
 Services never import concrete adapters. They depend on callable protocols defined in the `services/protocols/` package
 (config-source parsers live in `paths.py`), and the concrete adapter method is wired up by `bootstrap/`.
@@ -207,7 +207,7 @@ same adapter exposes multiple capabilities (`get_corename`, `get_supported_exten
 each gets its own protocol so services can depend on only what they actually use — and a test double only needs to stub
 the callables a given test exercises.
 
-### 4. Wiring in `py_modules/bootstrap/`
+### 4. Wiring in `backend/bootstrap/`
 
 Adapter instance is created in `bootstrap/adapters.py`, and `bootstrap/services.py` threads its method into services
 that need it:
@@ -293,7 +293,7 @@ and the migration-blocked page renders `old_path` and `new_path`, both of which 
 Silently operating on the wrong root is the failure mode
 [#948](https://github.com/danielcopper/decky-romm-sync/issues/948) addresses. The fix keeps the getters
 silent-and-best-effort but pairs them with a loud health signal that the frontend surfaces as a QAM banner.
-`RetroDeckPathsAdapter.config_health()` returns a `RetroDeckConfigHealth` enum (`py_modules/lib/retrodeck_health.py` —
+`RetroDeckPathsAdapter.config_health()` returns a `RetroDeckConfigHealth` enum (`backend/lib/retrodeck_health.py` —
 placed in `lib/` because the adapter, the `RetroDeckPaths` Protocol, and `main.py` all import it, and import-linter
 forbids the adapter↔service directions). The four states:
 
@@ -428,11 +428,11 @@ When the plugin needs to read a new external config/metadata source, the checkli
 
 1. **Identify the source and its authoritative domain.** Add a row to the **Question-to-source mapping** table above. If
    the new source overlaps with an existing one, explicitly decide which parser owns which question — do not merge them.
-2. **Write the pure parser** in `py_modules/domain/<source>.py`. Start with the smallest function that answers the
+2. **Write the pure parser** in `backend/domain/<source>.py`. Start with the smallest function that answers the
    immediate need; grow the API later. Tests first.
-3. **Write the adapter** in `py_modules/adapters/<source>.py`. Path resolution, file read, parsing delegation, caching.
+3. **Write the adapter** in `backend/adapters/<source>.py`. Path resolution, file read, parsing delegation, caching.
    Tests with `tmp_path`.
-4. **Add callback protocol(s)** in `py_modules/services/protocols/`. One protocol per capability, in the existing `*Fn`
+4. **Add callback protocol(s)** in `backend/services/protocols/`. One protocol per capability, in the existing `*Fn`
    Call-protocol style.
 5. **Wire in `bootstrap/`.** Instantiate the adapter in `adapters.py`; thread its method(s) from `services.py` into the
    services that need them.

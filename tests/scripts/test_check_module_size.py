@@ -63,7 +63,7 @@ def run_check(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Yield a helper that lays out modules, retargets the check, and runs it."""
 
     def _run(modules: dict[str, int], allowlist: dict[str, int], raw: dict[str, str] | None = None) -> int:
-        (tmp_path / "py_modules" / "services").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "backend" / "services").mkdir(parents=True, exist_ok=True)
         for relative, lines in modules.items():
             _write_module(tmp_path, relative, lines)
         for relative, text in (raw or {}).items():
@@ -116,12 +116,12 @@ class TestLineCount:
 
 class TestHappyPath:
     def test_passes_when_everything_is_small(self, run_check, capsys: pytest.CaptureFixture[str]) -> None:
-        assert run_check({"py_modules/services/small.py": 120}, {}) == 0
+        assert run_check({"backend/services/small.py": 120}, {}) == 0
         assert "OK: no module over 1000 lines" in capsys.readouterr().out
 
     def test_listed_module_at_its_ceiling_passes(self, run_check) -> None:
-        modules = {"py_modules/services/big.py": 1200}
-        assert run_check(modules, {"py_modules/services/big.py": 1200}) == 0
+        modules = {"backend/services/big.py": 1200}
+        assert run_check(modules, {"backend/services/big.py": 1200}) == 0
 
 
 class TestScope:
@@ -130,12 +130,12 @@ class TestScope:
     @pytest.mark.parametrize(
         "tree",
         [
-            "py_modules/adapters",
-            "py_modules/bootstrap",
-            "py_modules/domain",
-            "py_modules/lib",
-            "py_modules/models",
-            "py_modules/services",
+            "backend/adapters",
+            "backend/bootstrap",
+            "backend/domain",
+            "backend/lib",
+            "backend/models",
+            "backend/services",
         ],
     )
     def test_governed_tree_is_walked(self, tree: str, run_check, capsys: pytest.CaptureFixture[str]) -> None:
@@ -144,16 +144,16 @@ class TestScope:
 
     def test_subpackages_are_walked(self, run_check, capsys: pytest.CaptureFixture[str]) -> None:
         """The walk recurses — the largest modules in scope live in subpackages."""
-        assert run_check({"py_modules/adapters/romm/big.py": 1200}, {}) == 1
-        assert "py_modules/adapters/romm/big.py: 1200 lines exceeds" in capsys.readouterr().err
+        assert run_check({"backend/adapters/romm/big.py": 1200}, {}) == 1
+        assert "backend/adapters/romm/big.py: 1200 lines exceeds" in capsys.readouterr().err
 
     def test_main_py_is_out_of_scope(self, run_check) -> None:
         """``main.py`` grows with the callable surface by design — never flagged."""
-        assert run_check({"main.py": 5000}, {}) == 0
+        assert run_check({"backend/main.py": 5000}, {}) == 0
 
     def test_vendored_code_is_out_of_scope(self, run_check) -> None:
         """``_vendor/`` sits beside the governed trees but its size is upstream's decision."""
-        assert run_check({"py_modules/_vendor/big.py": 5000}, {}) == 0
+        assert run_check({"backend/_vendor/big.py": 5000}, {}) == 0
 
 
 class TestCodeLinesNotPhysicalLines:
@@ -163,45 +163,45 @@ class TestCodeLinesNotPhysicalLines:
         """Physically 1190 lines, 990 of code — a heavily documented module passes."""
         body = "\n".join(f"x = {n}" for n in range(990))
         padding = "\n".join("# explanation" if n % 2 else "" for n in range(200))
-        raw = {"py_modules/services/documented.py": f"{body}\n{padding}\n"}
+        raw = {"backend/services/documented.py": f"{body}\n{padding}\n"}
         assert run_check({}, {}, raw) == 0
 
     def test_comments_do_not_buy_room_above_a_ceiling(self, run_check, capsys: pytest.CaptureFixture[str]) -> None:
         """Being mostly prose does not excuse a listed module that grew in code."""
         body = "\n".join(f"x = {n}" for n in range(1210))
         padding = "\n".join("# explanation" for _ in range(300))
-        raw = {"py_modules/services/big.py": f"{body}\n{padding}\n"}
-        assert run_check({}, {"py_modules/services/big.py": 1200}, raw) == 1
+        raw = {"backend/services/big.py": f"{body}\n{padding}\n"}
+        assert run_check({}, {"backend/services/big.py": 1200}, raw) == 1
         assert "1210 lines, up from its 1200-line ceiling" in capsys.readouterr().err
 
 
 class TestFailureModes:
     def test_unlisted_module_over_threshold_fails(self, run_check, capsys: pytest.CaptureFixture[str]) -> None:
-        assert run_check({"py_modules/services/new.py": 1001}, {}) == 1
+        assert run_check({"backend/services/new.py": 1001}, {}) == 1
         err = capsys.readouterr().err
-        assert "py_modules/services/new.py: 1001 lines exceeds the 1000-line threshold" in err
+        assert "backend/services/new.py: 1001 lines exceeds the 1000-line threshold" in err
         assert "Adding it to ALLOWLIST is not the fix" in err
 
     def test_listed_module_that_grew_fails_with_the_delta(self, run_check, capsys: pytest.CaptureFixture[str]) -> None:
-        modules = {"py_modules/services/big.py": 1210}
-        assert run_check(modules, {"py_modules/services/big.py": 1200}) == 1
+        modules = {"backend/services/big.py": 1210}
+        assert run_check(modules, {"backend/services/big.py": 1200}) == 1
         err = capsys.readouterr().err
         assert "1210 lines, up from its 1200-line ceiling" in err
         assert "Move the 10 added line(s)" in err
 
     def test_graduated_module_must_leave_the_allowlist(self, run_check, capsys: pytest.CaptureFixture[str]) -> None:
-        modules = {"py_modules/services/shrunk.py": 950}
-        assert run_check(modules, {"py_modules/services/shrunk.py": 1200}) == 1
+        modules = {"backend/services/shrunk.py": 950}
+        assert run_check(modules, {"backend/services/shrunk.py": 1200}) == 1
         assert "back under the 1000-line threshold" in capsys.readouterr().err
 
     def test_stale_allowlist_entry_fails(self, run_check, capsys: pytest.CaptureFixture[str]) -> None:
-        assert run_check({}, {"py_modules/services/deleted.py": 1200}) == 1
+        assert run_check({}, {"backend/services/deleted.py": 1200}) == 1
         assert "listed in ALLOWLIST but not found" in capsys.readouterr().err
 
     def test_every_failing_module_is_reported_not_just_the_first(
         self, run_check, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        modules = {"py_modules/services/a.py": 1100, "py_modules/services/b.py": 1200}
+        modules = {"backend/services/a.py": 1100, "backend/services/b.py": 1200}
         assert run_check(modules, {}) == 1
         err = capsys.readouterr().err
         assert "2 module(s)" in err
@@ -213,35 +213,35 @@ class TestBoundaries:
     """An off-by-one here silently widens or narrows the gate."""
 
     def test_exactly_at_threshold_is_allowed(self, run_check) -> None:
-        assert run_check({"py_modules/services/edge.py": 1000}, {}) == 0
+        assert run_check({"backend/services/edge.py": 1000}, {}) == 0
 
     def test_one_over_threshold_is_not(self, run_check) -> None:
-        assert run_check({"py_modules/services/edge.py": 1001}, {}) == 1
+        assert run_check({"backend/services/edge.py": 1001}, {}) == 1
 
     def test_one_over_ceiling_is_not(self, run_check) -> None:
-        modules = {"py_modules/services/big.py": 1201}
-        assert run_check(modules, {"py_modules/services/big.py": 1200}) == 1
+        modules = {"backend/services/big.py": 1201}
+        assert run_check(modules, {"backend/services/big.py": 1200}) == 1
 
     def test_threshold_plus_one_stays_listed_rather_than_graduating(self, run_check) -> None:
         """1001 is still over the threshold, so the entry is still required."""
-        modules = {"py_modules/services/big.py": 1001}
-        assert run_check(modules, {"py_modules/services/big.py": 1200}) == 0
+        modules = {"backend/services/big.py": 1001}
+        assert run_check(modules, {"backend/services/big.py": 1200}) == 0
 
 
 class TestSlackAdvisory:
     """The advisory nudges the ratchet down without failing an honest refactor."""
 
     def test_banked_slack_prints_a_note_and_still_passes(self, run_check, capsys: pytest.CaptureFixture[str]) -> None:
-        modules = {"py_modules/services/big.py": 1150}
-        assert run_check(modules, {"py_modules/services/big.py": 1200}) == 0
+        modules = {"backend/services/big.py": 1150}
+        assert run_check(modules, {"backend/services/big.py": 1200}) == 0
         out = capsys.readouterr().out
-        assert "note: py_modules/services/big.py: 1150 lines vs. a 1200-line ceiling — lower it to 1150." in out
+        assert "note: backend/services/big.py: 1150 lines vs. a 1200-line ceiling — lower it to 1150." in out
 
     def test_slack_below_the_advisory_threshold_stays_quiet(
         self, run_check, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        modules = {"py_modules/services/big.py": 1199}
-        assert run_check(modules, {"py_modules/services/big.py": 1200}) == 0
+        modules = {"backend/services/big.py": 1199}
+        assert run_check(modules, {"backend/services/big.py": 1200}) == 0
         assert "note:" not in capsys.readouterr().out
 
 
@@ -258,19 +258,19 @@ class TestRealRepository:
         assert not missing, f"SCOPE_DIRS entries that do not exist: {missing}"
 
     def test_every_backend_package_with_python_is_governed(self) -> None:
-        """The mirror of the entry-exists check: a new package under ``py_modules/`` must not escape the gate.
+        """The mirror of the entry-exists check: a new package under ``backend/`` must not escape the gate.
 
         ``_vendor/`` is the one deliberate exemption — it holds checksum-pinned upstream copies whose size is
         upstream's decision, not ours (the reasoning is recorded beside ``SCOPE_DIRS``). Every other package holding
         Python belongs in scope, so do not widen this exemption to silence a failure.
         """
-        governed = {d.split("/", 1)[1] for d in check.SCOPE_DIRS if d.startswith("py_modules/")}
+        governed = {d.split("/", 1)[1] for d in check.SCOPE_DIRS if d.startswith("backend/")}
         ungoverned = sorted(
             d.name
-            for d in (check.ROOT / "py_modules").iterdir()
+            for d in (check.ROOT / "backend").iterdir()
             if d.is_dir() and d.name not in governed and d.name != "_vendor" and any(d.rglob("*.py"))
         )
-        assert not ungoverned, f"py_modules packages holding Python but outside SCOPE_DIRS: {ungoverned}"
+        assert not ungoverned, f"backend packages holding Python but outside SCOPE_DIRS: {ungoverned}"
 
     def test_allowlist_has_no_entry_at_or_below_the_threshold(self) -> None:
         too_small = {name: n for name, n in check.ALLOWLIST.items() if n <= check.THRESHOLD}

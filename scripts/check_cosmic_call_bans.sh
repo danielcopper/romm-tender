@@ -6,7 +6,7 @@
 #   - File-store / cache adapters      for any filesystem-touch operation
 #   - HTTP / socket adapters           for any network I/O
 #
-# Two pattern groups are enforced in ``py_modules/services/``:
+# Two pattern groups are enforced in ``backend/services/``:
 #
 #   1. Clock / randomness / sleep call sites
 #      (``datetime.now()`` / ``time.time()`` / ``time.monotonic()`` /
@@ -39,7 +39,7 @@
 
 set -euo pipefail
 
-readonly SERVICES_DIR="py_modules/services"
+readonly SERVICES_DIR="backend/services"
 
 # Lines where the pattern appears only inside a ``...`` markdown span
 # (docstring code reference) are not real call sites. Strip them out.

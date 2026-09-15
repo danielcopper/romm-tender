@@ -181,7 +181,7 @@ class TestManifestPerTree:
         discrepancies = check.collect_discrepancies(vendor_dir)
         assert len(discrepancies) == 1
         assert discrepancies[0].startswith("zstd/: no zstd.SHA256SUMS — the tree is pinned by nothing.")
-        assert "py_modules/_vendor/README.md" in discrepancies[0]
+        assert "backend/_vendor/README.md" in discrepancies[0]
 
     def test_a_manifest_without_its_tree_reports_every_file(self, vendor_dir: Path) -> None:
         """A dropped tree must report, not pass because there is nothing left to compare."""
@@ -440,7 +440,7 @@ class TestExitCodes:
         err = capsys.readouterr().err
         assert "atlas/__init__.py: digest " in err
         assert "xargs sha256sum > <pkg>.SHA256SUMS" in err
-        assert "py_modules/_vendor/README.md" in err
+        assert "backend/_vendor/README.md" in err
 
     def test_an_unreadable_manifest_still_reaches_the_remediation(
         self, vendor_dir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]

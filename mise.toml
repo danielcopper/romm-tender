@@ -48,7 +48,7 @@ run = "pnpm exec markdownlint-cli2 \"**/*.md\" \"!node_modules\" \"!.worktrees\"
 description = "Check Cosmic Python architecture rules (layer imports + forbidden service calls) and Markdown"
 depends = ["lint:md"]
 run = [
-    "PYTHONPATH=py_modules lint-imports",
+    "PYTHONPATH=backend lint-imports",
     "python scripts/check_service_independence_contract.py",
     "python scripts/check_callable_manifest.py",
     "bash scripts/check_cosmic_call_bans.sh",
@@ -68,7 +68,7 @@ run = [
     "python scripts/check_lock_sync.py",
     "python scripts/check_markdown_links.py",
     "python scripts/check_romm_min_version.py",
-    "cd py_modules/native && sha256sum -c libgavel-x86_64-linux.so.sha256",
+    "cd backend/native && sha256sum -c libgavel-x86_64-linux.so.sha256",
     "python scripts/check_vendored_trees.py",
 ]
 
@@ -119,11 +119,16 @@ rsync -a --delete defaults/ "$DEST/defaults/"
 # the freshly-deployed one.
 # Drop any root-level namesake so a dev deploy always reads the just-deployed defaults/.
 for f in defaults/*; do rm -f "$DEST/$(basename "$f")"; done
-rsync -a --delete py_modules/ "$DEST/py_modules/"
-cp -f main.py plugin.json package.json "$DEST/"
-# Every local deploy is a dev deploy — release zips are packaged in CI
-# (release.yml builds with the Decky CLI straight from the repo checkout), so
-# this deployed copy never feeds a release. decky-loader's file watcher runs on
+# The repo keeps the whole Python backend — entry point included — under
+# backend/; Decky reads main.py at the plugin root with the packages in
+# py_modules/, so the deploy writes that layout. Since the move, main.py no
+# longer puts py_modules on sys.path itself — Decky's loader appends it before
+# main is imported. Run on a device on 2026-09-15, this deploy came up: the
+# backend loaded, reached the server and registered the library.
+rsync -a --delete --exclude=/main.py backend/ "$DEST/py_modules/"
+cp -f backend/main.py plugin.json package.json "$DEST/"
+# Every local deploy is a dev deploy — no release artifact is built anywhere
+# here, so this deployed copy feeds nothing. decky-loader's file watcher runs on
 # every device — LIVE_RELOAD defaults to on and the shipped unit file sets no
 # value — but Loader.import_plugin re-loads only plugins carrying "debug" in
 # flags, and skips every other one. Injecting the flag into the DEPLOYED
@@ -254,7 +259,7 @@ if [ ! -d "$DEST" ] || [ ! -w "$DEST" ]; then
 fi
 # Fail fast on a typo'd display target before paying for the full deploy.
 bash scripts/dev_open_bpm.sh --resolve "$usage_display" >/dev/null
-# Full initial push (frontend build + rsync of everything). The `cp -f main.py`
+# Full initial push (frontend build + rsync of everything). The `cp -f backend/main.py`
 # inside deploy is itself a modify event on a watched file, so the watcher
 # hot-reloads the plugin with the fresh backend + frontend right away.
 mise run deploy
@@ -272,17 +277,18 @@ exec pnpm exec rollup -c rollup.dev.config.js -w --watch.onEnd="cp -f dist/index
 '''
 
 [tasks."dev:push-backend"]
-description = "Push backend changes (py_modules/ + main.py) into the deployed plugin during a dev:watch session"
+description = "Push backend changes (backend/, main.py included) into the deployed plugin during a dev:watch session"
 raw = true
 run = '''
 DEST="$HOME/homebrew/plugins/romm-tender"
 # decky-loader's watcher matches only dist/index.js and main.py, so a
-# py_modules-only rsync never triggers a reload — that's why the cp of main.py
+# packages-only rsync never triggers a reload — that's why the cp of main.py
 # comes LAST: it's the modify event that makes the watcher reload the plugin
 # (backend subprocess restart + frontend re-import). For bin/ or defaults/
-# changes run the full `mise run deploy` instead.
-rsync -a --delete py_modules/ "$DEST/py_modules/"
-cp -f main.py "$DEST/main.py"
+# changes run the full `mise run deploy` instead. The repo's backend/ is
+# written into Decky's layout the same way `deploy` does it.
+rsync -a --delete --exclude=/main.py backend/ "$DEST/py_modules/"
+cp -f backend/main.py "$DEST/main.py"
 '''
 
 [tasks."dev:ui-scale"]

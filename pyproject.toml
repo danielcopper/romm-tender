@@ -1,9 +1,9 @@
 [tool.basedpyright]
 pythonVersion = "3.11"
-extraPaths = ["py_modules"]
+extraPaths = ["backend"]
 stubPath = "typings"
 typeCheckingMode = "basic"
-exclude = ["py_modules/_vendor", "node_modules", "scripts", ".venv", ".claude", ".worktrees"]
+exclude = ["backend/_vendor", "node_modules", "scripts", ".venv", ".claude", ".worktrees"]
 reportMissingModuleSource = "none"
 reportMissingImports = "warning"
 reportPrivateUsage = "error"
@@ -19,14 +19,15 @@ reportMissingTypeArgument = "error"
 # white-box testing is a deliberate, accepted pattern here. The
 # reportPrivateUsage guardrail targets production encapsulation, not
 # test setup, so it's disabled under tests/. extraPaths is repeated
-# because execution environments do not inherit the top-level value;
-# the repo root "." is added on top so test files can resolve the
-# top-level `main` module and sibling `tests.*` packages (without it,
-# those imports are unresolved and `main.*` symbols degrade to Unknown,
-# a blind spot on the callable surface the tests exercise).
+# because execution environments do not inherit the top-level value.
+# `backend` is what resolves `main` now that the entry point lives there:
+# without it `from main import ...` is unresolved and every `main.*` symbol
+# degrades to Unknown, a blind spot on the callable surface the tests
+# exercise. The repo root "." is added on top so a test file can resolve a
+# sibling `tests.*` package.
 [[tool.basedpyright.executionEnvironments]]
 root = "tests"
-extraPaths = ["py_modules", "."]
+extraPaths = ["backend", "."]
 reportPrivateUsage = "none"
 
 [tool.ruff]
@@ -36,7 +37,7 @@ line-length = 120
 # the convention they were kept under before; both hold whole checkouts of this
 # repo. The gate runs `ruff check .` from the repo root, which walks into them
 # and reports another branch's findings against this one.
-extend-exclude = ["py_modules/_vendor", "./scripts", ".claude", ".worktrees"]
+extend-exclude = ["backend/_vendor", "./scripts", ".claude", ".worktrees"]
 # Ruff applies extend-exclude to a directory walk but ignores it for a path passed
 # explicitly, unless this is set. .githooks/pre-commit passes staged paths explicitly,
 # so without it the hook reformats the vendored copies it is excluding and breaks the
@@ -72,7 +73,7 @@ select = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"main.py" = ["E402"]
+"backend/main.py" = ["E402"]
 # pytest-asyncio test bodies legitimately do blocking setup I/O (open,
 # os.path) — ASYNC's event-loop concern is a production-only worry, not
 # a test one, so the group is disabled under tests/ (same rationale as ARG).
@@ -80,7 +81,7 @@ select = [
 # TID251 is deliberately absent from every entry above: the ban below carries no
 # per-file-ignore, in tests least of all — tests are where the banned call lived.
 # That is the whole of the claim. The ban reaches only what ruff walks, so the
-# trees `extend-exclude` drops — `py_modules/_vendor`, `./scripts`, `.claude`,
+# trees `extend-exclude` drops — `backend/_vendor`, `./scripts`, `.claude`,
 # `.worktrees` — never see it; no tracked call site in them spells it today (the one
 # tracked file that names it at all is `.claude/rules/testing-backend.md`, which
 # states the ban in prose and which ruff would not read either way), and
@@ -98,5 +99,8 @@ select = [
 "asyncio.get_event_loop".msg = "Use asyncio.get_running_loop() — get_event_loop() has no implicit loop left to answer with (#806)."
 
 [tool.ruff.lint.isort]
-known-first-party = ["lib", "domain", "services", "adapters"]
+# ``main`` is listed like the packages beside it: ruff resolves a first-party
+# module against ``src`` (the repo root), and the entry point now lives under
+# ``backend/``, where that lookup does not reach it.
+known-first-party = ["lib", "domain", "services", "adapters", "main"]
 known-third-party = ["_vendor", "decky"]

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Seam-owner confinement gate for the library sync package.
 
-``py_modules/services/library/`` is a decomposition: each module owns one job,
+``backend/services/library/`` is a decomposition: each module owns one job,
 and a job's injected seams are what identify it. When a seam leaks into a second
 module the decomposition quietly reverses — the module that "does not do that
 any more" grows a second reason to open the same resource, and the boundary the
@@ -77,7 +77,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-LIBRARY_DIR = REPO_ROOT / "py_modules" / "services" / "library"
+LIBRARY_DIR = REPO_ROOT / "backend" / "services" / "library"
 
 # --- The seam table ------------------------------------------------------
 # Seam config-attribute name -> the modules (relative to LIBRARY_DIR) allowed

@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """Aggregate field-assignment ban — Cosmic Python enforcement.
 
-Aggregate roots in ``py_modules/domain/`` decorated with ``@cosmic_aggregate``
+Aggregate roots in ``backend/domain/`` decorated with ``@cosmic_aggregate``
 expose mutation only through verb-named methods on the root. External code
 must NOT do ``aggregate.field = value`` — that bypasses the aggregate's
-invariants. This check scans ``py_modules/services/`` for such patterns and
+invariants. This check scans ``backend/services/`` for such patterns and
 fails CI if any are found.
 
 Heuristic (conservative by design):
 
-  1. Parse every file under ``py_modules/domain/``; collect the class names
+  1. Parse every file under ``backend/domain/``; collect the class names
      decorated with ``@cosmic_aggregate`` (or attribute paths ending in
      ``cosmic_aggregate``). Build a lowercase-name set.
-  2. Parse every file under ``py_modules/services/``; flag every ``Assign``
+  2. Parse every file under ``backend/services/``; flag every ``Assign``
      node whose target is an ``Attribute`` on a plain ``Name`` whose name
      (case-insensitively) exactly equals the snake_case form of one of the
      aggregate names (variable ``rom`` matches aggregate ``Rom``; ``rom_state``
@@ -42,8 +42,8 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DOMAIN_DIR = REPO_ROOT / "py_modules" / "domain"
-SERVICES_DIR = REPO_ROOT / "py_modules" / "services"
+DOMAIN_DIR = REPO_ROOT / "backend" / "domain"
+SERVICES_DIR = REPO_ROOT / "backend" / "services"
 DECORATOR_NAME = "cosmic_aggregate"
 ESCAPE_HATCH = "pragma: no aggregate-check"
 

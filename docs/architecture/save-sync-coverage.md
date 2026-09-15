@@ -37,7 +37,7 @@ is better in one of two ways. For Amiga, Sega CD and Saturn the machine names so
 inside the disk image, a shared BRAM card, a `.smpc` that is configuration rather than progress. For Amiga CD32 the
 machine agrees with the table on a `.chd` and REFUSES on a `.bin`, where the table answered `.nvr` for both — a refusal
 replacing a guess, which is the smaller of the two improvements and the easier one to mistake for a regression. The
-reasoning is in [ADR-0031](../adr/0031-a-save-is-answered-by-the-emulator-that-writes-it.md).
+reasoning is in [ADR-0034](../adr/0034-a-save-is-answered-by-the-emulator-that-writes-it.md).
 
 ## The answer is per ROM, never per platform
 

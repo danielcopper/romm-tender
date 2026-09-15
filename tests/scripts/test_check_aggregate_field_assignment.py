@@ -41,9 +41,9 @@ def _make_fake_tree(
     domain_files: dict[str, str] | None = None,
     services_files: dict[str, str] | None = None,
 ) -> tuple[Path, Path]:
-    """Build a fake ``py_modules/{domain,services}/`` tree under ``tmp_path``."""
-    domain_dir = tmp_path / "py_modules" / "domain"
-    services_dir = tmp_path / "py_modules" / "services"
+    """Build a fake ``backend/{domain,services}/`` tree under ``tmp_path``."""
+    domain_dir = tmp_path / "backend" / "domain"
+    services_dir = tmp_path / "backend" / "services"
     domain_dir.mkdir(parents=True)
     services_dir.mkdir(parents=True)
     for name, source in (domain_files or {}).items():

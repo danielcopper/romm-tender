@@ -1,19 +1,19 @@
 ---
 paths:
-  - "py_modules/_vendor/**"
-  - "py_modules/native/**"
+  - "backend/_vendor/**"
+  - "backend/native/**"
   - "defaults/**"
 ---
 
 # Vendored code, binaries, and data `[ours]`
 
-**Vendored deps (`_vendor/`)**: Third-party runtime deps are vendored under `py_modules/_vendor/<package>/` (Decky has
-no plugin-level package manager) and imported as `from _vendor import <package>`. Only adapters import `_vendor.*`;
+**Vendored deps (`_vendor/`)**: Third-party runtime deps are vendored under `backend/_vendor/<package>/` (Decky has no
+plugin-level package manager) and imported as `from _vendor import <package>`. Only adapters import `_vendor.*`;
 services/domain/lib stay third-party-free (`domain-stdlib-only` contract in `.importlinter`). `_vendor/` is excluded
 from ruff, basedpyright, and Sonar. Every vendored package ships its upstream `LICENSE` and a provenance entry in
-[`_vendor/README.md`](../../py_modules/_vendor/README.md).
+[`_vendor/README.md`](../../backend/_vendor/README.md).
 
-**One manifest per tree.** `py_modules/_vendor/<package>/` is pinned by the `<package>.SHA256SUMS` beside it, and
+**One manifest per tree.** `backend/_vendor/<package>/` is pinned by the `<package>.SHA256SUMS` beside it, and
 `scripts/check_vendored_trees.py` fails on a package directory that has none — the manifest is discovered, never named
 in the script, so vendoring a package without dropping one next to it breaks the build rather than leaving an unguarded
 tree beside a guarded one. The manifest is upstream's own release manifest where the copy is verbatim (`atlas`), or one
@@ -46,9 +46,9 @@ before any vendoring, and that fix is still in the tree:
 - **A package that spawns `sys.executable`.** Frozen, that is the application and not an interpreter, so the spawn
   starts the host a second time — under Decky Loader it took the whole Steam UI down with it, at the first save question
   rather than at load. Fixed in emu-atlas 0.14.0 halfway by design: atlas now spawns nothing it was not handed, so
-  **this host has to hand it one** — [`adapters/atlas_host.py`](../../py_modules/adapters/atlas_host.py), whose absence
+  **this host has to hand it one** — [`adapters/atlas_host.py`](../../backend/adapters/atlas_host.py), whose absence
   fails nothing and quietly degrades save answers. Removing a grant is therefore a device-test trigger of its own. The
-  full account is in [`_vendor/README.md`](../../py_modules/_vendor/README.md).
+  full account is in [`_vendor/README.md`](../../backend/_vendor/README.md).
 
 The consequence for this repo is the actionable half: **vendoring a package is a device-test trigger.** A green
 `mise run gate` says the copy hashes correctly and imports under CPython; it says nothing about whether it imports under
@@ -57,11 +57,9 @@ Decky's interpreter. How far a load-time failure spreads is a property of the wi
 so a raise inside the vendored tree takes the whole plugin down rather than one feature. A package reached only behind a
 lazy import would cost just the path that reaches it.
 
-**Compiled binaries** (no source in this repo) are vendored under `py_modules/native/` instead (inside one of the fixed
-directories the Decky CLI packs into the plugin zip) — downloaded verbatim from an upstream release with a pinned
-SHA-256 (CI re-verifies it; the release smoke test asserts the artifact ships in the zip), loaded by an adapter via
-`ctypes` with no Python fallback; provenance and the update procedure live in
-[`native/README.md`](../../py_modules/native/README.md).
+**Compiled binaries** (no source in this repo) are vendored under `backend/native/` instead — downloaded verbatim from
+an upstream release with a pinned SHA-256 (CI re-verifies it), loaded by an adapter via `ctypes` with no Python
+fallback; provenance and the update procedure live in [`native/README.md`](../../backend/native/README.md).
 
 **Vendored data** used to be a third category — `defaults/bios_registry.json`, a firmware snapshot copied from an
 emu-atlas release under its own checksum. It is gone with the swap to the live resolver, and nothing in `defaults/` is

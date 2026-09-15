@@ -50,7 +50,7 @@ Three required fields:
 
 The legacy ``error_code`` key and a second ``error`` key are **forbidden**.
 ``scripts/check_failure_shape.py --check`` enforces this: every
-``success: False`` return in ``py_modules/services/`` must carry ``reason``
+``success: False`` return in ``backend/services/`` must carry ``reason``
 and ``message`` and must not carry ``error`` or ``error_code``.
 
 Optional payload-shape extras (``slot``, ``saves``, ``active_slot``, …) may

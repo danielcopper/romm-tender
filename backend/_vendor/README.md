@@ -34,7 +34,7 @@ what differs is what the digests prove.
   gate:
 
   ```sh
-  cd py_modules/_vendor && find <package> -type f -not -path '*/__pycache__/*' \
+  cd backend/_vendor && find <package> -type f -not -path '*/__pycache__/*' \
       | LC_ALL=C sort | xargs sha256sum > <package>.SHA256SUMS
   ```
 
@@ -87,9 +87,9 @@ bootstrap on a real Deck.
    cd /tmp/atlas && sha256sum -c --ignore-missing SHA256SUMS && unzip -d u emu_atlas-*-py3-none-any.whl
    ```
 
-3. Replace `py_modules/_vendor/atlas/` with `/tmp/atlas/u/atlas/`, leaving out any `__pycache__`. Copy
-   `/tmp/atlas/u/emu_atlas-<version>.dist-info/licenses/LICENSE` to `py_modules/_vendor/atlas.LICENSE` and
-   `/tmp/atlas/SHA256SUMS` to `py_modules/_vendor/atlas.SHA256SUMS`.
+3. Replace `backend/_vendor/atlas/` with `/tmp/atlas/u/atlas/`, leaving out any `__pycache__`. Copy
+   `/tmp/atlas/u/emu_atlas-<version>.dist-info/licenses/LICENSE` to `backend/_vendor/atlas.LICENSE` and
+   `/tmp/atlas/SHA256SUMS` to `backend/_vendor/atlas.SHA256SUMS`.
 4. Bump the **Version** bullet above and the pinned version in `tests/test_vendored_atlas.py`.
 5. Re-run the gate: `python scripts/check_vendored_trees.py`.
 
@@ -118,16 +118,16 @@ licence, and the update procedure below has to put it back by hand for exactly t
 
 ### How to update vdf
 
-1. Replace `py_modules/_vendor/vdf/` with the new upstream `vdf/`, leaving out any `__pycache__` — delete the old
-   directory first rather than copying over it, since a file upstream has dropped would otherwise survive and step 4
-   would regenerate the manifest from a tree holding it, pinning the leftover as if it belonged. This is the one
-   procedure here with no upstream manifest to catch that. Then reapply the self-import patch above — dropping it makes
-   the package resolve to a top-level `vdf` that is not installed.
-2. Copy the upstream repository's **root** `LICENSE` back in as `py_modules/_vendor/vdf/LICENSE`. The previous step
-   deletes it and upstream's `vdf/` does not carry one, so skipping this ships the package with no licence at all — and
-   nothing would say so: step 4 regenerates the manifest from whatever tree is there, a generated manifest has no
-   dist-info licence entry for the gate's licence assertion to run off, and there is no sibling `vdf.LICENSE` either, so
-   the check stays green over a licence-less redistribution.
+1. Replace `backend/_vendor/vdf/` with the new upstream `vdf/`, leaving out any `__pycache__` — delete the old directory
+   first rather than copying over it, since a file upstream has dropped would otherwise survive and step 4 would
+   regenerate the manifest from a tree holding it, pinning the leftover as if it belonged. This is the one procedure
+   here with no upstream manifest to catch that. Then reapply the self-import patch above — dropping it makes the
+   package resolve to a top-level `vdf` that is not installed.
+2. Copy the upstream repository's **root** `LICENSE` back in as `backend/_vendor/vdf/LICENSE`. The previous step deletes
+   it and upstream's `vdf/` does not carry one, so skipping this ships the package with no licence at all — and nothing
+   would say so: step 4 regenerates the manifest from whatever tree is there, a generated manifest has no dist-info
+   licence entry for the gate's licence assertion to run off, and there is no sibling `vdf.LICENSE` either, so the check
+   stays green over a licence-less redistribution.
 3. Bump the **Version** and **Local patches** bullets above.
 4. Regenerate the manifest from the patched tree with the command under [Manifests](#manifests), then re-run the gate:
    `python scripts/check_vendored_trees.py`.

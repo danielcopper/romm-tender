@@ -4,10 +4,10 @@
 Decky callables that return a plain ``dict`` and can fail use the canonical
 failure shape ``{"success": False, "reason": ErrorCode | str, "message": str}``
 (plus per-callable payload extras). The convention — documented in
-``py_modules/lib/list_result.py`` and ``CLAUDE.md`` → "Callable response shapes"
+``backend/lib/list_result.py`` and ``CLAUDE.md`` → "Callable response shapes"
 — forbids a second ``error`` field and the legacy ``error_code`` key.
 
-This check walks ``py_modules/services/`` and classifies every failure-shaped
+This check walks ``backend/services/`` and classifies every failure-shaped
 ``return`` against a **required-key rule**: a failure shape must carry both
 ``reason`` and ``message`` and must NOT carry ``error`` or ``error_code``.
 
@@ -49,7 +49,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SERVICES_DIR = REPO_ROOT / "py_modules" / "services"
+SERVICES_DIR = REPO_ROOT / "backend" / "services"
 
 REASON_KEY = "reason"
 MESSAGE_KEY = "message"
@@ -277,7 +277,7 @@ def _print_violations(findings: list[Finding]) -> None:
             print(f"  {finding.render()}")
         print()
     print(
-        "ERROR: failure-shaped returns in py_modules/services/ must carry "
+        "ERROR: failure-shaped returns in backend/services/ must carry "
         "'reason' + 'message' and must not carry 'error' / 'error_code' "
         "(CLAUDE.md → Callable response shapes; lib/list_result.py)."
     )

@@ -3,7 +3,7 @@
 
 ``.importlinter``'s ``service-independence`` contract is an ``independence``
 contract over a hand-enumerated ``modules`` list. Hand-maintained lists rot: a
-new service module is easy to add under ``py_modules/services/`` while forgetting
+new service module is easy to add under ``backend/services/`` while forgetting
 to enrol it, and a renamed or removed service leaves a stale entry behind. Either
 way the flagship layer-boundary enforcement silently stops covering reality.
 
@@ -12,8 +12,8 @@ This check derives the expected service set from the filesystem and fails when
 
 Derivation rule (a "service" = one independence entry):
 
-  * every ``py_modules/services/<name>.py`` except ``__init__.py`` -> ``services.<name>``
-  * every ``py_modules/services/<dir>/`` package (has ``__init__.py``) except
+  * every ``backend/services/<name>.py`` except ``__init__.py`` -> ``services.<name>``
+  * every ``backend/services/<dir>/`` package (has ``__init__.py``) except
     ``protocols/`` -> ``services.<dir>``
 
 A sub-package (e.g. ``services.saves``, ``services.library``) counts as ONE entry,
@@ -39,7 +39,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SERVICES_DIR = REPO_ROOT / "py_modules" / "services"
+SERVICES_DIR = REPO_ROOT / "backend" / "services"
 IMPORTLINTER_PATH = REPO_ROOT / ".importlinter"
 
 CONTRACT_NAME = "service-independence"
@@ -86,7 +86,7 @@ def find_discrepancies(on_disk: set[str], contract: set[str], exempt: set[str]) 
     ]
     findings.extend(
         f"{stale}: listed in the [{CONTRACT_NAME}] contract but no such service module exists "
-        f"under py_modules/services/ — remove the stale entry (or fix a rename)."
+        f"under backend/services/ — remove the stale entry (or fix a rename)."
         for stale in sorted(contract - on_disk)
     )
     findings.extend(
@@ -109,7 +109,7 @@ def main(argv: list[str]) -> int:
         print()
         print(
             f"ERROR: the [{CONTRACT_NAME}] contract in .importlinter has drifted from "
-            "py_modules/services/. Every service must be enrolled (or explicitly EXEMPT) so the "
+            "backend/services/. Every service must be enrolled (or explicitly EXEMPT) so the "
             "independence enforcement keeps covering reality."
         )
         return 1

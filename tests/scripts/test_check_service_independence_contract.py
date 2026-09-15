@@ -1,7 +1,7 @@
 """Tests for ``scripts/check_service_independence_contract.py``.
 
 Loaded via ``importlib`` because ``scripts/`` is not on ``sys.path`` (and is
-excluded from ruff/basedpyright). Fixtures build a fake ``py_modules/services/``
+excluded from ruff/basedpyright). Fixtures build a fake ``backend/services/``
 tree and a fake ``.importlinter`` under ``tmp_path`` and monkeypatch the script's
 module-level path constants.
 """
@@ -36,8 +36,8 @@ check = _load_check_module()
 
 
 def _make_services_tree(tmp_path: Path, *, files: list[str], packages: list[str]) -> Path:
-    """Build a fake ``py_modules/services/`` tree: ``files`` -> ``<name>.py``, ``packages`` -> ``<dir>/__init__.py``."""
-    services_dir = tmp_path / "py_modules" / "services"
+    """Build a fake ``backend/services/`` tree: ``files`` -> ``<name>.py``, ``packages`` -> ``<dir>/__init__.py``."""
+    services_dir = tmp_path / "backend" / "services"
     services_dir.mkdir(parents=True)
     (services_dir / "__init__.py").write_text("", encoding="utf-8")
     for name in files:
@@ -166,7 +166,7 @@ class TestMainEntryPoint:
 
     def test_real_repo_run_is_clean(self, capsys: pytest.CaptureFixture[str]):
         # Locks the actual .importlinter service-independence contract in sync with
-        # py_modules/services/. If this fails, a service was added/renamed without
+        # backend/services/. If this fails, a service was added/renamed without
         # updating the contract (the whole point of the check).
         rc = check.main([])
         assert rc == 0

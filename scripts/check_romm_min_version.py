@@ -26,7 +26,7 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SOURCE = ROOT / "main.py"
+SOURCE = ROOT / "backend" / "main.py"
 CONSTANT = "_MIN_REQUIRED_VERSION"
 
 # Each claim site: file, a regex with the version as group 1, and a label.

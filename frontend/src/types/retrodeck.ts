@@ -8,7 +8,7 @@
  */
 
 /** How trustworthy the resolved RetroDECK roots are. Mirrors the backend
- *  `RetroDeckConfigHealth` StrEnum (`py_modules/lib/retrodeck_health.py`). */
+ *  `RetroDeckConfigHealth` StrEnum (`backend/lib/retrodeck_health.py`). */
 export type RetroDeckHealth = "ok" | "absent" | "unreadable" | "root_missing";
 
 /** Discriminated-status response from `get_retrodeck_status`. `config_path` is

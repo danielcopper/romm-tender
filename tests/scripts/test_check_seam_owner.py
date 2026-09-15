@@ -2,7 +2,7 @@
 
 The check is loaded via ``importlib`` because ``scripts/`` is not on
 ``sys.path`` (and is excluded from ruff/basedpyright). Fixtures lay out a small
-``py_modules/services/library/`` tree under ``tmp_path`` so the check walks it
+``backend/services/library/`` tree under ``tmp_path`` so the check walks it
 with its real file discovery.
 
 Coverage centres on the confinement rule (a seam is held only by the module —
@@ -53,8 +53,8 @@ _OWNERS = {
 
 
 def _make_library_tree(tmp_path: Path, files: dict[str, str]) -> Path:
-    """Build a fake ``py_modules/services/library/`` tree: ``name -> source``."""
-    library_dir = tmp_path / "py_modules" / "services" / "library"
+    """Build a fake ``backend/services/library/`` tree: ``name -> source``."""
+    library_dir = tmp_path / "backend" / "services" / "library"
     library_dir.mkdir(parents=True)
     for name, source in files.items():
         (library_dir / name).write_text(source, encoding="utf-8")

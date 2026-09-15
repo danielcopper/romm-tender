@@ -40,10 +40,9 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PY_MODULES_DIR = REPO_ROOT / "py_modules"
-VENDOR_DIR = PY_MODULES_DIR / "_vendor"
+BACKEND_DIR = REPO_ROOT / "backend"
+VENDOR_DIR = BACKEND_DIR / "_vendor"
 SRC_DIR = REPO_ROOT / "frontend" / "src"
-MAIN_PY = REPO_ROOT / "main.py"
 
 # Event names deliberately excluded from the parity check. Empty today; add an
 # entry only as a conscious decision (see the module docstring). Do NOT add a
@@ -244,11 +243,8 @@ def _parse_text_into(text: str, result: set[str]) -> None:
 
 
 def _iter_backend_files() -> list[Path]:
-    """Every backend ``.py`` to scan: all of py_modules/ minus _vendor/, plus main.py."""
-    files = sorted(p for p in PY_MODULES_DIR.rglob("*.py") if VENDOR_DIR not in p.parents and p != VENDOR_DIR)
-    if MAIN_PY.is_file():
-        files.append(MAIN_PY)
-    return files
+    """Every backend ``.py`` to scan: all of backend/ minus _vendor/ (``main.py`` included)."""
+    return sorted(p for p in BACKEND_DIR.rglob("*.py") if VENDOR_DIR not in p.parents and p != VENDOR_DIR)
 
 
 def parse_backend_emits(files: list[Path] | None = None) -> set[str]:
@@ -327,7 +323,7 @@ def main(argv: list[str]) -> int:
             print(line)
         print()
         print(
-            "ERROR: the backend (py_modules emit calls) and frontend (frontend/src/**/*.ts "
+            "ERROR: the backend (backend emit calls) and frontend (frontend/src/**/*.ts "
             "addEventListener calls) event surfaces have drifted. Every emitted event "
             "must have a frontend listener and vice versa (or be explicitly EXEMPT) so "
             "the event channel stays one source of truth."

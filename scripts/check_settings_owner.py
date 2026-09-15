@@ -15,9 +15,9 @@ analysis: it cannot catch a module that receives an already-constructed path
 from the owner and writes to it. It catches the common regression, which is a
 second module hardcoding the filename and writing its own copy.
 
-It scans every backend ``.py`` (all of ``py_modules/`` except ``_vendor/`` and
-except the owner, plus ``main.py``) via ``ast`` and flags any ``ast.Constant``
-whose value is exactly the str ``"settings.json"``. A docstring or comment that
+It scans every backend ``.py`` (all of ``backend/`` except ``_vendor/`` and
+except the owner) via ``ast`` and flags any ``ast.Constant`` whose value is
+exactly the str ``"settings.json"``. A docstring or comment that
 merely *mentions* settings.json in prose does not match — only an exact
 string-constant ``"settings.json"`` does (a docstring's constant value is the
 whole docstring text, not the bare filename). ``tests/`` is not scanned: tests
@@ -34,28 +34,24 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PY_MODULES_DIR = REPO_ROOT / "py_modules"
-VENDOR_DIR = PY_MODULES_DIR / "_vendor"
-MAIN_PY = REPO_ROOT / "main.py"
+BACKEND_DIR = REPO_ROOT / "backend"
+VENDOR_DIR = BACKEND_DIR / "_vendor"
 
 # The single module allowed to name settings.json — its crash-safe owner.
-OWNER = REPO_ROOT / "py_modules" / "adapters" / "persistence.py"
+OWNER = REPO_ROOT / "backend" / "adapters" / "persistence.py"
 
 # The confined literal.
 SETTINGS_FILENAME = "settings.json"
 
 
 def _iter_scanned_files() -> list[Path]:
-    """Every backend ``.py`` to scan: py_modules/ minus _vendor/ and the owner, plus main.py."""
+    """Every backend ``.py`` to scan: backend/ minus _vendor/ and the owner."""
     owner = OWNER.resolve()
-    files = sorted(
+    return sorted(
         p
-        for p in PY_MODULES_DIR.rglob("*.py")
+        for p in BACKEND_DIR.rglob("*.py")
         if VENDOR_DIR not in p.parents and p != VENDOR_DIR and p.resolve() != owner
     )
-    if MAIN_PY.is_file():
-        files.append(MAIN_PY)
-    return files
 
 
 def find_violations(files: list[Path] | None = None) -> list[str]:

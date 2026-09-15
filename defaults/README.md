@@ -1,7 +1,8 @@
 # Packaged defaults
 
-Reference data that ships inside the plugin. The Decky CLI flattens this directory into the plugin root at package time,
-so the runtime reads these files by their bare name (no `defaults/` prefix); do not move or rename them.
+Reference data that ships inside the plugin. The runtime looks for each file at the plugin root first and under
+`defaults/` second — Decky-packaged installs carried these flattened into the root — so they keep their bare names; do
+not move or rename them.
 
 ## `config.json` — in-tree default
 
@@ -14,5 +15,5 @@ checksum gate.
 here from an [emu-atlas](https://github.com/danielcopper/emu-atlas) release and read at runtime by `FirmwareService`. It
 is gone: the file no longer exists upstream, so the snapshot could never be refreshed again and drifted a little further
 with every RetroDECK update. Firmware requirements are now read live off the installed cores through the vendored
-resolver (`py_modules/_vendor/atlas/`, provenance in [`_vendor/README.md`](../py_modules/_vendor/README.md)), which is
-data no snapshot has to keep in step.
+resolver (`backend/_vendor/atlas/`, provenance in [`_vendor/README.md`](../backend/_vendor/README.md)), which is data no
+snapshot has to keep in step.

@@ -52,7 +52,7 @@ def run_check(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """Yield a helper that writes *source* as the transport module and runs the real check."""
 
     def _run(source: str) -> list[str]:
-        transport = tmp_path / "py_modules" / "adapters" / "romm" / "http.py"
+        transport = tmp_path / "backend" / "adapters" / "romm" / "http.py"
         transport.parent.mkdir(parents=True, exist_ok=True)
         transport.write_text(source, encoding="utf-8")
         monkeypatch.setattr(check, "REPO_ROOT", tmp_path)
@@ -96,7 +96,7 @@ class TestChokePointBypassed:
         assert len(findings) == 1
         assert "outside _urlopen()" in findings[0]
         offending_line = source.splitlines().index("        return urllib.request.urlopen(req, timeout=30)") + 1
-        assert f"py_modules/adapters/romm/http.py:{offending_line}:" in findings[0]
+        assert f"backend/adapters/romm/http.py:{offending_line}:" in findings[0]
 
     def test_every_offending_site_is_reported_not_just_the_first(self, run_check):
         source = (

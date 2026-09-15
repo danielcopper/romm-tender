@@ -593,7 +593,7 @@ class TestFamiliesAreDistinguishable:
 
 class TestFindViolationsWalk:
     def test_walk_finds_and_relativises(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-        services_dir = tmp_path / "py_modules" / "services"
+        services_dir = tmp_path / "backend" / "services"
         services_dir.mkdir(parents=True)
         (services_dir / "clean.py").write_text(
             "class S:\n"
@@ -615,7 +615,7 @@ class TestFindViolationsWalk:
 
         findings = check.find_violations(services_dir)
         assert len(findings) == 1
-        assert findings[0].startswith("py_modules/services/bad.py:")
+        assert findings[0].startswith("backend/services/bad.py:")
 
     def test_missing_dir_returns_empty(self, tmp_path: Path):
         assert check.find_violations(tmp_path / "does-not-exist") == []
@@ -638,7 +638,7 @@ class TestMainEntryPoint:
         assert "OK:" in capsys.readouterr().out
 
     def test_main_reports_and_returns_one_on_violations(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys):
-        services_dir = tmp_path / "py_modules" / "services"
+        services_dir = tmp_path / "backend" / "services"
         services_dir.mkdir(parents=True)
         (services_dir / "bad.py").write_text(
             "class S:\n"
@@ -661,7 +661,7 @@ class TestMainEntryPoint:
     def test_main_summarises_only_the_io_rule_for_io_findings(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
     ):
-        services_dir = tmp_path / "py_modules" / "services"
+        services_dir = tmp_path / "backend" / "services"
         services_dir.mkdir(parents=True)
         (services_dir / "bad.py").write_text(
             "class S:\n"
@@ -681,7 +681,7 @@ class TestMainEntryPoint:
         assert "UoW-opening seam" not in out
 
     def test_main_summarises_both_rules_when_both_fire(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys):
-        services_dir = tmp_path / "py_modules" / "services"
+        services_dir = tmp_path / "backend" / "services"
         services_dir.mkdir(parents=True)
         (services_dir / "bad.py").write_text(
             "class S:\n"

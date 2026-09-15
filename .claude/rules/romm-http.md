@@ -1,6 +1,6 @@
 ---
 paths:
-  - "py_modules/adapters/romm/**"
+  - "backend/adapters/romm/**"
 ---
 
 # RomM HTTP error translation `[ours]`

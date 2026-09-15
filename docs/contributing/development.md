@@ -60,7 +60,7 @@ mise run test                   # same thing via mise
 To run with coverage:
 
 ```bash
-python -m pytest tests/ -q --cov=py_modules --cov=main --cov-report=term --cov-branch
+python -m pytest tests/ -q --cov=backend --cov-report=term --cov-branch
 ```
 
 Tests mirror the source layout (`tests/services/`, `tests/adapters/`, `tests/domain/`, `tests/models/`, `tests/lib/`),
@@ -109,7 +109,7 @@ separate change. See `.claude/rules/testing-backend.md` for the full contract-ti
 
 The save-sync decisions are also published as a standalone client contract,
 [romm-gavel](https://github.com/danielcopper/romm-gavel) — and since both of them run in gavel's compiled core (vendored
-as `py_modules/native/libgavel-x86_64-linux.so`), the two vector families are what keep the shipped binary and the
+as `backend/native/libgavel-x86_64-linux.so`), the two vector families are what keep the shipped binary and the
 published spec from silently drifting apart:
 
 - **ladder** (the 409 resolution ladder) — `tests/adapters/test_gavel_native.py`.
@@ -207,20 +207,20 @@ Mode's. See [Frontend dev loop](frontend-dev-loop.md) for the full workflow, key
 
 ## Deploying to Device
 
-For development, symlink the repo into the plugins directory:
-
 ```bash
-sudo ln -sf "$(pwd)" ~/homebrew/plugins/romm-tender
-sudo systemctl restart plugin_loader
+mise run deploy
 ```
 
-This way, rebuilds take effect immediately after a Decky restart.
+Deploying is a copy, not a link. Decky reads `<plugin>/main.py` with the packages beside it in `<plugin>/py_modules/`,
+and the repo root carries neither — the whole backend, entry point included, lives under `backend/`. `deploy` writes
+that layout into `~/homebrew/plugins/romm-tender`. Use `mise run dev` rather than `deploy` on a root-owned plugin dir:
+it stops and restarts `plugin_loader` around the copy, as described above.
 
 ## Linting
 
 ```bash
-PYTHONPATH=py_modules lint-imports   # check service/adapter layer rules
-mise run lint                        # same via mise
+PYTHONPATH=backend lint-imports   # check service/adapter layer rules
+mise run lint                     # same via mise
 ```
 
 The `.importlinter` config enforces the layer boundary contracts:
@@ -239,8 +239,8 @@ services may not call `datetime.now()` / `asyncio.sleep()` / `time.time()` / `ti
 `random.*` directly — they inject the `Clock` / `Sleeper` / `UuidGen` Protocol instead.
 
 `mise run lint` (and CI) also runs `scripts/check_service_independence_contract.py`, which derives the expected service
-list from `py_modules/services/` and fails if `.importlinter`'s `service-independence` contract drifts — omitting a
-service or carrying a stale entry — keeping the hand-maintained `modules` list self-healing.
+list from `backend/services/` and fails if `.importlinter`'s `service-independence` contract drifts — omitting a service
+or carrying a stale entry — keeping the hand-maintained `modules` list self-healing.
 
 `mise run lint` (and CI) also runs `scripts/check_failure_shape.py --check`, which fails if any `success: False` return
 in `services/` is missing the canonical `reason` + `message` keys or carries the forbidden `error` / `error_code` key —
@@ -345,8 +345,8 @@ tracked.
 ## Project Structure
 
 ```text
-main.py                              # Plugin entry — Decky lifecycle + callable surface
-py_modules/
+backend/
+  main.py                            # Plugin entry — Decky lifecycle + callable surface
   bootstrap/                         # Composition root — re-exported through __init__.py
     adapters.py                      # bootstrap() builds every adapter and the typed bundles
     services.py                      # wire_services() builds every service from those bundles
@@ -406,7 +406,7 @@ frontend/src/                        # Frontend TypeScript
   utils/                             # Shortcut CRUD, sync, downloads, collections, session manager, store patches
 bin/rom-launcher                     # Pure exec wrapper — installed to <data root>/bin at every start, and run from there
 defaults/config.json                 # platform_map: 153 platform slug -> RetroDECK system mappings
-tests/                               # Backend unit tests, mirroring py_modules/ layout
+tests/                               # Backend unit tests, mirroring backend/ layout
 ```
 
 See [Backend Architecture](../architecture/backend-architecture.md) for the service/adapter design, dependency diagram,
