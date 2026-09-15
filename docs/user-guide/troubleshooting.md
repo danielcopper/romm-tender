@@ -36,13 +36,14 @@ answers with its own message instead — "Server unreachable", "Sign-in rejected
 
 ### "RomM Sync" is still installed
 
-**Symptom**: Decky lists two plugins — an older **RomM Sync** and **Tender** — and Tender's QAM panel shows a warning
-card about it. Tender may also look brand new, with no server configured and no synced games.
+**Symptom**: Decky lists two plugins — an older **RomM Sync** and **Tender**. Tender may also look brand new, with no
+server configured and no synced games.
 
-**Fix**: Nothing to fix — read the card. It says one of two things: your games still launch through a file in that older
-plugin's folder, or nothing in Tender depends on it any more and it can go. Removing it before the card says so stops
-all of your games from starting, and Tender cannot put that file back. See
-[Updating from a release before 0.31.0](getting-started.md#updating-from-a-release-before-0310).
+**Fix**: Nothing to fix, but do not remove the older plugin until you have checked one of your games. Your shortcuts may
+still start through a file inside that older plugin's folder; removing it before they have been repointed stops all of
+your games from starting, and nothing can put that file back. A game's own **Target** path tells you which state you are
+in — see [Updating from a release before 0.31.0](getting-started.md#updating-from-a-release-before-0310) for the check
+and what each answer means.
 
 ### BIOS files missing
 
