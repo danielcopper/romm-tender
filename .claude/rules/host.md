@@ -23,11 +23,19 @@ error stands.
 
 ## 2. An address with a token in it never reaches the log file
 
-The token lives in memory for one process and travels as part of an address, never as a header. `TokenRedactionFilter`
-sits on the **file** handler, which is what makes the rule checked rather than remembered. The one line that prints the
-whole load address is deliberate and goes to stderr — the terminal for a hand start, the journal for a service — which
-is exactly why the filter is not on the root logger. Nothing may ever add a handler on **stdout**: this process reads
-the vendored resolver's core-probe child on stdout as JSON.
+The token lives in memory for one process and travels as part of an address, never as a header. Redaction is
+`RedactingFormatter`, set as the **file** handler's own formatter: it rewrites the string that handler renders and
+touches nothing else. The one line that prints the whole load address is deliberate and goes to stderr — the terminal
+for a hand start, the journal for a service — and the stderr handler keeps a plain formatter so that line arrives whole.
+
+**Do not make this a `logging.Filter`, which is what it was.** A filter sees the record every handler shares, so
+redacting there rewrote the message for stderr too, and whether it did depended on the order the handlers were added —
+which nothing in the code read as an ordering decision. The deliberate exception silently never existed, and the test
+covering it asserted where the filter was installed rather than what stderr received, so it stayed green. A formatter is
+per handler by construction; assert on each handler's output.
+
+Nothing may ever add a handler on **stdout**: this process reads the vendored resolver's core-probe child on stdout as
+JSON.
 
 ## 3. Two entry points, one order: Host, then Origin, then Token
 

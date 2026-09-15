@@ -133,9 +133,9 @@ async def run_backend(
 
         # Once, at start-up, with the token in it: this is the address the panel
         # is loaded from, and without it the development loop cannot be driven
-        # by hand at all. The log file never sees it — the redaction filter sits
-        # on that handler — so this line lives on stderr, which is the terminal
-        # for a hand start and the journal for a service.
+        # by hand at all. The log file never sees it — that handler's own
+        # formatter redacts the token — so this line lives on stderr, which is
+        # the terminal for a hand start and the journal for a service.
         logger.info(f"host: load the panel from {server.bundle_url()}")
         if status.failed_startup_steps:
             logger.warning(f"host: {len(status.failed_startup_steps)} start-up step(s) failed; the panel will say so")

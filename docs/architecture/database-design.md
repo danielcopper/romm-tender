@@ -390,8 +390,8 @@ it again. The ladder is on [Backend Architecture → Where user data lives](back
 ([ADR-0036](../adr/0036-the-backend-hosts-itself.md)).
 
 The live path reads and writes it; DB-init is hard-failing (a migration failure aborts startup rather than degrading
-silently) so a corrupt or unmigratable database never serves stale reads. The migration that moves the file runs
-**before** the schema runner opens it, so the two never race: what the runner opens is whatever the move settled on.
+silently) so a corrupt or unmigratable database never serves stale reads. Nothing moves the file any more, so the schema
+runner opens the one path the entry point resolved and there is no ordering left to get wrong.
 
 ### Adding a migration past v1
 

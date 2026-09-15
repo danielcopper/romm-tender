@@ -84,8 +84,8 @@ The shortcut itself tells you which state you are in, and looking costs nothing:
 
 - **The path is inside `~/.local/share/romm-tender/bin/`** — your shortcuts no longer depend on the older plugin. Remove
   it wherever Decky lists your installed plugins, or keep it: it costs disk space and nothing else.
-- **The path is still inside `homebrew/plugins/`** — leave the older plugin where it is. Open Tender's panel once to
-  give it the chance to repoint them, then look again before you delete anything.
+- **The path is still inside `homebrew/plugins/`** — leave the older plugin where it is. Tender repoints shortcuts when
+  it loads, not when you open its panel, so reload Tender or restart Steam, then look again before you delete anything.
 
 The new install also starts with its own settings and library: each install keeps its data in its own place, and nothing
 copies the older one's settings or synced library across. Set Tender up as if it were new, and remove the older plugin

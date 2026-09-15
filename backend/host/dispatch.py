@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 # out too large is one call's problem and must not cost the others anything.
 #
 # The number is chosen, not inherited. The reference library's largest cover is
-# 5,869,834 bytes, which is about 7.7 MB once base64 has had it; a 4 MiB cap
+# 5,869,834 bytes, which base64 turns into 7,826,448 (7.46 MiB); a 4 MiB cap
 # would have refused that image with nothing to show for it. Decky's own 1 MiB
 # limit belongs to a bridge that is not in this path at all.
 DEFAULT_PAYLOAD_LIMIT = 12 * 1024 * 1024

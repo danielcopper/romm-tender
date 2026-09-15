@@ -23,10 +23,10 @@ entry point resolved. `bootstrap()` is **told** where those directories are and 
 
 **`Plugin.run` is a `classmethod` and synchronous, and both halves are load-bearing.** Synchronous because everything it
 does is path and environment work that belongs before a loop exists — and because the admission token has to be minted
-before the first log line, since the filter that keeps it out of the log file is installed with the file handler. A
-method on the class rather than a module function because the lifecycle it drives is private, and a module-level caller
-would be reaching across the class boundary to use it. It must stay **non-async**: every public `async def` on `Plugin`
-is a callable, both to the manifest gate and to the dispatcher.
+before the first log line, since the formatter that keeps it out of the log file is built with the file handler and
+takes the token as its argument. A method on the class rather than a module function because the lifecycle it drives is
+private, and a module-level caller would be reaching across the class boundary to use it. It must stay **non-async**:
+every public `async def` on `Plugin` is a callable, both to the manifest gate and to the dispatcher.
 
 `main.py` grows with the callable surface it describes; that is unavoidable density, not god-class, and it is
 deliberately out of scope for the module-size gate.

@@ -57,8 +57,9 @@ export async function relocateShortcutsToLauncher(): Promise<LauncherRelocation>
     }
   } catch (e) {
     // A partial pass is not a relocation: the shortcuts it never reached are
-    // still in a plugin folder, so the card must not say otherwise. The next
-    // start's reading finds them and hands them over again.
+    // still in a plugin folder, so this answers `blocked` rather than claiming
+    // a move it did not finish. The next start's reading finds them and hands
+    // them over again.
     logError(`launcher relocation: stopped after a failed write, leaving the rest for the next start: ${e}`);
     return { status: "blocked" };
   }

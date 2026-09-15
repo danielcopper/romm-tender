@@ -145,9 +145,9 @@ locally with `mise run docs`.
   an ordinary error for that one call, while `host/connection.py` closes the socket on a frame over 16 MiB, which
   rejects every call in flight with it. So a bulk payload is chunked rather than sent: per-item callables, and bulk
   lists paged (the library apply emits shortcuts in batches; the metadata cache loads page-by-page). Those numbers are
-  ours and were chosen — the reference library's largest cover is 5,869,834 bytes, about 7.7 MB once base64 has had it,
-  so a 4 MiB cap would have refused it silently. The plugin loader's own 1 MiB bridge limit is **not** in this path any
-  more; do not reason from it.
+  ours and were chosen — the reference library's largest cover is 5,869,834 bytes, which base64 turns into 7,826,448
+  (7.46 MiB), so a 4 MiB cap would have refused it silently. The plugin loader's own 1 MiB bridge limit is **not** in
+  this path any more; do not reason from it.
 - **No `BIsModOrShortcut` bypass**: the bypass counter was removed deliberately. Shortcuts return `true` (natural
   state); we own the game detail UI. Do not reintroduce a bypass.
 - **`instanceof` against a DOM global is false in QAM code**: plugin code runs in the **SharedJSContext** window while

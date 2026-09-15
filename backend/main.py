@@ -1118,8 +1118,8 @@ class Plugin:
 
         Synchronous on purpose. Everything here is path and environment work that
         belongs before a loop exists — and the token has to be minted before the
-        first log line, because the filter that keeps it out of the log file is
-        installed with the file handler.
+        first log line, because the formatter that keeps it out of the log file
+        is built with the file handler and needs the token to redact.
 
         Answers 0 for a clean stop, 1 when another backend already holds the lock.
         """

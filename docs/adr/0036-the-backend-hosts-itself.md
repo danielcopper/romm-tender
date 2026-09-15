@@ -58,7 +58,7 @@ claims. "No store" means a lost answer fails **visibly**, never that it vanishes
 that call; a 16 MiB cap on the connection's frames, judged on the announced length before a byte is buffered, whose
 breach closes the socket. They are separate because breaking the second rejects every call in flight, and one oversized
 cover image must not cost every other request. The numbers are chosen, not inherited: the reference library's largest
-cover is 5,869,834 bytes, about 7.7 MB once base64 has had it, so a 4 MiB cap would have refused it silently.
+cover is 5,869,834 bytes, which base64 turns into 7,826,448 (7.46 MiB), so a 4 MiB cap would have refused it silently.
 
 **6. Three checks, one order, two entry points.** Host, then Origin, then Token — on the static route and on the
 upgrade, from one function. Host first so a DNS-rebinding attempt is logged as one rather than as a bad credential;

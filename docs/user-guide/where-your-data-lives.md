@@ -34,8 +34,9 @@ cannot move them again.
 The folders above are the defaults. Tender asks its environment first, so an installer that sets `TENDER_CONFIG_DIR`,
 `TENDER_DATA_DIR`, `TENDER_CACHE_DIR` or `TENDER_STATE_DIR` decides where they go; failing that it follows the standard
 `XDG_*` variables, and only then falls back to the paths in the table. It resolves this once when it starts and writes
-the program, database and cache folders it settled on into its log, so the first lines of `backend.log` tell you which
-ones this install is actually using.
+the program, database and cache folders it settled on into its log, so the **last** `host: code …` line in `backend.log`
+tells you which ones this install is actually using. Look for the last one rather than the first: the log is appended to
+across runs, so the top of the file belongs to an older start.
 
 ## Coming from an older version
 
