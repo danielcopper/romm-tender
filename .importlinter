@@ -5,7 +5,42 @@ root_packages =
     lib
     domain
     models
+    host
+    bootstrap
 include_external_packages = True
+
+# The host is the process, not a layer of the application. It owns the port, the
+# protocol and the lifetime, and it reaches none of the code it hosts — the
+# composition root hands it a dispatcher and an event sink, and it asks them
+# nothing about what is behind them.
+[importlinter:contract:host-hosts-nothing-it-knows]
+name = The host must not import the application it hosts
+type = forbidden
+source_modules =
+    host
+forbidden_modules =
+    services
+    adapters
+    bootstrap
+    domain
+
+# ...and the other direction, which is the half that rots without a check. The
+# first service that wants to send an event would reach in here for the sink,
+# and from then on the composition root would no longer be the only place that
+# knows a transport exists. ``main.py`` is the one module allowed to know, and
+# it is not a package, so nothing in this list can name it.
+[importlinter:contract:nobody-imports-the-host]
+name = Only the entry point may import the host
+type = forbidden
+source_modules =
+    services
+    adapters
+    bootstrap
+    domain
+    lib
+    models
+forbidden_modules =
+    host
 
 # Services must not import concrete adapters (Protocols are OK). Forbid the
 # ``adapters`` root package wholesale, not a hand-enumerated denylist: services

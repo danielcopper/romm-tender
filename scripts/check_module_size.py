@@ -64,6 +64,7 @@ SCOPE_DIRS = (
     "backend/adapters",
     "backend/bootstrap",
     "backend/domain",
+    "backend/host",
     "backend/lib",
     "backend/models",
     "backend/services",

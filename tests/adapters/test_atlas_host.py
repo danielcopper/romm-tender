@@ -108,6 +108,53 @@ class TestGrantCoreProbeInterpreter:
         assert core_probe_interpreter() is None
         assert str(unrunnable) not in report
 
+    def test_a_real_interpreter_host_is_left_with_its_own(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Hosted by its own process, ``sys.executable`` IS a Python — and is the right one.
+
+        The path this module offers is a guess about the machine; the running
+        interpreter is not a guess at all. Registering over it would replace a
+        known-good answer with a worse one, so the grant does not fire.
+        """
+        interpreter = tmp_path / "python3"
+        interpreter.write_text("#!/bin/sh\n", encoding="utf-8")
+        interpreter.chmod(0o755)
+        monkeypatch.delattr(sys, "frozen", raising=False)
+        monkeypatch.setattr(sys, "executable", "/opt/cpython/bin/python3")
+        monkeypatch.setattr(atlas_host, "_HOST_INTERPRETER", str(interpreter))
+
+        report = atlas_host.grant_core_probe_interpreter()
+
+        granted = core_probe_interpreter()
+        assert granted is not None
+        assert granted.registered is False
+        assert granted.path == "/opt/cpython/bin/python3"
+        assert str(interpreter) not in report
+
+    def test_only_frozenness_decides_between_the_two(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, frozen_host: None
+    ) -> None:
+        """The same spawnable path, granted here and refused in the test above.
+
+        Stated as a pair because deleting the condition is the "simplification"
+        that fails nothing: the grant would fire everywhere, and on a hosted
+        backend every core probe would run under whatever ``/usr/bin/python3``
+        happened to be rather than under the interpreter the backend is running.
+        """
+        interpreter = tmp_path / "python3"
+        interpreter.write_text("#!/bin/sh\n", encoding="utf-8")
+        interpreter.chmod(0o755)
+        monkeypatch.setattr(sys, "executable", "/opt/cpython/bin/python3")
+        monkeypatch.setattr(atlas_host, "_HOST_INTERPRETER", str(interpreter))
+
+        atlas_host.grant_core_probe_interpreter()
+
+        granted = core_probe_interpreter()
+        assert granted is not None
+        assert granted.registered is True
+        assert granted.path == str(interpreter)
+
     def test_the_answer_names_atlas_own_reading_where_nothing_was_granted(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

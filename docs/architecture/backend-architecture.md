@@ -2,30 +2,101 @@
 
 ## Overview
 
-The Python backend follows **Cosmic Python** ("Architecture Patterns with Python") adapted for a single-user Decky
-plugin. Code is split into four layers with a strictly enforced dependency direction:
+The Python backend follows **Cosmic Python** ("Architecture Patterns with Python") adapted for a single-user
+application. Code is split into layers with a strictly enforced dependency direction:
 
 - **`services/`** — orchestration. Business logic and the public callable surface.
 - **`adapters/`** — I/O. Everything that touches the network, the filesystem, the clock, or Steam.
 - **`domain/`** — pure compute. Functions in, values out; no I/O, no state mutation, no service/adapter imports.
 - **`lib/`** — cross-cutting utilities independent of every other layer.
 - **`models/`** — data shapes (TypedDicts, dataclasses) independent of every other layer.
+- **`host/`** — the process itself. Not a layer of the application at all: see below.
 
 Services depend on **Protocols** (defined in `services/protocols/`), never on concrete adapter classes. Adapters
 implement those Protocols. `bootstrap/` is the composition root — the only place where concrete adapters meet services.
-`main.py` owns the Decky lifecycle and the callable surface; it holds no business logic.
+`main.py` owns the process lifecycle and the callable surface; it holds no business logic.
 
 ```python
 class Plugin:
     # No base classes — pure composition
-    # Owns: the Decky lifecycle (_main / _unload) and the callable surface
+    # Owns: the lifecycle (_main / _unload) and the callable surface
     # Delegates: all business logic to services, all I/O to adapters
 ```
+
+## The host (`backend/host/`)
+
+The backend runs in a process of its own — [ADR-0036](../adr/0036-the-backend-hosts-itself.md). `host/` is everything
+that used to be a plugin loader's job: the single-instance lock, the start-up order, a loopback port, the panel bundle,
+and one WebSocket carrying calls and events. Standard library only.
+
+It is deliberately **not** a layer of the application, and the boundary runs in both directions. `host/` imports nothing
+from `services`, `adapters`, `bootstrap` or `domain`; and **nothing but `main.py` imports `host`** — both are
+`.importlinter` contracts. The second half is the one that would rot without a check: the first service that wanted to
+send an event would reach in here for the sink, and the composition root would stop being the only place that knows a
+transport exists.
+
+| Module               | Owns                                                                             |
+| -------------------- | -------------------------------------------------------------------------------- |
+| `protocol.py`        | The four message kinds and the transport-reason vocabulary                       |
+| `access.py`          | The three admission checks — Host, Origin, Token — in that order                 |
+| `dispatch.py`        | Name resolution onto the plugin object, the exception boundary, the answer cap   |
+| `connection.py`      | One live WebSocket: frame reading, the frame cap, the heartbeat, calls in flight |
+| `server.py`          | The bind and its fallback, the file route, the upgrade, newest-connection-wins   |
+| `single_instance.py` | The `flock` beside the database, and the port file beside the session            |
+| `logging_setup.py`   | The root logger, and the token redaction on its file handler                     |
+| `runtime.py`         | The start-up order and the shutdown                                              |
+| `status.py`          | What the panel may ask about the run hosting it                                  |
+
+Two pure halves live in `lib/` instead, because they are checkable against tables of bytes rather than against a running
+server: `lib/websocket_frames.py` (the RFC 6455 codec) and `lib/http_messages.py` (request heads in, response heads
+out).
+
+**The protocol.** JSON text frames, both directions, each message stating its kind as a readable word:
+
+```text
+call   {type, id, method, args}     args are positional
+reply  {type, id, result}
+error  {type, id, reason, message, traceback?}
+event  {type, name, payload}
+```
+
+`error.reason` is the **transport** layer — `method_unknown`, `payload_too_large`, `backend_exception`,
+`malformed_message`, `connection_lost`. A callable's own failure is a successful transport and arrives inside `result`
+in the `{success, reason, message}` shape `scripts/check_failure_shape.py` guards; that gate does not see `host/`, so
+keeping the two apart is prose and review. Reachable methods are exactly the public `async def` on `Plugin` — the same
+set `scripts/check_callable_manifest.py` derives, asserted equal by `tests/host/test_dispatch.py`.
+
+**Two size caps, two purposes.** ~12 MiB on one call's encoded answer, refused as an ordinary error for that call alone;
+16 MiB on the connection's frames, judged on the **announced** length before a byte is buffered, whose breach closes the
+socket. Breaking the second rejects every call in flight, which is why one oversized cover image may not reach it.
+
+**No reply store.** A call whose answer was in flight when the socket went is not redelivered — its task is cancelled,
+and the caller's own pending register answers it `connection_lost`. A lost answer fails visibly; it never disappears.
+
+**The start-up order** is what makes the port file meaningful:
+
+```text
+lock (with a short retry window)   ← beside the database, which is what it protects
+  → schema migration + start-up routines
+  → bind the port (27737, then the next free)
+  → write the port file
+  → migrate_legacy_credentials     ← the only start-up step with network I/O
+```
+
+So "the port file is there" means "the backend is ready", and there is no readiness flag for a call to wait on. A second
+backend never reaches the port fallback — the lock refused it first — so a fallback always means some other program
+holds the port. The port file is a hint; connecting to it is the proof.
+
+**A start-up routine's failure is counted, not fatal** (`bootstrap/startup.py`). One edge binds two of them:
+`prune_stale_installed_roms` runs only after `detect_retrodeck_path_change` **succeeded**, because the prune reads the
+pending homes the detection writes.
 
 ## Dependency Diagram
 
 ```text
-main.py (Plugin — Decky lifecycle + callable routing)
+host/ (the process: lock, port, protocol, lifetime — imports none of the below)
+    ↑ dispatches onto
+main.py (Plugin — lifecycle + callable routing; the only importer of host/)
     ↓ calls
 bootstrap/ (composition root: adapters.bootstrap() builds adapters, services.wire_services() builds services)
     ↓ creates
@@ -2337,6 +2408,19 @@ forbidden_modules = _vendor
 type = forbidden
 source_modules = models
 forbidden_modules = services, adapters, domain, lib
+
+# The host is the process, not a layer: it reaches none of the code it hosts
+[importlinter:contract:host-hosts-nothing-it-knows]
+type = forbidden
+source_modules = host
+forbidden_modules = services, adapters, bootstrap, domain
+
+# ...and only the entry point may reach the host. main.py is not a package,
+# so nothing in this list can name it.
+[importlinter:contract:nobody-imports-the-host]
+type = forbidden
+source_modules = services, adapters, bootstrap, domain, lib, models
+forbidden_modules = host
 
 # Services must not import stdlib I/O / non-deterministic primitives directly
 [importlinter:contract:no-stdlib-io-in-services]
