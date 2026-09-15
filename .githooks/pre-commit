@@ -9,6 +9,21 @@
 # Markdown (deno fmt). A no-op or missing tool in one section must NOT skip the
 # others, so each section guards itself rather than exiting the whole hook.
 
+# --- Chain the developer's global pre-commit, if they have one -------------
+# `mise run setup` points core.hooksPath at this directory, and that setting is
+# single-valued: from then on a global hook the developer installed no longer
+# runs in this repo, without anything saying so. A guard they rely on
+# everywhere else would be off in exactly one place. Running it first, and
+# adopting its refusal, keeps that from happening. A developer with no global
+# hook notices nothing.
+global_hooks=$(git config --global --get core.hooksPath)
+if [ -n "${global_hooks:-}" ]; then
+    global_hooks=${global_hooks/#\~/$HOME}
+    if [ -x "$global_hooks/pre-commit" ]; then
+        "$global_hooks/pre-commit" || exit 1
+    fi
+fi
+
 # Re-stage the files a formatter may have rewritten — but only those that had
 # no unstaged changes when this hook started.
 #
