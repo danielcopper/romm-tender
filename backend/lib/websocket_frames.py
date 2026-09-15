@@ -242,5 +242,5 @@ def accept_key(client_key: str) -> str:
     """
     # SHA-1 is what RFC 6455 §4.2.2 specifies. It is not used here as a security
     # primitive — the handshake proves protocol comprehension, not identity.
-    digest = hashlib.sha1((client_key + _ACCEPT_GUID).encode("ascii")).digest()
+    digest = hashlib.sha1((client_key + _ACCEPT_GUID).encode("ascii"), usedforsecurity=False).digest()
     return base64.b64encode(digest).decode("ascii")

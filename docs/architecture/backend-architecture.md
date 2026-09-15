@@ -1590,7 +1590,6 @@ answering anything. Selected adapters:
 | `sgdb_artwork_cache.py`                                                    | `SgdbArtworkCacheAdapter` — on-disk SGDB artwork cache                                                                                                                                                                                                                                                                   |
 | `cover_art_file_store.py`                                                  | `CoverArtFileStoreAdapter` — RomM cover art I/O across the per-ROM cover cache and the Steam grid dir (download, `copy_file` publish/seed, read, prune)                                                                                                                                                                  |
 | `persistence.py`                                                           | `PersistenceAdapter` + per-domain persister adapters — `settings.json` read/write plus the one-time legacy `save_sync_state.json` read that feeds the bootstrap settings fold                                                                                                                                            |
-| `user_data_migration.py`                                                   | `UserDataMigrationAdapter` — the single owner of the start-up move to the plugin's own roots: probes the older locations and the two targets, copies a half through a staging directory renamed into place, leaves a note in the source, and reads/writes the recorded choice                                            |
 | `repositories/`                                                            | `SqliteUnitOfWork` + per-aggregate repository adapters — SQLite I/O (the live persistence path; see [Database Design](database-design.md))                                                                                                                                                                               |
 | `sqlite_migrations.py`                                                     | `apply_migrations` — schema migration runner (`db/migrations/NNN_*.sql`, `PRAGMA user_version`)                                                                                                                                                                                                                          |
 | `download_file.py`                                                         | `DownloadFileAdapter` — download filesystem                                                                                                                                                                                                                                                                              |
@@ -2150,7 +2149,7 @@ documented in [Database Design](database-design.md). Selected modules:
 | `state_migrations.py`                                        | `migrate_settings` (`settings.json`) + `fold_legacy_save_sync_settings` (one-time legacy `save_sync_state.json` fold)                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `sync_state.py`                                              | `SyncState` enum (idle, running, cancelling)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `emulator_tag.py` / `version.py`                             | emulator-tag formatting, version parsing, core-change detection                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `identity.py`                                                | `DISPLAY_NAME` — the plugin's name where a person reads it: the toast sender, the RomM token label, the registered-device client, and the headline of each of the three files opened by hand (a recovery bundle's README, the recovery root's, and the note a data migration leaves behind). The identifier `romm-tender` is deliberately not here and not in one place; which name a new string takes is CONTEXT.md's "Display name vs identifier" entry; why its four homes stay apart is this module's docstring                |
+| `identity.py`                                                | `DISPLAY_NAME` — the plugin's name where a person reads it: the toast sender, the RomM token label, the registered-device client, and the headline of each of the two files opened by hand (a recovery bundle's README and the recovery root's). The identifier `romm-tender` is deliberately not here and not in one place; which name a new string takes is CONTEXT.md's "Display name vs identifier" entry; why its three homes stay apart is this module's docstring                                                           |
 
 **Config-source parsers** follow a dedicated domain+adapter template (pure parse in domain, I/O in adapter, callback
 Protocol into services). The full pattern, source catalog, and decisions log are on the
@@ -2222,15 +2221,15 @@ is written on every start rather than once is that a launcher installed once wou
 the move brought. The reason it is written through a staging file that is renamed on — never in place — is that a game
 running right now is executing that file, and bash reads a script as it runs it.
 
-**It runs after the migration above, and only where the data half landed.** The migration reads a target root holding
-anything at all as already migrated, so a launcher written into an empty data root would settle that rung for the life
-of the install and the user's library would never come across, silently. Whether the half landed is read off what the
-migration just returned — `locations.data_dir` IS the new root — rather than by probing the directory a second time. A
-start that has not got there installs nothing and creates nothing, and `ShortcutLauncher.path` is then the copy that
-ships inside the plugin folder: a real file, so a sync in that state still produces shortcuts that launch.
+**It is unconditional.** There was once an ordering to respect here — the install had to wait for a start-up migration's
+data half to land, because writing into an empty data root would have settled that migration's first rung for the life
+of the install. Nothing migrates now and the data root is simply where this run was told it is, so the install runs on
+every start and the only question left is whether the write succeeded. A start whose write failed creates nothing, and
+`ShortcutLauncher.path` is then the copy that ships beside the program: a real file, so a sync in that state still
+produces shortcuts that launch.
 
 `ShortcutLauncher` carries the two answers apart on purpose. `path` is what a newly built shortcut names, and follows
-the INSTALL rather than the migration: the home where this start actually got the launcher into it, the shipped copy
+the INSTALL rather than the intent: the home where this start actually got the launcher into it, the shipped copy
 otherwise — including the start whose write failed, whose home is empty. The one case where even the shipped copy is not
 a real file is a package shipped without its launcher, which is the same reason the install failed. `at_home` is the
 narrower question — `path` is the home under the data root, with this release's launcher in it — and it is what
@@ -2252,8 +2251,9 @@ file again. The frontend writes and reports; it records nothing, so a completed 
 start — Steam writes its in-memory shortcuts to the file when it chooses, and the file is what the stamp rests on. Every
 uncertainty answers `blocked` instead — the launcher is not at its home, or the file could not be read — and a blocked
 answer is never stamped, so the next start asks again. The gap that leaves is named at `get_shortcut_relocation`:
-nothing clears the stamp, so a shortcut that turns up later on the old path keeps launching but loses the panel's
-agreement, since the card reads the stamp as "nothing points into the pre-rename install any more".
+nothing clears the stamp, so a shortcut that turns up later on the old path keeps launching while the backend reports
+`done`. The card that used to read the stamp is gone with the plugin loader; the stamp itself still decides whether a
+later start re-reads Steam's file at all.
 
 ## Composition Root (`bootstrap/`)
 
@@ -2264,12 +2264,14 @@ only — consumers write `from bootstrap import …` and never deep-import a sub
    builds every adapter, applies the SQLite schema migrations, and loads + migrates `settings.json` (folding in the
    one-time legacy `save_sync_state.json` settings) so the settings persister binds the live mutable `settings` dict at
    construction. Returns a typed `BootstrapResult` carrying four bundles (`adapters`, `stores`, `callbacks`,
-   `runtime_adapters`), a small `handles` struct for Plugin-only outputs, `locations` — the two directories the
-   migration settled on — and `launcher`, where the shortcut launcher lives beneath the data half and whether this start
-   got it there. The bundle dataclasses are defined here too — they are the vocabulary the second half consumes.
+   `runtime_adapters`), a small `handles` struct for Plugin-only outputs, `directories` — the `AppDirectories` this run
+   was handed, six fields — `launcher`, where the shortcut launcher lives beneath the data root and whether this start
+   got it there, and `user_agent`, `<package name>/<version>` from the one read of the manifest that the outgoing
+   User-Agent comes from, which is also the identity the host answers under. The bundle dataclasses are defined here too
+   — they are the vocabulary the second half consumes.
 
 2. **`services.py`** — owns `WiringConfig` and `wire_services()`, which takes the four bundles plus
-   `min_required_version`, `locations` and `launcher`, and constructs every service, injecting each one's
+   `min_required_version`, `directories` and `launcher`, and constructs every service, injecting each one's
    `*ServiceConfig`. Returns a dict of named service instances.
 
 The two-phase split exists because adapter instantiation and state loading happen first (`bootstrap()`), then `main.py`

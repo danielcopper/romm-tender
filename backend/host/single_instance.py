@@ -20,8 +20,10 @@ failure line and leave the user with no backend.
 
 **The port file is a hint; connecting is the proof.** It carries a port and
 nothing else — no PID — and a reader is expected to try the port rather than
-believe the file. After a crash it lingers at most until the user logs out,
-because the runtime directory it lives in is emptied then.
+believe the file. How long a stale one lingers after a crash depends on where it
+landed: under ``XDG_RUNTIME_DIR`` the session clears it at logout, and on the
+fallback rung it is the state directory, which nothing clears
+(``domain/app_directories.py``). Neither matters to a reader who tries the port.
 """
 
 from __future__ import annotations

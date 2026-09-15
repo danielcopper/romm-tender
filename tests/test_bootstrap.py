@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import pathlib
 from dataclasses import replace
 from typing import Any
@@ -219,6 +220,68 @@ class TestBootstrap:
         result = _bootstrap_for(tmp_path)
         assert result.adapters.http_adapter._user_agent == "decky-plugin/0.0.0"
         assert result.adapters.sgdb_adapter._user_agent == "decky-plugin/0.0.0"
+
+
+class TestTheCacheRootAndTheDataRootStayApart:
+    """Everything re-derivable is wired to the cache root, and the database is not.
+
+    The two are six sibling `str` fields on one struct, so a wrong one is a
+    rename away and fails silently in whichever direction it pointed. These
+    assert the ROOTS the wiring composed, rather than that a file turned up:
+    `PruneArtifactAdapter` owns exactly `covers/` and `artwork/`, so pointing it
+    at the data root makes a removed-game purge find nothing and delete nothing,
+    with no failure and nothing in the log.
+    """
+
+    def test_the_cover_cache_and_the_purge_that_clears_it_share_one_root(self, tmp_path):
+        directories = _directories_at(tmp_path)
+        result = _bootstrap_for(tmp_path)
+        loop = asyncio.new_event_loop()
+        services = wire_services(
+            WiringConfig(
+                adapters=result.adapters,
+                stores=result.stores,
+                runtime=RuntimeBundle(
+                    loop=loop,
+                    logger=logging.getLogger("test"),
+                    emit=AsyncMock(),
+                    clock=result.runtime_adapters.clock,
+                    uuid_gen=result.runtime_adapters.uuid_gen,
+                    sleeper=result.runtime_adapters.sleeper,
+                    hostname_provider=result.runtime_adapters.hostname_provider,
+                    machine_id_provider=result.runtime_adapters.machine_id_provider,
+                ),
+                callbacks=result.callbacks,
+                min_required_version=(4, 9, 0),
+                directories=directories,
+                launcher=result.launcher,
+            )
+        )
+
+        try:
+            # Where the covers are written, and where the purge goes looking —
+            # the purge's own answer, through the seam the service calls.
+            assert services["artwork_service"]._cover_cache_dir.startswith(directories.cache_dir)
+            roots = {a["safe_root"] for a in result.adapters.prune_artifacts.recovery_artifacts([7])}
+            assert roots == {directories.cache_dir}
+        finally:
+            loop.close()
+
+    def test_the_sgdb_artwork_cache_is_on_the_cache_root(self, tmp_path):
+        directories = _directories_at(tmp_path)
+
+        result = _bootstrap_for(tmp_path)
+
+        assert result.adapters.sgdb_artwork_cache.cache_dir() == os.path.join(directories.cache_dir, "artwork")
+
+    def test_the_database_is_not(self, tmp_path):
+        """The one thing that cannot be fetched again stays on the data root."""
+        directories = _directories_at(tmp_path)
+
+        _bootstrap_for(tmp_path)
+
+        assert (pathlib.Path(directories.data_dir) / "romm_sync.db").exists()
+        assert not (pathlib.Path(directories.cache_dir) / "romm_sync.db").exists()
 
 
 class TestBootstrapInstallsTheLauncher:

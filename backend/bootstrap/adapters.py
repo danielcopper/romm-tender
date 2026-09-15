@@ -119,18 +119,11 @@ if TYPE_CHECKING:
         UuidGen,
     )
 
-# Filename of the SQLite database inside a plugin's runtime dir. Created by the
-# migration runner at startup. Not private: the legacy-install notice asks the
-# same question of the pre-rename install's runtime dir, and a second literal
-# spelling of the name would leave that detection silently answering about a
-# file we no longer write.
+# Filename of the SQLite database under the data root, created by the schema
+# migration runner at startup. It has one reader, in this module; the name is
+# public because it was once asked of a second install's directory too, and
+# leaving it importable costs nothing.
 DB_FILENAME = "romm_sync.db"
-
-# Where a user's answer to the two-libraries question waits for the next start.
-# It lives in the Decky-assigned runtime directory, which is the directory Decky
-# hands THIS install whichever candidate it is running from — so a start can find
-# the answer before it has decided anything. That directory is also one of the
-# candidates' own, which is why the migration's copy skips this file.
 
 
 @dataclass(frozen=True)
@@ -176,10 +169,11 @@ class StateBundle:
 class RuntimeBundle:
     """Process-level runtime infrastructure (event loop, logger, event funnel, time/UUID/sleep seams).
 
-    It carries no directory. Where anything lives is ``WiringConfig.directories``
-    and is answered there alone — this bundle used to hold two paths beside it,
-    which is how a question about the plugin loader's own layout came to sit
-    next to a question about the user's data.
+    It carries no directory. Where anything lives is the ``AppDirectories`` the
+    entry point resolved, which reaches a service as ``WiringConfig.directories``
+    — this bundle used to hold two paths beside the seams above, which is how a
+    question about the plugin loader's own layout came to sit next to a question
+    about the user's data.
     """
 
     loop: asyncio.AbstractEventLoop
@@ -252,12 +246,14 @@ class BootstrapResult:
 
     The four bundles carry every Protocol-typed seam and live state
     dict that services need; :attr:`handles` carries the small set of
-    raw outputs only ``main.py`` itself binds (debug logger); and
-    :attr:`locations` says which two directories this run ended up
-    reading and writing, which nothing else can answer because the
-    start-up migration decides it; :attr:`launcher` says where the
-    shortcut launcher lives beneath the data half and whether this
-    start got it there. Together they replace the historical untyped
+    raw outputs only ``main.py`` itself binds (debug logger);
+    :attr:`directories` is the set this run was handed, passed back so
+    every consumer reads the same six fields rather than composing any
+    of them again; :attr:`launcher` says where the shortcut launcher
+    lives beneath the data root and whether this start got it there;
+    and :attr:`user_agent` is the one manifest read, which the outgoing
+    User-Agent and the host's own identity both come from. Together
+    they replace the historical untyped
     ``dict`` return so every consumer is caught by basedpyright
     instead of failing silently at runtime on a typo.
     """
@@ -398,7 +394,9 @@ def bootstrap(
         package_name=package_name,
         plugin_version=plugin_version,
     )
-    prune_artifacts = PruneArtifactAdapter(runtime_dir=directories.data_dir)
+    # The CACHE root: this adapter's whole subject is ``covers/`` and
+    # ``artwork/``, which live there and not under the data root.
+    prune_artifacts = PruneArtifactAdapter(cache_dir=directories.cache_dir)
     steam_recovery = SteamRecoveryAdapter(user_home=user_home, logger=logger)
     # Built here rather than beside its peers below because the transport wants
     # it: a bare `logger.debug` never reaches the log the user reads, since
@@ -409,7 +407,7 @@ def bootstrap(
     steam_config = SteamConfigAdapter(user_home=user_home, logger=logger)
     sgdb_adapter = SteamGridDbAdapter(settings=settings, logger=logger, user_agent=user_agent)
     cover_art_file_store = CoverArtFileStoreAdapter()
-    sgdb_artwork_cache = SgdbArtworkCacheAdapter(runtime_dir=directories.cache_dir)
+    sgdb_artwork_cache = SgdbArtworkCacheAdapter(cache_dir=directories.cache_dir)
     download_file_store = DownloadFileAdapter()
     adoption_move = AdoptionMoveAdapter()
     firmware_file_store = FirmwareFileAdapter()
@@ -431,11 +429,14 @@ def bootstrap(
     sleeper = AsyncioSleeper()
     hostname_provider = HostnameAdapter()
     machine_id_provider = MachineIdAdapter()
-    # Without this grant the resolver probes no core here — Decky Loader's
-    # frozen runtime is no interpreter to spawn — so every core it is asked
-    # about answers unknown and a libretro save answer usually establishes
-    # nothing. That fails nothing and no test notices, which is why the answer
-    # is logged rather than discarded. Granted before the first atlas adapter:
+    # The grant is conditional and answers for both runtimes. Running as its own
+    # process this program IS an interpreter, so atlas takes ``sys.executable``
+    # and nothing is registered over it; frozen, there is none to take and the
+    # registered path is the only offer. Where neither yields one the resolver
+    # probes no core, every core it is asked about answers unknown, and a
+    # libretro save answer usually establishes nothing — which fails nothing and
+    # no test notices, and is why the answer is logged rather than discarded.
+    # Granted before the first atlas adapter:
     # any question one of them puts can probe. The call stands on its own line
     # because it is the grant, not the diagnostic: nested inside the log it
     # would leave with a demoted or deleted log line, and everything would stay

@@ -687,9 +687,11 @@ class SgdbArtworkCache(Protocol):
     """Filesystem seam for the SteamGridDB artwork cache directory.
 
     Owns the raw POSIX calls SteamGridService uses to manage cached
-    SGDB artwork (heroes, logos, grids, icons) under the plugin runtime
-    directory. Path construction and pruning policy remain a service
-    concern; this Protocol exposes only the I/O seams.
+    SGDB artwork (heroes, logos, grids, icons) under the CACHE root —
+    it is re-derivable from the server, which is what puts it there
+    rather than beside the database. Path construction and pruning
+    policy remain a service concern; this Protocol exposes only the
+    I/O seams.
 
     Implementations are synchronous — services that call from an async
     context offload via ``loop.run_in_executor``.

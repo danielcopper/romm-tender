@@ -5,7 +5,7 @@ Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 
 This tier reaches the answer through the real ``bootstrap()`` and a real SQLite
 database, which is what makes it worth having: the launcher path is derived from
-the data root the start-up migration settled, the completion stamp is a real
+the data root this run was told about, the completion stamp is a real
 ``kv_config`` row, and the reading is a real ``shortcuts.vdf`` parse. A unit test
 can only be told all three.
 

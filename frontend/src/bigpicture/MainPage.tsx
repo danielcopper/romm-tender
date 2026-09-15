@@ -786,10 +786,6 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
             </PanelSectionRow>
           </>
         )}
-        {/* Last of the button-carrying notices: nothing is lost either way and
-            the plugin is running, so what is outstanding is only where its data
-            ends up. Its button opens a modal rather than a page, because the
-            condition is answered once and for all. */}
         <BlockSeparator />
       </PanelSection>
 

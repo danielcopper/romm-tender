@@ -23,10 +23,10 @@ _LOCK_EXT = ".lock"
 # ``scripts/check_settings_owner.py`` confines the literal here as a PROXY for
 # "every write goes through the owner" — name-confinement, not dataflow: a
 # module handed an already-built path is not caught, as that gate's own
-# docstring says. Not private: the data-location migration has to recognise a
-# configured install without reading it, and a second spelling of the name there
-# would drift silently and leave that probe quietly answering about a file we no
-# longer write.
+# docstring says. It is public for a reader that no longer exists — a start-up
+# probe that had to recognise a configured install without opening it — and
+# today nothing outside this module imports it; the gate carries its own copy of
+# the literal rather than importing this one.
 SETTINGS_FILENAME = "settings.json"
 
 
@@ -106,7 +106,7 @@ class PersistenceAdapter:
     settings_dir:
         Absolute path to the directory that holds ``settings.json`` — the
         config root this run was told about.
-    runtime_dir:
+    data_dir:
         Absolute path to the directory that holds ``save_sync_state.json`` —
         the data root this run was told about.
     logger:
@@ -122,13 +122,13 @@ class PersistenceAdapter:
     def __init__(
         self,
         settings_dir: str,
-        runtime_dir: str,
+        data_dir: str,
         logger: logging.Logger,
         *,
         clock: _ClockPort | None = None,
     ) -> None:
         self._settings_dir = settings_dir
-        self._runtime_dir = runtime_dir
+        self._data_dir = data_dir
         self._logger = logger
         self._clock: _ClockPort = clock if clock is not None else SystemClock()
         # Transient load-time signal of a corrupt-settings reset on the last
@@ -309,7 +309,7 @@ class PersistenceAdapter:
         lifts the legacy save-sync toggles + device label out of this
         file into ``settings.json``.
         """
-        state_path = os.path.join(self._runtime_dir, "save_sync_state.json")
+        state_path = os.path.join(self._data_dir, "save_sync_state.json")
         try:
             with open(state_path) as f:
                 loaded = json.load(f)

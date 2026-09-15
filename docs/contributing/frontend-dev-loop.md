@@ -1,5 +1,14 @@
 # Frontend dev loop
 
+!!! warning "This loop depends on the Decky deploy, which no longer produces a loadable plugin"
+
+    The backend hosts itself now ([ADR-0036](../adr/0036-the-backend-hosts-itself.md)) and has no zero-argument
+    lifecycle hook a plugin loader can call, so the deploy this page builds on comes up and fails. The injector and
+    installer that replace it are separate pieces of work
+    ([#1900](https://github.com/danielcopper/romm-tender/issues/1900),
+    [#1902](https://github.com/danielcopper/romm-tender/issues/1902)). Everything below is kept because the mechanics —
+    windowed Big Picture, the display choice, the height caveat — carry over; the deploy step does not.
+
 Iterate on the frontend from Desktop Mode on the Steam Deck: edit code next to a windowed Big Picture window and watch
 the real plugin UI hot-reload on every save — no Desktop/Game Mode switching, no `plugin_loader` restarts.
 

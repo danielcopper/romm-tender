@@ -65,8 +65,12 @@ class WiringConfig:
     top level — it's plugin metadata, not a runtime seam, and only
     ConnectionService consumes it. ``directories`` sits beside it for the
     same reason: it is where this program's directories are, resolved
-    from the environment by the entry point rather than derived, and it
-    is the ONLY place any of them is read from. ``launcher`` sits beside
+    from the environment by the entry point rather than derived. It is
+    the same value ``bootstrap()`` was handed, carried on so that a
+    service's wiring reads a directory rather than composing one — the
+    entry point is the only caller of ``resolve_directories``, and
+    nothing downstream of it builds a root out of a home. ``launcher``
+    sits beside
     it for the same reason: it says where the launcher a Steam shortcut
     runs through lives, and whether this start got it there. Its path is
     the data directory's only where this start actually put the launcher

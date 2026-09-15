@@ -28,7 +28,7 @@ def adapter(tmp_path, logger):
     runtime_dir = str(tmp_path / "runtime")
     os.makedirs(settings_dir, exist_ok=True)
     os.makedirs(runtime_dir, exist_ok=True)
-    return PersistenceAdapter(settings_dir=settings_dir, runtime_dir=runtime_dir, logger=logger)
+    return PersistenceAdapter(settings_dir=settings_dir, data_dir=runtime_dir, logger=logger)
 
 
 # ── Locking tests ──────────────────────────────────────────────────────────────
@@ -333,7 +333,7 @@ class TestCorruptQuarantine:
         runtime_dir = str(tmp_path / "runtime")
         os.makedirs(settings_dir, exist_ok=True)
         os.makedirs(runtime_dir, exist_ok=True)
-        return PersistenceAdapter(settings_dir=settings_dir, runtime_dir=runtime_dir, logger=logger, clock=clock)
+        return PersistenceAdapter(settings_dir=settings_dir, data_dir=runtime_dir, logger=logger, clock=clock)
 
     def test_corrupt_file_backed_up_with_clock_stamp(self, tmp_path, logger):
         clock = FakeClock(now=datetime(2026, 6, 13, 12, 0, 0, tzinfo=UTC))
@@ -455,7 +455,7 @@ class TestClockInjection:
         runtime_dir = str(tmp_path / "runtime")
         os.makedirs(settings_dir, exist_ok=True)
         os.makedirs(runtime_dir, exist_ok=True)
-        adapter = PersistenceAdapter(settings_dir=settings_dir, runtime_dir=runtime_dir, logger=logger)
+        adapter = PersistenceAdapter(settings_dir=settings_dir, data_dir=runtime_dir, logger=logger)
         with open(os.path.join(settings_dir, "settings.json"), "w") as f:
             f.write("CORRUPT{{{")
         adapter.load_settings()
@@ -470,7 +470,7 @@ class TestClockInjection:
 
 class TestLoadSaveSyncState:
     def _write(self, adapter, raw: str) -> None:
-        path = os.path.join(adapter._runtime_dir, "save_sync_state.json")
+        path = os.path.join(adapter._data_dir, "save_sync_state.json")
         with open(path, "w") as f:
             f.write(raw)
 

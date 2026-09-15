@@ -119,6 +119,36 @@ class TestTheBind:
         assert build_server(static_root, free_port()).bound_addresses == ()
 
 
+class TestTheHandshakeIsRefusedRatherThanRaising:
+    async def test_a_non_ascii_key_is_refused(self, static_root):
+        """Latin-1 decodes every byte, so such a key reaches the handshake intact.
+
+        Answering it means digesting its ASCII bytes, which raises — and out of
+        a connection callback that is a bare traceback in asyncio's log with the
+        socket left open, rather than an answer.
+        """
+        server = build_server(static_root, free_port())
+        try:
+            port = await server.start()
+            reader, writer = await asyncio.open_connection("127.0.0.1", port)
+            request = (
+                f"GET /ws?token={server.token} HTTP/1.1\r\n"
+                f"Host: 127.0.0.1:{port}\r\n"
+                "Upgrade: websocket\r\n"
+                "Connection: Upgrade\r\n"
+                "Sec-WebSocket-Key: schlüssel-mit-umlaut\r\n"
+                "Sec-WebSocket-Version: 13\r\n\r\n"
+            ).encode("latin-1")
+            writer.write(request)
+            await writer.drain()
+            status_line = await asyncio.wait_for(reader.readline(), 5)
+            writer.close()
+        finally:
+            await server.stop()
+
+        assert b"426" in status_line
+
+
 class TestTheLoadAddress:
     async def test_it_names_the_bound_port_and_carries_the_token(self, static_root):
         server = build_server(static_root, free_port())

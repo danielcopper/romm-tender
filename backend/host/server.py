@@ -94,6 +94,12 @@ class HostServer:
         self._server: asyncio.Server | None = None
         self._port = 0
         self._connection: HostConnection | None = None
+        # Summed across connections rather than read off the live one. The case
+        # this counter exists for is a panel and a backend that disagree about
+        # the wire, and the development loop reaches it by swapping the frontend
+        # — which is a NEW connection, so a per-connection count would reset at
+        # exactly the moment it had something to report.
+        self._dropped_by_closed_connections = 0
 
     @property
     def port(self) -> int:
@@ -119,8 +125,9 @@ class HostServer:
 
     @property
     def dropped_messages(self) -> int:
-        """How many messages the current connection could not make sense of."""
-        return self._connection.dropped_messages if self._connection is not None else 0
+        """How many messages this SERVER could not make sense of, across every connection."""
+        live = self._connection.dropped_messages if self._connection is not None else 0
+        return self._dropped_by_closed_connections + live
 
     def bundle_url(self) -> str:
         """The complete address the panel bundle is loaded from, token included."""
@@ -264,7 +271,11 @@ class HostServer:
         key = head.header("sec-websocket-key")
         upgrade = head.header("upgrade").lower()
         version = head.header("sec-websocket-version")
-        if upgrade != "websocket" or not key or version != "13":
+        # The key is answered with a digest over its ASCII bytes. A header is
+        # decoded latin-1, so a non-ASCII one reaches here intact and would
+        # raise out of this callback — asyncio prints a bare traceback and the
+        # socket is simply left open. Refused as a malformed handshake instead.
+        if upgrade != "websocket" or not key or not key.isascii() or version != "13":
             self._logger.warning(f"host: not a WebSocket 13 handshake (upgrade={upgrade!r}, version={version!r})")
             await self._refuse(writer, 426)
             return
@@ -295,6 +306,7 @@ class HostServer:
             await connection.run()
         finally:
             self._events.detach(sender)
+            self._dropped_by_closed_connections += connection.dropped_messages
             if self._connection is connection:
                 self._connection = None
             await self._shutdown(writer)

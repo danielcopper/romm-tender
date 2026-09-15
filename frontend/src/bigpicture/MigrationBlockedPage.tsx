@@ -139,17 +139,6 @@ export const MigrationBlockedPage: FC<MigrationBlockedPageProps> = ({ migration 
           </div>
         </PanelSectionRow>
       </PanelSection>
-      {/* This page replaces the panel, so it carries the pre-rename install
-          warning itself — a blocked plugin is what makes a user tidy the older
-          one out of Decky, and their games all launch through it. It sits after
-          the migration's own explanation and actions, as a section of its own
-          rather than a section nested inside this one, and renders nothing
-          while no older install stands beside this one. */}
-      {/* And the data-location notice, for a stronger reason than the one
-          above: leaving this page needs a user action, so a condition invisible
-          here is invisible for as long as the user takes to migrate RetroDECK —
-          and one of its two conditions is itself a question only the user can
-          answer. It renders nothing while neither stands. */}
     </>
   );
 };

@@ -175,6 +175,14 @@ Every backend feature or callable where testing makes sense should have unit tes
 
 ## Dev Reload
 
+!!! warning "The Decky deploy no longer produces a loadable plugin"
+
+    The backend hosts itself now ([ADR-0036](../adr/0036-the-backend-hosts-itself.md)) and has no zero-argument
+    lifecycle hook for a plugin loader to call, so `mise run dev` and `mise run deploy` stage a layout that comes up
+    and fails. The installer that replaces them is a separate piece of work
+    ([#1902](https://github.com/danielcopper/romm-tender/issues/1902)); until it lands, the backend is started by hand
+    and the sections below describe a loop that does not currently work end to end.
+
 ```bash
 mise run dev          # build frontend, deploy to the plugin dir, restart plugin_loader
 mise run dev dp2      # ...and also open windowed Big Picture on that display after deploying

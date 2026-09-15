@@ -21,17 +21,10 @@ interface VersionErrorCardProps {
 /**
  * Polished error card shown when server version is below plugin minimum.
  *
- * It replaces whatever page it is shown on, so it also carries the pre-rename
- * install warning — this is the state a user is most likely to react to by
- * removing the older plugin, and the shortcuts that older install wrote still
- * launch through it. Below the card rather than above: the card is the
- * explanation of why the plugin cannot work, and a warning several sentences
- * long stacked on top of it pushes that explanation down a panel nothing here
- * can scroll (neither element takes focus). The notice renders nothing while no
- * older install stands beside this one, which is the ordinary case.
+ * It replaces whatever page it is shown on, and carries nothing beside the card
+ * itself. It used to carry a second warning about an older plugin install; that
+ * condition went with the plugin loader.
  */
 export const VersionErrorCard: FC<VersionErrorCardProps> = ({ message, compact = false }) => (
-  <>
-    <WarningCard title="RomM Server Update Required" message={message} compact={compact} />
-  </>
+  <WarningCard title="RomM Server Update Required" message={message} compact={compact} />
 );

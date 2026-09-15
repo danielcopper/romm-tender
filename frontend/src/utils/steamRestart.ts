@@ -9,8 +9,10 @@
  *   (`services/library/_state.py` states the same fact from the backend side).
  *   That is exactly right for freeing the renderer's per-session heap budget.
  * - {@link restartDevice} reboots the **device**, which is what it takes to
- *   reach the plugin's next start — the only moment the data-location migration
- *   can run, because it has to happen before the database is opened.
+ *   reach the backend's next start. It has no caller today: the notice that
+ *   offered it went with the start-up data migration, and it is kept because
+ *   "restart the client" and "restart the machine" are two different answers
+ *   and the distinction is the thing worth not losing.
  *
  * Both refuse while a game is running: either one would close it, and neither
  * is urgent enough to be worth that.

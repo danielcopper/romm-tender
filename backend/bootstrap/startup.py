@@ -1,7 +1,9 @@
 """Running the start-up routines so one failing repair cannot take the backend down.
 
-Contract: the wrapper every start-up routine is called through, and nothing
-else. It belongs to the composition root rather than to the services, so the
+Contract: the wrapper the start-up REPAIRS are called through, and nothing else.
+Eight of the nine steps go through it; the ninth, ``migrate_legacy_credentials``,
+does not — it runs after the port is announced (``host/runtime.py``) and
+swallows its own failures. It belongs to the composition root rather than to the services, so the
 distinction it draws — this step is a repair, not a prerequisite — is visible at
 the call site rather than buried in each service.
 

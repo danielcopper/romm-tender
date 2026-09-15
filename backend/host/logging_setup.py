@@ -15,12 +15,18 @@ stops holding.
 **Rotation is by size, not by run.** The loader wrote one file per start; a
 process that may run for weeks would make that one enormous file.
 
-**The redaction filter sits on the file handler, not on the root.** The address
-the panel loads from carries the admission token, and it is printed once at
-start-up on stderr so the development loop is usable at all — the terminal for a
-hand start, the journal for a service. That line is the deliberate exception;
+**The redaction belongs to the file handler's FORMATTER, not to a filter.** The
+address the panel loads from carries the admission token, and it is printed once
+at start-up on stderr so the development loop is usable at all — the terminal for
+a hand start, the journal for a service. That line is the deliberate exception;
 the file is where a token would outlive the process, so the file is what is
-filtered.
+redacted.
+
+A ``logging.Filter`` cannot express that, and the way it fails is silent. A
+filter sees the record every handler shares, so redacting there rewrites the
+message for stderr as well — and whether it does depends on the order the
+handlers were added, which nothing in the code reads as an ordering decision.
+A formatter is per handler by construction.
 
 **Nothing here may ever write to stdout.** The vendored resolver's core probe
 runs a child interpreter and this process reads that child's stdout as JSON. A
@@ -47,31 +53,29 @@ LOG_BACKUP_COUNT = 3
 _REDACTED = "***"
 
 
-class TokenRedactionFilter(logging.Filter):
-    """Replaces the admission token wherever it appears in a record's message.
+class RedactingFormatter(logging.Formatter):
+    """Formats a record, then removes the admission token from the RESULT.
 
-    A filter rather than a discipline: an address with a token in it reaches the
-    log through whatever formats it, so a rule that every call site must remember
-    would be a rule nobody could check. This one is checked by being the only
-    path to the file.
+    The redaction happens on this handler's own output string and touches
+    nothing else. That is the whole point: a ``logging.Filter`` sees the record
+    every handler shares, so redacting there rewrites the message for the stderr
+    handler too — and the one line this program deliberately prints in full, the
+    address the panel is loaded from, came out of the terminal already starred.
+    A formatter cannot do that: each handler formats for itself.
+
+    Working on the formatted string also catches the token wherever it ended up
+    — inside a ``%s`` argument, inside an exception's text — rather than only in
+    the parts a filter thought to look at.
     """
 
-    def __init__(self, token: str) -> None:
-        super().__init__()
+    def __init__(self, fmt: str, token: str) -> None:
+        super().__init__(fmt)
         self._token = token
 
-    def filter(self, record: logging.LogRecord) -> bool:
-        """Redact the token in place; never drops a record."""
-        if not self._token:
-            return True
-        if isinstance(record.msg, str) and self._token in record.msg:
-            record.msg = record.msg.replace(self._token, _REDACTED)
-        if record.args:
-            record.args = tuple(
-                argument.replace(self._token, _REDACTED) if isinstance(argument, str) else argument
-                for argument in (record.args if isinstance(record.args, tuple) else (record.args,))
-            )
-        return True
+    def format(self, record: logging.LogRecord) -> str:
+        """Render *record* for this handler, with the token taken out."""
+        rendered = super().format(record)
+        return rendered.replace(self._token, _REDACTED) if self._token else rendered
 
 
 def configure_logging(log_dir: str, token: str, level: int = logging.INFO) -> logging.Logger:
@@ -82,7 +86,6 @@ def configure_logging(log_dir: str, token: str, level: int = logging.INFO) -> lo
     line twice and rotates at half the size it should.
     """
     os.makedirs(log_dir, exist_ok=True)
-    formatter = logging.Formatter(LOG_FORMAT)
 
     file_handler = RotatingFileHandler(
         os.path.join(log_dir, LOG_FILENAME),
@@ -90,13 +93,13 @@ def configure_logging(log_dir: str, token: str, level: int = logging.INFO) -> lo
         backupCount=LOG_BACKUP_COUNT,
         encoding="utf-8",
     )
-    file_handler.setFormatter(formatter)
-    file_handler.addFilter(TokenRedactionFilter(token))
+    file_handler.setFormatter(RedactingFormatter(LOG_FORMAT, token))
 
     # stderr, never stdout — see the module docstring. Under systemd this is the
-    # journal with nothing further to configure.
+    # journal with nothing further to configure. Its formatter is the plain one:
+    # this is the handler the start-up address is printed FOR.
     stream_handler = logging.StreamHandler(sys.stderr)
-    stream_handler.setFormatter(formatter)
+    stream_handler.setFormatter(logging.Formatter(LOG_FORMAT))
 
     root = logging.getLogger()
     for existing in list(root.handlers):

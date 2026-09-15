@@ -8,9 +8,8 @@
  *
  * It starts false and is never set back. False therefore means "not established
  * this session" — the pass has not finished, or the backend said nothing may be
- * rewritten yet — and every reader is written for that reading, because the
- * panel would otherwise tell a user the pre-rename install is safe to remove on
- * the strength of a pass that never ran.
+ * rewritten yet — and any reader must be written for that reading: false is not
+ * evidence that a shortcut still points at the old path.
  *
  * Updated by:
  *   - plugin load init in index.tsx (relocateShortcutsToLauncher)

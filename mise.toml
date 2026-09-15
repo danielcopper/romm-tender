@@ -121,10 +121,15 @@ rsync -a --delete defaults/ "$DEST/defaults/"
 for f in defaults/*; do rm -f "$DEST/$(basename "$f")"; done
 # The repo keeps the whole Python backend — entry point included — under
 # backend/; Decky reads main.py at the plugin root with the packages in
-# py_modules/, so the deploy writes that layout. Since the move, main.py no
-# longer puts py_modules on sys.path itself — Decky's loader appends it before
-# main is imported. Run on a device on 2026-09-15, this deploy came up: the
-# backend loaded, reached the server and registered the library.
+# py_modules/, so the deploy writes that layout.
+#
+# THIS NO LONGER PRODUCES A LOADABLE PLUGIN. The measurement that used to stand
+# here — a device run on 2026-09-15 where the backend loaded, reached the server
+# and registered the library — was taken before the backend began hosting
+# itself. `Plugin._main` now takes five keyword arguments and there is no
+# zero-argument lifecycle hook for a loader to call, so a deploy from here comes
+# up and fails. The layout is left in place because the installer that replaces
+# it is its own cut (#1902); do not read the steps below as working.
 rsync -a --delete --exclude=/main.py backend/ "$DEST/py_modules/"
 cp -f backend/main.py plugin.json package.json "$DEST/"
 # Every local deploy is a dev deploy — no release artifact is built anywhere

@@ -139,8 +139,8 @@ class TestTheStampHasOneWriter:
     once let it was removed — because Steam writes its in-memory shortcuts to
     that file when it chooses, so a report describes writes the file cannot yet
     show. A second writer breaks no behavioural test below: it would stamp
-    early, the panel would offer the pre-rename install for removal on the
-    strength of it, and every later start would read nothing.
+    early, the service would answer ``done`` on the strength of it, and every
+    later start would read nothing.
 
     The scan pins the whole chain from the key to the reading — one write of the
     ``kv_config`` key, one reference to the method holding it, one reference to
@@ -210,7 +210,7 @@ class TestTheStampHasOneWriter:
 class TestWhenNothingMayBeRewritten:
     @pytest.mark.asyncio
     async def test_a_launcher_not_at_its_home_blocks_the_rewrite(self):
-        """The data migration has not landed, or the install failed."""
+        """This start's launcher install failed, so there is nowhere safe to point."""
         service, steam_config, _ = _make(exes={10: _OLD}, at_home=False)
 
         answer = await service.get_shortcut_relocation()

@@ -28,9 +28,8 @@ import { getShortcutRelocation, logError, logInfo } from "../api/backend";
 /**
  * Whether the library now points at the launcher's home.
  *
- * `relocated` is the only answer that says no shortcut of ours names a plugin
- * folder any more, and it is what the panel reads to decide whether the
- * pre-rename install is still load-bearing. `blocked` is every other outcome —
+ * `relocated` is the only answer that says no shortcut of ours still names a
+ * launcher inside a program install directory. `blocked` is every other outcome —
  * the launcher is not at its home yet, Steam's shortcut file could not be read,
  * or a write threw — and it is deliberately not a failure to report at the
  * user: the next start asks again, and until then the old paths keep working.

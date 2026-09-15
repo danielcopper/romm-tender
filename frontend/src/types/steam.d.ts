@@ -40,10 +40,10 @@ declare var SteamClient: {
     // every call site feature-detects rather than offering a button that would
     // do nothing.
     //
-    // The data-location notice needs it and `User.StartRestart` will not do:
-    // restarting the Steam client reloads the frontend but does not start the
-    // plugin's backend again, and the move that notice is about happens on the
-    // plugin's next start.
+    // Distinct from `User.StartRestart`, which reloads the Steam client and the
+    // frontend with it but does not start the backend again. Nothing calls this
+    // today; the distinction between the two restarts is what the declaration
+    // keeps.
     RestartPC?: () => void;
   };
   User: {

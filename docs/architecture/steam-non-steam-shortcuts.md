@@ -43,11 +43,12 @@ launch-options write for the (majority) uninstalled case also avoids `setLaunchO
 
 ### Where the exe points
 
-Every shortcut's `exe` is `<data root>/bin/rom-launcher` — under the user's own home, not in the plugin folder, because
-Decky deletes that folder whole before it unpacks an update
+Every shortcut's `exe` is `<data root>/bin/rom-launcher` — under the user's own home, not in the directory the program
+is installed in, because a shortcut's `exe` is the one thing about it this program cannot repair from inside: an update
+that replaced its own install directory would leave every game pointing at a file nothing puts back
 ([ADR-0032](../adr/0032-shortcuts-are-rewritten-in-place.md); the roots themselves are
-[ADR-0031](../adr/0031-user-data-lives-outside-the-plugin-directory.md)). The backend installs this release's launcher
-there on every start, once the data migration's own half has landed.
+[ADR-0036](../adr/0036-the-backend-hosts-itself.md)). The backend installs this release's launcher there unconditionally
+on every start.
 
 Shortcuts written before that move are repointed once, at plugin load. The **backend** decides which: it parses
 `shortcuts.vdf` and returns the app IDs whose `exe` still ends in `/bin/rom-launcher` but is not the launcher's home,

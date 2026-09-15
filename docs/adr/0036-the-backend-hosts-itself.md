@@ -82,11 +82,13 @@ is `domain/app_directories.py` — pure, with the environment handed in, so ever
 
 ## Consequences
 
-- **The entry point has not moved yet, and this decision does not pretend it has.** `backend/main.py` still imports
-  `decky` and still takes its four paths from the loader's constants. Wiring it to the host means retiring the start-up
-  data migration (decision 9 leaves it nothing to decide) and with it `LegacyInstallService`, whose whole question is
-  whether the pre-rename **Decky** plugin folder still stands beside ours. Both have a panel surface, so both cross into
-  the frontend. That is a cut of its own, and until it lands the host in this repository is complete and unreached.
+- **Nothing in this repository's backend imports `decky` any more.** `Plugin.run` is the process entry point, and the
+  four loader constants are gone with it. Two surfaces went at the same time because both asked questions only the
+  loader could pose: the start-up data migration, which copied a library forward from a directory the loader had named
+  after the delivered folder (decision 9 leaves it nothing to decide), and `LegacyInstallService`, which asked whether
+  the pre-rename plugin folder still stood beside ours by taking the loader's own runtime directory's parent. Both had a
+  panel surface, so both crossed into the frontend. `typings/decky/` stays until the test files that still import the
+  module follow, which is a separate cleanup.
 - **Nothing reaches the backend yet.** The injector ([#1900](https://github.com/danielcopper/romm-tender/issues/1900)),
   the frontend transport ([#1899](https://github.com/danielcopper/romm-tender/issues/1899)) and the installer
   ([#1902](https://github.com/danielcopper/romm-tender/issues/1902)) are separate cuts. This one makes the backend

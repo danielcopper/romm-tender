@@ -11,7 +11,7 @@ from adapters.sgdb_artwork_cache import SgdbArtworkCacheAdapter
 
 @pytest.fixture
 def cache(tmp_path) -> SgdbArtworkCacheAdapter:
-    return SgdbArtworkCacheAdapter(runtime_dir=str(tmp_path))
+    return SgdbArtworkCacheAdapter(cache_dir=str(tmp_path))
 
 
 class TestCacheDir:

@@ -17,14 +17,21 @@ _SGDB_TYPES = ("hero", "logo", "grid", "icon")
 class PruneArtifactAdapter:
     """Own recovery discovery and deletion for plugin cover/SGDB caches."""
 
-    def __init__(self, *, runtime_dir: str) -> None:
-        self._runtime_dir = runtime_dir
+    def __init__(self, *, cache_dir: str) -> None:
+        """*cache_dir* is the CACHE root: this adapter owns ``covers/`` and ``artwork/``.
+
+        Named for what it must be given rather than for the struct field it once
+        came from. Hand it the data root and every path below is composed under
+        a directory those caches do not live in, so a purge finds nothing and
+        removes nothing — with no failure and nothing in the log.
+        """
+        self._cache_dir = cache_dir
 
     def recovery_artifacts(self, rom_ids: list[int]) -> list[RecoveryArtifact]:
         artifacts: list[RecoveryArtifact] = []
         for rom_id in rom_ids:
             for path, kind in self._paths(rom_id):
-                artifacts.append({"source_path": path, "safe_root": self._runtime_dir, "kind": kind, "rom_id": rom_id})
+                artifacts.append({"source_path": path, "safe_root": self._cache_dir, "kind": kind, "rom_id": rom_id})
         return artifacts
 
     def remove(self, rom_ids: list[int], claims: dict[str, SourceClaim] | None = None) -> MutationOutcome:
@@ -35,8 +42,8 @@ class PruneArtifactAdapter:
                 try:
                     claim = claims.get(path) if claims is not None else None
                     if claim is None:
-                        claim = claim_source(path, self._runtime_dir)
-                    outcome = remove_claimed(path, self._runtime_dir, claim)
+                        claim = claim_source(path, self._cache_dir)
+                    outcome = remove_claimed(path, self._cache_dir, claim)
                 except Exception as exc:
                     return {
                         "success": False,
@@ -56,8 +63,8 @@ class PruneArtifactAdapter:
         return {"success": True, "changed": changed, "ambiguous": ambiguous, "message": "Artifacts removed"}
 
     def _paths(self, rom_id: int) -> list[tuple[str, str]]:
-        covers = os.path.join(self._runtime_dir, "covers")
-        artwork = os.path.join(self._runtime_dir, "artwork")
+        covers = os.path.join(self._cache_dir, "covers")
+        artwork = os.path.join(self._cache_dir, "artwork")
         paths = [
             (os.path.join(covers, cache_filename(rom_id)), "cover_cache"),
             (os.path.join(covers, cover_meta_filename(rom_id)), "cover_validator"),

@@ -31,13 +31,11 @@ _LAUNCHER_MODE = 0o700
 
 
 class LauncherInstallAdapter:
-    """Keeps this release's shortcut launcher at its home outside the plugin folder.
+    """Keeps this release's shortcut launcher at its home under the data root.
 
-    Never the thing that brings the data root into existence: the composition
-    root calls this only once the start-up migration's data half stands at that
-    root, because the migration reads any entry in it as a finished move. The
-    ordering, and what it costs to lose it, is stated where it is enforced —
-    ``bootstrap/adapters.py``, at the call.
+    Run on every start rather than once, so the launcher a shortcut executes is
+    always the one this release ships: installed a single time it would freeze
+    at whatever version that day happened to bring.
     """
 
     def __init__(self, *, source: str, destination: str, logger: logging.Logger) -> None:

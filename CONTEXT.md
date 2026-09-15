@@ -76,36 +76,49 @@ user-facing **sentence** it stays literal text — interpolating a constant into
 A **heading** is not a sentence: a headline and the rule under it are one thing, so the headline is interpolated and the
 underline derived from its length.
 
-The identifier has **four** homes, separate because they answer four questions that must stay free to disagree:
+The identifier has **three** homes, separate because they answer three questions that must stay free to disagree:
 
-- `APP_DIR_NAME` (`domain/user_data_location.py`) — where the user's own data lives.
+- `APP_DIR_NAME` (`domain/user_data_location.py`) — the name every directory the program derives for itself carries.
 - `package.json`'s `name` — the recovery root and the `User-Agent`, both through bootstrap, and nothing else.
-- `_LEGACY_PLUGIN_FOLDER` (`services/legacy_install.py`) — the folder releases up to 0.30.1 unpacked into.
 - `SESSION_BREADCRUMB_KEY` (`frontend/src/utils/sessionManager.ts`) — the `localStorage` key naming the open-session
   breadcrumb, so a rename orphans every row written under the old one.
 
-One place restates a home rather than being one: `SOURCE_FOLDER_NAMES`, beside `APP_DIR_NAME`, spells the first and the
-third out again as the migration's search list rather than composing them from either. A fifth home used to sit between
-the second and the third — the folder a release unpacked into, which Decky derived its four per-plugin directories from.
-That question was Decky's, asked because Decky derived; hosting the backend ourselves derives nothing, so it dissolved
-rather than moving to a new owner ([ADR-0035](docs/adr/0035-the-release-builds-no-decky-artifact.md)). Why the four stay
-apart is argued once, in `backend/domain/identity.py`'s module docstring.
+Two homes have gone rather than moved, and both for the same reason. The folder a release unpacked into was Decky's
+question, asked because Decky derived its four per-plugin directories from it
+([ADR-0035](docs/adr/0035-the-release-builds-no-decky-artifact.md)). The folder EARLIER releases unpacked into was the
+other half of the same story — what a start-up migration searched, which is a search nothing performs any more
+([ADR-0036](docs/adr/0036-the-backend-hosts-itself.md)). Hosting the backend ourselves derives nothing: the directories
+come from the environment, so neither question has an asker left. Why the three stay apart is argued once, in
+`backend/domain/identity.py`'s module docstring.
 
 _Avoid_: "the plugin name" for either, since it names neither; and reading "a machine parses it" as "so it is the
 identifier" — `plugin.json`'s `name` is the counter-example.
 
-### Config root / data root
+### The program's directories
 
-The two directories the plugin's own persisted state lives in, both under the **user's** home directory rather than
-anywhere the packaging decides. The **config root** holds user-intent configuration — the settings file and its
-siblings. The **data root** holds everything the plugin derived or downloaded for itself: the database, the cover and
-artwork caches. The split is the one a reader would draw anyway: the config root is small, hand-editable and worth
-carrying to another device; the data root is large and rebuildable.
+The six directories this program reads and writes, resolved **once from the environment** by the entry point and handed
+to `bootstrap()`, which derives none of them (`domain/app_directories.py`). The ladder is `TENDER_*` first — what an
+installer resolved and wrote into the service unit — then the XDG variables, then built-in defaults; the back two rungs
+are for a start by hand.
 
-They are two roots, not two names for one, and each is filled independently — one can be at its new home while the other
-is not. Neither is a **Decky-assigned directory**: those are named after the plugin's own folder, which is what made the
-data move on a rename, and are what the plugin falls back to while a root is not yet filled. _Avoid_: XDG directory (the
-XDG environment variables are deliberately not read), plugin directory, install directory.
+- **config root** — user-intent configuration: the settings file and its siblings.
+- **data root** — what cannot be fetched again: the database, the launcher, the single-instance lock.
+- **cache root** — what can: the cover and artwork caches.
+- **state root** — the log file.
+- **runtime root** — the port file, in a directory the session clears at logout.
+- **code root** — where the program itself sits; the launcher it ships is copied out of here.
+
+The data/cache split is the load-bearing one: a system that clears caches must be able to clear one and not the other.
+All but the code root are named after `APP_DIR_NAME` — that one is wherever the program was installed, so it carries no
+name of ours. Every reader takes the six off the one `AppDirectories` the entry point resolved, which reaches
+`bootstrap()` as an argument and the services as `WiringConfig.directories`; nothing composes a directory of its own
+from a home or a folder name. `resolve_directories` has exactly one caller (`main.py`), and `config_root` / `data_root`
+have none left.
+
+_Avoid_: **Decky-assigned directory** — those were named after the plugin's own folder, which is what made the data move
+on a rename, and nothing derives a directory from a folder name any more. Also avoid: plugin directory, install
+directory. "XDG directory" is now only half wrong — the XDG variables ARE read, as the ladder's second rung, but they
+are not where the answer comes from on an installed system.
 
 ### Persistence boundary (settings.json / SQLite)
 

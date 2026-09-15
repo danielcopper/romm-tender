@@ -13,7 +13,7 @@ from host.logging_setup import (
     LOG_FILENAME,
     LOG_FORMAT,
     MAX_LOG_BYTES,
-    TokenRedactionFilter,
+    RedactingFormatter,
     configure_logging,
 )
 
@@ -93,6 +93,15 @@ class TestConfigureLogging:
 
 
 class TestTokenRedaction:
+    """The file is redacted and stderr is not — asserted on the OUTPUT of each.
+
+    Every case here reads what a handler actually wrote. The earlier version of
+    this file asserted where the redaction was *installed*, which stayed green
+    while the start-up address came out of the terminal already starred: the
+    redaction ran on the shared record, so whichever handler formatted second
+    saw the rewritten message.
+    """
+
     def test_the_token_never_reaches_the_file(self, tmp_path, restore_root_logger):
         root = configure_logging(str(tmp_path), "s3cr3t-token")
 
@@ -102,42 +111,58 @@ class TestTokenRedaction:
         assert "s3cr3t-token" not in written
         assert "***" in written
 
-    def test_the_filter_is_on_the_file_handler_not_the_root(self, tmp_path, restore_root_logger):
-        """The start-up address must still reach stderr — that is the deliberate exception."""
+    def test_the_start_up_address_reaches_stderr_in_full(self, tmp_path, restore_root_logger, capsys):
+        """The one deliberate exception, and the reason the development loop works at all."""
         root = configure_logging(str(tmp_path), "s3cr3t-token")
 
-        assert not any(isinstance(f, TokenRedactionFilter) for f in root.filters)
-        rotating = next(h for h in root.handlers if isinstance(h, RotatingFileHandler))
-        assert any(isinstance(f, TokenRedactionFilter) for f in rotating.filters)
+        root.info("host: load the panel from http://127.0.0.1:27737/index.js?token=s3cr3t-token")
 
-    def test_it_redacts_a_token_in_a_formatting_argument(self):
-        record = logging.LogRecord("t", logging.INFO, "f", 1, "address %s", ("?token=s3cr3t",), None)
+        assert "?token=s3cr3t-token" in capsys.readouterr().err
 
-        TokenRedactionFilter("s3cr3t").filter(record)
+    def test_the_token_is_redacted_in_a_formatting_argument(self, tmp_path, restore_root_logger):
+        """The file sees the rendered line, so a token in an argument is caught too."""
+        root = configure_logging(str(tmp_path), "s3cr3t-token")
 
-        assert "s3cr3t" not in record.getMessage()
+        root.warning("address %s", "?token=s3cr3t-token")
 
-    def test_it_leaves_a_record_without_the_token_alone(self):
-        record = logging.LogRecord("t", logging.INFO, "f", 1, "nothing secret", None, None)
+        assert "s3cr3t-token" not in (tmp_path / LOG_FILENAME).read_text()
 
-        TokenRedactionFilter("s3cr3t").filter(record)
+    def test_that_same_argument_reaches_stderr_whole(self, tmp_path, restore_root_logger, capsys):
+        root = configure_logging(str(tmp_path), "s3cr3t-token")
 
-        assert record.getMessage() == "nothing secret"
+        root.warning("address %s", "?token=s3cr3t-token")
 
-    def test_it_never_drops_a_record(self):
-        record = logging.LogRecord("t", logging.INFO, "f", 1, "?token=s3cr3t", None, None)
+        assert "?token=s3cr3t-token" in capsys.readouterr().err
 
-        assert TokenRedactionFilter("s3cr3t").filter(record) is True
+    def test_the_record_itself_is_left_alone(self, tmp_path, restore_root_logger):
+        """Nothing shared is mutated — which is exactly what the filter form got wrong."""
+        configure_logging(str(tmp_path), "s3cr3t-token")
+        record = logging.LogRecord("t", logging.INFO, "f", 1, "?token=s3cr3t-token", None, None)
 
-    def test_an_empty_token_redacts_nothing(self):
-        record = logging.LogRecord("t", logging.INFO, "f", 1, "some message", None, None)
+        for handler in logging.getLogger().handlers:
+            handler.format(record)
 
-        assert TokenRedactionFilter("").filter(record) is True
-        assert record.getMessage() == "some message"
+        assert record.getMessage() == "?token=s3cr3t-token"
 
-    def test_a_non_string_argument_survives(self):
-        record = logging.LogRecord("t", logging.INFO, "f", 1, "count %d", (7,), None)
+    def test_a_line_without_the_token_is_unchanged_in_both(self, tmp_path, restore_root_logger, capsys):
+        root = configure_logging(str(tmp_path), "s3cr3t-token")
 
-        TokenRedactionFilter("s3cr3t").filter(record)
+        root.info("nothing secret here")
 
-        assert record.getMessage() == "count 7"
+        assert "nothing secret here" in (tmp_path / LOG_FILENAME).read_text()
+        assert "nothing secret here" in capsys.readouterr().err
+
+    def test_an_empty_token_redacts_nothing(self, tmp_path, restore_root_logger):
+        root = configure_logging(str(tmp_path), "")
+
+        root.info("some message")
+
+        assert "some message" in (tmp_path / LOG_FILENAME).read_text()
+
+    def test_the_formatter_keeps_the_repos_own_line_shape(self):
+        """Redacting must not change the format saved diagnostic walk-throughs grep for."""
+        rendered = RedactingFormatter(LOG_FORMAT, "s3cr3t").format(
+            logging.LogRecord("t", logging.WARNING, "f", 1, "careful", None, None)
+        )
+
+        assert rendered.endswith("[WARNING]: careful")

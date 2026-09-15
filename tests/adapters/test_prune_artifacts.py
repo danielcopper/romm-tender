@@ -14,7 +14,7 @@ def test_discovers_and_removes_only_named_rom_cache_files(tmp_path):
         path.write_bytes(b"x")
     unrelated = artwork / "8_grid.png"
     unrelated.write_bytes(b"keep")
-    adapter = PruneArtifactAdapter(runtime_dir=str(tmp_path))
+    adapter = PruneArtifactAdapter(cache_dir=str(tmp_path))
 
     artifacts = adapter.recovery_artifacts([7])
     sources = {Path(item["source_path"]) for item in artifacts}
@@ -32,7 +32,7 @@ def test_unsealed_cleanup_does_not_follow_symlinked_cache_directory(tmp_path):
     target.write_bytes(b"keep")
     (tmp_path / "covers").symlink_to(outside, target_is_directory=True)
     (tmp_path / "artwork").mkdir()
-    adapter = PruneArtifactAdapter(runtime_dir=str(tmp_path))
+    adapter = PruneArtifactAdapter(cache_dir=str(tmp_path))
 
     result = adapter.remove([7])
 
@@ -47,7 +47,7 @@ def test_preopened_cache_writer_prevents_artifact_deletion(tmp_path):
     artwork.mkdir()
     target = covers / "7.png"
     target.write_bytes(b"cached")
-    adapter = PruneArtifactAdapter(runtime_dir=str(tmp_path))
+    adapter = PruneArtifactAdapter(cache_dir=str(tmp_path))
     writer = os.open(target, os.O_WRONLY)
     try:
         result = adapter.remove([7])

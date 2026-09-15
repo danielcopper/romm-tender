@@ -22,12 +22,13 @@ class SgdbArtworkCacheAdapter:
     ``loop.run_in_executor``.
     """
 
-    def __init__(self, *, runtime_dir: str) -> None:
-        self._runtime_dir = runtime_dir
+    def __init__(self, *, cache_dir: str) -> None:
+        """*cache_dir* is the CACHE root; this adapter owns ``artwork/`` beneath it."""
+        self._cache_dir = cache_dir
 
     def cache_dir(self) -> str:
         """Return the SGDB artwork cache directory, creating it if missing."""
-        art_dir = os.path.join(self._runtime_dir, "artwork")
+        art_dir = os.path.join(self._cache_dir, "artwork")
         os.makedirs(art_dir, exist_ok=True)
         return art_dir
 

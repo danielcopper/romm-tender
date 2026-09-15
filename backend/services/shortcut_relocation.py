@@ -1,7 +1,8 @@
 """ShortcutRelocationService — pointing the existing shortcuts at the launcher's home.
 
 Owns one question the frontend asks at start-up: which Steam shortcuts still
-name a launcher inside a plugin folder, and may they be repointed. Nothing here
+name a launcher inside a program install directory rather than the launcher's
+home under the data root, and may they be repointed. Nothing here
 writes to Steam — the frontend owns every shortcut mutation — and nothing here
 decides where the launcher lives; the composition root settles that and hands
 the answer in.
@@ -77,15 +78,13 @@ class ShortcutRelocationService:
           app IDs carry a launcher path that is not ``exe``. The frontend writes
           both fields on each and reports; it records nothing.
         - ``{"status": "blocked", "message"}`` — nothing may be repointed yet:
-          the launcher is not at its home (the data migration is still
-          outstanding, or the install failed), or Steam's shortcut file could
-          not be read. Never stamped, so the next start asks again.
+          the launcher is not at its home (this start's install failed), or
+          Steam's shortcut file could not be read. Never stamped, so the next
+          start asks again.
 
         The blocked answer is the one that matters. Repointing a shortcut at a
-        launcher that is not there stops its game from starting and nothing in
-        this plugin could put the file back, so every uncertainty resolves to
-        it — and the panel keeps warning against removing the pre-rename
-        install, which is still load-bearing exactly while this is the answer.
+        launcher that is not there stops its game from starting and nothing here
+        could put the file back, so every uncertainty resolves to it.
 
         **A completed rewrite is therefore stamped on the FOLLOWING start**, and
         that is the design rather than a delay that slipped in. Steam holds its
@@ -103,8 +102,7 @@ class ShortcutRelocationService:
         — restored from a backup, written by a downgraded build — stays on it,
         and no start will look again. It keeps launching, because the package
         still ships ``bin/rom-launcher`` at that path; what it does NOT keep is
-        the panel's agreement, since the card reads this stamp as "nothing points
-        into the pre-rename install any more" and offers its removal. Clearing
+        agreement with this service, which goes on answering ``done``. Clearing
         the stamp on Force Full Sync was considered and rejected: it would only
         ever reach a user who had already diagnosed the shortcut, and that button
         carries enough meanings already.

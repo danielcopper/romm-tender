@@ -470,17 +470,14 @@ budget — so the absence is ordinary.
 
 ## Main
 
-Narrow, in this order: the `"RomM Sync"` warning, an untitled section carrying its heading inside the card, and then the
-settings-reset and playtime-scope notices, each a titled section of its own, all three above everything else; the status
-block — the RetroDECK warning, then Connection, Last sync, Library, then the conditional slot and, while a run is going,
-Cancel Sync, then the transient line a just-ended run leaves behind (and a cancel whose call failed), and under all of
-those the three notices that carry a button (the RetroArch input driver, the save-file sorting, a run paused on the
-session budget) and, last, the data-location notice — last because the plugin is running either way and only where its
-data ends up is outstanding; it carries a button only in its choice variant, and that button opens a modal rather than a
-page; the download summary (up to two rows, an overflow count, a completed count, View All); the menu — Sync, Library,
-Settings, Data Management. **Those last three blocks carry no section title at all** — what separates one from the next
-is a hairline (`BlockSeparator`), which costs one pixel of height where a heading would cost a whole row. The layout
-study it was chosen from is [main-layouts.html](../assets/main-layouts.html).
+Narrow, in this order: the settings-reset and playtime-scope notices, each a titled section of its own, both above
+everything else; the status block — the RetroDECK warning, then Connection, Last sync, Library, then the conditional
+slot and, while a run is going, Cancel Sync, then the transient line a just-ended run leaves behind (and a cancel whose
+call failed), and under all of those the three notices that carry a button (the RetroArch input driver, the save-file
+sorting, a run paused on the session budget); the download summary (up to two rows, an overflow count, a completed
+count, View All); the menu — Sync, Library, Settings, Data Management. **Those last three blocks carry no section title
+at all** — what separates one from the next is a hairline (`BlockSeparator`), which costs one pixel of height where a
+heading would cost a whole row. The layout study it was chosen from is [main-layouts.html](../assets/main-layouts.html).
 
 **The menu is the navigation that is always there — complete, and always in the same place. The status rows state and do
 nothing. The single exception is one conditional slot that exists only while the Sync page has something to report; a

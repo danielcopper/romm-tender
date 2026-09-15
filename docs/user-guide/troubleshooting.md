@@ -10,10 +10,9 @@ Common issues and how to fix them.
 failed to start — check Decky logs", and the Sync buttons are disabled. This state means the plugin's own Python backend
 process never started — it is **not** the same as an unreachable RomM server, which shows **Not connected** instead.
 
-**Fix**: The backend aborted during startup — most often a failed data migration after an update — so the UI can't reach
-it. Open the Decky plugin log to find the underlying error, then reload Tender from the Decky plugin list. If it still
-fails after a reload, restart Steam (or the Steam Deck); if the error persists, include the log output when you report
-it.
+**Fix**: The backend aborted during startup, so the UI can't reach it. Open the Decky plugin log to find the underlying
+error, then reload Tender from the Decky plugin list. If it still fails after a reload, restart Steam (or the Steam
+Deck); if the error persists, include the log output when you report it.
 
 Reaching that verdict takes up to about a minute and a half, because the check keeps retrying to ride out a backend that
 is merely slow to start rather than calling it dead too early. It runs to its conclusion whether or not the panel is

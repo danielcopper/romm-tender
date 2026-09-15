@@ -2,6 +2,12 @@
 
 ## Status
 
+**Superseded in part by [ADR-0036](0036-the-backend-hosts-itself.md)**, which removes the machinery decisions 2, 3 and 4
+describe. Decision 1 still stands in substance — the roots are still named after the program and still sit under the
+user's home — but they are no longer BUILT here: where the directories are is resolved once from the environment and
+handed to `bootstrap()`. Decisions 2 and 3 are void: there is no start-up migration and so no two-libraries question.
+Decision 4 is retired with its subject, `RuntimeBundle.runtime_dir`, which no longer exists.
+
 Accepted. **Revises the "package name stays" decision recorded in
 [#1536](https://github.com/danielcopper/romm-tender/issues/1536)** — specifically its first half, that the package name
 is fixed at `decky-romm-sync` permanently because Decky keys `~/homebrew/settings/<pkg>` and `~/homebrew/data/<pkg>` off

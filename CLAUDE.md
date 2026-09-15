@@ -67,7 +67,12 @@ new code in it.
   entity proof is the default and only the three byte-stream fetches opt out. Tests pin both directions; nothing else
   does. Also owns the transport's reachability state: a new request method sends through `_urlopen` (checked) and passes
   `romm_origin=False` if it does not talk to RomM (not checked).
-- `bootstrap-wiring.md` — the `main.py` / `bootstrap/` split, and which half of `bootstrap/` new wiring belongs in.
+- `bootstrap-wiring.md` — the `main.py` / `bootstrap/` split, which half of `bootstrap/` new wiring belongs in, and why
+  `Plugin.run` is a synchronous classmethod.
+- `host.md` — the process that hosts this backend (`backend/host/**`): the transport-vs-callable failure shapes, the
+  token's one deliberate exception, the order of the three admission checks, claim-bearing events, where the size cap is
+  judged, and the served root. **None of its six rules has a mechanical check; each fails green** — the redaction one
+  did exactly that, and only an assertion on stderr's own output caught it.
 - `callables.md` — the `{success, reason, message}` failure shape and its two carve-outs. Checked.
 - `vendored-assets.md` — `_vendor/` and `native/` are checksum-pinned upstream copies — verbatim, or verbatim plus a
   documented local patch — and every vendored tree carries its own manifest. The checksums are checked; the reflex to
@@ -115,8 +120,12 @@ locally with `mise run docs`.
   does to the appId; do not read the exe measurement as covering it.
 - **Frontend API**: `@decky/ui` + `@decky/api` (NOT deprecated `decky-frontend-lib`). Use `callable()` (NOT
   `ServerAPI.callPluginMethod()`).
-- **Decky callables must be async**: Even if the body is synchronous, Decky's callable framework requires `async def`.
-  Do not remove `async` from callable methods in `main.py`.
+- **A callable must be `async def`**: even where the body is synchronous. The set a caller can reach is exactly the
+  public `async def` on `Plugin` — `host.dispatch.reachable_methods` resolves it off the loaded class,
+  `scripts/check_callable_manifest.py` derives the same set from the source, and `tests/host/test_dispatch.py` asserts
+  the two are equal. Two consequences, both silent: dropping `async` makes a callable unreachable, and giving `Plugin` a
+  public `async def` that was never meant as wire surface publishes it. `Plugin.run`, the process entry point, is
+  synchronous for exactly that reason.
 - **RomM API quirks**: Filter param is `platform_ids` (plural). Cover URLs have unencoded spaces (must URL-encode).
   Paginated: `{"items": [...], "total": N}`. List calls page via `lib/romm_paging.py` and append
   `&with_char_index=false&with_filter_values=false` to skip aggregations the server otherwise computes on every request.
@@ -132,8 +141,13 @@ locally with `mise run docs`.
   Decky zip. A missing or malformed `package.json` degrades to the metadata adapter's documented fallback,
   `decky-plugin/0.0.0`. `adapters/renderer_gc.py` also speaks HTTP — to Steam's debugger on `localhost` — and takes
   none.
-- **Large payloads**: Never send bulk base64 through `decky.emit()` — the WebSocket bridge has size limits. Use per-item
-  callables, and chunk bulk lists (the library apply emits shortcuts in batches; the metadata cache loads page-by-page).
+- **Large payloads**: two caps, and they fail differently — `host/dispatch.py` refuses an encoded answer over ~12 MiB as
+  an ordinary error for that one call, while `host/connection.py` closes the socket on a frame over 16 MiB, which
+  rejects every call in flight with it. So a bulk payload is chunked rather than sent: per-item callables, and bulk
+  lists paged (the library apply emits shortcuts in batches; the metadata cache loads page-by-page). Those numbers are
+  ours and were chosen — the reference library's largest cover is 5,869,834 bytes, about 7.7 MB once base64 has had it,
+  so a 4 MiB cap would have refused it silently. The plugin loader's own 1 MiB bridge limit is **not** in this path any
+  more; do not reason from it.
 - **No `BIsModOrShortcut` bypass**: the bypass counter was removed deliberately. Shortcuts return `true` (natural
   state); we own the game detail UI. Do not reintroduce a bypass.
 - **`instanceof` against a DOM global is false in QAM code**: plugin code runs in the **SharedJSContext** window while
@@ -253,19 +267,25 @@ Format: **invariant** — tier — enforced by.
 - **Every backend `emit` event name has a frontend listener, and vice versa** — check — `scripts/check_event_parity.py`
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
   `scripts/check_settings_owner.py`
-- **Where this program's directories are is resolved once from the environment and read only from
-  `WiringConfig.directories`** — prompt-only — `domain/app_directories.py` is the ladder (`TENDER_*`, then XDG, then the
-  built-in defaults) and it is pure: the environment is handed in, so every rung is checkable against a table. The entry
-  point resolves it once and hands it to `bootstrap()`, which derives nothing. `RuntimeBundle` carries **no** directory
-  at all, which is the shape that matters: it used to carry two, and a question about a plugin loader's own layout sat
-  beside a question about the user's data as two plain `str` fields on structs the composition root hands around. Both
-  of those consumers are gone with the loader. Seven call sites read a directory today, all in `bootstrap/`: the
-  `db_path` the schema runner and the UoW factory open, `PersistenceAdapter`'s two arguments (config and data),
-  `PruneArtifactAdapter`, `SgdbArtworkCacheAdapter` and `services.py`'s `cover_cache_dir` — those last two on the
-  **cache** root, because artwork and covers are re-derivable from the server and the database is not — and the
-  launcher's home (`launcher_path(directories.data_dir)`, carried on as `ShortcutLauncher.path` and baked into every
-  shortcut's `exe`), the one whose mix-up would be visible to a user rather than only to the next start. Nothing
-  mechanical tells the six fields apart; they are all plain `str` on one frozen struct
+- **Where this program's directories are is resolved once from the environment, and every consumer reads them off
+  `AppDirectories`** — prompt-only — `domain/app_directories.py` is the ladder (`TENDER_*`, then XDG, then the built-in
+  defaults) and it is pure: the environment is handed in, so every rung is checkable against a table. `Plugin.run`
+  resolves it once and hands it to `bootstrap()`, which derives nothing, and `RuntimeBundle` carries no directory at all
+  — it used to carry two, and that is how a question about a plugin loader's own layout came to sit beside a question
+  about the user's data as two plain `str` fields on structs the composition root passes around. **Counting rule** (an
+  AST walk for an attribute in `{config_dir, data_dir, cache_dir, state_dir, runtime_dir,
+  code_dir}` whose base ends
+  in `directories`): **21 reads over three modules**, `main.py` and `bootstrap/`'s two — `code_dir` 8, `data_dir` 6,
+  `cache_dir` 4, and one each for `config_dir`, `state_dir` and `runtime_dir`. Re-derive it rather than trusting the
+  number. **Two fields are read in `main.py` alone** and nowhere else: `state_dir`, which the logging setup opens, and
+  `runtime_dir`, which the port file lives in. `config_dir` has exactly one reader, `PersistenceAdapter`. The pairing
+  that matters is `cache_dir` against `data_dir` — covers, artwork and the SGDB artwork cache on the first because they
+  are re-derivable from the server, the database and the launcher on the second because they are not; a system that
+  clears caches must be able to clear one and not the other. The launcher's home is the read whose mix-up a user would
+  see rather than the next start only, since `launcher_path(directories.data_dir)` is carried on as
+  `ShortcutLauncher.path` and baked into every shortcut's `exe`. Nothing mechanical tells the six apart: they are six
+  `str` fields on one frozen struct, so a read of the wrong one is a rename away and fails silently in whichever
+  direction it happened to point
 - **The identifier's three homes are never derived from one another — in particular `APP_DIR_NAME`
   (`domain/user_data_location.py`) is never read from `package.json`** — prompt-only — the three homes and the question
   each answers are enumerated in `backend/domain/identity.py`'s module docstring, and nothing mechanical detects a fold.

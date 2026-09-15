@@ -57,6 +57,10 @@ rather than by probing the directory again. A start that has not got there insta
 new shortcuts at the copy the release ships inside the plugin folder — where they pointed before this cut, and which
 still runs.
 
+> **Overtaken by [ADR-0036](0036-the-backend-hosts-itself.md).** There is no start-up migration to wait for: the data
+> root is simply where the run was told it is, so the install is unconditional and the only question left is whether the
+> write succeeded. The rest of this decision is unchanged.
+
 ### 2. Existing shortcuts are rewritten in place, never deleted and recreated
 
 At frontend start the plugin rewrites `exe` and `startDir` on each of its shortcuts that does not already carry the new

@@ -1154,10 +1154,12 @@ export const getShortcutRelocation = callable<[], ShortcutRelocation>("get_short
  * `failed_startup_steps` names the start-up repairs that did not finish — each
  * is reported and counted rather than being fatal, so a repair that fails on
  * every start would otherwise live only in a log file. `dropped_messages`
- * counts protocol messages the backend could not act on; it keeps the
+ * counts protocol messages the backend could not act on, summed over every
+ * connection this backend has served rather than the live one: it keeps the
  * connection rather than closing it, so a panel and backend that disagree about
- * the wire would otherwise show as nothing at all. Both are states, read when
- * the panel opens, which is why neither is an event.
+ * the wire would otherwise show as nothing at all — and reconnecting is exactly
+ * what a frontend swap does. Both are states, read when the panel opens, which
+ * is why neither is an event.
  */
 export interface HostStatus {
   port: number;
