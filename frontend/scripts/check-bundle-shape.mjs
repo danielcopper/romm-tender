@@ -36,8 +36,10 @@ const DIST = new URL("../../dist/", import.meta.url);
  * Strings that exist only inside `@decky/ui`'s own implementation.
  *
  * Five are its module-cache machinery and its logger, four are search predicates
- * its components carry, and **none of them appears anywhere under `src/`** —
- * which is the property that makes them evidence rather than decoration. A
+ * its components carry, and **none of them is written in any of this project's
+ * own `src/**` TypeScript** — which is the property that makes them evidence
+ * rather than decoration, and which the sweep below asserts in exactly those
+ * terms. A
  * string this project also writes would be found in both bundles and prove
  * nothing about either.
  *
@@ -86,6 +88,13 @@ const report = [];
 // finding about our own source rather than about `@decky/ui`. Comments count —
 // they are what caught this twice — because a probe that survives only through
 // `removeComments` rests on a compiler option instead of on a fact.
+//
+// What is swept is `src/**/*.{ts,tsx}`, which is what the bundles are built from
+// and is therefore the whole of what could contaminate one. It is stated rather
+// than rounded up to "under src/": there is one non-TS file there today,
+// `boot/decky-globals-block.txt`, and it is upstream Decky source that no bundle
+// can reach — so the gap is harmless, and saying so is cheaper than a reader
+// discovering the sweep is narrower than the sentence.
 {
   const sources = globSync("src/**/*.{ts,tsx}", { cwd: new URL("..", import.meta.url).pathname });
   if (sources.length === 0) {
@@ -98,8 +107,11 @@ const report = [];
       if (text.includes(needle)) contaminated.set(needle, relative);
     }
   }
+  // Reported AFTER the loop and from what it found: pushed before it, the line
+  // said "none written" two lines above a finding naming one.
   report.push(
-    `probe strings: ${DECKY_UI_IMPLEMENTATION.length}, none written under src/ (${sources.length} files swept)`,
+    `probe strings: ${DECKY_UI_IMPLEMENTATION.length}, ${contaminated.size} also written in ` +
+      `src/**/*.{ts,tsx} (${sources.length} files swept)`,
   );
   for (const [needle, where] of contaminated) {
     findings.push(

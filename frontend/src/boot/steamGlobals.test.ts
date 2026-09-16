@@ -258,12 +258,14 @@ describe("installing the globals", () => {
 
   it("leaves SP_JSX unset when the search finds nothing, rather than a hollow stand-in", async () => {
     // A stand-in built from a module that was never found is
-    // `{ jsx: undefined, jsxs: undefined }` — a perfectly truthy object. The
-    // start-up check would report SP_JSX found, the panel would mount, and it
-    // would die mid-render on `SP_JSX.jsx is not a function`: the exact
-    // confusion that check exists to remove, for that one name. The other two
-    // globals have no such hole, and neither does Decky, whose block reads
-    // `jsxModule.jsxs` bare and throws here.
+    // `{ jsx: undefined, jsxs: undefined }` — a perfectly truthy object — so the
+    // report would say SP_JSX was installed when nothing was found. That report
+    // is what the injector reads out of THIS bundle to decide whether to load
+    // the panel (#1900), and the panel gets no chance to correct it: a
+    // module-scope `SP_JSX.jsx` in its import graph throws while it is being
+    // evaluated, before any check inside it can run. The other two globals have
+    // no such hole, and neither does Decky, whose block reads `jsxModule.jsxs`
+    // bare and throws here.
     const report = await install({ ...STEAM_IS_UP }, [REACT, { createPortal: 1, createRoot: 1 }]);
 
     expect(read("SP_JSX")).toBeUndefined();

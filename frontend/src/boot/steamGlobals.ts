@@ -181,12 +181,20 @@ export async function installGlobals(): Promise<GlobalsReport> {
     const jsxModule = findModule((m) => (m.jsx && m.jsxs) || (m.jsx && Object.keys(m).length == 1));
     // The guard is what keeps a MISSED search from reporting as a hit. Building
     // the stand-in unconditionally leaves `{ jsx: undefined, jsxs: undefined }`,
-    // which is a perfectly truthy object — so the start-up check would find
-    // `SP_JSX` set, mount the panel, and let it die mid-render on
-    // `SP_JSX.jsx is not a function`, which is the exact confusion that check
-    // exists to remove. `SP_REACT` and `SP_REACTDOM` have no such hole: a miss
-    // leaves them unset. Decky has none either — its block reads `jsxModule.jsxs`
-    // bare and throws here.
+    // which is a perfectly truthy object — so `installed.SP_JSX` would say true
+    // when nothing was found.
+    //
+    // **That report is the whole of what this buys**, and it is read from THIS
+    // bundle by whoever decides whether to load the panel (#1900). The panel
+    // itself gets no chance to notice: a module-scope `SP_JSX.jsx` sits in its
+    // import graph (`dist/index.js:4892`, from `PlatformDetail.tsx`), so with
+    // `SP_JSX` unset it throws while being evaluated — before `definePlugin`'s
+    // factory exists, and long before any check inside it could run. An honest
+    // `false` here is what keeps that bundle from being loaded at all.
+    //
+    // `SP_REACT` and `SP_REACTDOM` have no such hole: a miss leaves them unset.
+    // Decky has none either — its block reads `jsxModule.jsxs` bare and throws
+    // here.
     //
     // A module carrying `jsxs` is used as it stands; one without gets `jsx`
     // aliased into `jsxs`'s place. Decky builds the same stand-in, and it has to

@@ -92,14 +92,25 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // what `steamGlobals.ts` installs, and they are checked here because the
   // panel's failure when they are absent is indistinguishable from a stale
   // predicate, while the repair is completely different.
+  //
+  // **Only `SP_REACTDOM` can ever report missing from inside this bundle**, and
+  // the other two are here for a different reader. Measured on `dist/index.js`:
+  // `SP_REACT` is read while the bundle is being EVALUATED (line 852,
+  // react-icons' `IconContext`) and so is `SP_JSX` (line 4892, a module-scope
+  // `SP_JSX.jsx` in `PlatformDetail.tsx`), both before `definePlugin`'s factory
+  // can be obtained — so with either unset the bundle throws at import, this
+  // check never runs, and nothing it would have said is written anywhere. The
+  // coexistence bundle has the same shape at lines 231 and 4271. `SP_REACTDOM`
+  // has no import-time read at all.
+  //
+  // They are listed anyway because this list is also what
+  // `GlobalsReport.installed` answers for, and that report is read from
+  // `dist/globals.js` — a bundle that imports none of this — by whoever decides
+  // whether to load the panel at all (#1900). A panel that would throw at import
+  // is then never loaded, which is the whole value of the guard in
+  // `steamGlobals.ts` that keeps a missed JSX search from reporting as a hit.
   truthy("SP_REACT", () => window.SP_REACT),
   truthy("SP_REACTDOM", () => window.SP_REACTDOM),
-  // `SP_JSX` is the one name whose absence this page cannot survive either: the
-  // page is JSX, so it compiles to calls on the very global that is missing. The
-  // log line `index.tsx` writes before building the page is what survives, and
-  // the injector's own fallback page — plain HTML, no React (#1900) — is what
-  // covers the rest. Reported here anyway, because the name in that log line is
-  // what a user quotes.
   truthy("SP_JSX", () => window.SP_JSX),
 
   // Steam's components, each one a predicate over its minified bundle.
