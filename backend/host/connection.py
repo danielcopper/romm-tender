@@ -56,6 +56,7 @@ if TYPE_CHECKING:
     import logging
 
     from host.dispatch import CallDispatcher
+    from lib.websocket_frames import FrameHeader
 
 # The largest frame, and the largest assembled message, this connection will
 # accept — a memory guard and nothing else. Distinct from the dispatcher's
@@ -171,57 +172,21 @@ class HostConnection:
 
     async def _read_loop(self) -> None:
         """Read frames until the peer closes, breaks the protocol, or goes away."""
-        opcode = 0
         fragments: list[bytes] = []
         buffered = 0
 
         while not self._closed:
-            try:
-                header = await self._read_header()
-            except (asyncio.IncompleteReadError, OSError):
-                self._logger.info("host: the panel connection went away")
+            frame = await self._next_frame(buffered)
+            if frame is None:
                 return
-            except WebSocketProtocolError as exc:
-                self._logger.warning(f"host: malformed frame, closing: {exc}")
-                await self.close(CLOSE_PROTOCOL_ERROR, str(exc))
-                return
-
-            if not header.masked:
-                self._logger.warning("host: a client frame arrived unmasked, closing")
-                await self.close(CLOSE_PROTOCOL_ERROR, "client frames must be masked")
-                return
-
-            # The cap, judged on what the sender ANNOUNCED — the payload is
-            # still on the network at this point and never enters this process.
-            running = buffered + header.payload_length
-            if header.payload_length > self._frame_limit or running > self._frame_limit:
-                self._logger.warning(f"host: a frame of {running} bytes is over the {self._frame_limit} cap, closing")
-                await self.close(CLOSE_MESSAGE_TOO_BIG, "frame over the size limit")
-                return
-
-            try:
-                payload = apply_mask(await self._reader.readexactly(header.payload_length), header.mask)
-            except (asyncio.IncompleteReadError, OSError):
-                self._logger.info("host: the panel connection went away mid-frame")
-                return
+            header, payload = frame
 
             if header.is_control:
                 if await self._handle_control(header.opcode, payload):
                     return
                 continue
 
-            if header.opcode == OPCODE_CONTINUATION:
-                if not fragments:
-                    await self.close(CLOSE_PROTOCOL_ERROR, "continuation with nothing to continue")
-                    return
-            elif header.opcode == OPCODE_TEXT:
-                if fragments:
-                    await self.close(CLOSE_PROTOCOL_ERROR, "a new message began before the last one ended")
-                    return
-                opcode = header.opcode
-            else:
-                self._logger.warning("host: a binary frame arrived; this host speaks text, closing")
-                await self.close(CLOSE_UNSUPPORTED_DATA, "this host speaks text frames only")
+            if not await self._accepts_data_frame(header, assembling=bool(fragments)):
                 return
 
             fragments.append(payload)
@@ -230,8 +195,69 @@ class HostConnection:
                 continue
 
             message, fragments, buffered = b"".join(fragments), [], 0
-            if opcode == OPCODE_TEXT:
-                self._handle_text(message)
+            self._handle_text(message)
+
+    async def _next_frame(self, buffered: int) -> tuple[FrameHeader, bytes] | None:
+        """Read one whole frame, or answer ``None`` because the connection is over.
+
+        Every way reading a frame can end the connection is answered here, so
+        the loop above sees a frame or an ending and nothing else. *buffered* is
+        how much of the message being assembled is already held, which is what
+        the cap is judged against across fragments.
+        """
+        try:
+            header = await self._read_header()
+        except (asyncio.IncompleteReadError, OSError):
+            self._logger.info("host: the panel connection went away")
+            return None
+        except WebSocketProtocolError as exc:
+            self._logger.warning(f"host: malformed frame, closing: {exc}")
+            await self.close(CLOSE_PROTOCOL_ERROR, str(exc))
+            return None
+
+        if not header.masked:
+            self._logger.warning("host: a client frame arrived unmasked, closing")
+            await self.close(CLOSE_PROTOCOL_ERROR, "client frames must be masked")
+            return None
+
+        # The cap, judged on what the sender ANNOUNCED — the payload is
+        # still on the network at this point and never enters this process.
+        running = buffered + header.payload_length
+        if header.payload_length > self._frame_limit or running > self._frame_limit:
+            self._logger.warning(f"host: a frame of {running} bytes is over the {self._frame_limit} cap, closing")
+            await self.close(CLOSE_MESSAGE_TOO_BIG, "frame over the size limit")
+            return None
+
+        try:
+            payload = apply_mask(await self._reader.readexactly(header.payload_length), header.mask)
+        except (asyncio.IncompleteReadError, OSError):
+            self._logger.info("host: the panel connection went away mid-frame")
+            return None
+        return header, payload
+
+    async def _accepts_data_frame(self, header: FrameHeader, *, assembling: bool) -> bool:
+        """May this data frame join the message being assembled? Close if not.
+
+        A message is begun by a text frame and carried on by continuations, so
+        the three answers here are the three ways a data frame can contradict
+        what is already being assembled — and the reason nothing downstream has
+        to ask an assembled message which opcode began it.
+        """
+        if header.opcode == OPCODE_CONTINUATION:
+            if assembling:
+                return True
+            await self.close(CLOSE_PROTOCOL_ERROR, "continuation with nothing to continue")
+            return False
+
+        if header.opcode == OPCODE_TEXT:
+            if not assembling:
+                return True
+            await self.close(CLOSE_PROTOCOL_ERROR, "a new message began before the last one ended")
+            return False
+
+        self._logger.warning("host: a binary frame arrived; this host speaks text, closing")
+        await self.close(CLOSE_UNSUPPORTED_DATA, "this host speaks text frames only")
+        return False
 
     async def _read_header(self):
         """Read exactly one frame header off the socket and parse it."""

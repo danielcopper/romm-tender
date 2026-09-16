@@ -106,8 +106,14 @@ def parse_request_head(raw: bytes) -> RequestHead:
         raise HttpParseError("empty request head")
 
     lines = raw.replace(b"\r\n", b"\n").split(b"\n")
+    method, target, version = _parse_request_line(lines[0])
+    return RequestHead(method=method, target=target, version=version, headers=_parse_fields(lines[1:]))
+
+
+def _parse_request_line(raw: bytes) -> tuple[str, str, str]:
+    """Split the first line into method, target and version, or refuse it."""
     try:
-        request_line = lines[0].decode("latin-1")
+        request_line = raw.decode("latin-1")
     except UnicodeDecodeError as exc:  # pragma: no cover — latin-1 decodes every byte
         raise HttpParseError("request line is not decodable") from exc
 
@@ -117,9 +123,13 @@ def parse_request_head(raw: bytes) -> RequestHead:
     method, target, version = parts
     if not method or not target or not version.startswith("HTTP/"):
         raise HttpParseError(f"malformed request line: {request_line!r}")
+    return method, target, version
 
+
+def _parse_fields(lines: Sequence[bytes]) -> dict[str, str]:
+    """Fold the field lines into one lower-cased mapping, or refuse one of them."""
     headers: dict[str, str] = {}
-    for line in lines[1:]:
+    for line in lines:
         if not line:
             continue
         if line[:1] in (b" ", b"\t"):
@@ -134,8 +144,7 @@ def parse_request_head(raw: bytes) -> RequestHead:
         key = name.lower()
         stripped = value.strip()
         headers[key] = f"{headers[key]}, {stripped}" if key in headers else stripped
-
-    return RequestHead(method=method, target=target, version=version, headers=headers)
+    return headers
 
 
 def build_response_head(status: int, headers: Sequence[tuple[str, str]] = ()) -> bytes:
