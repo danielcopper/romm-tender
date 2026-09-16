@@ -129,7 +129,7 @@ bootstrap/ (composition root: adapters.bootstrap() builds adapters, services.wir
 │   EsFindRulesAdapter (ES-DE es_find_rules.xml)          │
 │   PlatformCoreReaderAdapter (settings platform_cores)   │
 │   SystemClock / SystemUuidGen / AsyncioSleeper          │
-│   HostnameAdapter / PathProbe / PluginMetadata          │
+│   HostnameAdapter / PathProbe / DebugLogger             │
 └────────────────────────┬────────────────────────────────┘
                          │ injected via *ServiceConfig
 ┌────────────────────────▼────────────────────────────────┐
@@ -1606,7 +1606,7 @@ answering anything. Selected adapters:
 | `es_find_rules.py`                                                         | `EsFindRulesAdapter` — ES-DE `es_find_rules.xml`: whether a standalone emulator's binary is installed, and the sandbox component launcher the folder-boot bake execs                                                                                                                                                     |
 | `gavel_native.py`                                                          | `GavelNativeAdapter` — loads the compiled [romm-gavel](https://github.com/danielcopper/romm-gavel) core (`backend/native/libgavel-x86_64-linux.so`) via `ctypes`; is itself the `ResolveUploadConflictFn` seam and provides the `ComputeSyncActionFn` seam, the two save-sync decisions (no Python fallback)             |
 | `system_clock.py` / `system_uuid_gen.py` / `asyncio_sleeper.py`            | concrete `Clock` / `UuidGen` / `Sleeper` seams                                                                                                                                                                                                                                                                           |
-| `hostname.py` / `path_probe.py` / `plugin_metadata.py` / `debug_logger.py` | hostname, the generic path seams (exists, symlink-resolve), `package.json` name/version reader, settings-aware debug logger                                                                                                                                                                                              |
+| `hostname.py` / `path_probe.py` / `debug_logger.py`                        | hostname, the generic path seams (exists, symlink-resolve), settings-aware debug logger. The program's own name and version are not read from anywhere — they are constants in `domain/identity.py`                                                                                                                      |
 | `renderer_rss.py` / `renderer_gc.py`                                       | `RendererRssFn` — max `steamwebhelper` `VmRSS` from `/proc`; `RendererGcFn` (`HeapProfiler.collectGarbage`) over the CEF debugger. The session-budget measure + settle seams (ADR-0024). The "free memory" action is a frontend `SteamClient.User.StartRestart`, not a backend adapter                                   |
 | `game_process.py`                                                          | `GameProcessControl` — resolves a flatpak app's live instances via the per-user registry (`info` / `bwrapinfo.json`) plus the `/proc` child walk, reporting each tree's PIDs and argv separately, and signals them. Direct reads + `os.kill`, no subprocess; fail-soft on every read                                     |
 
@@ -2303,7 +2303,7 @@ package, organised topically (consumers always deep-import `from services.protoc
   `RommDeviceApi`, `RommFirmwareApi`, `RommPlaytimeApi`, `RommLibraryApi`, `RommConnectionApi`, `RommPlatformReader`,
   `RommAchievementsApi`, `RommSyncApi`, `RommVersion`), `SteamConfigStore`, `SteamGridDbApi`.
 - **`determinism`** — `Clock` / `UuidGen` / `Sleeper` test seams.
-- **`persistence`** — `SettingsPersister`, `PluginMetadataReader`.
+- **`persistence`** — `SettingsPersister`.
 - **`paths`** — `RetroDeckPaths`, `SystemResolver`, `CoreInfoProvider`, `SaveLocationReader`, `SandboxLauncherFn`,
   `CoreResolverFn`, `CoreNameProviderFn`, `RetroArchConfigReader`, `RetroArchCoreInfoReader`,
   `RetroArchSaveSortingProvider`, `PlatformCoreReader`.

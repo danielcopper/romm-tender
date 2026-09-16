@@ -21,6 +21,12 @@ service wiring in `main.py`.
 Everything the host needs from the application it gets handed: a dispatcher, an event sink, and the directories the
 entry point resolved. `bootstrap()` is **told** where those directories are and derives none of them.
 
+What `bootstrap()` does NOT read is the program's own name and version: they are constants in `domain/identity.py`,
+imported directly, and the outgoing User-Agent and the recovery root's name are composed from them. No seam, adapter or
+Protocol stands between the two. The road not taken is a reader — a manifest under `directories.code_dir`, parsed at
+boot behind a Protocol — and what it costs is a failure mode: a read has to answer something when the file is missing,
+and the fallback it answers with travels all the way out to a server's token list. A constant cannot be missing.
+
 **`Plugin.run` is a `classmethod` and synchronous, and both halves are load-bearing.** Synchronous because everything it
 does is path and environment work that belongs before a loop exists — and because the admission token has to be minted
 before the first log line, since the formatter that keeps it out of the log file is built with the file handler and

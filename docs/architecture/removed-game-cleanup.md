@@ -294,12 +294,12 @@ bundle is what keeps it reversible by hand. The two defaults are a pair — turn
 acknowledgement toggle before the run can start. The dialog shows recursive size per ROM alongside required and free
 space, and blocks confirmation when space is insufficient.
 
-The root is `~/<package-name>-recovery`, with the package name taken from `package.json` through the canonical metadata
-adapter and path-sanitized (today: `~/romm-tender-recovery`). Reading free space must not create that layout — a
-read-only preview stats the nearest existing parent, and the directories appear only when a bundle is actually written.
-The root's own `README.txt`, which explains what the folder is, is written by the same layout-creating step for the same
-reason: the only moment the root is known to be wanted is the one that creates it. It is best-effort, because a bundle
-must never fail to seal over its folder's signpost.
+The root is `~/<package-name>-recovery`, with the package name taken from `PACKAGE_NAME` (`domain/identity.py`) and
+path-sanitized (today: `~/romm-tender-recovery`). Reading free space must not create that layout — a read-only preview
+stats the nearest existing parent, and the directories appear only when a bundle is actually written. The root's own
+`README.txt`, which explains what the folder is, is written by the same layout-creating step for the same reason: the
+only moment the root is known to be wanted is the one that creates it. It is best-effort, because a bundle must never
+fail to seal over its folder's signpost.
 
 A bundle records the complete pre-cascade state in lossless JSON: the ROM aggregate, install and metadata state,
 save-sync baselines and files, playtime including pending sessions, completion stamps, plugin artifacts, and applicable

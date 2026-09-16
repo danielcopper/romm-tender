@@ -57,29 +57,27 @@ operation's own serialization (the per-ROM save lock, the single library-sync ta
 
 ### Display name (Tender) vs identifier (romm-tender)
 
-The plugin has two names, and they are not interchangeable. The **display name** is `Tender`: the one a person reads — a
-toast's sender, the label on the Client API Token in their RomM account, the client a registered device is listed under,
-the headline of a README they open by hand, the row Decky shows in its plugin list. The **identifier** is `romm-tender`:
-the one a machine spends — folder names, the outgoing `User-Agent`, the `localStorage` breadcrumb key, `package.json`'s
-`name`. A new string picks by its reader, never by which one looks better in place.
+The program has two names, and they are not interchangeable. The **display name** is `Tender`: the one a person reads —
+a toast's sender, the label on the Client API Token in their RomM account, the client a registered device is listed
+under, the headline of a README they open by hand. The **identifier** is `romm-tender`: the one a machine spends —
+folder names, the outgoing `User-Agent`, the `localStorage` breadcrumb key. A new string picks by its reader, never by
+which one looks better in place.
 
-**`plugin.json`'s `name` is the display name; `package.json`'s `name` is the identifier.** Two manifests side by side,
-alike enough to be read past, carrying different values — which is the confusion this entry exists to prevent. And
-`plugin.json`'s is read by a machine: Decky compares it against each installed manifest to decide whether a plugin is
-already installed, which is what tied the release asset's `Tender.zip` name to it for as long as one was published. No
-build here publishes that asset now. So being machine-read does not make a name the identifier, and this is the display
-name that cannot be changed casually.
+Both live in `backend/domain/identity.py`, beside `VERSION` — which is the release this is, not a name at all. Three
+constants in one module is not a fold: they are three different values, so no edit to one reproduces another by
+accident. The identically SPELT pair is `PACKAGE_NAME` against `APP_DIR_NAME`, and that pair is exactly the one still
+standing in two modules.
 
-The display name has **three** homes, and nothing checks that they agree: `DISPLAY_NAME` in
-`backend/domain/identity.py`, `PLUGIN_NAME` in `frontend/src/utils/toast.ts`, and `plugin.json`'s `name`. Inside a
-user-facing **sentence** it stays literal text — interpolating a constant into prose costs readability and buys nothing.
-A **heading** is not a sentence: a headline and the rule under it are one thing, so the headline is interpolated and the
-underline derived from its length.
+The display name has **two** homes, and nothing checks that they agree: `DISPLAY_NAME` in `backend/domain/identity.py`
+and `PLUGIN_NAME` in `frontend/src/utils/toast.ts`. Inside a user-facing **sentence** it stays literal text —
+interpolating a constant into prose costs readability and buys nothing. A **heading** is not a sentence: a headline and
+the rule under it are one thing, so the headline is interpolated and the underline derived from its length.
 
 The identifier has **three** homes, separate because they answer three questions that must stay free to disagree:
 
 - `APP_DIR_NAME` (`domain/user_data_location.py`) — the name every directory the program derives for itself carries.
-- `package.json`'s `name` — the recovery root and the `User-Agent`, both through bootstrap, and nothing else.
+- `PACKAGE_NAME` (`domain/identity.py`) — the recovery root and the `User-Agent`, both through bootstrap, and nothing
+  else.
 - `SESSION_BREADCRUMB_KEY` (`frontend/src/utils/sessionManager.ts`) — the `localStorage` key naming the open-session
   breadcrumb, so a rename orphans every row written under the old one.
 
@@ -92,7 +90,7 @@ come from the environment, so neither question has an asker left. Why the three 
 `backend/domain/identity.py`'s module docstring.
 
 _Avoid_: "the plugin name" for either, since it names neither; and reading "a machine parses it" as "so it is the
-identifier" — `plugin.json`'s `name` is the counter-example.
+identifier" — the display name is machine-read too, by the frontend that puts it in the QAM header.
 
 ### The program's directories
 

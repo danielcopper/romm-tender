@@ -133,14 +133,16 @@ locally with `mise run docs`.
   `main.py`) — the plugin is inert until the server is updated.
 - **User-Agent on outgoing HTTP**: SteamGridDB **and** RomM behind Cloudflare Tunnel reject the default `Python-urllib`
   UA with 403. Both adapters that talk to a server off this machine (`adapters/romm/http.py`, `adapters/steamgriddb.py`)
-  take a `user_agent: str` ctor param; bootstrap threads `<package name>/<version>`, both halves from one `package.json`
-  read — no hardcoded name and no hardcoded version, so it and the recovery root come from that one read rather than
-  from two literals that could drift (the root additionally through `sanitize_package_name`, which is the identity for a
-  name shaped like this one). Those two are everything `package.json`'s `name` reaches; the folder the plugin ships as
-  is not decided by this file — and is decided nowhere in the tree today, the build that decided it having gone with the
-  Decky zip. A missing or malformed `package.json` degrades to the metadata adapter's documented fallback,
-  `decky-plugin/0.0.0`. `adapters/renderer_gc.py` also speaks HTTP — to Steam's debugger on `localhost` — and takes
-  none.
+  take a `user_agent: str` ctor param; bootstrap threads `<package name>/<version>`, both halves from
+  `domain/identity.py` — no hardcoded name and no hardcoded version at the format site, so the UA and the recovery root
+  come from that one module rather than from two literals that could drift (the root additionally through
+  `sanitize_package_name`, which is the identity for a name shaped like this one). Those two are everything
+  `PACKAGE_NAME` reaches; the folder the program ships as is not decided by it — and is decided nowhere in the tree
+  today, the build that decided it having gone with the Decky zip. **There is no fallback and no failure mode left**:
+  this used to be a `package.json` read that degraded to `decky-plugin/0.0.0` when the manifest was missing or
+  malformed, and a constant cannot be missing — so a UA naming anything but this program is now a code change, never a
+  deployment accident. `VERSION` is machine-stamped by release-please (`x-release-please-version` on its line) and never
+  edited by hand. `adapters/renderer_gc.py` also speaks HTTP — to Steam's debugger on `localhost` — and takes none.
 - **Large payloads**: two caps, and they fail differently — `host/dispatch.py` refuses an encoded answer over ~12 MiB as
   an ordinary error for that one call, while `host/connection.py` closes the socket on a frame over 16 MiB, which
   rejects every call in flight with it. So a bulk payload is chunked rather than sent: per-item callables, and bulk
@@ -287,13 +289,20 @@ Format: **invariant** — tier — enforced by.
   `str` fields on one frozen struct, so a read of the wrong one is a rename away and fails silently in whichever
   direction it happened to point
 - **The identifier's three homes are never derived from one another — in particular `APP_DIR_NAME`
-  (`domain/user_data_location.py`) is never read from `package.json`** — prompt-only — the three homes and the question
-  each answers are enumerated in `backend/domain/identity.py`'s module docstring, and nothing mechanical detects a fold.
-  `APP_DIR_NAME` and `package.json`'s `name` spell the same string today, so `APP_DIR_NAME = package_name` reproduces
-  every current path exactly and the whole suite stays green; the cost arrives at the next manifest edit, which then
-  moves every user's library on the following start with nothing failing and nothing said. The rule is stated at
-  `APP_DIR_NAME` itself, because a diff that folds it opens neither the docstring nor this file.
-  `tests/domain/test_identity.py` pins only the seam between the DISPLAY name and the identifier, a different fold
+  (`domain/user_data_location.py`) is never read from `PACKAGE_NAME` (`domain/identity.py`)** — test + prompt-only — the
+  three homes and the question each answers are enumerated in `backend/domain/identity.py`'s module docstring.
+  `APP_DIR_NAME` and `PACKAGE_NAME` spell the same string today, so `APP_DIR_NAME = PACKAGE_NAME` reproduces every
+  current path exactly and every value comparison stays green — the two are still equal after the fold, which is what
+  makes it invisible; the cost arrives at the next package rename, which then moves every user's library on the
+  following start with nothing failing and nothing said.
+  `tests/domain/test_identity.py::TestTheIdentifierStaysInTwoPlaces` therefore asks the module what it ASSIGNS rather
+  than what it resolves to: it parses `user_data_location.py` and fails unless `APP_DIR_NAME` is a string literal, which
+  is the one answer that cannot be another constant's — a fold through a transform (`PACKAGE_NAME.lower()`) is a call
+  node and fails too. The reverse fold, `PACKAGE_NAME = APP_DIR_NAME`, is caught by asserting `domain.identity` has no
+  `APP_DIR_NAME` attribute, and **that half is the weaker one**: importing it under an alias evades it. The THIRD home
+  is unchecked entirely — `SESSION_BREADCRUMB_KEY` is frontend TypeScript and no test on either side relates it to the
+  other two. The rule is also stated at `APP_DIR_NAME` itself, because a diff that folds it opens neither the docstring
+  nor this file
 - **Sync run-lifecycle (`sync_state` / `current_sync_id`) written only via `LibrarySyncStateBox` verbs** — check —
   `scripts/check_sync_lifecycle_owner.py`
 - **A library-sync seam is held only by the module owning the job it belongs to: `active_core` / `disc_resolver` by

@@ -388,7 +388,7 @@ backend/
     download_file.py / firmware_file.py / migration_file.py / rom_files.py / save_file.py
     retrodeck_paths.py / retroarch_config.py / retroarch_core_info.py / es_find_rules.py
     atlas_catalogue.py / atlas_firmware.py / atlas_saves.py  # the adapters over the vendored emu-atlas resolver
-    system_clock.py / system_uuid_gen.py / asyncio_sleeper.py / hostname.py / path_probe.py / plugin_metadata.py / debug_logger.py
+    system_clock.py / system_uuid_gen.py / asyncio_sleeper.py / hostname.py / path_probe.py / debug_logger.py
   db/
     migrations/001_initial.sql       # SQLite schema DDL
   domain/                            # Pure compute — no I/O, no service/adapter imports
