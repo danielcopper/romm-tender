@@ -1371,17 +1371,27 @@ class TestBadPathDeleteSavesPartialFailure:
 class TestPluginVersionResolution:
     """The version a registered device is stamped with is the program's own."""
 
-    def test_the_device_registry_is_handed_the_programs_version(self, tmp_path):
+    def test_the_device_registry_is_handed_the_programs_version(self, monkeypatch, tmp_path):
         """No seam, no manifest: the constant reaches the registry unchanged.
 
-        The registry spends it as ``client_version`` on the user's RomM
-        server, which is the one place this value is read by something
-        outside this program — so a registry handed a version from anywhere
-        else would tell the server a release that was never cut.
+        The registry spends it as ``client_version`` on the user's RomM server
+        — one of three places this version leaves the program, beside the
+        outgoing User-Agent (both RomM and SteamGridDB, on every request) and
+        the ``plugin_version`` in a recovery bundle's manifest. A registry
+        handed a version from anywhere else would tell the server a release
+        that was never cut.
+
+        Asked with a version the program will never carry, because comparing
+        against ``VERSION`` alone proves nothing: this module and
+        ``services/saves/service.py`` would then read the same constant, and a
+        literal spelled at the call site would satisfy it — which is the drift
+        this exists to catch.
         """
+        monkeypatch.setattr("services.saves.service.VERSION", "9.9.9")
+
         service, _ = make_service(tmp_path)
 
-        assert service._device_registry._plugin_version == VERSION
+        assert service._device_registry._plugin_version == "9.9.9"
 
 
 class TestBuildSaveInventory:

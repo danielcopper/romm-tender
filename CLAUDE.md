@@ -106,10 +106,11 @@ locally with `mise run docs`.
   frontend's property: the backend serves it as `os.path.join(directories.code_dir, "dist")` (`backend/main.py`), and a
   host that located its own build output relative to `__file__` would be the only part of the backend that knew the
   repository's layout. Tidying `dist/` into the package it is built by would put the backend's reach inside the
-  frontend's internals. Two consequences worth knowing: `tsconfig.json`'s `outDir` and `.size-limit.json`'s `path` both
-  point up as well, and **emptying that directory is the `build` script's job** (`rm -rf ../dist && rollup -c`) —
-  `@decky/rollup` puts a `rollup-plugin-delete` in its plugin array aimed at `./dist/*`, which resolves against the
-  working directory and so cleans the package's own unused `dist` instead of the real one.
+  frontend's internals. Two consequences worth knowing: `frontend/tsconfig.json`'s `outDir` and
+  `frontend/.size-limit.json`'s `path` both point up as well, and **emptying that directory is the `build` script's
+  job** (`rm -rf ../dist && rollup -c`) — `@decky/rollup` puts a `rollup-plugin-delete` in its plugin array aimed at
+  `./dist/*`, which resolves against the working directory and so cleans the package's own unused `dist` instead of the
+  real one.
 - **`frontend/plugin.json` is not a manifest, and `@decky/rollup` is why it exists** — the builder opens it
   unconditionally as its first statement (`@decky/rollup@1.0.2`, `src/index.js:74`), with no option to skip the read, so
   deleting it makes `rollup -c` fail with `ENOENT` before any config of ours runs. Nothing installs, ships or reads it
@@ -233,6 +234,12 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
   inside `mise run gate`.
 - **Gate**: `mise run gate` (the full CI battery in one command — mirrors every PR check; slow. Run before pushing.)
 - **Setup**: `mise run setup` (installs JS + Python dependencies)
+- **Release**: release-please, configured as `release-type: simple` (`release-please-config.json`). The version it
+  proposes comes from `.release-please-manifest.json`; `version.txt` at the repository root is an OUTPUT of the release
+  run, not a source — release-please rewrites it, and `backend/domain/identity.py`'s `VERSION` line beside it, through
+  the `generic` extra-file entry that finds the line by its `x-release-please-version` marker. Neither is edited by
+  hand. `version.txt` ends with a newline because that is what release-please writes (`DefaultUpdater.updateContent`
+  returns `this.version + '\n'`); stripping it makes the next release PR diff a line nobody touched.
 - **Dev reload**: `mise run dev [display]` (build + restart plugin_loader; a display like `dp4` / `internal` also opens
   windowed BPM on it after the deploy)
 - **Frontend live dev**: `mise run dev:watch [display]` (one-time `mise run dev:setup`) — hot-reloads the **frontend**
@@ -295,7 +302,7 @@ Format: **invariant** — tier — enforced by.
   about the user's data as two plain `str` fields on structs the composition root passes around. **Counting rule** (an
   AST walk for an attribute in `{config_dir, data_dir, cache_dir, state_dir, runtime_dir,
   code_dir}` whose base ends
-  in `directories`): **21 reads over three modules**, `main.py` and `bootstrap/`'s two — `code_dir` 8, `data_dir` 6,
+  in `directories`): **19 reads over three modules**, `main.py` and `bootstrap/`'s two — `code_dir` 6, `data_dir` 6,
   `cache_dir` 4, and one each for `config_dir`, `state_dir` and `runtime_dir`. Re-derive it rather than trusting the
   number. **Two fields are read in `main.py` alone** and nowhere else: `state_dir`, which the logging setup opens, and
   `runtime_dir`, which the port file lives in. `config_dir` has exactly one reader, `PersistenceAdapter`. The pairing
@@ -589,7 +596,11 @@ Format: **invariant** — tier — enforced by.
 - **A coverage exclusion names a property of the code, never a place: every frontend-scoped entry stands in BOTH
   `frontend/vitest.config.ts`'s `coverage.exclude` and `sonar-project.properties`' `sonar.coverage.exclusions`, every
   file entry carries its reason as a `// coverage-exempt:` marker in the file's own first lines, and every marked file
-  is listed** — check — `scripts/check_coverage_exclusions.py` (a folder entry is admitted only from the script's
+  is listed** — check — `scripts/check_coverage_exclusions.py`. **The two lists spell a shared entry differently and
+  that is not drift**: Sonar runs from the repository root and Vitest from `frontend/`, so `src/types/**` there is
+  `frontend/src/types/**` here, and the gate normalises before comparing. An entry spelled repo-relative on the Vitest
+  side excludes nothing at all — Vitest would resolve it to `frontend/frontend/...` — so it is reported by name rather
+  than normalised into agreement with Sonar's identical-looking copy. (A folder entry is admitted only from the script's
   `FOLDER_ENTRIES`, where membership in the folder IS the property; the backend/config entries are Sonar-only and the
   frontend test glob Vitest-only, each declared there with its reason so the asymmetry is stated rather than tolerated).
   Two accidents it removes, both silent: `src/patches/**` excluded a FOLDER, so a file's coverage obligation changed

@@ -9,7 +9,7 @@ The package is organised topically — consumers always deep-import via
 
 - ``transport``: external system clients (RomM REST, SGDB REST, Steam IPC).
 - ``determinism``: ``Clock`` / ``UuidGen`` / ``Sleeper`` test seams.
-- ``persistence``: on-disk plugin settings and plugin metadata.
+- ``persistence``: the on-disk settings this program owns.
 - ``paths``: RetroDECK path getters, system/core resolution, ES-DE
   read/write seams.
 - ``infra``: cross-cutting callable seams (event emit, debug log,

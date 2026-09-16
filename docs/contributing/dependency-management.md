@@ -5,15 +5,15 @@ one of the files below. Most update automatically (Renovate); a few are pinned b
 
 ## Where every version lives
 
-| File                                               | Holds                                                                       | Updated by                                                         |
-| -------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `mise.toml`                                        | the dev **toolchain**: `node`, `pnpm`, `python`, `uv`, `deno`               | **by hand** (see [Bumping by hand](#bumping-by-hand))              |
-| `frontend/package.json`                            | npm deps (`^` ranges), `packageManager` (pnpm), `pnpm.overrides` (CVE pins) | Renovate (npm)                                                     |
-| `frontend/pnpm-lock.yaml`                          | resolved npm versions                                                       | generated from `frontend/package.json` (Renovate keeps it in sync) |
-| `requirements-dev.txt` / `requirements-docs.txt`   | Python dep **ranges** — the **source of truth**, incl. deliberate ceilings  | by hand for ceilings; Renovate refreshes within them               |
-| `requirements-dev.lock` / `requirements-docs.lock` | resolved Python versions (uv-compiled)                                      | `mise run lock-update` locally; Renovate recompiles on its PRs     |
-| `.github/workflows/*.yml`                          | action SHA pins (`@<sha> # vX`), `setup-*` version inputs                   | Renovate (github-actions) for the SHAs; toolchain inputs by hand   |
-| `renovate.json`                                    | **policy only** — who may bump what. Not a version source.                  | by hand                                                            |
+| File                                               | Holds                                                                      | Updated by                                                         |
+| -------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `mise.toml`                                        | the dev **toolchain**: `node`, `pnpm`, `python`, `uv`, `deno`              | **by hand** (see [Bumping by hand](#bumping-by-hand))              |
+| `frontend/package.json`                            | npm deps (`^` ranges), `packageManager` (pnpm), `pnpm.peerDependencyRules` | Renovate (npm)                                                     |
+| `frontend/pnpm-lock.yaml`                          | resolved npm versions                                                      | generated from `frontend/package.json` (Renovate keeps it in sync) |
+| `requirements-dev.txt` / `requirements-docs.txt`   | Python dep **ranges** — the **source of truth**, incl. deliberate ceilings | by hand for ceilings; Renovate refreshes within them               |
+| `requirements-dev.lock` / `requirements-docs.lock` | resolved Python versions (uv-compiled)                                     | `mise run lock-update` locally; Renovate recompiles on its PRs     |
+| `.github/workflows/*.yml`                          | action SHA pins (`@<sha> # vX`), `setup-*` version inputs                  | Renovate (github-actions) for the SHAs; toolchain inputs by hand   |
+| `renovate.json`                                    | **policy only** — who may bump what. Not a version source.                 | by hand                                                            |
 
 ## What's genuinely duplicated (and why it's safe)
 

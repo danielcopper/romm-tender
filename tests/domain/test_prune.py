@@ -50,10 +50,25 @@ def _readme_context() -> BundleReadmeContext:
     }
 
 
-def test_package_name_sanitization_and_fallback():
+def test_package_name_sanitization():
     assert sanitize_package_name("decky romm/../sync") == "decky-romm-..-sync"
     assert sanitize_package_name("dëcky") == "d-cky"
     assert sanitize_package_name("aéb") == "a-b"
+
+
+def test_the_empty_name_fallback_is_a_guard_clause_with_no_caller():
+    """``"decky-plugin"`` is unreachable in production, and stays covered anyway.
+
+    The one production caller is ``RecoveryBundleAdapter``, which is handed
+    ``PACKAGE_NAME`` (``domain/identity.py``) — a non-empty literal — so neither
+    input below can arise from this program any more. That is what this asserts:
+    a defensive branch, exercised so it keeps working if a caller ever passes
+    something it did not choose, not a behaviour anything depends on.
+
+    Do not read it as "the recovery root can fall back to decky-plugin". It
+    cannot; the root's name is settled by the constant, and
+    ``tests/test_bootstrap.py`` pins that end.
+    """
     assert sanitize_package_name("///") == "decky-plugin"
     assert sanitize_package_name(None) == "decky-plugin"
 

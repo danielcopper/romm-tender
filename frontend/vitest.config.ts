@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
@@ -8,7 +10,17 @@ export default defineConfig({
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     coverage: {
       provider: "v8",
-      reporter: ["text", "lcov"],
+      // The lcov report is read by SonarCloud, which resolves every `SF:` path
+      // against the REPOSITORY root while this config's root is the package.
+      // `@vitest/coverage-v8` defaults istanbul's `projectRoot` to
+      // `ctx.config.root`, so without this override the report says
+      // `SF:src/index.tsx`, Sonar finds no `src/` beside `backend/`, and every
+      // frontend file arrives uncovered — with nothing failing, because
+      // `sonar.sources` and `sonar.coverage.exclusions` are repo-relative and
+      // still match. The 80%-on-new-code gate would simply start judging
+      // frontend changes as untested. Vitest spreads the reporter's options over
+      // its own, so the value below wins.
+      reporter: ["text", ["lcov", { projectRoot: fileURLToPath(new URL("..", import.meta.url)) }]],
       include: ["src/**/*.{ts,tsx}"],
       // An exclusion names a property of the code, never a place: a folder entry
       // stands only where membership in the folder IS the property, and every
