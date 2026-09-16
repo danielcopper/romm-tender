@@ -78,9 +78,11 @@ class TestTheOriginCheck:
 
     def test_the_refused_origin_is_named_in_the_log_line(self):
         """So the first run answers what Steam's UI actually sends."""
-        verdict = check_access(head(origin="https://evil.example.com"), POLICY)
+        foreign = "https://evil.example.com"
 
-        assert "https://evil.example.com" in verdict.log_line
+        verdict = check_access(head(origin=foreign), POLICY)
+
+        assert repr(foreign) in verdict.log_line
 
     def test_an_absent_origin_passes(self):
         """A browser never omits it; whoever did is not one, and still needs the token."""
@@ -129,7 +131,9 @@ class TestTheOrder:
 
 class TestTheToken:
     def test_two_tokens_differ(self):
-        assert new_token() != new_token()
+        first, second = new_token(), new_token()
+
+        assert first != second
 
     def test_a_token_is_long_enough_not_to_be_guessed(self):
         assert len(new_token()) >= 32
