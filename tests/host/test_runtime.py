@@ -172,11 +172,12 @@ class TestShutdown:
 
 class TestASecondBackend:
     async def test_it_refuses_to_start(self, tmp_path, recorder):
+        status, port = HostStatus(), free_port()
         holder = SingleInstanceLock(recorder.lock_path)
         holder.acquire()
         try:
             with pytest.raises(AlreadyRunningError):
-                await _run(tmp_path, recorder, HostStatus(), free_port())
+                await _run(tmp_path, recorder, status, port)
         finally:
             holder.release()
 
