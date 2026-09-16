@@ -28,29 +28,42 @@
  */
 import { findModule } from "@decky/ui/dist/webpack";
 
-declare global {
-  interface Window {
-    /** Steam's React. Written here, or by Decky's loader — whoever is first. */
-    SP_REACT?: typeof import("react");
-    /** Steam's ReactDOM. */
-    SP_REACTDOM?: unknown;
-    /** Steam's JSX runtime, or the aliased stand-in built below. */
-    SP_JSX?: { jsx?: unknown; jsxs?: unknown; Fragment?: unknown };
-    /** Decky's own `@decky/ui` namespace. Present only when Decky is running. */
-    DFL?: unknown;
-  }
-}
-
 interface SteamAppInit {
   BFinishedInitBeforeLogin?: () => boolean;
   BFinishedInitStageOne?: () => boolean;
 }
 
+/**
+ * The window as this module has to see it: the three globals absent until
+ * somebody installs them.
+ *
+ * `@decky/ui` declares all three on `Window` as always-present
+ * (`dist/utils/react/react.d.ts`), which is the very claim this module exists
+ * because it is false — without Decky they are `undefined`, and that is the
+ * whole reason the panel could not load. TypeScript cannot re-type an existing
+ * global member through declaration merging, so the honest view is a local
+ * interface and one cast, the same move `utils/deckyUiInternals.ts` makes for
+ * the package's other always-present lies.
+ */
+interface SteamWindow {
+  /** Steam's React. Written here, or by Decky's loader — whoever is first. */
+  SP_REACT?: typeof import("react");
+  /** Steam's ReactDOM. */
+  SP_REACTDOM?: unknown;
+  /** Steam's JSX runtime, or the aliased stand-in built below. */
+  SP_JSX?: { jsx?: unknown; jsxs?: unknown; Fragment?: unknown };
+  /** Decky's own `@decky/ui` namespace. Present only when Decky is running. */
+  DFL?: unknown;
+  /** Steam's own boot object, which reports when its registry is complete. */
+  App?: SteamAppInit;
+  /** Where a hand-driven CEF session reaches this module's one function. */
+  __TENDER_INSTALL_GLOBALS?: typeof installGlobals;
+}
+
+const w = window as unknown as SteamWindow;
+
 /** Has Steam finished the init stage after which its module registry is complete? */
-const steamReady = (): boolean => {
-  const app = (window as { App?: SteamAppInit }).App;
-  return app?.BFinishedInitBeforeLogin?.() ?? app?.BFinishedInitStageOne?.() ?? false;
-};
+const steamReady = (): boolean => w.App?.BFinishedInitBeforeLogin?.() ?? w.App?.BFinishedInitStageOne?.() ?? false;
 
 /**
  * How long to wait for Steam's init before installing the globals anyway.
@@ -87,16 +100,16 @@ export interface GlobalsReport {
  * its JS context, and Decky may have set them in between.
  */
 export async function installGlobals(): Promise<GlobalsReport> {
-  if (window.SP_REACT && window.SP_JSX && window.SP_REACTDOM) {
+  if (w.SP_REACT && w.SP_JSX && w.SP_REACTDOM) {
     return {
       alreadyPresent: true,
       // `DFL` is Decky's own namespace and nothing else writes it, so its
       // presence is the one thing that tells a Decky install from a second run
       // of this function.
-      source: window.DFL ? "decky" : "unknown",
+      source: w.DFL ? "decky" : "unknown",
       steamReady: steamReady(),
       installed: { SP_REACT: true, SP_REACTDOM: true, SP_JSX: true },
-      reactVersion: window.SP_REACT.version,
+      reactVersion: w.SP_REACT.version,
     };
   }
 
@@ -104,20 +117,20 @@ export async function installGlobals(): Promise<GlobalsReport> {
   while (!steamReady() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 0));
   const readyInTime = steamReady();
 
-  window.SP_REACT ??= findModule((m) => m.Component && m.PureComponent && m.useLayoutEffect);
-  window.SP_REACTDOM ??=
+  w.SP_REACT ??= findModule((m) => m.Component && m.PureComponent && m.useLayoutEffect);
+  w.SP_REACTDOM ??=
     findModule((m) => m.createPortal && m.createRoot) ||
     findModule((m) => m.createPortal && m.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE);
 
-  if (!window.SP_JSX) {
+  if (!w.SP_JSX) {
     const jsxModule = findModule((m) => (m.jsx && m.jsxs) || (m.jsx && Object.keys(m).length == 1));
     // A module carrying `jsxs` is used as it stands; one without gets `jsx`
     // aliased into `jsxs`'s place. Decky builds the same stand-in, and it has to
     // stay the same one: whichever of the two runs first is the shape the other
     // renders through.
-    window.SP_JSX = jsxModule?.jsxs
+    w.SP_JSX = jsxModule?.jsxs
       ? jsxModule
-      : { jsx: jsxModule?.jsx, jsxs: jsxModule?.jsx, Fragment: window.SP_REACT?.Fragment };
+      : { jsx: jsxModule?.jsx, jsxs: jsxModule?.jsx, Fragment: w.SP_REACT?.Fragment };
   }
 
   return {
@@ -125,11 +138,11 @@ export async function installGlobals(): Promise<GlobalsReport> {
     source: "tender",
     steamReady: readyInTime,
     installed: {
-      SP_REACT: Boolean(window.SP_REACT),
-      SP_REACTDOM: Boolean(window.SP_REACTDOM),
-      SP_JSX: Boolean(window.SP_JSX),
+      SP_REACT: Boolean(w.SP_REACT),
+      SP_REACTDOM: Boolean(w.SP_REACTDOM),
+      SP_JSX: Boolean(w.SP_JSX),
     },
-    reactVersion: window.SP_REACT?.version ?? null,
+    reactVersion: w.SP_REACT?.version ?? null,
   };
 }
 
@@ -137,6 +150,6 @@ export async function installGlobals(): Promise<GlobalsReport> {
 // reachable by name as well, so the same bundle can be driven by hand from the
 // CEF debugger — which is how the spike measured it and how a device test
 // reproduces one.
-(window as { __TENDER_INSTALL_GLOBALS?: typeof installGlobals }).__TENDER_INSTALL_GLOBALS = installGlobals;
+w.__TENDER_INSTALL_GLOBALS = installGlobals;
 
 export default installGlobals;

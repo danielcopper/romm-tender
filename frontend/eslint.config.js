@@ -161,6 +161,16 @@ export default tseslint.config(
     },
   },
   {
+    // Build-time scripts run under Node, not in Steam's window: `process`,
+    // `console` and `URL` are theirs. Scoped to `scripts/` rather than added to
+    // the `src/` block, because a module under `src/` reaching for `process`
+    // ships a reference that resolves to nothing inside Steam.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+  },
+  {
     // Ambient global type declarations require `var` and `any` by their nature.
     files: ["**/*.d.ts"],
     rules: {

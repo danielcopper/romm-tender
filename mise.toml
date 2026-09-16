@@ -89,10 +89,10 @@ description = "Run the full CI battery locally — every PR check in ci.yml, in 
 # depends: `test` (pytest) + `lint` (import-linter, the check_* scripts, markdownlint)
 # cover the Python-test and architecture-gate CI jobs. The run list below adds the
 # rest of ci.yml: the ruff/basedpyright half of the `lint` job, the whole `build`
-# job (eslint/prettier/build/typecheck/size), the `frontend-test` job (`pnpm test`
+# job (eslint/prettier/build/bundle shape/typecheck/size), the `frontend-test` job (`pnpm test`
 # stands in for CI's `pnpm test:coverage` — pass/fail parity), and `markdown-format`
-# (`deno fmt --check`). `pnpm build` precedes `pnpm size` because size-limit measures
-# the built bundle. Not reproducible locally, so omitted: the SonarCloud scan +
+# (`deno fmt --check`). `pnpm build` precedes `pnpm check:bundle` and `pnpm size`
+# because both measure what the build produced. Not reproducible locally, so omitted: the SonarCloud scan +
 # sonar-gate (need SONAR_TOKEN and CI coverage artifacts).
 depends = ["test", "lint"]
 run = [
@@ -102,6 +102,7 @@ run = [
     "pnpm -C frontend lint",
     "pnpm -C frontend format:check",
     "pnpm -C frontend build",
+    "pnpm -C frontend check:bundle",
     "pnpm -C frontend typecheck",
     "pnpm -C frontend size",
     "pnpm -C frontend test",

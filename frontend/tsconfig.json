@@ -1,6 +1,15 @@
 {
   "compilerOptions": {
     "outDir": "../dist",
+    // Both of these answer a warning `@decky/rollup` used to swallow and
+    // `@rollup/plugin-typescript` now prints on every build. `rootDir` states
+    // what TypeScript would otherwise infer from the file set — infer, not
+    // decide, so a future source file outside `src/` would silently move every
+    // emitted path. `ignoreDeprecations` acknowledges `moduleResolution: node`,
+    // which TypeScript 7 drops; `tsconfig.typecheck.json` already carried it and
+    // the build had no way to inherit it.
+    "rootDir": "./src",
+    "ignoreDeprecations": "6.0",
     "module": "ESNext",
     "removeComments": true,
     "target": "ES2020",

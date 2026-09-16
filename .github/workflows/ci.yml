@@ -71,6 +71,9 @@ jobs:
       - name: Build
         run: pnpm -C frontend build
 
+      - name: Check the two panel bundles are the two bundles
+        run: pnpm -C frontend check:bundle
+
       - name: Type check
         run: pnpm -C frontend typecheck
 

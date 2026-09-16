@@ -1,7 +1,19 @@
 [
   {
-    "name": "dist/index.js (raw)",
+    "name": "dist/globals.js — the React bootstrap (raw)",
+    "path": "../dist/globals.js",
+    "brotli": false,
+    "limit": "20 KB"
+  },
+  {
+    "name": "dist/index.js — the panel, @decky/ui bundled (raw)",
     "path": "../dist/index.js",
+    "brotli": false,
+    "limit": "850 KB"
+  },
+  {
+    "name": "dist/index-coexistence.js — the panel, @decky/ui from DFL (raw)",
+    "path": "../dist/index-coexistence.js",
     "brotli": false,
     "limit": "830 KB"
   }
