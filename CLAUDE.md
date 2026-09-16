@@ -251,6 +251,11 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
   the release run and neither is edited by hand. `version.txt` ends with a newline because that is what release-please
   writes (`DefaultUpdater.updateContent` returns `this.version + '\n'`); stripping it makes the next release PR diff a
   line nobody touched.
+
+  A third reader exists outside the repository: README's release badge is a shields `dynamic/json` badge over
+  `.release-please-manifest.json`, because the JS manifest it used to read moved under `frontend/` and deliberately
+  carries no version. The note lives here rather than beside the badge: the badge sits inside a centred HTML block, and
+  `deno fmt` puts blank lines around an HTML comment, which would end that block and unalign the row.
 - **Dev reload**: `mise run dev [display]` (build + restart plugin_loader; a display like `dp4` / `internal` also opens
   windowed BPM on it after the deploy)
 - **Frontend live dev**: `mise run dev:watch [display]` (one-time `mise run dev:setup`) — hot-reloads the **frontend**
