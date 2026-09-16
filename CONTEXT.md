@@ -118,6 +118,39 @@ on a rename, and nothing derives a directory from a folder name any more. Also a
 directory. "XDG directory" is now only half wrong — the XDG variables ARE read, as the ladder's second rung, but they
 are not where the answer comes from on an installed system.
 
+### Standalone bundle / coexistence bundle / React bootstrap
+
+The three files `pnpm -C frontend build` produces, and the names to use for them.
+
+- **Standalone bundle** — `dist/index.js`. The panel with `@decky/ui` bundled inside it. For a machine where Decky
+  Loader is not running.
+- **Coexistence bundle** — `dist/index-coexistence.js`. The same panel, taking `@decky/ui` from the copy Decky Loader
+  has already loaded, through the `DFL` global. For a machine where Decky is running: a second bundled copy sweeps
+  Steam's module registry a second time in one session and takes the Big Picture window down.
+- **React bootstrap** — `dist/globals.js`. Installs `SP_REACT`, `SP_REACTDOM` and `SP_JSX`, which Steam does not define
+  and Decky's loader otherwise would. Its own file because `@decky/ui`'s component half reads React internals while its
+  modules evaluate, so it cannot be in the import graph of the module that creates the globals.
+
+The two panel bundles differ in exactly one thing and are told apart by NAME — there is no flag in either. Which one is
+loaded is the injector's decision and is made nowhere in this tree yet.
+
+_Avoid_: **DFL build** / **bundled build** — both name the mechanism rather than the situation, and the situation is
+what the choice turns on. Avoid **the bundle** unqualified once more than one exists. Avoid calling the React bootstrap
+a "shim" or a "polyfill": it installs Steam's own React, not a stand-in for it.
+
+### Start-up check
+
+The question `frontend/src/boot/steamModules.ts` asks before anything mounts: did every search into Steam's own
+interface find something? Almost everything the panel renders is a search predicate over Steam's minified bundle, and
+one Steam has moved past returns `undefined` with nothing thrown.
+
+On a miss the panel does not mount at all — the factory returns a **fallback page** instead and registers nothing. The
+page distinguishes SOME searches missing (a Steam client update moved what they match) from ALL of them (the React
+bootstrap never ran, or Steam's registry was read before it was complete), which is the one fact that leads to a repair.
+
+_Avoid_: **health check** — it asks one question at one moment and is not a recurring probe. Avoid **degraded mode**:
+there is no such mode, and inventing one is the thing the check exists to refuse.
+
 ### Persistence boundary (settings.json / SQLite)
 
 Where a piece of persisted state lives is a deliberate decision driven by what the data _is_, not which file it

@@ -3,8 +3,11 @@
 !!! warning "This loop depends on the Decky deploy, which no longer produces a loadable plugin"
 
     The backend hosts itself now ([ADR-0036](../adr/0036-the-backend-hosts-itself.md)) and has no zero-argument
-    lifecycle hook a plugin loader can call, so the deploy this page builds on comes up and fails. The injector and
-    installer that replace it are separate pieces of work
+    lifecycle hook a plugin loader can call, so the deploy this page builds on comes up and fails. Since
+    [#1899](https://github.com/danielcopper/romm-tender/issues/1899) the FRONTEND has moved too: the build now produces
+    three files rather than one — see
+    [How the panel is built and loaded](../architecture/frontend-bundles.md) — and nothing in this tree loads any of
+    them yet. The injector and installer that will are separate pieces of work
     ([#1900](https://github.com/danielcopper/romm-tender/issues/1900),
     [#1902](https://github.com/danielcopper/romm-tender/issues/1902)). Everything below is kept because the mechanics —
     windowed Big Picture, the display choice, the height caveat — carry over; the deploy step does not.
@@ -31,9 +34,8 @@ Three pieces line up:
   section does not fire on a deploy from here. It is documented because the watcher's behaviour is what the loop below
   is shaped around, and because the installer that replaces the deploy is its own cut (#1902).
 
-  Do not mistake `frontend/plugin.json` for that manifest. It carries a `name` and nothing else, it is never deployed,
-  and it exists only because `@decky/rollup` reads a file of that name before it will build at all — see the comment
-  above `deckyPlugin({})` in `frontend/rollup.config.js`. Adding `flags` to it would reach no device.
+  There is no such file in this tree at all any more. `frontend/plugin.json` existed only because `@decky/rollup` read a
+  file of that name before it would build, and both went with #1899.
 
 ## One-time setup
 
@@ -67,7 +69,10 @@ What happens:
 2. A windowed Big Picture opens on the desktop (a no-op if one is already open; if Steam isn't running, it starts
    straight into BPM) and its window is placed on the chosen display.
 3. Rollup stays in watch mode. On every save it rebuilds `dist/index.js` and copies it into the deployed `dist/`;
-   decky-loader hot-reloads the plugin about 1–2 seconds later.
+   decky-loader hot-reloads the plugin about 1–2 seconds later. Since #1899 that is one of three build outputs, and the
+   two the watcher does not carry are the ones the loader never needed: `dist/globals.js` installs the React globals the
+   loader installs itself, and `dist/index-coexistence.js` is the same panel taking `@decky/ui` from the loader's copy —
+   which is what `dist/index.js` also did, under the loader, before this cut.
 
 The reload is bundle-level, not component-level hot module replacement: the plugin is unmounted and re-imported, so
 component state resets and whatever is currently on screen keeps showing the **old** render until it is mounted again.
