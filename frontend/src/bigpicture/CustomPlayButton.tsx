@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect, useRef, FC, ReactElement } from "react";
-import { addEventListener, removeEventListener } from "@decky/api";
+import { addEventListener, removeEventListener } from "../api/host";
 import { showToast } from "../utils/toast";
 import { Focusable, DialogButton, Menu, MenuItem, Navigation, showContextMenu } from "@decky/ui";
 import { appActionButtonClasses, basicAppDetailsSectionStylerClasses } from "../utils/deckyUiInternals";

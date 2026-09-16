@@ -690,7 +690,7 @@ describe("RomMGameInfoPanel", () => {
       expect(queryByText("ROM File")).not.toBeNull();
     });
 
-    // download_complete is a Decky backend event (@decky/api bus), the install
+    // download_complete is a backend event (the `api/host` bus), the install
     // counterpart to romm_rom_uninstalled — the fix for #1340.
     it("registers a download_complete listener on mount and removes it on unmount", async () => {
       const before = deckyEventListenerCount("download_complete");

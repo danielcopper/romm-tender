@@ -3,7 +3,7 @@ import { render, fireEvent, waitFor, act } from "@testing-library/react";
 import { createElement } from "react";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import * as backend from "../../api/backend";
-import { toaster } from "@decky/api";
+import { toaster } from "../../api/host";
 import { showSyncConflictModal } from "../SyncConflictModal";
 import type { SaveVersionEntry, RollbackStatus } from "../../types";
 
@@ -460,7 +460,7 @@ describe("VersionHistoryPanel — self-refresh on romm_data_changed", () => {
   });
 
   // romm_data_changed is a plain DOM CustomEvent (globalThis.dispatchEvent), not
-  // an @decky/api emit, so happy-dom routes it natively to the panel's listener.
+  // a backend emit, so happy-dom routes it natively to the panel's listener.
   function dispatchDataChanged(romId: number): void {
     act(() => {
       globalThis.dispatchEvent(new CustomEvent("romm_data_changed", { detail: { type: "save_sync", rom_id: romId } }));

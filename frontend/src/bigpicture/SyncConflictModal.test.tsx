@@ -14,7 +14,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent, act, cleanup } from "@testing-library/react";
 import { createElement, type ReactElement } from "react";
-import { toaster } from "@decky/api";
+import { toaster } from "../api/host";
 import { showModal } from "@decky/ui";
 import { showSyncConflictModal, handleConflicts } from "./SyncConflictModal";
 import * as backend from "../api/backend";

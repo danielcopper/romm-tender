@@ -23,7 +23,7 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
-import { toaster } from "@decky/api";
+import { toaster } from "../api/host";
 import { DownloadQueue } from "./DownloadQueue";
 import * as backend from "../api/backend";
 import { setDownloads, getDownloadState, removeDownload, removeTerminalDownloads } from "../utils/downloadStore";

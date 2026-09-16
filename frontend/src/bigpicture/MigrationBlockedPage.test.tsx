@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent, act } from "@testing-library/react";
 import { createElement, type ComponentProps, type ReactElement } from "react";
 import { showModal } from "@decky/ui";
-import { toaster } from "@decky/api";
+import { toaster } from "../api/host";
 import { MigrationBlockedPage } from "./MigrationBlockedPage";
 import * as backend from "../api/backend";
 import { setMigrationStatus, clearMigration, getMigrationState } from "../utils/migrationStore";

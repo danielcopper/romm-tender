@@ -1,5 +1,5 @@
-import { toaster } from "@decky/api";
-import type { ToastData, ToastNotification } from "@decky/api";
+import { toaster } from "../api/host";
+import type { ToastData, ToastNotification } from "../api/host";
 import type { ReactNode } from "react";
 
 // Must match the backend's `DISPLAY_NAME` (`backend/domain/identity.py`) —

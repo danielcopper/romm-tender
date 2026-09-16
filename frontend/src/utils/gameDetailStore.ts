@@ -24,7 +24,7 @@
  */
 
 import { useCallback, useSyncExternalStore, type Dispatch, type SetStateAction } from "react";
-import { addEventListener, removeEventListener } from "@decky/api";
+import { addEventListener, removeEventListener } from "../api/host";
 import {
   debugLog,
   getBiosStatus,

@@ -1,6 +1,6 @@
 /**
  * Exercises index.tsx's `download_complete` and `migration_relaunch_options`
- * listeners through the @decky/api event harness. The plugin factory registers
+ * listeners through the backend-event harness. The plugin factory registers
  * the listeners on the in-memory bus; tests dispatch events via emitDeckyEvent
  * and assert the launch-options confirm-poll fires for the payload's appId.
  *
@@ -14,7 +14,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
-import { toaster } from "@decky/api";
+import { toaster } from "./api/host";
 import { emitDeckyEvent, deckyEventListenerCount } from "./test-utils/decky-api-mock";
 import {
   getSettingsResetNotice,

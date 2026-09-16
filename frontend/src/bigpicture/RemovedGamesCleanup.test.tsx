@@ -1,6 +1,6 @@
 import { act, fireEvent, render, waitFor, type RenderResult } from "@testing-library/react";
 import { createElement, type ReactElement } from "react";
-import { toaster } from "@decky/api";
+import { toaster } from "../api/host";
 import { showModal } from "@decky/ui";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import * as backend from "../api/backend";

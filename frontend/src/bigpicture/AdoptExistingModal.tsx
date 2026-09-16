@@ -20,7 +20,7 @@
 
 import { FC, useEffect, useState } from "react";
 import { ModalRoot, DialogButton, showModal } from "@decky/ui";
-import { addEventListener, removeEventListener } from "@decky/api";
+import { addEventListener, removeEventListener } from "../api/host";
 import { debugLog, verifyExistingContent } from "../api/backend";
 import { ENTRY_KIND_LABEL, formatBytes } from "../utils/formatters";
 import { detach } from "../utils/detach";

@@ -8,7 +8,7 @@
  *     play-button state back to "download" when the failed event matches the
  *     button's rom.
  *
- * Extracting the listener bodies into pure functions keeps the @decky/api
+ * Extracting the listener bodies into pure functions keeps the backend-event
  * listener registration as a one-line delegation and makes the behavior
  * testable without an addEventListener mock harness.
  */

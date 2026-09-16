@@ -10,7 +10,7 @@
  * so the file is exempt from `@typescript-eslint/no-explicit-any`.
  */
 
-import { routerHook } from "@decky/api";
+import { routerHook } from "../../api/host";
 import { afterPatch, findInReactTree, createReactTreePatcher } from "@decky/ui";
 import {
   appDetailsClasses,
@@ -20,7 +20,7 @@ import {
 import { RomMPlaySection } from "../RomMPlaySection";
 import { RomMGameInfoPanel } from "../RomMGameInfoPanel";
 import { debugLog } from "../../api/backend";
-import type { RoutePatch } from "@decky/api";
+import type { RoutePatch } from "../../api/host";
 import { detach } from "../../utils/detach";
 import { isRomMAppId, rommAppIdCount } from "../../utils/rommAppIds";
 

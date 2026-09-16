@@ -81,7 +81,7 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
   // / external rollback) adds or removes a version, but the list is cached on
   // first expand — without this it stays stale in-session until the game page is
   // re-entered. The signal is a DOM CustomEvent (`globalThis.dispatchEvent`),
-  // NOT an @decky/api emit, so we listen on `globalThis`. Invalidate on any
+  // NOT a backend emit, so we listen on `globalThis`. Invalidate on any
   // change for this ROM; reload immediately when the panel is open, otherwise the
   // next expand lazy-loads the fresh list. `expanded` is a dep so the handler
   // always sees the live open/closed state (re-subscribing on toggle is cheap).

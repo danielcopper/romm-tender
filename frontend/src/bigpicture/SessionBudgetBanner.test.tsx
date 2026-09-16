@@ -8,7 +8,7 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
-import { toaster } from "@decky/api";
+import { toaster } from "../api/host";
 import { SessionBudgetBanner, formatGb, formatSignedGb, memoryLevelColor, HIGH_HEAP_KB } from "./SessionBudgetBanner";
 import type { SyncButton } from "./SessionBudgetBanner";
 

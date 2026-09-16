@@ -93,14 +93,19 @@ vi.stubGlobal("appDetailsStore", { GetAppDetails: vi.fn() });
 vi.stubGlobal("appDetailsCache", { GetAppData: vi.fn() });
 vi.stubGlobal("collectionStore", { userCollections: [] });
 
-// @decky/api — callable returns a vi.fn that resolves to undefined by default.
-// Tests opt into specific behavior via
-// vi.mocked(<callable>).mockResolvedValue(...). addEventListener /
+// api/host — the panel's end of the backend's WebSocket. `callable` returns a
+// vi.fn that resolves to undefined by default; tests opt into specific behavior
+// via vi.mocked(<callable>).mockResolvedValue(...). addEventListener /
 // removeEventListener route through the in-memory event bus in
-// frontend/src/test-utils/decky-api-mock.ts so tests can drive Decky-loader
-// events via emitDeckyEvent(). Async factory + dynamic import is required
-// because vi.mock factories are hoisted above top-level imports.
-vi.mock("@decky/api", async () => {
+// frontend/src/test-utils/decky-api-mock.ts so tests can drive backend events
+// via emitDeckyEvent(). Async factory + dynamic import is required because
+// vi.mock factories are hoisted above top-level imports.
+//
+// Stubbing the module means NO SOCKET IS EVER OPENED in this suite, and no line
+// of `api/hostSocket.ts` runs through it — everything about framing, call ids,
+// reconnection and the outbox is covered by that module's own tests, against an
+// injected socket, and is invisible to every test that goes through here.
+vi.mock("./api/host", async () => {
   const bus = await import("./test-utils/decky-api-mock");
   return {
     callable: <T>(_name: string) => vi.fn().mockResolvedValue(undefined) as unknown as T,
@@ -108,6 +113,10 @@ vi.mock("@decky/api", async () => {
     definePlugin: (fn: unknown) => fn,
     addEventListener: bus.mockAddEventListener,
     removeEventListener: bus.mockRemoveEventListener,
+    // Named explicitly rather than left off: Vitest throws on an import of a
+    // name a mock factory does not define, so an omission breaks every file that
+    // reaches the route patch.
+    routerHook: { addPatch: vi.fn((_path: string, patch: unknown) => patch), removePatch: vi.fn() },
   };
 });
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { toaster } from "@decky/api";
-import type { ToastNotification } from "@decky/api";
+import { toaster } from "../api/host";
+import type { ToastNotification } from "../api/host";
 import { showToast, PLUGIN_NAME } from "./toast";
 
 describe("showToast", () => {

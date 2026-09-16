@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { showModal } from "@decky/ui";
-import { toaster } from "@decky/api";
+import { toaster } from "../../api/host";
 import type { ReactElement } from "react";
 import { useCopyToSlot } from "./useCopyToSlot";
 import * as backend from "../../api/backend";
@@ -9,7 +9,7 @@ import { showSyncConflictModal } from "../SyncConflictModal";
 import type { CopySaveToSlotStatus, SaveSlotSummary, SyncConflict } from "../../types";
 
 // Control the callable + the conflict modal directly; everything else (showModal,
-// toaster) comes from the global @decky/ui / @decky/api stubs.
+// toaster) comes from the global @decky/ui / `api/host` stubs.
 vi.mock("../../api/backend", () => ({
   copySaveToSlot: vi.fn(),
   debugLog: vi.fn().mockResolvedValue(undefined),

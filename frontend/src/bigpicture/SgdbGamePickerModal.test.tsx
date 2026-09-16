@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, act, fireEvent } from "@testing-library/react";
 import { createElement } from "react";
-import { toaster } from "@decky/api";
+import { toaster } from "../api/host";
 import * as backend from "../api/backend";
 import * as artwork from "../utils/artwork";
 import { SgdbGamePickerModalContent } from "./SgdbGamePickerModal";

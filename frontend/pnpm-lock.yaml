@@ -8,16 +8,13 @@ importers:
 
   .:
     dependencies:
-      '@decky/api':
-        specifier: ^1.1.3
-        version: 1.1.3
+      '@decky/ui':
+        specifier: ^4.11.6
+        version: 4.12.0
       tslib:
         specifier: ^2.7.0
         version: 2.8.1
     devDependencies:
-      '@decky/ui':
-        specifier: ^4.11.6
-        version: 4.12.0
       '@eslint/js':
         specifier: ^9.39.4
         version: 9.39.5
@@ -197,9 +194,6 @@ packages:
   '@bcoe/v8-coverage@1.0.2':
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
-
-  '@decky/api@1.1.3':
-    resolution: {integrity: sha512-XsPCZxfxk5I1UtylIUN3qaWQI31siQbKfbLIskkI5innEatY1m4NQqBv/6hwPaO9mKMbdqYpnh5PSJDeMEOOBA==}
 
   '@decky/ui@4.12.0':
     resolution: {integrity: sha512-OwO1XEi+tNI5jRyCs6w2526o+u9URjh1A1gtfUld7HUpAcxNVthgcCySaeLtvQqTPTj7IeiDCEy7rRS88Fd+wQ==}
@@ -2670,8 +2664,6 @@ snapshots:
       '@babel/helper-validator-identifier': 7.29.7
 
   '@bcoe/v8-coverage@1.0.2': {}
-
-  '@decky/api@1.1.3': {}
 
   '@decky/ui@4.12.0': {}
 

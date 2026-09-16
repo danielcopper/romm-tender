@@ -16,7 +16,7 @@
  */
 
 import { useState, useEffect, useRef, FC, ReactNode } from "react";
-import { addEventListener, removeEventListener } from "@decky/api";
+import { addEventListener, removeEventListener } from "../api/host";
 import { Menu, MenuItem, showContextMenu, DialogButton } from "@decky/ui";
 import { FaCompactDisc, FaChevronDown } from "react-icons/fa";
 import { getCachedGameDetail, getDiscSelection, selectDisc, logError, logWarn } from "../api/backend";

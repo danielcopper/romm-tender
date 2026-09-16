@@ -88,6 +88,40 @@ reaches is module-private or read during render. `steamModules.test.ts` sweeps e
 `@decky/ui` and fails on a name that is in none of its three lists, so a new import has to be classified before it can
 ship.
 
+## Talking to the backend
+
+`frontend/src/api/host.ts` is what the panel imports for everything `@decky/api` used to give it, under the same six
+names — `callable`, `addEventListener`, `removeEventListener`, `toaster`, `routerHook`, `definePlugin` — so a call site
+reads the same as before. `@decky/api` itself is gone from the package.
+
+**Four of the six are the wire.** They go through `frontend/src/api/hostSocket.ts`, one WebSocket per bundle instance,
+on the protocol defined once on the other side in `backend/host/protocol.py`. The port and the token are read off the
+URL this bundle was loaded from: the host mints exactly that address, so they arrive with the code that needs them and
+cannot be stale.
+
+Three properties are worth knowing before changing anything there:
+
+- **A transport failure is thrown, never returned.** `error.reason` names something that went wrong _carrying_ a call; a
+  callable's own failure is a perfectly successful transport and arrives inside `result` as
+  `{success, reason,
+  message}`. The frontend keeps them apart by throwing `HostTransportError` for the first, so it
+  cannot reach a reader of the second.
+- **There is no timeout.** A call made while the socket is down waits for it to come back. That is the contract
+  `@decky/api`'s `callable` had and 150 call sites are written against it — `index.tsx` races its own deadline around
+  the calls that must not wait.
+- **A dropped connection fails the calls that were already sent, and only those.** A frame still queued never left, so
+  re-sending it is safe; one already on the wire may have run, and retrying it would repeat whatever it did.
+
+**Two of the six are not the wire at all.** `toaster` and `routerHook` were Decky Loader's own, and `@decky/api` only
+forwarded them. Their replacements are [#1901](https://github.com/danielcopper/romm-tender/issues/1901) — a toaster
+through Steam's own notification store, and the game-page patch installed by Tender's own installer — so until then both
+are **declared placeholders that do nothing**: no toast appears, and Steam's game page carries no Tender section.
+
+Neither reaches Decky's loader API when one happens to be present, and the reason is the device test rather than purity.
+The reference machine has Decky installed but disabled; a placeholder that borrowed the loader's API whenever it found
+one would pass that test for a reason nobody could identify afterwards, and a test that cannot fail for the thing it is
+testing is worth nothing.
+
 ## What the tests here can and cannot see
 
 The frontend suite replaces `@decky/ui` with a stub — 33 files plus a global mock in `frontend/src/test-setup.ts` — so
@@ -95,6 +129,11 @@ The frontend suite replaces `@decky/ui` with a stub — 33 files plus a global m
 invisible to a green suite. That is why the bundling half is checked against the built artifact instead, and why
 `index.test.tsx` supplies the start-up check's answer rather than letting the stub produce one: under the stub almost
 every search answers `undefined`, exactly as a Steam that had moved them would.
+
+The same is true of the transport. `test-setup.ts` stubs `api/host` wholesale, so **no socket is opened anywhere in the
+suite** and no line of `hostSocket.ts` runs through it; that module is covered by `hostSocket.test.ts` alone, against a
+socket that file supplies. What neither reaches is the real wire: nothing here has ever carried a frame between this
+code and `backend/host/`, and the first thing that will is the device.
 
 ## Related
 

@@ -13,7 +13,7 @@ import * as backend from "../api/backend";
 import { ENTRY_STOP_ATTR } from "../utils/entryFocus";
 import type { SaveSortMigrationStatus, RegisteredDevice, SettingsSection } from "../types";
 import { showModal } from "@decky/ui";
-import { toaster } from "@decky/api";
+import { toaster } from "../api/host";
 import {
   setSaveSortMigrationStatus,
   clearSaveSortMigration,

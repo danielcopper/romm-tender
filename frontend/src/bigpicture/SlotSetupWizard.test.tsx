@@ -3,7 +3,7 @@ import { render, fireEvent, act } from "@testing-library/react";
 import { createElement, type ChangeEvent, type KeyboardEvent, type ReactElement } from "react";
 import { SlotSetupWizard } from "./SlotSetupWizard";
 import * as backend from "../api/backend";
-import { toaster } from "@decky/api";
+import { toaster } from "../api/host";
 import { showModal } from "@decky/ui";
 import {
   applyWizardInitialSetupResult,

@@ -81,7 +81,8 @@ new code in it.
   fix the upstream artifact instead of the copy is not. `defaults/` holds no vendored artifact since the BIOS registry
   left.
 - `testing-backend.md` — test tiers, gate tests, vendored conformance vectors.
-- `testing-frontend.md` — the `@decky/api` event harness, non-vacuous catch assertions.
+- `testing-frontend.md` — the backend-event harness, that `api/host` is stubbed suite-wide so no socket is ever opened,
+  non-vacuous catch assertions.
 - `comments.md` — an inline comment is the exception: only an outside-world fact, a road not taken, or a constraint the
   code cannot express. Re-read the comment on the line you touch — a stale one is worse than none, because it is
   believed and nothing in the toolchain contradicts it. **No mechanical check exists.**
@@ -151,8 +152,12 @@ locally with `mise run docs`.
   evidence about any of them — it is equally true of `SetShortcutName`, which is the one that has **never** been
   measured. The sync writes the name in place too (`rewriteShortcutIdentity`), and nothing has established what that
   does to the appId; do not read the exe measurement as covering it.
-- **Frontend API**: `@decky/ui` + `@decky/api` (NOT deprecated `decky-frontend-lib`). Use `callable()` (NOT
-  `ServerAPI.callPluginMethod()`).
+- **Frontend API**: `@decky/ui` for Steam's components, and `frontend/src/api/host.ts` for everything `@decky/api` used
+  to give us — same six export names, so a call site reads the same. Four of the six go over the backend's WebSocket;
+  **`toaster` and `routerHook` are declared placeholders that do nothing** until #1901, so no toast appears and Steam's
+  game page carries no Tender section. Neither reaches Decky's loader API when one is present, and the reason is the
+  device test rather than purity: the reference machine has Decky installed but disabled, so a placeholder that borrowed
+  the loader's API whenever it found one would pass that test for a reason nobody could identify afterwards.
 - **A callable must be `async def`**: even where the body is synchronous. The set a caller can reach is exactly the
   public `async def` on `Plugin` — `host.dispatch.reachable_methods` resolves it off the loaded class,
   `scripts/check_callable_manifest.py` derives the same set from the source, and `tests/host/test_dispatch.py` asserts
@@ -619,6 +624,14 @@ Format: **invariant** — tier — enforced by.
   nothing. Type-only imports are not edges (erased at runtime), which is why the `api/backend.ts` ⇄
   `utils/cachedGameDetailStore.ts` back-reference is not a cycle
 - **No bare `# type: ignore` / blanket suppressions** — check — `scripts/check_no_bare_ignores.sh`
+- **A transport failure and a callable's own failure never arrive in the same shape, on either end** — test +
+  prompt-only — `backend/host/protocol.py` states the vocabulary and `.claude/rules/host.md` holds the backend half; the
+  frontend half is `frontend/src/api/hostSocket.ts`, which THROWS `HostTransportError` for an `error` message and
+  resolves only a `reply`, so a transport reason cannot reach a reader of `{success, reason, message}`.
+  `hostSocket.test.ts` pins both directions. **Nothing joins the two ends**: `connection_lost` is the one reason no
+  backend ever sends — the caller's own register answers with it — and it is spelled once in Python and once in
+  TypeScript with no check that the two agree. A frontend that spelled it differently would go green, and the divergence
+  would surface only to whoever eventually matched on it
 - **The standalone panel bundle carries `@decky/ui` and the coexistence one carries none of it** — check —
   `frontend/scripts/check-bundle-shape.mjs`, over the built artifact rather than a bundler setting (ten strings that
   exist only in the package's implementation, plus the `DFL.` read count, in both directions; the licence file the

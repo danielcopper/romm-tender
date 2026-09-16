@@ -11,13 +11,13 @@
  * 3. Asserts the button transitioned back to "Download" — the visible
  *    side-effect of `handleButtonDownloadFailure(...) -> reset()`.
  *
- * Future component tests that consume `@decky/api` events should follow this
+ * Future component tests that consume backend events should follow this
  * shape. The bus is reset between tests by `frontend/src/test-setup.ts`.
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, waitFor, act, within } from "@testing-library/react";
-import { toaster } from "@decky/api";
+import { toaster } from "../api/host";
 import { showContextMenu, Navigation } from "@decky/ui";
 import type { ReactElement } from "react";
 import { CustomPlayButton } from "./CustomPlayButton";

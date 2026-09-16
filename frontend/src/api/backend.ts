@@ -1,4 +1,4 @@
-import { callable } from "@decky/api";
+import { callable } from "./host";
 import { detach } from "../utils/detach";
 import type {
   PluginSettings,

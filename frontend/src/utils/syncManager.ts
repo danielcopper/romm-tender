@@ -1,4 +1,4 @@
-import { addEventListener } from "@decky/api";
+import { addEventListener } from "../api/host";
 import type { SyncAddItem, SyncApplyUnitData } from "../types";
 import {
   reconcileShortcuts,
@@ -454,8 +454,8 @@ export async function reconcileStaleShortcuts(): Promise<void> {
  * {@link processCoverRefreshes}) — and reports back via ``reportUnitResults`` so
  * the backend can advance the work queue and durably commit the chunk.
  */
-export function initUnitSyncManager(): ReturnType<typeof addEventListener> {
-  return addEventListener("sync_apply_unit", async (data: SyncApplyUnitData) => {
+export function initUnitSyncManager(): (data: SyncApplyUnitData) => unknown {
+  return addEventListener<[SyncApplyUnitData]>("sync_apply_unit", async (data: SyncApplyUnitData) => {
     if (_isUnitRunning) {
       logInfo(`sync_apply_unit: already processing a unit, dropping duplicate for ${data.unit_name}`);
       return;

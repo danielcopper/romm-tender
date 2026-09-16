@@ -17,7 +17,7 @@ import { RomMPlaySection } from "./RomMPlaySection";
 import * as backend from "../api/backend";
 import { _resetSharedReadsForTests } from "../api/sharedReads";
 import { showContextMenu, showModal } from "@decky/ui";
-import { toaster } from "@decky/api";
+import { toaster } from "../api/host";
 import {
   installDomEventListenerSpy,
   uninstallDomEventListenerSpy,

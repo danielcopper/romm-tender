@@ -3,7 +3,7 @@ import { render, fireEvent, act } from "@testing-library/react";
 import { createElement } from "react";
 import { SlotPanel } from "./SlotPanel";
 import * as backend from "../../api/backend";
-import { toaster } from "@decky/api";
+import { toaster } from "../../api/host";
 import { showModal } from "@decky/ui";
 import type { SaveStatus, SaveSlotSummary, SlotSaveFile } from "../../types";
 

@@ -9,7 +9,7 @@
  * them.
  */
 
-import { addEventListener, removeEventListener } from "@decky/api";
+import { addEventListener, removeEventListener } from "../api/host";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import {
   invalidateCachedGameDetail,
@@ -386,7 +386,7 @@ export function wirePanelEvents(ctx: PanelEventContext): () => void {
   // Listen for download completion — the install counterpart to onUninstall.
   // The "ROM File" section is gated on installed + installedRom; a fresh
   // download must flip both so the section (with the local path) appears
-  // without a detail-page re-mount (#1340). Decky backend event (@decky/api),
+  // without a detail-page re-mount (#1340). A backend event (`api/host`),
   // not a DOM CustomEvent — mirrors DiscSelector's download_complete wiring.
   const onDownloadComplete = addEventListener<[DownloadCompleteEvent]>(
     "download_complete",

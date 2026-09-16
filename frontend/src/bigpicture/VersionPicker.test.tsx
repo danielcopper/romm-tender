@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, waitFor, act, fireEvent, within } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
-import { toaster } from "@decky/api";
+import { toaster } from "../api/host";
 import { VersionPicker } from "./VersionPicker";
 import * as backend from "../api/backend";
 import type { VersionList } from "../api/backend";

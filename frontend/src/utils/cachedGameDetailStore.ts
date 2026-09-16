@@ -7,7 +7,7 @@
  * add one when there's a consumer that needs invalidation notifications.
  */
 
-import { callable } from "@decky/api";
+import { callable } from "../api/host";
 import type { CachedGameDetail } from "../api/backend";
 
 const CACHE_TTL_MS = 3000;

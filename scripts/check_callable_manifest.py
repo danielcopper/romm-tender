@@ -249,18 +249,31 @@ def parse_frontend_callables(src_dir: Path) -> dict[str, int]:
     """Parse every ``callable<[Args], Return>("name")`` under *src_dir*.
 
     Scans all ``.ts``/``.tsx`` files as text (declarations may span multiple
-    lines). Comments are stripped first (:func:`_strip_comments`) so a comment
-    inside a ``callable<...>`` block can't corrupt the bracket tracker and a
-    commented-out declaration isn't mistaken for a live one. Returns
-    ``{wire_name: arity}`` where arity is the number of top-level elements in the
-    ``[Args]`` tuple. A wire name declared more than once maps to a sentinel
-    arity of ``-1`` so the diff surfaces the duplicate.
+    lines), EXCLUDING test files (``*.test.*``), ``frontend/src/test-utils/`` and
+    ``frontend/src/test-setup.ts`` — the same scope
+    :func:`check_event_parity.parse_frontend_listeners` uses, and for the same
+    reason: what this gate compares is the WIRE SURFACE, and a ``callable(...)``
+    written inside a test is a fixture rather than a declaration. Without the
+    exclusion a test that exercises the transport against a real callable name
+    reads as a duplicate declaration of it, which is what
+    ``frontend/src/api/host.test.ts`` did.
+
+    Comments are stripped first (:func:`_strip_comments`) so a comment inside a
+    ``callable<...>`` block can't corrupt the bracket tracker and a commented-out
+    declaration isn't mistaken for a live one. Returns ``{wire_name: arity}``
+    where arity is the number of top-level elements in the ``[Args]`` tuple. A
+    wire name declared more than once maps to a sentinel arity of ``-1`` so the
+    diff surfaces the duplicate.
     """
     result: dict[str, int] = {}
     if not src_dir.is_dir():
         return result
+    test_utils = src_dir / "test-utils"
+    test_setup = src_dir / "test-setup.ts"
     files = sorted(p for p in src_dir.rglob("*") if p.suffix in (".ts", ".tsx") and p.is_file())
     for path in files:
+        if ".test." in path.name or test_utils in path.parents or path == test_setup:
+            continue
         try:
             text = path.read_text(encoding="utf-8")
         except OSError:

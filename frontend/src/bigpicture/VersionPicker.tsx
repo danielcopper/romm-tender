@@ -28,7 +28,7 @@
  */
 
 import { useState, useEffect, useRef, FC, ReactNode } from "react";
-import { addEventListener, removeEventListener } from "@decky/api";
+import { addEventListener, removeEventListener } from "../api/host";
 import { showToast } from "../utils/toast";
 import { Menu, MenuItem, showContextMenu, DialogButton } from "@decky/ui";
 import { FaChevronDown, FaCompactDisc, FaLayerGroup, FaTrash } from "react-icons/fa";

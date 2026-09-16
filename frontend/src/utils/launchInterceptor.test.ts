@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { toaster } from "@decky/api";
+import { toaster } from "../api/host";
 import * as backend from "../api/backend";
 import * as rommAppIds from "./rommAppIds";
 import * as launchGate from "./launchGate";

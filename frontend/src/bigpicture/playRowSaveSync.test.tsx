@@ -106,7 +106,7 @@ describe("play row save-sync fan-out (#1758)", () => {
   beforeEach(() => {
     // clearAllMocks, not resetAllMocks: the whole row renders here, so every
     // callable it touches on the way to a first paint must keep the
-    // undefined-resolving default the @decky/api stub gives it. Resetting them
+    // undefined-resolving default the `api/host` stub gives it. Resetting them
     // hands the row a bare `undefined` where it awaits a promise, and the tree
     // never renders at all.
     vi.clearAllMocks();

@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, waitFor, act, fireEvent, within } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
-import { toaster } from "@decky/api";
+import { toaster } from "../api/host";
 import { DiscSelector } from "./DiscSelector";
 import { emitDeckyEvent, deckyEventListenerCount } from "../test-utils/decky-api-mock";
 import * as backend from "../api/backend";

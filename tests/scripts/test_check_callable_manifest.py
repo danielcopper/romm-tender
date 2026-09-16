@@ -113,6 +113,24 @@ class TestParseFrontendCallables:
     def test_missing_src_returns_empty(self, tmp_path: Path):
         assert check.parse_frontend_callables(tmp_path / "nope") == {}
 
+    def test_test_files_are_not_wire_surface(self, tmp_path: Path):
+        """A ``callable(...)`` written in a test is a fixture, not a declaration.
+
+        Scoped the same way ``check_event_parity`` scopes its own scan. Without
+        it, a test that drives the transport against a real callable name reads
+        as a second declaration of it and the gate reports a duplicate that does
+        not exist on the wire.
+        """
+        src = tmp_path / "src"
+        (src / "api").mkdir(parents=True)
+        (src / "test-utils").mkdir(parents=True)
+        (src / "api" / "backend.ts").write_text('callable<[], A>("get_sync_stats");', encoding="utf-8")
+        (src / "api" / "host.test.ts").write_text('callable<[], A>("get_sync_stats");', encoding="utf-8")
+        (src / "test-utils" / "fake.ts").write_text('callable<[], A>("get_sync_stats");', encoding="utf-8")
+        (src / "test-setup.ts").write_text('callable<[], A>("get_sync_stats");', encoding="utf-8")
+
+        assert check.parse_frontend_callables(src) == {"get_sync_stats": 0}
+
 
 class TestParserHardening:
     """Regression cases for the adversarial blind spots: TS comments, arrow-typed
