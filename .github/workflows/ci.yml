@@ -263,11 +263,15 @@ jobs:
 
       - uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24
         with:
+          # Identical to the `lint:md` task in mise.toml, which states why each
+          # exclusion is anchored where it is.
           globs: |
             **/*.md
-            !node_modules
-            !.worktrees
+            !**/node_modules
+            !**/.venv
+            !.claude/worktrees
             !CHANGELOG.md
+            !site
 
   markdown-format:
     runs-on: ubuntu-latest
