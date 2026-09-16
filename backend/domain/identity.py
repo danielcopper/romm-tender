@@ -81,6 +81,6 @@ PACKAGE_NAME = "romm-tender"
 # carries a ``generic`` extra-file entry pointing at this module, and the
 # marker below is how it finds the line). Never edit it by hand: a version
 # written here out of band is one release-please will overwrite without
-# noticing, and until it does, every User-Agent and every recovery manifest
+# noticing, and until it does, every consumer listed in the module docstring
 # claims a release that was never cut.
 VERSION = "0.33.0"  # x-release-please-version
