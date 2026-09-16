@@ -134,6 +134,25 @@ const report = [];
   }
 }
 
+// The licence that has to travel with the bundled package. Bundling `@decky/ui`
+// makes this project a distributor of LGPL-2.1 code, and the text is emitted by
+// the standalone build alone — the coexistence bundle distributes none of it.
+{
+  let licence = "";
+  try {
+    licence = read("LICENSE-@decky-ui.txt");
+  } catch {
+    licence = "";
+  }
+  report.push(`LICENSE-@decky-ui.txt: ${licence.length} B`);
+  if (!licence.includes("GNU LESSER GENERAL PUBLIC LICENSE")) {
+    findings.push(
+      "LICENSE-@decky-ui.txt is missing or is not the LGPL text. dist/index.js carries @decky/ui's code, which " +
+        "makes this a distribution of it, and the licence travels with the work.",
+    );
+  }
+}
+
 for (const line of report) console.log(line);
 
 if (findings.length > 0) {

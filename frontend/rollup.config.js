@@ -1,3 +1,5 @@
+import { copyFileSync, mkdirSync } from "node:fs";
+
 import commonjs from "@rollup/plugin-commonjs";
 import { nodeResolve } from "@rollup/plugin-node-resolve";
 import typescript from "@rollup/plugin-typescript";
@@ -57,6 +59,28 @@ const OUT_DIR = "../dist";
 // Rollup upgrade and a `@decky/ui` bump, neither of which a treeshake setting
 // here would survive being wrong about.
 
+/**
+ * Ship `@decky/ui`'s licence beside the bundle that carries its code.
+ *
+ * Bundling the package makes this project a DISTRIBUTOR of it, and it is
+ * LGPL-2.1: the licence text travels with the work. Until #1899 this project
+ * shipped not one byte of it — the package was mapped onto Decky's global — so
+ * nothing was owed and nothing was carried.
+ *
+ * It hangs off the standalone build alone, deliberately: the coexistence bundle
+ * takes the package from Decky's own copy and distributes none of it, so a
+ * notice there would claim a distribution that is not happening. `THIRD-PARTY-
+ * NOTICES.md` at the repository root names the version and says what the reader
+ * may do with it; this is the text itself, verbatim and untouched.
+ */
+const shipDeckyUiLicence = () => ({
+  name: "ship-decky-ui-licence",
+  writeBundle() {
+    mkdirSync(OUT_DIR, { recursive: true });
+    copyFileSync("node_modules/@decky/ui/LICENSE", `${OUT_DIR}/LICENSE-@decky-ui.txt`);
+  },
+});
+
 const plugins = () => [
   typescript({ tsconfig: "./tsconfig.json" }),
   commonjs(),
@@ -108,6 +132,7 @@ export default [
     input: "./src/index.tsx",
     file: "index.js",
     external: Object.keys(STEAM_REACT_GLOBALS),
+    extraPlugins: [shipDeckyUiLicence()],
   }),
 
   // COEXISTENCE — `@decky/ui` taken from Decky's already-loaded copy through the

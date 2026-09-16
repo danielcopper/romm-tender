@@ -154,6 +154,11 @@ This plugin stands on the shoulders of some great projects:
 - [RetroDECK](https://retrodeck.net/) — the all-in-one emulation solution for Steam Deck that bundles ES-DE, RetroArch,
   and standalone emulators into a single flatpak. Our entire launch chain runs through RetroDECK
 - [Decky Loader](https://decky.xyz/) — the plugin framework that makes all of this possible
+- [@decky/ui](https://github.com/SteamDeckHomebrew/decky-frontend-lib) — maintained by the Decky project, and how Tender
+  reaches Steam's own interface components. It is not a component library: most of it is search predicates that find
+  Steam's minified modules and hand them back, and keeping those working as Steam's output changes is real, continuous
+  work that this project gets for free. Tender ships a copy of it — LGPL-2.1, see
+  [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)
 - [Valve](https://www.valvesoftware.com/) — for the Steam Deck, SteamOS, and an open enough platform to build on
 - [Unifideck](https://github.com/ma3ke/unifideck) — inspiration for game detail page injection techniques and gamepad
   navigation patterns
