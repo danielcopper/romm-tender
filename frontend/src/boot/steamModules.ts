@@ -73,44 +73,54 @@ export interface SteamLookup {
   readonly found: () => boolean;
 }
 
-const truthy = (name: string, value: unknown): SteamLookup => ({ name, found: () => Boolean(value) });
+const truthy = (name: string, read: () => unknown): SteamLookup => ({ name, found: () => Boolean(read()) });
 
 /**
  * Every Steam search the panel depends on, asked one at a time.
  *
- * Each entry's `found` is a thunk rather than a boolean taken here, so the check
- * reads the live value at the moment it runs. `@decky/ui` resolves these while
- * its own modules evaluate, which is before this module's body — but a thunk
- * costs nothing and removes the ordering question entirely.
+ * Each entry READS its value when the check runs, not when this module is
+ * imported — which is why `truthy` takes a function and not a value. For
+ * `@decky/ui`'s members the difference is theoretical: they resolve while its own
+ * modules evaluate, which is before this module's body either way. For the three
+ * React globals it is not. Those are installed by a separate bundle, and whether
+ * that bundle has run by the time this one is imported is the injector's
+ * business rather than this file's; a value captured at import would answer for
+ * a moment nobody chose.
  */
 export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // Steam's three React globals. Not `@decky/ui` lookups at all — these are
   // what `steamGlobals.ts` installs, and they are checked here because the
   // panel's failure when they are absent is indistinguishable from a stale
   // predicate, while the repair is completely different.
-  truthy("SP_REACT", window.SP_REACT),
-  truthy("SP_REACTDOM", window.SP_REACTDOM),
-  truthy("SP_JSX", window.SP_JSX),
+  truthy("SP_REACT", () => window.SP_REACT),
+  truthy("SP_REACTDOM", () => window.SP_REACTDOM),
+  // `SP_JSX` is the one name whose absence this page cannot survive either: the
+  // page is JSX, so it compiles to calls on the very global that is missing. The
+  // log line `index.tsx` writes before building the page is what survives, and
+  // the injector's own fallback page — plain HTML, no React (#1900) — is what
+  // covers the rest. Reported here anyway, because the name in that log line is
+  // what a user quotes.
+  truthy("SP_JSX", () => window.SP_JSX),
 
   // Steam's components, each one a predicate over its minified bundle.
-  truthy("ButtonItem", ButtonItem),
-  truthy("ConfirmModal", ConfirmModal),
-  truthy("DialogButton", DialogButton),
-  truthy("Field", Field),
-  truthy("Focusable", Focusable),
-  truthy("Menu", Menu),
-  truthy("MenuItem", MenuItem),
-  truthy("MenuSeparator", MenuSeparator),
-  truthy("ModalRoot", ModalRoot),
-  truthy("PanelSection", PanelSection),
-  truthy("PanelSectionRow", PanelSectionRow),
-  truthy("ProgressBar", ProgressBar),
-  truthy("ScrollPanel", ScrollPanel),
-  truthy("Spinner", Spinner),
-  truthy("Tabs", Tabs),
-  truthy("TextField", TextField),
-  truthy("ToggleField", ToggleField),
-  truthy("showContextMenu", showContextMenu),
+  truthy("ButtonItem", () => ButtonItem),
+  truthy("ConfirmModal", () => ConfirmModal),
+  truthy("DialogButton", () => DialogButton),
+  truthy("Field", () => Field),
+  truthy("Focusable", () => Focusable),
+  truthy("Menu", () => Menu),
+  truthy("MenuItem", () => MenuItem),
+  truthy("MenuSeparator", () => MenuSeparator),
+  truthy("ModalRoot", () => ModalRoot),
+  truthy("PanelSection", () => PanelSection),
+  truthy("PanelSectionRow", () => PanelSectionRow),
+  truthy("ProgressBar", () => ProgressBar),
+  truthy("ScrollPanel", () => ScrollPanel),
+  truthy("Spinner", () => Spinner),
+  truthy("Tabs", () => Tabs),
+  truthy("TextField", () => TextField),
+  truthy("ToggleField", () => ToggleField),
+  truthy("showContextMenu", () => showContextMenu),
 
   // Not truthiness: `@decky/ui` declares `Navigation` as an empty object and
   // fills it from a lookup inside a `try`, so a miss leaves an object that is
@@ -125,12 +135,12 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // The class maps and the glyph, which `deckyUiInternals.ts` already types
   // honestly. A missing class map does not throw — it styles nothing, which is
   // a panel that renders and looks wrong.
-  truthy("appActionButtonClasses", appActionButtonClasses),
-  truthy("appDetailsClasses", appDetailsClasses),
-  truthy("basicAppDetailsSectionStylerClasses", basicAppDetailsSectionStylerClasses),
-  truthy("playSectionClasses", playSectionClasses),
-  truthy("quickAccessMenuClasses", quickAccessMenuClasses),
-  truthy("ControllerGlyph", ControllerGlyph),
+  truthy("appActionButtonClasses", () => appActionButtonClasses),
+  truthy("appDetailsClasses", () => appDetailsClasses),
+  truthy("basicAppDetailsSectionStylerClasses", () => basicAppDetailsSectionStylerClasses),
+  truthy("playSectionClasses", () => playSectionClasses),
+  truthy("quickAccessMenuClasses", () => quickAccessMenuClasses),
+  truthy("ControllerGlyph", () => ControllerGlyph),
 ];
 
 /**
@@ -149,8 +159,9 @@ export const UNVERIFIABLE: Readonly<Record<string, string>> = {
     "an arrow function `@decky/ui` always defines; the lookup it renders " +
     "(`DropdownItemInternal`) is module-private, so the export is truthy either way",
   showModal:
-    "an arrow function `@decky/ui` always defines; the modal lookups it reaches are " +
-    "read when it is called, not when it is imported",
+    "an arrow function `@decky/ui` always defines; the lookup it renders " +
+    "(`showModalRaw`, `dist/components/Modal.js:3`) is module-private, so the export is " +
+    "truthy whether or not that search found anything",
   useQuickAccessVisible:
     "a hook `@decky/ui` always defines; what it reads is a Steam store it reaches " +
     "during render, so an import-time read says nothing about it",

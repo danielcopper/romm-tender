@@ -33,8 +33,9 @@ and how to re-copy it on a bump, is at [`backend/native/README.md`](backend/nati
 
 ## @decky/ui
 
-- **Version:** 4.12.0 (pinned in [`frontend/package.json`](frontend/package.json); the exact resolved version is in
-  `frontend/pnpm-lock.yaml`)
+- **Version:** 4.12.0 — what `frontend/pnpm-lock.yaml` resolves, which is the version actually bundled.
+  [`frontend/package.json`](frontend/package.json) declares the range `^4.11.6`, so it is the lock and not the manifest
+  that fixes which bytes ship
 - **Licence:** LGPL-2.1
 - **Source:** <https://github.com/SteamDeckHomebrew/decky-frontend-lib>
 - **Where the text is:** `LICENSE-@decky-ui.txt`, emitted next to the bundle by the build

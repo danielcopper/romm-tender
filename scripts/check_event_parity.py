@@ -21,7 +21,7 @@ What it guarantees (and what it deliberately does not):
     (``self._emit(some_var, ...)`` or ``addEventListener(name, ...)``) can't be
     matched statically and is skipped — same limitation the callable gate has
     with literal wire names.
-  * Only the bare ``@decky/api`` ``addEventListener(...)`` counts on the
+  * Only the bare ``api/host`` ``addEventListener(...)`` counts on the
     frontend. ``globalThis.addEventListener`` / ``el.addEventListener`` are DOM
     ``CustomEvent`` subscriptions, not backend emits, and are excluded.
 

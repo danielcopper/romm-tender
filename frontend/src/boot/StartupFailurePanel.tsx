@@ -1,9 +1,10 @@
 /**
  * What the panel shows instead of itself when a Steam search came back empty.
  *
- * **It uses no `@decky/ui`.** Every component in that package is a search into
- * Steam's own bundle, and this page exists precisely because such a search
- * missed — a page built from them could be the next thing to render nothing.
+ * **It uses no `@decky/ui`.** Most of that package is searches into Steam's own
+ * bundle — `steamModules.ts` classifies 25 of the 33 members this project imports
+ * as exactly that — and this page exists precisely because such a search missed.
+ * A page built from them could be the next thing to render nothing.
  * Plain elements and inline styles only, so that whatever else is broken, this
  * still draws.
  *

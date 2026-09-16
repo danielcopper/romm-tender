@@ -48,9 +48,10 @@ any set-up code in the importing module runs — there is no point at which the 
 and is made nowhere in this tree today. The file name is the whole of the mechanism: no flag in the bundle, no marker,
 no runtime probe.
 
-`frontend/scripts/check-bundle-shape.mjs` fails the build when either bundle stops being what it is — when the
-standalone one has lost the package, or the coexistence one has gained it. Neither of those is a build error on its own,
-and each fails on a device rather than in CI: the first throws on its first `DFL.` read where no `DFL` exists, the
+`frontend/scripts/check-bundle-shape.mjs` fails when either bundle stops being what it is — when the standalone one has
+lost the package, or the coexistence one has gained it. It is a step of its own, `pnpm -C frontend check:bundle`, run
+after the build by `mise run gate` and by CI; the build itself has no opinion. Neither of those is a build error on its
+own, and each fails on a device rather than in CI: the first throws on its first `DFL.` read where no `DFL` exists, the
 second takes the window down.
 
 ## Steam's React, and why it is a separate file

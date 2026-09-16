@@ -179,13 +179,24 @@ export async function installGlobals(): Promise<GlobalsReport> {
 
   if (!w.SP_JSX) {
     const jsxModule = findModule((m) => (m.jsx && m.jsxs) || (m.jsx && Object.keys(m).length == 1));
+    // The guard is what keeps a MISSED search from reporting as a hit. Building
+    // the stand-in unconditionally leaves `{ jsx: undefined, jsxs: undefined }`,
+    // which is a perfectly truthy object — so the start-up check would find
+    // `SP_JSX` set, mount the panel, and let it die mid-render on
+    // `SP_JSX.jsx is not a function`, which is the exact confusion that check
+    // exists to remove. `SP_REACT` and `SP_REACTDOM` have no such hole: a miss
+    // leaves them unset. Decky has none either — its block reads `jsxModule.jsxs`
+    // bare and throws here.
+    //
     // A module carrying `jsxs` is used as it stands; one without gets `jsx`
     // aliased into `jsxs`'s place. Decky builds the same stand-in, and it has to
     // stay the same one: whichever of the two runs first is the shape the other
     // renders through.
-    w.SP_JSX = jsxModule?.jsxs
-      ? jsxModule
-      : { jsx: jsxModule?.jsx, jsxs: jsxModule?.jsx, Fragment: w.SP_REACT?.Fragment };
+    if (jsxModule) {
+      w.SP_JSX = jsxModule.jsxs
+        ? jsxModule
+        : { jsx: jsxModule.jsx, jsxs: jsxModule.jsx, Fragment: w.SP_REACT?.Fragment };
+    }
   }
 
   return {

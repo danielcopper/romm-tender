@@ -50,10 +50,15 @@ hand, together. The `setup-*` action SHAs themselves stay auto-updated.
 ## Building
 
 ```bash
-pnpm -C frontend build   # Rollup -> dist/index.js (the repository's, not the package's)
+pnpm -C frontend build   # Rollup -> the repository's dist/, not the package's
 ```
 
-The frontend is bundled with Rollup into a single `dist/index.js` file that Decky Loader serves.
+Rollup produces **three** files there, plus `@decky/ui`'s licence text beside them: `dist/globals.js` installs Steam's
+React, and `dist/index.js` and `dist/index-coexistence.js` are the same panel differing in whether `@decky/ui` is
+bundled into it or taken from Decky Loader's own copy. Nothing in this tree loads any of them — the backend serves
+`dist/` and the injector that will fetch from it is [#1900](https://github.com/danielcopper/romm-tender/issues/1900).
+What each file is and why there are two panels:
+[How the panel is built and loaded](../architecture/frontend-bundles.md).
 
 ## Testing
 
@@ -73,7 +78,8 @@ with each test file mapping 1:1 to a source module. Shared mocks live in `tests/
 `decky` module so tests run without Decky Loader.
 
 Frontend component tests run with `mise run test:frontend` (`pnpm -C frontend test`); see
-`.claude/rules/testing-frontend.md` for the `@decky/api` event harness.
+`.claude/rules/testing-frontend.md` for the backend-event harness, and for what that suite cannot see — `api/host` is
+stubbed suite-wide, so no socket is ever opened in it.
 
 ### Property-based tests
 

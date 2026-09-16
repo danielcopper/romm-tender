@@ -4,10 +4,14 @@
  *
  * `dist/index.js` carries `@decky/ui` inside it, so it loads where Decky Loader
  * is not running. `dist/index-coexistence.js` takes the package from Decky's
- * already-loaded copy through the `DFL` global, because bundling a second copy
- * beside a running Decky runs its module sweep a second time in one session and
- * kills the Quick Access menu with `Minified React error #31` — measured four
- * times on the device, taking the Big Picture window with it each time.
+ * already-loaded copy through the `DFL` global, because importing the package
+ * re-executes every module in Steam's live webpack registry — and beside a
+ * RENDERING Decky that is fatal: a module re-executed underneath something
+ * holding its exports leaves an empty object where a component was, and the
+ * Quick Access menu dies with `Minified React error #31`, taking the Big
+ * Picture window with it. Measured on the device, where the three passes
+ * without a rendering consumer all survived; the count of sweeps is not the
+ * condition.
  *
  * **Neither failure is a build error, which is why this exists.** A standalone
  * bundle that lost the package has `DFL.` reads and nothing to answer them: it
@@ -24,21 +28,25 @@
  * this check is right for whatever they do next.
  */
 
-import { readFileSync, statSync } from "node:fs";
+import { globSync, readFileSync, statSync } from "node:fs";
 
 const DIST = new URL("../../dist/", import.meta.url);
 
 /**
  * Strings that exist only inside `@decky/ui`'s own implementation.
  *
- * Six are its module-cache machinery and its logger, four are search predicates
+ * Five are its module-cache machinery and its logger, four are search predicates
  * its components carry, and **none of them appears anywhere under `src/`** —
  * which is the property that makes them evidence rather than decoration. A
  * string this project also writes would be found in both bundles and prove
- * nothing about either; one candidate was dropped for exactly that reason
- * (`pane.tsx:262` quotes `@decky/ui`'s DialogButton predicate in a comment,
- * which survives into no bundle only because `removeComments` is on — evidence
- * resting on a compiler option is not evidence).
+ * nothing about either.
+ *
+ * That property is asserted below rather than claimed, because it has now failed
+ * twice. `pane.tsx:262` quotes `@decky/ui`'s DialogButton predicate in a comment,
+ * and `steamGlobals.ts` names `initModuleCache` in its own; both stay out of the
+ * artefact only because `removeComments` is on, and evidence resting on a
+ * compiler option is not evidence. Both were dropped from this list — the second
+ * one after the sentence above had already been written and was already false.
  */
 const DECKY_UI_IMPLEMENTATION = [
   "Webpack Module Init",
@@ -46,7 +54,6 @@ const DECKY_UI_IMPLEMENTATION = [
   "Ignoring require error for module",
   "background: #16a085; color: black;",
   "%c @decky/ui %c",
-  "initModuleCache",
   "shift-children-below",
   "Either closeModal or onCancel should be passed to GenericDialog",
   "bUpdateDisabled",
@@ -72,6 +79,36 @@ function read(name) {
 const findings = [];
 const report = [];
 
+// The probe list's own premise, asserted rather than trusted.
+//
+// Each string is evidence only while this project writes none of it: one we also
+// write would be in BOTH bundles, so the coexistence bundle's "0 of N" would be a
+// finding about our own source rather than about `@decky/ui`. Comments count —
+// they are what caught this twice — because a probe that survives only through
+// `removeComments` rests on a compiler option instead of on a fact.
+{
+  const sources = globSync("src/**/*.{ts,tsx}", { cwd: new URL("..", import.meta.url).pathname });
+  if (sources.length === 0) {
+    findings.push("found no sources under src/ to check the probe strings against — the sweep proves nothing empty.");
+  }
+  const contaminated = new Map();
+  for (const relative of sources) {
+    const text = readFileSync(new URL(`../src/${relative.split("src/").pop() ?? relative}`, import.meta.url), "utf8");
+    for (const needle of DECKY_UI_IMPLEMENTATION) {
+      if (text.includes(needle)) contaminated.set(needle, relative);
+    }
+  }
+  report.push(
+    `probe strings: ${DECKY_UI_IMPLEMENTATION.length}, none written under src/ (${sources.length} files swept)`,
+  );
+  for (const [needle, where] of contaminated) {
+    findings.push(
+      `${JSON.stringify(needle)} is a probe string AND is written at ${where}. It would then be found in both ` +
+        `bundles, so it is evidence about nothing. Drop it from the list and pick one @decky/ui alone writes.`,
+    );
+  }
+}
+
 // The React bootstrap. It imports `@decky/ui/dist/webpack` and nothing else from
 // the package, so it must carry the sweep and none of the components — and it
 // must never reach for `DFL`, since the whole point of it is the case where
@@ -79,8 +116,12 @@ const report = [];
 {
   const source = read("globals.js");
   const dfl = count(source, "DFL.");
-  report.push(`globals.js: ${source.length} B, ${count(source, "initModuleCache")} initModuleCache, ${dfl} DFL.`);
-  if (!source.includes("initModuleCache")) {
+  // Asked by a string from INSIDE the sweep's own loop rather than by its name:
+  // `initModuleCache` is a word this repository also writes, and a probe our own
+  // sources contain proves nothing about what reached the bundle.
+  const sweep = "Ignoring require error for module";
+  report.push(`globals.js: ${source.length} B, sweep ${source.includes(sweep) ? "present" : "ABSENT"}, ${dfl} DFL.`);
+  if (!source.includes(sweep)) {
     findings.push("globals.js does not contain @decky/ui's module sweep — every search in it would answer undefined.");
   }
   if (dfl > 0) {
@@ -123,7 +164,7 @@ const report = [];
     findings.push(
       `index-coexistence.js carries ${hits.length} of @decky/ui's implementation strings, so a second copy of the ` +
         `package is bundled into it: ${hits.map((needle) => JSON.stringify(needle)).join(", ")}. Loaded beside a ` +
-        `running Decky this sweeps Steam's module registry a second time and kills the Quick Access menu.`,
+        `RENDERING Decky this re-executes the modules it is rendering from and kills the Quick Access menu.`,
     );
   }
   if (dfl === 0) {

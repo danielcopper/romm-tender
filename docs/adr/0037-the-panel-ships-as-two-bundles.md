@@ -78,7 +78,8 @@ stand-in against each other.
 
 `@decky/ui` declares `"sideEffects": false` and then sweeps Steam's whole module registry at import — a false statement
 to any bundler. `@decky/rollup` answered this for us and has been removed, so the answer was made again. Three builds of
-the standalone bundle, rollup 4.62.2 and `@decky/ui` 4.12.0:
+the standalone bundle, taken at `2c7847de` against rollup 4.62.2 and `@decky/ui` 4.12.0 — the bundle has grown since, so
+what these three numbers compare is each other:
 
 | Configuration                                  | `initModuleCache` | Size      |
 | ---------------------------------------------- | ----------------- | --------- |
@@ -89,15 +90,20 @@ the standalone bundle, rollup 4.62.2 and `@decky/ui` 4.12.0:
 The sweep survives all three, because it writes the module-level map `findModule` reads and Rollup cannot treat such a
 call as removable. Forcing the flag bought no behavioural difference and 10,795 bytes of the package's unused `EResult`
 / `EUIMode` enum tables. So the setting is Rollup's default, and what guards the sweep is
-`frontend/scripts/check-bundle-shape.mjs`: it fails the build when the standalone bundle does not carry the package or
-the coexistence bundle does. That holds across a Rollup upgrade and a `@decky/ui` bump; a treeshake setting chosen on
-one measurement would not.
+`frontend/scripts/check-bundle-shape.mjs`: a step of its own (`pnpm check:bundle`, run after the build by the gate and
+by CI) that fails when the standalone bundle does not carry the package or the coexistence bundle does. That holds
+across a Rollup upgrade and a `@decky/ui` bump; a treeshake setting chosen on one measurement would not.
 
 **5. Bundling makes this project a distributor, and the notice travels with the bundle.**
 
-`@decky/ui` is LGPL-2.1. The standalone build emits its licence text verbatim as `dist/LICENSE-@decky-ui.txt`;
-`THIRD-PARTY-NOTICES.md` names the package, its version and the replacement right. The coexistence bundle distributes
-none of it, so nothing hangs off that build.
+`@decky/ui` is LGPL-2.1, and **two of the three builds ship its code**: `dist/index.js` carries the components and
+`dist/globals.js` carries its module-cache half. Only the coexistence bundle carries none of it, taking the package from
+Decky's own copy instead.
+
+The standalone build emits the licence text verbatim as `dist/LICENSE-@decky-ui.txt`, and one copy covers the directory
+because all three builds write into the same `dist/`. That is an arrangement rather than a licensing judgement, and it
+is the premise a later change would break by serving `globals.js` without the standalone bundle beside it.
+`THIRD-PARTY-NOTICES.md` names the package, its version and the replacement right.
 
 ## Consequences
 

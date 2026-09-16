@@ -101,7 +101,7 @@ FOLDER_ENTRIES = {
     ),
     "frontend/src/test-utils/**": (
         "shared test harnesses, reached only from the test run — by the tests and by "
-        "frontend/src/test-setup.ts, which wires the @decky/api mock in"
+        "frontend/src/test-setup.ts, which wires the api/host mock in"
     ),
 }
 

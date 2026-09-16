@@ -54,10 +54,13 @@ const OUT_DIR = "../dist";
 // not kept — a setting that protects nothing still has to be maintained and read.
 //
 // What guards the sweep instead is an assertion on the ARTEFACT:
-// `scripts/check_bundle_shape.py` fails the build when the standalone bundle
-// does not contain it, or when the coexistence bundle does. That holds across a
-// Rollup upgrade and a `@decky/ui` bump, neither of which a treeshake setting
-// here would survive being wrong about.
+// `frontend/scripts/check-bundle-shape.mjs` fails when the standalone bundle
+// does not contain it, or when the coexistence bundle does. It is a step of its
+// own (`pnpm check:bundle`, run after `pnpm build` by the gate and by CI) rather
+// than part of this build — `pnpm build` is `rm -rf ../dist && rollup -c` and
+// this file has no say in what runs next. The assertion holds across a Rollup
+// upgrade and a `@decky/ui` bump, neither of which a treeshake setting here
+// would survive being wrong about.
 
 /**
  * Ship `@decky/ui`'s licence beside the bundle that carries its code.
@@ -67,11 +70,21 @@ const OUT_DIR = "../dist";
  * shipped not one byte of it — the package was mapped onto Decky's global — so
  * nothing was owed and nothing was carried.
  *
- * It hangs off the standalone build alone, deliberately: the coexistence bundle
- * takes the package from Decky's own copy and distributes none of it, so a
- * notice there would claim a distribution that is not happening. `THIRD-PARTY-
- * NOTICES.md` at the repository root names the version and says what the reader
- * may do with it; this is the text itself, verbatim and untouched.
+ * **Two of the three builds ship the package's code**, not one: `dist/index.js`
+ * carries the components, and `dist/globals.js` carries its module-cache half.
+ * The coexistence bundle carries none of it — it takes the package from Decky's
+ * own copy — so it is the one build a notice would be a false claim on.
+ *
+ * The emission hangs off the standalone build for a reason of arrangement
+ * rather than of licensing: all three builds write into one `dist/`, so one
+ * copy covers the directory whichever of them produced it. Hanging it off a
+ * build that ships none of the code would be the mistake; hanging it off one of
+ * the two that do is enough while they share an output directory, and that
+ * premise is what a later change serving `globals.js` on its own would break.
+ *
+ * `THIRD-PARTY-NOTICES.md` at the repository root names the version and says
+ * what the reader may do with it; this is the text itself, verbatim and
+ * untouched.
  */
 const shipDeckyUiLicence = () => ({
   name: "ship-decky-ui-licence",
@@ -138,12 +151,17 @@ export default [
   // COEXISTENCE — `@decky/ui` taken from Decky's already-loaded copy through the
   // `DFL` global, which is what the whole build did before #1899.
   //
-  // It is not a legacy form kept for politeness. Bundling a second copy beside a
-  // running Decky runs `initModuleCache()` a second time in one session, over a
-  // registry Decky's own earlier sweep has already been through, and the Quick
-  // Access menu dies with `Minified React error #31` — measured four times on
-  // the device, taking the Big Picture window with it each time. This build
-  // carries no `initModuleCache` call at all.
+  // It is not a legacy form kept for politeness. Importing `@decky/ui` re-runs
+  // `initModuleCache()`, which re-executes every module in Steam's live webpack
+  // registry — and what makes that fatal is a consumer already RENDERING from
+  // those modules, not the number of sweeps. Measured on the device: a second
+  // sweep on the desktop client survives, a third with Big Picture open and the
+  // Quick Access view mounted survives, and starting Decky into that same
+  // session survives; Big Picture plus Quick Access plus Decky already
+  // rendering crashes with `Minified React error #31`, because a module
+  // re-executed underneath something holding its exports leaves an empty object
+  // where a component was. Steam's own interface is not such a consumer;
+  // Decky's is. This build carries no `initModuleCache` call at all.
   //
   // WHICH of the two is loaded is the injector's decision (#1900) and is not made
   // here; what is made here is the pair, and two file names to tell them apart.

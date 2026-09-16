@@ -125,8 +125,8 @@ The three files `pnpm -C frontend build` produces, and the names to use for them
 - **Standalone bundle** — `dist/index.js`. The panel with `@decky/ui` bundled inside it. For a machine where Decky
   Loader is not running.
 - **Coexistence bundle** — `dist/index-coexistence.js`. The same panel, taking `@decky/ui` from the copy Decky Loader
-  has already loaded, through the `DFL` global. For a machine where Decky is running: a second bundled copy sweeps
-  Steam's module registry a second time in one session and takes the Big Picture window down.
+  has already loaded, through the `DFL` global. For a machine where Decky is running: a second bundled copy re-executes
+  Steam's module registry underneath a Decky that is already rendering from it, and takes the Big Picture window down.
 - **React bootstrap** — `dist/globals.js`. Installs `SP_REACT`, `SP_REACTDOM` and `SP_JSX`, which Steam does not define
   and Decky's loader otherwise would. Its own file because `@decky/ui`'s component half reads React internals while its
   modules evaluate, so it cannot be in the import graph of the module that creates the globals.

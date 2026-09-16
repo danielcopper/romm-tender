@@ -643,9 +643,9 @@ Format: **invariant** — tier — enforced by.
   exist only in the package's implementation, plus the `DFL.` read count, in both directions; the licence file the
   standalone build owes is asserted there too). Both failures are silent in CI and land on a device: a standalone bundle
   that lost the package throws on its first `DFL.` read where no `DFL` exists, and a coexistence bundle that gained it
-  sweeps Steam's module registry a second time and takes the Big Picture window down. **The check sees the artefacts and
-  not the decision**: which of the two the injector loads (#1900) is made nowhere in this tree, and nothing here would
-  notice the wrong one being served
+  re-executes the modules a rendering Decky is rendering FROM, and takes the Big Picture window down. **The check sees
+  the artefacts and not the decision**: which of the two the injector loads (#1900) is made nowhere in this tree, and
+  nothing here would notice the wrong one being served
 - **Tender's three React globals are spelled exactly the way Decky Loader spells them** — test —
   `frontend/src/boot/steamGlobals.test.ts`, which reads `steamGlobals.ts` and the pinned `decky-globals-block.txt` as
   TEXT and compares the four search predicates, which global each answer is assigned to, and the JSX stand-in's keys and

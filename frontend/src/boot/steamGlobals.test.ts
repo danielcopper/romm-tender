@@ -38,8 +38,27 @@ vi.mock("@decky/ui/dist/webpack", () => ({ findModule: vi.fn() }));
 // the same reason `test-utils/componentSources.ts` resolves its root this way.
 const BOOT_DIR = `${process.cwd()}/src/boot`;
 
-const PINNED = readFileSync(`${BOOT_DIR}/decky-globals-block.txt`, "utf8");
-const OURS = readFileSync(`${BOOT_DIR}/steamGlobals.ts`, "utf8");
+/**
+ * A source file with its comments removed, so the lock reads what the compiler
+ * reads.
+ *
+ * Without this the extractors below search prose: a comment that spells out the
+ * shape it is describing — and the one above the JSX stand-in does exactly that,
+ * because the hole it warns about is worth naming — is found before the code and
+ * compared as if it were the code. That is not a hypothetical; it is what this
+ * helper was added for.
+ *
+ * The rule is narrow and stated because a general JavaScript comment stripper is
+ * not: block comments, plus lines whose first non-space characters are `//`.
+ * Both files satisfy it — every `//` comment in either starts its own line, and
+ * the only `//` that does not (`https://` in the pinned file's provenance
+ * header) is outside the markers.
+ */
+const withoutComments = (source: string): string =>
+  source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+
+const PINNED = withoutComments(readFileSync(`${BOOT_DIR}/decky-globals-block.txt`, "utf8"));
+const OURS = withoutComments(readFileSync(`${BOOT_DIR}/steamGlobals.ts`, "utf8"));
 
 const BEGIN = "--- BEGIN decky-loader frontend/src/index.ts (globals block) ---";
 const END = "--- END decky-loader frontend/src/index.ts (globals block) ---";
@@ -164,6 +183,7 @@ describe("installing the globals", () => {
   /** Everything this module reads off or writes to the window. */
   const TOUCHED = ["SP_REACT", "SP_REACTDOM", "SP_JSX", "DFL", "App", "__TENDER_INSTALL_GLOBALS"] as const;
   const win = () => window as unknown as Record<string, unknown>;
+  const read = (name: string) => win()[name];
 
   const STEAM_IS_UP = { App: { BFinishedInitBeforeLogin: () => true } };
   const REACT = { Component: 1, PureComponent: 1, useLayoutEffect: 1, Fragment: "the-fragment", version: "19.1.1" };
@@ -234,6 +254,20 @@ describe("installing the globals", () => {
     // first is the shape the other renders through.
     await install({ ...STEAM_IS_UP }, [REACT, { createPortal: 1, createRoot: 1 }, { jsx: "the-only-one" }]);
     expect(win().SP_JSX).toEqual({ jsx: "the-only-one", jsxs: "the-only-one", Fragment: "the-fragment" });
+  });
+
+  it("leaves SP_JSX unset when the search finds nothing, rather than a hollow stand-in", async () => {
+    // A stand-in built from a module that was never found is
+    // `{ jsx: undefined, jsxs: undefined }` — a perfectly truthy object. The
+    // start-up check would report SP_JSX found, the panel would mount, and it
+    // would die mid-render on `SP_JSX.jsx is not a function`: the exact
+    // confusion that check exists to remove, for that one name. The other two
+    // globals have no such hole, and neither does Decky, whose block reads
+    // `jsxModule.jsxs` bare and throws here.
+    const report = await install({ ...STEAM_IS_UP }, [REACT, { createPortal: 1, createRoot: 1 }]);
+
+    expect(read("SP_JSX")).toBeUndefined();
+    expect(report.installed).toEqual({ SP_REACT: true, SP_REACTDOM: true, SP_JSX: false });
   });
 
   it("installs anyway once the wait for Steam runs out, and says the wait ran out", async () => {
