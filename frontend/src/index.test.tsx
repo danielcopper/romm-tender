@@ -11,7 +11,7 @@
  * post-catch side effect (the surfaced error message) is observable.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { toaster } from "@decky/api";
@@ -26,6 +26,8 @@ import {
   releasePruneConflictLease,
   waitForPruneRelease,
 } from "./api/backend";
+import { registerGameDetailPatch } from "./bigpicture/patches/gameDetailPatch";
+import { registerLaunchInterceptor } from "./utils/launchInterceptor";
 import { getSettingsResetState, setSettingsResetState } from "./utils/settingsResetStore";
 import { getDownloadState, setDownloads } from "./utils/downloadStore";
 import { getSyncProgress, setSyncProgress } from "./utils/syncProgress";
@@ -43,6 +45,22 @@ import type {
   SyncStaleData,
   RomMetadata,
 } from "./types";
+
+// The start-up check gates everything the factory does, and under this suite it
+// would answer NO for almost every search: the global `@decky/ui` stub in
+// `test-setup.ts` hands back `undefined` for the class maps, the tabbed page, the
+// scroll panel and the module finder, exactly as a Steam that had moved them
+// would. Left unmocked, every test below would be handed the fallback page.
+//
+// So the answer is supplied here, and the one test that wants the other answer
+// sets it. It is a stand-in for the CHECK, never for the searches — what the
+// check itself reads is pinned in `boot/steamModules.test.ts`, where nothing is
+// stubbed away.
+let startupAnswer: { ok: boolean; missing: string[]; checked: number } = { ok: true, missing: [], checked: 27 };
+vi.mock("./boot/steamModules", async () => {
+  const actual = await vi.importActual<typeof import("./boot/steamModules")>("./boot/steamModules");
+  return { ...actual, checkSteamModules: () => startupAnswer };
+});
 
 vi.mock("./bigpicture/patches/gameDetailPatch", () => ({
   registerGameDetailPatch: vi.fn(),
@@ -180,6 +198,61 @@ beforeEach(() => {
   // appStore, so default them to no-ops here.
   vi.stubGlobal("SteamClient", { Apps: {} });
   vi.stubGlobal("appStore", { GetAppOverviewByAppID: () => null, allApps: [] });
+});
+
+describe("index.tsx — what the factory does when a Steam search found nothing", () => {
+  const failing = { ok: false, missing: ["Focusable", "PanelSection"], checked: 27 };
+  // The refusal is logged on purpose, and the suite fails a test that emits an
+  // unexpected `console.error` — so the spy both permits it and makes the line
+  // an assertion rather than noise nobody reads.
+  let consoleError: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    startupAnswer = failing;
+    consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleError.mockRestore();
+    startupAnswer = { ok: true, missing: [], checked: 27 };
+  });
+
+  it("mounts the fallback page instead of the panel, and names what is missing", () => {
+    const plugin = pluginFactory();
+    render(createElement("div", null, plugin.content));
+
+    expect(screen.getByText(/could not read Steam/i)).toBeInTheDocument();
+    expect(screen.getByText(/Focusable, PanelSection/)).toBeInTheDocument();
+  });
+
+  it("puts the same names in the log, where a user with no panel can still reach them", () => {
+    pluginFactory();
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("Missing: Focusable, PanelSection"));
+  });
+
+  it("registers nothing at all — not the patches, not the listeners, not the relocation", () => {
+    // A half-working panel acts on what it cannot see. Nothing below the check
+    // is written to run without the components it was written against, so the
+    // refusal has to be total rather than a degraded panel: the pages whose
+    // lookups happened to resolve would still reach the ones that did not.
+    vi.mocked(registerGameDetailPatch).mockClear();
+    vi.mocked(registerLaunchInterceptor).mockClear();
+    relocateShortcutsToLauncher.mockClear();
+
+    // Cast locally rather than widening `pluginFactory`: this is the one exit
+    // where the teardown is absent, and making it optional everywhere would say
+    // the other seventy-nine call sites have to guard for something they do not.
+    const plugin = pluginFactory() as unknown as { onDismount?: () => void };
+
+    expect(registerGameDetailPatch).not.toHaveBeenCalled();
+    expect(registerLaunchInterceptor).not.toHaveBeenCalled();
+    expect(relocateShortcutsToLauncher).not.toHaveBeenCalled();
+    expect(deckyEventListenerCount("sync_progress")).toBe(0);
+    expect(deckyEventListenerCount("download_complete")).toBe(0);
+    // And nothing to tear down: a factory that registered nothing must not hand
+    // back a teardown that would remove listeners the real panel installed.
+    expect(plugin.onDismount).toBeUndefined();
+  });
 });
 
 describe("index.tsx — launcher relocation at plugin load", () => {

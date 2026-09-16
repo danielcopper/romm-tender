@@ -3,6 +3,8 @@ import { showToast, PLUGIN_NAME } from "./utils/toast";
 import { useState, useRef, useEffect, FC, type ReactNode } from "react";
 import { Focusable } from "@decky/ui";
 import { FaGamepad } from "react-icons/fa";
+import { StartupFailurePanel } from "./boot/StartupFailurePanel";
+import { checkSteamModules, describeFailure } from "./boot/steamModules";
 import { MainPage } from "./bigpicture/MainPage";
 import { SettingsPage } from "./bigpicture/SettingsPage";
 import { LibraryPage } from "./bigpicture/LibraryPage";
@@ -352,6 +354,30 @@ function registerAppIds(map: Record<string, number[]>): void {
 }
 
 export default definePlugin(() => {
+  // Before anything else runs, and before anything mounts: did every search into
+  // Steam's own interface find what it was looking for?
+  //
+  // Almost everything the panel renders is a search predicate over Steam's
+  // minified bundle, and a predicate Steam has moved past returns `undefined`
+  // with nothing thrown. The panel then dies mid-tree or, worse, renders a hole
+  // and says nothing — and an empty panel looks EXACTLY like a backend that is
+  // not running, which is a completely different fault with a completely
+  // different fix.
+  //
+  // So nothing mounts. Not a degraded panel, not the pages whose lookups did
+  // resolve: a half-working panel acts on what it cannot see, and nothing below
+  // is written to run without the components it was written against.
+  const startup = checkSteamModules();
+  if (!startup.ok) {
+    console.error(`[${PLUGIN_NAME}] ${describeFailure(startup)} Missing: ${startup.missing.join(", ")}`);
+    return {
+      name: PLUGIN_NAME,
+      icon: <FaGamepad />,
+      content: <StartupFailurePanel report={startup} />,
+      alwaysRender: true,
+    };
+  }
+
   mountPruneLeasePlugin();
   const pluginAdmission = capturePruneLeaseAdmission();
   registerGameDetailPatch();
