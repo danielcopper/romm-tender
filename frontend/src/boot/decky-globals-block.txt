@@ -1,0 +1,73 @@
+Decky Loader's globals block, pinned verbatim.
+
+WHY THIS FILE EXISTS
+--------------------
+Decky's loader skips its ENTIRE globals block when `window.SP_REACT` is already
+set. So when Tender installs the three globals first and Decky starts after it,
+Decky's whole frontend renders through OUR React, OUR ReactDOM and OUR JSX
+shape. A deviation here does not break Tender's panel — it breaks DECKY's user
+interface, on a machine whose owner installed Decky for other plugins.
+
+That makes "our shape equals Decky's shape" a cross-project invariant with no
+diff that shows both halves. This file is the other half, checked out of
+upstream and held still; `steamGlobals.ts` beside it is ours, and
+`steamGlobals.test.ts` holds the two predicates against each other.
+
+PROVENANCE
+----------
+repo    https://github.com/SteamDeckHomebrew/decky-loader
+path    frontend/src/index.ts
+commit  3e4302e2e58f39d6289d95a64edbb931f3831668  (2026-07-25, the last commit
+        that touched this file)
+read at f75dc1df134daf53b1ec02c351b12313c1696a7e  (main, 2026-09-14)
+fetched 2026-09-16
+
+REFRESHING IT
+-------------
+Re-fetch the file at the commit you are pinning, replace everything between the
+two markers with the current block, and update all four lines above. Do NOT edit
+the copy to make a failing test pass — a failing test here means our shape and
+Decky's have parted, and which of the two moved is the question to answer first.
+
+--- BEGIN decky-loader frontend/src/index.ts (globals block) ---
+  if (!window.SP_REACT) {
+    console.debug('[Decky:Boot] Setting up Webpack & React globals...');
+    // deliberate partial import
+    const DFLWebpack = await import('@decky/ui/dist/webpack');
+    window.SP_REACT = DFLWebpack.findModule((m) => m.Component && m.PureComponent && m.useLayoutEffect);
+    window.SP_REACTDOM =
+      DFLWebpack.findModule((m) => m.createPortal && m.createRoot) ||
+      DFLWebpack.findModule((m) => m.createPortal && m.__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE);
+
+    console.debug('[Decky:Boot] Setting up JSX internals...');
+    const jsxModule = DFLWebpack.findModule((m) => (m.jsx && m.jsxs) || (m.jsx && Object.keys(m).length == 1));
+    if (jsxModule.jsxs) {
+      window.SP_JSX = jsxModule;
+    } else {
+      window.SP_JSX = {
+        jsx: jsxModule.jsx,
+        jsxs: jsxModule.jsx,
+        Fragment: window.SP_REACT.Fragment,
+      };
+    }
+  }
+--- END decky-loader frontend/src/index.ts (globals block) ---
+
+THE WAIT ABOVE IT, WHICH IS NOT IN THE MARKERS
+----------------------------------------------
+Decky waits for Steam's own init before it reaches the block:
+
+    const isSteamAppInitialized = () => {
+      const app = window.App as unknown as SteamAppInitialization | undefined;
+      return app?.BFinishedInitBeforeLogin?.() ?? app?.BFinishedInitStageOne?.() ?? false;
+    };
+    while (!isSteamAppInitialized()) {
+      await new Promise((r) => setTimeout(r, 0));
+    }
+
+It is outside the markers because it is not part of the SHAPE — waiting longer
+or shorter cannot hand Decky a different React. It is reproduced here anyway
+because skipping it is how a finder silently answers `undefined`: the module
+cache is read once, and reading it before Steam has finished registering its
+modules means the cache never holds them. `steamGlobals.ts` waits the same way,
+with a deadline the loader does not have.
