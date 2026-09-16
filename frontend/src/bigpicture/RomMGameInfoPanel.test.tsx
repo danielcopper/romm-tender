@@ -24,7 +24,7 @@ import {
   uninstallDomEventListenerSpy,
   domListenerCount,
 } from "../test-utils/dom-event-listener-spy";
-import { emitDeckyEvent, deckyEventListenerCount } from "../test-utils/decky-api-mock";
+import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
 import { useVersionError } from "./VersionErrorCard";
 import {
   setRommConnectionState,
@@ -693,12 +693,12 @@ describe("RomMGameInfoPanel", () => {
     // download_complete is a backend event (the `api/host` bus), the install
     // counterpart to romm_rom_uninstalled — the fix for #1340.
     it("registers a download_complete listener on mount and removes it on unmount", async () => {
-      const before = deckyEventListenerCount("download_complete");
+      const before = hostEventListenerCount("download_complete");
       const { unmount } = render(<RomMGameInfoPanel appId={testAppId} />);
       await flushAsync();
-      expect(deckyEventListenerCount("download_complete")).toBe(before + 1);
+      expect(hostEventListenerCount("download_complete")).toBe(before + 1);
       unmount();
-      expect(deckyEventListenerCount("download_complete")).toBe(before);
+      expect(hostEventListenerCount("download_complete")).toBe(before);
     });
 
     it("download_complete: matching rom_id → ROM File section appears without a re-mount (#1340)", async () => {
@@ -726,7 +726,7 @@ describe("RomMGameInfoPanel", () => {
       // Download finishes for this rom → installed flips true + installedRom
       // populates → section (with the local path) appears live.
       await act(async () => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", {
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", {
           rom_id: 100,
           rom_name: "Test",
           platform_name: "Super Nintendo",
@@ -821,7 +821,7 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
       expect(queryByText("ROM File")).toBeNull();
       await act(async () => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", {
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", {
           rom_id: 999,
           rom_name: "Other",
           platform_name: "Super Nintendo",

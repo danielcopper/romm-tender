@@ -1,5 +1,5 @@
 /**
- * DiscSelector tests — driven through the `emitDeckyEvent` event-bus harness.
+ * DiscSelector tests — driven through the `emitHostEvent` event-bus harness.
  *
  * The component owns a custom compact trigger (`DialogButton`) and opens the
  * disc list via `showContextMenu`. This file locally re-mocks `@decky/ui` to
@@ -13,7 +13,7 @@ import { render, waitFor, act, fireEvent, within } from "@testing-library/react"
 import { createElement, type ReactNode } from "react";
 import { toaster } from "../api/host";
 import { DiscSelector } from "./DiscSelector";
-import { emitDeckyEvent, deckyEventListenerCount } from "../test-utils/decky-api-mock";
+import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
 import * as backend from "../api/backend";
 import type { CachedGameDetail, DiscSelection } from "../api/backend";
 import type { DownloadCompleteEvent } from "../types";
@@ -308,7 +308,7 @@ describe("DiscSelector — event-driven re-fetch + cleanup", () => {
     render(<DiscSelector appId={100} />);
 
     await waitFor(() => {
-      expect(deckyEventListenerCount("download_complete")).toBe(1);
+      expect(hostEventListenerCount("download_complete")).toBe(1);
     });
   });
 
@@ -330,7 +330,7 @@ describe("DiscSelector — event-driven re-fetch + cleanup", () => {
         app_id: 100,
         launch_options: "cmd",
       };
-      emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", event);
+      emitHostEvent<[DownloadCompleteEvent]>("download_complete", event);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -347,7 +347,7 @@ describe("DiscSelector — event-driven re-fetch + cleanup", () => {
     await waitFor(() => expect(vi.mocked(backend.getDiscSelection)).toHaveBeenCalledTimes(1));
 
     await act(async () => {
-      emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", {
+      emitHostEvent<[DownloadCompleteEvent]>("download_complete", {
         rom_id: 999,
         rom_name: "Other",
         platform_name: "PSX",
@@ -381,9 +381,9 @@ describe("DiscSelector — event-driven re-fetch + cleanup", () => {
     vi.mocked(backend.getDiscSelection).mockResolvedValue({ multi_disc: false });
 
     const { unmount } = render(<DiscSelector appId={100} />);
-    await waitFor(() => expect(deckyEventListenerCount("download_complete")).toBe(1));
+    await waitFor(() => expect(hostEventListenerCount("download_complete")).toBe(1));
 
     unmount();
-    expect(deckyEventListenerCount("download_complete")).toBe(0);
+    expect(hostEventListenerCount("download_complete")).toBe(0);
   });
 });

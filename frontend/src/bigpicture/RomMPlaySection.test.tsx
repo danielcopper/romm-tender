@@ -23,7 +23,7 @@ import {
   uninstallDomEventListenerSpy,
   domListenerCount,
 } from "../test-utils/dom-event-listener-spy";
-import { emitDeckyEvent, deckyEventListenerCount } from "../test-utils/decky-api-mock";
+import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
 import type { DownloadCompleteEvent, SaveStatus } from "../types";
 import { stubAppStore } from "../test-utils/steamStubs";
 import * as cachedStore from "../utils/cachedGameDetailStore";
@@ -4547,7 +4547,7 @@ describe("RomMPlaySection", () => {
         fs_size_bytes: 123456,
       });
       await act(async () => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(1395));
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(1395));
         await Promise.resolve();
       });
       await flushAsync();
@@ -4583,7 +4583,7 @@ describe("RomMPlaySection", () => {
       // Event for another ROM → the rom_id guard no-ops; no cache re-read.
       vi.mocked(cachedStore.getCachedGameDetail).mockClear();
       await act(async () => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999999));
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999999));
         await Promise.resolve();
       });
       await flushAsync();
@@ -4598,15 +4598,15 @@ describe("RomMPlaySection", () => {
       // above the pre-render baseline on mount and returns exactly to it on
       // unmount — a leaked section listener would leave the count elevated.
       const uninstallBefore = domListenerCount("romm_rom_uninstalled");
-      const downloadBefore = deckyEventListenerCount("download_complete");
+      const downloadBefore = hostEventListenerCount("download_complete");
 
       const { unmount } = render(<RomMPlaySection appId={testAppId} />);
       await flushAsync();
-      expect(deckyEventListenerCount("download_complete")).toBeGreaterThan(downloadBefore);
+      expect(hostEventListenerCount("download_complete")).toBeGreaterThan(downloadBefore);
       expect(domListenerCount("romm_rom_uninstalled")).toBeGreaterThan(uninstallBefore);
 
       unmount();
-      expect(deckyEventListenerCount("download_complete")).toBe(downloadBefore);
+      expect(hostEventListenerCount("download_complete")).toBe(downloadBefore);
       expect(domListenerCount("romm_rom_uninstalled")).toBe(uninstallBefore);
     });
   });

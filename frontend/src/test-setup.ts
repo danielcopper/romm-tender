@@ -4,7 +4,7 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
-import { resetDeckyEventBus } from "./test-utils/decky-api-mock";
+import { resetHostEventBus } from "./test-utils/host-event-bus";
 
 // A React `act(...)` warning is a defect, but Vitest's default reporter prints no
 // console output for a *passing* test — so a suite that emits stays green, and any
@@ -52,7 +52,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  resetDeckyEventBus();
+  resetHostEventBus();
 
   // Drained before the throw so one emitting test cannot fail its successors.
   // Checked after cleanup(), so an unmount-time warning counts too.
@@ -97,8 +97,8 @@ vi.stubGlobal("collectionStore", { userCollections: [] });
 // vi.fn that resolves to undefined by default; tests opt into specific behavior
 // via vi.mocked(<callable>).mockResolvedValue(...). addEventListener /
 // removeEventListener route through the in-memory event bus in
-// frontend/src/test-utils/decky-api-mock.ts so tests can drive backend events
-// via emitDeckyEvent(). Async factory + dynamic import is required because
+// frontend/src/test-utils/host-event-bus.ts so tests can drive backend events
+// via emitHostEvent(). Async factory + dynamic import is required because
 // vi.mock factories are hoisted above top-level imports.
 //
 // Stubbing the module means NO SOCKET IS EVER OPENED in this suite, and no line
@@ -106,7 +106,7 @@ vi.stubGlobal("collectionStore", { userCollections: [] });
 // reconnection and the outbox is covered by that module's own tests, against an
 // injected socket, and is invisible to every test that goes through here.
 vi.mock("./api/host", async () => {
-  const bus = await import("./test-utils/decky-api-mock");
+  const bus = await import("./test-utils/host-event-bus");
   return {
     callable: <T>(_name: string) => vi.fn().mockResolvedValue(undefined) as unknown as T,
     toaster: { toast: vi.fn() },

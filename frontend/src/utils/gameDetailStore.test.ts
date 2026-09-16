@@ -17,7 +17,7 @@ import {
   uninstallDomEventListenerSpy,
   domListenerCount,
 } from "../test-utils/dom-event-listener-spy";
-import { deckyEventListenerCount, emitDeckyEvent } from "../test-utils/decky-api-mock";
+import { hostEventListenerCount, emitHostEvent } from "../test-utils/host-event-bus";
 import type { CachedGameDetail } from "../api/backend";
 import type { CoreInfo, DownloadCompleteEvent, SaveStatus } from "../types";
 
@@ -302,21 +302,21 @@ describe("gameDetailStore", () => {
     it("attaches the entry's listeners on the first subscribe and detaches them on the last unsubscribe", async () => {
       const dataChangedBefore = domListenerCount("romm_data_changed");
       const uninstalledBefore = domListenerCount("romm_rom_uninstalled");
-      const downloadBefore = deckyEventListenerCount("download_complete");
+      const downloadBefore = hostEventListenerCount("download_complete");
 
       const first = subscribe(nextAppId);
       const second = subscribe(nextAppId);
       await flush();
       expect(domListenerCount("romm_data_changed")).toBe(dataChangedBefore + 1);
       expect(domListenerCount("romm_rom_uninstalled")).toBe(uninstalledBefore + 1);
-      expect(deckyEventListenerCount("download_complete")).toBe(downloadBefore + 1);
+      expect(hostEventListenerCount("download_complete")).toBe(downloadBefore + 1);
 
       first();
       expect(domListenerCount("romm_data_changed")).toBe(dataChangedBefore + 1);
       second();
       expect(domListenerCount("romm_data_changed")).toBe(dataChangedBefore);
       expect(domListenerCount("romm_rom_uninstalled")).toBe(uninstalledBefore);
-      expect(deckyEventListenerCount("download_complete")).toBe(downloadBefore);
+      expect(hostEventListenerCount("download_complete")).toBe(downloadBefore);
     });
 
     it("logs at warn level when the cached-detail read rejects", async () => {
@@ -1125,7 +1125,7 @@ describe("gameDetailStore", () => {
 
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true, fs_size_bytes: 8192 }));
       await act(async () => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(42));
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(42));
         await Promise.resolve();
       });
       await flush();
@@ -1165,7 +1165,7 @@ describe("gameDetailStore", () => {
         found({ installed: true, ra_id: 7, stale_fields: ["achievements"] }),
       );
       await act(async () => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(42));
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(42));
         await Promise.resolve();
       });
       await flush();
@@ -1285,7 +1285,7 @@ describe("gameDetailStore", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true }));
 
       await act(async () => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(42));
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(42));
         await Promise.resolve();
       });
       await flush();
@@ -1334,7 +1334,7 @@ describe("gameDetailStore", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockClear();
 
       await act(async () => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
         globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: 999 } }));
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", { detail: { type: "rom_adopted", rom_id: 999 } }),
@@ -1366,7 +1366,7 @@ describe("gameDetailStore", () => {
       await act(async () => {
         // Another game's download: with no identity the entry cannot tell whose
         // event this is, and the read it needs is about its own appId either way.
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
         await Promise.resolve();
       });
       await flush();
@@ -1436,7 +1436,7 @@ describe("gameDetailStore", () => {
 
         vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true }));
         await act(async () => {
-          emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
+          emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
           await Promise.resolve();
         });
         await flush();
@@ -1518,7 +1518,7 @@ describe("gameDetailStore", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockClear();
 
       await act(async () => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
         globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: 998 } }));
         await Promise.resolve();
       });
@@ -1540,14 +1540,14 @@ describe("gameDetailStore", () => {
       // and this entry has none to install.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: false });
       await act(async () => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
         await Promise.resolve();
       });
       await flush();
       vi.mocked(cachedStore.getCachedGameDetail).mockClear();
 
       await act(async () => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
         await Promise.resolve();
       });
       await flush();
@@ -1562,7 +1562,7 @@ describe("gameDetailStore", () => {
 
       vi.mocked(cachedStore.getCachedGameDetail).mockRejectedValueOnce(new Error("bridge down"));
       await act(async () => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(42));
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(42));
         await Promise.resolve();
       });
       await flush();
@@ -1573,14 +1573,14 @@ describe("gameDetailStore", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true }));
       vi.mocked(cachedStore.getCachedGameDetail).mockClear();
       await act(async () => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
         await Promise.resolve();
       });
       await flush();
       expect(vi.mocked(cachedStore.getCachedGameDetail)).not.toHaveBeenCalled();
 
       await act(async () => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(42));
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(42));
         await Promise.resolve();
       });
       await flush();
@@ -1626,7 +1626,7 @@ describe("gameDetailStore", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockClear();
 
       await act(async () => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
         await Promise.resolve();
       });
       await flush();

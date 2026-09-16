@@ -9,11 +9,10 @@ paths:
 
 Run with `mise run test:frontend` (Vitest + happy-dom); `mise run test:frontend:coverage` for coverage.
 
-`frontend/src/test-utils/decky-api-mock.ts` exposes an in-memory event bus that `addEventListener` /
-`removeEventListener` route through. Tests dispatch backend events via `emitDeckyEvent` instead of mocking
-`frontend/src/api/host.ts` per file; `frontend/src/bigpicture/CustomPlayButton.test.tsx` is the reference shape. (The
-`decky` in that file's name predates #1899 and is a rename waiting for its own commit — 178 occurrences across 11
-files.) The bus resets between tests; use `deckyEventListenerCount(name)` to assert `useEffect` cleanup ran. DOM-level
+`frontend/src/test-utils/host-event-bus.ts` exposes an in-memory event bus that `addEventListener` /
+`removeEventListener` route through. Tests dispatch backend events via `emitHostEvent` instead of mocking
+`frontend/src/api/host.ts` per file; `frontend/src/bigpicture/CustomPlayButton.test.tsx` is the reference shape. The bus
+resets between tests; use `hostEventListenerCount(name)` to assert `useEffect` cleanup ran. DOM-level
 `globalThis.dispatchEvent` flows bypass the harness — happy-dom handles them natively. Prefer the harness over
 extracting listener bodies into `frontend/src/utils/*.ts` purely for testability.
 

@@ -16,7 +16,7 @@ import { VersionPicker } from "./VersionPicker";
 import * as backend from "../api/backend";
 import type { VersionList } from "../api/backend";
 import { getRommConnectionState, setRommConnectionState } from "../utils/connectionState";
-import { emitDeckyEvent } from "../test-utils/decky-api-mock";
+import { emitHostEvent } from "../test-utils/host-event-bus";
 import type { DownloadCompleteEvent } from "../types";
 import {
   installDomEventListenerSpy,
@@ -1784,7 +1784,7 @@ describe("VersionPicker — event refresh", () => {
     expect(vi.mocked(backend.getVersionList)).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", { rom_id: 2 } as DownloadCompleteEvent);
+      emitHostEvent<[DownloadCompleteEvent]>("download_complete", { rom_id: 2 } as DownloadCompleteEvent);
       await Promise.resolve();
     });
     expect(vi.mocked(backend.getVersionList)).toHaveBeenCalledTimes(2);
@@ -1808,7 +1808,7 @@ describe("VersionPicker — event refresh", () => {
     expect(vi.mocked(backend.getVersionList)).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", { rom_id: 999 } as DownloadCompleteEvent);
+      emitHostEvent<[DownloadCompleteEvent]>("download_complete", { rom_id: 999 } as DownloadCompleteEvent);
       await Promise.resolve();
     });
 

@@ -1,5 +1,5 @@
 /**
- * Reference test for the `frontend/src/test-utils/decky-api-mock.ts` event-bus
+ * Reference test for the `frontend/src/test-utils/host-event-bus.ts` event-bus
  * harness.
  *
  * Exercises CustomPlayButton's per-button `download_failed` listener — the
@@ -7,7 +7,7 @@
  *
  * 1. Mocks `getCachedGameDetail` so the button reaches `state === "play"`.
  * 2. Dispatches a `download_failed` event matching the button's `romId` via
- *    `emitDeckyEvent` from the harness.
+ *    `emitHostEvent` from the harness.
  * 3. Asserts the button transitioned back to "Download" — the visible
  *    side-effect of `handleButtonDownloadFailure(...) -> reset()`.
  *
@@ -21,7 +21,7 @@ import { toaster } from "../api/host";
 import { showContextMenu, Navigation } from "@decky/ui";
 import type { ReactElement } from "react";
 import { CustomPlayButton } from "./CustomPlayButton";
-import { emitDeckyEvent, deckyEventListenerCount } from "../test-utils/decky-api-mock";
+import { emitHostEvent, hostEventListenerCount } from "../test-utils/host-event-bus";
 import * as backend from "../api/backend";
 import type { CachedGameDetail } from "../api/backend";
 import type { DownloadCompleteEvent, DownloadFailedEvent, DownloadProgressEvent } from "../types";
@@ -237,12 +237,12 @@ describe("CustomPlayButton — download_failed listener", () => {
 
   it("registers a download_failed listener on mount", async () => {
     mockCachedDetail();
-    expect(deckyEventListenerCount("download_failed")).toBe(0);
+    expect(hostEventListenerCount("download_failed")).toBe(0);
 
     render(<CustomPlayButton appId={100} />);
 
     await waitFor(() => {
-      expect(deckyEventListenerCount("download_failed")).toBe(1);
+      expect(hostEventListenerCount("download_failed")).toBe(1);
     });
   });
 
@@ -262,7 +262,7 @@ describe("CustomPlayButton — download_failed listener", () => {
         platform_name: "PSX",
         error_message: "disk full",
       };
-      emitDeckyEvent<[DownloadFailedEvent]>("download_failed", event);
+      emitHostEvent<[DownloadFailedEvent]>("download_failed", event);
     });
 
     // Reset path: setState("download"), so the Download label appears and
@@ -277,7 +277,7 @@ describe("CustomPlayButton — download_failed listener", () => {
     await findByText("Play");
 
     act(() => {
-      emitDeckyEvent<[DownloadFailedEvent]>("download_failed", {
+      emitHostEvent<[DownloadFailedEvent]>("download_failed", {
         rom_id: 999, // mismatched — listener no-ops
         rom_name: "Other",
         platform_name: "PSX",
@@ -295,11 +295,11 @@ describe("CustomPlayButton — download_failed listener", () => {
     const { unmount } = render(<CustomPlayButton appId={100} />);
 
     await waitFor(() => {
-      expect(deckyEventListenerCount("download_failed")).toBe(1);
+      expect(hostEventListenerCount("download_failed")).toBe(1);
     });
 
     unmount();
-    expect(deckyEventListenerCount("download_failed")).toBe(0);
+    expect(hostEventListenerCount("download_failed")).toBe(0);
   });
 });
 
@@ -327,7 +327,7 @@ describe("CustomPlayButton — download_progress cancelled listener (#1017)", ()
         bytes_downloaded: 300,
         total_bytes: 1000,
       };
-      emitDeckyEvent<[DownloadProgressEvent]>("download_progress", event);
+      emitHostEvent<[DownloadProgressEvent]>("download_progress", event);
     });
 
     // Post-state: the Download label is shown and Play is gone — the visible
@@ -342,7 +342,7 @@ describe("CustomPlayButton — download_progress cancelled listener (#1017)", ()
     await findByText("Play");
 
     act(() => {
-      emitDeckyEvent<[DownloadProgressEvent]>("download_progress", {
+      emitHostEvent<[DownloadProgressEvent]>("download_progress", {
         rom_id: 999, // mismatched — listener no-ops
         rom_name: "Other",
         platform_name: "PSX",
@@ -397,7 +397,7 @@ describe("CustomPlayButton — cancel X on active download (#1049)", () => {
         bytes_downloaded: 300,
         total_bytes: 1000,
       };
-      emitDeckyEvent<[DownloadProgressEvent]>("download_progress", event);
+      emitHostEvent<[DownloadProgressEvent]>("download_progress", event);
     });
 
     return utils;
@@ -490,7 +490,7 @@ describe("CustomPlayButton — pause/resume on active download (#1124)", () => {
         total_bytes: 1000,
         ...(frame.resumable === undefined ? {} : { resumable: frame.resumable }),
       };
-      emitDeckyEvent<[DownloadProgressEvent]>("download_progress", event);
+      emitHostEvent<[DownloadProgressEvent]>("download_progress", event);
     });
 
     return utils;
@@ -736,7 +736,7 @@ describe("CustomPlayButton — extraction phase on a multi-file download", () =>
 
     for (const frame of frames) {
       act(() => {
-        emitDeckyEvent<[DownloadProgressEvent]>("download_progress", frame);
+        emitHostEvent<[DownloadProgressEvent]>("download_progress", frame);
       });
     }
 
@@ -1131,7 +1131,7 @@ describe("CustomPlayButton — uninstall is visible and single-shot (#1664)", ()
     await pressUninstall();
 
     act(() => {
-      emitDeckyEvent("uninstall_progress", { rom_id: 42, files_removed: 128, files_total: 331 });
+      emitHostEvent("uninstall_progress", { rom_id: 42, files_removed: 128, files_total: 331 });
     });
 
     expect(await findByText("Uninstalling 128/331")).toBeTruthy();
@@ -1147,7 +1147,7 @@ describe("CustomPlayButton — uninstall is visible and single-shot (#1664)", ()
     await pressUninstall();
 
     act(() => {
-      emitDeckyEvent("uninstall_progress", { rom_id: 7, files_removed: 128, files_total: 331 });
+      emitHostEvent("uninstall_progress", { rom_id: 7, files_removed: 128, files_total: 331 });
     });
 
     // Still the plain label — a frame for another ROM must not move this counter.
@@ -1208,11 +1208,11 @@ describe("CustomPlayButton — uninstall is visible and single-shot (#1664)", ()
     mockCachedDetail({ rom_id: 42, installed: true });
     const { findByText, unmount } = render(<CustomPlayButton appId={100} />);
     await findByText("Play");
-    expect(deckyEventListenerCount("uninstall_progress")).toBe(1);
+    expect(hostEventListenerCount("uninstall_progress")).toBe(1);
 
     unmount();
 
-    expect(deckyEventListenerCount("uninstall_progress")).toBe(0);
+    expect(hostEventListenerCount("uninstall_progress")).toBe(0);
   });
 });
 
@@ -1267,7 +1267,7 @@ describe("CustomPlayButton — completion flashes (#1677)", () => {
     vi.useFakeTimers();
     try {
       act(() => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", completeEvent());
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", completeEvent());
       });
       expect(getByText("Ready!")).toBeInTheDocument();
 
@@ -1360,7 +1360,7 @@ describe("CustomPlayButton — completion flashes (#1677)", () => {
     vi.useFakeTimers();
     try {
       act(() => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", completeEvent());
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", completeEvent());
       });
       expect(getByText("Ready!")).toBeInTheDocument();
       expect(vi.getTimerCount()).toBe(1);
@@ -1386,7 +1386,7 @@ describe("CustomPlayButton — completion flashes (#1677)", () => {
     vi.useFakeTimers();
     try {
       act(() => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", completeEvent());
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", completeEvent());
       });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(400);
@@ -1520,7 +1520,7 @@ describe("CustomPlayButton — completion flashes (#1677)", () => {
     vi.useFakeTimers();
     try {
       act(() => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", completeEvent());
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", completeEvent());
       });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1100);
@@ -1540,7 +1540,7 @@ describe("CustomPlayButton — completion flashes (#1677)", () => {
     vi.useFakeTimers();
     try {
       act(() => {
-        emitDeckyEvent<[DownloadCompleteEvent]>("download_complete", completeEvent());
+        emitHostEvent<[DownloadCompleteEvent]>("download_complete", completeEvent());
       });
       act(() => {
         announceConflict(true);
@@ -3548,7 +3548,7 @@ describe("CustomPlayButton — active-download button never takes the idle blue 
       await Promise.resolve();
     });
     act(() => {
-      emitDeckyEvent<[DownloadProgressEvent]>("download_progress", {
+      emitHostEvent<[DownloadProgressEvent]>("download_progress", {
         rom_id: 42,
         rom_name: "Test ROM",
         platform_name: "PSP",
@@ -3676,7 +3676,7 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
     expect(await utils.findByText("Use Existing Files")).toBeTruthy();
 
     act(() => {
-      emitDeckyEvent<[DownloadProgressEvent]>("download_progress", {
+      emitHostEvent<[DownloadProgressEvent]>("download_progress", {
         rom_id: 42,
         rom_name: "Test ROM",
         platform_name: "PSX",
@@ -3697,7 +3697,7 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
     expect(await utils.findByText("Use Existing Files")).toBeTruthy();
 
     act(() => {
-      emitDeckyEvent<[DownloadFailedEvent]>("download_failed", {
+      emitHostEvent<[DownloadFailedEvent]>("download_failed", {
         rom_id: 42,
         rom_name: "Test ROM",
         platform_name: "PSX",
