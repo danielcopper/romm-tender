@@ -119,14 +119,14 @@ def test_seals_verified_bundle_with_generated_destinations(tmp_path):
 
 
 def test_the_recovery_root_is_named_after_the_package(tmp_path):
-    """The folder the user finds their bundles in follows ``package.json``.
+    """The folder the user finds their bundles in follows ``PACKAGE_NAME``.
 
-    Two names rather than one: the plugin's own name is what a literal here
+    Two names rather than one: the program's own name is what a literal here
     would spell, so a test using only that would pass either way. The name
-    reaches this adapter from ``package.json`` through bootstrap, and that one
-    read also builds the outgoing User-Agent — so a literal is free to drift
-    away from the package, and the drift lands on the one surface a destructive
-    cleanup leaves behind.
+    reaches this adapter from ``domain/identity.py`` through bootstrap, and that
+    same constant also builds the outgoing User-Agent — so a literal is free to
+    drift away from the package, and the drift lands on the one surface a
+    destructive cleanup leaves behind.
     """
     for package_name in ("romm-tender", "some-other-plugin"):
         adapter = RecoveryBundleAdapter(user_home=str(tmp_path), package_name=package_name, plugin_version="1.2.3")

@@ -216,8 +216,6 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         machine_id_provider=cfg.runtime.machine_id_provider,
         log_debug=cfg.callbacks.log_debug,
         get_core_name=cfg.callbacks.get_core_name,
-        plugin_metadata=cfg.callbacks.plugin_metadata,
-        plugin_dir=cfg.directories.code_dir,
         emit=cfg.runtime.emit,
         # StatusService reports the live layout so the SAVES tab can warn when
         # saves go to the content dir (#239).

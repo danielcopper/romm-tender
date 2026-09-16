@@ -43,7 +43,6 @@ from adapters.persistence import (
     PlatformCoreReaderAdapter,
     SettingsPersisterAdapter,
 )
-from adapters.plugin_metadata import PluginMetadataAdapter
 from adapters.prune_artifacts import PruneArtifactAdapter
 from adapters.recovery_bundle import RecoveryBundleAdapter
 from adapters.renderer_gc import RendererGcAdapter
@@ -63,6 +62,7 @@ from adapters.steam_recovery import SteamRecoveryAdapter
 from adapters.steamgriddb import SteamGridDbAdapter
 from adapters.system_clock import SystemClock
 from adapters.system_uuid_gen import SystemUuidGen
+from domain.identity import PACKAGE_NAME, VERSION
 from domain.state_migrations import fold_legacy_save_sync_settings, migrate_settings
 from domain.user_data_location import launcher_path
 
@@ -92,7 +92,6 @@ if TYPE_CHECKING:
         MigrationFileStore,
         PathExistsReader,
         PlatformCoreReader,
-        PluginMetadataReader,
         PruneArtifactStore,
         RecoveryBundleStore,
         RendererGcFn,
@@ -202,7 +201,6 @@ class CallbackBundle:
     list_rom_dir_files: DirectoryFileListerFn
     settings_persister: SettingsPersister
     log_debug: DebugLogger
-    plugin_metadata: PluginMetadataReader
     uow_factory: UnitOfWorkFactory
 
 
@@ -378,21 +376,19 @@ def bootstrap(
     # Binds the same live settings dict so the per-platform-core fan-out resolves
     # the freshly-written value, not a snapshot.
     platform_core_reader = PlatformCoreReaderAdapter(settings)
-    plugin_metadata = PluginMetadataAdapter()
-    # Single source of truth for outgoing User-Agent — read package.json once at
-    # boot and thread the string to the two adapters that talk to a server off
-    # this machine (RomM and SteamGridDB). ``RendererGcAdapter`` also speaks
-    # HTTP, to Steam's own debugger on localhost, and takes no UA. Bot Fight Mode
-    # on Cloudflare blocks the default ``Python-urllib`` UA before requests reach
-    # self-hosted RomM (#249). Both halves come from that one read: a literal
-    # name here would be a second spelling of the package, free to drift away
-    # from the recovery root built out of the same value below.
-    package_name, plugin_version = plugin_metadata.read_metadata(directories.code_dir)
-    user_agent = f"{package_name}/{plugin_version}"
+    # Single source of truth for outgoing User-Agent — thread the string to the
+    # two adapters that talk to a server off this machine (RomM and
+    # SteamGridDB). ``RendererGcAdapter`` also speaks HTTP, to Steam's own
+    # debugger on localhost, and takes no UA. Bot Fight Mode on Cloudflare
+    # blocks the default ``Python-urllib`` UA before requests reach self-hosted
+    # RomM (#249). Both halves come from ``domain/identity.py``, and so does the
+    # recovery root built out of the same name below: a literal spelled here
+    # would be a second spelling of the package, free to drift away from it.
+    user_agent = f"{PACKAGE_NAME}/{VERSION}"
     recovery_store = RecoveryBundleAdapter(
         user_home=user_home,
-        package_name=package_name,
-        plugin_version=plugin_version,
+        package_name=PACKAGE_NAME,
+        plugin_version=VERSION,
     )
     # The CACHE root: this adapter's whole subject is ``covers/`` and
     # ``artwork/``, which live there and not under the data root.
@@ -509,7 +505,6 @@ def bootstrap(
         list_rom_dir_files=download_file_store.list_files,
         settings_persister=settings_persister,
         log_debug=debug_logger,
-        plugin_metadata=plugin_metadata,
         uow_factory=uow_factory,
     )
     runtime_adapters = RuntimeAdaptersBundle(

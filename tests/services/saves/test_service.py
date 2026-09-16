@@ -10,10 +10,10 @@ from unittest.mock import MagicMock
 
 import pytest
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
-from fakes.fake_plugin_metadata_reader import FakePluginMetadataReader
 from fakes.fake_save_api import FakeSaveApi
 from fakes.fake_settings_persister import FakeSettingsPersister
 
+from domain.identity import VERSION
 from domain.iso_time import epoch_to_iso
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
 from lib.errors import RommConnectionError, RommNotFoundError
@@ -139,7 +139,7 @@ class TestDeviceRegistrationServer:
 
     @pytest.mark.asyncio
     async def test_ensure_device_registered_reconciles_client_version(self, tmp_path):
-        """Already-registered path calls update_device with current plugin_version."""
+        """Already-registered path calls update_device with the program's version."""
         svc, fake = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "server-abc")
@@ -151,7 +151,7 @@ class TestDeviceRegistrationServer:
         update_calls = [c for c in fake.call_log if c[0] == "update_device"]
         assert len(update_calls) == 1
         assert update_calls[0][1][0] == "server-abc"
-        assert update_calls[0][2].get("client_version") == "0.14.0"
+        assert update_calls[0][2].get("client_version") == VERSION
 
     @pytest.mark.asyncio
     async def test_ensure_device_registered_reconcile_non_fatal(self, tmp_path):
@@ -1369,17 +1369,19 @@ class TestBadPathDeleteSavesPartialFailure:
 
 
 class TestPluginVersionResolution:
-    """SaveService.__init__ resolves the plugin version exactly once."""
+    """The version a registered device is stamped with is the program's own."""
 
-    def test_reads_plugin_version_once_with_injected_plugin_dir(self, tmp_path):
-        """One read at construction, scoped to the injected plugin_dir."""
-        fake_reader = FakePluginMetadataReader(version="0.14.0")
-        plugin_dir = str(tmp_path / "custom-plugin-dir")
+    def test_the_device_registry_is_handed_the_programs_version(self, tmp_path):
+        """No seam, no manifest: the constant reaches the registry unchanged.
 
-        make_service(tmp_path, plugin_metadata=fake_reader, plugin_dir=plugin_dir)
+        The registry spends it as ``client_version`` on the user's RomM
+        server, which is the one place this value is read by something
+        outside this program — so a registry handed a version from anywhere
+        else would tell the server a release that was never cut.
+        """
+        service, _ = make_service(tmp_path)
 
-        assert fake_reader.read_count == 1
-        assert fake_reader.last_plugin_dir == plugin_dir
+        assert service._device_registry._plugin_version == VERSION
 
 
 class TestBuildSaveInventory:

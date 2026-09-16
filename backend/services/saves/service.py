@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from domain.identity import VERSION
 from domain.iso_time import epoch_to_iso
 from domain.rom_save_sync_state import RomSaveSyncState
 from lib.list_result import ErrorCode
@@ -70,10 +71,6 @@ class SaveService:
         # save count walks the filesystem once per installed ROM, and the page
         # asks it on every selection.
         self._loop = config.loop
-        # Resolve plugin version once at construction; the DeviceRegistry and
-        # any other consumer receive the resolved string, not the Protocol.
-        plugin_version = config.plugin_metadata.read_version(config.plugin_dir)
-
         # The single owner of the server device id (kv_config["device_id"]).
         # Built once here and shared into every sub-service that needs the id
         # (sync_engine, status, versions, slots) — the same-bounded-context
@@ -88,7 +85,7 @@ class SaveService:
             logger=config.logger,
             log_debug=config.log_debug,
             settings_persister=config.settings_persister,
-            plugin_version=plugin_version,
+            plugin_version=VERSION,
         )
 
         self._rom_info = RomInfoService(

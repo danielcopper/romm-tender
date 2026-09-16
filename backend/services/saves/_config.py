@@ -24,7 +24,6 @@ if TYPE_CHECKING:
         HostnameReader,
         MachineIdReader,
         MigrationPendingFn,
-        PluginMetadataReader,
         ResolveUploadConflictFn,
         RetroArchSaveLayoutProvider,
         RetroDeckPaths,
@@ -109,13 +108,6 @@ class SaveServiceConfig:
         at runtime (the callable returns ``None``), SaveService warns
         and falls back to the parent directory path; see
         ``_resolve_retroarch_corename``.
-    plugin_metadata:
-        ``PluginMetadataReader`` Protocol seam — read once during
-        :meth:`SaveService.__init__` to resolve the declared plugin
-        version forwarded into user-agent strings and emitted events.
-    plugin_dir:
-        The directory this program is installed in, passed to
-        :meth:`PluginMetadataReader.read_version` — it holds the manifest.
     emit:
         Event emitter for pushing save-sync progress to the frontend.
     get_save_layout:
@@ -168,8 +160,6 @@ class SaveServiceConfig:
     hostname_provider: HostnameReader
     machine_id_provider: MachineIdReader
     log_debug: DebugLogger
-    plugin_metadata: PluginMetadataReader
-    plugin_dir: str
     get_core_name: CoreNameProviderFn
     emit: EventEmitter
     get_save_layout: RetroArchSaveLayoutProvider

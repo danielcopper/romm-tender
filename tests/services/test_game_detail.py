@@ -15,7 +15,6 @@ from fakes.fake_hostname_reader import FakeHostnameReader
 from fakes.fake_machine_id_reader import FakeMachineIdReader
 from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
-from fakes.fake_plugin_metadata_reader import FakePluginMetadataReader
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
@@ -120,8 +119,6 @@ def plugin(tmp_path):
             hostname_provider=FakeHostnameReader(),
             machine_id_provider=FakeMachineIdReader(),
             log_debug=p._log_debug,
-            plugin_metadata=FakePluginMetadataReader(version="0.14.0"),
-            plugin_dir=str(tmp_path / "plugin"),
             emit=AsyncMock(),
             get_core_name=lambda core_so: None,
             get_save_layout=lambda: InSaveDir(sort_by_content=True, sort_by_core=False),

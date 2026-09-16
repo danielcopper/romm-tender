@@ -1,4 +1,4 @@
-"""On-disk persistence Protocols for plugin settings and metadata.
+"""On-disk persistence Protocols for the program's settings.
 
 Services delegate disk round-trips for settings to these Protocols so
 atomic writes, locking, and corrupt-file recovery stay in adapters. Each
@@ -16,32 +16,3 @@ class SettingsPersister(Protocol):
     """Persist the live settings dict (``settings.json``)."""
 
     def save_settings(self) -> None: ...
-
-
-class PluginMetadataReader(Protocol):
-    """Read plugin install metadata from ``package.json``.
-
-    Owns the one-shot read of the plugin's ``package.json`` at startup
-    so ``bootstrap`` does not perform raw ``open()`` calls. The plugin
-    directory is supplied by the caller — implementations resolve the
-    ``package.json`` path and parse the JSON payload. A missing or
-    malformed file must not abort bootstrap; implementations return the
-    documented fallback (``"0.0.0"`` for ``read_version``).
-    """
-
-    def read_metadata(self, plugin_dir: str) -> tuple[str, str]:
-        """Return ``(name, version)`` from one canonical package read."""
-        ...
-
-    def read_version(self, plugin_dir: str) -> str:
-        """Return the plugin's declared semantic version.
-
-        Falls back to ``"0.0.0"`` when the file is missing, unreadable,
-        malformed, or has no ``version`` field — bootstrap must not
-        abort on a metadata read.
-        """
-        ...
-
-    def read_name(self, plugin_dir: str) -> str:
-        """Return the declared package name, or ``"decky-plugin"`` on failure."""
-        ...

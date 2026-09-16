@@ -112,10 +112,7 @@ from services.protocols.paths import (
     SystemResolver,
     SystemSupportedExtensionsFn,
 )
-from services.protocols.persistence import (
-    PluginMetadataReader,
-    SettingsPersister,
-)
+from services.protocols.persistence import SettingsPersister
 from services.protocols.repositories import (
     BiosFileRepository,
     FirmwareCacheRepository,
@@ -195,7 +192,6 @@ __all__ = [
     "PlatformSyncStateRepository",
     "PlaytimeRepository",
     "PlaytimeScopeNoticeClearFn",
-    "PluginMetadataReader",
     "PruneArtifactStore",
     "PruneSaveCoordinator",
     "ReachabilityProbeFn",

@@ -21,11 +21,12 @@ from __future__ import annotations
 import os
 
 # The name every directory this program derives for itself carries — the two
-# below, and five of the six in ``domain/app_directories.py``. Never derived from ``package.json``'s
-# ``name``, which happens to spell it identically: read from the manifest, a
-# one-line edit there would move every user's library on the next start, with
-# nothing failing and nothing said. ``domain/identity.py`` carries the rest of
-# that split.
+# below, and five of the six in ``domain/app_directories.py``. Never derived from
+# ``domain/identity.py``'s ``PACKAGE_NAME``, which happens to spell it
+# identically: that one names the package a server is told about and is free to
+# be renamed with it, and a one-line edit there would then move every user's
+# library on the next start, with nothing failing and nothing said.
+# ``domain/identity.py`` carries the rest of that split.
 APP_DIR_NAME = "romm-tender"
 
 # The two functions below compose a root out of a home directory and nothing

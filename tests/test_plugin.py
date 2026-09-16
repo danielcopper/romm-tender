@@ -1202,7 +1202,6 @@ class TestMainStartupOrdering:
                 list_rom_dir_files=MagicMock(),
                 settings_persister=MagicMock(),
                 log_debug=MagicMock(),
-                plugin_metadata=MagicMock(),
                 uow_factory=MagicMock(),
             ),
             runtime_adapters=RuntimeAdaptersBundle(

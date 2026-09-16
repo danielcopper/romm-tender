@@ -4,7 +4,6 @@ import asyncio
 import logging
 import os
 import pathlib
-from dataclasses import replace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -29,7 +28,6 @@ from fakes.fake_machine_id_reader import FakeMachineIdReader
 from fakes.fake_migration_file_store import FakeMigrationFileStore
 from fakes.fake_path_exists_reader import FakePathExistsReader
 from fakes.fake_platform_core_reader import FakePlatformCoreReader
-from fakes.fake_plugin_metadata_reader import FakePluginMetadataReader
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_resolved_path import FakeResolvedPath
@@ -48,6 +46,7 @@ from adapters.romm.http import RommHttpAdapter
 from adapters.romm.romm_api import RommApiAdapter
 from adapters.steam_config import SteamConfigAdapter
 from domain.app_directories import AppDirectories
+from domain.identity import PACKAGE_NAME, VERSION
 from domain.save_layout import InSaveDir
 from services.achievements import AchievementsService
 from services.cores import CoreService
@@ -166,60 +165,56 @@ class TestBootstrap:
         assert result.runtime_adapters.hostname_provider is not None
         assert result.runtime_adapters.machine_id_provider is not None
 
-    @staticmethod
-    def _bootstrap_with_package(tmp_path, payload: dict[str, str]) -> BootstrapResult:
-        """Bootstrap against a plugin dir whose ``package.json`` holds *payload*."""
-        import json
-
-        plugin_dir = tmp_path / "plugin"
-        plugin_dir.mkdir()
-        (plugin_dir / "package.json").write_text(json.dumps(payload))
-        return bootstrap(
-            directories=replace(_directories_at(tmp_path), code_dir=str(plugin_dir)),
-            user_home=str(tmp_path / "home"),
-            logger=logging.getLogger("test"),
-        )
-
     def test_user_agent_threaded_to_romm_http_adapter(self, tmp_path):
-        """Bootstrap reads ``package.json`` once and threads the resulting
-        ``<package name>/<version>`` string to ``RommHttpAdapter`` (#249, #719).
+        """Bootstrap threads ``<package name>/<version>`` to ``RommHttpAdapter`` (#249, #719).
 
         Without a User-Agent, Cloudflare Bot Fight Mode 403s the default
         ``Python-urllib`` UA before the request reaches self-hosted RomM
         behind a tunnel.
         """
-        result = self._bootstrap_with_package(tmp_path, {"name": "romm-tender", "version": "1.2.3"})
-        assert result.adapters.http_adapter._user_agent == "romm-tender/1.2.3"
+        result = _bootstrap_for(tmp_path)
+        assert result.adapters.http_adapter._user_agent == f"{PACKAGE_NAME}/{VERSION}"
 
     def test_user_agent_threaded_to_steamgriddb_adapter(self, tmp_path):
         """Bootstrap threads the same ``<package name>/<version>`` UA into
         ``SteamGridDbAdapter`` so SGDB sees a non-default UA on every site
         (#719). SGDB rejects ``Python-urllib`` with 403.
         """
-        result = self._bootstrap_with_package(tmp_path, {"name": "romm-tender", "version": "1.2.3"})
-        assert result.adapters.sgdb_adapter._user_agent == "romm-tender/1.2.3"
-
-    def test_user_agent_names_the_package_rather_than_a_literal(self, tmp_path):
-        """Both halves of the UA come from ``package.json``, name included.
-
-        The two assertions above write the plugin's own name, so a literal
-        ``"romm-tender"`` in bootstrap would satisfy them; this one asks with a
-        name the plugin will never carry, so only the read can answer it. What
-        it protects: bootstrap spends that same read on the recovery root the
-        cleanup writes its bundles into, so a literal here is free to drift away
-        from it, and the drift shows up on a server's token list rather than in
-        CI.
-        """
-        result = self._bootstrap_with_package(tmp_path, {"name": "not-the-plugins-name", "version": "1.2.3"})
-        assert result.adapters.http_adapter._user_agent == "not-the-plugins-name/1.2.3"
-        assert result.adapters.sgdb_adapter._user_agent == "not-the-plugins-name/1.2.3"
-
-    def test_user_agent_falls_back_when_package_json_missing(self, tmp_path):
-        """When ``package.json`` is absent, the adapter's documented fallback
-        (``decky-plugin``, ``0.0.0``) feeds into BOTH halves of the UA string."""
         result = _bootstrap_for(tmp_path)
-        assert result.adapters.http_adapter._user_agent == "decky-plugin/0.0.0"
-        assert result.adapters.sgdb_adapter._user_agent == "decky-plugin/0.0.0"
+        assert result.adapters.sgdb_adapter._user_agent == f"{PACKAGE_NAME}/{VERSION}"
+
+    def test_user_agent_reads_the_constants_rather_than_spelling_them(self, tmp_path, monkeypatch):
+        """Both halves come from ``domain/identity.py``, name included.
+
+        The two assertions above spell the program's own name and version, so a
+        literal ``"romm-tender/0.33.0"`` in bootstrap would satisfy them; this
+        one asks with a name and a version the program will never carry, so only
+        a read of the constants can answer it. What it protects: bootstrap
+        spends the same name on the recovery root the cleanup writes its bundles
+        into, so a literal here is free to drift away from it, and the drift
+        shows up on a server's token list rather than in CI.
+        """
+        monkeypatch.setattr("bootstrap.adapters.PACKAGE_NAME", "not-the-programs-name")
+        monkeypatch.setattr("bootstrap.adapters.VERSION", "9.9.9")
+
+        result = _bootstrap_for(tmp_path)
+
+        assert result.adapters.http_adapter._user_agent == "not-the-programs-name/9.9.9"
+        assert result.adapters.sgdb_adapter._user_agent == "not-the-programs-name/9.9.9"
+
+    def test_the_recovery_root_is_named_after_the_same_constant(self, tmp_path, monkeypatch):
+        """The UA and the recovery root are one name, so they cannot drift apart.
+
+        A recovery folder is named after whatever wrote it and a server reading
+        a User-Agent is told which package is calling — the same answer, spent
+        twice. Asked with a name the program will never carry, because the real
+        one is what ``sanitize_package_name`` would produce either way.
+        """
+        monkeypatch.setattr("bootstrap.adapters.PACKAGE_NAME", "not-the-programs-name")
+
+        result = _bootstrap_for(tmp_path)
+
+        assert result.adapters.recovery_store.root().endswith("/not-the-programs-name-recovery")
 
 
 class TestTheCacheRootAndTheDataRootStayApart:
@@ -430,7 +425,6 @@ class TestWireServices:
             "settings_persister": MagicMock(),
             "core_info_provider": FakeCoreInfoProvider(),
             "log_debug": MagicMock(),
-            "plugin_metadata": FakePluginMetadataReader(version="0.14.0"),
             "uow_factory": FakeUnitOfWorkFactory(),
             "directories": _directories_at(tmp_path),
             "launcher": ShortcutLauncher(
@@ -497,7 +491,6 @@ class TestWireServices:
                 list_rom_dir_files=deps["list_rom_dir_files"],
                 settings_persister=deps["settings_persister"],
                 log_debug=deps["log_debug"],
-                plugin_metadata=deps["plugin_metadata"],
                 uow_factory=deps["uow_factory"],
             ),
             min_required_version=deps["min_required_version"],

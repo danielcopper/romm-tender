@@ -9,7 +9,6 @@ from _factories import _make_retry
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_hostname_reader import FakeHostnameReader
 from fakes.fake_machine_id_reader import FakeMachineIdReader
-from fakes.fake_plugin_metadata_reader import FakePluginMetadataReader
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_save_api import FakeSaveApi
 from fakes.fake_save_location_reader import FakeSaveLocationReader
@@ -73,8 +72,6 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
         "hostname_provider": FakeHostnameReader(),
         "machine_id_provider": FakeMachineIdReader(),
         "log_debug": lambda _msg: None,
-        "plugin_metadata": FakePluginMetadataReader(version="0.14.0"),
-        "plugin_dir": str(tmp_path / "plugin"),
         "emit": emit if emit is not None else _noop_emit,
         "get_core_name": lambda core_so: None,
         # Supported layout by default; tests that exercise the content-dir

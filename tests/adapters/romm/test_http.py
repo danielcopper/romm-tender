@@ -42,7 +42,7 @@ from services.library import LibraryService, LibraryServiceConfig
 
 # The UA every adapter in this file is constructed with, and the value its
 # outgoing header is then asserted against — this file pins the pass-through,
-# not the string. Production builds the real one from ``package.json``
+# not the string. Production builds the real one from ``domain/identity.py``
 # (``bootstrap/adapters.py``); the version here is deliberately not a real one.
 _USER_AGENT = "romm-tender/9.9.9"
 
