@@ -39,9 +39,8 @@ const DIST = new URL("../../dist/", import.meta.url);
  * its components carry, and **none of them is written in any of this project's
  * own `src/**` TypeScript** — which is the property that makes them evidence
  * rather than decoration, and which the sweep below asserts in exactly those
- * terms. A
- * string this project also writes would be found in both bundles and prove
- * nothing about either.
+ * terms. A string this project also writes would be found in both bundles and
+ * prove nothing about either.
  *
  * That property is asserted below rather than claimed, because it has now failed
  * twice. `pane.tsx:262` quotes `@decky/ui`'s DialogButton predicate in a comment,

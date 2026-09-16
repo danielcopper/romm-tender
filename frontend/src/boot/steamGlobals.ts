@@ -184,8 +184,10 @@ export async function installGlobals(): Promise<GlobalsReport> {
     // which is a perfectly truthy object — so `installed.SP_JSX` would say true
     // when nothing was found.
     //
-    // **That report is the whole of what this buys**, and it is read from THIS
-    // bundle by whoever decides whether to load the panel (#1900). The panel
+    // **That report is the whole of what this buys**: it is there for the
+    // injector to read out of THIS bundle before it decides whether to load the
+    // panel (#1900). Nothing reads it yet — until something does, the honesty
+    // below buys nothing at all. The panel
     // itself gets no chance to notice: a module-scope `SP_JSX.jsx` sits in its
     // import graph (`dist/index.js:4892`, from `PlatformDetail.tsx`), so with
     // `SP_JSX` unset it throws while being evaluated — before `definePlugin`'s

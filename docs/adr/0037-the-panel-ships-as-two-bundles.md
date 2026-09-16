@@ -10,8 +10,9 @@ The panel is built out of `@decky/ui`, and until now the build did not ship it. 
 `DFL` — the global Decky Loader installs — and listed it as external, so the artifact contained not one byte of it.
 Measured on the shipped `dist/index.js` at `79323dbd`: **546 reads of `DFL.`**. The coexistence bundle this cut keeps is
 that same externalisation, and it still measures the same way — `DFL` never declared or assigned anywhere in it, and
-**none** of ten strings that exist only inside the package's own implementation (its module-cache machinery, its logger,
-four of its component predicates) present at all.
+**none** of the nine strings that exist only inside the package's own implementation (five of its module-cache machinery
+and its logger, four of its component predicates) present at all — the same nine
+`frontend/scripts/check-bundle-shape.mjs` probes for.
 
 So the dependency was a **runtime contract with Decky Loader**, not a shipped library. The same held for Steam's React:
 `SP_REACT`, `SP_REACTDOM` and `SP_JSX` are not Steam's doing — the loader sets them, and the build maps `react`,
