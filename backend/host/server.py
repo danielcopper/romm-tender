@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING
 from host.access import SESSION_PARAM, TOKEN_PARAM, AccessPolicy, check_access, new_token
 from host.connection import HostConnection
 from lib.http_messages import HEAD_TERMINATOR, MAX_HEAD_BYTES, HttpParseError, build_response_head, parse_request_head
-from lib.path_safety import PathTraversalError, safe_join
+from lib.path_safety import safe_join
 from lib.websocket_frames import accept_key
 
 if TYPE_CHECKING:
@@ -174,11 +174,11 @@ class HostServer:
         """Serve one accepted socket: read the head, admit it, route it."""
         try:
             head = await self._read_head(reader)
-        except (HttpParseError, asyncio.IncompleteReadError, asyncio.LimitOverrunError, ValueError) as exc:
+        except (asyncio.IncompleteReadError, asyncio.LimitOverrunError, ValueError) as exc:
             self._logger.warning(f"host: unreadable request head: {exc}")
             await self._refuse(writer, 400)
             return
-        except (ConnectionError, OSError):
+        except OSError:
             return
 
         policy = AccessPolicy(port=self._port, token=self._token)
@@ -228,7 +228,7 @@ class HostServer:
         loop = asyncio.get_running_loop()
         try:
             found = await loop.run_in_executor(None, _read_from_root, self._static_root, requested)
-        except (PathTraversalError, ValueError):
+        except ValueError:
             self._logger.warning(f"host: refusing a path outside the served root: {head.path!r}")
             await self._refuse(writer, 404)
             return

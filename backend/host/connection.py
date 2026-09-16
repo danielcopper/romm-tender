@@ -133,7 +133,7 @@ class HostConnection:
                     return False
                 self._writer.write(text_frame(text))
                 await self._writer.drain()
-        except (ConnectionError, RuntimeError, OSError) as exc:
+        except (RuntimeError, OSError) as exc:
             self._logger.info(f"host: write failed, the connection is gone ({type(exc).__name__}: {exc})")
             self._closed = True
             return False
@@ -162,7 +162,7 @@ class HostConnection:
             async with self._write_lock:
                 self._writer.write(close_frame(code, reason))
                 await self._writer.drain()
-        except (ConnectionError, RuntimeError, OSError):
+        except (RuntimeError, OSError):
             pass
         with contextlib.suppress(ConnectionError, RuntimeError, OSError):
             self._writer.close()
@@ -178,7 +178,7 @@ class HostConnection:
         while not self._closed:
             try:
                 header = await self._read_header()
-            except (asyncio.IncompleteReadError, ConnectionError, OSError):
+            except (asyncio.IncompleteReadError, OSError):
                 self._logger.info("host: the panel connection went away")
                 return
             except WebSocketProtocolError as exc:
@@ -201,7 +201,7 @@ class HostConnection:
 
             try:
                 payload = apply_mask(await self._reader.readexactly(header.payload_length), header.mask)
-            except (asyncio.IncompleteReadError, ConnectionError, OSError):
+            except (asyncio.IncompleteReadError, OSError):
                 self._logger.info("host: the panel connection went away mid-frame")
                 return
 
@@ -266,7 +266,7 @@ class HostConnection:
         """
         try:
             message = decode_message(raw.decode("utf-8"))
-        except (UnicodeDecodeError, ValueError) as exc:
+        except ValueError as exc:
             self._dropped_messages += 1
             self._logger.warning(f"host: dropping a message that is not a protocol message: {exc}")
             return
@@ -329,6 +329,6 @@ class HostConnection:
                         return
                     self._writer.write(build_frame(OPCODE_PING, b""))
                     await self._writer.drain()
-            except (ConnectionError, RuntimeError, OSError):
+            except (RuntimeError, OSError):
                 self._closed = True
                 return
