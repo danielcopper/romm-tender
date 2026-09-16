@@ -23,10 +23,25 @@ because of what importing it does.
 
 **`@decky/ui` runs `initModuleCache()` at module scope.** The sweep force-executes every module in Steam's live webpack
 registry and swallows each failure; a module that throws part-way leaves a cached exports object with no keys behind.
-Beside a **running** Decky — whose own sweep already ran earlier in the session, over a smaller module set — opening the
-Quick Access menu then died with `Minified React error #31` ("Objects are not valid as a React child (found: object with
-keys {})") and took the Big Picture window with it. Four times, on the device. The same bundle taking the package from
-Decky's already-loaded copy through `DFL` survives the identical sequence.
+Importing the package a second time in one session therefore re-executes modules that something may already be holding
+the exports of.
+
+**What makes that fatal is not the second sweep — it is a consumer already rendering from the modules being
+re-executed.** Measured on the device, four passes:
+
+| Pass                                                                           | Result                               |
+| ------------------------------------------------------------------------------ | ------------------------------------ |
+| Second sweep, desktop client, Decky stopped                                    | survives (14 CEF targets, unchanged) |
+| Third sweep, Big Picture open and the Quick Access view mounted, Decky stopped | survives (5 targets, unchanged)      |
+| Decky started afterwards into that same session                                | survives, its interface normal       |
+| Big Picture + Quick Access + **Decky already rendering**                       | **crash**, reproduced                |
+
+So neither the count nor Big Picture is the condition, and Steam's own interface is not a consumer in the sense that
+matters — Decky's is. That also accounts for the error text, which the count never did: a module re-executed underneath
+something holding its exports leaves an empty object where a component was, and React says so —
+`Minified React error #31`, "Objects are not valid as a React child (found: object with keys {})". It takes the Big
+Picture window with it. The same bundle taking the package from Decky's already-loaded copy through `DFL` survives the
+identical sequence.
 
 A runtime switch inside one bundle cannot express this. The damage happens at **import**, and ESM evaluates the whole
 import graph before any set-up code in the importing module runs — there is no point at which an `if` could stand.

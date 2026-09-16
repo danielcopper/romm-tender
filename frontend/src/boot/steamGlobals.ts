@@ -30,6 +30,16 @@
  * three names, so without them it cannot load at all. This module is the
  * smallest thing that makes it load.
  *
+ * **It carries `@decky/ui`'s module sweep, and the guard below does not stop
+ * it.** `@decky/ui/dist/webpack` calls `initModuleCache()` unguarded at module
+ * scope, so importing this file re-executes every module in Steam's registry
+ * whatever `installGlobals` then decides — the short-circuit is in the FUNCTION
+ * and the sweep is in the IMPORT, which ESM runs first. That is harmless unless
+ * something is already RENDERING from those modules, which is the condition
+ * measured on the device; Decky's interface is such a consumer, Steam's own is
+ * not. So this bundle must not be loaded beside a running Decky. Who loads which
+ * bundle is #1900's decision, not this file's.
+ *
  * **This is its own bundle (`dist/globals.js`), and that is not tidiness.**
  * `@decky/ui`'s component half reads React internals while its own modules are
  * evaluated, so it cannot sit in the import graph of the module that creates
@@ -120,7 +130,15 @@ const STEAM_INIT_DEADLINE_MS = 30_000;
 export interface GlobalsReport {
   /** Were all three already set when this ran? Then nothing else happened. */
   alreadyPresent: boolean;
-  /** Who set them, when they were already there. */
+  /**
+   * Who set them — a fact about THIS module instance, not about the session.
+   *
+   * A second instance of this module (a re-import, a re-injection) finds the
+   * globals set, finds no `DFL`, and answers `"unknown"` even where the first
+   * instance installed them itself: nothing carries the attribution across
+   * instances, and `"tender"` is returned only on the path that installs.
+   * Measured on the device.
+   */
   source: "decky" | "tender" | "unknown";
   /** Did Steam report itself initialised before the deadline? */
   steamReady: boolean;

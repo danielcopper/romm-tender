@@ -23,12 +23,23 @@ backend serves it as `<code_dir>/dist` and must not reach into the frontend's di
 resolving those predicates means running `initModuleCache()` — a sweep that force-executes **every** module in Steam's
 live webpack registry, swallowing each failure. The package runs it at module scope, on import.
 
-Beside a **running** Decky Loader, whose own sweep already ran earlier in the session over a smaller module set, a
-second sweep leaves cached exports objects with no keys behind. Opening the Quick Access menu then dies with
-`Minified React error #31` and takes the whole Big Picture window with it — measured four times on the device. The same
-bundle taking the package from Decky's already-loaded copy survives the identical sequence.
+**What makes a second import fatal is a consumer already RENDERING from the modules being re-executed** — not the number
+of sweeps, and not Big Picture. Four passes on the device:
 
-Alone, with no Decky running, our sweep is the first of the session and carries.
+| Pass                                                                           | Result                               |
+| ------------------------------------------------------------------------------ | ------------------------------------ |
+| Second sweep, desktop client, Decky stopped                                    | survives (14 CEF targets, unchanged) |
+| Third sweep, Big Picture open and the Quick Access view mounted, Decky stopped | survives (5 targets, unchanged)      |
+| Decky started afterwards into that same session                                | survives, its interface normal       |
+| Big Picture + Quick Access + **Decky already rendering**                       | **crash**, reproduced                |
+
+Steam's own interface is not a consumer in the sense that matters; Decky's is. A module re-executed underneath something
+holding its exports leaves an empty object where a component was, which is exactly what React reports:
+`Minified React error #31`, "Objects are not valid as a React child (found: object with keys {})". It takes the whole
+Big Picture window with it. The same bundle taking the package from Decky's already-loaded copy survives the identical
+sequence.
+
+Alone, with no Decky running, nothing else is rendering from those modules and the sweep is harmless.
 
 **A runtime `if` cannot express this.** The damage happens at import, and ESM evaluates the whole import graph before
 any set-up code in the importing module runs — there is no point at which the branch could stand. Hence two artifacts.
@@ -54,6 +65,18 @@ components. Decky splits it in the same place, for the same reason.
 
 **Whatever loads these has to load `globals.js` first.** Nothing in either file enforces the order; the panel simply
 throws on its first React read if the bootstrap has not run.
+
+**And `globals.js` must not be loaded beside a running Decky.** It imports `@decky/ui/dist/webpack`, whose
+`initModuleCache()` is unguarded at module scope, so the bootstrap carries the same sweep the standalone panel bundle
+does — `initModuleCache` appears twice in the built file. The short-circuit inside `installGlobals` protects nothing
+here: it is a guard in the FUNCTION, and the sweep is in the IMPORT, which ESM runs first. That is a property of the
+artefact rather than a decision this cut makes; who loads which bundle is
+[#1900](https://github.com/danielcopper/romm-tender/issues/1900)'s.
+
+**`GlobalsReport.source` is a fact about one module instance, not about the session.** A second instance of this module
+— a re-import, a re-injection — finds the globals already set, finds no `DFL`, and answers `"unknown"` even where the
+first instance installed them itself. Nothing carries the attribution across instances, and `"tender"` is returned only
+on the path that actually does the installing.
 
 ### The one thing that must not drift
 

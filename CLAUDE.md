@@ -120,12 +120,18 @@ locally with `mise run docs`.
 - **The build produces THREE files, and two of them are the same panel** — `dist/globals.js` (Steam's React installed by
   us), `dist/index.js` (the panel with `@decky/ui` bundled) and `dist/index-coexistence.js` (the panel taking it from
   Decky's `DFL` global). **Which panel bundle gets loaded is the injector's decision (#1900) and is made nowhere in this
-  tree yet**; the name is the whole mechanism. Bundling a second copy of `@decky/ui` beside a RUNNING Decky runs its
-  sweep of Steam's module registry a second time in one session and takes the Big Picture window down with
-  `Minified React error #31` — four times on the device — which is why the pair exists at all and why a runtime `if`
-  cannot replace it: the damage is done at import, and ESM hoists the import above any set-up code in the same module.
-  `pnpm -C frontend check:bundle` fails when either bundle stops being what it is; `pnpm build` alone would not. Detail:
-  [frontend-bundles.md](docs/architecture/frontend-bundles.md).
+  tree yet**; the name is the whole mechanism. Importing `@decky/ui` re-executes every module in Steam's live webpack
+  registry, and **what makes a second import fatal is a consumer already RENDERING from those modules — not the number
+  of sweeps, and not Big Picture.** Measured on the device: a second sweep on the desktop client survives; a third with
+  Big Picture open and the Quick Access view mounted survives; starting Decky into that same session survives; Big
+  Picture plus Quick Access plus Decky **already rendering** crashes with `Minified React error #31`, because a module
+  re-executed underneath something holding its exports leaves an empty object where a component was. Steam's own
+  interface is not such a consumer; Decky's is. That is why the pair exists and why a runtime `if` cannot replace it:
+  the damage is done at import, and ESM hoists the import above any set-up code in the same module. **`dist/globals.js`
+  carries the same sweep** — it imports `@decky/ui/dist/webpack`, whose `initModuleCache()` is unguarded at module scope
+  — so the short-circuit inside `installGlobals` protects nothing, and that bundle must not be loaded beside a running
+  Decky either. `pnpm -C frontend check:bundle` fails when either bundle stops being what it is; `pnpm build` alone
+  would not. Detail: [frontend-bundles.md](docs/architecture/frontend-bundles.md).
 - **Our three React globals must match Decky's EXACTLY, and the cost of a difference lands on Decky's users** —
   `frontend/src/boot/steamGlobals.ts` installs `SP_REACT`, `SP_REACTDOM` and `SP_JSX`, which Steam does not define and
   Decky's loader otherwise would. Decky skips its **entire** globals block when `SP_REACT` is already set, so when ours
