@@ -24,6 +24,7 @@ jobs:
           PR_LABELS_JSON: ${{ toJson(github.event.pull_request.labels.*.name) }}
           PR_BODY: ${{ github.event.pull_request.body }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
 
@@ -36,6 +37,17 @@ jobs:
           # --- Opt-out: PR body marker ---
           if echo "${PR_BODY:-}" | grep -iqE 'docs:[[:space:]]*n/?a'; then
             echo "::notice::Skipping docs check — PR description marks 'docs: N/A'."
+            exit 0
+          fi
+
+          # --- Opt-out: release-please's own version bump ---
+          # Its PR stamps version.txt and backend/domain/identity.py's VERSION line, so every release
+          # PR touches source and would fail this check forever. Skipping by BRANCH rather than by
+          # adding those paths to the skip list below: identity.py is a real source file whose
+          # docstring is load-bearing, and exempting it by name would drop the docs requirement from
+          # every hand-written change to it too.
+          if [[ "${HEAD_REF:-}" == release-please--* ]]; then
+            echo "::notice::Skipping docs check — release-please version bump."
             exit 0
           fi
 

@@ -95,6 +95,12 @@ For genuinely doc-irrelevant PRs (pure refactor with no user-visible change, no 
 tooling/CI changes; dependency bumps), set the `no-docs-change` label on the PR OR include `docs: N/A` (with a one-line
 reason) in the PR description. Opting out is an explicit acknowledgement, not a silent omission.
 
+One opt-out is automatic and nobody has to remember it: a PR from a `release-please--*` branch. Its diff stamps
+`version.txt` and `backend/domain/identity.py`'s `VERSION` line, so every release PR touches source and would fail the
+check forever. It is skipped by BRANCH rather than by exempting those two paths, because `identity.py` is a real source
+file whose docstring is load-bearing — exempting it by name would drop the docs requirement from every hand-written
+change to it as well.
+
 Docs are Material for MkDocs, published to GitHub Pages by `.github/workflows/docs.yml` on push to `main`. Preview
 locally with `mise run docs`.
 
