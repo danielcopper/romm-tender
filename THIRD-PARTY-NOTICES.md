@@ -12,11 +12,11 @@ will find it — so listing them again would be a second copy to keep in step, n
 
 Tender also ships, and this file does not describe:
 
-| What                                      | Licence | Where its text is                                               |
-| ----------------------------------------- | ------- | --------------------------------------------------------------- |
-| `backend/_vendor/atlas` (emu-atlas)       | MIT     | `backend/_vendor/atlas.LICENSE`, beside the tree                |
-| `backend/_vendor/vdf` (ValvePython/vdf)   | MIT     | `backend/_vendor/vdf/LICENSE`, inside the tree                  |
-| `backend/native/libgavel-x86_64-linux.so` | MIT     | upstream only — no copy in this repository (see the note below) |
+| What                                      | Licence | Where its text is                                                    |
+| ----------------------------------------- | ------- | -------------------------------------------------------------------- |
+| `backend/_vendor/atlas` (emu-atlas)       | MIT     | `backend/_vendor/atlas.LICENSE`, beside the tree                     |
+| `backend/_vendor/vdf` (ValvePython/vdf)   | MIT     | `backend/_vendor/vdf/LICENSE`, inside the tree                       |
+| `backend/native/libgavel-x86_64-linux.so` | MIT     | `backend/native/libgavel-x86_64-linux.so.LICENSE`, beside the binary |
 
 The two vendored trees are not held the same way, and the difference is deliberate rather than an inconsistency:
 `scripts/check_vendored_trees.py` asserts the sibling `atlas.LICENSE` because upstream's own wheel manifest names a
@@ -25,9 +25,11 @@ upstream manifest can ever match it) and its `LICENSE` is covered instead by the
 requires to match the vendored file set exactly. Provenance for both is in
 [`backend/_vendor/README.md`](backend/_vendor/README.md).
 
-**`backend/native/` carries no licence text.** The `.so` is a compiled build of
-[romm-gavel](https://github.com/danielcopper/romm-gavel), MIT and by this project's own author, pinned by a checksum
-rather than vendored as source — see [`backend/native/README.md`](backend/native/README.md).
+**`backend/native/` is pinned differently from the two vendored trees.** The `.so` is a compiled build of
+[romm-gavel](https://github.com/danielcopper/romm-gavel), MIT and by this project's own author, shipped as a binary
+rather than as source — so its licence is a sibling file, copied verbatim from upstream at the release the checksum
+pins, and the checksum itself is upstream's own artifact and pins only the `.so`. What that means for the licence file,
+and how to re-copy it on a bump, is at [`backend/native/README.md`](backend/native/README.md).
 
 ## @decky/ui
 
