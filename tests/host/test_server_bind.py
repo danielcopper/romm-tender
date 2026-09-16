@@ -10,7 +10,7 @@ import pytest
 from host.dispatch import CallDispatcher
 from host.events import EventSink
 from host.server import DEFAULT_PORT, HostServer
-from tests.host.conftest import SERVER_IDENTITY, FakePlugin, free_port
+from tests.host.conftest import SERVER_IDENTITY, FakePlugin, close_all, free_port, squat_run
 from tests.host.ws_client import http_get
 
 LOGGER = logging.getLogger("test_server_bind")
@@ -54,29 +54,22 @@ class TestTheBind:
 
     async def test_it_falls_back_past_a_port_another_program_holds(self, static_root):
         """The fallback is for a FOREIGN program — a second backend never reaches it."""
-        taken = free_port()
-        squatter = await asyncio.start_server(lambda r, w: None, host="127.0.0.1", port=taken)
+        taken, squatters = await squat_run(1)
         server = build_server(static_root, taken)
         try:
             assert await server.start() == taken + 1
         finally:
             await server.stop()
-            squatter.close()
-            await squatter.wait_closed()
+            await close_all(squatters)
 
     async def test_it_keeps_stepping_past_a_run_of_taken_ports(self, static_root):
-        first = free_port()
-        squatters = [
-            await asyncio.start_server(lambda r, w: None, host="127.0.0.1", port=first + offset) for offset in range(3)
-        ]
+        first, squatters = await squat_run(3)
         server = build_server(static_root, first)
         try:
             assert await server.start() == first + 3
         finally:
             await server.stop()
-            for squatter in squatters:
-                squatter.close()
-                await squatter.wait_closed()
+            await close_all(squatters)
 
     async def test_it_raises_when_no_port_in_the_range_is_free(self, static_root):
         taken = free_port()
@@ -91,8 +84,7 @@ class TestTheBind:
 
     async def test_the_checks_are_built_from_the_port_actually_bound(self, static_root):
         """A policy built from the port we wanted would refuse everything after a fallback."""
-        taken = free_port()
-        squatter = await asyncio.start_server(lambda r, w: None, host="127.0.0.1", port=taken)
+        taken, squatters = await squat_run(1)
         server = build_server(static_root, taken)
         try:
             bound = await server.start()
@@ -100,8 +92,7 @@ class TestTheBind:
             refused, _, _ = await http_get(bound, "/index.js", token=server.token, host=f"127.0.0.1:{taken}")
         finally:
             await server.stop()
-            squatter.close()
-            await squatter.wait_closed()
+            await close_all(squatters)
 
         assert status == 200
         assert refused == 421

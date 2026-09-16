@@ -78,6 +78,49 @@ def free_port() -> int:
         return probe.getsockname()[1]
 
 
+async def squat_run(count: int) -> tuple[int, list[asyncio.Server]]:
+    """Hold *count* consecutive loopback ports, with the one after them free.
+
+    ``free_port`` speaks for one port and says nothing about its neighbours, and
+    the ephemeral range it draws from is exactly where other programs are handed
+    theirs — so a test that assumed ``first + 1`` was free failed whenever the
+    machine happened to be using it. This binds the whole run at once, which is
+    what proves every port in it was free, and releases only the last so the
+    server under test has somewhere to land.
+
+    Returns the first port and the servers holding the run; the caller closes them.
+    """
+    for _ in range(64):
+        held: list[asyncio.Server] = []
+        first = free_port()
+        try:
+            # Appended one at a time on purpose: a bind that fails part-way through
+            # the run must leave the ports already held in ``held``, so the except
+            # below can give them back. ``list.extend`` over a comprehension would
+            # discard them and leak a listener for the rest of the session.
+            for offset in range(count + 1):
+                held.append(  # noqa: PERF401
+                    await asyncio.start_server(lambda r, w: None, host="127.0.0.1", port=first + offset)
+                )
+        except OSError:
+            for server in held:
+                server.close()
+                await server.wait_closed()
+            continue
+        landing = held.pop()
+        landing.close()
+        await landing.wait_closed()
+        return first, held
+    raise AssertionError(f"no run of {count + 1} consecutive free loopback ports")
+
+
+async def close_all(servers: list[asyncio.Server]) -> None:
+    """Close every server and wait for it, so the next test finds the ports free."""
+    for server in servers:
+        server.close()
+        await server.wait_closed()
+
+
 class RunningHost:
     """A started server plus the pieces a test needs to make assertions about it."""
 
