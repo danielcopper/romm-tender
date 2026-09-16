@@ -724,7 +724,7 @@ surface — the QAM panel and the patch into Steam's game-detail route (`fronten
 the keyboard-and-mouse client (`frontend/src/desktop/`, which holds a README and nothing else so far). They are **peers,
 not layers**: the two share data and logic and almost nothing visual, so neither may import from the other, and anything
 that turns out to belong to both moves _down_ into `api/`, `utils/` or `types/` rather than sideways —
-`import-x/no-restricted-paths` in `eslint.config.js` enforces both directions.
+`import-x/no-restricted-paths` in `frontend/eslint.config.js` enforces both directions.
 
 The word predates the directories and the older use is still current: `docs/architecture/qam-panel.md` and
 `frontend/src/utils/gameDetailStore.ts` call the components subscribed to one game page's **game-detail store** that

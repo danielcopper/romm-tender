@@ -26,7 +26,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
-const SRC = path.join(process.cwd(), "frontend", "src");
+const SRC = path.join(process.cwd(), "src");
 const UTILS_DIR = path.join(SRC, "utils", "__eslint_fixtures__");
 const API_DIR = path.join(SRC, "api", "__eslint_fixtures__");
 // Not `__eslint_fixtures__`: eslintQamFocusable.test.ts owns a directory of that

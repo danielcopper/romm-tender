@@ -27,9 +27,13 @@ Three pieces line up:
   patches are removed and re-applied).
 - **Reloading is gated on a `debug` flag, and this repo no longer produces the manifest that carries it.** The watcher
   itself runs on every device, but it only re-loads plugins carrying `"debug"` in the `flags` array of a plugin's
-  `plugin.json`. That file is gone — nothing here writes a Decky manifest any more — so the hot reload described in this
-  section does not fire on a deploy from this tree. It is documented because the watcher's behaviour is what the loop
-  below is shaped around, and because the installer that replaces the deploy is its own cut (#1902).
+  `plugin.json`. No Decky manifest is written or deployed from this tree any more, so the hot reload described in this
+  section does not fire on a deploy from here. It is documented because the watcher's behaviour is what the loop below
+  is shaped around, and because the installer that replaces the deploy is its own cut (#1902).
+
+  Do not mistake `frontend/plugin.json` for that manifest. It carries a `name` and nothing else, it is never deployed,
+  and it exists only because `@decky/rollup` reads a file of that name before it will build at all — see the comment
+  above `deckyPlugin({})` in `frontend/rollup.config.js`. Adding `flags` to it would reach no device.
 
 ## One-time setup
 

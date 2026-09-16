@@ -10,15 +10,14 @@ import globals from "globals";
 import qamFocusableRow from "./eslint-rules/qam-focusable-row.js";
 
 export default tseslint.config(
-  // `.venv` (local uv/mise Python env) and `site` (local mkdocs build output) are
-  // gitignored build artifacts that don't exist in a clean CI checkout; ignoring
-  // them keeps local `pnpm lint` from choking on their minified vendored JS.
-  // `.claude/worktrees` is where this repo's git worktrees live, and `.worktrees`
-  // is the convention they were kept under before; both hold whole checkouts of
-  // this repo, `node_modules` and all, which a lint run from a checkout holding
-  // one would otherwise walk until it runs out of V8 heap.
+  // ESLint's root is this package, so the only gitignored trees it can reach are
+  // this package's own: its `node_modules` and the coverage report Vitest writes
+  // beside it. Everything the old list also named — `.venv`, `site`, `.claude`,
+  // `.worktrees`, `defaults`, `bin`, and the build output, which the repository
+  // owns rather than this package — sits ABOVE this directory and is now out of
+  // reach by construction rather than by exclusion.
   {
-    ignores: ["dist", "node_modules", "defaults", "bin", "coverage", ".claude", ".worktrees", ".venv", "site"],
+    ignores: ["node_modules", "coverage"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -27,11 +26,11 @@ export default tseslint.config(
   reactHooks.configs.flat["recommended-latest"],
   jsxA11y.flatConfigs.recommended,
   // Global so eslint-plugin-react resolves the version for every linted file —
-  // including root config files (eslint.config.js, vitest.config.ts, …) that the
-  // react flat configs apply to but that the frontend-scoped block below never matches.
-  // Without it the plugin prints a "React version not specified" warning.
+  // including this package's config files (eslint.config.js, vitest.config.ts, …)
+  // that the react flat configs apply to but that the src-scoped block below never
+  // matches. Without it the plugin prints a "React version not specified" warning.
   { settings: { react: { version: "detect" } } },
-  // Direction rules for `frontend/src/`. The backend gets this from
+  // Direction rules for `src/`. The backend gets this from
   // `.importlinter`, which is Python-only; without an equivalent here nothing
   // in the frontend toolchain has an opinion about which module may reach
   // which. The seven rules below make the WRONG seam fail — they cannot certify
@@ -39,7 +38,7 @@ export default tseslint.config(
   // dozen parameters and doing nothing on its own, is neither a cycle nor a
   // direction violation and still passes.
   {
-    files: ["frontend/src/**/*.{ts,tsx}"],
+    files: ["src/**/*.{ts,tsx}"],
     plugins: { "import-x": importX },
     settings: {
       // Resolution decides what these rules see. The TS resolver handles path
@@ -53,7 +52,7 @@ export default tseslint.config(
       // one edge deep and reports nothing, on any codebase, forever. `parsers`
       // supplies the TS parser it needs to do that reading. A probe cycle is the
       // only way to tell this apart from "no cycles exist"; see
-      // frontend/src/eslintBoundaries.test.ts for the one that stays.
+      // src/eslintBoundaries.test.ts for the one that stays.
       "import-x/extensions": [".ts", ".tsx"],
       "import-x/parsers": { "@typescript-eslint/parser": [".ts", ".tsx"] },
     },
@@ -69,36 +68,36 @@ export default tseslint.config(
         {
           zones: [
             {
-              target: "./frontend/src/utils",
-              from: "./frontend/src/bigpicture",
+              target: "./src/utils",
+              from: "./src/bigpicture",
               message:
                 "utils/ is the bottom layer and must not reach up into a surface. Declare what you need to ask (see LaunchPrompts in utils/launchInterceptor.ts) and let index.tsx supply it.",
             },
             {
-              target: "./frontend/src/utils",
-              from: "./frontend/src/desktop",
+              target: "./src/utils",
+              from: "./src/desktop",
               message:
                 "utils/ is the bottom layer and must not reach up into a surface. Declare what you need to ask (see LaunchPrompts in utils/launchInterceptor.ts) and let the surface's entry point supply it.",
             },
             {
-              target: "./frontend/src/api",
-              from: "./frontend/src/bigpicture",
+              target: "./src/api",
+              from: "./src/bigpicture",
               message: "api/ is the wire layer and has no business reaching into the view.",
             },
             {
-              target: "./frontend/src/api",
-              from: "./frontend/src/desktop",
+              target: "./src/api",
+              from: "./src/desktop",
               message: "api/ is the wire layer and has no business reaching into the view.",
             },
             {
-              target: "./frontend/src/bigpicture",
-              from: "./frontend/src/desktop",
+              target: "./src/bigpicture",
+              from: "./src/desktop",
               message:
                 "bigpicture/ and desktop/ are peers, not layers: the two surfaces share data and logic and almost nothing visual, so neither may reach into the other. Anything that turns out to belong to both moves DOWN into api/, utils/ or types/ — never sideways.",
             },
             {
-              target: "./frontend/src/desktop",
-              from: "./frontend/src/bigpicture",
+              target: "./src/desktop",
+              from: "./src/bigpicture",
               message:
                 "desktop/ and bigpicture/ are peers, not layers: the two surfaces share data and logic and almost nothing visual, so neither may reach into the other. Anything that turns out to belong to both moves DOWN into api/, utils/ or types/ — never sideways.",
             },
@@ -109,16 +108,16 @@ export default tseslint.config(
   },
   {
     files: [
-      "frontend/src/index.tsx",
-      "frontend/src/bigpicture/{MainPage,SyncPage,LibraryPage,SettingsPage,DangerZone,RemovedGamesCleanup,DownloadQueue}.tsx",
-      "frontend/src/bigpicture/{SessionBudgetBanner,MigrationBlockedPage,SettingsResetBanner,PlaytimeScopeBanner,DownloadProgressRow,LoadingRow}.tsx",
-      "frontend/src/bigpicture/{layout,sync,library,settings}/**/*.tsx",
+      "src/index.tsx",
+      "src/bigpicture/{MainPage,SyncPage,LibraryPage,SettingsPage,DangerZone,RemovedGamesCleanup,DownloadQueue}.tsx",
+      "src/bigpicture/{SessionBudgetBanner,MigrationBlockedPage,SettingsResetBanner,PlaytimeScopeBanner,DownloadProgressRow,LoadingRow}.tsx",
+      "src/bigpicture/{layout,sync,library,settings}/**/*.tsx",
     ],
     // A test renders no row a reader walks, and a modal is not a panel row at all —
     // it mounts in Steam's `ModalRoot`, outside the region that scrolls by focus.
     // Neither exemption is load-bearing today: with both removed the rule still
-    // reports nothing across `frontend/src/**/*.tsx`.
-    ignores: ["frontend/src/**/*.test.tsx", "frontend/src/bigpicture/**/*Modal.tsx"],
+    // reports nothing across `src/**/*.tsx`.
+    ignores: ["src/**/*.test.tsx", "src/bigpicture/**/*Modal.tsx"],
     plugins: {
       tender: {
         rules: { "qam-focusable-row": qamFocusableRow },
@@ -129,7 +128,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["frontend/src/**/*.{ts,tsx}"],
+    files: ["src/**/*.{ts,tsx}"],
     languageOptions: {
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
       globals: {
@@ -173,9 +172,9 @@ export default tseslint.config(
     // Vitest globals (describe/it/expect/vi/...) are injected at runtime via
     // vitest.config.ts `globals: true` + tsconfig "types": ["vitest/globals"].
     files: [
-      "frontend/src/**/*.{test,spec}.{ts,tsx}",
-      "frontend/src/test-setup.ts",
-      "frontend/src/test-utils/**/*.ts",
+      "src/**/*.{test,spec}.{ts,tsx}",
+      "src/test-setup.ts",
+      "src/test-utils/**/*.ts",
     ],
     languageOptions: {
       globals: { ...globals.vitest },

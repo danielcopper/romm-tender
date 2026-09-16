@@ -2,10 +2,18 @@
 """Coverage-exclusion gate — an exclusion names a PROPERTY of the code, never a place.
 
 Coverage exclusions live in two lists that must agree: ``coverage.exclude`` in
-``vitest.config.ts`` (what the local and CI coverage report leaves out) and
-``sonar.coverage.exclusions`` in ``sonar-project.properties`` (what the
+``frontend/vitest.config.ts`` (what the local and CI coverage report leaves out)
+and ``sonar.coverage.exclusions`` in ``sonar-project.properties`` (what the
 SonarCloud quality gate leaves out). Both are hand-maintained, and neither knows
 the other exists.
+
+**The two spell the same entry differently, and that is not drift.** Sonar runs
+from the repository root; Vitest runs from ``frontend/``, so its paths are
+relative to that package — ``src/types/**`` there is ``frontend/src/types/**``
+here. Every declaration below is written repo-relative, and each Vitest entry is
+normalised onto that footing before anything is compared (:func:`repo_relative`).
+An entry that is already repo-relative on the Vitest side fails the comparison
+loudly rather than passing, which is the direction that wants to be loud.
 
 Two things went wrong before this gate, and both were silent.
 
@@ -18,8 +26,8 @@ Steam's router has no subject outside the device), and that reason therefore
 belongs to the file, not to its parent directory.
 
 The second is drift between the two lists: ``steamShortcuts.ts`` sat on Sonar's
-list and not on Vitest's, under a comment in ``vitest.config.ts`` claiming the
-two were aligned.
+list and not on Vitest's, under a comment in the Vitest config claiming the two
+were aligned.
 
 So the reason each excluded file carries is written IN that file, as a marker
 comment in its first five lines:
@@ -68,8 +76,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-VITEST_CONFIG = Path("vitest.config.ts")
+VITEST_CONFIG = Path("frontend/vitest.config.ts")
 SONAR_PROPERTIES = Path("sonar-project.properties")
+
+# What the Vitest config's paths are relative to. Its entries name paths inside
+# the frontend package because that is the directory Vitest runs in; every
+# declaration in this file, and Sonar's whole list, is repo-relative.
+VITEST_ROOT = "frontend/"
 
 MARKER = "// coverage-exempt:"
 # The marker rides above the file's own docstring/imports, so it is found
@@ -98,8 +111,8 @@ SONAR_ONLY = {
     "**/tests/**": "the Python suite — Vitest's coverage scope is frontend/src only",
     "**/conftest.py": "pytest fixtures — Python, as above",
     "backend/_vendor/**": "vendored third-party Python — not our code, and not TypeScript",
-    "*.config.js": "root build/test/lint config — outside Vitest's frontend/src include",
-    "*.config.ts": "root build/test/lint config — outside Vitest's frontend/src include",
+    "frontend/*.config.js": "the frontend package's build/test/lint config — outside Vitest's src include",
+    "frontend/*.config.ts": "the frontend package's build/test/lint config — outside Vitest's src include",
 }
 VITEST_ONLY = {
     "frontend/src/**/*.{test,spec}.{ts,tsx}": (
@@ -115,14 +128,38 @@ MARKER_SUFFIXES = (".ts", ".tsx", ".js", ".jsx")
 MARKER_SKIP = ("node_modules/", "backend/_vendor/", "dist/", "site/", "coverage/")
 
 
+def repo_relative(entry: str) -> str:
+    """A Vitest exclusion entry on the same footing as everything else here.
+
+    Vitest runs in ``frontend/``, so its entries are relative to that package
+    and this prepends the package prefix unconditionally. An entry that already
+    carries the prefix is NOT special-cased here: doing so would make a
+    repo-relative entry — which excludes nothing, because Vitest would resolve
+    it to ``frontend/frontend/...`` — compare equal to Sonar's and pass in
+    silence. :func:`misspelled_vitest_entries` reports that case by name
+    instead.
+    """
+    return VITEST_ROOT + entry
+
+
+def misspelled_vitest_entries(raw: list[str]) -> list[str]:
+    """Vitest entries written repo-relative, which match nothing.
+
+    The two lists spell shared entries differently on purpose, so this is the
+    one confusion the difference invites: ``frontend/src/types/**`` looks right
+    beside Sonar's copy and excludes nothing at all.
+    """
+    return [e for e in raw if e.startswith(VITEST_ROOT)]
+
+
 def vitest_exclusions(text: str) -> list[str]:
-    """The string entries of ``coverage.exclude`` in vitest.config.ts."""
+    """The string entries of ``coverage.exclude``, exactly as the file spells them."""
     coverage = text.split("coverage:", 1)
     if len(coverage) != 2:
-        raise SystemExit("ERROR: vitest.config.ts has no `coverage:` block")
+        raise SystemExit(f"ERROR: {VITEST_CONFIG} has no `coverage:` block")
     block = re.search(r"exclude:\s*\[(.*?)\]", coverage[1], re.DOTALL)
     if block is None:
-        raise SystemExit("ERROR: vitest.config.ts `coverage:` block has no `exclude: [...]` array")
+        raise SystemExit(f"ERROR: {VITEST_CONFIG} `coverage:` block has no `exclude: [...]` array")
     return re.findall(r'"([^"]+)"', block.group(1))
 
 
@@ -156,20 +193,32 @@ def carries_marker(path: Path) -> bool:
 
 def collect_errors(root: Path, source_files: list[str]) -> list[str]:
     """Every way the two lists, the paths they name and the markers disagree."""
-    vitest = vitest_exclusions((root / VITEST_CONFIG).read_text(encoding="utf-8"))
+    vitest_raw = vitest_exclusions((root / VITEST_CONFIG).read_text(encoding="utf-8"))
+    vitest = [repo_relative(e) for e in vitest_raw]
     sonar_text = (root / SONAR_PROPERTIES).read_text(encoding="utf-8")
     sonar = sonar_exclusions(sonar_text)
     errors: list[str] = []
+
+    for entry in misspelled_vitest_entries(vitest_raw):
+        errors.append(
+            f"'{entry}' in {VITEST_CONFIG} is spelled repo-relative, so it excludes nothing — "
+            f"Vitest runs in {VITEST_ROOT.rstrip('/')}/, so drop the '{VITEST_ROOT}' prefix"
+        )
 
     # 1. The two lists agree once the declared asymmetries are taken out.
     for entry, reason in SONAR_ONLY.items():
         if entry not in sonar:
             errors.append(f"'{entry}' is declared Sonar-only ({reason}) but is not in sonar.coverage.exclusions")
-        if entry in vitest:
-            errors.append(f"'{entry}' is declared Sonar-only but appears in vitest.config.ts — update the declaration")
+        # Both spellings, because normalising alone would miss one: a Sonar-only
+        # entry written package-relative (`*.config.js`) is caught by the
+        # normalised list, and one written repo-relative (`**/conftest.py`,
+        # which no prefix would change) by the raw one. Either way it is this
+        # error and not the vaguer drift message below.
+        if entry in vitest or entry in vitest_raw:
+            errors.append(f"'{entry}' is declared Sonar-only but appears in {VITEST_CONFIG} — update the declaration")
     for entry, reason in VITEST_ONLY.items():
         if entry not in vitest:
-            errors.append(f"'{entry}' is declared Vitest-only ({reason}) but is not in vitest.config.ts")
+            errors.append(f"'{entry}' is declared Vitest-only ({reason}) but is not in {VITEST_CONFIG}")
         # Read against the raw line: Sonar's list is comma-separated, so a glob
         # holding a comma (`{test,spec}`) cannot survive the split — which is
         # also why such an entry cannot be expressed on that side at all.

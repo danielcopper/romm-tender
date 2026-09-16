@@ -50,25 +50,25 @@ jobs:
         with:
           node-version: "24"
           cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm -C frontend install --frozen-lockfile
 
       - name: ESLint
-        run: pnpm lint
+        run: pnpm -C frontend lint
 
       - name: Prettier format check
-        run: pnpm format:check
+        run: pnpm -C frontend format:check
 
       - name: Build
-        run: pnpm build
+        run: pnpm -C frontend build
 
       - name: Type check
-        run: pnpm typecheck
+        run: pnpm -C frontend typecheck
 
       - name: Check bundle size budget
-        run: pnpm size
+        run: pnpm -C frontend size
 
   frontend-test:
     runs-on: ubuntu-latest
@@ -82,19 +82,19 @@ jobs:
         with:
           node-version: "24"
           cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm -C frontend install --frozen-lockfile
 
       - name: Run frontend tests with coverage
-        run: pnpm test:coverage
+        run: pnpm -C frontend test:coverage
 
       - name: Upload frontend coverage artifact
         uses: actions/upload-artifact@v7
         with:
           name: frontend-coverage
-          path: coverage/lcov.info
+          path: frontend/coverage/lcov.info
 
   lint:
     runs-on: ubuntu-latest

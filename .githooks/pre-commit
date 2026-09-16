@@ -82,8 +82,9 @@ else
 fi
 
 # --- Frontend: format staged TypeScript with Prettier ---------------------
-# Find prettier — prefer the project-local node_modules binary, fall back to PATH
-PRETTIER="$(git rev-parse --show-toplevel)/node_modules/.bin/prettier"
+# Find prettier — prefer the frontend package's node_modules binary, fall back to
+# PATH. The JS package lives in frontend/, so that is where node_modules is.
+PRETTIER="$(git rev-parse --show-toplevel)/frontend/node_modules/.bin/prettier"
 if [ ! -x "$PRETTIER" ]; then
     PRETTIER="$(command -v prettier 2>/dev/null)"
 fi

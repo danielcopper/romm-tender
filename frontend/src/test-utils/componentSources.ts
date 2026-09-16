@@ -21,28 +21,28 @@
  *
  * `.tsx` only, which is a real limit rather than a definition: a wording helper
  * extracted into a `.ts` beside its component is not swept. Components are the
- * surfaces, and `frontend/src/utils` is where a shared wording legitimately
- * lives, so a blanket `frontend/src/**` would fail on the module that owns the
- * phrases.
+ * surfaces, and `src/utils` is where a shared wording legitimately lives, so a
+ * blanket `src/**` would fail on the module that owns the phrases.
  */
 
 import { globSync, readFileSync } from "node:fs";
 
 /** One component source file: its repo-relative path, and its text. */
 export interface ComponentSource {
-  /** Relative to `frontend/src/`, POSIX-separated — the name a test case is
-   *  reported under. */
+  /** Relative to `src/`, POSIX-separated — the name a test case is reported
+   *  under. */
   path: string;
   /** The file's whole text, comments included: a comment quoting a sentence the
    *  module owns is drift too, since the reasoning belongs where the words do. */
   source: string;
 }
 
-// The Vitest root, which is the repo root — not `import.meta.url`, which is not
-// a `file:` URL for a non-test module under the happy-dom environment and throws
-// on `fileURLToPath`. A wrong root is caught below rather than assumed away: it
-// finds no file, and the sweep refuses to answer with an empty set.
-const SRC_DIR = `${process.cwd()}/frontend/src/`;
+// The Vitest root, which is this package's directory — not `import.meta.url`,
+// which is not a `file:` URL for a non-test module under the happy-dom
+// environment and throws on `fileURLToPath`. A wrong root is caught below rather
+// than assumed away: it finds no file, and the sweep refuses to answer with an
+// empty set.
+const SRC_DIR = `${process.cwd()}/src/`;
 
 // Directories an eslint test plants and removes while the suite runs — see the
 // note on `componentSources` below.

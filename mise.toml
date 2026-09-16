@@ -1,6 +1,6 @@
 [tools]
 node = "24"      # major pin — "lts" is a moving alias that silently jumps majors; CI uses node 24
-pnpm = "10.29.3" # exact — must match package.json "packageManager"; bump both together
+pnpm = "10.29.3" # exact — must match frontend/package.json "packageManager"; bump both together
 python = "3.11"  # match Decky Loader's embedded Python (libpython3.11)
 uv = "0.10.2"    # exact — uv creates the venv AND compiles the dependency locks; pin so the local resolver == the lock author
 deno = "2.8"     # minor pin — deno fmt is a formatter; a version jump can reformat Markdown (the CI drift we're killing)
@@ -10,7 +10,7 @@ _.python.venv = { path = ".venv", create = true }
 
 [tasks.setup]
 description = "Install JS and Python dependencies"
-run = ["pnpm install", "uv pip install -r requirements-dev.lock", "git config core.hooksPath .githooks"]
+run = ["pnpm -C frontend install", "uv pip install -r requirements-dev.lock", "git config core.hooksPath .githooks"]
 
 [tasks.lock-update]
 description = "Recompile the pinned Python dependency locks from the requirements-*.txt sources (run after editing a source or bumping a pin)"
@@ -25,7 +25,7 @@ run = [
 
 [tasks.build]
 description = "Build frontend (dev: with source maps)"
-run = "pnpm build:dev"
+run = "pnpm -C frontend build:dev"
 depends = ["setup"]
 
 [tasks.test]
@@ -34,11 +34,11 @@ run = "python -m pytest tests/ -q"
 
 [tasks."test:frontend"]
 description = "Run frontend tests"
-run = "pnpm test"
+run = "pnpm -C frontend test"
 
 [tasks."test:frontend:coverage"]
 description = "Run frontend tests with coverage report"
-run = "pnpm test:coverage"
+run = "pnpm -C frontend test:coverage"
 
 [tasks."lint:md"]
 description = "Lint Markdown with markdownlint-cli2 (CI parity)"
@@ -48,7 +48,13 @@ description = "Lint Markdown with markdownlint-cli2 (CI parity)"
 # repo, each with its own. `.claude` itself may NOT be excluded: `.claude/rules`
 # is repo documentation and has to stay in the checked set. Keep this list and
 # the markdownlint job in .github/workflows/ci.yml identical.
-run = "pnpm exec markdownlint-cli2 \"**/*.md\" \"!**/node_modules\" \"!**/.venv\" \"!.claude/worktrees\" \"!CHANGELOG.md\" \"!site\""
+# Invoked by PATH rather than through `pnpm -C frontend exec`: the globs below are
+# anchored at the repository root, and `-C` would move the working directory into
+# the package and silently re-scope every one of them. `markdownlint-cli2` is a
+# dependency of the frontend package because that is where this repo's only
+# node_modules lives — not because linting Markdown belongs to the frontend; most
+# of what it reads is under docs/.
+run = "frontend/node_modules/.bin/markdownlint-cli2 \"**/*.md\" \"!**/node_modules\" \"!**/.venv\" \"!.claude/worktrees\" \"!CHANGELOG.md\" \"!site\""
 
 [tasks.lint]
 description = "Check Cosmic Python architecture rules (layer imports + forbidden service calls) and Markdown"
@@ -93,12 +99,12 @@ run = [
     "ruff check .",
     "ruff format --check .",
     "basedpyright",
-    "pnpm lint",
-    "pnpm format:check",
-    "pnpm build",
-    "pnpm typecheck",
-    "pnpm size",
-    "pnpm test",
+    "pnpm -C frontend lint",
+    "pnpm -C frontend format:check",
+    "pnpm -C frontend build",
+    "pnpm -C frontend typecheck",
+    "pnpm -C frontend size",
+    "pnpm -C frontend test",
     "deno fmt --check",
 ]
 
@@ -137,7 +143,7 @@ for f in defaults/*; do rm -f "$DEST/$(basename "$f")"; done
 # up and fails. The layout is left in place because the installer that replaces
 # it is its own cut (#1902); do not read the steps below as working.
 rsync -a --delete --exclude=/main.py backend/ "$DEST/py_modules/"
-cp -f backend/main.py package.json "$DEST/"
+cp -f backend/main.py "$DEST/"
 '''
 
 [tasks.docs]
@@ -261,7 +267,10 @@ bash scripts/dev_open_bpm.sh "$usage_display"
 # cp (in-place modify), never mv/rsync: decky-loader's watcher reacts only to
 # create/modify events on dist/index.js + main.py — moves/renames are ignored.
 # The sourcemap goes first so the watched trigger file (index.js) lands last.
-exec pnpm exec rollup -c rollup.dev.config.js -w --watch.onEnd="cp -f dist/index.js.map '$DEST/dist/' && cp -f dist/index.js '$DEST/dist/'"
+# `-C frontend` puts rollup's working directory in the package, and onEnd runs
+# there too — hence `../dist`, which is where the build writes (the output is
+# the repository's, not the frontend package's).
+exec pnpm -C frontend exec rollup -c rollup.dev.config.js -w --watch.onEnd="cp -f ../dist/index.js.map '$DEST/dist/' && cp -f ../dist/index.js '$DEST/dist/'"
 '''
 
 [tasks."dev:push-backend"]

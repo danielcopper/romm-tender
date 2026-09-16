@@ -42,15 +42,15 @@ lives, what's coupled, what auto-merges, and how to bump things by hand** — se
 [Dependency management](dependency-management.md).
 
 The toolchain versions — `node`, `pnpm`, `python`, `uv`, `deno` — are **excluded** from Renovate: they are pinned and
-cross-file-coupled (each appears in `mise.toml` and in `package.json`'s `packageManager` and/or the workflow `setup-*`
-version inputs, and all copies must match — `python` to Decky's embedded libpython3.11, `uv` for lock reproducibility).
-Renovate is disabled for these by dependency name so a bot bump can't desync one copy; bump them by hand, together. The
-`setup-*` action SHAs themselves stay auto-updated.
+cross-file-coupled (each appears in `mise.toml` and in `frontend/package.json`'s `packageManager` and/or the workflow
+`setup-*` version inputs, and all copies must match — `python` to Decky's embedded libpython3.11, `uv` for lock
+reproducibility). Renovate is disabled for these by dependency name so a bot bump can't desync one copy; bump them by
+hand, together. The `setup-*` action SHAs themselves stay auto-updated.
 
 ## Building
 
 ```bash
-pnpm build            # Rollup -> dist/index.js
+pnpm -C frontend build   # Rollup -> dist/index.js (the repository's, not the package's)
 ```
 
 The frontend is bundled with Rollup into a single `dist/index.js` file that Decky Loader serves.
@@ -72,8 +72,8 @@ Tests mirror the source layout (`tests/services/`, `tests/adapters/`, `tests/dom
 with each test file mapping 1:1 to a source module. Shared mocks live in `tests/conftest.py`, which also provides a mock
 `decky` module so tests run without Decky Loader.
 
-Frontend component tests run with `mise run test:frontend` (`pnpm test`); see `.claude/rules/testing-frontend.md` for
-the `@decky/api` event harness.
+Frontend component tests run with `mise run test:frontend` (`pnpm -C frontend test`); see
+`.claude/rules/testing-frontend.md` for the `@decky/api` event harness.
 
 ### Property-based tests
 
@@ -295,20 +295,20 @@ reviewable diff, never a command someone runs to get back to green.
 
 The frontend has no size gate — deliberately, because a threshold only works when something else forbids the cheap way
 of getting under it, and `frontend/src/` has no equivalent of `service-independence`. What it has instead is direction
-rules, in `eslint.config.js` via `eslint-plugin-import-x`: `frontend/src/utils/` and `frontend/src/api/` may not import
-either surface (`frontend/src/bigpicture/` or `frontend/src/desktop/`), the two surfaces may not import each other, and
-no module in `frontend/src/` may take part in an import cycle. The cycle rule is the one that matters most, because a
-cycle is the signature of a split whose two halves still call each other — the wrong seam, detectable without judgment.
-What none of them catch is a helper imported by exactly one parent that takes a dozen parameters and does nothing on its
-own: it is neither a cycle nor a direction violation. These rules make the worst seam fail; they do not certify that a
-seam is right.
+rules, in `frontend/eslint.config.js` via `eslint-plugin-import-x`: `frontend/src/utils/` and `frontend/src/api/` may
+not import either surface (`frontend/src/bigpicture/` or `frontend/src/desktop/`), the two surfaces may not import each
+other, and no module in `frontend/src/` may take part in an import cycle. The cycle rule is the one that matters most,
+because a cycle is the signature of a split whose two halves still call each other — the wrong seam, detectable without
+judgment. What none of them catch is a helper imported by exactly one parent that takes a dozen parameters and does
+nothing on its own: it is neither a cycle nor a direction violation. These rules make the worst seam fail; they do not
+certify that a seam is right.
 
 Two settings in that config are load-bearing and neither is the plugin's default. `import-x/extensions` ships as
 `['.js']`, so until it names `.ts`/`.tsx` the plugin resolves an import but never opens the target file to read _its_
 imports — `no-cycle` then walks a graph one edge deep and reports nothing, on any codebase. `import-x/parsers` supplies
 the parser it needs for that reading. Because the failure mode is silence rather than noise,
 `frontend/src/eslintBoundaries.test.ts` lints known-bad fixtures through the real config and fails if any of the seven
-rules stops reporting. A green `pnpm lint` on its own does not distinguish a working rule from an inert one.
+rules stops reporting. A green `pnpm -C frontend lint` on its own does not distinguish a working rule from an inert one.
 
 See [Backend Architecture](../architecture/backend-architecture.md) for details.
 
@@ -321,9 +321,9 @@ mise run gate         # run every PR check from .github/workflows/ci.yml, locall
 `mise run gate` is the single local battery that mirrors CI. It runs the backend tests (`mise run test`) and the
 architecture/lint gates (`mise run lint`), then adds the rest of what CI enforces: `ruff check` + `ruff format --check`,
 `basedpyright`, the frontend `eslint` / `prettier --check` / build / `tsc` typecheck / bundle-size budget, the frontend
-tests (`pnpm test`), and `deno fmt --check` for Markdown. It is slow — a full pytest run plus a production frontend
-build — so it is a pre-push check, not something to run on every save. The only CI jobs it can't reproduce are the
-SonarCloud scan and its `sonar-gate` (they need `SONAR_TOKEN` and the CI coverage artifacts).
+tests (`pnpm -C frontend test`), and `deno fmt --check` for Markdown. It is slow — a full pytest run plus a production
+frontend build — so it is a pre-push check, not something to run on every save. The only CI jobs it can't reproduce are
+the SonarCloud scan and its `sonar-gate` (they need `SONAR_TOKEN` and the CI coverage artifacts).
 
 ## Code Quality
 

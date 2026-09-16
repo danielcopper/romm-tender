@@ -100,6 +100,24 @@ locally with `mise run docs`.
 
 ## Traps — non-obvious rules that bite silently
 
+- **The build output lives at `<repo>/dist/`, not under `frontend/`** — and the frontend package writes one directory UP
+  to put it there (`config.output.dir = "../dist"` in `frontend/rollup.config.js`, assigned after `@decky/rollup` merges
+  its own defaults last, like `input` and `sourcemap`). `dist/` is the SEAM between the two halves rather than the
+  frontend's property: the backend serves it as `os.path.join(directories.code_dir, "dist")` (`backend/main.py`), and a
+  host that located its own build output relative to `__file__` would be the only part of the backend that knew the
+  repository's layout. Tidying `dist/` into the package it is built by would put the backend's reach inside the
+  frontend's internals. Two consequences worth knowing: `tsconfig.json`'s `outDir` and `.size-limit.json`'s `path` both
+  point up as well, and **emptying that directory is the `build` script's job** (`rm -rf ../dist && rollup -c`) —
+  `@decky/rollup` puts a `rollup-plugin-delete` in its plugin array aimed at `./dist/*`, which resolves against the
+  working directory and so cleans the package's own unused `dist` instead of the real one.
+- **`frontend/plugin.json` is not a manifest, and `@decky/rollup` is why it exists** — the builder opens it
+  unconditionally as its first statement (`@decky/rollup@1.0.2`, `src/index.js:74`), with no option to skip the read, so
+  deleting it makes `rollup -c` fail with `ENOENT` before any config of ours runs. Nothing installs, ships or reads it
+  otherwise. Its contents are inert: `name` is the only field reached, and it reaches only a `127.0.0.1:1337` asset URL
+  no loader serves for us and a `decky://` sourcemap prefix the dev build alone emits, plus a `@decky/manifest` external
+  global no module imports. It is **not** a home of the display name — nothing requires it to agree with `DISPLAY_NAME`.
+  It goes when `@decky/rollup` does (#1899).
+
 - **Shortcuts**: Use `SteamClient.Apps.AddShortcut()` from frontend JS, NOT VDF writes. VDF edits require Steam restart;
   SteamClient API is instant.
 - **AddShortcut ignores most params**: `AddShortcut(name, exe, startDir, launchOptions)` ignores startDir and
@@ -206,7 +224,7 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
 
 ## Development
 
-- **Build**: `pnpm build` (Rollup -> dist/index.js)
+- **Build**: `pnpm -C frontend build` (Rollup -> dist/index.js)
 - **Tests**: backend — `python -m pytest tests/ -q` or `mise run test`; frontend — `mise run test:frontend` (Vitest +
   happy-dom)
 - **Coverage**: backend — `python -m pytest tests/ -q --cov=backend --cov-report=term --cov-branch`; frontend —
@@ -558,34 +576,34 @@ Format: **invariant** — tier — enforced by.
 - **Layer import direction (services ↛ adapters, adapters ↛ services, …)** — check — `.importlinter` (`lint-imports`)
 - **Frontend direction: `frontend/src/utils/` and `frontend/src/api/` never import either surface
   (`frontend/src/bigpicture/`, `frontend/src/desktop/`); the two surfaces never import each other; and no
-  `frontend/src/` module takes part in an import cycle** — check — `eslint.config.js` (`import-x/no-restricted-paths`,
-  `import-x/no-cycle`). The surface pair is a peer rule, not a layer rule: the two share data and logic and almost
-  nothing visual, so anything that turns out to belong to both moves DOWN into `api/`, `utils/` or `types/`, never
-  sideways. These rules go inert rather than loud when misconfigured: `import-x/extensions` ships as `['.js']`, so until
-  it names `.ts`/`.tsx` the plugin resolves an import but never opens the target to read its imports, and `no-cycle`
-  reports nothing on any codebase. `frontend/src/eslintBoundaries.test.ts` lints known-bad fixtures through the real
-  config and fails if any of the seven stops reporting — a green `pnpm lint` alone proves nothing. Type-only imports are
-  not edges (erased at runtime), which is why the `api/backend.ts` ⇄ `utils/cachedGameDetailStore.ts` back-reference is
-  not a cycle
+  `frontend/src/` module takes part in an import cycle** — check — `frontend/eslint.config.js`
+  (`import-x/no-restricted-paths`, `import-x/no-cycle`). The surface pair is a peer rule, not a layer rule: the two
+  share data and logic and almost nothing visual, so anything that turns out to belong to both moves DOWN into `api/`,
+  `utils/` or `types/`, never sideways. These rules go inert rather than loud when misconfigured: `import-x/extensions`
+  ships as `['.js']`, so until it names `.ts`/`.tsx` the plugin resolves an import but never opens the target to read
+  its imports, and `no-cycle` reports nothing on any codebase. `frontend/src/eslintBoundaries.test.ts` lints known-bad
+  fixtures through the real config and fails if any of the seven stops reporting — a green `pnpm lint` alone proves
+  nothing. Type-only imports are not edges (erased at runtime), which is why the `api/backend.ts` ⇄
+  `utils/cachedGameDetailStore.ts` back-reference is not a cycle
 - **No bare `# type: ignore` / blanket suppressions** — check — `scripts/check_no_bare_ignores.sh`
 - **A coverage exclusion names a property of the code, never a place: every frontend-scoped entry stands in BOTH
-  `vitest.config.ts`'s `coverage.exclude` and `sonar-project.properties`' `sonar.coverage.exclusions`, every file entry
-  carries its reason as a `// coverage-exempt:` marker in the file's own first lines, and every marked file is listed**
-  — check — `scripts/check_coverage_exclusions.py` (a folder entry is admitted only from the script's `FOLDER_ENTRIES`,
-  where membership in the folder IS the property; the backend/config entries are Sonar-only and the frontend test glob
-  Vitest-only, each declared there with its reason so the asymmetry is stated rather than tolerated). Two accidents it
-  removes, both silent: `src/patches/**` excluded a FOLDER, so a file's coverage obligation changed when it was moved
-  out of the folder and nothing said so; and `steamShortcuts.ts` sat on Sonar's list and not on Vitest's under a comment
-  claiming the two were aligned. **What the check cannot see is MEMBERSHIP in a folder entry's directory** — the two
-  admitted folders are checked to exist and their contents are never read, so a real module filed into
-  `frontend/src/types/` or `frontend/src/test-utils/` is exempted by its PLACE, with no marker asked for and nothing
-  failing: the very accident above, still live for those two directories. It is declared rather than mechanized on
-  purpose — "is this really only a type declaration" is not a cheap check, and a half-check would exempt on a property
-  nobody stated while reading as enforcement. **Nor can it see the marker's SENTENCE** — a false reason passes green,
-  which is what the three stated reasons this cut found were: "no logic to assert" over a file with four passing tests,
-  "no isolated logic to assert" over 88.65% line coverage, and "thin plugin-entry shim" over 89.09%. Only the first was
-  replaced by a truer marker; the other two files lost their exclusions outright, which is also how their list drift was
-  settled
+  `frontend/vitest.config.ts`'s `coverage.exclude` and `sonar-project.properties`' `sonar.coverage.exclusions`, every
+  file entry carries its reason as a `// coverage-exempt:` marker in the file's own first lines, and every marked file
+  is listed** — check — `scripts/check_coverage_exclusions.py` (a folder entry is admitted only from the script's
+  `FOLDER_ENTRIES`, where membership in the folder IS the property; the backend/config entries are Sonar-only and the
+  frontend test glob Vitest-only, each declared there with its reason so the asymmetry is stated rather than tolerated).
+  Two accidents it removes, both silent: `src/patches/**` excluded a FOLDER, so a file's coverage obligation changed
+  when it was moved out of the folder and nothing said so; and `steamShortcuts.ts` sat on Sonar's list and not on
+  Vitest's under a comment claiming the two were aligned. **What the check cannot see is MEMBERSHIP in a folder entry's
+  directory** — the two admitted folders are checked to exist and their contents are never read, so a real module filed
+  into `frontend/src/types/` or `frontend/src/test-utils/` is exempted by its PLACE, with no marker asked for and
+  nothing failing: the very accident above, still live for those two directories. It is declared rather than mechanized
+  on purpose — "is this really only a type declaration" is not a cheap check, and a half-check would exempt on a
+  property nobody stated while reading as enforcement. **Nor can it see the marker's SENTENCE** — a false reason passes
+  green, which is what the three stated reasons this cut found were: "no logic to assert" over a file with four passing
+  tests, "no isolated logic to assert" over 88.65% line coverage, and "thin plugin-entry shim" over 89.09%. Only the
+  first was replaced by a truer marker; the other two files lost their exclusions outright, which is also how their list
+  drift was settled
 - **Every pinned version in `requirements-*.lock` satisfies its `requirements-*.txt` source constraint** — check —
   `scripts/check_lock_sync.py`
 - **Every local markdown link in tracked docs resolves (file target + heading/attr-list anchor)** — check —

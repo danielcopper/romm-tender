@@ -1,0 +1,14 @@
+# Prettier's scope is this package's sources under src/ — that is what
+# `pnpm format:check` checks and what the pre-commit hook formats.
+#
+# The four-line allowlist chain that used to stand here is gone with the move:
+# Prettier's root is this directory now, so an unscoped `prettier --write .`
+# cannot reach outside the package at all. What the chain was defending against
+# is worth remembering, because it was not hypothetical — an unscoped run has
+# re-expanded the minified docs/assets/logo.svg into a 300-line diff and reached
+# the vendored conformance vectors under tests/, which must never be edited.
+# Those all live above this directory now.
+#
+# What remains is the one exclusion that is genuinely INSIDE the package:
+# generated snapshots are not sources and Prettier must not rewrite them.
+src/**/*.snap

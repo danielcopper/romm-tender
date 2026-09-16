@@ -3,8 +3,8 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
-const QAM_FIXTURE_DIR = path.join(process.cwd(), "frontend", "src", "bigpicture", "layout", "__eslint_fixtures__");
-const OFF_SCOPE_FIXTURE_DIR = path.join(process.cwd(), "frontend", "src", "bigpicture", "__eslint_fixtures__");
+const QAM_FIXTURE_DIR = path.join(process.cwd(), "src", "bigpicture", "layout", "__eslint_fixtures__");
+const OFF_SCOPE_FIXTURE_DIR = path.join(process.cwd(), "src", "bigpicture", "__eslint_fixtures__");
 const RULE_ID = "tender/qam-focusable-row";
 
 const FIXTURES: [dir: string, name: string, source: string][] = [
@@ -144,11 +144,9 @@ describe("QAM Focusable row rule", () => {
     ];
     await Promise.all(
       qamFiles.map(async (file) => {
-        expect(await configuredRule(path.join(process.cwd(), "frontend", "src", "bigpicture", file))).toEqual([2]);
+        expect(await configuredRule(path.join(process.cwd(), "src", "bigpicture", file))).toEqual([2]);
       }),
     );
-    expect(
-      await configuredRule(path.join(process.cwd(), "frontend", "src", "bigpicture", "CustomPlayButton.tsx")),
-    ).toBeUndefined();
+    expect(await configuredRule(path.join(process.cwd(), "src", "bigpicture", "CustomPlayButton.tsx"))).toBeUndefined();
   });
 }, 60_000);

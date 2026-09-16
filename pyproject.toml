@@ -3,7 +3,11 @@ pythonVersion = "3.11"
 extraPaths = ["backend"]
 stubPath = "typings"
 typeCheckingMode = "basic"
-exclude = ["backend/_vendor", "node_modules", "scripts", ".venv", ".claude", ".worktrees"]
+# `**/node_modules`, not `node_modules`: a bare entry is a path relative to the
+# project root, and the JS package's dependencies live at `frontend/node_modules`.
+# Anchored at the root it walked into them and reported on the Python files a
+# JS dependency happens to ship (katex bundles font-generation scripts).
+exclude = ["backend/_vendor", "**/node_modules", "scripts", ".venv", ".claude", ".worktrees"]
 reportMissingModuleSource = "none"
 reportMissingImports = "warning"
 reportPrivateUsage = "error"

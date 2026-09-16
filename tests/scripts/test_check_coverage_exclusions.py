@@ -61,6 +61,18 @@ _SONAR_ONLY = list(check.SONAR_ONLY)
 _MARKED = "// coverage-exempt: a CSS payload, nothing to assert\nconst css = `a{}`;\n"
 
 
+def _as_package_relative(entry: str) -> str:
+    """Spell a repo-relative entry the way the Vitest config would.
+
+    The inverse of the gate's own ``repo_relative``. An entry outside the
+    frontend package (a Sonar-only one such as ``**/conftest.py``) has no
+    package-relative form and is written unchanged — which is what a developer
+    adding it to the wrong list would write, and what that case asserts on.
+    """
+    prefix = check.VITEST_ROOT
+    return entry[len(prefix) :] if entry.startswith(prefix) else entry
+
+
 def _write_root(
     tmp_path: Path,
     *,
@@ -71,12 +83,18 @@ def _write_root(
     """Lay out a synthetic repository root and return it."""
     vitest_entries = _VITEST_ONLY + _SHARED if vitest is None else vitest
     sonar_entries = _SONAR_ONLY + _SHARED if sonar is None else sonar
-    body = ",\n        ".join(f'"{e}"' for e in vitest_entries)
-    (tmp_path / "vitest.config.ts").write_text(
+    # Every case states its entries repo-relative, the footing the gate compares
+    # on. The Vitest config is written as the real one is — relative to the
+    # package Vitest runs in — so the synthetic root exercises the normalisation
+    # rather than sidestepping it.
+    body = ",\n        ".join(f'"{_as_package_relative(e)}"' for e in vitest_entries)
+    vitest_config = tmp_path / check.VITEST_CONFIG
+    vitest_config.parent.mkdir(parents=True, exist_ok=True)
+    vitest_config.write_text(
         "export default defineConfig({\n"
         "  test: {\n"
         "    coverage: {\n"
-        '      include: ["frontend/src/**/*.{ts,tsx}"],\n'
+        '      include: ["src/**/*.{ts,tsx}"],\n'
         f"      exclude: [\n        {body},\n      ],\n"
         "    },\n  },\n});\n",
         encoding="utf-8",
@@ -134,7 +152,7 @@ class TestTheTwoListsAgree:
 
         errors = check.collect_errors(root, ["frontend/src/utils/styleInjector.ts"])
 
-        assert any("**/conftest.py" in e and "appears in vitest.config.ts" in e for e in errors)
+        assert any("**/conftest.py" in e and "appears in frontend/vitest.config.ts" in e for e in errors)
 
     def test_a_vitest_only_entry_appearing_in_sonars_list_is_reported(self, tmp_path: Path) -> None:
         root = _write_root(tmp_path, sonar=_SONAR_ONLY + _SHARED + _VITEST_ONLY)
@@ -142,6 +160,35 @@ class TestTheTwoListsAgree:
         errors = check.collect_errors(root, ["frontend/src/utils/styleInjector.ts"])
 
         assert any("appears in sonar.coverage.exclusions" in e for e in errors)
+
+
+class TestTheTwoListsSpellEntriesDifferently:
+    """Sonar runs from the root, Vitest from the package — and the gate knows."""
+
+    def test_the_same_entry_in_its_two_spellings_is_not_drift(self, tmp_path: Path) -> None:
+        """`src/types/**` in the Vitest config IS `frontend/src/types/**` in Sonar's."""
+        root = _write_root(tmp_path)
+        written = (root / check.VITEST_CONFIG).read_text(encoding="utf-8")
+
+        assert '"src/types/**"' in written, "the synthetic config must use the package-relative spelling"
+        assert "frontend/src/types/**" not in written
+        assert check.collect_errors(root, ["frontend/src/utils/styleInjector.ts"]) == []
+
+    def test_a_vitest_entry_spelled_repo_relative_is_reported(self, tmp_path: Path) -> None:
+        """The confusion the two spellings invite, and the one that fails silently.
+
+        `frontend/src/types/**` in the Vitest config reads correctly beside
+        Sonar's identical copy and excludes nothing, because Vitest resolves it
+        against `frontend/`. Normalising it away would make it compare equal to
+        Sonar's entry and pass.
+        """
+        root = _write_root(tmp_path)
+        config = root / check.VITEST_CONFIG
+        config.write_text(config.read_text(encoding="utf-8").replace('"src/types/**"', '"frontend/src/types/**"'))
+
+        errors = check.collect_errors(root, ["frontend/src/utils/styleInjector.ts"])
+
+        assert any("frontend/src/types/**" in e and "excludes nothing" in e for e in errors)
 
 
 class TestEveryListedPathExists:

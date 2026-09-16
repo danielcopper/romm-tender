@@ -1,16 +1,13 @@
 {
-  "name": "romm-tender",
-  "version": "0.33.0",
-  "description": "Decky Loader plugin to sync your RomM library to Steam as non-steam shortcuts",
   "type": "module",
   "scripts": {
-    "build": "rollup -c",
-    "build:dev": "rollup -c rollup.dev.config.js",
+    "build": "rm -rf ../dist && rollup -c",
+    "build:dev": "rm -rf ../dist && rollup -c rollup.dev.config.js",
     "size": "size-limit",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
-    "format": "prettier --write \"frontend/src/**/*.{ts,tsx}\"",
-    "format:check": "prettier --check \"frontend/src/**/*.{ts,tsx}\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

@@ -1,7 +1,7 @@
 [
   {
     "name": "dist/index.js (raw)",
-    "path": "dist/index.js",
+    "path": "../dist/index.js",
     "brotli": false,
     "limit": "830 KB"
   }
