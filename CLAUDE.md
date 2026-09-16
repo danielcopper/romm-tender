@@ -234,12 +234,17 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
   inside `mise run gate`.
 - **Gate**: `mise run gate` (the full CI battery in one command — mirrors every PR check; slow. Run before pushing.)
 - **Setup**: `mise run setup` (installs JS + Python dependencies)
-- **Release**: release-please, configured as `release-type: simple` (`release-please-config.json`). The version it
-  proposes comes from `.release-please-manifest.json`; `version.txt` at the repository root is an OUTPUT of the release
-  run, not a source — release-please rewrites it, and `backend/domain/identity.py`'s `VERSION` line beside it, through
-  the `generic` extra-file entry that finds the line by its `x-release-please-version` marker. Neither is edited by
-  hand. `version.txt` ends with a newline because that is what release-please writes (`DefaultUpdater.updateContent`
-  returns `this.version + '\n'`); stripping it makes the next release PR diff a line nobody touched.
+- **Release**: release-please, configured as `release-type: simple` (`release-please-config.json`). What it proposes is
+  normally computed from `.release-please-manifest.json` plus the commits since — but **not today**:
+  `release-as: "1.0.0"` overrides that computation on every run, so every release PR proposes 1.0.0 until the key is
+  removed. **Take it out once 1.0.0 has shipped**, or the version stops moving and nothing says so.
+
+  Two files carry the version and each is written by a different mechanism: `version.txt` at the repository root is the
+  `simple` strategy's own version file, and `backend/domain/identity.py`'s `VERSION` line is an extra file, found by the
+  `x-release-please-version` marker on that line (the `generic` entry reaches only `identity.py`). Both are OUTPUTS of
+  the release run and neither is edited by hand. `version.txt` ends with a newline because that is what release-please
+  writes (`DefaultUpdater.updateContent` returns `this.version + '\n'`); stripping it makes the next release PR diff a
+  line nobody touched.
 - **Dev reload**: `mise run dev [display]` (build + restart plugin_loader; a display like `dp4` / `internal` also opens
   windowed BPM on it after the deploy)
 - **Frontend live dev**: `mise run dev:watch [display]` (one-time `mise run dev:setup`) — hot-reloads the **frontend**
