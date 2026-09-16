@@ -22,7 +22,7 @@
   "pip-compile": {
     "managerFilePatterns": [
       "/(^|/)requirements-dev\\.lock$/",
-      "/(^|/)requirements-docs\\.lock$/"
+      "/(^|/)docs/requirements\\.lock$/"
     ]
   },
   "packageRules": [

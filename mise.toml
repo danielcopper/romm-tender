@@ -13,14 +13,14 @@ description = "Install JS and Python dependencies"
 run = ["pnpm -C frontend install", "uv pip install -r requirements-dev.lock", "git config core.hooksPath .githooks"]
 
 [tasks.lock-update]
-description = "Recompile the pinned Python dependency locks from the requirements-*.txt sources (run after editing a source or bumping a pin)"
+description = "Recompile the pinned Python dependency locks from their sources (run after editing a source or bumping a pin)"
 # `--output-file=` (not `-o`): Renovate's pip-compile manager parses the uv
 # command recorded in each lock header and only recognizes the long `--output-file`
 # form with an `=`. `-o` makes it bail with "Option -o not supported (yet)", so it
 # can't recompile the lock on a dependency-update PR.
 run = [
     "uv pip compile requirements-dev.txt --output-file=requirements-dev.lock",
-    "uv pip compile requirements-docs.txt --output-file=requirements-docs.lock",
+    "uv pip compile docs/requirements.txt --output-file=docs/requirements.lock",
 ]
 
 [tasks.build]

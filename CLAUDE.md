@@ -250,9 +250,10 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
 - **Frontend live dev**: `mise run dev:watch [display]` (one-time `mise run dev:setup`) — hot-reloads the **frontend**
   into windowed Big Picture on every save, no loader restart. **Backend** changes need `mise run dev:push-backend`. Lost
   the Decky UI after leaving BPM: `mise run dev:bpm-reset [display]`. Guide: `docs/contributing/frontend-dev-loop.md`
-- **Tooling**: mise manages node, pnpm, python, uv; venv auto-creates at `.venv`. Python deps are pinned in
-  `requirements-*.lock`, compiled from `requirements-*.txt` by `uv pip compile`; regenerate with `mise run lock-update`
-  after editing a source or bumping a pin.
+- **Tooling**: mise manages node, pnpm, python, uv; venv auto-creates at `.venv`. Python deps are pinned in two
+  lock/source pairs — `requirements-dev.lock` at the root, for `backend/`, `tests/` and `scripts/`, and
+  `docs/requirements.lock` beside the documentation it builds — each compiled from the `.txt` next to it by
+  `uv pip compile`; regenerate with `mise run lock-update` after editing a source or bumping a pin.
 - **Pre-commit hook** (`.githooks/pre-commit`): formats staged files — `ruff format` + `ruff check` (Python),
   `prettier --write` (TS/TSX), `deno fmt` (Markdown). Stays fast (<2s); heavy validation is CI-only. Do not re-introduce
   heavy checks here. It re-stages what it formatted, but **only for a file with no unstaged changes**: `git add` stages
@@ -620,8 +621,8 @@ Format: **invariant** — tier — enforced by.
   tests, "no isolated logic to assert" over 88.65% line coverage, and "thin plugin-entry shim" over 89.09%. Only the
   first was replaced by a truer marker; the other two files lost their exclusions outright, which is also how their list
   drift was settled
-- **Every pinned version in `requirements-*.lock` satisfies its `requirements-*.txt` source constraint** — check —
-  `scripts/check_lock_sync.py`
+- **Every pinned version in a lock satisfies its `.txt` source constraint (`requirements-dev.*` at the root,
+  `docs/requirements.*` beside the docs)** — check — `scripts/check_lock_sync.py`
 - **Every local markdown link in tracked docs resolves (file target + heading/attr-list anchor)** — check —
   `scripts/check_markdown_links.py`
 - **Every stated RomM minimum version matches the enforced `Plugin._MIN_REQUIRED_VERSION`** — check —

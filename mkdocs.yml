@@ -6,8 +6,16 @@ site_url: https://danielcopper.github.io/romm-tender/
 # contributors and AI agents — they're internal design history, not user
 # documentation. Exclude them from the published MkDocs site so they
 # don't appear as orphan pages or in on-site search.
+#
+# The two requirement files are inputs to the docs BUILD, not documentation.
+# MkDocs copies every non-Markdown file under `docs_dir` into the output
+# verbatim, so without these two lines the site publishes them at
+# `/requirements.txt` and `/requirements.lock` — measured, and `--strict` says
+# nothing about it.
 exclude_docs: |
   adr/
+  requirements.txt
+  requirements.lock
 
 repo_url: https://github.com/danielcopper/romm-tender
 repo_name: danielcopper/romm-tender

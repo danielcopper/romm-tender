@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Lockfile constraint gate.
 
-``requirements-*.lock`` are compiled from ``requirements-*.txt`` via
+Each lock below is compiled from the ``.txt`` source beside it via
 ``uv pip compile`` (``mise run lock-update``). CI and ``mise run setup`` install
 from the LOCK, so a bump to a ``.txt`` constraint that does not regenerate the
 lock is INERT (the old pin keeps getting installed) and can leave the lock
@@ -32,7 +32,7 @@ from packaging.utils import canonicalize_name
 
 PAIRS = [
     ("requirements-dev.txt", "requirements-dev.lock"),
-    ("requirements-docs.txt", "requirements-docs.lock"),
+    ("docs/requirements.txt", "docs/requirements.lock"),
 ]
 
 # A pinned line in a uv-compiled lock: `name==version` at column 0 (the `# via`

@@ -31,7 +31,7 @@ therefore runs whatever global `pre-commit` you have installed first and aborts 
 guard you rely on in your other repos working here too. If you have no global hook, nothing changes.
 
 Python dependencies are installed from `requirements-dev.lock` — fully-pinned versions compiled from
-`requirements-dev.txt` by uv. After changing a source (`requirements-dev.txt` / `requirements-docs.txt`) or bumping a
+`requirements-dev.txt` by uv. After changing a source (`requirements-dev.txt` / `docs/requirements.txt`) or bumping a
 pin, run `mise run lock-update` to regenerate the locks.
 
 ### Automated dependency updates
