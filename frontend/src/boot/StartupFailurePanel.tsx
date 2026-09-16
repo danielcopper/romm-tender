@@ -7,6 +7,9 @@
  * Plain elements and inline styles only, so that whatever else is broken, this
  * still draws.
  *
+ * `boot/` is Steam-specific throughout — what makes it so, and why nothing
+ * should be built on it as general start-up code, is stated at `steamGlobals.ts`.
+ *
  * **Report, do not diagnose.** The page's whole job is to make one fault
  * distinguishable from another: an empty panel looks exactly like a backend that
  * is not running, and the user's next step is different in each case. So it says

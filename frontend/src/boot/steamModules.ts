@@ -9,6 +9,9 @@
  * five times a year for four years, so this is the ordinary failure of a working
  * install after a client update, not a defect.
  *
+ * `boot/` is Steam-specific throughout — what makes it so, and why nothing
+ * should be built on it as general start-up code, is stated at `steamGlobals.ts`.
+ *
  * **Why a check and not a try/catch.** An empty panel looks EXACTLY like "the
  * backend is not running", and those are two completely different faults with
  * two completely different fixes. The check exists so the panel can say which

@@ -2,6 +2,28 @@
  * Steam's React, ReactDOM and JSX runtime, installed by Tender instead of by
  * Decky Loader.
  *
+ * ## `boot/` is about STEAM, not about starting up
+ *
+ * This file is the entry point of `dist/globals.js` and the reason the directory
+ * exists, so the statement about the directory lives here; `steamModules.ts` and
+ * `StartupFailurePanel.tsx` point at it.
+ *
+ * Everything under `boot/` is specific to a frontend running **inside Steam's
+ * own client**, and the specificity is concrete rather than a matter of
+ * emphasis: this module reads `window.webpackChunksteamui`, Steam's own module
+ * registry, and writes `SP_REACT` / `SP_REACTDOM` / `SP_JSX`, three globals that
+ * exist only because a plugin loader puts them there; `steamModules.ts` asks
+ * whether a list of searches into that same registry found anything, and
+ * `StartupFailurePanel.tsx` words the answer for a user of the Quick Access
+ * menu. A frontend that were not Steam's would use none of it — it would take
+ * React from npm and have nothing to look up.
+ *
+ * **So this is not a general start-up package and nothing should be built on it
+ * as one.** There is no second frontend; if one ever arrives, the thing to reuse
+ * is the idea of refusing to mount rather than any file here.
+ *
+ * ## What this module does
+ *
  * Steam does not define `SP_REACT`, `SP_REACTDOM` or `SP_JSX` — Decky's loader
  * does, and until #1896 that was the only reason they existed on a device. The
  * panel bundle maps `react`, `react-dom` and `react/jsx-runtime` onto those
@@ -15,6 +37,21 @@
  * import cannot be ordered after set-up code in the same file. Only
  * `@decky/ui/dist/webpack` is imported here: the module-cache machinery without
  * the components. Decky splits it in the same place for the same reason.
+ *
+ * **ONE bootstrap with a live branch, not two artifacts.** The two panel
+ * bundles are two artifacts because their difference is decided at BUILD time —
+ * whether `@decky/ui`'s code is inside them — and a build is the only place that
+ * can be decided. This module's difference is not like that. Without Decky it
+ * must find and set the three globals; with Decky running it must leave them
+ * exactly as they are, because Decky skips its own globals block once
+ * `SP_REACT` is set and would then render through ours. That is a question about
+ * the machine at the moment this runs, and **whoever loads this cannot answer it
+ * in advance**: Decky may be started after Tender, or restarted mid-session, so
+ * a caller that picked a "with-Decky" artifact would be picking on a fact that
+ * can change between the pick and the run. So the branch is a read of live state
+ * — the first thing `installGlobals` does — and the function is idempotent by
+ * construction, which is also what lets the injector re-run it after Steam
+ * restarts its JS context.
  *
  * **The predicates below are not ours to choose.** Decky's loader skips its
  * entire globals block when `window.SP_REACT` is already set, so if Tender
