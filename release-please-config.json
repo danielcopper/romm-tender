@@ -1,17 +1,16 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-  "release-type": "node",
+  "release-type": "simple",
   "packages": {
     ".": {
       "package-name": "tender",
       "initial-version": "0.1.0",
       "changelog-path": "CHANGELOG.md",
-      "bump-minor-pre-major": true,
+      "release-as": "1.0.0",
       "extra-files": [
         {
-          "type": "json",
-          "path": "plugin.json",
-          "jsonpath": "$.version"
+          "type": "generic",
+          "path": "backend/domain/identity.py"
         }
       ]
     }

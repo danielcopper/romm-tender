@@ -108,8 +108,8 @@ depends = ["build"]
 raw = true
 run = '''
 DEST="$HOME/homebrew/plugins/romm-tender"
-# The plugin dir is root-owned: Decky's root plugin_loader continuously re-owns the
-# dir + plugin.json back to root within ~1-2s as a tamper guard, so a plain
+# The plugin dir is root-owned: Decky's root plugin_loader continuously re-owns it
+# back to root within ~1-2s as a tamper guard, so a plain
 # deck-owned rsync/cp hits "permission denied". The `dev` task makes this safe by
 # stopping plugin_loader and chowning the dir to deck around this deploy, so nothing
 # re-roots mid-flight. Run via `dev`, not `deploy` standalone, on a root-owned dir.
@@ -137,30 +137,7 @@ for f in defaults/*; do rm -f "$DEST/$(basename "$f")"; done
 # up and fails. The layout is left in place because the installer that replaces
 # it is its own cut (#1902); do not read the steps below as working.
 rsync -a --delete --exclude=/main.py backend/ "$DEST/py_modules/"
-cp -f backend/main.py plugin.json package.json "$DEST/"
-# Every local deploy is a dev deploy — no release artifact is built anywhere
-# here, so this deployed copy feeds nothing. decky-loader's file watcher runs on
-# every device — LIVE_RELOAD defaults to on and the shipped unit file sets no
-# value — but Loader.import_plugin re-loads only plugins carrying "debug" in
-# flags, and skips every other one. Injecting the flag into the DEPLOYED
-# plugin.json is what opts this plugin in. Never commit it to the repo
-# plugin.json: a release that shipped it would have every user's device restart
-# the plugin's backend and re-import its frontend whenever its dist/index.js
-# or main.py changed. Idempotent: re-deploys don't duplicate the flag.
-python3 - "$DEST/plugin.json" <<'PYEOF'
-import json
-import sys
-
-path = sys.argv[1]
-with open(path, encoding="utf-8") as f:
-    manifest = json.load(f)
-flags = manifest.setdefault("flags", [])
-if "debug" not in flags:
-    flags.append("debug")
-with open(path, "w", encoding="utf-8") as f:
-    json.dump(manifest, f, indent=2)
-    f.write("\n")
-PYEOF
+cp -f backend/main.py package.json "$DEST/"
 '''
 
 [tasks.docs]
@@ -191,7 +168,7 @@ if [ -n "${usage_display:-}" ]; then
 fi
 sudo -v
 DEST="$HOME/homebrew/plugins/romm-tender"
-# plugin_loader runs as root and continuously re-owns the plugin dir + plugin.json
+# plugin_loader runs as root and continuously re-owns the plugin dir
 # back to root within ~1-2s (Decky's tamper guard). A chown-then-deploy loses that
 # race: the rollup build between the chown and the cp is ~8s, so the dir is
 # root-owned again long before the copy runs ("permission denied"). Stop the loader
@@ -223,7 +200,7 @@ run = '''
 sudo -v
 DEST="$HOME/homebrew/plugins/romm-tender"
 # Decky's tamper guard (env CHOWN_PLUGIN_PATH, default "1") re-owns the plugin
-# dir + plugin.json back to root on every plugin load, so the deck user can't
+# dir back to root on every plugin load, so the deck user can't
 # write deploys into it while the loader runs. The drop-in turns the guard off
 # on this machine; drop-ins survive Decky self-updates (those rewrite only the
 # unit file). Every step below is idempotent — safe to re-run.
