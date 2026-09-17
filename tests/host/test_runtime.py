@@ -17,10 +17,14 @@ import pytest
 
 from host.dispatch import CallDispatcher
 from host.events import EventSink
+from host.inject import InjectionSetup
+from host.inject.bootstrap import MARKER, marker_present_expression
+from host.inject.bundles import COEXISTENCE_PANEL, GLOBALS_BUNDLE, STANDALONE_PANEL, choose_bundles
 from host.runtime import AlreadyRunningError, BackendBuild, _where_the_running_one_is, run_backend
 from host.single_instance import PortFile, SingleInstanceLock
 from host.status import HostStatus
 from tests.host.conftest import FakePlugin, free_port
+from tests.host.inject.fake_debugger import FakeDebugger, FakePage, FakeTarget
 from tests.host.ws_client import http_get
 
 LOGGER = logging.getLogger("test_runtime")
@@ -66,11 +70,12 @@ def default_sigterm():
     signal.signal(signal.SIGTERM, signal.SIG_DFL)
 
 
-async def _run(tmp_path, recorder: Recorder, status: HostStatus, port: int) -> None:
+async def _run(tmp_path, recorder: Recorder, status: HostStatus, port: int, injection=None) -> None:
     """Drive ``run_backend`` on *port* so no test ever binds the real default."""
     static_root = tmp_path / "dist"
     static_root.mkdir(exist_ok=True)
     await run_backend(
+        injection=injection,
         build=recorder.build,
         after_bind=recorder.after_bind,
         shutdown=recorder.shutdown,
@@ -225,3 +230,89 @@ class TestFailedStartUpSteps:
 
     def test_a_clean_start_records_none(self):
         assert HostStatus().failed_startup_steps == []
+
+
+class TestLoadingThePanelIntoSteam:
+    """The composition seam: the run loads the panel, and stops loading it when it ends."""
+
+    async def test_the_panel_is_loaded_while_the_backend_runs_and_the_socket_goes_with_it(
+        self, tmp_path, recorder, default_sigterm
+    ):
+        page = FakePage(
+            marker_expression=marker_present_expression(MARKER),
+            ready_expression=choose_bundles(decky_is_serving=False).ready_when,
+        )
+        debugger = FakeDebugger(page)
+        await debugger.start()
+        debugger.targets = [FakeTarget(id="renderer", title="SharedJSContext")]
+        debugger.handlers["Page.enable"] = lambda _params: {}
+
+        static_root = tmp_path / "dist"
+        static_root.mkdir(exist_ok=True)
+        for name in (GLOBALS_BUNDLE, STANDALONE_PANEL, COEXISTENCE_PANEL):
+            (static_root / name).write_text(f"// {name}\n", encoding="utf-8")
+
+        async def after_bind() -> None:
+            recorder.steps.append("after_bind")
+            async with asyncio.timeout(10):
+                while not page.bootstraps:
+                    await asyncio.sleep(0.01)
+            os.kill(os.getpid(), signal.SIGTERM)
+
+        recorder.after_bind = after_bind
+        try:
+            await asyncio.wait_for(
+                _run(
+                    tmp_path,
+                    recorder,
+                    HostStatus(),
+                    free_port(),
+                    injection=InjectionSetup(
+                        static_root=str(static_root),
+                        state_dir=str(tmp_path / "state"),
+                        user_home=str(tmp_path / "home"),
+                        version="0.0.0-test",
+                        debugger_port=debugger.port,
+                        decky_port=free_port(),
+                    ),
+                ),
+                20,
+            )
+            assert len(page.bootstraps) == 1
+            assert debugger.connections == 0
+        finally:
+            await debugger.stop()
+
+    async def test_the_switch_turns_it_off_without_touching_the_rest_of_the_run(
+        self, tmp_path, recorder, default_sigterm
+    ):
+        page = FakePage(
+            marker_expression=marker_present_expression(MARKER),
+            ready_expression=choose_bundles(decky_is_serving=False).ready_when,
+        )
+        debugger = FakeDebugger(page)
+        await debugger.start()
+        debugger.targets = [FakeTarget(id="renderer", title="SharedJSContext")]
+        try:
+            await asyncio.wait_for(
+                _run(
+                    tmp_path,
+                    recorder,
+                    HostStatus(),
+                    free_port(),
+                    injection=InjectionSetup(
+                        static_root=str(tmp_path / "dist"),
+                        state_dir=str(tmp_path / "state"),
+                        user_home=str(tmp_path / "home"),
+                        version="0.0.0-test",
+                        override="off",
+                        debugger_port=debugger.port,
+                        decky_port=free_port(),
+                    ),
+                ),
+                20,
+            )
+            assert page.evaluated == []
+            assert recorder.steps == ["build", "after_bind", "shutdown"]
+        finally:
+            await debugger.stop()

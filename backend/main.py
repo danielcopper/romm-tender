@@ -22,6 +22,7 @@ from bootstrap import (
 from bootstrap.startup import StartupSteps
 
 from domain.app_directories import resolve_directories
+from domain.identity import VERSION
 from host import (
     LOCK_FILENAME,
     PORT_FILENAME,
@@ -30,6 +31,7 @@ from host import (
     CallDispatcher,
     EventSink,
     HostStatus,
+    InjectionSetup,
     configure_logging,
     new_token,
     run_backend,
@@ -1144,6 +1146,12 @@ class Plugin:
             plugin._host_status = status
             return BackendBuild(dispatcher=CallDispatcher(plugin, logger), server_identity=user_agent)
 
+        # Handed in, never searched for: a host that looked for its own build
+        # output relative to ``__file__`` would be the only part of this backend
+        # that knew the repository's layout. Resolved once here because the
+        # server serves this directory and the injector hashes the bundles in
+        # it, and two spellings of one directory are free to drift apart.
+        static_root = os.path.join(directories.code_dir, "dist")
         try:
             asyncio.run(
                 run_backend(
@@ -1152,15 +1160,19 @@ class Plugin:
                     shutdown=plugin._unload,
                     events=events,
                     status=status,
-                    # Handed in, never searched for: a host that looked for its own
-                    # build output relative to ``__file__`` would be the only part of
-                    # this backend that knew the repository's layout.
-                    static_root=os.path.join(directories.code_dir, "dist"),
+                    static_root=static_root,
                     # The lock lies beside what it protects, which is the database.
                     lock_path=os.path.join(directories.data_dir, LOCK_FILENAME),
                     port_file_path=os.path.join(directories.runtime_dir, PORT_FILENAME),
                     logger=logger,
                     token=token,
+                    injection=InjectionSetup.from_environment(
+                        os.environ,
+                        static_root=static_root,
+                        state_dir=directories.state_dir,
+                        user_home=user_home,
+                        version=VERSION,
+                    ),
                 )
             )
         except AlreadyRunningError as exc:

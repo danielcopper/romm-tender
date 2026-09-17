@@ -129,9 +129,18 @@ class HostServer:
         live = self._connection.dropped_messages if self._connection is not None else 0
         return self._dropped_by_closed_connections + live
 
+    def asset_url(self, filename: str) -> str:
+        """The complete address *filename* is served at, token included.
+
+        The one place an address of this server is spelled. What loads the panel
+        runs in this process and asks here, so the token reaches the code that
+        needs it without ever being stored anywhere.
+        """
+        return f"http://127.0.0.1:{self._port}/{filename}?{TOKEN_PARAM}={self._token}"
+
     def bundle_url(self) -> str:
         """The complete address the panel bundle is loaded from, token included."""
-        return f"http://127.0.0.1:{self._port}/{BUNDLE_FILENAME}?{TOKEN_PARAM}={self._token}"
+        return self.asset_url(BUNDLE_FILENAME)
 
     async def start(self) -> int:
         """Bind a port and begin serving; return the port that was taken.

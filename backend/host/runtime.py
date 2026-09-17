@@ -7,6 +7,7 @@ order below is the whole point of this module::
       -> schema migration and the start-up routines
       -> bind the port (preferred, then falling back)
       -> write the port file
+      -> start loading the panel into Steam
       -> the one start-up step that talks to the network
 
 Because the port is bound only after the schema and the start-up routines are
@@ -39,6 +40,7 @@ import signal
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from host.inject import PanelInjector
 from host.server import DEFAULT_PORT, HostServer
 from host.single_instance import PortFile, SingleInstanceLock, someone_listening
 
@@ -48,6 +50,7 @@ if TYPE_CHECKING:
 
     from host.dispatch import CallDispatcher
     from host.events import EventSink
+    from host.inject import InjectionSetup
     from host.status import HostStatus
 
 
@@ -86,6 +89,7 @@ async def run_backend(
     port_file_path: str,
     logger: logging.Logger,
     token: str,
+    injection: InjectionSetup | None = None,
     preferred_port: int = DEFAULT_PORT,
 ) -> None:
     """Start the backend, serve until a termination signal, then shut it down.
@@ -96,6 +100,8 @@ async def run_backend(
     by the caller because the logging filter that keeps it out of the log file
     has to exist before the first line is written. *after_bind* is
     the network-touching start-up step, run once the port has been announced.
+    *injection* is what the panel is loaded into Steam with, or ``None`` to serve
+    the panel and load it nowhere.
     *shutdown* is awaited before the process ends — an interrupted unload would
     leave the very state the start-up routines exist to repair. *preferred_port*
     is the port asked for first; the bind falls back past a port some other
@@ -115,6 +121,7 @@ async def run_backend(
     # repair.
     stop = _listen_for_termination()
     server: HostServer | None = None
+    injector: asyncio.Task[None] | None = None
     try:
         built = await build()
 
@@ -140,12 +147,26 @@ async def run_backend(
         if status.failed_startup_steps:
             logger.warning(f"host: {len(status.failed_startup_steps)} start-up step(s) failed; the panel will say so")
 
+        # After the address is announced, because the injector asks the server
+        # for it — and before the network-touching start-up step, which may wait
+        # on a server that is not there. Loading the panel does not depend on
+        # RomM being reachable, and holding it behind a timing-out credential
+        # fetch would leave Steam without a panel for the length of it.
+        if injection is not None:
+            injector = asyncio.create_task(
+                PanelInjector(setup=injection, asset_url=server.asset_url, token=token, logger=logger).run()
+            )
+
         await after_bind()
         await stop.wait()
         logger.info("host: termination signal received")
     finally:
         _stop_listening_for_termination()
         logger.info("host: shutting down")
+        if injector is not None:
+            injector.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await injector
         with contextlib.suppress(Exception):
             await shutdown()
         if server is not None:

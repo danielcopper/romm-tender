@@ -19,6 +19,7 @@ them from here and never from a submodule.
 from host.access import new_token
 from host.dispatch import CallDispatcher
 from host.events import EventSink
+from host.inject import InjectionSetup
 from host.logging_setup import configure_logging
 from host.runtime import AlreadyRunningError, BackendBuild, run_backend
 from host.single_instance import LOCK_FILENAME, PORT_FILENAME
@@ -32,6 +33,7 @@ __all__ = [
     "CallDispatcher",
     "EventSink",
     "HostStatus",
+    "InjectionSetup",
     "configure_logging",
     "new_token",
     "run_backend",
