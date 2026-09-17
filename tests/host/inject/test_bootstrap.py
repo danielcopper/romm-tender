@@ -11,8 +11,11 @@ from typing import Any
 import pytest
 
 from host.inject.bootstrap import (
-    DISMISS,
     MARKER,
+    STOP,
+    STOP_BINDING,
+    STOP_NOTE,
+    STOP_PAYLOAD,
     TITLE,
     build_bootstrap,
     build_facts,
@@ -31,6 +34,7 @@ def facts(**overrides):
         "log_path": "/home/deck/.local/state/romm-tender/backend.log",
         "urls": URLS,
         "token": TOKEN,
+        "binding": STOP_BINDING,
     }
     values.update(overrides)
     return build_facts(**values)
@@ -55,11 +59,17 @@ class TestWhatTheSourceCarries:
     def test_a_steam_build_nobody_could_read_is_worded_rather_than_left_blank(self):
         assert folded_facts(build_bootstrap(facts(steam_build="")))["steam_build"] == "unknown"
 
-    def test_the_card_says_what_happened_and_offers_a_way_off_the_screen(self):
+    def test_the_card_says_what_happened_and_where_updates_are_listed(self):
         carried = folded_facts(build_bootstrap(facts()))
         assert carried["title"] == TITLE
-        assert carried["dismiss"] == DISMISS
         assert "releases" in carried["updates"]
+
+    def test_the_address_of_the_releases_is_text_rather_than_a_button(self):
+        """Nothing here updates Tender yet, so a button would be a button that lies."""
+        source = build_bootstrap(facts())
+        card = source[source.index("const showLoadFailure") : source.index("return loadAll()")]
+        assert "T.updates" in card
+        assert card.count('el("button"') == 1
 
     def test_a_log_path_with_javascript_in_its_name_is_carried_as_data(self):
         awkward = '/tmp/"; window.owned = 1; //'
@@ -92,6 +102,33 @@ class TestTheToken:
         assert "T.token" not in card
 
 
+class TestTheOneButton:
+    def test_it_says_which_program_restarting_means(self):
+        carried = folded_facts(build_bootstrap(facts()))
+        assert carried["stop"] == STOP
+        assert carried["stop_note"] == STOP_NOTE
+        assert "backend process" in carried["stop_note"]
+
+    def test_pressing_it_tells_the_backend_and_takes_the_card_away(self):
+        source = build_bootstrap(facts())
+        assert "ask(T.stop_payload);" in source
+        assert "card.remove();" in source
+        assert folded_facts(source)["stop_payload"] == STOP_PAYLOAD
+
+    def test_it_reaches_the_backend_through_the_debugger_and_not_a_socket(self):
+        source = build_bootstrap(facts())
+        assert folded_facts(source)["binding"] == STOP_BINDING
+        assert "win[T.binding]" in source
+        for forbidden in ("WebSocket", "fetch(", "XMLHttpRequest"):
+            assert forbidden not in source
+
+    def test_no_button_is_drawn_where_there_is_nothing_for_it_to_reach(self):
+        """A button that cannot report a press is worse here than no button."""
+        source = build_bootstrap(facts(binding=""))
+        assert folded_facts(source)["binding"] == ""
+        assert "if (T.binding) {" in source
+
+
 class TestTheCardNeverTakesTheMachineOver:
     def test_nothing_but_the_dismiss_button_accepts_a_press(self):
         source = build_bootstrap(facts())
@@ -100,8 +137,10 @@ class TestTheCardNeverTakesTheMachineOver:
         assert card.count('pointerEvents: "auto"') == 1
         assert card.index('pointerEvents: "none"') < card.index('pointerEvents: "auto"')
 
-    def test_the_dismiss_button_removes_the_card(self):
-        assert 'dismiss.addEventListener("click", () => card.remove());' in build_bootstrap(facts())
+    def test_the_button_is_the_only_thing_that_accepts_one(self):
+        source = build_bootstrap(facts())
+        card = source[source.index("const showLoadFailure") : source.index("return loadAll()")]
+        assert card.count('el("button"') == 1
 
 
 class TestTheCardIsBuiltFromNothingThatCanBeMissing:

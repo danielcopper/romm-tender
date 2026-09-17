@@ -19,9 +19,15 @@ interface came back empty.
 **It never takes the machine over.** Whether Steam's controller focus can reach
 a node appended to its document from outside its own React tree is not
 established here, and the card is built so that the answer does not matter: it is
-drawn with ``pointer-events: none`` everywhere except its dismiss button, so
-every control underneath it stays reachable whatever happens to the button. A
-fixed overlay that swallowed input would be worse than the fault it reports.
+drawn with ``pointer-events: none`` everywhere except its one button, so every
+control underneath it stays reachable whatever happens to that button. A fixed
+overlay that swallowed input would be worse than the fault it reports.
+
+**The one button reaches this process through a debugger binding**, which is why
+it can act at all: the card holds no token, opens no socket, and this backend
+grows no route for it. Whether the button is drawn is the injector's answer —
+it installs the binding before this source is evaluated and says so in the facts
+— because a button that cannot report a press is worse here than no button.
 
 **The token appears once, inside the addresses.** It has to be there — the panel
 reads the port and the token off the URL it was imported from
@@ -40,6 +46,13 @@ from dataclasses import asdict, dataclass
 # rebuild wipes it and everything short of one leaves it standing, which is
 # exactly the question the injector puts to it.
 MARKER = "__tender_panel__"
+
+# The function the debugger installs on the page so one press on the card can
+# reach this process, and the word that press sends. A binding is the whole of
+# the card's way back: the page holds no token, opens no socket of its own, and
+# this backend adds no route for it.
+STOP_BINDING = "__tender_stop_loading__"
+STOP_PAYLOAD = "stop"
 
 _FACTS_PLACEHOLDER = "__TENDER_FACTS__"
 
@@ -116,18 +129,27 @@ _SOURCE = """
     facts.appendChild(row("Log", T.log_path));
     card.appendChild(facts);
     card.appendChild(el("p", { margin: "0 0 10px", fontSize: "12px", opacity: "0.75" }, T.updates));
-    const dismiss = el("button", {
-      pointerEvents: "auto",
-      padding: "6px 14px",
-      fontSize: "13px",
-      color: "inherit",
-      background: "rgba(255, 255, 255, 0.12)",
-      border: "1px solid rgba(255, 255, 255, 0.24)",
-      borderRadius: "4px",
-      cursor: "pointer"
-    }, T.dismiss);
-    dismiss.addEventListener("click", () => card.remove());
-    card.appendChild(dismiss);
+    if (T.binding) {
+      const stop = el("button", {
+        pointerEvents: "auto",
+        padding: "6px 14px",
+        fontSize: "13px",
+        color: "inherit",
+        background: "rgba(255, 255, 255, 0.12)",
+        border: "1px solid rgba(255, 255, 255, 0.24)",
+        borderRadius: "4px",
+        cursor: "pointer"
+      }, T.stop);
+      stop.addEventListener("click", () => {
+        const ask = win[T.binding];
+        if (typeof ask === "function") {
+          ask(T.stop_payload);
+        }
+        card.remove();
+      });
+      card.appendChild(stop);
+      card.appendChild(el("p", { margin: "8px 0 0", fontSize: "12px", opacity: "0.75" }, T.stop_note));
+    }
     win.document.body.appendChild(card);
   };
 
@@ -163,10 +185,13 @@ class BootstrapFacts:
     log_path: str
     urls: tuple[str, ...]
     token: str
+    binding: str
+    stop_payload: str
     title: str
     explanation: str
     updates: str
-    dismiss: str
+    stop: str
+    stop_note: str
 
 
 TITLE = "Tender could not load its panel"
@@ -174,8 +199,17 @@ EXPLANATION = (
     "Steam is unaffected and nothing in your library has been changed. Tender did not start at all, "
     "rather than starting half-way, and it will try again when Steam's interface reloads."
 )
+# Printed rather than offered as a button: nothing in this program updates
+# itself yet, and a button aimed at a Steam API nobody here has run would be a
+# guess on the one page whose whole job is to be true after everything else has
+# failed. It becomes a button in the cut that gives it something to do (#1903).
 UPDATES_AT = "Releases are listed at github.com/danielcopper/romm-tender/releases"
-DISMISS = "Dismiss"
+STOP = "Stop trying until Tender restarts"
+# "Restart" is the one word on this card a reader can get wrong, so the card
+# spells out which program it means. It is the same way back the crash state
+# has, for the same reason: the way out of a state Steam is in cannot be inside
+# Steam.
+STOP_NOTE = "That is Tender's own backend process. The panel is loaded again the next time it starts."
 
 
 def build_facts(
@@ -186,8 +220,16 @@ def build_facts(
     log_path: str,
     urls: tuple[str, ...],
     token: str,
+    binding: str = "",
 ) -> BootstrapFacts:
-    """Assemble what the evaluated source is given."""
+    """Assemble what the evaluated source is given.
+
+    *binding* is the name of the callback the debugger installed, or the empty
+    string when it could not be installed. The card draws its one button only
+    when there is something for it to reach: a button that cannot report a press
+    is worse on this card than no button, because this is the page a user reads
+    when nothing else worked.
+    """
     return BootstrapFacts(
         marker=MARKER,
         kind=kind,
@@ -196,10 +238,13 @@ def build_facts(
         log_path=log_path,
         urls=urls,
         token=token,
+        binding=binding,
+        stop_payload=STOP_PAYLOAD,
         title=TITLE,
         explanation=EXPLANATION,
         updates=UPDATES_AT,
-        dismiss=DISMISS,
+        stop=STOP,
+        stop_note=STOP_NOTE,
     )
 
 

@@ -96,6 +96,10 @@ class FakeDebugger:
         # RFC 6455 §5.1: every client frame is masked. Counted rather than
         # refused, so a test can assert on the number instead of on a hang.
         self.unmasked_client_frames = 0
+        # A command to hold un-answered, so a test can stop the injector at an
+        # exact point in its sequence rather than by racing it.
+        self.hold_method = ""
+        self.held = asyncio.Event()
         self._server: asyncio.Server | None = None
         self._port = 0
         self._writers: list[asyncio.StreamWriter] = []
@@ -231,6 +235,9 @@ class FakeDebugger:
         method = message.get("method", "")
         params = message.get("params", {})
         self.calls.append((method, params))
+
+        if method and method == self.hold_method:
+            await self.held.wait()
 
         handler = self.handlers.get(method)
         if handler is not None:

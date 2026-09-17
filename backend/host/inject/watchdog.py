@@ -75,11 +75,24 @@ class CrashWatchdog:
         self._override = override
         self._failures = 0
         self._fingerprint: Fingerprint | None = None
+        self._armed = False
 
     @property
     def path(self) -> str:
         """Where the record lives."""
         return self._path
+
+    @property
+    def armed(self) -> bool:
+        """Is there a record this process opened and has not yet answered for?
+
+        Exactly one of :meth:`survived`, :meth:`inconclusive` and
+        :meth:`stays_open` answers for an :meth:`arm`. This is how a shutdown
+        tells "nobody has looked yet" — which it must close, or the next start
+        reads it as a crash — from "the reading was taken", which it must leave
+        exactly as the reading left it.
+        """
+        return self._armed
 
     def judge(self, now: Fingerprint) -> Verdict:
         """Resolve what the last attempt left behind, and answer whether to inject.
@@ -108,11 +121,13 @@ class CrashWatchdog:
     def arm(self, fingerprint: Fingerprint) -> None:
         """Open a record, before anything is evaluated into Steam."""
         self._fingerprint = fingerprint
+        self._armed = True
         self._write(open_record=True)
 
     def survived(self) -> None:
         """Close the record: the interface was still there afterwards."""
         self._failures = 0
+        self._armed = False
         self._write(open_record=False)
 
     def inconclusive(self) -> None:
@@ -125,7 +140,17 @@ class CrashWatchdog:
         observed at all — and an unobserved attempt recorded as a failure would
         stop the injection over a user closing Steam.
         """
+        self._armed = False
         self._write(open_record=False)
+
+    def stays_open(self) -> None:
+        """Leave the record open — the interface did not come back.
+
+        Writes nothing, because the record already says so. What it does is mark
+        the reading as TAKEN, so a shutdown afterwards does not close what this
+        reading deliberately left open for the next start to find.
+        """
+        self._armed = False
 
     # -- the file --------------------------------------------------------------
 

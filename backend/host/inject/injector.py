@@ -27,7 +27,14 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from host.inject.bootstrap import MARKER, build_bootstrap, build_facts, marker_present_expression
+from host.inject.bootstrap import (
+    MARKER,
+    STOP_BINDING,
+    STOP_PAYLOAD,
+    build_bootstrap,
+    build_facts,
+    marker_present_expression,
+)
 from host.inject.bundles import bundle_digest, choose_bundles
 from host.inject.cdp import (
     DEBUGGER_PORT,
@@ -91,6 +98,44 @@ COMMAND_TIMEOUT_SECONDS = 10.0
 # open a few seconds more, while waiting too little would record a crash as a
 # survival and let the next start walk into it again.
 ALIVE_AFTER_SECONDS = 10.0
+
+
+# The two subscriptions one attachment watches, named so a waiter can say which
+# of them answered.
+_REBUILT = "rebuilt"
+_PRESSED = "pressed"
+
+
+class _Waits:
+    """The two queues an attachment watches, each with its getter held open.
+
+    The getters are made once and only the one that answered is renewed, so a
+    getter is never cancelled with an item already handed to it — which is what
+    a ``Queue.get`` cancelled and remade on every turn of a loop risks.
+    """
+
+    def __init__(
+        self,
+        rebuilt: asyncio.Queue[dict[str, Any] | None],
+        pressed: asyncio.Queue[dict[str, Any] | None],
+    ) -> None:
+        self._queues = {_REBUILT: rebuilt, _PRESSED: pressed}
+        self._waiting = {name: asyncio.ensure_future(queue.get()) for name, queue in self._queues.items()}
+
+    async def next(self) -> tuple[str, dict[str, Any] | None]:
+        """The next event off either queue, with the name of the queue it came from."""
+        done, _ = await asyncio.wait(self._waiting.values(), return_when=asyncio.FIRST_COMPLETED)
+        for name, waiting in list(self._waiting.items()):
+            if waiting in done:
+                self._waiting[name] = asyncio.ensure_future(self._queues[name].get())
+                return name, waiting.result()
+        raise CdpConnectionLost("waited on two queues and neither answered")
+
+    async def cancel(self) -> None:
+        """Drop both getters; the attachment is over."""
+        for waiting in self._waiting.values():
+            waiting.cancel()
+        await asyncio.gather(*self._waiting.values(), return_exceptions=True)
 
 
 @dataclass(frozen=True)
@@ -191,23 +236,46 @@ class PanelInjector:
             return
 
         self._logger.info(f"inject: attached to {target.title} ({target.id})")
+        # Subscribed before the domains are enabled, so nothing that happens
+        # while we are still setting up is missed.
+        waits = _Waits(connection.subscribe("Page.domContentEventFired"), connection.subscribe("Runtime.bindingCalled"))
         try:
-            # Subscribed before the domain is enabled, so a rebuild that happens
-            # while we are still setting up is queued rather than missed.
-            rebuilt = connection.subscribe("Page.domContentEventFired")
             async with asyncio.timeout(COMMAND_TIMEOUT_SECONDS):
                 await connection.call("Page.enable")
             while not self._stopped:
                 if not await self._already_carries_the_panel(connection) and not await self._inject(connection, target):
                     return
-                if await rebuilt.get() is None:
-                    self._logger.info("inject: the renderer connection ended; will attach again")
+                if not await self._wait_for_something_to_do(waits):
                     return
-                self._logger.info("inject: Steam rebuilt its JS context; loading the panel again")
         except (CdpConnectionLost, CdpUnavailableError, TimeoutError) as exc:
             self._logger.info(f"inject: the renderer connection failed ({type(exc).__name__}: {exc})")
         finally:
+            await waits.cancel()
             await connection.close()
+
+    async def _wait_for_something_to_do(self, waits: _Waits) -> bool:
+        """Wait until there is a reason to act; ``False`` ends this attachment.
+
+        Two things can arrive, and they are read as two subscriptions rather than
+        one poll: Steam rebuilt its JS context and wiped the marker, or the user
+        pressed the load-failure card's one button. A connection that ends puts
+        ``None`` on both, which is the third answer.
+        """
+        while True:
+            name, event = await waits.next()
+            if event is None:
+                self._logger.info("inject: the renderer connection ended; will attach again")
+                return False
+            if name == _REBUILT:
+                self._logger.info("inject: Steam rebuilt its JS context; loading the panel again")
+                return True
+            if _is_the_stop_press(event):
+                self._logger.warning(
+                    "inject: the load-failure card was pressed; loading nothing more into Steam until this backend "
+                    f"is restarted. Start it again, or set {INJECT_ENV}={INJECT_OFF} to stop it asking."
+                )
+                self._stopped = True
+                return False
 
     async def _find_target(self) -> Target | None:
         """Wait for Steam to name ``SharedJSContext``, or answer ``None``.
@@ -276,6 +344,7 @@ class PanelInjector:
         await self._abandon_alive_check()
         self._watchdog.arm(fingerprint)
 
+        binding = await self._install_the_cards_callback(connection)
         self._logger.info(f"inject: loading {', '.join(choice.files)} — {choice.because}")
         async with asyncio.timeout(EVALUATE_TIMEOUT_SECONDS):
             answer = await connection.call(
@@ -289,15 +358,49 @@ class PanelInjector:
                             log_path=self._log_path,
                             urls=tuple(self._asset_url(name) for name in choice.files),
                             token=self._token,
+                            binding=binding,
                         )
                     ),
                     "awaitPromise": True,
                     "returnByValue": True,
                 },
             )
-        self._report(answer)
+        if self._report(answer):
+            await self._listen_for_a_press(connection)
         self._alive_check = asyncio.create_task(self._check_still_alive(target.id, witness))
         return True
+
+    async def _install_the_cards_callback(self, connection: CdpConnection) -> str:
+        """Put the card's one callback on the page; answer its name, or ``""``.
+
+        Installed BEFORE the source that may draw the card is evaluated, so the
+        button is wired from the moment it exists — and re-installed on every
+        injection rather than once per attachment, because whether a binding
+        survives a JS-context rebuild is not established here. Adding one that
+        survived costs a round trip; missing one costs the card its only button.
+        """
+        try:
+            async with asyncio.timeout(COMMAND_TIMEOUT_SECONDS):
+                await connection.call("Runtime.addBinding", {"name": STOP_BINDING})
+        except (CdpUnavailableError, TimeoutError) as exc:
+            self._logger.info(f"inject: the debugger refused the card's callback ({exc}); it will draw no button")
+            return ""
+        return STOP_BINDING
+
+    async def _listen_for_a_press(self, connection: CdpConnection) -> None:
+        """Turn on the domain whose event carries a press — only once a card is up.
+
+        ``Runtime.bindingCalled`` is a Runtime event, so it arrives only while
+        that domain is enabled, and enabling it turns on every other Runtime
+        event for this connection as well. That cost is paid where it is worth
+        paying: after a load that failed, where the card is the only thing left
+        to act on, and never on the path where the panel came up.
+        """
+        try:
+            async with asyncio.timeout(COMMAND_TIMEOUT_SECONDS):
+                await connection.call("Runtime.enable")
+        except (CdpUnavailableError, TimeoutError) as exc:
+            self._logger.warning(f"inject: the card is up but its button cannot report a press ({exc})")
 
     async def _wait_until_ready(self, connection: CdpConnection, expression: str) -> bool:
         """Poll *expression* until the page says it is ready, or the window closes."""
@@ -320,8 +423,8 @@ class PanelInjector:
         steam = await loop.run_in_executor(None, read_steam_build, self._setup.user_home)
         return Fingerprint(tender=self._setup.version, bundle=digest, steam=steam or "")
 
-    def _report(self, answer: dict[str, Any]) -> None:
-        """Say what the evaluated bootstrap answered.
+    def _report(self, answer: dict[str, Any]) -> bool:
+        """Say what the evaluated bootstrap answered; is a card now on screen?
 
         Its own failure path draws the card that explains the state to the user,
         so what is wanted here is the sentence for the log — and the bootstrap
@@ -329,23 +432,24 @@ class PanelInjector:
         """
         if "exceptionDetails" in answer:
             self._logger.error(f"inject: the bootstrap could not be evaluated: {answer['exceptionDetails']}")
-            return
+            return False
         value = _value_of(answer)
         if not isinstance(value, dict):
             self._logger.error(f"inject: the bootstrap answered something unreadable: {value!r}")
-            return
+            return False
         if value.get("ok"):
             if value.get("already"):
                 self._logger.info("inject: this context already carries the panel")
             else:
                 self._logger.info("inject: the panel is loaded")
-            return
+            return False
         shown = (
             "the load-failure card is up"
             if value.get("shown")
             else "and the load-failure card could not be drawn either"
         )
         self._logger.error(f"inject: the panel did not load ({shown}): {value.get('reason')}")
+        return bool(value.get("shown"))
 
     # -- did the interface survive it? ----------------------------------------
 
@@ -376,6 +480,7 @@ class PanelInjector:
         if pages_besides(targets, target_id):
             self._watchdog.survived()
             return
+        self._watchdog.stays_open()
         self._logger.error(
             f"inject: Steam's interface is gone — {witness} page(s) were open when the panel was loaded and none "
             f"are now. The record stays open; two in a row and Tender stops loading the panel."
@@ -386,22 +491,34 @@ class PanelInjector:
         return await list_targets(self._setup.debugger_port)
 
     async def _abandon_alive_check(self) -> None:
-        """Drop a pending alive check and close its record without counting it.
+        """Drop a pending alive check and close a record nobody answered for.
 
-        Nothing was observed, so nothing is claimed. Both callers want exactly
-        that: a shutdown must not leave a record open for the next start to read
-        as a crash, and a second injection arms the record again immediately
-        afterwards.
+        The record rather than the task is what decides: an injection can be
+        interrupted after the record is armed and before the check that answers
+        for it exists, and a record left open there would be read as a crash at
+        the next start. Nothing was observed, so nothing is claimed — and a
+        reading that was taken is left exactly as it left it.
         """
-        if self._alive_check is None:
-            return
         check, self._alive_check = self._alive_check, None
-        if check.done():
-            return
-        check.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await check
-        self._watchdog.inconclusive()
+        if check is not None and not check.done():
+            check.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await check
+        if self._watchdog.armed:
+            self._watchdog.inconclusive()
+
+
+def _is_the_stop_press(event: dict[str, Any]) -> bool:
+    """Is this ``Runtime.bindingCalled`` the card's button and nothing else?
+
+    The connection carries every Runtime event once the domain is on, so the
+    name AND the word the button sends are both checked: a page that happened to
+    call a function of the same name with something else is not this press.
+    """
+    params = event.get("params")
+    if not isinstance(params, dict):
+        return False
+    return params.get("name") == STOP_BINDING and params.get("payload") == STOP_PAYLOAD
 
 
 def _value_of(answer: dict[str, Any]) -> Any:

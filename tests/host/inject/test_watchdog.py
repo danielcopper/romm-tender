@@ -197,3 +197,31 @@ class TestWhatItDoesWithAnUnusableFile:
             watchdog.survived()
         finally:
             unwritable.chmod(0o700)
+
+
+class TestWhoAnswersForAnArmedRecord:
+    """Exactly one of three answers follows an ``arm``, and a shutdown reads which."""
+
+    def test_arming_leaves_a_record_nobody_has_answered_for(self, record_path):
+        watchdog = CrashWatchdog(record_path)
+        watchdog.judge(SAME)
+        assert watchdog.armed is False
+        watchdog.arm(SAME)
+        assert watchdog.armed is True
+
+    def test_each_of_the_three_answers_settles_it(self, record_path):
+        for answer in ("survived", "inconclusive", "stays_open"):
+            watchdog = CrashWatchdog(record_path)
+            watchdog.judge(SAME)
+            watchdog.arm(SAME)
+            getattr(watchdog, answer)()
+            assert watchdog.armed is False, answer
+
+    def test_leaving_it_open_writes_nothing_and_keeps_the_record_open(self, record_path):
+        watchdog = CrashWatchdog(record_path)
+        watchdog.judge(SAME)
+        watchdog.arm(SAME)
+        watchdog.stays_open()
+
+        assert stored(record_path)["open"] is True
+        assert CrashWatchdog(record_path).judge(SAME).failures == 1

@@ -6,16 +6,18 @@ import asyncio
 import contextlib
 import json
 import logging
+import re
+from typing import Any
 
 import pytest
 
 import host.inject.injector as injector_module
-from host.inject.bootstrap import MARKER, marker_present_expression
+from host.inject.bootstrap import MARKER, STOP_BINDING, STOP_PAYLOAD, marker_present_expression
 from host.inject.bundles import COEXISTENCE_PANEL, GLOBALS_BUNDLE, STANDALONE_PANEL, choose_bundles
 from host.inject.injector import InjectionSetup, PanelInjector
 from host.inject.watchdog import INJECT_FORCE, INJECT_OFF, WATCHDOG_FILENAME, CrashWatchdog, Fingerprint
 from tests.host.conftest import free_port
-from tests.host.inject.fake_debugger import FakeDebugger, FakePage, FakeTarget
+from tests.host.inject.fake_debugger import FakeDebugger, FakePage, FakeTarget, refuse
 
 LOGGER = logging.getLogger("test_injector")
 TOKEN = "an-admission-token"
@@ -82,9 +84,13 @@ async def injecting(tmp_path):
         targets: list[FakeTarget] | None = None,
         decky_port: int | None = None,
         override: str = "",
+        handlers: dict[str, Any] | None = None,
+        hold: str = "",
     ) -> Running:
         used_page = page if page is not None else a_page()
         debugger = FakeDebugger(used_page)
+        debugger.handlers.update(handlers or {})
+        debugger.hold_method = hold
         await debugger.start()
         debugger.targets = targets if targets is not None else [FakeTarget(id=RENDERER, title="SharedJSContext")]
         debugger.handlers["Page.enable"] = lambda _params: {}
@@ -119,6 +125,7 @@ async def injecting(tmp_path):
         yield start
     finally:
         for running in started:
+            running.debugger.held.set()
             running.task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await running.task
@@ -191,6 +198,95 @@ class TestLoadingThePanel:
             await wait_until(lambda: any("has not named its renderer" in r.message for r in caplog.records))
         line = next(r.message for r in caplog.records if "has not named its renderer" in r.message)
         assert "2 target(s), 2 still unnamed" in line
+
+
+def carried_facts(bootstrap: str) -> dict[str, Any]:
+    """The one JSON object the evaluated source was built around."""
+    found = re.search(r"const T = (\{.*?\});", bootstrap, re.DOTALL)
+    assert found is not None
+    return json.loads(found.group(1))
+
+
+class TestTheCardsOneButton:
+    async def test_its_callback_is_installed_before_the_card_can_exist(self, injecting):
+        """The card is drawn by the evaluate, so the button is wired before it runs."""
+        page = a_page()
+        page.bootstrap_answer = {"ok": False, "reason": "TypeError", "shown": True}
+        running = await injecting(page=page)
+        await wait_until(lambda: page.bootstraps)
+
+        methods = [method for method, _ in running.debugger.calls]
+        drew_the_card = next(
+            index
+            for index, (method, params) in enumerate(running.debugger.calls)
+            if method == "Runtime.evaluate" and params.get("expression") == page.bootstraps[0]
+        )
+        assert methods.index("Runtime.addBinding") < drew_the_card
+        assert carried_facts(page.bootstraps[0])["binding"] == STOP_BINDING
+
+    async def test_the_press_is_listened_for_only_once_a_card_is_up(self, injecting):
+        page = a_page()
+        page.bootstrap_answer = {"ok": False, "reason": "TypeError", "shown": True}
+        running = await injecting(page=page)
+        await wait_until(lambda: any(method == "Runtime.enable" for method, _ in running.debugger.calls))
+
+    async def test_a_load_that_worked_turns_no_runtime_events_on(self, injecting):
+        running = await injecting()
+        await wait_until(lambda: running.page.bootstraps)
+        await asyncio.sleep(0.1)
+
+        assert "Runtime.enable" not in [method for method, _ in running.debugger.calls]
+
+    async def test_a_press_stops_loading_anything_more_into_steam(self, injecting, caplog):
+        page = a_page()
+        page.bootstrap_answer = {"ok": False, "reason": "TypeError", "shown": True}
+        running = await injecting(page=page)
+        await wait_until(lambda: page.bootstraps)
+
+        with caplog.at_level(logging.WARNING, logger="test_injector"):
+            await running.debugger.emit(
+                "Runtime.bindingCalled", {"name": STOP_BINDING, "payload": STOP_PAYLOAD, "executionContextId": 1}
+            )
+            await wait_until(lambda: running.task.done())
+
+        assert any("until this backend is restarted" in record.message for record in caplog.records)
+        assert len(page.bootstraps) == 1
+
+    async def test_a_rebuild_after_a_press_loads_nothing(self, injecting):
+        page = a_page()
+        page.bootstrap_answer = {"ok": False, "reason": "TypeError", "shown": True}
+        running = await injecting(page=page)
+        await wait_until(lambda: page.bootstraps)
+        await running.debugger.emit(
+            "Runtime.bindingCalled", {"name": STOP_BINDING, "payload": STOP_PAYLOAD, "executionContextId": 1}
+        )
+        await wait_until(lambda: running.task.done())
+
+        page.marker = False
+        await running.debugger.emit("Page.domContentEventFired", {"timestamp": 1})
+        await asyncio.sleep(0.15)
+        assert len(page.bootstraps) == 1
+
+    async def test_another_binding_call_is_not_that_press(self, injecting):
+        page = a_page()
+        page.bootstrap_answer = {"ok": False, "reason": "TypeError", "shown": True}
+        running = await injecting(page=page)
+        await wait_until(lambda: page.bootstraps)
+
+        await running.debugger.emit("Runtime.bindingCalled", {"name": "somebody-elses", "payload": STOP_PAYLOAD})
+        await running.debugger.emit("Runtime.bindingCalled", {"name": STOP_BINDING, "payload": "something-else"})
+        await asyncio.sleep(0.15)
+        assert not running.task.done()
+
+    async def test_a_refused_callback_leaves_the_card_without_a_button(self, injecting, caplog):
+        page = a_page()
+        page.bootstrap_answer = {"ok": False, "reason": "TypeError", "shown": True}
+        with caplog.at_level(logging.INFO, logger="test_injector"):
+            await injecting(page=page, handlers={"Runtime.addBinding": lambda _params: refuse("no such command")})
+            await wait_until(lambda: page.bootstraps)
+
+        assert carried_facts(page.bootstraps[0])["binding"] == ""
+        assert any("will draw no button" in record.message for record in caplog.records)
 
 
 class TestWhenSomethingUnexpectedGoesWrong:
@@ -296,6 +392,20 @@ class TestDidTheInterfaceSurviveIt:
             await wait_until(lambda: running.watchdog_record().get("open") is True)
             await running.debugger.stop()
             await wait_until(lambda: any("stopped answering" in r.message for r in caplog.records))
+        assert running.watchdog_record().get("open") is False
+
+    async def test_a_shutdown_before_the_check_even_exists_closes_the_record(self, injecting):
+        """The record is armed a moment before the check that answers for it exists."""
+        running = await injecting(
+            targets=[FakeTarget(id=RENDERER, title="SharedJSContext"), FakeTarget(id="bpm", title="Big Picture")],
+            hold="Runtime.addBinding",
+        )
+        await wait_until(lambda: running.watchdog_record().get("open") is True)
+        running.task.cancel()
+        running.debugger.held.set()
+        with contextlib.suppress(asyncio.CancelledError):
+            await running.task
+
         assert running.watchdog_record().get("open") is False
 
     async def test_shutting_the_backend_down_mid_check_closes_the_record(self, injecting):
