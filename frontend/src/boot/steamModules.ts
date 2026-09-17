@@ -24,6 +24,15 @@
  * with WHOSE copy of `@decky/ui` ran the stale predicate, which is not the same
  * in the two panel bundles and is answered by `searchingCopy.ts`.
  *
+ * **Did every search answer, and may the panel mount, are two questions.** They
+ * used to be one, and that spent the whole user interface on a decoration: a
+ * missing `ControllerGlyph` was enough to take the panel off the air, in a
+ * codebase where `WidePage.tsx` already draws `‹ Back` in its place. So each
+ * entry states what
+ * its absence costs ({@link SteamLookup.absenceCost}), the panel mounts when
+ * everything that missed was cosmetic, and {@link describeCosmeticMiss} puts the
+ * miss in the log, which is then the only thing that says so.
+ *
  * ## What this file can and cannot see
  *
  * A name is checkable here only when its VALUE is the lookup's result. Three of
@@ -68,12 +77,36 @@ import {
 } from "../utils/deckyUiInternals";
 import type { SearchingCopy } from "./searchingCopy";
 
+/**
+ * What one name's absence costs.
+ *
+ * - `panel` — the panel cannot be trusted to render without it, so nothing
+ *   mounts. This is the status quo answer for every name, and staying here
+ *   costs no evidence: it is what the check did for all of them.
+ * - `appearance` — the panel renders and only looks poorer, because the one
+ *   place that reads the name already draws something else when it is missing.
+ *
+ * Moving a name to `appearance` is what needs evidence, one name at a time: its
+ * every consumer, checked to cope with the absence. Nothing derives this —
+ * `steamModules.test.ts` pins the set that has been through that, so a second
+ * one is a decision somebody takes rather than an entry that slipped in.
+ */
+export type AbsenceCost = "panel" | "appearance";
+
 /** One thing the panel depends on, and how to ask whether it is there. */
 export interface SteamLookup {
   /** The name as the panel imports it — what the fallback page prints. */
   readonly name: string;
   /** `true` when the search behind it found something. */
   readonly found: () => boolean;
+  /**
+   * What this name's absence costs — see {@link AbsenceCost}.
+   *
+   * Required rather than defaulted, and the type is the whole of the mechanism:
+   * a new entry does not compile until it says which it is, where a default
+   * would let one arrive without anybody deciding.
+   */
+  readonly absenceCost: AbsenceCost;
   /**
    * Is this a name `@decky/ui` exports?
    *
@@ -93,15 +126,16 @@ export interface SteamLookup {
   readonly deckyUiExport: boolean;
 }
 
-const truthy = (name: string, read: () => unknown): SteamLookup => ({
+const truthy = (name: string, absenceCost: AbsenceCost, read: () => unknown): SteamLookup => ({
   name,
   found: () => Boolean(read()),
   deckyUiExport: true,
+  absenceCost,
 });
 
 /** The same question about a name `@decky/ui` does not export — see {@link SteamLookup.deckyUiExport}. */
-const truthyUnexported = (name: string, read: () => unknown): SteamLookup => ({
-  ...truthy(name, read),
+const truthyUnexported = (name: string, absenceCost: AbsenceCost, read: () => unknown): SteamLookup => ({
+  ...truthy(name, absenceCost, read),
   deckyUiExport: false,
 });
 
@@ -141,52 +175,58 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // reads it yet. Once something does, a panel that would throw at import is
   // never loaded, which is the whole value of the guard in `steamGlobals.ts`
   // that keeps a missed JSX search from reporting as a hit.
-  truthyUnexported("SP_REACT", () => window.SP_REACT),
-  truthyUnexported("SP_REACTDOM", () => window.SP_REACTDOM),
-  truthyUnexported("SP_JSX", () => window.SP_JSX),
+  truthyUnexported("SP_REACT", "panel", () => window.SP_REACT),
+  truthyUnexported("SP_REACTDOM", "panel", () => window.SP_REACTDOM),
+  truthyUnexported("SP_JSX", "panel", () => window.SP_JSX),
 
   // Steam's components, each one a predicate over its minified bundle.
-  truthy("ButtonItem", () => ButtonItem),
-  truthy("ConfirmModal", () => ConfirmModal),
-  truthy("DialogButton", () => DialogButton),
-  truthy("Field", () => Field),
-  truthy("Focusable", () => Focusable),
-  truthy("Menu", () => Menu),
-  truthy("MenuItem", () => MenuItem),
-  truthy("MenuSeparator", () => MenuSeparator),
-  truthy("ModalRoot", () => ModalRoot),
-  truthy("PanelSection", () => PanelSection),
-  truthy("PanelSectionRow", () => PanelSectionRow),
-  truthy("ProgressBar", () => ProgressBar),
-  truthy("ScrollPanel", () => ScrollPanel),
-  truthy("Spinner", () => Spinner),
-  truthy("Tabs", () => Tabs),
-  truthy("TextField", () => TextField),
-  truthy("ToggleField", () => ToggleField),
-  truthy("showContextMenu", () => showContextMenu),
+  truthy("ButtonItem", "panel", () => ButtonItem),
+  truthy("ConfirmModal", "panel", () => ConfirmModal),
+  truthy("DialogButton", "panel", () => DialogButton),
+  truthy("Field", "panel", () => Field),
+  truthy("Focusable", "panel", () => Focusable),
+  truthy("Menu", "panel", () => Menu),
+  truthy("MenuItem", "panel", () => MenuItem),
+  truthy("MenuSeparator", "panel", () => MenuSeparator),
+  truthy("ModalRoot", "panel", () => ModalRoot),
+  truthy("PanelSection", "panel", () => PanelSection),
+  truthy("PanelSectionRow", "panel", () => PanelSectionRow),
+  truthy("ProgressBar", "panel", () => ProgressBar),
+  truthy("ScrollPanel", "panel", () => ScrollPanel),
+  truthy("Spinner", "panel", () => Spinner),
+  truthy("Tabs", "panel", () => Tabs),
+  truthy("TextField", "panel", () => TextField),
+  truthy("ToggleField", "panel", () => ToggleField),
+  truthy("showContextMenu", "panel", () => showContextMenu),
 
   // Not truthiness: `@decky/ui` declares `Navigation` as an empty object and
   // fills it from a lookup inside a `try`, so a miss leaves an object that is
   // perfectly truthy and does nothing.
-  { name: "Navigation", found: () => Object.keys(Navigation).length > 0, deckyUiExport: true },
+  { name: "Navigation", found: () => Object.keys(Navigation).length > 0, deckyUiExport: true, absenceCost: "panel" },
 
   // Asked by CALLING it: `findSP` is always a function and answers `undefined`
   // when its probe missed, which is why `@decky/ui`'s own callers write
   // `findSP() || window` around it.
-  { name: "findSP", found: () => findSP() !== undefined, deckyUiExport: true },
+  { name: "findSP", found: () => findSP() !== undefined, deckyUiExport: true, absenceCost: "panel" },
 
   // The class maps and the glyph, which `deckyUiInternals.ts` already types
-  // honestly. A missing class map does not throw — it styles nothing, which is
-  // a panel that renders and looks wrong.
-  truthy("appActionButtonClasses", () => appActionButtonClasses),
-  truthy("appDetailsClasses", () => appDetailsClasses),
-  truthy("basicAppDetailsSectionStylerClasses", () => basicAppDetailsSectionStylerClasses),
-  truthy("playSectionClasses", () => playSectionClasses),
-  truthy("quickAccessMenuClasses", () => quickAccessMenuClasses),
+  // honestly. A missing class map does not throw — it styles nothing, and
+  // several of these are not styling at all: `playSectionClasses.Container` and
+  // `appDetailsClasses.InnerContainer` are the marks
+  // `bigpicture/patches/gameDetailPatch.tsx` finds the game page by.
+  truthy("appActionButtonClasses", "panel", () => appActionButtonClasses),
+  truthy("appDetailsClasses", "panel", () => appDetailsClasses),
+  truthy("basicAppDetailsSectionStylerClasses", "panel", () => basicAppDetailsSectionStylerClasses),
+  truthy("playSectionClasses", "panel", () => playSectionClasses),
+  truthy("quickAccessMenuClasses", "panel", () => quickAccessMenuClasses),
   // `@decky/ui` does not export the controller glyph at all —
   // `deckyUiInternals.ts` reaches it with a `findModule` predicate of our own,
   // so it is our search in both bundles.
-  truthyUnexported("ControllerGlyph", () => ControllerGlyph),
+  //
+  // The one name whose absence is cosmetic. `layout/WidePage.tsx` is its only
+  // consumer and already renders `‹ Back` where the glyph would be, so a miss
+  // costs one chip its button picture and nothing else.
+  truthyUnexported("ControllerGlyph", "appearance", () => ControllerGlyph),
 ];
 
 /**
@@ -230,8 +270,24 @@ export const PACKAGE_OWN: Readonly<Record<string, string>> = {
 
 /** What the check found. */
 export interface StartupReport {
-  /** Did every search answer? */
-  readonly ok: boolean;
+  /**
+   * Did every search find something?
+   *
+   * A report of the machine, and nothing follows from it on its own: some names
+   * can be absent with the panel perfectly able to run. What may mount is
+   * {@link panelMayMount}, and the two are separate fields because one field
+   * answering both is what took the whole interface off the air for a glyph.
+   */
+  readonly everySearchAnswered: boolean;
+  /**
+   * May the panel mount?
+   *
+   * `true` while everything that missed was cosmetic — including when nothing
+   * missed at all. `false` is the fallback page: a name the pages below are
+   * written against is not there, and a half-working panel acts on what it
+   * cannot see.
+   */
+  readonly panelMayMount: boolean;
   /** The names that did not, in the order they are checked. */
   readonly missing: readonly string[];
   /**
@@ -256,7 +312,8 @@ export interface StartupReport {
 export function checkSteamModules(lookups: readonly SteamLookup[] = STEAM_LOOKUPS): StartupReport {
   const missed = lookups.filter((lookup) => !lookup.found());
   return {
-    ok: missed.length === 0,
+    everySearchAnswered: missed.length === 0,
+    panelMayMount: missed.every((lookup) => lookup.absenceCost === "appearance"),
     missing: missed.map((lookup) => lookup.name),
     missingPackageNames: missed.filter((lookup) => lookup.deckyUiExport).map((lookup) => lookup.name),
     checked: lookups.length,
@@ -264,7 +321,11 @@ export function checkSteamModules(lookups: readonly SteamLookup[] = STEAM_LOOKUP
 }
 
 /**
- * The one sentence that leads to a repair.
+ * The one sentence that leads to a repair, for the page that replaces the panel.
+ *
+ * Asked only where the panel may not mount, which is the moment that page
+ * exists for; a miss that costs appearance alone is worded by
+ * {@link describeCosmeticMiss} instead, in the log.
  *
  * All of them missing is not "many predicates broke at once" — it is the
  * globals bundle never having run, or Steam's registry having been read before
@@ -282,23 +343,24 @@ export function checkSteamModules(lookups: readonly SteamLookup[] = STEAM_LOOKUP
  * glyph, marked by {@link SteamLookup.deckyUiExport} — and a miss confined to
  * those belongs to no copy of the package, so the sentence names none.
  *
- * It names no repair either, and the two kinds of name behind that silence are
- * not in the same position. For the globals there is none to offer: which
+ * It names no repair either, and for the globals there is none to offer: which
  * program installed them on a machine running both is #1900's question and not
  * one this page may decide — and in the standalone bundle, having that answer
  * would not settle it anyway: a missing `SP_REACTDOM` there is `globals.js`
  * never having run or the ReactDOM predicate in `steamGlobals.ts` having gone
  * stale, a load-order fault and a version fault behind one symptom with
- * different repairs. `ControllerGlyph` is
- * the opposite case: `utils/deckyUiInternals.ts` reaches it with a `findModule`
- * predicate of OURS in both bundles, so a newer Tender really is its repair, and
- * this branch gives up a sentence that was correct — the one the standalone
- * bundle used to print. That is the price of keying the branch on whose COPY ran
- * the search; buying it back takes a third axis, whose PREDICATE, rather than a
- * reworded answer.
+ * different repairs.
+ *
+ * `ControllerGlyph` can appear in that silence too, and there it is a real loss
+ * — `utils/deckyUiInternals.ts` reaches it with a `findModule` predicate of OURS
+ * in both bundles, so a newer Tender is its repair, and keying the branch on
+ * whose COPY ran the search cannot say so. What it costs is now bounded: the
+ * glyph reaches this page only ALONGSIDE a global, whose silence is right
+ * anyway, because on its own it no longer brings the page up at all. Its own
+ * sentence is printed by {@link describeCosmeticMiss}.
  */
 export function describeFailure(report: StartupReport, copy: SearchingCopy): string {
-  if (report.ok) return "";
+  if (report.panelMayMount) return "";
   if (report.missing.length === report.checked) {
     return (
       "None of the searches into Steam's interface found anything. That is not a run of " +
@@ -332,5 +394,30 @@ export function describeFailure(report: StartupReport, copy: SearchingCopy): str
     `${decky}'s copy of @decky/ui ran them, not Tender's own, so a Steam client update has ` +
     "moved what Decky looks for — Decky's own interface and its other plugins are affected " +
     "the same way. A newer Decky Loader is the repair."
+  );
+}
+
+/**
+ * The sentence for a miss the panel survives — the log's, not the page's.
+ *
+ * The panel mounts, so nothing on screen says anything happened: this line is
+ * the only record that a search went stale, and the next reader of it is
+ * whoever is asked why a button lost its glyph. It names the repair, which the
+ * page in {@link describeFailure} cannot for the same name — there the branch
+ * turns on whose COPY of `@decky/ui` ran the search and the glyph's predicate
+ * belongs to neither copy, while here every name that can arrive is one Tender
+ * searches for itself.
+ *
+ * "Itself, in either bundle" is true of the cosmetic set as it stands and is not
+ * derived from anything: `steamModules.test.ts` pins that set to the one name,
+ * so a second one fails there and this sentence is re-read before it can ship
+ * over a search Decky's copy might have run.
+ */
+export function describeCosmeticMiss(report: StartupReport): string {
+  if (report.everySearchAnswered || !report.panelMayMount) return "";
+  return (
+    `${report.missing.length} of ${report.checked} searches into Steam's interface found nothing. ` +
+    "Nothing that missed is needed to render the panel, so Tender has started and only looks poorer. " +
+    "Tender runs these searches itself in either bundle, so a newer Tender is the repair."
   );
 }

@@ -5,7 +5,7 @@ import { Focusable } from "@decky/ui";
 import { FaGamepad } from "react-icons/fa";
 import { StartupFailurePanel } from "./boot/StartupFailurePanel";
 import { readSearchingCopy } from "./boot/searchingCopy";
-import { checkSteamModules, describeFailure } from "./boot/steamModules";
+import { checkSteamModules, describeCosmeticMiss, describeFailure } from "./boot/steamModules";
 import { MainPage } from "./bigpicture/MainPage";
 import { SettingsPage } from "./bigpicture/SettingsPage";
 import { LibraryPage } from "./bigpicture/LibraryPage";
@@ -368,8 +368,12 @@ export default definePlugin(() => {
   // So nothing mounts. Not a degraded panel, not the pages whose lookups did
   // resolve: a half-working panel acts on what it cannot see, and nothing below
   // is written to run without the components it was written against.
+  //
+  // Unless what missed costs appearance alone, which the check answers for
+  // separately: taking the whole interface off the air for a decoration the one
+  // place that draws it already renders without is the opposite trade.
   const startup = checkSteamModules();
-  if (!startup.ok) {
+  if (!startup.panelMayMount) {
     // Whose copy of `@decky/ui` ran the missed searches is read once, here, and
     // handed to both the log line and the page: the two must not answer a
     // question about the machine separately and disagree.
@@ -381,6 +385,12 @@ export default definePlugin(() => {
       content: <StartupFailurePanel report={startup} copy={copy} />,
       alwaysRender: true,
     };
+  }
+  if (!startup.everySearchAnswered) {
+    // The panel mounts, so nothing on screen reports this: the log line is the
+    // whole record, and the next reader of it is whoever is asked why a button
+    // lost its glyph.
+    console.warn(`[${PLUGIN_NAME}] ${describeCosmeticMiss(startup)} Missing: ${startup.missing.join(", ")}`);
   }
 
   mountPruneLeasePlugin();

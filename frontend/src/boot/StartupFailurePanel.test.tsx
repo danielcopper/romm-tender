@@ -26,7 +26,8 @@ import { STEAM_LOOKUPS, type StartupReport } from "./steamModules";
 // could produce reads as a state of the program. A case that deliberately
 // describes a shorter run passes its own count.
 const report = (missing: string[], checked = STEAM_LOOKUPS.length): StartupReport => ({
-  ok: false,
+  everySearchAnswered: false,
+  panelMayMount: false,
   missing,
   missingPackageNames: missing,
   checked,
@@ -75,15 +76,15 @@ describe("the fallback page", () => {
   });
 
   it("blames neither copy when what missed is not a @decky/ui lookup", () => {
-    // `ControllerGlyph` is a predicate of ours in both bundles, so the page must
-    // not hand the user Decky's name for it — the page is showing Decky's
-    // sentence otherwise, and that would be a program that did nothing here.
-    // The same branch also withholds "update Tender", which for this one name
-    // would have been right; separating the two takes a third axis (whose
-    // predicate ran, not whose copy) and is not what this case pins.
+    // Neither name is a search a copy of the package ran — `SP_REACTDOM` is a
+    // global a bootstrap installs, the glyph a predicate of ours — so the page
+    // must not hand the user Decky's name for either, which would be a program
+    // that did nothing here. The glyph arrives beside the global rather than
+    // alone because on its own it no longer brings this page up at all.
     const glyph: StartupReport = {
-      ok: false,
-      missing: ["ControllerGlyph"],
+      everySearchAnswered: false,
+      panelMayMount: false,
+      missing: ["SP_REACTDOM", "ControllerGlyph"],
       missingPackageNames: [],
       checked: STEAM_LOOKUPS.length,
     };

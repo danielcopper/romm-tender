@@ -147,9 +147,16 @@ The question `frontend/src/boot/steamModules.ts` asks before anything mounts: di
 interface find something? Almost everything the panel renders is a search predicate over Steam's minified bundle, and
 one Steam has moved past returns `undefined` with nothing thrown.
 
-On a miss the panel does not mount at all — the factory returns a **fallback page** instead and registers nothing. The
-page distinguishes SOME searches missing from ALL of them (the React bootstrap never ran, or Steam's registry was read
-before it was complete, neither of them `@decky/ui`'s doing), which is the first fact that leads to a repair.
+Each name checked states what its **absence costs**: the `panel`, which is every name's status quo, or only its
+`appearance`. On a miss that costs the panel, the panel does not mount at all — the factory returns a **fallback page**
+instead and registers nothing. The page distinguishes SOME searches missing from ALL of them (the React bootstrap never
+ran, or Steam's registry was read before it was complete, neither of them `@decky/ui`'s doing), which is the first fact
+that leads to a repair.
+
+A miss that costs appearance alone mounts the panel as usual and is reported in the log and nowhere else — the sentence
+there names the repair, a newer Tender, since the one name classed that way today (`ControllerGlyph`) is a search Tender
+runs itself. _Avoid_ **cosmetic failure**: nothing failed, one drawing is missing and the place that draws it has
+another.
 
 The second is the **searching copy**: which installed copy of `@decky/ui` ran the predicate that went stale, since the
 coexistence bundle runs Decky Loader's rather than ours. It gives SOME three answers instead of one — Tender's own copy

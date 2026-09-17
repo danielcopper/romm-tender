@@ -105,10 +105,23 @@ A search predicate Steam has moved past returns `undefined` with nothing thrown.
 renders a hole and says nothing — and **an empty panel looks exactly like a backend that is not running**, which is a
 completely different fault with a completely different fix.
 
-So `frontend/src/boot/steamModules.ts` asks every search whether it found something, before anything mounts. On a miss
-the factory returns a fallback page and registers nothing at all: no route patch, no launch interceptor, no event
-listeners, no shortcut relocation. A half-working panel acts on what it cannot see, and nothing below the check is
-written to run without the components it was written against.
+So `frontend/src/boot/steamModules.ts` asks every search whether it found something, before anything mounts. Where what
+missed is a name the panel renders with, the factory returns a fallback page and registers nothing at all: no route
+patch, no launch interceptor, no event listeners, no shortcut relocation. A half-working panel acts on what it cannot
+see, and nothing below the check is written to run without the components it was written against.
+
+**Whether every search answered and whether the panel may mount are two questions**, and each entry states which one it
+bears on: its absence costs the `panel`, or only its `appearance`. Blocking is the status quo, which every name is at
+and which costs no evidence to stay at; moving one to cosmetic is a decision taken per name, against each of its
+consumers. **`ControllerGlyph` is the only name there today** — `bigpicture/layout/WidePage.tsx` is its one consumer and
+already draws `‹ Back` where the glyph would be — and `steamModules.test.ts` pins the cosmetic set to that one name, so
+a second is somebody deciding rather than an entry that arrived with a feature.
+
+When everything that missed was cosmetic the panel mounts normally, and **the log line is then the only thing that
+reports it at all**: `describeCosmeticMiss` says how many searches missed, that none of them is needed to render the
+panel, and that a newer Tender is the repair. That last clause is the one the fallback page cannot offer for this name
+(below); it is sound only while the cosmetic set holds names Tender searches for itself, which is the second thing the
+one-name lock protects.
 
 The page names every search that came back empty, and distinguishes **some** of them missing from **all** of them. All
 means something more basic than a stale predicate: the React bootstrap never ran, or Steam's module registry was read
@@ -116,8 +129,9 @@ before it was complete — neither is `@decky/ui`'s doing, so that one answer is
 no `@decky/ui`, because a page built out of searches is the wrong thing to render when a search has missed.
 
 **Some of them missing has four answers, not one, because the predicates are not always ours.** Most belong to
-`@decky/ui`, and the coexistence bundle runs Decky Loader's copy of it. `frontend/src/boot/searchingCopy.ts` decides
-whose copy ran them, from the build's own stamp and one reading of Decky's namespace; `describeFailure` words it:
+`@decky/ui`, and the coexistence bundle runs Decky Loader's copy of it. These are the fallback page's answers, so they
+are reached only where a blocking name missed. `frontend/src/boot/searchingCopy.ts` decides whose copy ran them, from
+the build's own stamp and one reading of Decky's namespace; `describeFailure` words it:
 
 | Bundle      | What was read                      | What the page says                                                                                                                      |
 | ----------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -138,12 +152,13 @@ globals there is no repair to offer. Which program installed them on a machine r
 — and in the standalone bundle, having that answer would not settle it anyway: a missing `SP_REACTDOM` there is either
 `dist/globals.js` never having run (a load-order fault) or the ReactDOM predicate in `boot/steamGlobals.ts` having gone
 stale (a version fault, whose repair is a newer Tender), one symptom over two repairs. `ControllerGlyph` is the opposite
-case. Its predicate is **ours in both bundles**, so "update Tender" is its correct repair, and this row gives up a
-sentence the standalone bundle used to print. That is the price of keying the branch on whose COPY ran the search, and
-buying it back takes a third axis — whose PREDICATE — rather than a reworded row.
+case. Its predicate is **ours in both bundles**, so "update Tender" is its correct repair, and this row cannot say so —
+the price of keying the branch on whose COPY ran the search, which buying back takes a third axis, whose PREDICATE,
+rather than a reworded row. What that costs is bounded, because the glyph reaches this page only **alongside** a global,
+whose silence is right anyway: on its own it is cosmetic and brings no page up. Its own sentence is the log line above.
 
-`SP_REACTDOM` and `ControllerGlyph` are the two that can actually reach this state — `SP_REACT` and `SP_JSX` are read
-while the panel bundle is being evaluated, so with either unset the bundle throws at import and the check never runs.
+`SP_REACTDOM` is the only name that can reach this row alone — `SP_REACT` and `SP_JSX` are read while the panel bundle
+is being evaluated, so with either unset the bundle throws at import and the check never runs.
 
 `window.DFL` is an ESM module namespace object, so `in` is what discriminates — measured on the device against Decky
 v3.2.8, where `"DialogButton" in DFL` is true and a generated non-existent name is false. It is put only about the names

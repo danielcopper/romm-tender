@@ -57,7 +57,14 @@ import type {
 // sets it. It is a stand-in for the CHECK, never for the searches — what the
 // check itself reads is pinned in `boot/steamModules.test.ts`, where nothing is
 // stubbed away.
-let startupAnswer: StartupReport = { ok: true, missing: [], missingPackageNames: [], checked: 27 };
+const everythingResolved = (): StartupReport => ({
+  everySearchAnswered: true,
+  panelMayMount: true,
+  missing: [],
+  missingPackageNames: [],
+  checked: 27,
+});
+let startupAnswer: StartupReport = everythingResolved();
 vi.mock("./boot/steamModules", async () => {
   const actual = await vi.importActual<typeof import("./boot/steamModules")>("./boot/steamModules");
   return { ...actual, checkSteamModules: () => startupAnswer };
@@ -203,7 +210,8 @@ beforeEach(() => {
 
 describe("index.tsx — what the factory does when a Steam search found nothing", () => {
   const failing: StartupReport = {
-    ok: false,
+    everySearchAnswered: false,
+    panelMayMount: false,
     missing: ["Focusable", "PanelSection"],
     missingPackageNames: ["Focusable", "PanelSection"],
     checked: 27,
@@ -220,7 +228,7 @@ describe("index.tsx — what the factory does when a Steam search found nothing"
 
   afterEach(() => {
     consoleError.mockRestore();
-    startupAnswer = { ok: true, missing: [], missingPackageNames: [], checked: 27 };
+    startupAnswer = everythingResolved();
   });
 
   it("mounts the fallback page instead of the panel, and names what is missing", () => {
@@ -258,6 +266,46 @@ describe("index.tsx — what the factory does when a Steam search found nothing"
     // And nothing to tear down: a factory that registered nothing must not hand
     // back a teardown that would remove listeners the real panel installed.
     expect(plugin.onDismount).toBeUndefined();
+  });
+});
+
+describe("index.tsx — what the factory does when only a decoration was not found", () => {
+  const cosmeticOnly: StartupReport = {
+    everySearchAnswered: false,
+    panelMayMount: true,
+    missing: ["ControllerGlyph"],
+    missingPackageNames: [],
+    checked: 27,
+  };
+  let consoleWarn: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    startupAnswer = cosmeticOnly;
+    consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleWarn.mockRestore();
+    startupAnswer = everythingResolved();
+  });
+
+  it("mounts the panel and registers everything, with no failure page", () => {
+    // The whole point: a glyph the one place that draws it already renders
+    // without must not cost the user their interface.
+    vi.mocked(registerGameDetailPatch).mockClear();
+    const plugin = pluginFactory();
+    render(createElement("div", null, plugin.content));
+
+    expect(screen.queryByText(/could not read Steam/i)).not.toBeInTheDocument();
+    expect(registerGameDetailPatch).toHaveBeenCalled();
+    plugin.onDismount();
+  });
+
+  it("reports it in the log, which is the only place it is reported at all", () => {
+    const plugin = pluginFactory();
+    expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining("Missing: ControllerGlyph"));
+    expect(consoleWarn).toHaveBeenCalledWith(expect.stringContaining("a newer Tender is the repair"));
+    plugin.onDismount();
   });
 });
 

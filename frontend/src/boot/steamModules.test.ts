@@ -19,7 +19,15 @@ import { globSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { type SearchingCopy, readSearchingCopy } from "./searchingCopy";
-import { PACKAGE_OWN, STEAM_LOOKUPS, UNVERIFIABLE, checkSteamModules, describeFailure } from "./steamModules";
+import {
+  PACKAGE_OWN,
+  STEAM_LOOKUPS,
+  type SteamLookup,
+  UNVERIFIABLE,
+  checkSteamModules,
+  describeCosmeticMiss,
+  describeFailure,
+} from "./steamModules";
 
 const SRC_DIR = `${process.cwd()}/src/`;
 
@@ -93,6 +101,23 @@ describe("the start-up check's coverage of what the panel imports", () => {
     expect(wrong.map((lookup) => lookup.name)).toEqual([]);
   });
 
+  it("counts exactly one name whose absence is cosmetic", () => {
+    // Not a claim that the other twenty-eight were each weighed: `panel` is the
+    // status quo, and staying there costs no evidence. This list is the set that
+    // HAS been weighed — every consumer read, and each one found to cope — so a
+    // second name failing here is somebody's decision rather than an entry that
+    // came along with a feature.
+    //
+    // It is also what `describeCosmeticMiss`'s repair clause stands on: the one
+    // name here is reached by a `findModule` predicate of ours, so "a newer
+    // Tender" is true of it in both bundles. A cosmetic name `@decky/ui`
+    // exported would be Decky's search in the coexistence bundle and that
+    // sentence would send the user after the wrong program.
+    const cosmetic = STEAM_LOOKUPS.filter((lookup) => lookup.absenceCost === "appearance");
+    expect(cosmetic.map((lookup) => lookup.name)).toEqual(["ControllerGlyph"]);
+    expect(cosmetic.map((lookup) => lookup.deckyUiExport)).toEqual([false]);
+  });
+
   it("asks a real question of every search it lists", () => {
     // A `found` that never reads anything would answer `true` forever. Each one
     // is called here, which is also what catches an entry whose thunk throws.
@@ -101,22 +126,31 @@ describe("the start-up check's coverage of what the panel imports", () => {
 });
 
 describe("what the start-up check reports", () => {
-  const lookup = (name: string, present: boolean, deckyUiExport = true) => ({
+  const lookup = (name: string, present: boolean, deckyUiExport = true): SteamLookup => ({
     name,
     found: () => present,
     deckyUiExport,
+    absenceCost: "panel",
   });
   const ours: SearchingCopy = { owner: "tender" };
 
   it("is satisfied when every search answered", () => {
     const report = checkSteamModules([lookup("Focusable", true), lookup("Tabs", true)]);
-    expect(report).toEqual({ ok: true, missing: [], missingPackageNames: [], checked: 2 });
+    expect(report).toEqual({
+      everySearchAnswered: true,
+      panelMayMount: true,
+      missing: [],
+      missingPackageNames: [],
+      checked: 2,
+    });
     expect(describeFailure(report, ours)).toBe("");
+    expect(describeCosmeticMiss(report)).toBe("");
   });
 
   it("names the searches that found nothing, and only those", () => {
     const report = checkSteamModules([lookup("Focusable", true), lookup("Tabs", false), lookup("Spinner", false)]);
-    expect(report.ok).toBe(false);
+    expect(report.everySearchAnswered).toBe(false);
+    expect(report.panelMayMount).toBe(false);
     expect(report.missing).toEqual(["Tabs", "Spinner"]);
     expect(describeFailure(report, ours)).toContain("2 of 3");
     expect(describeFailure(report, ours)).toContain("Steam client update");
@@ -146,13 +180,71 @@ describe("what the start-up check reports", () => {
   });
 });
 
+describe("what a miss costs the panel", () => {
+  const blocking = (name: string, present: boolean): SteamLookup => ({
+    name,
+    found: () => present,
+    deckyUiExport: true,
+    absenceCost: "panel",
+  });
+  const cosmetic = (name: string, present: boolean): SteamLookup => ({
+    name,
+    found: () => present,
+    deckyUiExport: false,
+    absenceCost: "appearance",
+  });
+  const ours: SearchingCopy = { owner: "tender" };
+
+  it("lets the panel mount when everything that missed only costs appearance", () => {
+    const report = checkSteamModules([blocking("Focusable", true), cosmetic("ControllerGlyph", false)]);
+    expect(report.panelMayMount).toBe(true);
+    expect(report.everySearchAnswered).toBe(false);
+    expect(report.missing).toEqual(["ControllerGlyph"]);
+  });
+
+  it("puts that miss in the log, which is the only thing that reports it", () => {
+    // The page is what says anything to a user, and the page does not appear:
+    // whoever is asked why a button lost its glyph has this line and nothing
+    // else. So it carries the repair, which the page cannot for this name.
+    const report = checkSteamModules([blocking("Focusable", true), cosmetic("ControllerGlyph", false)]);
+    const sentence = describeCosmeticMiss(report);
+    expect(sentence).toContain("1 of 2 searches into Steam's interface found nothing");
+    expect(sentence).toContain("Nothing that missed is needed to render the panel");
+    expect(sentence).toContain("a newer Tender is the repair");
+    expect(describeFailure(report, ours)).toBe("");
+  });
+
+  it("keeps the panel off when a search the panel renders with missed", () => {
+    const report = checkSteamModules([blocking("Focusable", false), cosmetic("ControllerGlyph", true)]);
+    expect(report.panelMayMount).toBe(false);
+    expect(describeFailure(report, ours)).toContain("Steam client update");
+    // The fallback page is doing the reporting, so the log's cosmetic line must
+    // not appear beside it saying the panel started.
+    expect(describeCosmeticMiss(report)).toBe("");
+  });
+
+  it("keeps the panel off when a cosmetic search missed beside a blocking one", () => {
+    const report = checkSteamModules([blocking("Focusable", false), cosmetic("ControllerGlyph", false)]);
+    expect(report.panelMayMount).toBe(false);
+    expect(report.missing).toEqual(["Focusable", "ControllerGlyph"]);
+    expect(describeCosmeticMiss(report)).toBe("");
+  });
+
+  it("still reaches the bootstrap answer when everything missed, cosmetic names included", () => {
+    // Everything missing necessarily includes the names the panel renders with,
+    // so this answer cannot be reached by a cosmetic miss and is unchanged.
+    const report = checkSteamModules([blocking("Focusable", false), cosmetic("ControllerGlyph", false)]);
+    expect(describeFailure(report, ours)).toContain("not a run of");
+  });
+});
+
 describe("whose copy the page blames for a stale search", () => {
   // Both bundle answers are exercised for every message: the build constant is
   // a build constant, and a suite that only ever saw one of the two would leave
   // the other's sentence unread until a user read it.
   const stale = checkSteamModules([
-    { name: "Focusable", found: () => true, deckyUiExport: true },
-    { name: "Tabs", found: () => false, deckyUiExport: true },
+    { name: "Focusable", found: () => true, deckyUiExport: true, absenceCost: "panel" },
+    { name: "Tabs", found: () => false, deckyUiExport: true, absenceCost: "panel" },
   ]);
 
   it("sends the user after Tender when Tender's own copy searched", () => {
@@ -177,38 +269,40 @@ describe("whose copy the page blames for a stale search", () => {
     expect(sentence).toContain("A newer Decky Loader is the repair.");
   });
 
-  // `ControllerGlyph` is a predicate `utils/deckyUiInternals.ts` runs itself
-  // because the package does not export it, and `SP_REACTDOM` is a global a
-  // bootstrap installs — so neither is a lookup either copy of the package ran,
-  // in either bundle, and the sentence names none. In the coexistence bundle
-  // that is what keeps it from sending the user after Decky Loader, whose copy
-  // ran neither.
+  // `SP_REACTDOM` is a global a bootstrap installs, so it is a lookup neither
+  // copy of the package ran, in either bundle, and the sentence names none. In
+  // the coexistence bundle that is what keeps it from sending the user after
+  // Decky Loader, whose copy ran nothing here. It is also the only name that can
+  // reach this branch alone: `SP_REACT` and `SP_JSX` are read while the bundle
+  // is evaluated, so with either unset it throws at import and this check never
+  // runs.
   //
-  // The two are NOT alike in what the silence costs. `SP_REACTDOM` has no repair
-  // to offer in either bundle — #1900 owns who installed the globals, and in the
-  // standalone bundle the miss is `globals.js` not having run or our own
-  // predicate in `steamGlobals.ts` having gone stale. `ControllerGlyph`'s
-  // predicate is ours in BOTH bundles, so "update Tender" would be correct and
-  // is given up here; these cases pin the branch, not the loss.
-  //
-  // Those two are also the only ones that can reach this: `SP_REACT` and
-  // `SP_JSX` are read while the bundle is evaluated, so with either unset it
-  // throws at import and this check never runs.
+  // `ControllerGlyph` reaches it only in company, since on its own it no longer
+  // brings this page up at all — and there it is a real loss, because its
+  // predicate is ours in BOTH bundles and "update Tender" would be correct for
+  // it. The company it keeps here is a global whose own silence is right, so
+  // what the branch gives up is bounded; `describeCosmeticMiss` prints the
+  // sentence for the case where the glyph is the whole of the miss.
   it.each([
-    ["ControllerGlyph", "standalone"],
-    ["ControllerGlyph", "coexistence"],
-    ["SP_REACTDOM", "standalone"],
-    ["SP_REACTDOM", "coexistence"],
-  ] as const)("blames neither copy when only %s missed, in the %s bundle", (name, bundle) => {
+    [["SP_REACTDOM"], "standalone"],
+    [["SP_REACTDOM"], "coexistence"],
+    [["SP_REACTDOM", "ControllerGlyph"], "standalone"],
+    [["SP_REACTDOM", "ControllerGlyph"], "coexistence"],
+  ] as const)("blames neither copy when %s missed, in the %s bundle", (names, bundle) => {
     const missed = checkSteamModules([
-      { name: "Focusable", found: () => true, deckyUiExport: true },
-      { name, found: () => false, deckyUiExport: false },
+      { name: "Focusable", found: () => true, deckyUiExport: true, absenceCost: "panel" },
+      ...names.map((name): SteamLookup => ({
+        name,
+        found: () => false,
+        deckyUiExport: false,
+        absenceCost: name === "ControllerGlyph" ? "appearance" : "panel",
+      })),
     ]);
     const sentence = describeFailure(
       missed,
       readSearchingCopy(missed, bundle, () => ({ carries: () => true, version: "v3.2.8" })),
     );
-    expect(sentence).toContain("1 of 2");
+    expect(sentence).toContain(`${names.length} of ${names.length + 1}`);
     expect(sentence).toContain("None of them is a name @decky/ui exports");
     expect(sentence).not.toContain("ran them, not Tender's own");
     expect(sentence).not.toContain("Tender's own copy of @decky/ui ran them");

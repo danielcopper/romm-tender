@@ -21,7 +21,8 @@ import { STEAM_LOOKUPS, describeFailure, type StartupReport } from "./steamModul
 // could produce reads as a state of the program. The number it carried, 33, is
 // the count of names this project imports from `@decky/ui` — a different set.
 const report = (missing: string[], missingPackageNames = missing, checked = STEAM_LOOKUPS.length): StartupReport => ({
-  ok: false,
+  everySearchAnswered: false,
+  panelMayMount: false,
   missing,
   missingPackageNames,
   checked,
