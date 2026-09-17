@@ -639,7 +639,7 @@ Format: **invariant** — tier — enforced by.
   TypeScript with no check that the two agree. A frontend that spelled it differently would go green, and the divergence
   would surface only to whoever eventually matched on it
 - **The standalone panel bundle carries `@decky/ui` and the coexistence one carries none of it** — check —
-  `frontend/scripts/check-bundle-shape.mjs`, over the built artifact rather than a bundler setting (ten strings that
+  `frontend/scripts/check-bundle-shape.mjs`, over the built artifact rather than a bundler setting (nine strings that
   exist only in the package's implementation, plus the `DFL.` read count, in both directions; the licence file the
   standalone build owes is asserted there too). Both failures are silent in CI and land on a device: a standalone bundle
   that lost the package throws on its first `DFL.` read where no `DFL` exists, and a coexistence bundle that gained it

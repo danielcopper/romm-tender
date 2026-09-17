@@ -104,11 +104,12 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // has no import-time read at all.
   //
   // They are listed anyway because this list is also what
-  // `GlobalsReport.installed` answers for, and that report is read from
-  // `dist/globals.js` — a bundle that imports none of this — by whoever decides
-  // whether to load the panel at all (#1900). A panel that would throw at import
-  // is then never loaded, which is the whole value of the guard in
-  // `steamGlobals.ts` that keeps a missed JSX search from reporting as a hit.
+  // `GlobalsReport.installed` answers for, and that report is there for the
+  // injector to read out of `dist/globals.js` — a bundle that imports none of
+  // this — before it decides whether to load the panel at all (#1900). Nothing
+  // reads it yet. Once something does, a panel that would throw at import is
+  // never loaded, which is the whole value of the guard in `steamGlobals.ts`
+  // that keeps a missed JSX search from reporting as a hit.
   truthy("SP_REACT", () => window.SP_REACT),
   truthy("SP_REACTDOM", () => window.SP_REACTDOM),
   truthy("SP_JSX", () => window.SP_JSX),

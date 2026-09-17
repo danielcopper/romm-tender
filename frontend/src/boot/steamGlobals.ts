@@ -126,7 +126,7 @@ const steamReady = (): boolean => w.App?.BFinishedInitBeforeLogin?.() ?? w.App?.
  */
 const STEAM_INIT_DEADLINE_MS = 30_000;
 
-/** What `installGlobals` saw and did, for the start-up log line. */
+/** What `installGlobals` saw and did — the answer its caller gets back. */
 export interface GlobalsReport {
   /** Were all three already set when this ran? Then nothing else happened. */
   alreadyPresent: boolean;
@@ -187,12 +187,12 @@ export async function installGlobals(): Promise<GlobalsReport> {
     // **That report is the whole of what this buys**: it is there for the
     // injector to read out of THIS bundle before it decides whether to load the
     // panel (#1900). Nothing reads it yet — until something does, the honesty
-    // below buys nothing at all. The panel
-    // itself gets no chance to notice: a module-scope `SP_JSX.jsx` sits in its
-    // import graph (`dist/index.js:4892`, from `PlatformDetail.tsx`), so with
-    // `SP_JSX` unset it throws while being evaluated — before `definePlugin`'s
-    // factory exists, and long before any check inside it could run. An honest
-    // `false` here is what keeps that bundle from being loaded at all.
+    // below buys nothing at all. The panel itself gets no chance to notice: a
+    // module-scope `SP_JSX.jsx` sits in its import graph (`dist/index.js:4892`,
+    // from `PlatformDetail.tsx`), so with `SP_JSX` unset it throws while being
+    // evaluated — before `definePlugin`'s factory exists, and long before any
+    // check inside it could run. An honest `false` here is what would keep that
+    // bundle from being loaded at all.
     //
     // `SP_REACT` and `SP_REACTDOM` have no such hole: a miss leaves them unset.
     // Decky has none either — its block reads `jsxModule.jsxs` bare and throws
@@ -222,8 +222,8 @@ export async function installGlobals(): Promise<GlobalsReport> {
   };
 }
 
-// The injector (#1900) evaluates this bundle and then calls the function. It is
-// reachable by name as well, so the same bundle can be driven by hand from the
+// The injector (#1900) will evaluate this bundle and then call the function. It
+// is reachable by name as well, so the same bundle can be driven by hand from the
 // CEF debugger — which is how the spike measured it and how a device test
 // reproduces one.
 w.__TENDER_INSTALL_GLOBALS = installGlobals;
