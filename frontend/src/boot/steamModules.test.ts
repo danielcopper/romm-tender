@@ -123,7 +123,7 @@ describe("the start-up check's coverage of what the panel imports", () => {
 
   it("classifies each name once, so a list cannot quietly absorb another's entries", () => {
     const names = classifiedNames();
-    expect(names.length).toBe(new Set(names).size);
+    expect(names).toHaveLength(new Set(names).size);
   });
 
   it("marks as a @decky/ui export exactly the names the panel imports from it", () => {
