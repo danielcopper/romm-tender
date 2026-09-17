@@ -49,9 +49,21 @@ class TestBesideDeckyLoader:
 
 
 class TestTheDigest:
-    def test_the_same_bytes_answer_the_same_digest(self, tmp_path):
-        (tmp_path / "index.js").write_text("panel", encoding="utf-8")
-        assert bundle_digest(str(tmp_path), ("index.js",)) == bundle_digest(str(tmp_path), ("index.js",))
+    def test_the_same_bytes_answer_the_same_digest_wherever_they_sit(self, tmp_path):
+        """It is over the names and the bytes, and over nothing else.
+
+        Asked twice of ONE directory this says only that the function is
+        deterministic; asked of two, it also says the root is not folded in —
+        which is the property the watchdog rests on, because the fingerprint it
+        compares was written by an earlier run and a moved installation is not
+        a changed panel.
+        """
+        here, there = tmp_path / "here", tmp_path / "there"
+        here.mkdir()
+        there.mkdir()
+        (here / "index.js").write_text("panel", encoding="utf-8")
+        (there / "index.js").write_text("panel", encoding="utf-8")
+        assert bundle_digest(str(here), ("index.js",)) == bundle_digest(str(there), ("index.js",))
 
     def test_changed_bytes_answer_a_different_digest(self, tmp_path):
         (tmp_path / "index.js").write_text("panel", encoding="utf-8")

@@ -20,6 +20,15 @@ giving up on an answer costs the frame stream nothing.
 halves come from :mod:`lib.websocket_frames` rather than from a hand-rolled codec
 of this module's own. ``adapters/renderer_gc.py`` carries one, and predates that
 module; it is not a pattern to copy.
+
+**No ``except`` below names a class another already covers**, so each one is the
+whole of what it catches rather than a list of what was expected. The three that
+would read as documentation are language facts: ``TimeoutError`` — what an
+``asyncio.timeout`` window closing and a socket's own ``timeout=`` both raise —
+is an ``OSError``, ``urllib``'s ``URLError`` is one too, and
+``UnicodeDecodeError`` is a ``ValueError``. So a deadline this module set lands
+in an ``OSError`` clause, and a payload that is not UTF-8 in a ``ValueError``
+one; naming either beside its base would widen nothing.
 """
 
 from __future__ import annotations
@@ -33,7 +42,6 @@ import struct
 from dataclasses import dataclass
 from itertools import count
 from typing import TYPE_CHECKING, Any
-from urllib.error import URLError
 from urllib.request import urlopen
 
 from lib.http_messages import HEAD_TERMINATOR
@@ -143,7 +151,7 @@ async def list_targets(port: int = DEBUGGER_PORT, *, read_timeout: float = 2.0) 
     loop = asyncio.get_running_loop()
     try:
         raw = await loop.run_in_executor(None, _fetch_target_list, port, read_timeout)
-    except (URLError, OSError, TimeoutError) as exc:
+    except OSError as exc:
         raise CdpUnavailableError(f"the debugger on 127.0.0.1:{port} did not answer: {exc}") from exc
     try:
         payload = json.loads(raw)
@@ -240,7 +248,7 @@ class CdpConnection:
         try:
             async with asyncio.timeout(_HANDSHAKE_TIMEOUT):
                 reader, writer = await asyncio.open_connection(host, port)
-        except (OSError, TimeoutError) as exc:
+        except OSError as exc:
             raise CdpUnavailableError(f"cannot reach the debugger at {url}: {exc}") from exc
 
         key = base64.b64encode(os.urandom(16)).decode("ascii")
@@ -257,7 +265,7 @@ class CdpConnection:
             async with asyncio.timeout(_HANDSHAKE_TIMEOUT):
                 await writer.drain()
                 head = await reader.readuntil(HEAD_TERMINATOR)
-        except (OSError, TimeoutError, asyncio.IncompleteReadError, asyncio.LimitOverrunError) as exc:
+        except (OSError, asyncio.IncompleteReadError, asyncio.LimitOverrunError) as exc:
             writer.close()
             raise CdpUnavailableError(f"the debugger did not complete the handshake at {url}: {exc}") from exc
 
@@ -392,7 +400,7 @@ class CdpConnection:
         """
         try:
             message = json.loads(raw.decode("utf-8"))
-        except (ValueError, UnicodeDecodeError) as exc:
+        except ValueError as exc:
             self._logger.warning(f"inject: the debugger sent something that is not a CDP message: {exc}")
             return
         if not isinstance(message, dict):

@@ -112,8 +112,9 @@ class TestListingTargets:
         assert targets[0].websocket_url.endswith("/devtools/page/renderer")
 
     async def test_nothing_listening_is_reported_as_unavailable(self):
+        port = free_port()
         with pytest.raises(CdpUnavailableError):
-            await list_targets(free_port())
+            await list_targets(port)
 
     async def test_an_answer_that_is_not_json_is_reported_as_unavailable(self, debugger):
         debugger.answer_json = "<html>not the debugger</html>"
@@ -215,9 +216,9 @@ class TestTheConnection:
         debugger.handlers["Runtime.evaluate"] = never_answer
         connection = await connect_to(debugger)
         try:
+            abandoned = connection.call("Runtime.evaluate", {"expression": "1"})
             with pytest.raises(TimeoutError):
-                async with asyncio.timeout(0.2):
-                    await connection.call("Runtime.evaluate", {"expression": "1"})
+                await asyncio.wait_for(abandoned, 0.2)
 
             debugger.handlers["Page.enable"] = lambda _params: {"still": "here"}
             assert await ask(connection, "Page.enable") == {"still": "here"}
@@ -228,8 +229,9 @@ class TestTheConnection:
         connection = await connect_to(debugger)
         try:
             queue = connection.subscribe("Page.domContentEventFired")
+            expiring = queue.get()
             with pytest.raises(TimeoutError):
-                await asyncio.wait_for(queue.get(), 0.2)
+                await asyncio.wait_for(expiring, 0.2)
 
             debugger.handlers["Page.enable"] = lambda _params: {"still": "here"}
             assert await ask(connection, "Page.enable") == {"still": "here"}
@@ -280,8 +282,9 @@ class TestTheConnection:
             await server.wait_closed()
 
     async def test_nothing_listening_is_reported_as_unavailable(self):
+        url = f"ws://127.0.0.1:{free_port()}/devtools/page/x"
         with pytest.raises(CdpUnavailableError):
-            await CdpConnection.connect(f"ws://127.0.0.1:{free_port()}/devtools/page/x", logger=LOGGER)
+            await CdpConnection.connect(url, logger=LOGGER)
 
     async def test_the_client_masks_what_it_sends(self, debugger):
         """RFC 6455 §5.1 — a server refusing an unmasked client frame is the norm."""
@@ -308,7 +311,8 @@ class TestTheConnection:
         connection = await connect_to(debugger)
         try:
             await ask(connection, "Page.enable")
-            assert seen and all(seen)
+            assert seen
+            assert all(seen)
         finally:
             await connection.close()
 

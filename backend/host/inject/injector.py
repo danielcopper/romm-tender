@@ -100,6 +100,8 @@ COMMAND_TIMEOUT_SECONDS = 10.0
 ALIVE_AFTER_SECONDS = 10.0
 
 
+_EVALUATE = "Runtime.evaluate"
+
 # The two subscriptions one attachment watches, named so a waiter can say which
 # of them answered.
 _REBUILT = "rebuilt"
@@ -125,7 +127,7 @@ class _Waits:
     async def next(self) -> tuple[str, dict[str, Any] | None]:
         """The next event off either queue, with the name of the queue it came from."""
         done, _ = await asyncio.wait(self._waiting.values(), return_when=asyncio.FIRST_COMPLETED)
-        for name, waiting in list(self._waiting.items()):
+        for name, waiting in self._waiting.items():
             if waiting in done:
                 self._waiting[name] = asyncio.ensure_future(self._queues[name].get())
                 return name, waiting.result()
@@ -308,7 +310,7 @@ class PanelInjector:
         """Is the marker on this context? An injected panel leaves one behind."""
         async with asyncio.timeout(COMMAND_TIMEOUT_SECONDS):
             answer = await connection.call(
-                "Runtime.evaluate",
+                _EVALUATE,
                 {"expression": marker_present_expression(MARKER), "returnByValue": True},
             )
         return bool(_value_of(answer))
@@ -364,7 +366,7 @@ class PanelInjector:
         self._logger.info(f"inject: loading {', '.join(choice.files)} — {choice.because}")
         async with asyncio.timeout(EVALUATE_TIMEOUT_SECONDS):
             answer = await connection.call(
-                "Runtime.evaluate",
+                _EVALUATE,
                 {
                     "expression": build_bootstrap(
                         build_facts(
@@ -435,9 +437,7 @@ class PanelInjector:
         try:
             async with asyncio.timeout(READY_WINDOW_SECONDS):
                 while True:
-                    answer = await connection.call(
-                        "Runtime.evaluate", {"expression": expression, "returnByValue": True}
-                    )
+                    answer = await connection.call(_EVALUATE, {"expression": expression, "returnByValue": True})
                     if bool(_value_of(answer)):
                         return True
                     await asyncio.sleep(READY_POLL_SECONDS)
