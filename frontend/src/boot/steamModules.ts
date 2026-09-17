@@ -428,8 +428,10 @@ export function searchOwner(report: StartupReport, copy: SearchingCopy): SearchO
  * unreadable case is the bare name rather than a missing one: `_versionInfo` is
  * another program's internal and a newer Decky renaming it is exactly the skew
  * being diagnosed (`searchingCopy.ts`). A copy that is not Decky's has no
- * version to read and answers the bare name too; the branches that word one are
- * the only ones that ask.
+ * version to read and answers the bare name too. Both callers hoist this above
+ * their switch, so every verdict asks and the two that name no program discard
+ * the answer unread — which is what keeps the bare-name fallback harmless
+ * rather than any branch declining to ask.
  */
 const deckyName = (copy: SearchingCopy): string =>
   copy.owner === "decky" && copy.version !== null ? `Decky Loader ${copy.version}` : "Decky Loader";
@@ -447,11 +449,11 @@ const deckyName = (copy: SearchingCopy): string =>
  * copy of `@decky/ui`, so the searching copy does not enter it.
  *
  * Some of them missing is a stale predicate, and then whose predicate decides
- * the repair: {@link searchOwner} answers that, and this words each of its five
+ * the repair: {@link searchOwner} answers that, and this words each of its
  * answers for a user who is looking at a page instead of a panel.
  *
- * Two of the five stay silent about a repair — `none` about the whole of what
- * missed, `mixed` about part of it — and the reason is the same in both.
+ * `none` and `mixed` stay silent about a repair — the first about the whole of
+ * what missed, the second about part of it — and the reason is the same in both.
  * {@link STEAM_LOOKUPS} carries names `@decky/ui` does not export, and for the
  * three React globals among them there is no repair to offer: which
  * program installed them on a machine running both is #1900's question and not
@@ -536,14 +538,17 @@ export function describeFailure(report: StartupReport, copy: SearchingCopy): str
  * it is DECKY's, so that sentence would have sent the user after the wrong
  * program.
  *
- * The one answer this line can give that the page cannot is `none`: nothing
- * that missed is a name `@decky/ui` exports, so every one of them is a search
- * Tender runs with a module probe of its own and a newer Tender is the repair.
- * The page has to stay silent there because the three React globals reach it,
- * and which program installed those on a machine running both is #1900's
- * question. They cannot reach HERE — their absence costs the panel — and that
- * is the property `steamModules.test.ts` holds, rather than the short set of
- * names it happens to produce today.
+ * Both surfaces answer every verdict; where they come apart is the REPAIR. On
+ * `none` this line names one and the page names none at all: nothing that
+ * missed is a name `@decky/ui` exports, so every one of them is a search Tender
+ * runs with a module probe of its own and a newer Tender is the repair. The
+ * page has to stay silent there because the three React globals reach ITS
+ * `none`, and which program installed those on a machine running both is
+ * #1900's question. They cannot reach HERE — their absence costs the panel —
+ * and that is the property `steamModules.test.ts` holds, rather than the short
+ * set of names it happens to produce today. `mixed` is the other one: here it
+ * names a repair covering both programs, where the page names Decky's and stays
+ * silent about the rest, for the same reason.
  */
 export function describeSurvivedMiss(report: StartupReport, copy: SearchingCopy): string {
   if (report.everySearchAnswered || !report.panelMayMount) return "";

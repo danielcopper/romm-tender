@@ -127,12 +127,14 @@ the panel, and then answers the same question the fallback page answers — whos
 name "a newer Tender" unconditionally, which was sound only while nothing that could reach it was a name the package
 exports; `playSectionClasses` is one, and in the coexistence bundle the search behind it is Decky's.
 
-The one answer the log line can give that the page cannot is its own first row: nothing that missed is a `@decky/ui`
-export, so every one of them is a search Tender runs with a module probe of its own, and a newer Tender is the repair.
-The page has to stay silent there because the three `SP_*` globals reach it (below); they cannot reach the log line,
-because their absence costs the panel. **That is the property `steamModules.test.ts` locks** — a non-blocking name
-`@decky/ui` does not export must be one Tender probes for itself — rather than the short set of names it produces today,
-which would go stale the moment a second name moved.
+Both surfaces answer every verdict below; where they come apart is the **repair**. On `none` the log line names one and
+the page names none at all: nothing that missed is a `@decky/ui` export, so every one of them is a search Tender runs
+with a module probe of its own, and a newer Tender is the repair. The page has to stay silent there because the three
+`SP_*` globals reach its `none` (below); they cannot reach the log line, because their absence costs the panel. **That
+is the property `steamModules.test.ts` locks** — a non-blocking name `@decky/ui` does not export must be one Tender
+probes for itself — rather than the short set of names it produces today, which would go stale the moment a second name
+moved. `mixed` is the other place they differ: the log line names a repair covering both programs, where the page names
+Decky's and stays silent about the rest, for the same reason.
 
 The page names every search that came back empty, and distinguishes **some** of them missing from **all** of them. All
 means something more basic than a stale predicate: the React bootstrap never ran, or Steam's module registry was read
@@ -195,11 +197,11 @@ is being evaluated, so with either unset the bundle throws at import and the che
 
 `window.DFL` is an ESM module namespace object, so `in` is what discriminates — measured on the device against Decky
 v3.2.8, where `"DialogButton" in DFL` is true and a generated non-existent name is false. It is put only about the names
-that get past the row above — the package's own exports — because a Decky in perfect step with us carries none of the
+that get past the `none` row — the package's own exports — because a Decky in perfect step with us carries none of the
 other four, and asking would report a package disagreement on every miss. Those names are asked one at a time and the
-first absent one settles it: one absent name is enough for the last answer, so the rest are never put. A name Decky's
-copy does not export is a demonstrated fact about the two installs, where a name it exports with an empty value is one
-more stale predicate, and the repair the last answer names covers both.
+first absent one settles it: one absent name is enough for `disagreement`, so the rest are never put. A name Decky's
+copy does not export is a demonstrated fact about the two installs, where a name it exports with an empty value is a
+search result whose cause is inferred, and the repair `disagreement` names covers both.
 
 Every part of that reading is guarded and every guard falls the same way: no `DFL` to question, a `DFL` whose read
 throws, a name the question itself throws on — none of them claims anything. An absence has to be demonstrated, and a
