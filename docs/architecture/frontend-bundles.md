@@ -111,17 +111,26 @@ patch, no launch interceptor, no event listeners, no shortcut relocation. A half
 see, and nothing below the check is written to run without the components it was written against.
 
 **Whether every search answered and whether the panel may mount are two questions**, and each entry states which one it
-bears on: its absence costs the `panel`, or only its `appearance`. Blocking is the status quo, which every name is at
-and which costs no evidence to stay at; moving one to cosmetic is a decision taken per name, against each of its
-consumers. **`ControllerGlyph` is the only name there today** — `bigpicture/layout/WidePage.tsx` is its one consumer and
-already draws `‹ Back` where the glyph would be — and `steamModules.test.ts` pins the cosmetic set to that one name, so
-a second is somebody deciding rather than an entry that arrived with a feature.
+bears on through what its absence costs: the `panel`, only its `appearance`, or only a `diagnostic`. Blocking is the
+status quo, which costs no evidence to stay at; moving a name off it is a decision taken per name, against each of its
+consumers. Two names have been moved so far. `ControllerGlyph` costs appearance — `bigpicture/layout/WidePage.tsx` is
+its one consumer and already draws `‹ Back` where the glyph would be. `playSectionClasses` costs a diagnostic: all three
+of its reads are inside `gameDetailPatch.tsx`'s one-shot `dumpTree`, which already prints `UNDEFINED` where the class
+name would go, so nothing a user can see changes at all. The two are not one answer worded twice — calling the second
+cosmetic would put "Tender only looks poorer" in the log over a miss that changes nothing drawn.
 
-When everything that missed was cosmetic the panel mounts normally, and **the log line is then the only thing that
-reports it at all**: `describeCosmeticMiss` says how many searches missed, that none of them is needed to render the
-panel, and that a newer Tender is the repair. That last clause is the one the fallback page cannot offer for this name
-(below); it is sound only while the cosmetic set holds names Tender searches for itself, which is the second thing the
-one-name lock protects.
+When nothing that missed was needed to render the panel it mounts normally, and **the log line is then the only thing
+that reports it at all**: `describeCosmeticMiss` says how many searches missed, that none of them is needed to render
+the panel, and then answers the same question the fallback page answers — whose copy of `@decky/ui` ran them. It used to
+name "a newer Tender" unconditionally, which was sound only while nothing that could reach it was a name the package
+exports; `playSectionClasses` is one, and in the coexistence bundle the search behind it is Decky's.
+
+The one answer the log line can give that the page cannot is its own first row: nothing that missed is a `@decky/ui`
+export, so every one of them is a search Tender runs with a module probe of its own, and a newer Tender is the repair.
+The page has to stay silent there because the three `SP_*` globals reach it (below); they cannot reach the log line,
+because their absence costs the panel. **That is the property `steamModules.test.ts` locks** — a non-blocking name
+`@decky/ui` does not export must be one Tender probes for itself — rather than the short set of names it produces today,
+which would go stale the moment a second name moved.
 
 The page names every search that came back empty, and distinguishes **some** of them missing from **all** of them. All
 means something more basic than a stale predicate: the React bootstrap never ran, or Steam's module registry was read

@@ -665,22 +665,26 @@ Format: **invariant** — tier — enforced by.
   see is whether a classification is TRUE**: three names sit in the unverifiable list because they are wrappers the
   package always defines, and moving a real search there to quieten the check would pass green and leave the panel
   rendering a hole where the check reported everything resolved
-- **Whether every search answered and whether the panel may MOUNT are two questions, and a miss that costs appearance
-  alone never takes the interface off the air** — check + test + prompt-only — the type carries the first half:
-  `SteamLookup.absenceCost` is required, so a new entry does not compile until it states whether its absence costs the
-  `panel` or only its `appearance`, and there is no default to arrive in. `frontend/src/boot/steamModules.test.ts` pins
-  the cosmetic set to exactly one name (`ControllerGlyph`, whose only consumer `layout/WidePage.tsx` already draws
-  `‹ Back` in its place) and that it is not a `@decky/ui` export; `frontend/src/index.test.tsx` pins both factory
-  branches — the panel mounts with everything registered, and the miss reaches the log. **Blocking is the status quo and
-  staying there costs no evidence: nothing here is a claim that the other twenty-eight names were each judged**, only
-  that moving one OUT needs its every consumer read, one name at a time. **The join is prompt-only and spans three
-  places**: `checkSteamModules` derives `panelMayMount` from the costs, `index.tsx` gates the fallback page on it and
-  logs `describeCosmeticMiss` on the other side, and that sentence's repair clause — "a newer Tender" — is true only of
-  a name Tender searches for ITSELF, so a cosmetic entry `@decky/ui` exported would be Decky's search in the coexistence
-  bundle and the log would send the user after the wrong program; the one-name lock is what stands between that and a
-  green suite. Both directions fail quietly: call a real dependency cosmetic and the panel mounts and renders a hole,
-  which is the fault the whole check exists to tell apart from a backend that is not running; call a decoration blocking
-  and one missing glyph costs the user their entire interface, which is what this entry removed
+- **Whether every search answered and whether the panel may MOUNT are two questions, and a miss that costs less than the
+  panel never takes the interface off the air** — check + test + prompt-only — the type carries the first half:
+  `SteamLookup.absenceCost` is required, so a new entry does not compile until it states which of the three its absence
+  costs — the `panel`, only its `appearance` (`ControllerGlyph`, whose only consumer `layout/WidePage.tsx` already draws
+  `‹ Back` in its place), or only a `diagnostic` (`playSectionClasses`, read nowhere but `gameDetailPatch.tsx`'s
+  one-shot `dumpTree`, which already prints `UNDEFINED` in its place) — and there is no default to arrive in.
+  `frontend/src/index.test.tsx` pins both factory branches — the panel mounts with everything registered, and the miss
+  reaches the log. **Blocking is the status quo and staying there costs no evidence: nothing here is a claim that every
+  other name was judged**, only that moving one OUT needs its every consumer read, one name at a time. **The join is
+  prompt-only and spans three places**: `checkSteamModules` derives `panelMayMount` from the costs, `index.tsx` gates
+  the fallback page on it and logs `describeCosmeticMiss` on the other side, and that sentence answers whose COPY of
+  `@decky/ui` ran the missed searches rather than naming a repair of its own — it used to say "a newer Tender"
+  unconditionally, which held only while nothing reaching it was a name the package exports, and `playSectionClasses` is
+  one. What `frontend/src/boot/steamModules.test.ts` locks is the property the line's remaining own answer rests on — a
+  non-blocking name `@decky/ui` does NOT export must be one Tender probes for itself (`findModule`, swept from the
+  source) — so the three `SP_*` globals, whose owner on a machine running both programs is #1900's open question, fail
+  there the moment one is made non-blocking, instead of shipping a repair aimed at whichever program did not install
+  them. Both directions fail quietly: call a real dependency cosmetic and the panel mounts and renders a hole, which is
+  the fault the whole check exists to tell apart from a backend that is not running; call a decoration blocking and one
+  missing glyph costs the user their entire interface, which is what this entry removed
 - **The start-up failure page names the copy of `@decky/ui` that actually ran the search that missed, and the repair
   that follows from it** — check + test + prompt-only — the artefact's stamp is checked
   (`frontend/scripts/check-bundle-shape.mjs`, per bundle and on `globals.js`, which must carry none), and the four

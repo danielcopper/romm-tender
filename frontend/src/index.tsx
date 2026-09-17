@@ -373,24 +373,25 @@ export default definePlugin(() => {
   // separately: taking the whole interface off the air for a decoration the one
   // place that draws it already renders without is the opposite trade.
   const startup = checkSteamModules();
-  if (!startup.panelMayMount) {
-    // Whose copy of `@decky/ui` ran the missed searches is read once, here, and
-    // handed to both the log line and the page: the two must not answer a
-    // question about the machine separately and disagree.
-    const copy = readSearchingCopy(startup);
-    console.error(`[${PLUGIN_NAME}] ${describeFailure(startup, copy)} Missing: ${startup.missing.join(", ")}`);
-    return {
-      name: PLUGIN_NAME,
-      icon: <FaGamepad />,
-      content: <StartupFailurePanel report={startup} copy={copy} />,
-      alwaysRender: true,
-    };
-  }
   if (!startup.everySearchAnswered) {
+    // Whose copy of `@decky/ui` ran the missed searches is read once, here, and
+    // handed to the page and to both log lines: the three must not answer a
+    // question about the machine separately and disagree. It is read only where
+    // something missed, so the ordinary start touches none of Decky's globals.
+    const copy = readSearchingCopy(startup);
+    if (!startup.panelMayMount) {
+      console.error(`[${PLUGIN_NAME}] ${describeFailure(startup, copy)} Missing: ${startup.missing.join(", ")}`);
+      return {
+        name: PLUGIN_NAME,
+        icon: <FaGamepad />,
+        content: <StartupFailurePanel report={startup} copy={copy} />,
+        alwaysRender: true,
+      };
+    }
     // The panel mounts, so nothing on screen reports this: the log line is the
     // whole record, and the next reader of it is whoever is asked why a button
     // lost its glyph.
-    console.warn(`[${PLUGIN_NAME}] ${describeCosmeticMiss(startup)} Missing: ${startup.missing.join(", ")}`);
+    console.warn(`[${PLUGIN_NAME}] ${describeCosmeticMiss(startup, copy)} Missing: ${startup.missing.join(", ")}`);
   }
 
   mountPruneLeasePlugin();
