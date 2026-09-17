@@ -329,6 +329,32 @@ describe("events arriving from the backend", () => {
     expect(heard).toEqual([]);
   });
 
+  it("reach the listeners registered when the frame arrived, even ones removed part-way through", () => {
+    const socket = build();
+    const heard: string[] = [];
+    const second = () => heard.push("second");
+    const first = () => {
+      heard.push("first");
+      socket.off("sync_progress", first);
+      socket.off("sync_progress", second);
+    };
+    socket.on("sync_progress", first);
+    socket.on("sync_progress", second);
+    latest().open();
+
+    latest().deliver({ type: "event", name: "sync_progress", payload: 1 });
+
+    // A Set iterator walks the LIVE set, so an entry deleted before it is
+    // reached is skipped in silence — no throw, `second` simply never runs.
+    // Dispatching over a snapshot is what stops one listener's teardown from
+    // taking the frame away from a peer that was registered when it arrived.
+    expect(heard).toEqual(["first", "second"]);
+
+    latest().deliver({ type: "event", name: "sync_progress", payload: 2 });
+    // The removals did take effect — for the NEXT frame, not the one they ran in.
+    expect(heard).toEqual(["first", "second"]);
+  });
+
   it("reach nobody when the frame names no event", () => {
     const socket = build();
     const heard: unknown[] = [];
