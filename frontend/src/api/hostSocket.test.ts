@@ -193,6 +193,18 @@ describe("a call on the wire", () => {
 
     await expect(answer).rejects.toMatchObject({ traceback: undefined });
   });
+
+  it("takes reason and message only where the wire carried a string", async () => {
+    const socket = build();
+    const answer = socket.call("nope", []);
+    latest().open();
+    latest().deliver({ type: "error", id: 1, reason: { code: 7 }, message: ["a", "b"] });
+
+    // Stringifying whatever arrived would put `[object Object]` into the reason
+    // a caller matches on. The empty string is nothing `protocol.py` sends, so
+    // it cannot be read as a reason the backend named.
+    await expect(answer).rejects.toMatchObject({ reason: "", message: "" });
+  });
 });
 
 describe("when the connection goes", () => {
@@ -314,6 +326,23 @@ describe("events arriving from the backend", () => {
     latest().open();
 
     latest().deliver({ type: "event", name: "sync_progress", payload: 1 });
+    expect(heard).toEqual([]);
+  });
+
+  it("reach nobody when the frame names no event", () => {
+    const socket = build();
+    const heard: unknown[] = [];
+    socket.on("sync_progress", (payload: never) => heard.push(payload));
+    // Registered under "" as well, so what is asserted is that a nameless frame
+    // is DROPPED rather than folded onto the empty-string event. Without this
+    // listener the frame would fall through to a bucket that merely does not
+    // exist, and the test would pass either way.
+    socket.on("", (payload: never) => heard.push(payload));
+    latest().open();
+
+    latest().deliver({ type: "event", payload: 1 });
+    latest().deliver({ type: "event", name: { not: "a name" }, payload: 2 });
+
     expect(heard).toEqual([]);
   });
 

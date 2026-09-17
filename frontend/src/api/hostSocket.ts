@@ -289,18 +289,24 @@ export class HostSocket {
         this.settle(message.id, (call) => call.resolve(message.result));
         return;
       case "error":
+        // The empty string rather than a stand-in of our own: it is nothing
+        // `protocol.py` sends, so a frame that carried no usable reason cannot
+        // be read as one the backend named. Stringifying what arrived instead
+        // would put `[object Object]` into the reason a caller matches on.
         this.settle(message.id, (call) =>
           call.reject(
             new HostTransportError(
-              String(message.reason ?? ""),
-              String(message.message ?? ""),
+              typeof message.reason === "string" ? message.reason : "",
+              typeof message.message === "string" ? message.message : "",
               typeof message.traceback === "string" ? message.traceback : undefined,
             ),
           ),
         );
         return;
       case "event":
-        this.dispatch(String(message.name ?? ""), message.payload);
+        // Not folded onto "": a frame carrying no usable name is dropped, like
+        // any other frame the panel cannot make sense of.
+        if (typeof message.name === "string") this.dispatch(message.name, message.payload);
         return;
       default:
         return;
