@@ -131,8 +131,10 @@ The three files `pnpm -C frontend build` produces, and the names to use for them
   and Decky's loader otherwise would. Its own file because `@decky/ui`'s component half reads React internals while its
   modules evaluate, so it cannot be in the import graph of the module that creates the globals.
 
-The two panel bundles differ in exactly one thing and are told apart by NAME — there is no flag in either. Which one is
-loaded is the injector's decision and is made nowhere in this tree yet.
+The two panel bundles differ in exactly one thing and are told apart by NAME — nothing inside either is read to choose
+between them. Which one is loaded is the injector's decision and is made nowhere in this tree yet. Each does carry a
+build-time stamp of which of the two it IS, and exactly one thing reads it: the start-up check's fallback page, which
+has to name the copy of `@decky/ui` that ran a search that missed.
 
 _Avoid_: **DFL build** / **bundled build** — both name the mechanism rather than the situation, and the situation is
 what the choice turns on. Avoid **the bundle** unqualified once more than one exists. Avoid calling the React bootstrap
@@ -145,8 +147,14 @@ interface find something? Almost everything the panel renders is a search predic
 one Steam has moved past returns `undefined` with nothing thrown.
 
 On a miss the panel does not mount at all — the factory returns a **fallback page** instead and registers nothing. The
-page distinguishes SOME searches missing (a Steam client update moved what they match) from ALL of them (the React
-bootstrap never ran, or Steam's registry was read before it was complete), which is the one fact that leads to a repair.
+page distinguishes SOME searches missing from ALL of them (the React bootstrap never ran, or Steam's registry was read
+before it was complete, neither of them `@decky/ui`'s doing), which is the first fact that leads to a repair.
+
+The second is the **searching copy**: which installed copy of `@decky/ui` ran the predicate that went stale, since the
+coexistence bundle runs Decky Loader's rather than ours. It gives SOME three answers instead of one — Tender's own copy
+searched and missed (update Tender); Decky's copy searched and missed (update Decky Loader, whose own interface and
+other plugins are affected the same way); or Decky's copy does not export a name Tender asks it for, which is the two
+programs disagreeing about the package rather than about Steam (bring both to current).
 
 _Avoid_: **health check** — it asks one question at one moment and is not a recurring probe. Avoid **degraded mode**:
 there is no such mode, and inventing one is the thing the check exists to refuse.
