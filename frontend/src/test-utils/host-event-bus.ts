@@ -77,9 +77,10 @@ export function mockRemoveEventListener<Args extends unknown[] = []>(
 export function emitHostEvent<Args extends unknown[] = []>(name: string, ...args: Args): void {
   const bucket = listeners.get(name);
   if (!bucket) return;
-  // Snapshot first so a listener that removes itself during dispatch doesn't
+  // A snapshot, so a listener that removes itself during dispatch doesn't
   // mutate the set we're iterating.
-  for (const listener of [...bucket]) {
+  const registered = [...bucket];
+  for (const listener of registered) {
     listener(...args);
   }
 }

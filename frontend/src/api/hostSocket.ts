@@ -238,7 +238,7 @@ export class HostSocket {
   /** Fail every call there is, sent or not, with *error*. */
   private failEveryCall(error: Error): void {
     this.outbox = [];
-    for (const [id, call] of [...this.pending]) {
+    for (const [id, call] of this.pending) {
       this.pending.delete(id);
       call.reject(error);
     }
@@ -246,7 +246,7 @@ export class HostSocket {
 
   private failSentCalls(message: string): void {
     const unsent = new Set(this.outbox.map((entry) => entry.id));
-    for (const [id, call] of [...this.pending]) {
+    for (const [id, call] of this.pending) {
       if (unsent.has(id)) continue;
       this.pending.delete(id);
       call.reject(new HostTransportError(CONNECTION_LOST, message));
@@ -254,7 +254,7 @@ export class HostSocket {
   }
 
   private flush(): void {
-    if (!this.socket || this.socket.readyState !== 1) {
+    if (this.socket?.readyState !== 1) {
       this.connect();
       return;
     }
@@ -324,9 +324,10 @@ export class HostSocket {
   private dispatch(name: string, payload: unknown): void {
     const bucket = this.listeners.get(name);
     if (!bucket) return;
-    // Snapshot first, so a listener that removes itself while it runs does not
+    // A snapshot, so a listener that removes itself while it runs does not
     // mutate the set being iterated.
-    for (const listener of [...bucket]) {
+    const registered = [...bucket];
+    for (const listener of registered) {
       try {
         (listener as (payload: unknown) => unknown)(payload);
       } catch (error) {
