@@ -74,14 +74,15 @@ Every request path goes through `lib.path_safety.safe_join`, which resolves syml
 
 ## 7. The injection puts the token in one place and the panel in one context
 
-`host/inject/` evaluates one expression into Steam's renderer. Three properties of that expression have no check at all.
+`host/inject/` evaluates one expression into Steam's renderer. Four properties of it have no check at all.
 
-**The address it imports is the only place the token goes.** The panel reads its port and its token off the URL it was
-imported from (`api/host.ts` hands `import.meta.url` to `hostSocket.ts`), so the token has to be in that address and has
-nowhere else to be: not on the marker it leaves on the window, not on the load-failure card it may draw, and not in what
-it answers the backend with — the expression replaces the token in any error text with `<token>`, against the token
-itself rather than against a pattern, before the injector logs it. Rule 2's redaction covers the log FILE; this covers
-the page and stderr, which it does not.
+**The token goes into the addresses and one field beside them, and nowhere a press or a log can reach it.** The panel
+reads its port and its token off the URL it was imported from (`api/host.ts` hands `import.meta.url` to
+`hostSocket.ts`), so the token has to be in that address; the same facts object carries it a second time because the
+expression's redaction matches the token itself rather than a pattern. Both die with the expression. Where it must never
+go: the marker left on the window, the load-failure card, and what the expression answers the backend with — any error
+text has the token replaced with `<token>` before the injector logs it. Rule 2's redaction covers the log FILE; this
+covers stderr and the page, which it does not.
 
 **The marker is claimed before anything is imported, and kept when the import fails.** `window.__tender_panel__` is the
 whole of how a context says it already carries the panel — a JS-context rebuild wipes it and nothing short of one does —

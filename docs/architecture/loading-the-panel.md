@@ -21,13 +21,14 @@ From the debugger port answering to the panel being there:
 | Evaluate           | one expression that claims the marker and imports the chosen bundles in order                                |
 | Ask again, later   | is Steam's interface still there? — see [the crash watchdog](#the-crash-watchdog)                            |
 
-After that the loop waits on `Page.domContentEventFired` and nothing else. It polls in exactly two places, both before
-the panel is in: while Steam is still naming the renderer, and while the page is becoming something the panel can load
-into.
+After that the loop waits on two subscriptions and nothing else — `Page.domContentEventFired`, which says the marker has
+been wiped, and `Runtime.bindingCalled`, which is [the card's one button](#one-button-and-an-address-in-plain-text). It
+polls in exactly two places, both before the panel is in: while Steam is still naming the renderer, and while the page
+is becoming something the panel can load into.
 
 **A target the debugger lists with no title is not "nothing is open".** Measured on the device from the port answering:
-a target appears at **+0.20 s with an empty title**, the **same** target is renamed `SharedJSContext` at **+0.61 s**,
-and `webpackChunksteamui` is ready at **+0.84 s**. Discovery that read the first miss as a verdict would give up half a
+a target appears at **+0.20 s with an empty title**, the **same** target is renamed `SharedJSContext` at **+0.6 s**, and
+`webpackChunksteamui` is ready at **+0.84 s**. Discovery that read the first miss as a verdict would give up half a
 second before the answer existed, which is why every miss here is retried and the log distinguishes "targets, none named
 yet" from "nothing there".
 
@@ -63,9 +64,11 @@ at +4.65 s on the reference machine, and Decky had finished at +10.6 s with ten 
 
 ## The marker
 
-`window.__tender_panel__` is how a context says it already carries the panel. Measured: a JS-context rebuild WIPES it
-and everything short of one leaves it standing — a mark planted on the first `Page.domContentEventFired` survived eleven
-`Page.windowOpen` events over 16 s, and survived Decky starting beside it and finishing with ten plugins.
+`window.__tender_panel__` is how a context says it already carries the panel. Measured, in two device runs with a mark
+of their own rather than with this marker: a JS-context rebuild WIPES such a mark, while a mark planted on the first
+`Page.domContentEventFired` survived the settle that followed — eleven `Page.windowOpen` events over 16 s. In the other
+run a mark planted at +0.96 s was still there after Decky had finished at +10.6 s with ten plugins, which is what says
+Decky starting beside us does not rebuild the context.
 
 The expression claims the marker BEFORE it imports anything, so a second evaluation cannot load the panel twice. It
 holds the marker even when the import fails, which is what stops a broken bundle being retried into the same context —
@@ -162,10 +165,13 @@ do ([#1903](https://github.com/danielcopper/romm-tender/issues/1903)).
 
 ## The token
 
-The panel reads its port and its token off the URL it was imported from (`frontend/src/api/hostSocket.ts`), so the
-address the expression imports carries the token and there is nowhere else for it to be. It is put nowhere else: not on
-the marker, not on the card, and not in what comes back to the backend — the expression replaces the token in any error
-text with `<token>`, against the token itself rather than against a pattern, before the injector ever logs it.
+The panel reads its port and its token off the URL it was imported from (`frontend/src/api/host.ts` hands
+`import.meta.url` to `hostSocket.ts`), so the address the expression imports carries the token and there is nowhere else
+for it to be. The same facts object carries it once more, as a field, because the expression's redaction matches on the
+token itself rather than on a pattern — and both die with the expression that holds them.
+
+What it is kept out of is everything that outlives that: the marker left on the window, the card on screen, and what
+comes back to the backend — any error text has the token replaced with `<token>` before the injector ever logs it.
 
 ## Running it
 

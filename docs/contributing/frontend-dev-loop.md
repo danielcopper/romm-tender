@@ -18,9 +18,18 @@ Two things have to be true for anything to be loaded: `~/.steam/steam/.cef-enabl
 the empty file and restart Steam if it does not), and Steam has to be running. If Steam is not running the backend waits
 and attaches when it comes up, so the order of the two commands does not matter.
 
-The one start-up line on stderr prints the complete address the panel is loaded from, token included. That line is the
-deliberate exception to the token never being printed, and it is what makes the loop drivable by hand — paste the
-address into the CEF DevTools console to import the panel yourself.
+One start-up line on stderr prints an address with the port and the token in it — the deliberate exception to the token
+never being printed, and what makes the served root reachable by hand. **It is not the injector's choice**: the line is
+built from a constant (`BUNDLE_FILENAME`, `index.js`) and says where the served root answers, so beside a serving Decky
+Loader it names a file the injector did not load. Read it for the port and the token.
+
+!!! danger "Do not hand-import `index.js` beside a running Decky Loader"
+
+    Pasting that address into the DevTools console imports the standalone panel, which carries `@decky/ui` — and
+    re-running that sweep under a Decky that is already rendering is the crash that takes the Big Picture window down
+    ([frontend bundles](../architecture/frontend-bundles.md#why-two-copies-of-the-panel)). On a fresh context it throws
+    anyway, because `dist/globals.js` has not run. Let the backend load the panel; it picks the pair that is safe for
+    the machine it is on.
 
 ## Seeing a change
 
@@ -279,7 +288,8 @@ the state directory, and on stderr in the terminal `mise run dev` is running in.
   created), the renderer never named (Steam is still coming up), and the crash watchdog having stopped the injection
   after two dead Steam starts, which names itself in the log and is lifted with `TENDER_INJECT=force`.
 - **A card in the corner says Tender could not load its panel** — the bundle was served and did not mount. It names the
-  log path; the reason it prints is the import's own. Dismissing it removes it until the next context rebuild.
+  log path; the reason it prints is the import's own. Its one button stops the injection for the life of this backend
+  process and takes the card away — nothing is loaded again until `mise run dev` is started afresh.
 - **Big Picture reopened without the panel** — the injector loads the panel again by itself when Steam rebuilds its JS
   context. If it did not, `mise run dev:bpm-reset` gives a renderer nobody has loaded anything into yet. It takes the
   same optional display argument, e.g. `mise run dev:bpm-reset dp2`.

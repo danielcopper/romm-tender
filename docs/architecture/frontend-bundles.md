@@ -259,10 +259,14 @@ forwarded them. Their replacements are [#1901](https://github.com/danielcopper/r
 through Steam's own notification store, and the game-page patch installed by Tender's own installer — so until then both
 are **declared placeholders that do nothing**: no toast appears, and Steam's game page carries no Tender section.
 
-Neither reaches Decky's loader API when one happens to be present, and the reason is the device test rather than purity.
-The reference machine has Decky installed but disabled; a placeholder that borrowed the loader's API whenever it found
-one would pass that test for a reason nobody could identify afterwards, and a test that cannot fail for the thing it is
-testing is worth nothing.
+Neither reaches Decky's loader API when one happens to be present, and what decides that is not purity: both are the
+loader's own, [#1901](https://github.com/danielcopper/romm-tender/issues/1901) replaces them with Tender's, and a
+placeholder that borrowed one wherever it found one would behave differently on a machine running Decky from one without
+— the difference this program exists not to depend on.
+
+**The reference machine runs Decky Loader** — measured while building the injector: `plugin_loader.service` active and
+enabled, and `127.0.0.1:1337` listening. So a borrowing placeholder would be visible there rather than hidden, which is
+the opposite of what this page said while it recorded the machine as having Decky installed but disabled.
 
 ## What the tests here can and cannot see
 

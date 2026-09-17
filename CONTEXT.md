@@ -189,7 +189,7 @@ renders without, or a name only a debug line reads — never something a page ac
 
 Loading the panel into Steam's renderer from outside it: the backend attaches to Steam's CEF debugger and evaluates one
 expression in the `SharedJSContext` target. There is no plugin loader in this path, nothing is copied anywhere, and no
-file on disk decides anything.
+manifest anybody reads.
 
 The **marker** is the global that expression leaves behind (`window.__tender_panel__`), and it is the whole of how a
 context says it already carries the panel. It is wiped by a **JS-context rebuild** — Steam building its renderer's
@@ -223,7 +223,8 @@ happened; two in a row stop the injection, and a change in the **fingerprint** �
 bundle bytes, Steam's client build — drops the count so it starts trying again by itself.
 
 An attempt the record says nothing about is **not counted**: the debugger stopped answering, the backend is shutting
-down, or nothing but the renderer was open, so there was no collapse to observe.
+down, nothing but the renderer was open, or a second injection began before the check that answers for the first could
+run — in each of those there was no collapse to observe.
 
 _Avoid_: **crash counter**, which is what this replaced — the crash leaves the marker standing, so within one Steam
 session it can happen at most once and counting inside a session counts to one for ever.

@@ -53,10 +53,12 @@ describe("the toaster placeholder", () => {
   });
 
   it("reaches no loader API even where one exists", () => {
-    // The disqualifier is the device test, not purity: the machine this is
-    // tested on has Decky installed but disabled, so a placeholder that borrowed
-    // the loader's API whenever it found one would pass that test for a reason
-    // nobody could identify afterwards.
+    // The disqualifier is not purity: both placeholders stand in for the
+    // loader's own API, #1901 replaces them with Tender's, and one that
+    // borrowed wherever it found one would behave differently on a machine
+    // running Decky from one without. The reference machine DOES run the loader
+    // (plugin_loader active, 127.0.0.1:1337 listening, measured 2026-09-17), so
+    // that borrowing would show up on a device rather than hide there.
     const loader = { connect: vi.fn() };
     vi.stubGlobal("__DECKY_SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED_deckyLoaderAPIInit", loader);
     vi.spyOn(console, "warn").mockImplementation(() => {});
