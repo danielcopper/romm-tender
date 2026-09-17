@@ -59,6 +59,14 @@ async def decky_loader_is_serving(port: int = DECKY_LOADER_PORT, *, connect_time
     be leant on, because a reconnect can put this question at a moment when
     Steam has been up for an hour and Decky has long since rendered.
 
+    **What the safe direction costs, said plainly:** something that is not Decky
+    answering on this port is read as Decky. The coexistence panel is then
+    chosen, and it waits for a ``DFL`` that will never appear — so the injector
+    warns once a readiness window, attaches again, and no panel is ever loaded.
+    That is a machine with no panel rather than a machine with no Steam, which
+    is the trade this answer makes; the readiness warning names the condition it
+    waited for, so the log says ``DFL`` rather than only saying "not ready".
+
     The connect blocks, so it runs off the event loop — which is also why
     *connect_timeout* bounds the socket rather than this coroutine: a deadline
     on the await would return control while the worker thread was still waiting.

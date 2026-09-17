@@ -100,6 +100,10 @@ class FakeDebugger:
         # exact point in its sequence rather than by racing it.
         self.hold_method = ""
         self.held = asyncio.Event()
+        # A command whose reply goes out in two frames — a text frame with FIN
+        # clear and a continuation — because a reply this small never fragments
+        # on its own and the client's reassembly would otherwise go unexercised.
+        self.fragment_method = ""
         self._server: asyncio.Server | None = None
         self._port = 0
         self._writers: list[asyncio.StreamWriter] = []
@@ -253,7 +257,13 @@ class FakeDebugger:
             return
         else:
             reply = {"id": message.get("id"), "result": result}
-        writer.write(build_frame(OPCODE_TEXT, json.dumps(reply).encode("utf-8")))
+        body = json.dumps(reply).encode("utf-8")
+        if method and method == self.fragment_method:
+            half = len(body) // 2
+            writer.write(build_frame(OPCODE_TEXT, body[:half], fin=False))
+            writer.write(build_frame(OPCODE_CONTINUATION, body[half:]))
+        else:
+            writer.write(build_frame(OPCODE_TEXT, body))
         await writer.drain()
 
 

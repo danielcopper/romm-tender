@@ -68,7 +68,7 @@ if TYPE_CHECKING:
 RECONNECT_SECONDS = 5.0
 
 # Measured from the debugger port answering: the target appears at +0.20 s with
-# an empty title and is renamed ``SharedJSContext`` at +0.61 s, so a missing name
+# an empty title and is renamed ``SharedJSContext`` at +0.6 s, so a missing name
 # is a moment rather than an answer. The window is far wider than that reading
 # because waiting costs nothing and giving up costs the panel until the next
 # attachment.
@@ -326,10 +326,22 @@ class PanelInjector:
         """
         choice = choose_bundles(decky_is_serving=await decky_loader_is_serving(self._setup.decky_port))
         if not await self._wait_until_ready(connection, choice.ready_when):
+            # The expression rather than a summary of it: on a machine where
+            # something that is not Decky Loader answers on its port, this line
+            # naming ``DFL`` is the only thing that says why no panel appears.
             self._logger.warning(
-                f"inject: Steam's interface was not ready within {READY_WINDOW_SECONDS:.0f}s; will attach again"
+                f"inject: Steam's interface was not ready within {READY_WINDOW_SECONDS:.0f}s "
+                f"(waiting for {choice.ready_when}); will attach again"
             )
             return False
+
+        # Before the record is read, never after: this process may hold one it
+        # armed and never answered for, and ``judge`` reads an open record as a
+        # crash that already happened. A JS-context rebuild inside the alive
+        # window is the ordinary way that arrives — it is what a Steam restart
+        # produces — and a real crash is unaffected, because the check that saw
+        # it marks its reading taken and the record stays open for this call.
+        await self._abandon_alive_check()
 
         fingerprint = await self._fingerprint(choice.files)
         verdict = self._watchdog.judge(fingerprint)
@@ -341,7 +353,6 @@ class PanelInjector:
             self._logger.warning(f"inject: {verdict.line}")
 
         witness = len(pages_besides(await self._targets_now(), target.id))
-        await self._abandon_alive_check()
         self._watchdog.arm(fingerprint)
 
         binding = await self._install_the_cards_callback(connection)
@@ -400,7 +411,16 @@ class PanelInjector:
             async with asyncio.timeout(COMMAND_TIMEOUT_SECONDS):
                 await connection.call("Runtime.enable")
         except (CdpUnavailableError, TimeoutError) as exc:
-            self._logger.warning(f"inject: the card is up but its button cannot report a press ({exc})")
+            # The one state this design calls worse than no button: it is drawn,
+            # because the binding went on, and a press reaches nothing. Nothing
+            # here can take it back — the card was drawn by an evaluate that has
+            # already returned — so the log is what says so, and it names the
+            # way out, which is not inside Steam either.
+            self._logger.warning(
+                f"inject: the load-failure card is up and its button cannot reach this backend ({exc}); pressing it "
+                f"will only take the card off the screen. To stop the attempts, restart this backend with "
+                f"{INJECT_ENV}={INJECT_OFF}."
+            )
 
     async def _wait_until_ready(self, connection: CdpConnection, expression: str) -> bool:
         """Poll *expression* until the page says it is ready, or the window closes."""

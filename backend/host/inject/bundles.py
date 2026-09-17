@@ -36,7 +36,7 @@ COEXISTENCE = "coexistence"
 
 # The module registry every panel bundle searches. Measured from the debugger
 # port answering, it is the last of the start-up readings the device run took —
-# the target appears at +0.20 s, is named at +0.61 s, and this exists at
+# the target appears at +0.20 s, is named at +0.6 s, and this exists at
 # +0.84 s — so it is what "Steam is ready for us" means here.
 _STEAM_REGISTRY_READY = 'typeof window["webpackChunksteamui"] !== "undefined"'
 

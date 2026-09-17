@@ -172,7 +172,12 @@ class TestLoadingThePanel:
             running = await injecting(page=page)
             await wait_until(lambda: sum(1 for method, _ in running.debugger.calls if method == "Page.enable") >= 2)
         assert page.bootstraps == []
-        assert any("was not ready" in record.message for record in caplog.records)
+        line = next(record.message for record in caplog.records if "was not ready" in record.message)
+        # The condition, not a summary of it: on a machine where something that
+        # is not Decky Loader answers on its port, this is the only line that
+        # says why no panel ever appears.
+        assert "DFL" not in line
+        assert "webpackChunksteamui" in line
 
     async def test_a_context_that_already_carries_the_panel_is_left_alone(self, injecting):
         page = a_page()
@@ -277,6 +282,21 @@ class TestTheCardsOneButton:
         await running.debugger.emit("Runtime.bindingCalled", {"name": STOP_BINDING, "payload": "something-else"})
         await asyncio.sleep(0.15)
         assert not running.task.done()
+
+    async def test_a_button_that_cannot_reach_the_backend_is_said_to_be_one(self, injecting, caplog):
+        """The binding went on, the card drew its button, and the press reaches nothing.
+
+        The card cannot be taken back — the evaluate that drew it has returned —
+        so the log is the only thing that can say the button on screen is inert,
+        and it names the way out, which is not inside Steam.
+        """
+        page = a_page()
+        page.bootstrap_answer = {"ok": False, "reason": "TypeError", "shown": True}
+        with caplog.at_level(logging.WARNING, logger="test_injector"):
+            await injecting(page=page, handlers={"Runtime.enable": lambda _params: refuse("not today")})
+            await wait_until(lambda: any("cannot reach this backend" in r.message for r in caplog.records))
+        line = next(r.message for r in caplog.records if "cannot reach this backend" in r.message)
+        assert "TENDER_INJECT=off" in line
 
     async def test_a_refused_callback_leaves_the_card_without_a_button(self, injecting, caplog):
         page = a_page()
@@ -393,6 +413,27 @@ class TestDidTheInterfaceSurviveIt:
             await running.debugger.stop()
             await wait_until(lambda: any("stopped answering" in r.message for r in caplog.records))
         assert running.watchdog_record().get("open") is False
+
+    async def test_a_rebuild_inside_the_check_window_is_not_a_crash(self, injecting, monkeypatch):
+        """The record this process armed is answered for before the next one reads it.
+
+        A JS-context rebuild inside the alive window starts a second injection
+        while the first record is still open and unanswered — ordinary during
+        start-up settle, and exactly what ``mise run dev:bpm-reset`` produces.
+        Read as a crash, two of them stop the injection on a machine where
+        nothing was ever wrong.
+        """
+        monkeypatch.setattr(injector_module, "ALIVE_AFTER_SECONDS", 5.0)
+        running = await injecting(
+            targets=[FakeTarget(id=RENDERER, title="SharedJSContext"), FakeTarget(id="bpm", title="Big Picture")]
+        )
+        await wait_until(lambda: running.page.bootstraps)
+
+        running.page.marker = False
+        await running.debugger.emit("Page.domContentEventFired", {"timestamp": 1})
+        await wait_until(lambda: len(running.page.bootstraps) == 2)
+
+        assert running.watchdog_record().get("failures") == 0
 
     async def test_a_shutdown_before_the_check_even_exists_closes_the_record(self, injecting):
         """The record is armed a moment before the check that answers for it exists."""

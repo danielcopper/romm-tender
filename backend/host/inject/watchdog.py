@@ -5,11 +5,14 @@ piece of state that answers it. It performs no injection and reads no page — i
 is handed a fingerprint and told afterwards what happened.
 
 **Why a record and not a counter.** The issue this replaces asked for three
-crashes within a minute to stop injecting. That cannot be observed: measured on
-the device, the crash leaves ``SharedJSContext`` alive with our marker still on
-it, nothing recovers within 45 s, and so the injector sees "already injected" and
-never tries a second time. Within one Steam session the crash happens at most
-once, so counting them inside a session counts to one for ever.
+crashes within a minute to stop injecting. That cannot be observed. What was
+measured on the device is that the crash takes every other page target at once
+while ``SharedJSContext`` survives and the debugger keeps answering, and that
+nothing recovers within 45 s. The rest follows rather than being measured: the
+marker this cut plants lives on that surviving target — it did not exist in that
+provocation — so the injector would find it, read "already injected", and never
+try a second time. Within one Steam session the crash therefore happens at most
+once, and counting inside a session counts to one for ever.
 
 What is observable is the OTHER side of it: write a record before evaluating,
 clear it once the interface is still there some seconds later, and an open record

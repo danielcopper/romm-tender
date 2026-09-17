@@ -29,12 +29,14 @@ grows no route for it. Whether the button is drawn is the injector's answer —
 it installs the binding before this source is evaluated and says so in the facts
 — because a button that cannot report a press is worse here than no button.
 
-**The token appears once, inside the addresses.** It has to be there — the panel
-reads the port and the token off the URL it was imported from
-(``frontend/src/api/host.ts`` hands ``import.meta.url`` to
-``hostSocket.ts``'s ``addressFromBundleUrl``) — and it is put nowhere else: not on the
-marker, not in the page, and not in what comes back to the backend, which is
-redacted against the token itself rather than against a pattern.
+**The token is in the addresses, and in one field beside them.** It has to be in
+the addresses — the panel reads the port and the token off the URL it was
+imported from (``frontend/src/api/host.ts`` hands ``import.meta.url`` to
+``hostSocket.ts``'s ``addressFromBundleUrl``) — and it is carried a second time
+as a field of the same facts object, because the redaction below matches on the
+token itself rather than on a pattern. Both live and die with the expression.
+Where it is NOT: not on the marker left on the window, not on the card, and not
+in what comes back to the backend.
 """
 
 from __future__ import annotations
@@ -204,6 +206,12 @@ EXPLANATION = (
 # guess on the one page whose whole job is to be true after everything else has
 # failed. It becomes a button in the cut that gives it something to do (#1903).
 UPDATES_AT = "Releases are listed at github.com/danielcopper/romm-tender/releases"
+# One button rather than two, and a Dismiss beside it is the road not taken:
+# the card blocks nothing already (it accepts a press nowhere but here), so
+# "off my screen" is a weak need, and a second button whose effect is "gone
+# until the next rebuild draws it again" is the ambiguous one on the page whose
+# whole job is to be unambiguous. What this button costs is answered the way the
+# crash state answers it — by starting the backend again.
 STOP = "Stop trying until Tender restarts"
 # "Restart" is the one word on this card a reader can get wrong, so the card
 # spells out which program it means. It is the same way back the crash state

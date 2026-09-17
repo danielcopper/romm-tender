@@ -168,7 +168,7 @@ def find_shared_context(targets: tuple[Target, ...]) -> Target | None:
 
     **An answer of ``None`` is never "Steam has nothing open".** Measured on the
     device: from the debugger port answering, a target appears at +0.20 s with an
-    EMPTY title and the SAME target is renamed ``SharedJSContext`` at +0.61 s. A
+    EMPTY title and the SAME target is renamed ``SharedJSContext`` at +0.6 s. A
     caller that read the first miss as a verdict would give up half a second
     before the answer existed, so every caller here retries.
     """

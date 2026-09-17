@@ -78,7 +78,7 @@ class TestWhatTheSourceCarries:
 
 
 class TestTheToken:
-    def test_it_appears_only_inside_the_addresses_the_panel_is_loaded_from(self):
+    def test_the_only_field_carrying_it_is_the_one_the_redaction_reads(self):
         source = build_bootstrap(facts())
         carried = folded_facts(source)
         assert [key for key, value in carried.items() if isinstance(value, str) and TOKEN in value] == ["token"]
@@ -130,7 +130,7 @@ class TestTheOneButton:
 
 
 class TestTheCardNeverTakesTheMachineOver:
-    def test_nothing_but_the_dismiss_button_accepts_a_press(self):
+    def test_nothing_but_the_one_button_accepts_a_press(self):
         source = build_bootstrap(facts())
         card = source[source.index("const showLoadFailure") : source.index("return loadAll()")]
         assert card.count('pointerEvents: "none"') == 1

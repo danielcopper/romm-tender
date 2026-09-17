@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from typing import Any
 
 import pytest
 
@@ -38,6 +39,18 @@ async def debugger():
 
 async def connect_to(server: FakeDebugger, target_id: str = "renderer") -> CdpConnection:
     return await CdpConnection.connect(f"ws://127.0.0.1:{server.port}/devtools/page/{target_id}", logger=LOGGER)
+
+
+async def ask(connection: CdpConnection, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Send one command with a bound on the answer.
+
+    ``CdpConnection.call`` deliberately has no timeout of its own — the caller
+    owns that wait — and nothing in this repo's pytest run imposes one either.
+    Called bare, a client that stopped answering would HANG the suite instead of
+    failing it, which is what happened when the frame reassembly was mutated.
+    """
+    async with asyncio.timeout(5.0):
+        return await connection.call(method, params)
 
 
 class TestTheDiscoveryRule:
@@ -113,7 +126,7 @@ class TestTheConnection:
         debugger.handlers["Page.enable"] = lambda _params: {"enabled": True}
         connection = await connect_to(debugger)
         try:
-            assert await connection.call("Page.enable") == {"enabled": True}
+            assert await ask(connection, "Page.enable") == {"enabled": True}
         finally:
             await connection.close()
 
@@ -122,7 +135,7 @@ class TestTheConnection:
         connection = await connect_to(debugger)
         try:
             with pytest.raises(CdpUnavailableError, match="no such domain"):
-                await connection.call("Page.enable")
+                await ask(connection, "Page.enable")
         finally:
             await connection.close()
 
@@ -143,17 +156,51 @@ class TestTheConnection:
             queue = connection.subscribe("Page.domContentEventFired")
             await debugger.emit("Page.loadEventFired", {})
             debugger.handlers["Page.enable"] = lambda _params: {}
-            await connection.call("Page.enable")
+            await ask(connection, "Page.enable")
             assert queue.empty()
         finally:
             await connection.close()
 
     async def test_a_message_split_across_frames_is_reassembled(self, debugger):
+        """The reply arrives as a text frame with FIN clear plus a continuation.
+
+        A reply this size never fragments by itself, so the fake is told to
+        split this one — without that the reassembly is dead code under a test
+        name that says otherwise.
+        """
         payload = {"x": "y" * 200}
         debugger.handlers["Page.enable"] = lambda _params: payload
+        debugger.fragment_method = "Page.enable"
         connection = await connect_to(debugger)
         try:
-            assert await connection.call("Page.enable") == payload
+            assert await ask(connection, "Page.enable") == payload
+        finally:
+            await connection.close()
+
+    async def test_a_fragmented_message_is_two_frames_on_the_wire(self, debugger):
+        """The fake really splits it — otherwise the test above proves nothing."""
+        frames = 0
+        original = debugger._serve_frames
+
+        async def counting(reader, writer):
+            class Counting:
+                def __getattr__(self, name):
+                    return getattr(writer, name)
+
+                def write(self, data):
+                    nonlocal frames
+                    frames += 1
+                    writer.write(data)
+
+            await original(reader, Counting())
+
+        debugger._serve_frames = counting
+        debugger.handlers["Page.enable"] = lambda _params: {"x": "y" * 200}
+        debugger.fragment_method = "Page.enable"
+        connection = await connect_to(debugger)
+        try:
+            await ask(connection, "Page.enable")
+            assert frames == 2
         finally:
             await connection.close()
 
@@ -173,8 +220,7 @@ class TestTheConnection:
                     await connection.call("Runtime.evaluate", {"expression": "1"})
 
             debugger.handlers["Page.enable"] = lambda _params: {"still": "here"}
-            async with asyncio.timeout(5):
-                assert await connection.call("Page.enable") == {"still": "here"}
+            assert await ask(connection, "Page.enable") == {"still": "here"}
         finally:
             await connection.close()
 
@@ -186,8 +232,7 @@ class TestTheConnection:
                 await asyncio.wait_for(queue.get(), 0.2)
 
             debugger.handlers["Page.enable"] = lambda _params: {"still": "here"}
-            async with asyncio.timeout(5):
-                assert await connection.call("Page.enable") == {"still": "here"}
+            assert await ask(connection, "Page.enable") == {"still": "here"}
         finally:
             await connection.close()
 
@@ -262,7 +307,7 @@ class TestTheConnection:
         debugger.handlers["Page.enable"] = lambda _params: {}
         connection = await connect_to(debugger)
         try:
-            await connection.call("Page.enable")
+            await ask(connection, "Page.enable")
             assert seen and all(seen)
         finally:
             await connection.close()
@@ -271,7 +316,7 @@ class TestTheConnection:
         """RFC 6455 §5.1 — and ``close_frame`` builds the SERVER direction."""
         debugger.handlers["Page.enable"] = lambda _params: {}
         connection = await connect_to(debugger)
-        await connection.call("Page.enable")
+        await ask(connection, "Page.enable")
         await connection.close()
         await asyncio.sleep(0.05)
 
@@ -287,7 +332,7 @@ class TestTheConnection:
                 writer.write(build_frame(OPCODE_PING, b"hello"))
                 await writer.drain()
             await asyncio.sleep(0.05)
-            assert await connection.call("Page.enable") == {}
+            assert await ask(connection, "Page.enable") == {}
         finally:
             await connection.close()
 
@@ -303,7 +348,7 @@ class TestTheConnection:
                 await asyncio.sleep(0.05)
             assert any("not a CDP message" in record.message for record in caplog.records)
             debugger.handlers["Page.enable"] = lambda _params: {}
-            assert await connection.call("Page.enable") == {}
+            assert await ask(connection, "Page.enable") == {}
         finally:
             await connection.close()
 
@@ -317,7 +362,7 @@ class TestTheSizeCap:
         connection = await connect_to(debugger)
         try:
             with pytest.raises(CdpConnectionLost):
-                await asyncio.wait_for(connection.call("Page.enable"), 5)
+                await ask(connection, "Page.enable")
         finally:
             await connection.close()
 
