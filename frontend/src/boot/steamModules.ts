@@ -240,6 +240,11 @@ export interface StartupReport {
    * what `searchingCopy.ts` asks Decky's. The rest of `missing` — the three
    * globals, the glyph — would answer "not exported" for a Decky in perfect
    * step with us.
+   *
+   * Empty while {@link missing} is not is therefore a statement in its own
+   * right: nothing that missed was a search either copy of the package ran, and
+   * {@link describeFailure} answers that before it asks whose copy anything
+   * belongs to.
    */
   readonly missingPackageNames: readonly string[];
   /** How many searches were asked. */
@@ -270,6 +275,15 @@ export function checkSteamModules(lookups: readonly SteamLookup[] = STEAM_LOOKUP
  * Decky's interface and its other plugins at that moment), or a Decky copy that
  * does not carry the name at all, which is a disagreement about the package
  * rather than about Steam. `searchingCopy.ts` decides which; this words it.
+ *
+ * Unless none of what missed is a search either copy ran. {@link STEAM_LOOKUPS}
+ * carries names `@decky/ui` does not export — the React globals and the glyph,
+ * marked by {@link SteamLookup.deckyUiExport} — and a miss confined to those
+ * belongs to no copy of the package,
+ * so the sentence names none. It claims nothing further: which program installed
+ * the globals on a machine running both is #1900's question and not one this
+ * page may decide, and there is no repair to offer that would follow from an
+ * answer we do not have.
  */
 export function describeFailure(report: StartupReport, copy: SearchingCopy): string {
   if (report.ok) return "";
@@ -281,6 +295,9 @@ export function describeFailure(report: StartupReport, copy: SearchingCopy): str
     );
   }
   const scale = `${report.missing.length} of ${report.checked} searches into Steam's interface found nothing. `;
+  if (report.missingPackageNames.length === 0) {
+    return scale + "None of them is a name @decky/ui exports, so neither copy of the package ran them.";
+  }
   if (copy.owner === "tender") {
     return (
       scale +

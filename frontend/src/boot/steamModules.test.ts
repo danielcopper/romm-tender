@@ -177,6 +177,35 @@ describe("whose copy the page blames for a stale search", () => {
     expect(sentence).toContain("A newer Decky Loader is the repair.");
   });
 
+  // `ControllerGlyph` is a predicate `utils/deckyUiInternals.ts` runs itself
+  // because the package does not export it, and `SP_REACTDOM` is a global a
+  // bootstrap installs — so neither is a lookup either copy of the package ran,
+  // in either bundle. Naming a copy here sends the user after a program that did
+  // nothing; in the coexistence bundle that program is Decky Loader. Those two
+  // are also the only ones that can reach this: `SP_REACT` and `SP_JSX` are read
+  // while the bundle is evaluated, so with either unset it throws at import and
+  // this check never runs.
+  it.each([
+    ["ControllerGlyph", "standalone"],
+    ["ControllerGlyph", "coexistence"],
+    ["SP_REACTDOM", "standalone"],
+    ["SP_REACTDOM", "coexistence"],
+  ] as const)("blames neither copy when only %s missed, in the %s bundle", (name, bundle) => {
+    const missed = checkSteamModules([
+      { name: "Focusable", found: () => true, deckyUiExport: true },
+      { name, found: () => false, deckyUiExport: false },
+    ]);
+    const sentence = describeFailure(
+      missed,
+      readSearchingCopy(missed, bundle, () => ({ carries: () => true, version: "v3.2.8" })),
+    );
+    expect(sentence).toContain("1 of 2");
+    expect(sentence).toContain("None of them is a name @decky/ui exports");
+    expect(sentence).not.toContain("ran them, not Tender's own");
+    expect(sentence).not.toContain("Tender's own copy of @decky/ui ran them");
+    expect(sentence).not.toContain("is the repair");
+  });
+
   it("calls it a disagreement about the package when Decky's copy lacks the name", () => {
     const copy = readSearchingCopy(stale, "coexistence", () => ({ carries: () => false, version: "v3.2.8" }));
     const sentence = describeFailure(stale, copy);

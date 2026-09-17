@@ -74,10 +74,10 @@ export interface DeckyCopy {
    * Does Decky's `@decky/ui` export this name?
    *
    * `null` where the question could not be put at all — there is no `DFL`, or
-   * it is not something `in` can be asked of. An absence has to be
-   * demonstrated: a reading that did not happen is not evidence that Decky is
-   * missing anything, and treating it as one would put a package disagreement
-   * on screen that nobody established.
+   * reading it threw. An absence has to be demonstrated: a reading that did not
+   * happen is not evidence that Decky is missing anything, and treating it as
+   * one would put a package disagreement on screen that nobody established. For
+   * the same reason a single name the question throws on answers `true`.
    */
   readonly carries: ((name: string) => boolean) | null;
   /** Decky Loader's installed version, or `null` when it could not be read. */
@@ -121,15 +121,40 @@ function readDeckyVersion(w: DeckyWindow): string | null {
   }
 }
 
+/**
+ * What Decky's `@decky/ui` carries, or `null` where it cannot be questioned.
+ *
+ * Guarded on both axes, for the reason stated at {@link readDeckyVersion} and
+ * with a sharper cost here: `definePlugin`'s factory reads this BEFORE it
+ * returns anything, so a throw takes the failure page and the log line with it
+ * — the one screen that tells a stale search apart from a backend that is not
+ * running, gone in the moment it exists for. `DFL` is another program's global,
+ * so a future Decky may answer for it with a getter rather than store it, and
+ * may install something `in` cannot be asked of.
+ *
+ * A name the question throws on answers `true`, not `false`: a throw
+ * demonstrates nothing, and an absence has to be demonstrated.
+ */
+function readDeckyExports(w: DeckyWindow): DeckyCopy["carries"] {
+  try {
+    const dfl = w.DFL;
+    if (typeof dfl !== "object" || dfl === null) return null;
+    return (name: string) => {
+      try {
+        return name in dfl;
+      } catch {
+        return true;
+      }
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Ask Decky Loader what it is and what its `@decky/ui` carries. */
 export function readDeckyCopy(): DeckyCopy {
   const w = window as unknown as DeckyWindow;
-  const dfl = w.DFL;
-  const namespace = typeof dfl === "object" && dfl !== null ? dfl : null;
-  return {
-    carries: namespace === null ? null : (name: string) => name in namespace,
-    version: readDeckyVersion(w),
-  };
+  return { carries: readDeckyExports(w), version: readDeckyVersion(w) };
 }
 
 /**

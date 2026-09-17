@@ -70,6 +70,17 @@ describe("the fallback page", () => {
     expect(screen.getByText(/Bringing both Tender and Decky Loader/)).toBeInTheDocument();
   });
 
+  it("blames neither copy when what missed is not a @decky/ui lookup", () => {
+    // `ControllerGlyph` is a predicate of ours in both bundles, so the page must
+    // not hand the user Decky's name for it — the page is showing Decky's
+    // sentence otherwise, and that would be a program that did nothing here.
+    const glyph: StartupReport = { ok: false, missing: ["ControllerGlyph"], missingPackageNames: [], checked: 27 };
+    render(<StartupFailurePanel report={glyph} copy={DECKYS} />);
+    expect(screen.getByText(/None of them is a name @decky\/ui exports/)).toBeInTheDocument();
+    expect(screen.queryByText(/Decky Loader v3\.2\.8's copy/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/is the repair/)).not.toBeInTheDocument();
+  });
+
   it("says something more basic happened when none of them did", () => {
     render(<StartupFailurePanel report={report(["Tabs", "Focusable"], 2)} copy={OURS} />);
     expect(screen.getByText(/not a run of broken lookups/)).toBeInTheDocument();

@@ -14,9 +14,13 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { type DeckyCopy, readDeckyCopy, readSearchingCopy } from "./searchingCopy";
-import { describeFailure, type StartupReport } from "./steamModules";
+import { STEAM_LOOKUPS, describeFailure, type StartupReport } from "./steamModules";
 
-const report = (missing: string[], missingPackageNames = missing, checked = 33): StartupReport => ({
+// `checked` defaults to what a real run would put there rather than to a
+// literal: it is `STEAM_LOOKUPS.length` in production, and a fixture no run
+// could produce reads as a state of the program. The number it carried, 33, is
+// the count of names this project imports from `@decky/ui` — a different set.
+const report = (missing: string[], missingPackageNames = missing, checked = STEAM_LOOKUPS.length): StartupReport => ({
   ok: false,
   missing,
   missingPackageNames,
@@ -114,6 +118,52 @@ describe("what can be read off Decky Loader", () => {
   it("can be asked nothing when there is no DFL", () => {
     withDeckyWindow({ DFL: undefined }, () => {
       expect(readDeckyCopy().carries).toBeNull();
+    });
+  });
+
+  it("can be asked nothing when reading DFL throws", () => {
+    // Another program's global, and a future Decky may install it as a getter.
+    // `definePlugin`'s factory calls this before it returns anything, so a throw
+    // here costs the page AND the log line — the one screen that tells a stale
+    // search apart from a backend that is not running.
+    const w = deckyWindow();
+    const had = Object.getOwnPropertyDescriptor(w, "DFL");
+    Object.defineProperty(w, "DFL", {
+      configurable: true,
+      get(): never {
+        throw new Error("a future Decky answers for DFL rather than storing it");
+      },
+    });
+    try {
+      expect(readDeckyCopy().carries).toBeNull();
+    } finally {
+      if (had) Object.defineProperty(w, "DFL", had);
+      else delete w.DFL;
+    }
+  });
+
+  it("claims no absence for a name `in` cannot be asked about", () => {
+    // A throw demonstrates nothing, and an absence has to be demonstrated — so
+    // the name answers as carried, and the page does not report a package the
+    // two programs disagree about on evidence nobody has.
+    const namespace = new Proxy(
+      {},
+      {
+        has(): never {
+          throw new Error("a namespace that refuses the question");
+        },
+      },
+    );
+    withDeckyWindow({ DFL: namespace }, () => {
+      const copy = readDeckyCopy();
+      expect(copy.carries?.("Tabs")).toBe(true);
+      const stale = report(["Tabs"]);
+      expect(
+        describeFailure(
+          stale,
+          readSearchingCopy(stale, "coexistence", () => copy),
+        ),
+      ).not.toContain("does not carry");
     });
   });
 
