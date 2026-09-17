@@ -131,7 +131,7 @@ const report = [];
   // `initModuleCache` is a word this repository also writes, and a probe our own
   // sources contain proves nothing about what reached the bundle.
   const sweep = "Ignoring require error for module";
-  report.push(`globals.js: ${source.length} B, sweep ${source.includes(sweep) ? "present" : "ABSENT"}, ${dfl} DFL.`);
+  report.push(`globals.js: ${Buffer.byteLength(source)} B, sweep ${source.includes(sweep) ? "present" : "ABSENT"}, ${dfl} DFL.`);
   if (!source.includes(sweep)) {
     findings.push("globals.js does not contain @decky/ui's module sweep — every search in it would answer undefined.");
   }
@@ -146,7 +146,7 @@ const report = [];
   const hits = implementationHits(source);
   const dfl = count(source, "DFL.");
   report.push(
-    `index.js (standalone): ${source.length} B, ${hits.length}/${DECKY_UI_IMPLEMENTATION.length} @decky/ui implementation strings, ${dfl} DFL.`,
+    `index.js (standalone): ${Buffer.byteLength(source)} B, ${hits.length}/${DECKY_UI_IMPLEMENTATION.length} @decky/ui implementation strings, ${dfl} DFL.`,
   );
   const absent = DECKY_UI_IMPLEMENTATION.filter((needle) => !source.includes(needle));
   if (absent.length > 0) {
@@ -169,7 +169,7 @@ const report = [];
   const hits = implementationHits(source);
   const dfl = count(source, "DFL.");
   report.push(
-    `index-coexistence.js: ${source.length} B, ${hits.length}/${DECKY_UI_IMPLEMENTATION.length} @decky/ui implementation strings, ${dfl} DFL.`,
+    `index-coexistence.js: ${Buffer.byteLength(source)} B, ${hits.length}/${DECKY_UI_IMPLEMENTATION.length} @decky/ui implementation strings, ${dfl} DFL.`,
   );
   if (hits.length > 0) {
     findings.push(
@@ -196,7 +196,7 @@ const report = [];
   } catch {
     licence = "";
   }
-  report.push(`LICENSE-@decky-ui.txt: ${licence.length} B`);
+  report.push(`LICENSE-@decky-ui.txt: ${Buffer.byteLength(licence)} B`);
   if (!licence.includes("GNU LESSER GENERAL PUBLIC LICENSE")) {
     findings.push(
       "LICENSE-@decky-ui.txt is missing or is not the LGPL text. dist/index.js carries @decky/ui's code, which " +

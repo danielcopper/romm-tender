@@ -223,8 +223,8 @@ export async function installGlobals(): Promise<GlobalsReport> {
 }
 
 // The injector (#1900) will evaluate this bundle and then call the function. It
-// is reachable by name as well, so the same bundle can be driven by hand from the
-// CEF debugger — which is how the spike measured it and how a device test
+// is reachable by name as well, so the same bundle can be driven by hand from
+// the CEF debugger — which is how the spike measured it and how a device test
 // reproduces one.
 w.__TENDER_INSTALL_GLOBALS = installGlobals;
 
