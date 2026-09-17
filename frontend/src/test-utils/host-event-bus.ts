@@ -77,8 +77,9 @@ export function mockRemoveEventListener<Args extends unknown[] = []>(
 export function emitHostEvent<Args extends unknown[] = []>(name: string, ...args: Args): void {
   const bucket = listeners.get(name);
   if (!bucket) return;
-  // A snapshot, so a listener that removes itself during dispatch doesn't
-  // mutate the set we're iterating.
+  // A snapshot, because a listener may remove ANOTHER listener while it runs —
+  // a live walk would then skip that one in silence. Removing only itself is
+  // harmless. Mirrors `api/hostSocket.ts`'s dispatch, and is pinned the same.
   const registered = [...bucket];
   for (const listener of registered) {
     listener(...args);

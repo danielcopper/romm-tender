@@ -324,8 +324,10 @@ export class HostSocket {
   private dispatch(name: string, payload: unknown): void {
     const bucket = this.listeners.get(name);
     if (!bucket) return;
-    // A snapshot, so a listener that removes itself while it runs does not
-    // mutate the set being iterated.
+    // A snapshot, because a listener may remove ANOTHER listener while it runs
+    // — and a live walk would then skip that one, silently, with no throw to
+    // catch. Removing only itself is harmless: the walk is already standing on
+    // it and the peers still run. Measured, both directions.
     const registered = [...bucket];
     for (const listener of registered) {
       try {
