@@ -124,14 +124,15 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // predicate, while the repair is completely different.
   //
   // **Only `SP_REACTDOM` can ever report missing from inside this bundle**, and
-  // the other two are here for a different reader. Measured on `dist/index.js`:
-  // `SP_REACT` is read while the bundle is being EVALUATED (line 852,
-  // react-icons' `IconContext`) and so is `SP_JSX` (line 4892, a module-scope
-  // `SP_JSX.jsx` in `PlatformDetail.tsx`), both before `definePlugin`'s factory
-  // can be obtained — so with either unset the bundle throws at import, this
-  // check never runs, and nothing it would have said is written anywhere. The
-  // coexistence bundle has the same shape at lines 231 and 4271. `SP_REACTDOM`
-  // has no import-time read at all.
+  // the other two are here for a different reader. Measured by parsing both
+  // built artefacts and keeping the references that stand outside every function
+  // body: `SP_REACT` and `SP_JSX` are each read at one such site and
+  // `SP_REACTDOM` at none, in both bundles. In `dist/index.js` the two sites are
+  // lines 852 (react-icons' `IconContext`) and 4969 (a module-scope `SP_JSX.jsx`
+  // from `PlatformDetail.tsx`); in `dist/index-coexistence.js` the same two are
+  // at 231 and 4348. All four run before `definePlugin`'s factory can be
+  // obtained, so with either global unset the bundle throws at import, this
+  // check never runs, and nothing it would have said is written anywhere.
   //
   // They are listed anyway because these three names are also what
   // `GlobalsReport.installed` answers for, and that report is there for the
@@ -277,13 +278,24 @@ export function checkSteamModules(lookups: readonly SteamLookup[] = STEAM_LOOKUP
  * rather than about Steam. `searchingCopy.ts` decides which; this words it.
  *
  * Unless none of what missed is a search either copy ran. {@link STEAM_LOOKUPS}
- * carries names `@decky/ui` does not export — the React globals and the glyph,
- * marked by {@link SteamLookup.deckyUiExport} — and a miss confined to those
- * belongs to no copy of the package,
- * so the sentence names none. It claims nothing further: which program installed
- * the globals on a machine running both is #1900's question and not one this
- * page may decide, and there is no repair to offer that would follow from an
- * answer we do not have.
+ * carries names `@decky/ui` does not export — the three React globals and the
+ * glyph, marked by {@link SteamLookup.deckyUiExport} — and a miss confined to
+ * those belongs to no copy of the package, so the sentence names none.
+ *
+ * It names no repair either, and the two kinds of name behind that silence are
+ * not in the same position. For the globals there is none to offer: which
+ * program installed them on a machine running both is #1900's question and not
+ * one this page may decide — and in the standalone bundle, having that answer
+ * would not settle it anyway: a missing `SP_REACTDOM` there is `globals.js`
+ * never having run or the ReactDOM predicate in `steamGlobals.ts` having gone
+ * stale, a load-order fault and a version fault behind one symptom with
+ * different repairs. `ControllerGlyph` is
+ * the opposite case: `utils/deckyUiInternals.ts` reaches it with a `findModule`
+ * predicate of OURS in both bundles, so a newer Tender really is its repair, and
+ * this branch gives up a sentence that was correct — the one the standalone
+ * bundle used to print. That is the price of keying the branch on whose COPY ran
+ * the search; buying it back takes a third axis, whose PREDICATE, rather than a
+ * reworded answer.
  */
 export function describeFailure(report: StartupReport, copy: SearchingCopy): string {
   if (report.ok) return "";

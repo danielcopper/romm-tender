@@ -180,11 +180,20 @@ describe("whose copy the page blames for a stale search", () => {
   // `ControllerGlyph` is a predicate `utils/deckyUiInternals.ts` runs itself
   // because the package does not export it, and `SP_REACTDOM` is a global a
   // bootstrap installs — so neither is a lookup either copy of the package ran,
-  // in either bundle. Naming a copy here sends the user after a program that did
-  // nothing; in the coexistence bundle that program is Decky Loader. Those two
-  // are also the only ones that can reach this: `SP_REACT` and `SP_JSX` are read
-  // while the bundle is evaluated, so with either unset it throws at import and
-  // this check never runs.
+  // in either bundle, and the sentence names none. In the coexistence bundle
+  // that is what keeps it from sending the user after Decky Loader, whose copy
+  // ran neither.
+  //
+  // The two are NOT alike in what the silence costs. `SP_REACTDOM` has no repair
+  // to offer in either bundle — #1900 owns who installed the globals, and in the
+  // standalone bundle the miss is `globals.js` not having run or our own
+  // predicate in `steamGlobals.ts` having gone stale. `ControllerGlyph`'s
+  // predicate is ours in BOTH bundles, so "update Tender" would be correct and
+  // is given up here; these cases pin the branch, not the loss.
+  //
+  // Those two are also the only ones that can reach this: `SP_REACT` and
+  // `SP_JSX` are read while the bundle is evaluated, so with either unset it
+  // throws at import and this check never runs.
   it.each([
     ["ControllerGlyph", "standalone"],
     ["ControllerGlyph", "coexistence"],

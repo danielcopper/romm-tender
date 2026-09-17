@@ -19,9 +19,13 @@ import { describe, expect, it } from "vitest";
 
 import type { SearchingCopy } from "./searchingCopy";
 import { StartupFailurePanel } from "./StartupFailurePanel";
-import type { StartupReport } from "./steamModules";
+import { STEAM_LOOKUPS, type StartupReport } from "./steamModules";
 
-const report = (missing: string[], checked: number): StartupReport => ({
+// `checked` defaults to what a real run would put there rather than to a
+// literal: it is `STEAM_LOOKUPS.length` in production, and a fixture no run
+// could produce reads as a state of the program. A case that deliberately
+// describes a shorter run passes its own count.
+const report = (missing: string[], checked = STEAM_LOOKUPS.length): StartupReport => ({
   ok: false,
   missing,
   missingPackageNames: missing,
@@ -43,14 +47,14 @@ describe("the fallback page", () => {
   });
 
   it("names every search that found nothing", () => {
-    render(<StartupFailurePanel report={report(["Focusable", "Tabs"], 27)} copy={OURS} />);
+    render(<StartupFailurePanel report={report(["Focusable", "Tabs"])} copy={OURS} />);
     // The names ARE the bug report, so the assertion is on the names rather than
     // on a count beside them.
     expect(screen.getByText(/Focusable, Tabs/)).toBeInTheDocument();
   });
 
   it("blames Tender's own copy when the bundle carries one", () => {
-    render(<StartupFailurePanel report={report(["Tabs"], 27)} copy={OURS} />);
+    render(<StartupFailurePanel report={report(["Tabs"])} copy={OURS} />);
     expect(screen.getByText(/Tender's own copy of @decky\/ui ran them/)).toBeInTheDocument();
     expect(screen.getByText(/A newer Tender is the repair/)).toBeInTheDocument();
   });
@@ -59,13 +63,13 @@ describe("the fallback page", () => {
     // The same empty search, and a different program to update: in this bundle
     // the predicates are Decky's, so sending the user after Tender would send
     // them after the wrong one — while Decky's own interface is breaking too.
-    render(<StartupFailurePanel report={report(["Tabs"], 27)} copy={DECKYS} />);
+    render(<StartupFailurePanel report={report(["Tabs"])} copy={DECKYS} />);
     expect(screen.getByText(/Decky Loader v3\.2\.8's copy of @decky\/ui ran them/)).toBeInTheDocument();
     expect(screen.getByText(/A newer Decky Loader is the repair/)).toBeInTheDocument();
   });
 
   it("calls it a disagreement about the package when Decky's copy lacks the name", () => {
-    render(<StartupFailurePanel report={report(["Tabs"], 27)} copy={DECKYS_WITHOUT_THE_NAME} />);
+    render(<StartupFailurePanel report={report(["Tabs"])} copy={DECKYS_WITHOUT_THE_NAME} />);
     expect(screen.getByText(/does not carry some of the names Tender asks it for/)).toBeInTheDocument();
     expect(screen.getByText(/Bringing both Tender and Decky Loader/)).toBeInTheDocument();
   });
@@ -74,7 +78,15 @@ describe("the fallback page", () => {
     // `ControllerGlyph` is a predicate of ours in both bundles, so the page must
     // not hand the user Decky's name for it — the page is showing Decky's
     // sentence otherwise, and that would be a program that did nothing here.
-    const glyph: StartupReport = { ok: false, missing: ["ControllerGlyph"], missingPackageNames: [], checked: 27 };
+    // The same branch also withholds "update Tender", which for this one name
+    // would have been right; separating the two takes a third axis (whose
+    // predicate ran, not whose copy) and is not what this case pins.
+    const glyph: StartupReport = {
+      ok: false,
+      missing: ["ControllerGlyph"],
+      missingPackageNames: [],
+      checked: STEAM_LOOKUPS.length,
+    };
     render(<StartupFailurePanel report={glyph} copy={DECKYS} />);
     expect(screen.getByText(/None of them is a name @decky\/ui exports/)).toBeInTheDocument();
     expect(screen.queryByText(/Decky Loader v3\.2\.8's copy/)).not.toBeInTheDocument();
@@ -90,7 +102,7 @@ describe("the fallback page", () => {
     // Both sentences are the page's whole job — an empty panel looks exactly
     // like a backend that is not running, and a user who cannot tell them apart
     // starts by suspecting their library.
-    render(<StartupFailurePanel report={report(["Tabs"], 27)} copy={OURS} />);
+    render(<StartupFailurePanel report={report(["Tabs"])} copy={OURS} />);
     expect(screen.getByText(/nothing has been changed/)).toBeInTheDocument();
     expect(screen.getByText(/github\.com\/danielcopper\/romm-tender\/issues/)).toBeInTheDocument();
   });

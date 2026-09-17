@@ -49,12 +49,13 @@ and is made nowhere in this tree today. The file name is the whole of the SELECT
 is consulted to choose it, and no runtime probe decides anything.
 
 Each panel bundle does, however, know which of the two it is. `frontend/rollup.config.js` serves
-`virtual:tender-bundle-kind` once per panel build with that build's own answer inside, and one thing reads it: the
-start-up failure answer, printed on the fallback page and in the log line beside it. Whose copy of `@decky/ui` ran a
-search that came back empty decides which program the user has to update. It is stamped by the build because a runtime
-probe cannot answer it: `typeof DFL !== "undefined"` is also true of a standalone bundle loaded on a machine where Decky
-happens to be running, and the page would then credit Decky's copy with work our own copy did. `check-bundle-shape.mjs`
-asserts each artefact's stamp, because rollup answers an unresolved import with a warning rather than a failure.
+`virtual:tender-bundle-kind` once per panel build with that build's own answer inside, and one module imports it:
+`frontend/src/boot/searchingCopy.ts`. What it answers reaches two places — the fallback page and the log line beside it,
+both from the single resolution `index.tsx` makes. Whose copy of `@decky/ui` ran a search that came back empty decides
+which program the user has to update. It is stamped by the build because a runtime probe cannot answer it:
+`typeof DFL !== "undefined"` is also true of a standalone bundle loaded on a machine where Decky happens to be running,
+and the page would then credit Decky's copy with work our own copy did. `check-bundle-shape.mjs` asserts each artefact's
+stamp, because rollup answers an unresolved import with a warning rather than a failure.
 
 `frontend/scripts/check-bundle-shape.mjs` fails when either bundle stops being what it is — when the standalone one has
 lost the package, or the coexistence one has gained it. It is a step of its own, `pnpm -C frontend check:bundle`, run
@@ -127,13 +128,22 @@ whose copy ran them, from the build's own stamp and one reading of Decky's names
 
 The first row is asked first and is about neither copy. Four of the names checked are not `@decky/ui` lookups at all —
 the three `SP_*` globals, which a React bootstrap installs, and `ControllerGlyph`, which `utils/deckyUiInternals.ts`
-reaches with a predicate of its own — so a miss confined to those belongs to no copy of the package, and a sentence
-naming one sends the user after a program that did nothing. In the coexistence bundle that program is Decky's. The
-answer stops there rather than going on to say whose fault it is: which program installed the React globals on a machine
-running both is [#1900](https://github.com/danielcopper/romm-tender/issues/1900)'s question, and the page may not decide
-it in a sentence. `SP_REACTDOM` and `ControllerGlyph` are the two that can actually reach this state — `SP_REACT` and
-`SP_JSX` are read while the panel bundle is being evaluated, so with either unset the bundle throws at import and the
-check never runs.
+reaches with a `findModule` predicate of its own — so a miss confined to those belongs to no copy of the package, and
+the row names none. For the globals that is also what stops a sentence sending the user after a program that did
+nothing: in the coexistence bundle the copy it would name is Decky's, and Decky's copy ran none of these searches.
+
+**The row names no repair either, and the two kinds of name behind that silence are not in the same position.** For the
+globals there is no repair to offer. Which program installed them on a machine running both is
+[#1900](https://github.com/danielcopper/romm-tender/issues/1900)'s question and the page may not decide it in a sentence
+— and in the standalone bundle, having that answer would not settle it anyway: a missing `SP_REACTDOM` there is either
+`dist/globals.js` never having run (a load-order fault) or the ReactDOM predicate in `boot/steamGlobals.ts` having gone
+stale (a version fault, whose repair is a newer Tender), one symptom over two repairs. `ControllerGlyph` is the opposite
+case. Its predicate is **ours in both bundles**, so "update Tender" is its correct repair, and this row gives up a
+sentence the standalone bundle used to print. That is the price of keying the branch on whose COPY ran the search, and
+buying it back takes a third axis — whose PREDICATE — rather than a reworded row.
+
+`SP_REACTDOM` and `ControllerGlyph` are the two that can actually reach this state — `SP_REACT` and `SP_JSX` are read
+while the panel bundle is being evaluated, so with either unset the bundle throws at import and the check never runs.
 
 `window.DFL` is an ESM module namespace object, so `in` is what discriminates — measured on the device against Decky
 v3.2.8, where `"DialogButton" in DFL` is true and a generated non-existent name is false. It is put only about the names

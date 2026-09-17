@@ -4,8 +4,12 @@
  * The module does not exist on disk: `frontend/rollup.config.js` serves it from
  * a `resolveId` + `load` pair, once per panel build, with that build's own
  * answer inside. So the value cannot be edited into disagreement with the
- * artefact it describes, and a build that lost the plugin fails to resolve the
- * import instead of shipping a bundle that names the wrong one.
+ * artefact it describes, and a build that lost the plugin SAYS SO. Measured
+ * against rollup 4.63.1: such a build exits 0 and emits the artefact, but prints
+ * `(!) Unresolved dependencies` and leaves the bare
+ * `import { BUNDLE_KIND } from "virtual:tender-bundle-kind"` as the artefact's
+ * first line. What stops it shipping is `frontend/scripts/check-bundle-shape.mjs`
+ * asserting the stamp, since a warning beside an exit code of 0 does not.
  *
  * The suite resolves the same specifier through `vitest.config.ts`'s alias,
  * onto `src/test-utils/bundleKindUnderTest.ts` — nothing here runs a built

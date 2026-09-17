@@ -67,8 +67,8 @@ pair rather than a qualification of the sentence above. The stamp is read in one
 the searches that can go stale are `@decky/ui`'s, the coexistence bundle runs Decky Loader's copy of the package, and so
 the same empty search means "update Tender" in one bundle and "update Decky" in the other. The stamp carries no loading
 decision, and a runtime probe could not carry this one either — `typeof DFL !== "undefined"` is equally true of a
-standalone bundle loaded where Decky happens to be running. Current truth for the three answers and their reading of
-Decky's namespace lives in [frontend-bundles.md](../architecture/frontend-bundles.md).
+standalone bundle loaded where Decky happens to be running. Current truth for the answers and their reading of Decky's
+namespace lives in [frontend-bundles.md](../architecture/frontend-bundles.md).
 
 **2. A third output installs Steam's React, and it is its own bundle for the same reason.**
 
