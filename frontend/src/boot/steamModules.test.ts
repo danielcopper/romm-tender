@@ -478,6 +478,27 @@ describe("whose copy the page blames for a stale search", () => {
     expect(sentence).not.toContain("is the repair");
   });
 
+  it("leaves the glyph in the unnamed rest with no global anywhere in the miss", () => {
+    // What bounds the silence around `ControllerGlyph` is that its absence
+    // costs appearance, so it never brings this page up alone — NOT that it
+    // only ever arrives beside a global. A blocking `@decky/ui` name is the
+    // other company it can keep, and that is `mixed`, whose "rest" is the glyph
+    // and nothing else. `describeFailure` names no repair for it either way,
+    // which is what the bound is about.
+    const missed = checkSteamModules([
+      { name: "Tabs", found: () => true, deckyUiExport: true, absenceCost: "panel" },
+      { name: "Focusable", found: () => false, deckyUiExport: true, absenceCost: "panel" },
+      { name: "ControllerGlyph", found: () => false, deckyUiExport: false, absenceCost: "appearance" },
+    ]);
+    expect(missed.missing).toEqual(["Focusable", "ControllerGlyph"]);
+    expect(missed.panelMayMount).toBe(false);
+    const copy = readSearchingCopy(missed, "coexistence", () => ({ carries: () => true, version: "v3.2.8" }));
+    expect(searchOwner(missed, copy)).toBe("mixed");
+    const sentence = describeFailure(missed, copy);
+    expect(sentence).toContain("The rest are not names @decky/ui exports, so neither copy of the package ran them.");
+    expect(sentence).not.toContain("newer Tender");
+  });
+
   it("calls it a disagreement about the package when Decky's copy lacks the name", () => {
     const copy = readSearchingCopy(stale, "coexistence", () => ({ carries: () => false, version: "v3.2.8" }));
     const sentence = describeFailure(stale, copy);

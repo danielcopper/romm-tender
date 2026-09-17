@@ -687,32 +687,37 @@ Format: **invariant** — tier — enforced by.
   missing glyph costs the user their entire interface, which is what this entry removed
 - **The start-up failure page names the copy of `@decky/ui` that actually ran the search that missed, and the repair
   that follows from it** — check + test + prompt-only — the artefact's stamp is checked
-  (`frontend/scripts/check-bundle-shape.mjs`, per bundle and on `globals.js`, which must carry none), and the four
-  sentences are pinned in `frontend/src/boot/steamModules.test.ts` and `StartupFailurePanel.test.tsx` with both bundle
-  values exercised. **The join is prompt-only and spans four places**: `rollup.config.js` serves the stamp,
-  `boot/searchingCopy.ts` reads it and Decky's namespace, `boot/steamModules.ts` words it, and `index.tsx` resolves it
-  ONCE for the log line and the page — two resolutions could disagree with each other. The predicates belong to
-  `@decky/ui` and the coexistence bundle runs DECKY's copy, so a page that blamed Tender in both would send a user after
-  the wrong program while Decky's own interface and its other plugins broke beside it. **A miss confined to the four
-  names `@decky/ui` does not export names NO copy and offers NO repair** — `SP_REACTDOM` is the only one that reaches
-  that state alone, `ControllerGlyph` only ever beside a global (on its own it is cosmetic and brings no page up at all,
-  per the entry above), and `describeFailure` answers it before it asks whose copy ran anything. Naming a copy would
-  blame Decky for a predicate of ours; the silence about a repair is right for the three globals and a real loss for the
-  glyph, and only the second half of that is easy to forget. For the globals no repair follows: who installed them on a
-  machine running both is #1900's open question, and in the standalone bundle that answer would not settle it anyway — a
-  missing `SP_REACTDOM` there is `globals.js` not having run OR our own ReactDOM predicate in `boot/steamGlobals.ts`
-  having gone stale — two repairs behind one symptom. `ControllerGlyph` is reached by a `findModule` predicate of ours
-  in BOTH bundles, so a newer Tender IS its repair and this branch cannot say so; restoring it here would take a third
-  axis (whose PREDICATE, not whose copy), never a reworded answer. What it costs is bounded to the case where the glyph
-  missed beside a global, since `describeSurvivedMiss` prints that sentence into the log whenever the glyph is the whole
-  of the miss. Four quiet ways back: a runtime probe instead of the stamp (`typeof DFL !== "undefined"` is true of a
-  standalone bundle loaded beside a running Decky), asking `in DFL` about a name `@decky/ui` never exported (`SP_*`,
-  `ControllerGlyph` — a package disagreement reported on every miss, which is what `SteamLookup.deckyUiExport` and its
-  sweep-derived lock exist to prevent), reading an unreadable `DFL` as an absence rather than as nothing established,
-  and letting the reading THROW at all — `definePlugin`'s factory reads it before it returns anything, so an unguarded
-  `window.DFL` or `name in DFL` costs the page AND the log line and leaves the blank panel the check exists to tell
-  apart from a dead backend. The version beside the name is an enrichment only — `_versionInfo.current` is internal,
-  guarded, and every sentence is complete without it; `remote` beside it is the PUBLISHED version and is never consulted
+  (`frontend/scripts/check-bundle-shape.mjs`, per bundle and on `globals.js`, which must carry none), and the sentence
+  behind every verdict in `SEARCH_OWNERS` is pinned in `frontend/src/boot/steamModules.test.ts` and
+  `StartupFailurePanel.test.tsx` with both bundle values exercised — the test iterates that list rather than a count, so
+  a verdict added without a sentence on each surface fails instead of going unworded. **The join is prompt-only and
+  spans four places**: `rollup.config.js` serves the stamp, `boot/searchingCopy.ts` reads it and Decky's namespace,
+  `boot/steamModules.ts` words it, and `index.tsx` resolves it ONCE for the log line and the page — two resolutions
+  could disagree with each other. The predicates belong to `@decky/ui` and the coexistence bundle runs DECKY's copy, so
+  a page that blamed Tender in both would send a user after the wrong program while Decky's own interface and its other
+  plugins broke beside it. **A miss confined to the four names `@decky/ui` does not export names NO copy and offers NO
+  repair** — `SP_REACTDOM` is the only one that reaches that state alone, `ControllerGlyph` only ever beside a global
+  (on its own it is cosmetic and brings no page up at all, per the entry above), and `describeFailure` answers it before
+  it asks whose copy ran anything. Naming a copy would blame Decky for a predicate of ours; the silence about a repair
+  is right for the three globals and a real loss for the glyph, and only the second half of that is easy to forget. For
+  the globals no repair follows: who installed them on a machine running both is #1900's open question, and in the
+  standalone bundle that answer would not settle it anyway — a missing `SP_REACTDOM` there is `globals.js` not having
+  run OR our own ReactDOM predicate in `boot/steamGlobals.ts` having gone stale — two repairs behind one symptom.
+  `ControllerGlyph` is reached by a `findModule` predicate of ours in BOTH bundles, so a newer Tender IS its repair and
+  this branch cannot say so; restoring it here would take a third axis (whose PREDICATE, not whose copy), never a
+  reworded answer. What bounds that cost is only that the glyph's absence costs appearance, so it never brings the page
+  up alone and `describeSurvivedMiss` prints its sentence into the log whenever it is the whole of the miss. **It is NOT
+  bounded to the company of a global**: beside a blocking `@decky/ui` name the verdict is `mixed` and the glyph is that
+  answer's unnamed rest, with no global anywhere in the miss — `steamModules.test.ts`'s "leaves the glyph in the unnamed
+  rest with no global anywhere in the miss" is that case. Four quiet ways back: a runtime probe instead of the stamp
+  (`typeof DFL !== "undefined"` is true of a standalone bundle loaded beside a running Decky), asking `in DFL` about a
+  name `@decky/ui` never exported (`SP_*`, `ControllerGlyph` — a package disagreement reported on every miss, which is
+  what `SteamLookup.deckyUiExport` and its sweep-derived lock exist to prevent), reading an unreadable `DFL` as an
+  absence rather than as nothing established, and letting the reading THROW at all — `definePlugin`'s factory reads it
+  before it returns anything, so an unguarded `window.DFL` or `name in DFL` costs the page AND the log line and leaves
+  the blank panel the check exists to tell apart from a dead backend. The version beside the name is an enrichment only
+  — `_versionInfo.current` is internal, guarded, and every sentence is complete without it; `remote` beside it is the
+  PUBLISHED version and is never consulted
 - **A coverage exclusion names a property of the code, never a place: every frontend-scoped entry stands in BOTH
   `frontend/vitest.config.ts`'s `coverage.exclude` and `sonar-project.properties`' `sonar.coverage.exclusions`, every
   file entry carries its reason as a `// coverage-exempt:` marker in the file's own first lines, and every marked file

@@ -465,10 +465,14 @@ const deckyName = (copy: SearchingCopy): string =>
  * `ControllerGlyph` can appear in that silence too, and there it is a real loss
  * — `utils/deckyUiInternals.ts` reaches it with a `findModule` predicate of OURS
  * in both bundles, so a newer Tender is its repair, and keying the branch on
- * whose COPY ran the search cannot say so. What it costs is bounded: the glyph
- * reaches this page only ALONGSIDE a global, whose silence is right anyway,
- * because on its own it no longer brings the page up at all. Its own sentence
- * is printed by {@link describeSurvivedMiss}.
+ * whose COPY ran the search cannot say so. What bounds that is only that the
+ * glyph never brings this page up by itself: its absence costs appearance, so
+ * it arrives beside a name that does cost the panel. Which verdict it lands in
+ * follows from WHICH name that is, and both happen — beside a global it is the
+ * `none` answer, whose silence is right anyway; beside a package name Decky's
+ * copy carries it is `mixed`, and the glyph is that answer's unnamed rest with
+ * no global anywhere in the miss. Its own sentence is printed by
+ * {@link describeSurvivedMiss}.
  */
 export function describeFailure(report: StartupReport, copy: SearchingCopy): string {
   if (report.panelMayMount) return "";
