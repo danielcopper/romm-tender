@@ -169,10 +169,14 @@ programs disagreeing about the package rather than about Steam (bring both to cu
 
 Asked before all three: four of the names checked are not `@decky/ui` lookups at all — the three `SP_*` React globals
 and `ControllerGlyph`, which Tender reaches with a predicate of its own — so a miss confined to those belongs to NO copy
-of the package and the page names none, and no repair.
+of the package and names none. The **fallback page** then names no repair either, because a global can be among them and
+who installed it on a machine running both programs is not this page's to decide. The log line is not in that position:
+a global's absence costs the panel, so it never reaches one, and every name that does is a search Tender runs itself —
+so there the repair is named, a newer Tender.
 
 _Avoid_: **health check** — it asks one question at one moment and is not a recurring probe. Avoid **degraded mode**:
-there is no such mode, and inventing one is the thing the check exists to refuse.
+the panel is whole or it is absent, and a half-mounted panel acting on what it cannot see is the thing the check exists
+to refuse. A miss the panel survives is not one: nothing it renders is missing.
 
 ### Persistence boundary (settings.json / SQLite)
 
