@@ -675,7 +675,7 @@ Format: **invariant** — tier — enforced by.
   reaches the log. **Blocking is the status quo and staying there costs no evidence: nothing here is a claim that every
   other name was judged**, only that moving one OUT needs its every consumer read, one name at a time. **The join is
   prompt-only and spans three places**: `checkSteamModules` derives `panelMayMount` from the costs, `index.tsx` gates
-  the fallback page on it and logs `describeCosmeticMiss` on the other side, and that sentence answers whose COPY of
+  the fallback page on it and logs `describeSurvivedMiss` on the other side, and that sentence answers whose COPY of
   `@decky/ui` ran the missed searches rather than naming a repair of its own — it used to say "a newer Tender"
   unconditionally, which held only while nothing reaching it was a name the package exports, and `playSectionClasses` is
   one. What `frontend/src/boot/steamModules.test.ts` locks is the property the line's remaining own answer rests on — a
@@ -704,7 +704,7 @@ Format: **invariant** — tier — enforced by.
   having gone stale — two repairs behind one symptom. `ControllerGlyph` is reached by a `findModule` predicate of ours
   in BOTH bundles, so a newer Tender IS its repair and this branch cannot say so; restoring it here would take a third
   axis (whose PREDICATE, not whose copy), never a reworded answer. What it costs is bounded to the case where the glyph
-  missed beside a global, since `describeCosmeticMiss` prints that sentence into the log whenever the glyph is the whole
+  missed beside a global, since `describeSurvivedMiss` prints that sentence into the log whenever the glyph is the whole
   of the miss. Four quiet ways back: a runtime probe instead of the stamp (`typeof DFL !== "undefined"` is true of a
   standalone bundle loaded beside a running Decky), asking `in DFL` about a name `@decky/ui` never exported (`SP_*`,
   `ControllerGlyph` — a package disagreement reported on every miss, which is what `SteamLookup.deckyUiExport` and its

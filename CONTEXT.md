@@ -154,29 +154,34 @@ instead and registers nothing. The page distinguishes SOME searches missing from
 ran, or Steam's registry was read before it was complete, neither of them `@decky/ui`'s doing), which is the first fact
 that leads to a repair.
 
-A miss that costs neither the panel nor anything the panel acts on mounts it as usual and is reported in the log and
-nowhere else. That line answers the same question the page does — whose copy of `@decky/ui` ran the search — rather than
-naming a repair of its own, because the two costs below the panel do not all belong to the same program:
-`ControllerGlyph` is a search Tender runs itself, and `playSectionClasses` is a `@decky/ui` export whose search is
-Decky's in the coexistence bundle. _Avoid_ **cosmetic failure**: nothing failed, one drawing is missing and the place
-that draws it has another.
+A **miss the panel survives** costs neither the panel nor anything the panel acts on: it mounts as usual and the log is
+the only place the miss is reported. That line answers the same question the page does — whose copy of `@decky/ui` ran
+the search — rather than naming a repair of its own, because the two costs below the panel do not all belong to the same
+program: `ControllerGlyph` is a search Tender runs itself, and `playSectionClasses` is a `@decky/ui` export whose search
+is Decky's in the coexistence bundle. _Avoid_ **cosmetic miss** for the pair: it is true of the glyph and false of
+`playSectionClasses`, whose absence nothing draws in the first place.
 
 The second is the **searching copy**: which installed copy of `@decky/ui` ran the predicate that went stale, since the
-coexistence bundle runs Decky Loader's rather than ours. It gives SOME three answers instead of one — Tender's own copy
-searched and missed (update Tender); Decky's copy searched and missed (update Decky Loader, whose own interface and
-other plugins are affected the same way); or Decky's copy does not export a name Tender asks it for, which is the two
-programs disagreeing about the package rather than about Steam (bring both to current).
+coexistence bundle runs Decky Loader's rather than ours. It is read ONCE per start and worded by both surfaces, which is
+what stops the page and the log line from answering it differently. It gives SOME four answers instead of one — Tender's
+own copy searched and missed (update Tender); Decky's copy searched and missed (update Decky Loader, whose own interface
+and other plugins are affected the same way); Decky's copy does not export a name Tender asks it for, which is two
+separately installed programs disagreeing about the package (bring both to current); or what missed spans both kinds, so
+what missed does not settle which program went stale. The **package disagreement** is asked before the mixed answer
+because it is demonstrated where the other is inferred.
 
-Asked before all three: four of the names checked are not `@decky/ui` lookups at all — the three `SP_*` React globals
-and `ControllerGlyph`, which Tender reaches with a predicate of its own — so a miss confined to those belongs to NO copy
-of the package and names none. The **fallback page** then names no repair either, because a global can be among them and
+Asked before all four: four of the names checked are not `@decky/ui` lookups at all — the three `SP_*` React globals and
+`ControllerGlyph`, which Tender reaches with a predicate of its own — so a miss confined to those belongs to NO copy of
+the package and names none. The **fallback page** then names no repair either, because a global can be among them and
 who installed it on a machine running both programs is not this page's to decide. The log line is not in that position:
-a global's absence costs the panel, so it never reaches one, and every name that does is a search Tender runs itself —
-so there the repair is named, a newer Tender.
+a global's absence costs the panel, so it never reaches one, and the names that do reach it in this answer are searches
+Tender runs itself — so there the repair is named, a newer Tender. (That is this answer's scope, not a universal:
+`playSectionClasses` reaches the log line too, and its search is the package's.)
 
 _Avoid_: **health check** — it asks one question at one moment and is not a recurring probe. Avoid **degraded mode**:
 the panel is whole or it is absent, and a half-mounted panel acting on what it cannot see is the thing the check exists
-to refuse. A miss the panel survives is not one: nothing it renders is missing.
+to refuse. A miss the panel survives is not degraded mode: what is absent is a decoration the one place that draws it
+renders without, or a name only a debug line reads — never something a page acts on.
 
 ### Persistence boundary (settings.json / SQLite)
 
