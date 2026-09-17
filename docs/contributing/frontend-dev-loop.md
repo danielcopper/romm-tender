@@ -1,99 +1,50 @@
 # Frontend dev loop
 
-!!! danger "There is no frontend dev loop right now, and nothing below runs"
+Iterate on the panel from Desktop Mode on the Steam Deck: edit code next to a windowed Big Picture window, with the
+backend running beside it. Nothing is deployed anywhere and no plugin loader is involved.
 
-    **The loop this page describes is gone, and what replaces it is not built yet.** It is kept, unedited below the
-    fold, because the mechanics it documents — windowed Big Picture, choosing a display, the height caveat, reading
-    errors out of the QAM's own realm — carry straight over to whatever replaces it, and because rediscovering them
-    costs days.
-
-    Three separate things broke it, in order:
-
-    - **The backend stopped being a plugin.** It hosts itself now
-      ([ADR-0036](../adr/0036-the-backend-hosts-itself.md)) and has no zero-argument lifecycle hook a plugin loader can
-      call, so `mise run deploy` stages a plugin that comes up and fails.
-    - **The frontend stopped being one file.** Since
-      [#1899](https://github.com/danielcopper/romm-tender/issues/1899) the build produces a React bootstrap and two
-      variants of the panel — see [How the panel is built and loaded](../architecture/frontend-bundles.md) — and
-      Decky's hot-reload watcher matches one name, `dist/index.js`, which is now only one of the three.
-    - **Nothing in this tree loads any of them.** The injector is
-      [#1900](https://github.com/danielcopper/romm-tender/issues/1900) and the installer is
-      [#1902](https://github.com/danielcopper/romm-tender/issues/1902). Until the first of those lands, the only way to
-      get the panel into Steam is by hand, through the CEF debugger, the way the #1897 spike did it.
-
-    **What works today, without this page:** `pnpm -C frontend build`, `pnpm -C frontend test` and
-    `pnpm -C frontend check:bundle` all run and tell you something. What none of them can tell you is whether the panel
-    is usable with a controller — happy-dom has no navigation tree — so that answer still comes from a device, just not
-    from this loop.
-
-Iterate on the frontend from Desktop Mode on the Steam Deck: edit code next to a windowed Big Picture window and watch
-the real plugin UI hot-reload on every save — no Desktop/Game Mode switching, no `plugin_loader` restarts.
-
-## Why this works
-
-Three pieces line up:
-
-- **Desktop Big Picture is the real UI.** Desktop Steam's Big Picture window runs the same gamepadui React app as Game
-  Mode — same routes, same game-detail pages — and Decky Loader injects into desktop Steam too. What you see in the
-  windowed BPM is the plugin's actual UI, not an approximation. It is _not_ WYSIWYG about **vertical space**, though —
-  by default the windowed BPM gives the QAM panel far more height than the Deck does. See
-  [Display scale: the dev loop lies about height](#display-scale-the-dev-loop-lies-about-height).
-- **decky-loader ships a hot-reload watcher.** The loader watches `~/homebrew/plugins` and reacts to create/modify
-  events on exactly two files per plugin: `dist/index.js` and `main.py`. On a match it reloads the plugin in place —
-  backend subprocess restart plus a cache-busted frontend re-import (the plugin unmounts cleanly first, so router
-  patches are removed and re-applied).
-- **Reloading is gated on a `debug` flag, and this repo produces no manifest at all any more.** The watcher itself runs
-  on every device, but it only re-loads plugins carrying `"debug"` in the `flags` array of a plugin's `plugin.json`, and
-  no such file exists in this tree: `frontend/plugin.json` was never that manifest — it existed only because
-  `@decky/rollup` read a file of that name before it would build — and both went with #1899. So the hot reload described
-  here cannot fire from this tree at all. It is documented because the watcher's behaviour is what the loop below is
-  shaped around.
-
-## One-time setup
+## The loop
 
 ```bash
-mise run dev:setup
+mise run dev         # build the panel, then run the backend in the foreground
+mise run dev:bpm     # in another terminal: open windowed Big Picture, optionally on a chosen display
 ```
 
-This changes the system so the daily loop can run without `sudo`:
+`mise run dev` builds the three bundles and starts the backend. The backend serves `dist/` on a loopback port and loads
+the panel into Steam's renderer over the CEF debugger — see
+[How the panel gets into Steam](../architecture/loading-the-panel.md). Ctrl-C stops it and lets it unload.
 
-- Writes the systemd drop-in `/etc/systemd/system/plugin_loader.service.d/10-dev-loop.conf` with
-  `Environment=CHOWN_PLUGIN_PATH=0`. This disables Decky's tamper guard, which otherwise re-owns the plugin dir back to
-  root on every plugin load — with the guard off, the deck user can write straight into
-  `~/homebrew/plugins/romm-tender`. Drop-ins survive Decky self-updates (those rewrite only the unit file).
-- Runs `systemctl daemon-reload` and restarts `plugin_loader`.
-- Chowns an existing plugin dir back to the deck user.
-- Warns (without failing) if `~/.steam/steam/.cef-enable-remote-debugging` is missing — see [DevTools](#devtools).
+Two things have to be true for anything to be loaded: `~/.steam/steam/.cef-enable-remote-debugging` has to exist (create
+the empty file and restart Steam if it does not), and Steam has to be running. If Steam is not running the backend waits
+and attaches when it comes up, so the order of the two commands does not matter.
 
-The task is idempotent — safe to re-run at any time.
+The one start-up line on stderr prints the complete address the panel is loaded from, token included. That line is the
+deliberate exception to the token never being printed, and it is what makes the loop drivable by hand — paste the
+address into the CEF DevTools console to import the panel yourself.
 
-## Daily loop
+## Seeing a change
+
+**There is no hot reload.** The injector loads the panel into a JS context once and knows it by a marker on the window;
+a rebuilt bundle reaches Steam when that context is rebuilt, which is what wipes the marker.
 
 ```bash
-mise run dev:watch          # BPM window on the internal display (default)
-mise run dev:watch dp2      # BPM window on an external monitor
+mise run build           # rebuild the bundles (the backend can keep running)
+mise run dev:bpm-reset   # restart Steam into a fresh renderer, on a chosen display
 ```
 
-What happens:
+The backend serves whatever is in `dist/` at the moment the panel is imported, so a frontend change needs no backend
+restart. A **backend** change does: Ctrl-C and `mise run dev` again.
 
-1. A full deploy (`mise run deploy`): frontend build plus rsync of everything into the plugin dir. The `main.py` copy
-   inside it is itself a modify event, so the plugin hot-reloads with the fresh backend and frontend right away.
-2. A windowed Big Picture opens on the desktop (a no-op if one is already open; if Steam isn't running, it starts
-   straight into BPM) and its window is placed on the chosen display.
-3. Rollup stays in watch mode. On every save it rebuilds `dist/index.js` and copies it into the deployed `dist/`;
-   decky-loader hot-reloads the plugin about 1–2 seconds later. Since #1899 that is one of three build outputs, and the
-   two the watcher does not carry are the ones the loader never needed: `dist/globals.js` installs the React globals the
-   loader installs itself, and `dist/index-coexistence.js` is the same panel taking `@decky/ui` from the loader's copy —
-   which is what `dist/index.js` also did, under the loader, before this cut.
+Keyboard shortcuts in the BPM window: **Ctrl+2** opens the Quick Access Menu, **Ctrl+1** the main menu.
 
-The reload is bundle-level, not component-level hot module replacement: the plugin is unmounted and re-imported, so
-component state resets and whatever is currently on screen keeps showing the **old** render until it is mounted again.
-Concretely: after a save, leave the plugin's QAM panel and re-enter it (back out of _Tender_, open it again) — or
-re-navigate to a patched game-detail page — to see the change. Keyboard shortcuts in the BPM window: **Ctrl+2** opens
-the Quick Access Menu, **Ctrl+1** the main menu.
+## Why the windowed Big Picture
 
-Just want the window, not the loop? `mise run dev:bpm [display]` opens and places the same windowed Big Picture without
-deploying or watching anything — useful for eyeballing a one-off `mise run dev` test build.
+Desktop Steam's Big Picture window runs the same gamepadui React app as Game Mode — same routes, same game-detail pages
+— so what you see there is the panel's actual UI rather than an approximation. It is _not_ WYSIWYG about **vertical
+space**: by default the windowed BPM gives the QAM panel far more height than the Deck does. See
+[Display scale: the dev loop lies about height](#display-scale-the-dev-loop-lies-about-height).
+
+`mise run dev:bpm [display]` opens and places that window without building or running anything.
 
 ### Choosing the display
 
@@ -309,20 +260,6 @@ it automatically — measured on this Deck the same QAM panel ranged from **255 
 
 Validate a panel at 1.5 (the device) and at 2.4 (the worst case) before calling a layout done.
 
-## Backend changes
-
-```bash
-mise run dev:push-backend
-```
-
-`dev:watch` only watches `frontend/src/`, so **frontend** edits reload automatically but **backend** (Python) edits do
-not — push them on demand with this task. It rsyncs the repo's `backend/` into the deployed `py_modules/` and copies
-`backend/main.py` to the plugin root during a `dev:watch` session. The watcher matches only `dist/index.js` and
-`main.py`, so a packages-only push never triggers a reload — the task therefore copies `main.py` **last**, and that copy
-is the modify event that reloads the plugin. Every reload is a full one regardless of which file changed: decky-loader
-restarts the backend subprocess **and** re-imports the frontend bundle. For `bin/` or `defaults/` changes, run the full
-`mise run deploy` instead.
-
 ## DevTools
 
 With `~/.steam/steam/.cef-enable-remote-debugging` present, Steam exposes the CEF DevTools protocol on
@@ -331,24 +268,21 @@ With `~/.steam/steam/.cef-enable-remote-debugging` present, Steam exposes the CE
 - The **SharedJSContext** target is where all plugin JS runs — console output and JS debugging live here.
 - The **Steam Big Picture Mode** target is the rendered UI — element inspection and live CSS editing.
 
-Decky's developer setting **Allow Remote CEF Debugging** forwards the same protocol to port 8081 on the LAN, for
-DevTools from a second PC. Reload activity from the loader side is visible with:
-
-```bash
-journalctl -u plugin_loader -f
-```
+The backend drives the same protocol on the same port, so a DevTools window open on `SharedJSContext` and the injector
+are two clients of one debugger; both work at once. What the backend did and why is in its own log — `backend.log` under
+the state directory, and on stderr in the terminal `mise run dev` is running in.
 
 ## Troubleshooting and caveats
 
-- **Decky UI gone after leaving and re-entering BPM** — Decky's UI survives only the _first_ Big Picture entry per Steam
-  process; closing the BPM window and reopening it loses the Decky QAM until Steam restarts. Recover with
-  `mise run dev:bpm-reset` (shuts Steam down, waits for it to exit, reopens windowed BPM). It takes the same optional
-  display argument as `dev:watch`, e.g. `mise run dev:bpm-reset dp2`.
-- **Watcher arms ~10 seconds after `plugin_loader` starts.** Edits saved inside that window don't reload — save again
-  once it's up.
-- **Renames and moves are ignored by the watcher** — it reacts only to create/modify events. That's why the loop copies
-  with `cp` (an in-place modify); `mv`, or an rsync that writes a temp file and renames it into place, would silently
-  never trigger a reload for `dist/index.js` / `main.py`.
+- **The panel is not there** — read the backend's own log first; it says which bundles it loaded, or why it loaded none.
+  The states worth knowing: no CEF debugger (the marker file is missing, or Steam has not been restarted since it was
+  created), the renderer never named (Steam is still coming up), and the crash watchdog having stopped the injection
+  after two dead Steam starts, which names itself in the log and is lifted with `TENDER_INJECT=force`.
+- **A card in the corner says Tender could not load its panel** — the bundle was served and did not mount. It names the
+  log path; the reason it prints is the import's own. Dismissing it removes it until the next context rebuild.
+- **Big Picture reopened without the panel** — the injector loads the panel again by itself when Steam rebuilds its JS
+  context. If it did not, `mise run dev:bpm-reset` gives a renderer nobody has loaded anything into yet. It takes the
+  same optional display argument, e.g. `mise run dev:bpm-reset dp2`.
 - **Big Picture opened on the wrong monitor** — placement matches the window by its title once it appears. Check what
   the window manager actually saw with `journalctl --user -b | grep decky-bpm`: the log lists every window's caption and
   output, and whether the move fired. The window stays a normal desktop window, so you can always drag it over yourself.
@@ -357,10 +291,10 @@ journalctl -u plugin_loader -f
   mode. It is unrelated to this tooling. **Turn Steam's Game Recording off** (Steam → Settings → Game Recording) — you
   don't want Steam capturing your desktop mid-development anyway, and this removes the dialog for good. Ticking the
   portal's _"enable restore"_ box instead only hides the dialog: it pins whichever source you picked, so if you pick a
-  single monitor the capture stays on it even after `dev:watch <other-display>` moves Big Picture elsewhere.
+  single monitor the capture stays on it even after `dev:bpm <other-display>` opens Big Picture elsewhere.
 - **The QAM Performance tab is non-functional in desktop BPM** (it needs gamescope). Irrelevant for this plugin's UI.
-- **Desktop-BPM injection is best-effort** on Decky's side — re-verify the loop still works after Decky or Steam
-  updates.
+- **Re-verify the loop after a Steam update.** Nothing in this repo's toolchain runs against a real Steam, so a change
+  to how Steam names its targets or builds its renderer is only ever found on a device.
 - **Big Picture comes up at the wrong size** — a `dev:ui-scale` run was hard-killed and left Steam on a forced scale (it
   persists in `config.vdf`, filed under the display identity that run printed — a `…|||Windowed` one). Run
   `mise run dev:ui-scale auto`.

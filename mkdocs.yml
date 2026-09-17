@@ -91,6 +91,7 @@ nav:
       - Steam Non-Steam Shortcuts: architecture/steam-non-steam-shortcuts.md
       - QAM Panel: architecture/qam-panel.md
       - Frontend Bundles: architecture/frontend-bundles.md
+      - Loading the Panel: architecture/loading-the-panel.md
       - Steam Remote Play & Cross-Device: architecture/steam-remote-play.md
   - Contributing:
       - Development: contributing/development.md

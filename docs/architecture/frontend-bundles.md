@@ -44,9 +44,10 @@ Alone, with no Decky running, nothing else is rendering from those modules and t
 **A runtime `if` cannot express this.** The damage happens at import, and ESM evaluates the whole import graph before
 any set-up code in the importing module runs — there is no point at which the branch could stand. Hence two artifacts.
 
-**Which one is loaded is the injector's decision** ([#1900](https://github.com/danielcopper/romm-tender/issues/1900))
-and is made nowhere in this tree today. The file name is the whole of the SELECTION mechanism: nothing in either bundle
-is consulted to choose it, and no runtime probe decides anything.
+**Which one is loaded is the injector's decision**, taken from the machine rather than from the window —
+[how the panel gets into Steam](loading-the-panel.md#which-bundles-and-the-rule-that-cannot-bend). The file name is the
+whole of the SELECTION mechanism: nothing in either bundle is consulted to choose it, and no runtime probe decides
+anything.
 
 Each panel bundle does, however, know which of the two it is. `frontend/rollup.config.js` serves
 `virtual:tender-bundle-kind` once per panel build with that build's own answer inside, and one module imports it:
@@ -80,8 +81,9 @@ throws on its first React read if the bootstrap has not run.
 `initModuleCache()` is unguarded at module scope, so the bootstrap carries the same sweep the standalone panel bundle
 does — `initModuleCache` appears twice in the built file. The short-circuit inside `installGlobals` protects nothing
 here: it is a guard in the FUNCTION, and the sweep is in the IMPORT, which ESM runs first. That is a property of the
-artefact rather than a decision this cut makes; who loads which bundle is
-[#1900](https://github.com/danielcopper/romm-tender/issues/1900)'s.
+artefact rather than a decision the build makes; who loads which bundle is
+[the injector's](loading-the-panel.md#which-bundles-and-the-rule-that-cannot-bend), and refusing that pairing is the
+rule it is built around.
 
 **`GlobalsReport.source` is a fact about one module instance, not about the session.** A second instance of this module
 — a re-import, a re-injection — finds the globals already set, finds no `DFL`, and answers `"unknown"` even where the
@@ -181,16 +183,18 @@ the row names none. For the globals that is also what stops a sentence sending t
 nothing: in the coexistence bundle the copy it would name is Decky's, and Decky's copy ran none of these searches.
 
 **The row names no repair either, and the two kinds of name behind that silence are not in the same position.** For the
-globals there is no repair to offer. Which program installed them on a machine running both is
-[#1900](https://github.com/danielcopper/romm-tender/issues/1900)'s question and the page may not decide it in a sentence
-— and in the standalone bundle, having that answer would not settle it anyway: a missing `SP_REACTDOM` there is either
-`dist/globals.js` never having run (a load-order fault) or the ReactDOM predicate in `boot/steamGlobals.ts` having gone
-stale (a version fault, whose repair is a newer Tender), one symptom over two repairs. `ControllerGlyph` is the opposite
-case. Its predicate is **ours in both bundles**, so "update Tender" is its correct repair, and this row cannot say so —
-the price of keying the branch on whose COPY ran the search, which buying back takes a third axis, whose PREDICATE,
-rather than a reworded row. What that costs is bounded, because the glyph reaches this row only **alongside** a global,
-whose silence is right anyway: on its own it costs appearance alone and brings no page up, and beside a package name it
-is the `mixed` row's unnamed rest rather than this one's. Its own sentence is the log line above.
+globals there is no repair to offer. Which program installed them on a machine running both now HAS an answer — the
+injector loads `globals.js` only where Decky Loader is not serving, so beside a serving Decky those globals are Decky's
+([how the panel gets into Steam](loading-the-panel.md#which-bundles-and-the-rule-that-cannot-bend)) — and **this page
+does not read it**: the branch keys on whose copy ran the search, not on which program installed a global, so it still
+names no repair. In the standalone bundle having the answer would not settle it anyway: a missing `SP_REACTDOM` there is
+either `dist/globals.js` never having run (a load-order fault) or the ReactDOM predicate in `boot/steamGlobals.ts`
+having gone stale (a version fault, whose repair is a newer Tender), one symptom over two repairs. `ControllerGlyph` is
+the opposite case. Its predicate is **ours in both bundles**, so "update Tender" is its correct repair, and this row
+cannot say so — the price of keying the branch on whose COPY ran the search, which buying back takes a third axis, whose
+PREDICATE, rather than a reworded row. What that costs is bounded, because the glyph reaches this row only **alongside**
+a global, whose silence is right anyway: on its own it costs appearance alone and brings no page up, and beside a
+package name it is the `mixed` row's unnamed rest rather than this one's. Its own sentence is the log line above.
 
 `SP_REACTDOM` is the only name that can reach this row alone — `SP_REACT` and `SP_JSX` are read while the panel bundle
 is being evaluated, so with either unset the bundle throws at import and the check never runs.
@@ -275,6 +279,7 @@ code and `backend/host/`, and the first thing that will is the device.
 
 ## Related
 
+- [How the panel gets into Steam](loading-the-panel.md) — which of these files is loaded, and by what.
 - [ADR-0037](../adr/0037-the-panel-ships-as-two-bundles.md) — the decision, its measurements and the alternatives.
 - [ADR-0036](../adr/0036-the-backend-hosts-itself.md) — the backend became its own process and serves these files.
 - [QAM panel](qam-panel.md) — what the panel renders once it has mounted.

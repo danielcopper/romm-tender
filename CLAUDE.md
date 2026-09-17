@@ -6,9 +6,9 @@ Syncs a self-hosted RomM library into Steam as Non-Steam shortcuts. Games launch
 settings, sync, downloads, and BIOS management.
 
 The backend runs as **its own process** and hosts the panel itself over a loopback port
-([ADR-0036](docs/adr/0036-the-backend-hosts-itself.md)); it was a Decky Loader plugin up to 0.33. Nothing reaches that
-server yet — the injector, the frontend transport and the installer are separate cuts — and `mise run deploy` still
-stages the old plugin layout, which no longer produces a loadable plugin.
+([ADR-0036](docs/adr/0036-the-backend-hosts-itself.md)); it was a Decky Loader plugin up to 0.33. It also LOADS the
+panel, into Steam's renderer over the CEF debugger — so `mise run dev` is now "build, then run the backend", and the
+Decky-shaped deploy tasks are gone. The installer, the user unit and the XDG paths are a separate cut (#1902).
 
 ## What belongs in this file
 
@@ -34,8 +34,10 @@ is invisible at the citation site), so reach it through the page that owns the t
   [steam-non-steam-shortcuts.md](docs/architecture/steam-non-steam-shortcuts.md)
 - QAM panel — pages and their widths, the wide-page frame, list-and-detail navigation, notices and their homes —
   [qam-panel.md](docs/architecture/qam-panel.md)
-- How the panel is BUILT and loaded — the three build outputs, the two copies of the panel and why, Steam's React
-  globals, the start-up check — [frontend-bundles.md](docs/architecture/frontend-bundles.md)
+- How the panel is BUILT — the three build outputs, the two copies of the panel and why, Steam's React globals, the
+  start-up check — [frontend-bundles.md](docs/architecture/frontend-bundles.md)
+- How the panel GETS INTO STEAM — the CEF client, which bundle is chosen and from what, the marker, the crash watchdog,
+  the load-failure card — [loading-the-panel.md](docs/architecture/loading-the-panel.md)
 - Save-file sync — slots, conflict resolution, negotiate transport, version history —
   [save-file-sync-architecture.md](docs/architecture/save-file-sync-architecture.md)
 - Save-sync coverage matrix — [save-sync-coverage.md](docs/architecture/save-sync-coverage.md)
@@ -73,8 +75,8 @@ new code in it.
   `Plugin.run` is a synchronous classmethod.
 - `host.md` — the process that hosts this backend (`backend/host/**`): the transport-vs-callable failure shapes, the
   token's one deliberate exception, the order of the three admission checks, claim-bearing events, where the size cap is
-  judged, and the served root. **None of its six rules has a mechanical check; each fails green** — the redaction one
-  did exactly that, and only an assertion on stderr's own output caught it.
+  judged, the served root, and what the injected expression may carry. **None of its seven rules has a mechanical check;
+  each fails green** — the redaction one did exactly that, and only an assertion on stderr's own output caught it.
 - `callables.md` — the `{success, reason, message}` failure shape and its two carve-outs. Checked.
 - `vendored-assets.md` — `_vendor/` and `native/` are checksum-pinned upstream copies — verbatim, or verbatim plus a
   documented local patch — and every vendored tree carries its own manifest. The checksums are checked; the reflex to
@@ -119,17 +121,18 @@ locally with `mise run docs`.
   (`rm -rf ../dist && rollup -c`) rather than any plugin's.
 - **The build produces THREE files, and two of them are the same panel** — `dist/globals.js` (Steam's React installed by
   us), `dist/index.js` (the panel with `@decky/ui` bundled) and `dist/index-coexistence.js` (the panel taking it from
-  Decky's `DFL` global). **Which panel bundle gets loaded is the injector's decision (#1900) and is made nowhere in this
-  tree yet**; the name is the whole of the SELECTION mechanism. Each panel bundle does know which of the two it IS —
-  `rollup.config.js` stamps it through `virtual:tender-bundle-kind`, and `frontend/src/boot/searchingCopy.ts` is the one
-  thing that reads it. What it reads it INTO is the start-up failure answer, whose sentence names a different program to
-  update depending on whose copy of `@decky/ui` ran the search that missed — and that answer has two consumers, not one:
-  `index.tsx` resolves it once and hands it to both the fallback page and the log line beside it. Importing `@decky/ui`
-  re-executes every module in Steam's live webpack registry, and **what makes a second import fatal is a consumer
-  already RENDERING from those modules — not the number of sweeps, and not Big Picture.** Measured on the device: a
-  second sweep on the desktop client survives; a third with Big Picture open and the Quick Access view mounted survives;
-  starting Decky into that same session survives; Big Picture plus Quick Access plus Decky **already rendering** crashes
-  with `Minified React error #31`, because a module re-executed underneath something holding its exports leaves an empty
+  Decky's `DFL` global). **Which panel bundle gets loaded is the injector's decision**
+  (`backend/host/inject/bundles.py`), taken from the machine rather than from the window; the name is the whole of the
+  SELECTION mechanism. Each panel bundle does know which of the two it IS — `rollup.config.js` stamps it through
+  `virtual:tender-bundle-kind`, and `frontend/src/boot/searchingCopy.ts` is the one thing that reads it. What it reads
+  it INTO is the start-up failure answer, whose sentence names a different program to update depending on whose copy of
+  `@decky/ui` ran the search that missed — and that answer has two consumers, not one: `index.tsx` resolves it once and
+  hands it to both the fallback page and the log line beside it. Importing `@decky/ui` re-executes every module in
+  Steam's live webpack registry, and **what makes a second import fatal is a consumer already RENDERING from those
+  modules — not the number of sweeps, and not Big Picture.** Measured on the device: a second sweep on the desktop
+  client survives; a third with Big Picture open and the Quick Access view mounted survives; starting Decky into that
+  same session survives; Big Picture plus Quick Access plus Decky **already rendering** crashes with
+  `Minified React error #31`, because a module re-executed underneath something holding its exports leaves an empty
   object where a component was. Steam's own interface is not such a consumer; Decky's is. That is why the pair exists
   and why a runtime `if` cannot replace it: the damage is done at import, and ESM hoists the import above any set-up
   code in the same module. **`dist/globals.js` carries the same sweep** — it imports `@decky/ui/dist/webpack`, whose
@@ -281,11 +284,11 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
   `.release-please-manifest.json`, because the JS manifest it used to read moved under `frontend/` and deliberately
   carries no version. The note lives here rather than beside the badge: the badge sits inside a centred HTML block, and
   `deno fmt` puts blank lines around an HTML comment, which would end that block and unalign the row.
-- **Dev reload**: `mise run dev [display]` (build + restart plugin_loader; a display like `dp4` / `internal` also opens
-  windowed BPM on it after the deploy)
-- **Frontend live dev**: `mise run dev:watch [display]` (one-time `mise run dev:setup`) — hot-reloads the **frontend**
-  into windowed Big Picture on every save, no loader restart. **Backend** changes need `mise run dev:push-backend`. Lost
-  the Decky UI after leaving BPM: `mise run dev:bpm-reset [display]`. Guide: `docs/contributing/frontend-dev-loop.md`
+- **Run it**: `mise run dev` (build the panel, then run the backend, which serves `dist/` and loads the panel into
+  Steam). Needs `~/.steam/steam/.cef-enable-remote-debugging`. **There is no hot reload** — a rebuilt bundle reaches
+  Steam when its JS context is rebuilt; `mise run dev:bpm-reset [display]` gives a fresh one. `mise run dev:bpm` opens
+  windowed Big Picture on a display; `mise run dev:ui-scale` forces the Deck's metrics. Guide:
+  `docs/contributing/frontend-dev-loop.md`
 - **Tooling**: mise manages node, pnpm, python, uv; venv auto-creates at `.venv`. Python deps are pinned in two
   lock/source pairs — `requirements-dev.lock` at the root, for `backend/`, `tests/` and `scripts/`, and
   `docs/requirements.lock` beside the documentation it builds — each compiled from the `.txt` next to it by
@@ -344,17 +347,17 @@ Format: **invariant** — tier — enforced by.
   about the user's data as two plain `str` fields on structs the composition root passes around. **Counting rule** (an
   AST walk for an attribute in `{config_dir, data_dir, cache_dir, state_dir, runtime_dir,
   code_dir}` whose base ends
-  in `directories`): **19 reads over three modules**, `main.py` and `bootstrap/`'s two — `code_dir` 6, `data_dir` 6,
-  `cache_dir` 4, and one each for `config_dir`, `state_dir` and `runtime_dir`. Re-derive it rather than trusting the
-  number. **Two fields are read in `main.py` alone** and nowhere else: `state_dir`, which the logging setup opens, and
-  `runtime_dir`, which the port file lives in. `config_dir` has exactly one reader, `PersistenceAdapter`. The pairing
-  that matters is `cache_dir` against `data_dir` — covers, artwork and the SGDB artwork cache on the first because they
-  are re-derivable from the server, the database and the launcher on the second because they are not; a system that
-  clears caches must be able to clear one and not the other. The launcher's home is the read whose mix-up a user would
-  see rather than the next start only, since `launcher_path(directories.data_dir)` is carried on as
-  `ShortcutLauncher.path` and baked into every shortcut's `exe`. Nothing mechanical tells the six apart: they are six
-  `str` fields on one frozen struct, so a read of the wrong one is a rename away and fails silently in whichever
-  direction it happened to point
+  in `directories`): **20 reads over three modules**, `main.py` and `bootstrap/`'s two — `code_dir` 6, `data_dir` 6,
+  `cache_dir` 4, `state_dir` 2, and one each for `config_dir` and `runtime_dir`. Re-derive it rather than trusting the
+  number. **Two fields are read in `main.py` alone** and nowhere else: `state_dir`, which the logging setup opens and
+  which the injection's crash record lives under, and `runtime_dir`, which the port file lives in. `config_dir` has
+  exactly one reader, `PersistenceAdapter`. The pairing that matters is `cache_dir` against `data_dir` — covers, artwork
+  and the SGDB artwork cache on the first because they are re-derivable from the server, the database and the launcher
+  on the second because they are not; a system that clears caches must be able to clear one and not the other. The
+  launcher's home is the read whose mix-up a user would see rather than the next start only, since
+  `launcher_path(directories.data_dir)` is carried on as `ShortcutLauncher.path` and baked into every shortcut's `exe`.
+  Nothing mechanical tells the six apart: they are six `str` fields on one frozen struct, so a read of the wrong one is
+  a rename away and fails silently in whichever direction it happened to point
 - **The identifier's three homes are never derived from one another — in particular `APP_DIR_NAME`
   (`domain/user_data_location.py`) is never read from `PACKAGE_NAME` (`domain/identity.py`)** — test + prompt-only — the
   three homes and the question each answers are enumerated in `backend/domain/identity.py`'s module docstring.
@@ -545,6 +548,37 @@ Format: **invariant** — tier — enforced by.
   (`..._never_displaces_the_bearer`, `..._never_retargets_the_request`) pass because `stored_custom_headers` drops the
   entry long before `add_header` is reached, so both stay green if the ordering is reversed. Detail:
   `docs/architecture/backend-architecture.md` → "the headers every RomM-origin request carries"
+- **`dist/globals.js` is never evaluated into Steam where Decky Loader is serving, and what decides that is read from
+  the MACHINE rather than from the window** — test + prompt-only — `tests/host/inject/test_bundles.py` pins both choices
+  in both directions (the globals bundle absent beside a serving loader, and the standalone panel absent too, since it
+  carries the same sweep), and `tests/host/inject/test_injector.py::TestBesideDeckyLoader` pins it end to end over a
+  real socket with something answering on the loader's port. It is the only crash cause ever observed here: that bundle
+  carries `@decky/ui`'s module sweep at import scope, and re-running it under an interface already rendering from those
+  modules takes the Big Picture window down. **The rule spans three modules and nothing joins them.**
+  `host/inject/machine.py` asks whether Decky Loader's server answers, `host/inject/bundles.py` turns that into a file
+  list, and `host/inject/injector.py` evaluates it. A fourth caller building its own file list, or one reading the
+  window instead, goes green: at the moment the question has to be answered every Decky marker on the window — `DFL`,
+  `DeckyPluginLoader`, `DeckyBackend`, `deckyAuthToken`, `deckyHasLoaded` — is still `undefined`, so a window probe
+  answers "no Decky" on a machine that has one, picks the globals, and crashes the interface. The gap between "the
+  loader's server answers" and "Decky is rendering" is deliberately left on the safe side, and the ordering measurement
+  (Tender loading first is safe) may not be leant on to close it the other way: a reconnect puts the same question at a
+  moment when Steam has been up for an hour. Detail: `docs/architecture/loading-the-panel.md`
+- **An injection that could not be observed is never counted as a crash, and the record that says one happened is closed
+  before the next attempt reads it** — test + prompt-only — `tests/host/inject/test_watchdog.py` pins the state machine
+  in every direction and `::TestDidTheInterfaceSurviveIt` pins the three closings over the real loop. The crash cannot
+  be counted inside a session — it leaves `SharedJSContext` alive with our marker on it, so the injector sees "already
+  injected" and never tries again — so what is counted is a record left open at the NEXT attempt, and two in a row stop
+  the injection. **Three things have to hold together and nothing checks that they do.** `judge` writes its resolution
+  back before it answers, or one open record counts once per attempt for ever. The alive check closes the record without
+  counting whenever nothing was established — the debugger stopped answering, the backend is shutting down, or no page
+  target besides the renderer existed when the panel was loaded — because the signature is specific (every other page
+  target goes at once while the debugger keeps answering), and a run in which that could not be observed says nothing. A
+  fourth close that counted it would stop the panel loading over a user closing Steam, and the failure is silent in both
+  directions: too lenient and a crash loop is never stopped, too strict and the panel disappears with only a log line to
+  say why. The way back is not inside Steam (the interface is what is gone): the fingerprint — Tender's version, the
+  bundle bytes, Steam's client build — drops the count on its own, and `TENDER_INJECT=force` is the switch the refusal
+  line names
+
 - **Aggregate state mutated only via verb-named methods (no field assignment)** — check —
   `scripts/check_aggregate_field_assignment.py`
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, uow_factory) is called while a UoW is open on the
@@ -649,8 +683,8 @@ Format: **invariant** — tier — enforced by.
   standalone build owes and each bundle's own build stamp are asserted there too). Both failures are silent in CI and
   land on a device: a standalone bundle that lost the package throws on its first `DFL.` read where no `DFL` exists, and
   a coexistence bundle that gained it re-executes the modules a rendering Decky is rendering FROM, and takes the Big
-  Picture window down. **The check sees the artefacts and not the decision**: which of the two the injector loads
-  (#1900) is made nowhere in this tree, and nothing here would notice the wrong one being served
+  Picture window down. **The check sees the artefacts and not the decision**: which of the two the injector loads is
+  `backend/host/inject/bundles.py`'s, and nothing here would notice the wrong one being served
 - **Tender's three React globals are spelled exactly the way Decky Loader spells them** — test —
   `frontend/src/boot/steamGlobals.test.ts`, which reads `steamGlobals.ts` and the pinned `decky-globals-block.txt` as
   TEXT and compares the four search predicates, which global each answer is assigned to, and the JSX stand-in's keys and
@@ -680,7 +714,7 @@ Format: **invariant** — tier — enforced by.
   unconditionally, which held only while nothing reaching it was a name the package exports, and `playSectionClasses` is
   one. What `frontend/src/boot/steamModules.test.ts` locks is the property the line's remaining own answer rests on — a
   non-blocking name `@decky/ui` does NOT export must be one Tender probes for itself (`findModule`, swept from the
-  source) — so the three `SP_*` globals, whose owner on a machine running both programs is #1900's open question, fail
+  source) — so the three `SP_*` globals, which the frontend cannot attribute to a program from inside the page, fail
   there the moment one is made non-blocking, instead of shipping a repair aimed at whichever program did not install
   them. Both directions fail quietly: call a real dependency cosmetic and the panel mounts and renders a hole, which is
   the fault the whole check exists to tell apart from a backend that is not running; call a decoration blocking and one
@@ -700,8 +734,10 @@ Format: **invariant** — tier — enforced by.
   (on its own it is cosmetic and brings no page up at all, per the entry above), and `describeFailure` answers it before
   it asks whose copy ran anything. Naming a copy would blame Decky for a predicate of ours; the silence about a repair
   is right for the three globals and a real loss for the glyph, and only the second half of that is easy to forget. For
-  the globals no repair follows: who installed them on a machine running both is #1900's open question, and in the
-  standalone bundle that answer would not settle it anyway — a missing `SP_REACTDOM` there is `globals.js` not having
+  the globals no repair follows: who installed them on a machine running both now HAS an answer — the injector loads
+  `globals.js` only where Decky Loader is not serving, so beside a serving Decky they are Decky's — and **this branch
+  does not read it**, because it keys on whose COPY ran the search rather than on which program installed a global. In
+  the standalone bundle the answer would not settle it anyway: a missing `SP_REACTDOM` there is `globals.js` not having
   run OR our own ReactDOM predicate in `boot/steamGlobals.ts` having gone stale — two repairs behind one symptom.
   `ControllerGlyph` is reached by a `findModule` predicate of ours in BOTH bundles, so a newer Tender IS its repair and
   this branch cannot say so; restoring it here would take a third axis (whose PREDICATE, not whose copy), never a

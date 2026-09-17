@@ -6,7 +6,9 @@ Guide for setting up a development environment and contributing to Tender.
 
 - [mise](https://mise.jdx.dev/) — manages Node, pnpm, and Python versions
 - Git
-- A Steam Deck or Linux PC with [Decky Loader](https://decky.xyz/) installed (for testing)
+- A Steam Deck or Linux PC running Steam, with CEF remote debugging enabled
+  (`~/.steam/steam/.cef-enable-remote-debugging`, then restart Steam) — that is what the backend loads the panel
+  through. [Decky Loader](https://decky.xyz/) is no longer needed, and the panel coexists with one that is installed.
 
 > **On Windows, develop inside [WSL2](https://learn.microsoft.com/windows/wsl/install).** The plugin targets Linux —
 > some adapters import Unix-only modules (e.g. `fcntl`), a few dev dependencies have no Windows wheel, and CI runs on
@@ -55,10 +57,9 @@ pnpm -C frontend build   # Rollup -> the repository's dist/, not the package's
 
 Rollup produces **three** files there, plus `@decky/ui`'s licence text beside them: `dist/globals.js` installs Steam's
 React, and `dist/index.js` and `dist/index-coexistence.js` are the same panel differing in whether `@decky/ui` is
-bundled into it or taken from Decky Loader's own copy. Nothing in this tree loads any of them — the backend serves
-`dist/` and the injector that will fetch from it is [#1900](https://github.com/danielcopper/romm-tender/issues/1900).
-What each file is and why there are two panels:
-[How the panel is built and loaded](../architecture/frontend-bundles.md).
+bundled into it or taken from Decky Loader's own copy. The backend serves `dist/` and loads one of the two panels into
+Steam itself — [How the panel gets into Steam](../architecture/loading-the-panel.md). What each file is and why there
+are two panels: [How the panel is built and loaded](../architecture/frontend-bundles.md).
 
 ## Testing
 
@@ -179,61 +180,29 @@ Every backend feature or callable where testing makes sense should have unit tes
 - **Bad path** — invalid input, missing data, API errors, network failures
 - **Edge cases** — empty strings, None values, boundary conditions
 
-## Dev Reload
-
-!!! warning "The Decky deploy no longer produces a loadable plugin"
-
-    The backend hosts itself now ([ADR-0036](../adr/0036-the-backend-hosts-itself.md)) and has no zero-argument
-    lifecycle hook for a plugin loader to call, so `mise run dev` and `mise run deploy` stage a layout that comes up
-    and fails. The installer that replaces them is a separate piece of work
-    ([#1902](https://github.com/danielcopper/romm-tender/issues/1902)); until it lands, the backend is started by hand
-    and the sections below describe a loop that does not currently work end to end.
+## Running it
 
 ```bash
-mise run dev          # build frontend, deploy to the plugin dir, restart plugin_loader
-mise run dev dp2      # ...and also open windowed Big Picture on that display after deploying
+mise run dev
 ```
 
-This builds the frontend, copies the plugin files into `~/homebrew/plugins/romm-tender`, and restarts `plugin_loader` to
-pick up the changes. It **stops** `plugin_loader` around the file copy on purpose: the loader runs as root and
-continuously re-owns the plugin dir back to root within ~1–2s as a tamper guard, so copying while it runs races against
-that re-own and fails with `permission denied`. With the loader stopped, the copy is uncontested; it restarts
-automatically when the task finishes — even if the build or copy fails, so a failure never leaves the plugin dead. For
-backend-only changes, restarting the plugin loader is sufficient without rebuilding.
+Builds the panel and runs the backend in the foreground. The backend binds a loopback port, serves `dist/` from it, and
+loads the panel into Steam's renderer over the CEF debugger — nothing is copied into a plugin directory and no plugin
+loader is restarted. Ctrl-C stops it and lets it unload.
 
-Passing a display target (`internal`, or an output name like `dp2` / `DP-3` — the same argument
-[`dev:watch`](frontend-dev-loop.md#choosing-the-display) takes) also opens a windowed Big Picture on that display once
-the deploy succeeds, so you can deploy and eyeball the result in one command. With no argument, `dev` stays deploy-only
-and never opens a window. A bad display name is rejected up front, before the loader is stopped.
+It needs `~/.steam/steam/.cef-enable-remote-debugging` to exist and Steam to have been started since that file appeared.
+Steam does not have to be running when the backend starts; it attaches when Steam comes up.
 
-If you deployed before the rename, the old `~/homebrew/plugins/decky-romm-sync` is still there and `dev` deploys beside
-it rather than over it. Decky loads both. If that old deploy is from 0.31.0 or later its manifest carries the same
-plugin name, and the loader keys a plugin by its name — so the folder it happens to import last is the one left running,
-which is not reliably the one you just built. An older deploy carries the name `RomM Sync`, and Decky then runs the two
-side by side. Remove the old folder once:
-`sudo rm -rf ~/homebrew/plugins/decky-romm-sync && sudo systemctl restart plugin_loader`. It holds only the old deploy's
-files; your library and settings live under `~/.local/share/romm-tender` and `~/.config/romm-tender`. Let the new plugin
-start at least once first, though — until it has, your Steam shortcuts may still launch through `bin/rom-launcher`
-**inside** that folder, and the start-up relocation is what moves them off it. The QAM says the same thing, and switches
-to "can be removed now" once the move is done.
+There is no hot reload: a rebuilt bundle reaches Steam when its JS context is rebuilt. The whole loop, the Big Picture
+window, and how to judge layout at the Deck's real metrics are in [Frontend dev loop](frontend-dev-loop.md); what the
+injector does and how it protects the Steam UI from itself is in
+[How the panel gets into Steam](../architecture/loading-the-panel.md).
 
-For frontend iteration there is a much faster loop: after a one-time `mise run dev:setup`,
-`mise run dev:watch [display]` hot-reloads the **frontend** into a windowed Big Picture on the desktop as you save, with
-no loader restarts at all — put it on a second monitor with a display target like `dp2`. Backend changes are pushed on
-demand with `mise run dev:push-backend`. That windowed Big Picture gives the QAM panel ~59% more vertical room than the
-Deck does, so judge layout and overflow under `mise run dev:ui-scale`, which forces Steam's display scale to Game
-Mode's. See [Frontend dev loop](frontend-dev-loop.md) for the full workflow, keyboard shortcuts, and caveats.
+Two switches exist, both read from the environment at start-up: `TENDER_INJECT=off` serves the panel and loads it
+nowhere, and `TENDER_INJECT=force` loads it even where the crash watchdog has stopped.
 
-## Deploying to Device
-
-```bash
-mise run deploy
-```
-
-Deploying is a copy, not a link. Decky reads `<plugin>/main.py` with the packages beside it in `<plugin>/py_modules/`,
-and the repo root carries neither — the whole backend, entry point included, lives under `backend/`. `deploy` writes
-that layout into `~/homebrew/plugins/romm-tender`. Use `mise run dev` rather than `deploy` on a root-owned plugin dir:
-it stops and restarts `plugin_loader` around the copy, as described above.
+Installing this as a service, with its own unit and XDG paths, is separate work
+([#1902](https://github.com/danielcopper/romm-tender/issues/1902)).
 
 ## Linting
 

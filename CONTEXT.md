@@ -132,10 +132,10 @@ The three files `pnpm -C frontend build` produces, and the names to use for them
   modules evaluate, so it cannot be in the import graph of the module that creates the globals.
 
 The two panel bundles differ in exactly one thing and are told apart by NAME — nothing inside either is read to choose
-between them. Which one is loaded is the injector's decision and is made nowhere in this tree yet. Each does carry a
-build-time stamp of which of the two it IS, read in one place — `frontend/src/boot/searchingCopy.ts` — to name the copy
-of `@decky/ui` that ran a search that missed. That answer is printed twice: on the start-up check's fallback page and in
-the log line beside it.
+between them. Which one is loaded is the **injection**'s decision, taken from the machine rather than from the window.
+Each does carry a build-time stamp of which of the two it IS, read in one place — `frontend/src/boot/searchingCopy.ts` —
+to name the copy of `@decky/ui` that ran a search that missed. That answer is printed twice: on the start-up check's
+fallback page and in the log line beside it.
 
 _Avoid_: **DFL build** / **bundled build** — both name the mechanism rather than the situation, and the situation is
 what the choice turns on. Avoid **the bundle** unqualified once more than one exists. Avoid calling the React bootstrap
@@ -184,6 +184,44 @@ _Avoid_: **health check** — it asks one question at one moment and is not a re
 the panel is whole or it is absent, and a half-mounted panel acting on what it cannot see is the thing the check exists
 to refuse. A miss the panel survives is not degraded mode: what is absent is a decoration the one place that draws it
 renders without, or a name only a debug line reads — never something a page acts on.
+
+### Injection
+
+Loading the panel into Steam's renderer from outside it: the backend attaches to Steam's CEF debugger and evaluates one
+expression in the `SharedJSContext` target. There is no plugin loader in this path, nothing is copied anywhere, and no
+file on disk decides anything.
+
+The **marker** is the global that expression leaves behind (`window.__tender_panel__`), and it is the whole of how a
+context says it already carries the panel. It is wiped by a **JS-context rebuild** — Steam building its renderer's
+JavaScript world again, which is also what `Page.domContentEventFired` announces — and survives everything short of one.
+
+_Avoid_: **deploy** and **install** for this, which name what #1902 will do with a service and a unit; injection is
+about one Steam session and leaves nothing behind. Avoid **hot reload**: nothing here watches a file, and a rebuilt
+bundle reaches Steam only when the context is rebuilt.
+
+### Load-failure card
+
+The small card the injected expression draws into Steam's own document when the panel bundle did not load — Tender's
+version, Steam's build, the log path, where releases are listed, and the reason the import gave. Plain nodes and inline
+styles: it uses neither React nor `@decky/ui`, because its own subject is that those may be exactly what is missing.
+
+**It is not the start-up check's fallback page** and the two are never called by the same name. The fallback page is a
+React component rendered INSIDE a panel that did mount, when a search into Steam's interface came back empty; this card
+exists because nothing mounted at all. The issue that asked for it called it a fallback page, which is the wording this
+entry replaces.
+
+### Crash record
+
+The file the injection opens before it evaluates anything and closes once Steam's interface is still there some seconds
+later (`<state_dir>/injection-guard.json`). A record found still **open** at the next attempt is a crash that already
+happened; two in a row stop the injection, and a change in the **fingerprint** — Tender's version, a digest of the
+bundle bytes, Steam's client build — drops the count so it starts trying again by itself.
+
+An attempt the record says nothing about is **not counted**: the debugger stopped answering, the backend is shutting
+down, or nothing but the renderer was open, so there was no collapse to observe.
+
+_Avoid_: **crash counter**, which is what this replaced — the crash leaves the marker standing, so within one Steam
+session it can happen at most once and counting inside a session counts to one for ever.
 
 ### Persistence boundary (settings.json / SQLite)
 
