@@ -103,7 +103,7 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // coexistence bundle has the same shape at lines 231 and 4271. `SP_REACTDOM`
   // has no import-time read at all.
   //
-  // They are listed anyway because this list is also what
+  // They are listed anyway because these three names are also what
   // `GlobalsReport.installed` answers for, and that report is there for the
   // injector to read out of `dist/globals.js` — a bundle that imports none of
   // this — before it decides whether to load the panel at all (#1900). Nothing
