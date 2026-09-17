@@ -45,8 +45,16 @@ Alone, with no Decky running, nothing else is rendering from those modules and t
 any set-up code in the importing module runs — there is no point at which the branch could stand. Hence two artifacts.
 
 **Which one is loaded is the injector's decision** ([#1900](https://github.com/danielcopper/romm-tender/issues/1900))
-and is made nowhere in this tree today. The file name is the whole of the mechanism: no flag in the bundle, no marker,
-no runtime probe.
+and is made nowhere in this tree today. The file name is the whole of the SELECTION mechanism: nothing in either bundle
+is consulted to choose it, and no runtime probe decides anything.
+
+Each panel bundle does, however, know which of the two it is. `frontend/rollup.config.js` serves
+`virtual:tender-bundle-kind` once per panel build with that build's own answer inside, and one thing reads it: the
+start-up failure answer, printed on the fallback page and in the log line beside it. Whose copy of `@decky/ui` ran a
+search that came back empty decides which program the user has to update. It is stamped by the build because a runtime
+probe cannot answer it: `typeof DFL !== "undefined"` is also true of a standalone bundle loaded on a machine where Decky
+happens to be running, and the page would then credit Decky's copy with work our own copy did. `check-bundle-shape.mjs`
+asserts each artefact's stamp, because rollup answers an unresolved import with a warning rather than a failure.
 
 `frontend/scripts/check-bundle-shape.mjs` fails when either bundle stops being what it is — when the standalone one has
 lost the package, or the coexistence one has gained it. It is a step of its own, `pnpm -C frontend check:bundle`, run
@@ -101,16 +109,46 @@ the factory returns a fallback page and registers nothing at all: no route patch
 listeners, no shortcut relocation. A half-working panel acts on what it cannot see, and nothing below the check is
 written to run without the components it was written against.
 
-The page names every search that came back empty, and distinguishes **some** of them missing from **all** of them — that
-is the single fact that leads to a repair. Some means a Steam client update moved what those predicates match. All means
-something more basic: the React bootstrap never ran, or Steam's module registry was read before it was complete. The
-page uses no `@decky/ui`, because a page built out of searches is the wrong thing to render when a search has missed.
+The page names every search that came back empty, and distinguishes **some** of them missing from **all** of them. All
+means something more basic than a stale predicate: the React bootstrap never ran, or Steam's module registry was read
+before it was complete — neither is `@decky/ui`'s doing, so that one answer is the same in both bundles. The page uses
+no `@decky/ui`, because a page built out of searches is the wrong thing to render when a search has missed.
+
+**Some of them missing has three answers, not one, because the predicates are not always ours.** They belong to
+`@decky/ui`, and the coexistence bundle runs Decky Loader's copy of it. `frontend/src/boot/searchingCopy.ts` decides
+which of the three the page prints, from the build's own stamp and one reading of Decky's namespace:
+
+| Bundle      | What was read                | What the page says                                                                                                                      |
+| ----------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| standalone  | —                            | Tender's own copy searched and missed. **Update Tender.**                                                                               |
+| coexistence | the name is **in** `DFL`     | Decky's copy searched and missed — its own interface and its other plugins are affected the same way. **Update Decky Loader.**          |
+| coexistence | the name is **not in** `DFL` | Decky's copy does not carry the export: the two programs disagree about the package rather than about Steam. **Bring both to current.** |
+
+`window.DFL` is an ESM module namespace object, so `in` is what discriminates — measured on the device against Decky
+v3.2.8, where `"DialogButton" in DFL` is true and a generated non-existent name is false. Only the names `@decky/ui`
+exports are asked about: the three `SP_*` globals come from the React bootstrap and `ControllerGlyph` from a predicate
+of our own, so a Decky in perfect step with us carries none of them, and asking would report a package disagreement on
+every miss. Every missed name of the ones that remain is asked, and one absent name is enough for the third answer — a
+name Decky's copy does not export is a demonstrated fact about the two installs, where a name it exports with an empty
+value is one more stale predicate, and the repair the third answer names covers both. Where there is no `DFL` to
+question at all, nothing is claimed — an absence has to be demonstrated.
+
+Decky's version enriches the sentence and is never required for it. It is read from
+`DeckyPluginLoader.deckyState._versionInfo.current`, an internal field behind an underscore, and a newer Decky renaming
+it is exactly the skew being diagnosed — so the whole path is guarded and a failure simply drops the version from the
+sentence. `remote` beside it is release data about the published version and is never consulted: a release existing does
+not mean this machine installed it.
 
 **Three of the names the panel imports cannot be answered for**, and they are listed with the reason rather than left
 out: `DropdownItem`, `showModal` and `useQuickAccessVisible` are wrappers the package always defines, while what each
 reaches is module-private or read during render. `steamModules.test.ts` sweeps every value the panel imports from
 `@decky/ui` and fails on a name that is in none of its three lists, so a new import has to be classified before it can
 ship.
+
+That list is about VALUES, and the `in` reading above is a different axis — but the two do not meet, because the `in`
+question is only ever put about a name whose search missed, and nothing asks these three, so they are never among the
+missing. Asking `in` of them would be a check this tree does not have: whether Decky's copy carries a name whose value
+we never look at.
 
 ## Talking to the backend
 

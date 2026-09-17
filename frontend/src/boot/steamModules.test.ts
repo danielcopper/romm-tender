@@ -18,6 +18,7 @@ import { globSync, readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
+import { type SearchingCopy, readSearchingCopy } from "./searchingCopy";
 import { PACKAGE_OWN, STEAM_LOOKUPS, UNVERIFIABLE, checkSteamModules, describeFailure } from "./steamModules";
 
 const SRC_DIR = `${process.cwd()}/src/`;
@@ -80,6 +81,18 @@ describe("the start-up check's coverage of what the panel imports", () => {
     expect(names.length).toBe(new Set(names).size);
   });
 
+  it("marks as a @decky/ui export exactly the names the panel imports from it", () => {
+    // What decides whether Decky's own copy can be asked about a name — and a
+    // wrong flag is a sentence about the wrong program: the three globals come
+    // from the React bootstrap and `ControllerGlyph` from a predicate of ours,
+    // so a Decky in perfect step with us exports none of them. The flag is
+    // written out because deriving it needs this sweep, which is a filesystem
+    // read no device can do.
+    const imported = new Set(importedValueNames());
+    const wrong = STEAM_LOOKUPS.filter((lookup) => lookup.deckyUiExport !== imported.has(lookup.name));
+    expect(wrong.map((lookup) => lookup.name)).toEqual([]);
+  });
+
   it("asks a real question of every search it lists", () => {
     // A `found` that never reads anything would answer `true` forever. Each one
     // is called here, which is also what catches an entry whose thunk throws.
@@ -88,20 +101,31 @@ describe("the start-up check's coverage of what the panel imports", () => {
 });
 
 describe("what the start-up check reports", () => {
-  const lookup = (name: string, present: boolean) => ({ name, found: () => present });
+  const lookup = (name: string, present: boolean, deckyUiExport = true) => ({
+    name,
+    found: () => present,
+    deckyUiExport,
+  });
+  const ours: SearchingCopy = { owner: "tender" };
 
   it("is satisfied when every search answered", () => {
     const report = checkSteamModules([lookup("Focusable", true), lookup("Tabs", true)]);
-    expect(report).toEqual({ ok: true, missing: [], checked: 2 });
-    expect(describeFailure(report)).toBe("");
+    expect(report).toEqual({ ok: true, missing: [], missingPackageNames: [], checked: 2 });
+    expect(describeFailure(report, ours)).toBe("");
   });
 
   it("names the searches that found nothing, and only those", () => {
     const report = checkSteamModules([lookup("Focusable", true), lookup("Tabs", false), lookup("Spinner", false)]);
     expect(report.ok).toBe(false);
     expect(report.missing).toEqual(["Tabs", "Spinner"]);
-    expect(describeFailure(report)).toContain("2 of 3");
-    expect(describeFailure(report)).toContain("Steam client update");
+    expect(describeFailure(report, ours)).toContain("2 of 3");
+    expect(describeFailure(report, ours)).toContain("Steam client update");
+  });
+
+  it("separates the names a copy of @decky/ui can be asked about from the rest", () => {
+    const report = checkSteamModules([lookup("SP_REACT", false, false), lookup("Tabs", false)]);
+    expect(report.missing).toEqual(["SP_REACT", "Tabs"]);
+    expect(report.missingPackageNames).toEqual(["Tabs"]);
   });
 
   it("says something more basic happened when nothing at all resolved", () => {
@@ -109,7 +133,55 @@ describe("what the start-up check reports", () => {
     // registry that was never readable are different faults, and only the
     // second is fixed by looking at the bootstrap rather than at Steam.
     const report = checkSteamModules([lookup("Focusable", false), lookup("Tabs", false)]);
-    expect(describeFailure(report)).toContain("not a run of");
-    expect(describeFailure(report)).not.toContain("Steam client update");
+    expect(describeFailure(report, ours)).toContain("not a run of");
+    expect(describeFailure(report, ours)).not.toContain("Steam client update");
+  });
+
+  it("blames neither copy when nothing at all resolved, in either bundle", () => {
+    // The bootstrap is not `@decky/ui`'s doing in either bundle, so this one
+    // answer must not move with the copy that ran the searches.
+    const report = checkSteamModules([lookup("Focusable", false), lookup("Tabs", false)]);
+    const theirs: SearchingCopy = { owner: "decky", carriesEveryName: true, version: "v3.2.8" };
+    expect(describeFailure(report, theirs)).toBe(describeFailure(report, ours));
+  });
+});
+
+describe("whose copy the page blames for a stale search", () => {
+  // Both bundle answers are exercised for every message: the build constant is
+  // a build constant, and a suite that only ever saw one of the two would leave
+  // the other's sentence unread until a user read it.
+  const stale = checkSteamModules([
+    { name: "Focusable", found: () => true, deckyUiExport: true },
+    { name: "Tabs", found: () => false, deckyUiExport: true },
+  ]);
+
+  it("sends the user after Tender when Tender's own copy searched", () => {
+    const sentence = describeFailure(stale, readSearchingCopy(stale, "standalone"));
+    expect(sentence).toContain("Tender's own copy of @decky/ui ran them");
+    expect(sentence).toContain("A newer Tender is the repair.");
+  });
+
+  it("sends the user after Decky when Decky's copy searched, and says who else it breaks", () => {
+    const copy = readSearchingCopy(stale, "coexistence", () => ({ carries: () => true, version: "v3.2.8" }));
+    const sentence = describeFailure(stale, copy);
+    expect(sentence).toContain("Decky Loader v3.2.8's copy of @decky/ui ran them, not Tender's own");
+    expect(sentence).toContain("its other plugins are affected");
+    expect(sentence).toContain("A newer Decky Loader is the repair.");
+  });
+
+  it("names Decky without a version when the version could not be read", () => {
+    const copy = readSearchingCopy(stale, "coexistence", () => ({ carries: () => true, version: null }));
+    const sentence = describeFailure(stale, copy);
+    expect(sentence).toContain("Decky Loader's copy of @decky/ui ran them");
+    expect(sentence).not.toContain("v3.2.8");
+    expect(sentence).toContain("A newer Decky Loader is the repair.");
+  });
+
+  it("calls it a disagreement about the package when Decky's copy lacks the name", () => {
+    const copy = readSearchingCopy(stale, "coexistence", () => ({ carries: () => false, version: "v3.2.8" }));
+    const sentence = describeFailure(stale, copy);
+    expect(sentence).toContain("does not carry some of the names Tender asks it for");
+    expect(sentence).toContain("Bringing both Tender and Decky Loader to their current versions is the repair.");
+    expect(sentence).not.toContain("A Steam client update");
   });
 });

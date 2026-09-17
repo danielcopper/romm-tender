@@ -20,7 +20,9 @@
  * **One name missing means one predicate went stale. All of them missing means
  * something more basic** — the globals bundle never ran, or Steam's module
  * registry was read before it was complete. That difference is the single fact
- * that leads to a repair, so it is what `describeFailure` reports.
+ * that leads to a repair, so it is what `describeFailure` reports — together
+ * with WHOSE copy of `@decky/ui` ran the stale predicate, which is not the same
+ * in the two panel bundles and is answered by `searchingCopy.ts`.
  *
  * ## What this file can and cannot see
  *
@@ -64,6 +66,7 @@ import {
   playSectionClasses,
   quickAccessMenuClasses,
 } from "../utils/deckyUiInternals";
+import type { SearchingCopy } from "./searchingCopy";
 
 /** One thing the panel depends on, and how to ask whether it is there. */
 export interface SteamLookup {
@@ -71,9 +74,36 @@ export interface SteamLookup {
   readonly name: string;
   /** `true` when the search behind it found something. */
   readonly found: () => boolean;
+  /**
+   * Is this a name `@decky/ui` exports?
+   *
+   * It decides whether Decky's own copy of the package can be asked about the
+   * name at all (`searchingCopy.ts`), and a wrong answer here is a sentence
+   * about the wrong program: `SP_REACT` and the other two globals are installed
+   * by a bootstrap rather than exported by anything, and `ControllerGlyph` is a
+   * predicate `utils/deckyUiInternals.ts` runs itself because the package does
+   * NOT export it — so `"ControllerGlyph" in DFL` is false for a Decky that is
+   * perfectly in step with us.
+   *
+   * Written out rather than derived: what would derive it is a sweep of the
+   * source for `@decky/ui` imports, which is a filesystem read and cannot
+   * happen on a device. `steamModules.test.ts` runs exactly that sweep and holds
+   * every flag here against it.
+   */
+  readonly deckyUiExport: boolean;
 }
 
-const truthy = (name: string, read: () => unknown): SteamLookup => ({ name, found: () => Boolean(read()) });
+const truthy = (name: string, read: () => unknown): SteamLookup => ({
+  name,
+  found: () => Boolean(read()),
+  deckyUiExport: true,
+});
+
+/** The same question about a name `@decky/ui` does not export — see {@link SteamLookup.deckyUiExport}. */
+const truthyUnexported = (name: string, read: () => unknown): SteamLookup => ({
+  ...truthy(name, read),
+  deckyUiExport: false,
+});
 
 /**
  * Every Steam search the panel depends on, asked one at a time.
@@ -110,9 +140,9 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // reads it yet. Once something does, a panel that would throw at import is
   // never loaded, which is the whole value of the guard in `steamGlobals.ts`
   // that keeps a missed JSX search from reporting as a hit.
-  truthy("SP_REACT", () => window.SP_REACT),
-  truthy("SP_REACTDOM", () => window.SP_REACTDOM),
-  truthy("SP_JSX", () => window.SP_JSX),
+  truthyUnexported("SP_REACT", () => window.SP_REACT),
+  truthyUnexported("SP_REACTDOM", () => window.SP_REACTDOM),
+  truthyUnexported("SP_JSX", () => window.SP_JSX),
 
   // Steam's components, each one a predicate over its minified bundle.
   truthy("ButtonItem", () => ButtonItem),
@@ -137,12 +167,12 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // Not truthiness: `@decky/ui` declares `Navigation` as an empty object and
   // fills it from a lookup inside a `try`, so a miss leaves an object that is
   // perfectly truthy and does nothing.
-  { name: "Navigation", found: () => Object.keys(Navigation).length > 0 },
+  { name: "Navigation", found: () => Object.keys(Navigation).length > 0, deckyUiExport: true },
 
   // Asked by CALLING it: `findSP` is always a function and answers `undefined`
   // when its probe missed, which is why `@decky/ui`'s own callers write
   // `findSP() || window` around it.
-  { name: "findSP", found: () => findSP() !== undefined },
+  { name: "findSP", found: () => findSP() !== undefined, deckyUiExport: true },
 
   // The class maps and the glyph, which `deckyUiInternals.ts` already types
   // honestly. A missing class map does not throw — it styles nothing, which is
@@ -152,7 +182,10 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   truthy("basicAppDetailsSectionStylerClasses", () => basicAppDetailsSectionStylerClasses),
   truthy("playSectionClasses", () => playSectionClasses),
   truthy("quickAccessMenuClasses", () => quickAccessMenuClasses),
-  truthy("ControllerGlyph", () => ControllerGlyph),
+  // `@decky/ui` does not export the controller glyph at all —
+  // `deckyUiInternals.ts` reaches it with a `findModule` predicate of our own,
+  // so it is our search in both bundles.
+  truthyUnexported("ControllerGlyph", () => ControllerGlyph),
 ];
 
 /**
@@ -200,14 +233,28 @@ export interface StartupReport {
   readonly ok: boolean;
   /** The names that did not, in the order they are checked. */
   readonly missing: readonly string[];
+  /**
+   * The subset of {@link missing} that `@decky/ui` exports.
+   *
+   * These are the only names a copy of the package can be asked about, which is
+   * what `searchingCopy.ts` asks Decky's. The rest of `missing` — the three
+   * globals, the glyph — would answer "not exported" for a Decky in perfect
+   * step with us.
+   */
+  readonly missingPackageNames: readonly string[];
   /** How many searches were asked. */
   readonly checked: number;
 }
 
 /** Ask every search whether it found something. */
 export function checkSteamModules(lookups: readonly SteamLookup[] = STEAM_LOOKUPS): StartupReport {
-  const missing = lookups.filter((lookup) => !lookup.found()).map((lookup) => lookup.name);
-  return { ok: missing.length === 0, missing, checked: lookups.length };
+  const missed = lookups.filter((lookup) => !lookup.found());
+  return {
+    ok: missed.length === 0,
+    missing: missed.map((lookup) => lookup.name),
+    missingPackageNames: missed.filter((lookup) => lookup.deckyUiExport).map((lookup) => lookup.name),
+    checked: lookups.length,
+  };
 }
 
 /**
@@ -215,11 +262,16 @@ export function checkSteamModules(lookups: readonly SteamLookup[] = STEAM_LOOKUP
  *
  * All of them missing is not "many predicates broke at once" — it is the
  * globals bundle never having run, or Steam's registry having been read before
- * it was complete. Some of them missing is Steam having moved what those
- * particular predicates match. Saying which costs one comparison and is the
- * difference between a report someone can act on and a list of names.
+ * it was complete. That answer is about the bootstrap rather than about either
+ * copy of `@decky/ui`, so the searching copy does not enter it.
+ *
+ * Some of them missing is a stale predicate, and then WHOSE predicate decides
+ * the repair: our own bundled copy, Decky Loader's copy (which is also breaking
+ * Decky's interface and its other plugins at that moment), or a Decky copy that
+ * does not carry the name at all, which is a disagreement about the package
+ * rather than about Steam. `searchingCopy.ts` decides which; this words it.
  */
-export function describeFailure(report: StartupReport): string {
+export function describeFailure(report: StartupReport, copy: SearchingCopy): string {
   if (report.ok) return "";
   if (report.missing.length === report.checked) {
     return (
@@ -228,8 +280,28 @@ export function describeFailure(report: StartupReport): string {
       "read it, or Tender's React bootstrap never ran."
     );
   }
+  const scale = `${report.missing.length} of ${report.checked} searches into Steam's interface found nothing. `;
+  if (copy.owner === "tender") {
+    return (
+      scale +
+      "Tender's own copy of @decky/ui ran them, so a Steam client update has moved what " +
+      "this version of Tender looks for. A newer Tender is the repair."
+    );
+  }
+  const decky = copy.version === null ? "Decky Loader" : `Decky Loader ${copy.version}`;
+  if (!copy.carriesEveryName) {
+    return (
+      scale +
+      `Tender reads them from ${decky}'s copy of @decky/ui, and that copy does not carry ` +
+      "some of the names Tender asks it for — the two disagree about the package rather " +
+      "than about Steam. Bringing both Tender and Decky Loader to their current versions " +
+      "is the repair."
+    );
+  }
   return (
-    `${report.missing.length} of ${report.checked} searches into Steam's interface found nothing. ` +
-    "A Steam client update has moved what they look for."
+    scale +
+    `${decky}'s copy of @decky/ui ran them, not Tender's own, so a Steam client update has ` +
+    "moved what Decky looks for — Decky's own interface and its other plugins are affected " +
+    "the same way. A newer Decky Loader is the repair."
   );
 }

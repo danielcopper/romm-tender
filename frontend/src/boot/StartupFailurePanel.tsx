@@ -14,13 +14,18 @@
  * **Report, do not diagnose.** The page's whole job is to make one fault
  * distinguishable from another: an empty panel looks exactly like a backend that
  * is not running, and the user's next step is different in each case. So it says
- * what missed, that a Steam update is the usual cause, and where to report it.
- * It does not try to work out which update, or to carry on with the parts that
- * still resolve.
+ * what missed, whose copy of `@decky/ui` the missed searches belonged to, the
+ * one repair that follows, and where to report it. It does not try to work out
+ * which Steam update did it, or to carry on with the parts that still resolve.
+ *
+ * Whose copy that is arrives as a prop rather than being read here: it is the
+ * answer to a question about the machine (`searchingCopy.ts`), and a page that
+ * reads the machine while rendering cannot be shown either answer by a test.
  */
 
 import type { CSSProperties, FC } from "react";
 
+import type { SearchingCopy } from "./searchingCopy";
 import { describeFailure, type StartupReport } from "./steamModules";
 
 const ISSUES_URL = "github.com/danielcopper/romm-tender/issues";
@@ -50,10 +55,10 @@ const footnote: CSSProperties = { margin: 0, opacity: 0.75, fontSize: "12px" };
  */
 const MissingNames: FC<{ names: readonly string[] }> = ({ names }) => <div style={nameList}>{names.join(", ")}</div>;
 
-export const StartupFailurePanel: FC<{ report: StartupReport }> = ({ report }) => (
+export const StartupFailurePanel: FC<{ report: StartupReport; copy: SearchingCopy }> = ({ report, copy }) => (
   <div style={page}>
     <div style={heading}>Tender could not read Steam&apos;s interface</div>
-    <p style={paragraph}>{describeFailure(report)}</p>
+    <p style={paragraph}>{describeFailure(report, copy)}</p>
     <p style={paragraph}>These are what it looked for and did not find:</p>
     <MissingNames names={report.missing} />
     <p style={paragraph}>

@@ -58,7 +58,16 @@ import graph before any set-up code in the importing module runs — there is no
 
 **Which one is loaded is the injector's decision and is not made here** — that is
 [#1900](https://github.com/danielcopper/romm-tender/issues/1900). What this decision makes is the pair, and two file
-names to tell them apart. The name is the whole of the mechanism: no flag, no marker, no runtime probe.
+names to tell them apart. The name is the whole of the SELECTION mechanism: nothing inside either bundle is read to
+choose it, and no runtime probe decides anything.
+
+Each panel bundle is nevertheless stamped by its own build with which of the two it is, and that is a consequence of the
+pair rather than a qualification of the sentence above. The one thing that reads the stamp is the start-up failure page:
+the searches that can go stale are `@decky/ui`'s, the coexistence bundle runs Decky Loader's copy of the package, and so
+the same empty search means "update Tender" in one bundle and "update Decky" in the other. The stamp carries no loading
+decision, and a runtime probe could not carry this one either — `typeof DFL !== "undefined"` is equally true of a
+standalone bundle loaded where Decky happens to be running. Current truth for the three answers and their reading of
+Decky's namespace lives in [frontend-bundles.md](../architecture/frontend-bundles.md).
 
 **2. A third output installs Steam's React, and it is its own bundle for the same reason.**
 

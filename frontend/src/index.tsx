@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, FC, type ReactNode } from "react";
 import { Focusable } from "@decky/ui";
 import { FaGamepad } from "react-icons/fa";
 import { StartupFailurePanel } from "./boot/StartupFailurePanel";
+import { readSearchingCopy } from "./boot/searchingCopy";
 import { checkSteamModules, describeFailure } from "./boot/steamModules";
 import { MainPage } from "./bigpicture/MainPage";
 import { SettingsPage } from "./bigpicture/SettingsPage";
@@ -369,11 +370,15 @@ export default definePlugin(() => {
   // is written to run without the components it was written against.
   const startup = checkSteamModules();
   if (!startup.ok) {
-    console.error(`[${PLUGIN_NAME}] ${describeFailure(startup)} Missing: ${startup.missing.join(", ")}`);
+    // Whose copy of `@decky/ui` ran the missed searches is read once, here, and
+    // handed to both the log line and the page: the two must not answer a
+    // question about the machine separately and disagree.
+    const copy = readSearchingCopy(startup);
+    console.error(`[${PLUGIN_NAME}] ${describeFailure(startup, copy)} Missing: ${startup.missing.join(", ")}`);
     return {
       name: PLUGIN_NAME,
       icon: <FaGamepad />,
-      content: <StartupFailurePanel report={startup} />,
+      content: <StartupFailurePanel report={startup} copy={copy} />,
       alwaysRender: true,
     };
   }

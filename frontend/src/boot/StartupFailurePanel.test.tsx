@@ -17,7 +17,20 @@ import { readFileSync } from "node:fs";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import type { SearchingCopy } from "./searchingCopy";
 import { StartupFailurePanel } from "./StartupFailurePanel";
+import type { StartupReport } from "./steamModules";
+
+const report = (missing: string[], checked: number): StartupReport => ({
+  ok: false,
+  missing,
+  missingPackageNames: missing,
+  checked,
+});
+
+const OURS: SearchingCopy = { owner: "tender" };
+const DECKYS: SearchingCopy = { owner: "decky", carriesEveryName: true, version: "v3.2.8" };
+const DECKYS_WITHOUT_THE_NAME: SearchingCopy = { owner: "decky", carriesEveryName: false, version: "v3.2.8" };
 
 describe("the fallback page", () => {
   it("imports nothing from @decky/ui", () => {
@@ -30,19 +43,35 @@ describe("the fallback page", () => {
   });
 
   it("names every search that found nothing", () => {
-    render(<StartupFailurePanel report={{ ok: false, missing: ["Focusable", "Tabs"], checked: 27 }} />);
+    render(<StartupFailurePanel report={report(["Focusable", "Tabs"], 27)} copy={OURS} />);
     // The names ARE the bug report, so the assertion is on the names rather than
     // on a count beside them.
     expect(screen.getByText(/Focusable, Tabs/)).toBeInTheDocument();
   });
 
-  it("says a Steam update is the cause when some searches still resolved", () => {
-    render(<StartupFailurePanel report={{ ok: false, missing: ["Tabs"], checked: 27 }} />);
-    expect(screen.getByText(/Steam client update has moved/)).toBeInTheDocument();
+  it("blames Tender's own copy when the bundle carries one", () => {
+    render(<StartupFailurePanel report={report(["Tabs"], 27)} copy={OURS} />);
+    expect(screen.getByText(/Tender's own copy of @decky\/ui ran them/)).toBeInTheDocument();
+    expect(screen.getByText(/A newer Tender is the repair/)).toBeInTheDocument();
+  });
+
+  it("blames Decky's copy when the bundle takes the package from it", () => {
+    // The same empty search, and a different program to update: in this bundle
+    // the predicates are Decky's, so sending the user after Tender would send
+    // them after the wrong one — while Decky's own interface is breaking too.
+    render(<StartupFailurePanel report={report(["Tabs"], 27)} copy={DECKYS} />);
+    expect(screen.getByText(/Decky Loader v3\.2\.8's copy of @decky\/ui ran them/)).toBeInTheDocument();
+    expect(screen.getByText(/A newer Decky Loader is the repair/)).toBeInTheDocument();
+  });
+
+  it("calls it a disagreement about the package when Decky's copy lacks the name", () => {
+    render(<StartupFailurePanel report={report(["Tabs"], 27)} copy={DECKYS_WITHOUT_THE_NAME} />);
+    expect(screen.getByText(/does not carry some of the names Tender asks it for/)).toBeInTheDocument();
+    expect(screen.getByText(/Bringing both Tender and Decky Loader/)).toBeInTheDocument();
   });
 
   it("says something more basic happened when none of them did", () => {
-    render(<StartupFailurePanel report={{ ok: false, missing: ["Tabs", "Focusable"], checked: 2 }} />);
+    render(<StartupFailurePanel report={report(["Tabs", "Focusable"], 2)} copy={OURS} />);
     expect(screen.getByText(/not a run of broken lookups/)).toBeInTheDocument();
   });
 
@@ -50,7 +79,7 @@ describe("the fallback page", () => {
     // Both sentences are the page's whole job — an empty panel looks exactly
     // like a backend that is not running, and a user who cannot tell them apart
     // starts by suspecting their library.
-    render(<StartupFailurePanel report={{ ok: false, missing: ["Tabs"], checked: 27 }} />);
+    render(<StartupFailurePanel report={report(["Tabs"], 27)} copy={OURS} />);
     expect(screen.getByText(/nothing has been changed/)).toBeInTheDocument();
     expect(screen.getByText(/github\.com\/danielcopper\/romm-tender\/issues/)).toBeInTheDocument();
   });

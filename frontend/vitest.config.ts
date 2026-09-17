@@ -3,6 +3,16 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      // `virtual:tender-bundle-kind` is served by the build (`rollup.config.js`)
+      // and exists on no disk, so without this the start-up check's modules
+      // cannot be imported here at all. What it resolves to is the DEFAULT a
+      // test gets; both answers are reached by passing the kind explicitly,
+      // never by re-aliasing this.
+      "virtual:tender-bundle-kind": fileURLToPath(new URL("./src/test-utils/bundleKindUnderTest.ts", import.meta.url)),
+    },
+  },
   test: {
     environment: "happy-dom",
     globals: true,

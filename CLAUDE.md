@@ -120,18 +120,21 @@ locally with `mise run docs`.
 - **The build produces THREE files, and two of them are the same panel** — `dist/globals.js` (Steam's React installed by
   us), `dist/index.js` (the panel with `@decky/ui` bundled) and `dist/index-coexistence.js` (the panel taking it from
   Decky's `DFL` global). **Which panel bundle gets loaded is the injector's decision (#1900) and is made nowhere in this
-  tree yet**; the name is the whole mechanism. Importing `@decky/ui` re-executes every module in Steam's live webpack
-  registry, and **what makes a second import fatal is a consumer already RENDERING from those modules — not the number
-  of sweeps, and not Big Picture.** Measured on the device: a second sweep on the desktop client survives; a third with
-  Big Picture open and the Quick Access view mounted survives; starting Decky into that same session survives; Big
-  Picture plus Quick Access plus Decky **already rendering** crashes with `Minified React error #31`, because a module
-  re-executed underneath something holding its exports leaves an empty object where a component was. Steam's own
-  interface is not such a consumer; Decky's is. That is why the pair exists and why a runtime `if` cannot replace it:
-  the damage is done at import, and ESM hoists the import above any set-up code in the same module. **`dist/globals.js`
-  carries the same sweep** — it imports `@decky/ui/dist/webpack`, whose `initModuleCache()` is unguarded at module scope
-  — so the short-circuit inside `installGlobals` protects nothing, and that bundle must not be loaded beside a running
-  Decky either. `pnpm -C frontend check:bundle` fails when either bundle stops being what it is; `pnpm build` alone
-  would not. Detail: [frontend-bundles.md](docs/architecture/frontend-bundles.md).
+  tree yet**; the name is the whole of the SELECTION mechanism. Each panel bundle does know which of the two it IS —
+  `rollup.config.js` stamps it through `virtual:tender-bundle-kind` — and exactly one thing reads that: the start-up
+  failure page, whose sentence names a different program to update depending on whose copy of `@decky/ui` ran the search
+  that missed. Importing `@decky/ui` re-executes every module in Steam's live webpack registry, and **what makes a
+  second import fatal is a consumer already RENDERING from those modules — not the number of sweeps, and not Big
+  Picture.** Measured on the device: a second sweep on the desktop client survives; a third with Big Picture open and
+  the Quick Access view mounted survives; starting Decky into that same session survives; Big Picture plus Quick Access
+  plus Decky **already rendering** crashes with `Minified React error #31`, because a module re-executed underneath
+  something holding its exports leaves an empty object where a component was. Steam's own interface is not such a
+  consumer; Decky's is. That is why the pair exists and why a runtime `if` cannot replace it: the damage is done at
+  import, and ESM hoists the import above any set-up code in the same module. **`dist/globals.js` carries the same
+  sweep** — it imports `@decky/ui/dist/webpack`, whose `initModuleCache()` is unguarded at module scope — so the
+  short-circuit inside `installGlobals` protects nothing, and that bundle must not be loaded beside a running Decky
+  either. `pnpm -C frontend check:bundle` fails when either bundle stops being what it is; `pnpm build` alone would not.
+  Detail: [frontend-bundles.md](docs/architecture/frontend-bundles.md).
 - **Our three React globals must match Decky's EXACTLY, and the cost of a difference lands on Decky's users** —
   `frontend/src/boot/steamGlobals.ts` installs `SP_REACT`, `SP_REACTDOM` and `SP_JSX`, which Steam does not define and
   Decky's loader otherwise would. Decky skips its **entire** globals block when `SP_REACT` is already set, so when ours
@@ -641,11 +644,11 @@ Format: **invariant** — tier — enforced by.
 - **The standalone panel bundle carries `@decky/ui` and the coexistence one carries none of it** — check —
   `frontend/scripts/check-bundle-shape.mjs`, over the built artifact rather than a bundler setting (nine strings that
   exist only in the package's implementation, plus the `DFL.` read count, in both directions; the licence file the
-  standalone build owes is asserted there too). Both failures are silent in CI and land on a device: a standalone bundle
-  that lost the package throws on its first `DFL.` read where no `DFL` exists, and a coexistence bundle that gained it
-  re-executes the modules a rendering Decky is rendering FROM, and takes the Big Picture window down. **The check sees
-  the artefacts and not the decision**: which of the two the injector loads (#1900) is made nowhere in this tree, and
-  nothing here would notice the wrong one being served
+  standalone build owes and each bundle's own build stamp are asserted there too). Both failures are silent in CI and
+  land on a device: a standalone bundle that lost the package throws on its first `DFL.` read where no `DFL` exists, and
+  a coexistence bundle that gained it re-executes the modules a rendering Decky is rendering FROM, and takes the Big
+  Picture window down. **The check sees the artefacts and not the decision**: which of the two the injector loads
+  (#1900) is made nowhere in this tree, and nothing here would notice the wrong one being served
 - **Tender's three React globals are spelled exactly the way Decky Loader spells them** — test —
   `frontend/src/boot/steamGlobals.test.ts`, which reads `steamGlobals.ts` and the pinned `decky-globals-block.txt` as
   TEXT and compares the four search predicates, which global each answer is assigned to, and the JSX stand-in's keys and
@@ -660,6 +663,21 @@ Format: **invariant** — tier — enforced by.
   see is whether a classification is TRUE**: three names sit in the unverifiable list because they are wrappers the
   package always defines, and moving a real search there to quieten the check would pass green and leave the panel
   rendering a hole where the check reported everything resolved
+- **The start-up failure page names the copy of `@decky/ui` that actually ran the search that missed, and the repair
+  that follows from it** — check + test + prompt-only — the artefact's stamp is checked
+  (`frontend/scripts/check-bundle-shape.mjs`, per bundle and on `globals.js`, which must carry none), and the three
+  sentences are pinned in `frontend/src/boot/steamModules.test.ts` and `StartupFailurePanel.test.tsx` with both bundle
+  values exercised. **The join is prompt-only and spans four places**: `rollup.config.js` serves the stamp,
+  `boot/searchingCopy.ts` reads it and Decky's namespace, `boot/steamModules.ts` words it, and `index.tsx` resolves it
+  ONCE for the log line and the page — two resolutions could disagree with each other. The predicates belong to
+  `@decky/ui` and the coexistence bundle runs DECKY's copy, so a page that blamed Tender in both would send a user after
+  the wrong program while Decky's own interface and its other plugins broke beside it. Three quiet ways back: a runtime
+  probe instead of the stamp (`typeof DFL !== "undefined"` is true of a standalone bundle loaded beside a running
+  Decky), asking `in DFL` about a name `@decky/ui` never exported (`SP_*`, `ControllerGlyph` — a package disagreement
+  reported on every miss, which is what `SteamLookup.deckyUiExport` and its sweep-derived lock exist to prevent), and
+  reading an unreadable `DFL` as an absence rather than as nothing established. The version beside the name is an
+  enrichment only — `_versionInfo.current` is internal, guarded, and every sentence is complete without it; `remote`
+  beside it is the PUBLISHED version and is never consulted
 - **A coverage exclusion names a property of the code, never a place: every frontend-scoped entry stands in BOTH
   `frontend/vitest.config.ts`'s `coverage.exclude` and `sonar-project.properties`' `sonar.coverage.exclusions`, every
   file entry carries its reason as a `// coverage-exempt:` marker in the file's own first lines, and every marked file

@@ -64,6 +64,24 @@ const DECKY_UI_IMPLEMENTATION = [
 /** How many times *needle* occurs in *text*. */
 const count = (text, needle) => text.split(needle).length - 1;
 
+/**
+ * Which bundle a bundle says it is, read off the artefact.
+ *
+ * `rollup.config.js` serves `virtual:tender-bundle-kind` once per panel build
+ * with that build's own answer inside, and `src/boot/searchingCopy.ts` turns the
+ * answer into the sentence the start-up failure page prints — our copy of
+ * `@decky/ui` searched and missed, or Decky Loader's did. The stamp is asserted
+ * here because rollup answers an unresolved import with a WARNING and an
+ * external import: a build that lost the plugin would emit a bundle that throws
+ * on a device, having said nothing worse than a line nobody reads. A stamp that
+ * is simply the wrong one says nothing at all until a user is sent after the
+ * wrong program.
+ */
+const stampedKind = (text) => /const BUNDLE_KIND\w* = "(standalone|coexistence)";/.exec(text)?.[1] ?? null;
+
+/** How a wrong stamp reads in a finding — a stamp naming the other bundle, or none at all. */
+const stampSays = (kind) => (kind === null ? "carries no bundle stamp at all" : `says it is the ${kind} bundle`);
+
 /** How many of the implementation strings are in *text*. */
 const implementationHits = (text) => DECKY_UI_IMPLEMENTATION.filter((needle) => text.includes(needle));
 
@@ -131,9 +149,19 @@ const report = [];
   // `initModuleCache` is a word this repository also writes, and a probe our own
   // sources contain proves nothing about what reached the bundle.
   const sweep = "Ignoring require error for module";
-  report.push(`globals.js: ${Buffer.byteLength(source)} B, sweep ${source.includes(sweep) ? "present" : "ABSENT"}, ${dfl} DFL.`);
+  report.push(
+    `globals.js: ${Buffer.byteLength(source)} B, sweep ${source.includes(sweep) ? "present" : "ABSENT"}, ${dfl} DFL.`,
+  );
   if (!source.includes(sweep)) {
     findings.push("globals.js does not contain @decky/ui's module sweep — every search in it would answer undefined.");
+  }
+  // It is neither of the two panel bundles, so it has no answer to give and is
+  // built without the plugin that serves one.
+  if (stampedKind(source) !== null) {
+    findings.push(
+      `globals.js ${stampSays(stampedKind(source))}. It is the React bootstrap and carries no panel, so a stamp ` +
+        "there is an answer to a question nothing in it asks.",
+    );
   }
   if (dfl > 0) {
     findings.push(`globals.js reads DFL ${dfl} times — it runs where Decky has not, so nothing would answer.`);
@@ -145,9 +173,17 @@ const report = [];
   const source = read("index.js");
   const hits = implementationHits(source);
   const dfl = count(source, "DFL.");
+  const kind = stampedKind(source);
   report.push(
-    `index.js (standalone): ${Buffer.byteLength(source)} B, ${hits.length}/${DECKY_UI_IMPLEMENTATION.length} @decky/ui implementation strings, ${dfl} DFL.`,
+    `index.js (standalone): ${Buffer.byteLength(source)} B, ${hits.length}/${DECKY_UI_IMPLEMENTATION.length} @decky/ui implementation strings, ${dfl} DFL., stamped ${kind ?? "NOTHING"}`,
   );
+  if (kind !== "standalone") {
+    findings.push(
+      `index.js ${stampSays(kind)}. It carries its own @decky/ui, so its start-up failure page must send the user ` +
+        "after Tender; stamped the other way it names Decky Loader, whose copy ran none of these searches, and " +
+        "unstamped it fails on the first read.",
+    );
+  }
   const absent = DECKY_UI_IMPLEMENTATION.filter((needle) => !source.includes(needle));
   if (absent.length > 0) {
     findings.push(
@@ -168,9 +204,17 @@ const report = [];
   const source = read("index-coexistence.js");
   const hits = implementationHits(source);
   const dfl = count(source, "DFL.");
+  const kind = stampedKind(source);
   report.push(
-    `index-coexistence.js: ${Buffer.byteLength(source)} B, ${hits.length}/${DECKY_UI_IMPLEMENTATION.length} @decky/ui implementation strings, ${dfl} DFL.`,
+    `index-coexistence.js: ${Buffer.byteLength(source)} B, ${hits.length}/${DECKY_UI_IMPLEMENTATION.length} @decky/ui implementation strings, ${dfl} DFL., stamped ${kind ?? "NOTHING"}`,
   );
+  if (kind !== "coexistence") {
+    findings.push(
+      `index-coexistence.js ${stampSays(kind)}. Its searches are run by Decky Loader's copy of @decky/ui, so ` +
+        "stamped the other way its start-up failure page sends the user after Tender for a fault in Decky — which " +
+        "is breaking Decky's own interface and its other plugins at the same moment.",
+    );
+  }
   if (hits.length > 0) {
     findings.push(
       `index-coexistence.js carries ${hits.length} of @decky/ui's implementation strings, so a second copy of the ` +

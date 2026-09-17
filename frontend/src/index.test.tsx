@@ -37,6 +37,7 @@ import { recordSyncCreated, resetSyncDelta, getSyncDelta } from "./utils/syncDel
 import { resetSyncCancel } from "./utils/syncManager";
 import { beginPrunePreview, beginPruneRun, getPruneState, resetPruneState } from "./utils/pruneStore";
 import { mountPruneLeasePlugin, releaseAllPruneLeases } from "./utils/pruneLease";
+import type { StartupReport } from "./boot/steamModules";
 import type {
   DownloadCompleteEvent,
   DownloadProgressEvent,
@@ -56,7 +57,7 @@ import type {
 // sets it. It is a stand-in for the CHECK, never for the searches — what the
 // check itself reads is pinned in `boot/steamModules.test.ts`, where nothing is
 // stubbed away.
-let startupAnswer: { ok: boolean; missing: string[]; checked: number } = { ok: true, missing: [], checked: 27 };
+let startupAnswer: StartupReport = { ok: true, missing: [], missingPackageNames: [], checked: 27 };
 vi.mock("./boot/steamModules", async () => {
   const actual = await vi.importActual<typeof import("./boot/steamModules")>("./boot/steamModules");
   return { ...actual, checkSteamModules: () => startupAnswer };
@@ -201,7 +202,12 @@ beforeEach(() => {
 });
 
 describe("index.tsx — what the factory does when a Steam search found nothing", () => {
-  const failing = { ok: false, missing: ["Focusable", "PanelSection"], checked: 27 };
+  const failing: StartupReport = {
+    ok: false,
+    missing: ["Focusable", "PanelSection"],
+    missingPackageNames: ["Focusable", "PanelSection"],
+    checked: 27,
+  };
   // The refusal is logged on purpose, and the suite fails a test that emits an
   // unexpected `console.error` — so the spy both permits it and makes the line
   // an assertion rather than noise nobody reads.
@@ -214,7 +220,7 @@ describe("index.tsx — what the factory does when a Steam search found nothing"
 
   afterEach(() => {
     consoleError.mockRestore();
-    startupAnswer = { ok: true, missing: [], checked: 27 };
+    startupAnswer = { ok: true, missing: [], missingPackageNames: [], checked: 27 };
   });
 
   it("mounts the fallback page instead of the panel, and names what is missing", () => {

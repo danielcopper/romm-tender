@@ -94,6 +94,37 @@ const shipDeckyUiLicence = () => ({
   },
 });
 
+const BUNDLE_KIND_MODULE = "virtual:tender-bundle-kind";
+
+/**
+ * Tell a panel bundle which of the two it is.
+ *
+ * `src/boot/searchingCopy.ts` needs the answer to say whose copy of `@decky/ui`
+ * ran a search that came back empty — ours in the standalone bundle, Decky
+ * Loader's in the coexistence one — and the two repairs are different programs.
+ * It is a BUILD fact, so the build states it: a runtime probe would read
+ * `typeof DFL !== "undefined"`, which is also true of a standalone bundle loaded
+ * on a machine where Decky happens to be running, and the page would then credit
+ * Decky's copy with work our own copy did.
+ *
+ * A virtual module rather than `@rollup/plugin-replace`, which was the other
+ * candidate: it is one dependency fewer, and a build that lost this plugin
+ * cannot resolve the import at all, where a token left unreplaced would sit in
+ * the artefact as a free identifier and throw on a device. The React bootstrap
+ * build below deliberately does NOT carry it — it is neither of the two panel
+ * bundles, so it has no answer to give, and an import of the constant from
+ * there must fail rather than be stamped with a guess.
+ *
+ * `frontend/scripts/check-bundle-shape.mjs` asserts the stamp on each artefact,
+ * because rollup answers an unresolved import with a warning and an external
+ * import rather than with a failure.
+ */
+const stampBundleKind = (kind) => ({
+  name: "stamp-bundle-kind",
+  resolveId: (id) => (id === BUNDLE_KIND_MODULE ? `\0${BUNDLE_KIND_MODULE}` : null),
+  load: (id) => (id === `\0${BUNDLE_KIND_MODULE}` ? `export const BUNDLE_KIND = ${JSON.stringify(kind)};` : null),
+});
+
 const plugins = () => [
   typescript({ tsconfig: "./tsconfig.json" }),
   commonjs(),
@@ -108,11 +139,11 @@ const plugins = () => [
 // `output.exports` is deliberately absent. `@decky/rollup` set it to "default",
 // which Rollup ignores for `format: "esm"` — it applies to cjs/amd/umd/iife
 // only — so carrying it over would have looked like a decision and been a no-op.
-const build = ({ input, file, external, extraPlugins = [] }) => ({
+const build = ({ input, file, external, bundleKind, extraPlugins = [] }) => ({
   input,
   external,
   context: "window",
-  plugins: [...plugins(), ...extraPlugins],
+  plugins: [...(bundleKind ? [stampBundleKind(bundleKind)] : []), ...plugins(), ...extraPlugins],
   output: { file: `${OUT_DIR}/${file}`, format: "esm", sourcemap: false },
 });
 
@@ -145,6 +176,7 @@ export default [
     input: "./src/index.tsx",
     file: "index.js",
     external: Object.keys(STEAM_REACT_GLOBALS),
+    bundleKind: "standalone",
     extraPlugins: [shipDeckyUiLicence()],
   }),
 
@@ -169,6 +201,7 @@ export default [
     input: "./src/index.tsx",
     file: "index-coexistence.js",
     external: [...Object.keys(STEAM_REACT_GLOBALS), "@decky/ui"],
+    bundleKind: "coexistence",
     extraPlugins: [externalGlobals({ "@decky/ui": "DFL" })],
   }),
 ];
