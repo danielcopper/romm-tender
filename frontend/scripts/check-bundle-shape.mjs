@@ -181,7 +181,7 @@ const report = [];
     findings.push(
       `index.js ${stampSays(kind)}. It carries its own @decky/ui, so its start-up failure page must send the user ` +
         "after Tender; stamped the other way it names Decky Loader, whose copy ran none of these searches, and " +
-        "unstamped it fails on the first read.",
+        "unstamped it carries a bare import of a module no browser can resolve and never loads at all.",
     );
   }
   const absent = DECKY_UI_IMPLEMENTATION.filter((needle) => !source.includes(needle));

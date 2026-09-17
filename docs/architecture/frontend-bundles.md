@@ -114,24 +114,40 @@ means something more basic than a stale predicate: the React bootstrap never ran
 before it was complete — neither is `@decky/ui`'s doing, so that one answer is the same in both bundles. The page uses
 no `@decky/ui`, because a page built out of searches is the wrong thing to render when a search has missed.
 
-**Some of them missing has three answers, not one, because the predicates are not always ours.** They belong to
+**Some of them missing has four answers, not one, because the predicates are not always ours.** Most belong to
 `@decky/ui`, and the coexistence bundle runs Decky Loader's copy of it. `frontend/src/boot/searchingCopy.ts` decides
-which of the three the page prints, from the build's own stamp and one reading of Decky's namespace:
+whose copy ran them, from the build's own stamp and one reading of Decky's namespace; `describeFailure` words it:
 
-| Bundle      | What was read                | What the page says                                                                                                                      |
-| ----------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| standalone  | —                            | Tender's own copy searched and missed. **Update Tender.**                                                                               |
-| coexistence | the name is **in** `DFL`     | Decky's copy searched and missed — its own interface and its other plugins are affected the same way. **Update Decky Loader.**          |
-| coexistence | the name is **not in** `DFL` | Decky's copy does not carry the export: the two programs disagree about the package rather than about Steam. **Bring both to current.** |
+| Bundle      | What was read                      | What the page says                                                                                                                      |
+| ----------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| either      | no missed name is a package export | Neither copy of `@decky/ui` ran these searches. **No repair is named** — see below.                                                     |
+| standalone  | —                                  | Tender's own copy searched and missed. **Update Tender.**                                                                               |
+| coexistence | the name is **in** `DFL`           | Decky's copy searched and missed — its own interface and its other plugins are affected the same way. **Update Decky Loader.**          |
+| coexistence | the name is **not in** `DFL`       | Decky's copy does not carry the export: the two programs disagree about the package rather than about Steam. **Bring both to current.** |
+
+The first row is asked first and is about neither copy. Four of the names checked are not `@decky/ui` lookups at all —
+the three `SP_*` globals, which a React bootstrap installs, and `ControllerGlyph`, which `utils/deckyUiInternals.ts`
+reaches with a predicate of its own — so a miss confined to those belongs to no copy of the package, and a sentence
+naming one sends the user after a program that did nothing. In the coexistence bundle that program is Decky's. The
+answer stops there rather than going on to say whose fault it is: which program installed the React globals on a machine
+running both is [#1900](https://github.com/danielcopper/romm-tender/issues/1900)'s question, and the page may not decide
+it in a sentence. `SP_REACTDOM` and `ControllerGlyph` are the two that can actually reach this state — `SP_REACT` and
+`SP_JSX` are read while the panel bundle is being evaluated, so with either unset the bundle throws at import and the
+check never runs.
 
 `window.DFL` is an ESM module namespace object, so `in` is what discriminates — measured on the device against Decky
-v3.2.8, where `"DialogButton" in DFL` is true and a generated non-existent name is false. Only the names `@decky/ui`
-exports are asked about: the three `SP_*` globals come from the React bootstrap and `ControllerGlyph` from a predicate
-of our own, so a Decky in perfect step with us carries none of them, and asking would report a package disagreement on
-every miss. Every missed name of the ones that remain is asked, and one absent name is enough for the third answer — a
-name Decky's copy does not export is a demonstrated fact about the two installs, where a name it exports with an empty
-value is one more stale predicate, and the repair the third answer names covers both. Where there is no `DFL` to
-question at all, nothing is claimed — an absence has to be demonstrated.
+v3.2.8, where `"DialogButton" in DFL` is true and a generated non-existent name is false. It is put only about the names
+that get past the row above — the package's own exports — because a Decky in perfect step with us carries none of the
+other four, and asking would report a package disagreement on every miss. Those names are asked one at a time and the
+first absent one settles it: one absent name is enough for the last answer, so the rest are never put. A name Decky's
+copy does not export is a demonstrated fact about the two installs, where a name it exports with an empty value is one
+more stale predicate, and the repair the last answer names covers both.
+
+Every part of that reading is guarded and every guard falls the same way: no `DFL` to question, a `DFL` whose read
+throws, a name the question itself throws on — none of them claims anything. An absence has to be demonstrated, and a
+throw demonstrates nothing. The guards are not decoration: `definePlugin`'s factory reads this before it returns
+anything, so a throw would take the failure page and the log line with it and leave exactly the blank panel the check
+exists to tell apart from a backend that is not running.
 
 Decky's version enriches the sentence and is never required for it. It is read from
 `DeckyPluginLoader.deckyState._versionInfo.current`, an internal field behind an underscore, and a newer Decky renaming

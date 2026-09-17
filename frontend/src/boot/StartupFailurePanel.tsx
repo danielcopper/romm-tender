@@ -18,9 +18,13 @@
  * one repair that follows, and where to report it. It does not try to work out
  * which Steam update did it, or to carry on with the parts that still resolve.
  *
- * Whose copy that is arrives as a prop rather than being read here: it is the
- * answer to a question about the machine (`searchingCopy.ts`), and a page that
- * reads the machine while rendering cannot be shown either answer by a test.
+ * Whose copy that is arrives as a prop rather than being read here. The machine
+ * is not what would stand in the way — `searchingCopy.test.ts` sets
+ * `window.DFL` and `window.DeckyPluginLoader` freely. The BUILD is: the answer
+ * turns on `virtual:tender-bundle-kind` (`searchingCopy.ts`), which resolves
+ * under Vitest through one alias to one value for the whole suite, so a page
+ * that read it while rendering could be shown Tender's answer and never
+ * Decky's.
  */
 
 import type { CSSProperties, FC } from "react";

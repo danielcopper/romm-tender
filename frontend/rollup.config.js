@@ -108,16 +108,19 @@ const BUNDLE_KIND_MODULE = "virtual:tender-bundle-kind";
  * Decky's copy with work our own copy did.
  *
  * A virtual module rather than `@rollup/plugin-replace`, which was the other
- * candidate: it is one dependency fewer, and a build that lost this plugin
- * cannot resolve the import at all, where a token left unreplaced would sit in
- * the artefact as a free identifier and throw on a device. The React bootstrap
- * build below deliberately does NOT carry it — it is neither of the two panel
- * bundles, so it has no answer to give, and an import of the constant from
- * there must fail rather than be stamped with a guess.
+ * candidate: it is one dependency fewer, and a build that lost this plugin SAYS
+ * SO. Measured against rollup 4.63.1, such a build exits 0 and emits the
+ * artefact — but it prints `(!) Unresolved dependencies` and leaves the bare
+ * `import { BUNDLE_KIND } from "virtual:tender-bundle-kind"` standing at the top
+ * of it, where a token left unreplaced is a free identifier nothing says a word
+ * about. Both break on a device, and the difference is that one of them is
+ * visible before it gets there. The React bootstrap build below deliberately
+ * does NOT carry the plugin — it is neither of the two panel bundles, so it has
+ * no answer to give, and nothing in its import graph asks for one.
  *
  * `frontend/scripts/check-bundle-shape.mjs` asserts the stamp on each artefact,
- * because rollup answers an unresolved import with a warning and an external
- * import rather than with a failure.
+ * because a warning rollup prints and an exit code of 0 is not what stops a
+ * wrong bundle from shipping.
  */
 const stampBundleKind = (kind) => ({
   name: "stamp-bundle-kind",

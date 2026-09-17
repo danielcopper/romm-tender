@@ -133,8 +133,9 @@ The three files `pnpm -C frontend build` produces, and the names to use for them
 
 The two panel bundles differ in exactly one thing and are told apart by NAME — nothing inside either is read to choose
 between them. Which one is loaded is the injector's decision and is made nowhere in this tree yet. Each does carry a
-build-time stamp of which of the two it IS, and exactly one thing reads it: the start-up check's fallback page, which
-has to name the copy of `@decky/ui` that ran a search that missed.
+build-time stamp of which of the two it IS, read in one place — `frontend/src/boot/searchingCopy.ts` — to name the copy
+of `@decky/ui` that ran a search that missed. That answer is printed twice: on the start-up check's fallback page and in
+the log line beside it.
 
 _Avoid_: **DFL build** / **bundled build** — both name the mechanism rather than the situation, and the situation is
 what the choice turns on. Avoid **the bundle** unqualified once more than one exists. Avoid calling the React bootstrap
@@ -155,6 +156,10 @@ coexistence bundle runs Decky Loader's rather than ours. It gives SOME three ans
 searched and missed (update Tender); Decky's copy searched and missed (update Decky Loader, whose own interface and
 other plugins are affected the same way); or Decky's copy does not export a name Tender asks it for, which is the two
 programs disagreeing about the package rather than about Steam (bring both to current).
+
+Asked before all three: four of the names checked are not `@decky/ui` lookups at all — the three `SP_*` React globals
+and `ControllerGlyph`, which Tender reaches with a predicate of its own — so a miss confined to those belongs to NO copy
+of the package and the page names none, and no repair.
 
 _Avoid_: **health check** — it asks one question at one moment and is not a recurring probe. Avoid **degraded mode**:
 there is no such mode, and inventing one is the thing the check exists to refuse.

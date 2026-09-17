@@ -62,7 +62,8 @@ names to tell them apart. The name is the whole of the SELECTION mechanism: noth
 choose it, and no runtime probe decides anything.
 
 Each panel bundle is nevertheless stamped by its own build with which of the two it is, and that is a consequence of the
-pair rather than a qualification of the sentence above. The one thing that reads the stamp is the start-up failure page:
+pair rather than a qualification of the sentence above. The stamp is read in one place,
+`frontend/src/boot/searchingCopy.ts`, and what it answers reaches the start-up failure page and the log line beside it:
 the searches that can go stale are `@decky/ui`'s, the coexistence bundle runs Decky Loader's copy of the package, and so
 the same empty search means "update Tender" in one bundle and "update Decky" in the other. The stamp carries no loading
 decision, and a runtime probe could not carry this one either — `typeof DFL !== "undefined"` is equally true of a
