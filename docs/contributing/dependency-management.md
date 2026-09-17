@@ -47,25 +47,32 @@ everything is green.
 
 ## Ceilings — versions deliberately held back
 
-Two Python dev tools are capped tighter than "next major", because the next release is known-breaking:
+One Python dev tool is capped tighter than "next major", because the next release is known-breaking:
 
-| Dep              | Ceiling | Why                                                                                                   |
-| ---------------- | ------- | ----------------------------------------------------------------------------------------------------- |
-| `pytest-asyncio` | `<1.4`  | 1.4 changed event-loop semantics ([#806](https://github.com/danielcopper/decky-romm-sync/issues/806)) |
-| `ruff`           | `<0.16` | 0.x minors ship new lint rules (breaking)                                                             |
+| Dep    | Ceiling | Why                                       |
+| ------ | ------- | ----------------------------------------- |
+| `ruff` | `<0.16` | 0.x minors ship new lint rules (breaking) |
 
 The ceiling lives in `requirements-dev.txt`. Renovate's `rangeStrategy: update-lockfile` refreshes the lock _within_ the
 range, but it does **not** stop a range-widening PR when a newer version is _above_ the ceiling — so `renovate.json`
-also carries an `allowedVersions` cap for each of these two deps to keep Renovate from proposing the raise at all.
+also carries an `allowedVersions` cap for that dep to keep Renovate from proposing the raise at all.
 
-**Heads up — these two ceilings are duplicated:** the `<1.4` / `<0.16` caps exist in **both** `requirements-dev.txt` and
-`renovate.json` (`allowedVersions`). If you deliberately raise a ceiling, change it in **both** places (the
-`renovate.json` rules are commented `KEEP IN SYNC`). This is the only version duplication Renovate forces on us.
+**Heads up — this ceiling is duplicated:** the `<0.16` cap exists in **both** `requirements-dev.txt` and `renovate.json`
+(`allowedVersions`). If you deliberately raise it, change it in **both** places (the `renovate.json` rule is commented
+`KEEP IN SYNC`). This is the only version duplication Renovate forces on us.
+
+**A ceiling that is no longer needed is removed from both, too.** `pytest-asyncio` was held `<1.4` until
+[#1886](https://github.com/danielcopper/romm-tender/pull/1886) rewrote the suite to stop relying on the implicit
+thread-default event loop that 1.4 removed; the constraint in `requirements-dev.txt` went back to a plain next-major
+`<2.0` but the `allowedVersions` cap and this table's row were left behind, so Renovate kept refusing an upgrade the
+suite had already absorbed. Dropping a ceiling is the same two-place edit as raising one.
 
 ## Bumping by hand
 
 - **Toolchain** (`mise.toml`): edit the pin, then update every coupled copy in the same commit — `frontend/package.json`
   `packageManager` for pnpm, the workflow `setup-*` inputs for python/uv/node/deno. Run `mise install` to pick it up.
 - **A Python ceiling**: raise the `<X` in the `.txt` source, raise the matching `allowedVersions` in `renovate.json`,
-  run `mise run lock-update`, commit together.
+  run `mise run lock-update`, commit together. Dropping one is the same edit in reverse — widen the `.txt` constraint
+  **and** delete the `renovate.json` rule **and** its row in the table above, or Renovate keeps enforcing a cap the
+  source no longer states.
 - **Python locks** after any `.txt` source edit: `mise run lock-update` (the `check_lock_sync` CI gate enforces this).
