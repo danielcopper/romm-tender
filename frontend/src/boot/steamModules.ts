@@ -30,7 +30,7 @@
  * codebase where `WidePage.tsx` already draws `‹ Back` in its place. So each
  * entry states what its absence costs ({@link SteamLookup.absenceCost}), the
  * panel mounts when nothing that missed was needed to render it, and
- * {@link describeCosmeticMiss} puts the miss in the log, which is then the only
+ * {@link describeSurvivedMiss} puts the miss in the log, which is then the only
  * thing that says so.
  *
  * ## What this file can and cannot see
@@ -91,16 +91,20 @@ import type { SearchingCopy } from "./searchingCopy";
  *
  * Moving a name off `panel` is what needs evidence, one name at a time: its
  * every consumer, read, and found either to cope with the absence or to be a
- * diagnostic. The last two are not interchangeable and the difference reaches a
- * reader: calling a diagnostic-only name `appearance` would put "Tender only
- * looks poorer" in the log over a miss that changes nothing drawn. Neither
- * keeps the panel off the air, which is what the check asks separately
+ * diagnostic. **Nothing in the program branches on the difference between the
+ * last two** — `checkSteamModules`'s `!== "panel"` is the only reading of this
+ * field there is — so what the value records today is WHY a name was moved off
+ * blocking, not an answer anything consults. They are kept apart because they
+ * are different questions, and a name that answered the wrong one would be
+ * hard to catch later: a decoration whose absence a reader can see is not a
+ * name whose absence nothing renders at all. Neither keeps the panel off the
+ * air, which is what the check asks separately
  * ({@link StartupReport.panelMayMount}).
  *
  * Nothing derives this. The type is the mechanism — the field is required, so a
  * new entry does not compile until somebody answers — and what
  * `steamModules.test.ts` holds is not the set but the property the log sentence
- * rests on ({@link describeCosmeticMiss}).
+ * rests on ({@link describeSurvivedMiss}).
  */
 export type AbsenceCost = "panel" | "appearance" | "diagnostic";
 
@@ -221,24 +225,44 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   { name: "findSP", found: () => findSP() !== undefined, deckyUiExport: true, absenceCost: "panel" },
 
   // The class maps and the glyph, which `deckyUiInternals.ts` already types
-  // honestly. A missing class map does not throw — it styles nothing. Three of
-  // the five are not styling at all, though, but names for Steam's own nodes:
-  // `appDetailsClasses.InnerContainer` is the mark
-  // `bigpicture/patches/gameDetailPatch.tsx` finds the game page by,
-  // `quickAccessMenuClasses.TabGroupPanel` builds the DOM selector
-  // `utils/qamExpansion.ts` walks the panel by (with `ActiveTab` read beside
-  // it), and `basicAppDetailsSectionStylerClasses.PlaySection` is what
-  // `utils/styleInjector.ts` writes a rule against to hide Steam's own play
-  // section, so without it that section stays on screen beside ours.
+  // honestly. A missing class map does not throw — every read of one is
+  // optional-chained. What the absence COSTS differs per member, and swept
+  // across every non-test module under `frontend/src/` the five maps are not
+  // one kind; two of them carry both kinds at once.
+  //
+  // Some members style a node of OURS, where a miss leaves our own box no
+  // longer matching Steam's: `appActionButtonClasses` throughout
+  // `bigpicture/CustomPlayButton.tsx`,
+  // `appDetailsClasses.AppDetailsOverviewPanel` on the wrapper
+  // `bigpicture/patches/gameDetailPatch.tsx:231` inserts, and
+  // `basicAppDetailsSectionStylerClasses.PlaySection` on our own row
+  // (`bigpicture/RomMPlaySection.tsx:1048`).
+  //
+  // Others name a node of STEAM's, where a miss is a search that finds
+  // nothing: `appDetailsClasses.InnerContainer` is the mark
+  // `gameDetailPatch.tsx:88` finds the game page by, and that same
+  // `PlaySection` is what `CustomPlayButton.tsx:220` hands
+  // `utils/styleInjector.ts` to hide Steam's own play section with, so without
+  // it that section stays on screen beside ours.
+  //
+  // `quickAccessMenuClasses` is in neither list, and its two members differ:
+  // `TabGroupPanel` is read only inside the stylesheet `utils/qamExpansion.ts`
+  // injects and falls back to a panel-id selector without it, while `ActiveTab`
+  // is the read with no fallback — the class that file's DOM walk tests the
+  // active tab by (`qamExpansion.ts:32-40` and `:175`, the distinction stated
+  // at the first).
   truthy("appActionButtonClasses", "panel", () => appActionButtonClasses),
   truthy("appDetailsClasses", "panel", () => appDetailsClasses),
   truthy("basicAppDetailsSectionStylerClasses", "panel", () => basicAppDetailsSectionStylerClasses),
-  // The one name nothing acts on. All three of its reads are inside `dumpTree`,
-  // a debug dump that runs at most once per load, and the dump already copes:
-  // one line prints `UNDEFINED` where the class name would go and the search it
-  // guards is simply not attempted. It is still a `@decky/ui` export, which is
-  // what separates it from the glyph below — in the coexistence bundle the
-  // search behind it is DECKY's, so its repair is not Tender's to name.
+  // The one name nothing acts on, and the only one of the five maps that
+  // styles nothing at all. Its single read in the program is inside `dumpTree`
+  // (`gameDetailPatch.tsx:133`), a debug dump that runs at most once per load,
+  // and the dump already copes: one line prints `UNDEFINED` where the class
+  // name would go and the search it guards is simply not attempted. The two
+  // lines below that read the local, not the binding. It is a `@decky/ui`
+  // export, which is what separates it from the glyph below — in the
+  // coexistence bundle the search behind it is DECKY's, so its repair is not
+  // Tender's to name.
   truthy("playSectionClasses", "diagnostic", () => playSectionClasses),
   truthy("quickAccessMenuClasses", "panel", () => quickAccessMenuClasses),
   // `@decky/ui` does not export the controller glyph at all —
@@ -305,9 +329,9 @@ export interface StartupReport {
    * May the panel mount?
    *
    * `true` while nothing that missed was needed to render it — including when
-   * nothing missed at all. `false` is the fallback page: a name the pages below are
-   * written against is not there, and a half-working panel acts on what it
-   * cannot see.
+   * nothing missed at all. `false` is the fallback page: a name the pages
+   * below are written against is not there, and a half-working panel acts on
+   * what it cannot see.
    */
   readonly panelMayMount: boolean;
   /** The names that did not, in the order they are checked. */
@@ -343,47 +367,101 @@ export function checkSteamModules(lookups: readonly SteamLookup[] = STEAM_LOOKUP
 }
 
 /**
+ * Which copy of `@decky/ui` the missed searches belong to — the one verdict,
+ * worded separately by the page and by the log line.
+ *
+ * - `none` — nothing that missed is a name the package exports, so neither
+ *   copy ran any of them.
+ * - `tender` — our own bundled copy ran them.
+ * - `disagreement` — Decky's copy does not carry a name Tender asks it for:
+ *   two separately installed programs disagreeing about the package.
+ * - `mixed` — some of what missed is the package's and some is not, so what
+ *   missed does not settle which program went stale.
+ * - `decky` — every missed search is one Decky Loader's copy ran, and that
+ *   copy carries all of them.
+ *
+ * **Both surfaces read this rather than deciding for themselves.** They used to
+ * branch on the same facts twice, and the copies had already drifted apart: the
+ * log had the `mixed` case and the page did not, so on the page a missed
+ * `SP_REACTDOM` beside any `@decky/ui` name fell through to `decky` and told
+ * the user Decky's copy had run searches Decky ran none of. A verdict two
+ * surfaces word is a verdict they cannot answer differently.
+ *
+ * **The order is a precedence, not a tally**, and two of the five turn on it.
+ * `none` is asked first because {@link STEAM_LOOKUPS} carries names `@decky/ui`
+ * does not export at all ({@link SteamLookup.deckyUiExport}) — the three React
+ * globals and the glyph — and a miss confined to those belongs to no copy of
+ * the package. `disagreement` is asked before `mixed` because it is
+ * DEMONSTRATED where the others are inferred: a name Decky's copy does not
+ * export is a fact about the two installs, while a name it exports with an
+ * empty value is one more stale predicate. Its repair covers whatever else went
+ * stale beside it, since bringing the pair to current updates both programs —
+ * which is why the sentence for it must not claim the disagreement is the whole
+ * of what happened.
+ */
+export const SEARCH_OWNERS = ["none", "tender", "disagreement", "mixed", "decky"] as const;
+
+/** One of {@link SEARCH_OWNERS}, which states what each answer means. */
+export type SearchOwner = (typeof SEARCH_OWNERS)[number];
+
+/** Read the verdict off one report and one reading of the machine. */
+export function searchOwner(report: StartupReport, copy: SearchingCopy): SearchOwner {
+  if (report.missingPackageNames.length === 0) return "none";
+  if (copy.owner === "tender") return "tender";
+  if (!copy.carriesEveryName) return "disagreement";
+  if (report.missingPackageNames.length < report.missing.length) return "mixed";
+  return "decky";
+}
+
+/**
+ * Decky Loader, named with the version it is running where that could be read.
+ *
+ * Every sentence below is complete without the version, which is why the
+ * unreadable case is the bare name rather than a missing one: `_versionInfo` is
+ * another program's internal and a newer Decky renaming it is exactly the skew
+ * being diagnosed (`searchingCopy.ts`). A copy that is not Decky's has no
+ * version to read and answers the bare name too; the branches that word one are
+ * the only ones that ask.
+ */
+const deckyName = (copy: SearchingCopy): string =>
+  copy.owner === "decky" && copy.version !== null ? `Decky Loader ${copy.version}` : "Decky Loader";
+
+/**
  * The one sentence that leads to a repair, for the page that replaces the panel.
  *
  * Asked only where the panel may not mount, which is the moment that page
- * exists for; a miss that costs appearance alone is worded by
- * {@link describeCosmeticMiss} instead, in the log.
+ * exists for; a miss the panel survives is worded by
+ * {@link describeSurvivedMiss} instead, in the log.
  *
  * All of them missing is not "many predicates broke at once" — it is the
  * globals bundle never having run, or Steam's registry having been read before
  * it was complete. That answer is about the bootstrap rather than about either
  * copy of `@decky/ui`, so the searching copy does not enter it.
  *
- * Some of them missing is a stale predicate, and then WHOSE predicate decides
- * the repair: our own bundled copy, Decky Loader's copy (which is also breaking
- * Decky's interface and its other plugins at that moment), or a Decky copy that
- * does not carry the name at all, which is a disagreement about the package
- * rather than about Steam. `searchingCopy.ts` decides which; this words it.
+ * Some of them missing is a stale predicate, and then whose predicate decides
+ * the repair: {@link searchOwner} answers that, and this words each of its five
+ * answers for a user who is looking at a page instead of a panel.
  *
- * Unless none of what missed is a search either copy ran. {@link STEAM_LOOKUPS}
- * carries names `@decky/ui` does not export — the three React globals and the
- * glyph, marked by {@link SteamLookup.deckyUiExport} — and a miss confined to
- * those belongs to no copy of the package, so the sentence names none.
- *
- * It names no repair either, and for the globals there is none to offer: which
+ * Two of the five stay silent about a repair — `none` about the whole of what
+ * missed, `mixed` about part of it — and the reason is the same in both.
+ * {@link STEAM_LOOKUPS} carries names `@decky/ui` does not export, and for the
+ * three React globals among them there is no repair to offer: which
  * program installed them on a machine running both is #1900's question and not
  * one this page may decide — and in the standalone bundle, having that answer
- * would not settle it anyway: a missing `SP_REACTDOM` there is `globals.js`
- * never having run or the ReactDOM predicate in `steamGlobals.ts` having gone
- * stale, a load-order fault and a version fault behind one symptom with
- * different repairs.
+ * would not settle it anyway, since a missing `SP_REACTDOM` there is
+ * `globals.js` never having run or the ReactDOM predicate in `steamGlobals.ts`
+ * having gone stale, a load-order fault and a version fault behind one symptom
+ * with different repairs. So `none` names no repair at all, and `mixed` names
+ * one for the package's share of the miss and stays silent about the rest.
  *
  * `ControllerGlyph` can appear in that silence too, and there it is a real loss
  * — `utils/deckyUiInternals.ts` reaches it with a `findModule` predicate of OURS
  * in both bundles, so a newer Tender is its repair, and keying the branch on
- * whose COPY ran the search cannot say so. What it costs is now bounded: the
- * glyph reaches this page only ALONGSIDE a global, whose silence is right
- * anyway, because on its own it no longer brings the page up at all. Its own
- * sentence is printed by {@link describeCosmeticMiss}.
+ * whose COPY ran the search cannot say so. What it costs is bounded: the glyph
+ * reaches this page only ALONGSIDE a global, whose silence is right anyway,
+ * because on its own it no longer brings the page up at all. Its own sentence
+ * is printed by {@link describeSurvivedMiss}.
  */
-/** Decky Loader, named with the version it is running where that could be read. */
-const deckyName = (version: string | null): string => (version === null ? "Decky Loader" : `Decky Loader ${version}`);
-
 export function describeFailure(report: StartupReport, copy: SearchingCopy): string {
   if (report.panelMayMount) return "";
   if (report.missing.length === report.checked) {
@@ -394,32 +472,40 @@ export function describeFailure(report: StartupReport, copy: SearchingCopy): str
     );
   }
   const scale = `${report.missing.length} of ${report.checked} searches into Steam's interface found nothing. `;
-  if (report.missingPackageNames.length === 0) {
-    return scale + "None of them is a name @decky/ui exports, so neither copy of the package ran them.";
+  const decky = deckyName(copy);
+  switch (searchOwner(report, copy)) {
+    case "none":
+      return scale + "None of them is a name @decky/ui exports, so neither copy of the package ran them.";
+    case "tender":
+      return (
+        scale +
+        "Tender's own copy of @decky/ui ran them, so a Steam client update has moved what " +
+        "this version of Tender looks for. A newer Tender is the repair."
+      );
+    case "disagreement":
+      return (
+        scale +
+        `Tender reads them from ${decky}'s copy of @decky/ui, and that copy does not carry ` +
+        "some of the names Tender asks it for — two separately installed programs disagreeing " +
+        "about the package, whatever else went stale beside it. Bringing both Tender and Decky " +
+        "Loader to their current versions is the repair."
+      );
+    case "mixed":
+      return (
+        scale +
+        `${decky}'s copy of @decky/ui ran some of them, not Tender's own, so a Steam client ` +
+        "update has moved what Decky looks for — Decky's own interface and its other plugins " +
+        "are affected the same way, and a newer Decky Loader is the repair for those. The rest " +
+        "are not names @decky/ui exports, so neither copy of the package ran them."
+      );
+    case "decky":
+      return (
+        scale +
+        `${decky}'s copy of @decky/ui ran them, not Tender's own, so a Steam client update has ` +
+        "moved what Decky looks for — Decky's own interface and its other plugins are affected " +
+        "the same way. A newer Decky Loader is the repair."
+      );
   }
-  if (copy.owner === "tender") {
-    return (
-      scale +
-      "Tender's own copy of @decky/ui ran them, so a Steam client update has moved what " +
-      "this version of Tender looks for. A newer Tender is the repair."
-    );
-  }
-  const decky = deckyName(copy.version);
-  if (!copy.carriesEveryName) {
-    return (
-      scale +
-      `Tender reads them from ${decky}'s copy of @decky/ui, and that copy does not carry ` +
-      "some of the names Tender asks it for — the two disagree about the package rather " +
-      "than about Steam. Bringing both Tender and Decky Loader to their current versions " +
-      "is the repair."
-    );
-  }
-  return (
-    scale +
-    `${decky}'s copy of @decky/ui ran them, not Tender's own, so a Steam client update has ` +
-    "moved what Decky looks for — Decky's own interface and its other plugins are affected " +
-    "the same way. A newer Decky Loader is the repair."
-  );
 }
 
 /**
@@ -430,24 +516,24 @@ export function describeFailure(report: StartupReport, copy: SearchingCopy): str
  * whoever is asked why a button lost its glyph, or why a debug dump prints
  * `UNDEFINED` where a class name belongs.
  *
- * It answers the same question the page answers — whose copy of `@decky/ui` ran
- * the search — rather than naming a repair of its own. It used to name one
- * unconditionally ("a newer Tender"), which was sound only while nothing that
- * could arrive here was a name the package exports. `playSectionClasses` can
- * now, and in the coexistence bundle the search behind it is DECKY's, so that
- * sentence would have sent the user after the wrong program.
+ * It answers the same question the page answers — {@link searchOwner}'s, read
+ * from the same verdict — rather than naming a repair of its own. It used to
+ * name one unconditionally ("a newer Tender"), which was sound only while
+ * nothing that could arrive here was a name the package exports.
+ * `playSectionClasses` can now, and in the coexistence bundle the search behind
+ * it is DECKY's, so that sentence would have sent the user after the wrong
+ * program.
  *
- * Where what missed spans both kinds it names neither alone. The one answer
- * this line can give that the page cannot is the opposite case: nothing that
- * missed is a name `@decky/ui` exports, so every one of them is a search Tender
- * runs with a module probe of its own and a newer Tender is the repair. The
- * page has to stay silent there because the three React globals reach it, and
- * which program installed those on a machine running both is #1900's question.
- * They cannot reach HERE — their absence costs the panel — and that is the
- * property `steamModules.test.ts` holds, rather than the short set of names it
- * happens to produce today.
+ * The one answer this line can give that the page cannot is `none`: nothing
+ * that missed is a name `@decky/ui` exports, so every one of them is a search
+ * Tender runs with a module probe of its own and a newer Tender is the repair.
+ * The page has to stay silent there because the three React globals reach it,
+ * and which program installed those on a machine running both is #1900's
+ * question. They cannot reach HERE — their absence costs the panel — and that
+ * is the property `steamModules.test.ts` holds, rather than the short set of
+ * names it happens to produce today.
  */
-export function describeCosmeticMiss(report: StartupReport, copy: SearchingCopy): string {
+export function describeSurvivedMiss(report: StartupReport, copy: SearchingCopy): string {
   if (report.everySearchAnswered || !report.panelMayMount) return "";
   return (
     `${report.missing.length} of ${report.checked} searches into Steam's interface found nothing. ` +
@@ -456,31 +542,30 @@ export function describeCosmeticMiss(report: StartupReport, copy: SearchingCopy)
   );
 }
 
-/** Whose searches missed, and the repair that follows — for {@link describeCosmeticMiss}. */
+/** Whose searches missed, and the repair that follows — for {@link describeSurvivedMiss}. */
 function describeSurvivedSearches(report: StartupReport, copy: SearchingCopy): string {
-  if (report.missingPackageNames.length === 0) {
-    return "None of them is a name @decky/ui exports — Tender runs these searches itself, so a newer Tender is the repair.";
+  const decky = deckyName(copy);
+  switch (searchOwner(report, copy)) {
+    case "none":
+      return "None of them is a name @decky/ui exports — Tender runs these searches itself, so a newer Tender is the repair.";
+    case "tender":
+      return "Tender ran these searches, so a newer Tender is the repair.";
+    case "disagreement":
+      return (
+        `${decky}'s copy of @decky/ui does not carry some of the names Tender asks it for — two ` +
+        "separately installed programs disagreeing about the package, whatever else went stale " +
+        "beside it. Bringing both Tender and Decky Loader to their current versions is the repair."
+      );
+    case "mixed":
+      return (
+        `Tender ran some of them itself and ${decky}'s copy of @decky/ui the rest, so which of the ` +
+        "two went stale is not settled by what missed. Bringing both Tender and Decky Loader to " +
+        "their current versions is the repair."
+      );
+    case "decky":
+      return (
+        `${decky}'s copy of @decky/ui ran them, not Tender's own, so a newer Decky Loader is the ` +
+        "repair — Decky's own interface and its other plugins are affected the same way."
+      );
   }
-  if (copy.owner === "tender") {
-    return "Tender ran these searches, so a newer Tender is the repair.";
-  }
-  const decky = deckyName(copy.version);
-  if (!copy.carriesEveryName) {
-    return (
-      `${decky}'s copy of @decky/ui does not carry some of the names Tender asks it for — the ` +
-      "two disagree about the package rather than about Steam. Bringing both Tender and Decky " +
-      "Loader to their current versions is the repair."
-    );
-  }
-  if (report.missingPackageNames.length < report.missing.length) {
-    return (
-      `Tender ran some of them itself and ${decky}'s copy of @decky/ui the rest, so which of the ` +
-      "two went stale is not settled by what missed. Bringing both Tender and Decky Loader to " +
-      "their current versions is the repair."
-    );
-  }
-  return (
-    `${decky}'s copy of @decky/ui ran them, not Tender's own, so a newer Decky Loader is the ` +
-    "repair — Decky's own interface and its other plugins are affected the same way."
-  );
 }

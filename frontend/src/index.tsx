@@ -5,7 +5,7 @@ import { Focusable } from "@decky/ui";
 import { FaGamepad } from "react-icons/fa";
 import { StartupFailurePanel } from "./boot/StartupFailurePanel";
 import { readSearchingCopy } from "./boot/searchingCopy";
-import { checkSteamModules, describeCosmeticMiss, describeFailure } from "./boot/steamModules";
+import { checkSteamModules, describeFailure, describeSurvivedMiss } from "./boot/steamModules";
 import { MainPage } from "./bigpicture/MainPage";
 import { SettingsPage } from "./bigpicture/SettingsPage";
 import { LibraryPage } from "./bigpicture/LibraryPage";
@@ -369,9 +369,11 @@ export default definePlugin(() => {
   // resolve: a half-working panel acts on what it cannot see, and nothing below
   // is written to run without the components it was written against.
   //
-  // Unless what missed costs appearance alone, which the check answers for
+  // Unless the panel survives what missed, which the check answers for
   // separately: taking the whole interface off the air for a decoration the one
-  // place that draws it already renders without is the opposite trade.
+  // place that draws it already renders without — or for a name only a debug
+  // dump reads, which already prints `UNDEFINED` in its place — is the opposite
+  // trade.
   const startup = checkSteamModules();
   if (!startup.everySearchAnswered) {
     // Whose copy of `@decky/ui` ran the missed searches is read once, here, and
@@ -390,8 +392,9 @@ export default definePlugin(() => {
     }
     // The panel mounts, so nothing on screen reports this: the log line is the
     // whole record, and the next reader of it is whoever is asked why a button
-    // lost its glyph.
-    console.warn(`[${PLUGIN_NAME}] ${describeCosmeticMiss(startup, copy)} Missing: ${startup.missing.join(", ")}`);
+    // lost its glyph, or why a debug dump prints `UNDEFINED` where a class name
+    // belongs.
+    console.warn(`[${PLUGIN_NAME}] ${describeSurvivedMiss(startup, copy)} Missing: ${startup.missing.join(", ")}`);
   }
 
   mountPruneLeasePlugin();
