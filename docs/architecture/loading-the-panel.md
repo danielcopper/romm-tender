@@ -130,8 +130,35 @@ answers a different question — see CONTEXT.md → Load-failure card for why th
 
 **It never takes the machine over.** Whether Steam's controller focus can reach a node appended to its document from
 outside its own React tree is not established here, so the card is built so that the answer does not matter: it is drawn
-with `pointer-events: none` everywhere except its dismiss button, and every control underneath stays reachable whatever
-happens to the button. A fixed overlay that swallowed input would be worse than the fault it reports.
+with `pointer-events: none` everywhere except its one button, and every control underneath stays reachable whatever
+happens to that button. A fixed overlay that swallowed input would be worse than the fault it reports.
+
+### One button, and an address in plain text
+
+The card carries exactly one action — **Stop trying until Tender restarts** — and the releases address as text.
+
+The button reaches this process through a **debugger binding** (`Runtime.addBinding`), which is the whole of the card's
+way back: the card holds no token, opens no socket of its own, and the backend grows no route for it. Pressed, it sends
+one word, the injector stops loading anything into Steam for the rest of this process, and the card is taken off the
+screen. "Restart" there means **this backend's own process** — not Steam, not the machine — and the card says so under
+the button, because that is the word a reader is most likely to get wrong.
+
+Two properties of the binding decide where it is installed:
+
+- It goes on **before** the source that may draw the card is evaluated, so the button is wired from the moment it
+  exists. Whether it is drawn at all is the injector's answer: `Runtime.addBinding` is asked first, and a refusal is
+  carried into the card as "no button", because a button that cannot report a press is worse here than none.
+- It is **re-installed on every injection** rather than once per attachment. Whether a binding survives a JS-context
+  rebuild is not established here; adding one that survived costs a round trip, and missing one costs the card its only
+  button.
+
+`Runtime.bindingCalled` is a Runtime-domain event, so it arrives only while that domain is enabled — and enabling it
+turns on every other Runtime event for that connection. So it is enabled **only once a card is up**: after a load that
+failed, where the card is the only thing left to act on, and never on the path where the panel came up.
+
+**Checking for an update is text rather than a button**, because nothing in this program updates itself yet and no way
+to open a web page out of Steam's UI has been measured here. It becomes a button in the cut that gives it something to
+do ([#1903](https://github.com/danielcopper/romm-tender/issues/1903)).
 
 ## The token
 

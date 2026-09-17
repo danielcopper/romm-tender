@@ -90,8 +90,15 @@ bundle into the same context for ever.
 
 **The load-failure card may not take the machine over.** Whether Steam's controller focus reaches a node appended to its
 document from outside its React tree is not established here, so the card is built so that it does not matter: drawn
-`pointer-events: none` everywhere except its dismiss button, which keeps every control underneath reachable whatever
-happens to the button. A full-screen overlay here would be worse than the fault it reports.
+`pointer-events: none` everywhere except its one button, which keeps every control underneath reachable whatever happens
+to that button. A full-screen overlay here would be worse than the fault it reports.
+
+**That button's only way back is a debugger binding, and the domain it needs is enabled only when a card exists.**
+`Runtime.addBinding` goes on before the source that may draw the card is evaluated and is re-installed on every
+injection, because whether a binding survives a JS-context rebuild is not established here. `Runtime.enable` is what
+makes a press arrive — and it turns on every other Runtime event for that connection — so it is called only after a load
+that failed, never on the path where the panel came up. A refused binding is carried into the card as "no button": a
+button that cannot report a press is worse on that card than none.
 
 Which bundles are loaded, and the record that stops the injection when it takes the interface down, are in the invariant
 register — they span more than this package.

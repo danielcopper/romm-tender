@@ -205,6 +205,11 @@ The small card the injected expression draws into Steam's own document when the 
 version, Steam's build, the log path, where releases are listed, and the reason the import gave. Plain nodes and inline
 styles: it uses neither React nor `@decky/ui`, because its own subject is that those may be exactly what is missing.
 
+It carries **one action** — stop trying until Tender restarts — which reaches the backend through a **debugger binding**
+and nothing else, and takes the card off the screen. The restart meant there is the **backend's own process**, the same
+way back the crash state has. Checking for an update is an address printed as text rather than an action, because
+nothing in this program updates itself yet.
+
 **It is not the start-up check's fallback page** and the two are never called by the same name. The fallback page is a
 React component rendered INSIDE a panel that did mount, when a search into Steam's interface came back empty; this card
 exists because nothing mounted at all. The issue that asked for it called it a fallback page, which is the wording this
