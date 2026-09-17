@@ -119,8 +119,9 @@ class RommHttpAdapter:
         instead of raising into callers, several of which (the synchronous
         game-detail builder) have no surrounding guard.
         """
-        # Check plugin root first (Decky-packaged installs carry defaults/
-        # contents flattened there), then defaults/ (dev deploys via mise run deploy)
+        # Check the program root first (a Decky-packaged install carried
+        # defaults/ contents flattened there), then defaults/, which is where
+        # this repo keeps them
         root_path = os.path.join(self._plugin_dir, "config.json")
         dev_path = os.path.join(self._plugin_dir, "defaults", "config.json")
         config_path = root_path if os.path.exists(root_path) else dev_path

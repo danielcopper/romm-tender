@@ -191,7 +191,7 @@ def _list_targets() -> list[dict[str, Any]]:
     except (URLError, OSError, ValueError) as e:
         raise DevUiScaleError(
             f"no CEF debugger on {_DEBUGGER_URL} ({e}). Is Big Picture running? "
-            "Start the dev loop with `mise run dev:watch`. If Steam is up but the endpoint "
+            "Open one with `mise run dev:bpm`. If Steam is up but the endpoint "
             "is dead, ~/.steam/steam/.cef-enable-remote-debugging is missing (create it and "
             "restart Steam)."
         ) from e
@@ -926,7 +926,7 @@ def _set_scale(factor: float | None) -> None:
     if ws_url is None:
         raise DevUiScaleError(
             f"no {_SHARED_JS_CONTEXT} debug target on {_DEBUGGER_URL}. Is Big Picture running? "
-            "Start the dev loop with `mise run dev:watch`."
+            "Open one with `mise run dev:bpm`."
         )
     if factor is None:
         expression = "(() => { SteamClient.Window.SetGamepadUIAutoDisplayScale(true); return 'auto'; })()"

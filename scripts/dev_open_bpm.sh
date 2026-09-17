@@ -2,7 +2,7 @@
 # Open desktop Big Picture and place its window on a chosen monitor.
 #
 # Part of the frontend dev loop (docs/contributing/frontend-dev-loop.md);
-# called by the `dev:watch` / `dev:bpm-reset` mise tasks, usable standalone.
+# called by the `dev:bpm` / `dev:bpm-reset` mise tasks, usable standalone.
 #
 # Usage:
 #   dev_open_bpm.sh [target]        open BPM, place the window on <target>
