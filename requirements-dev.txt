@@ -1,6 +1,7 @@
 pytest>=9.1.1,<10.0
 pytest-asyncio>=1.3.0,<2.0
 pytest-cov>=7.1.0,<8.0
+pytest-timeout>=2.4.0,<3.0  # bounds a single test so a hang fails by name instead of running out the CI job's clock (#1936)
 hypothesis>=6.155.7,<7.0  # property-based tests for the save-sync decision kernels (#1028)
 ruff>=0.15.20,<0.16
 basedpyright>=1.39.9,<2.0

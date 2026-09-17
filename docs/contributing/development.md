@@ -311,6 +311,14 @@ the SonarCloud scan and its `sonar-gate` (they need `SONAR_TOKEN` and the CI cov
 - **basedpyright** — Type checking in CI. Checks all source files including the test suite (tests/ is not excluded).
 - **import-linter** — Layer boundary enforcement in CI (see Linting section above).
 - **pytest-cov** — Branch coverage reported to SonarCloud.
+- **pytest-timeout** — Bounds a single test at 60 s (`timeout` in `pytest.ini`), so a test that blocks fails by name
+  instead of running the CI job out of its `timeout-minutes: 15` with nothing to say which test it was. The rest of the
+  session still runs: the default `signal` method raises inside the test rather than killing the process. **The
+  traceback is only as sharp as the block is synchronous** — a test stuck in `sleep` or a blocking `recv()` points at
+  that line, while one stuck on an `await` points into the event loop's own `select()`, so the test name is the part to
+  read there. The bound is roughly ten times the slowest honest test, so only something genuinely stuck reaches it — a
+  test that legitimately waits longer raises its own with `@pytest.mark.timeout(<seconds>)` rather than the default
+  being lifted for everyone.
 
 ## Where the coding conventions live
 

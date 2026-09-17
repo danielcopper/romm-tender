@@ -35,9 +35,12 @@ pytest==9.1.1
     #   -r requirements-dev.txt
     #   pytest-asyncio
     #   pytest-cov
+    #   pytest-timeout
 pytest-asyncio==1.4.0
     # via -r requirements-dev.txt
 pytest-cov==7.1.0
+    # via -r requirements-dev.txt
+pytest-timeout==2.4.0
     # via -r requirements-dev.txt
 rich==15.0.0
     # via import-linter
