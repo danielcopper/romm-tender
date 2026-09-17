@@ -225,42 +225,33 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   { name: "findSP", found: () => findSP() !== undefined, deckyUiExport: true, absenceCost: "panel" },
 
   // The class maps and the glyph, which `deckyUiInternals.ts` already types
-  // honestly. A missing class map does not throw — every read of one is
-  // optional-chained. What the absence COSTS differs per member, and swept
-  // across every non-test module under `frontend/src/` the five maps are not
-  // one kind; two of them carry both kinds at once.
+  // honestly. A missing class map does not throw: every read is either
+  // optional-chained or guarded by one that is — `qamExpansion.ts:39` is a
+  // plain member read, reached only from the true arm of line 38's `?.` test.
   //
-  // Some members style a node of OURS, where a miss leaves our own box no
-  // longer matching Steam's: `appActionButtonClasses` throughout
-  // `bigpicture/CustomPlayButton.tsx`,
-  // `appDetailsClasses.AppDetailsOverviewPanel` on the wrapper
-  // `bigpicture/patches/gameDetailPatch.tsx:231` inserts, and
-  // `basicAppDetailsSectionStylerClasses.PlaySection` on our own row
-  // (`bigpicture/RomMPlaySection.tsx:1048`).
+  // What the absence costs is per map and is a table rather than a paragraph,
+  // because a paragraph is summarised and a cell is checked. Every row below
+  // was swept from every non-test module under `frontend/src/`; the enclosing
+  // function is named because two of the maps do different things at different
+  // reads, and a cell that named only the file would hide that.
   //
-  // Others name a node of STEAM's, where a miss is a search that finds
-  // nothing: `appDetailsClasses.InnerContainer` is the mark
-  // `gameDetailPatch.tsx:88` finds the game page by, and that same
-  // `PlaySection` is what `CustomPlayButton.tsx:220` hands
-  // `utils/styleInjector.ts` to hide Steam's own play section with, so without
-  // it that section stays on screen beside ours.
+  // | Map | Read at | Falls back to | What its absence costs |
+  // | --- | --- | --- | --- |
+  // | `appActionButtonClasses` | every button branch of `CustomPlayButton` (`bigpicture/CustomPlayButton.tsx:1426-1860`), for `PlayButtonContainer` / `PlayButton` / `Green` / `Throbber` | the class is simply absent — dropped from the list (`.filter(Boolean)`), replaced by `""`, or left undefined where it is the whole of the prop | our own play and download buttons keep their shape and lose Steam's, so a box of ours no longer matches the ones beside it |
+  // | `appDetailsClasses` | `InnerContainer` in `findInsertionPoint` (`bigpicture/patches/gameDetailPatch.tsx:88`); `AppDetailsOverviewPanel` in the patch handler `registerGameDetailPatch` installs (`:231`, and its debug line `:242`) | `findInsertionPoint` returns `undefined`; the wrapper takes `""` | `InnerContainer` is a mark on a node of STEAM's, so without it the handler finds no insertion point and returns the tree untouched — no Tender section on the game page at all. Without `AppDetailsOverviewPanel` the wrapper is still inserted, outside `InnerContainer`'s flex and scroll layout |
+  // | `basicAppDetailsSectionStylerClasses` | `PlaySection` in an unnamed `useEffect` of `CustomPlayButton` (`CustomPlayButton.tsx:220`) and on our own row in `RomMPlaySection` (`bigpicture/RomMPlaySection.tsx:1048`); also `dumpTree` (`gameDetailPatch.tsx:145-154`) | the effect does not call `hideNativePlaySection`; the row takes `""`; the dump prints `UNDEFINED` | the same member is both kinds at once: it names a node of Steam's for the hide, so Steam's own play section stays on screen beside ours, and a node of ours for the row's styling |
+  // | `playSectionClasses` | `Container` in `dumpTree` alone (`gameDetailPatch.tsx:133-141`) | the dump prints `UNDEFINED` and skips the tree search it guards | one line of a debug dump that runs at most once per load names no class. Nothing a user can see |
+  // | `quickAccessMenuClasses` | `TabGroupPanel` at module scope (`utils/qamExpansion.ts:38-40`), read into the selectors of the injected sheet (`:92-93`); `ActiveTab` in `useWideQamPanel`'s effect (`:175`) | `TAB_PANEL_SELECTOR` becomes `PANEL_ID_SELECTOR`, the panel's id; `deckyTabActive` defaults to true (`:182`, the default argued at `:178-181`) and the `MutationObserver` guarded at `:191` is never constructed | the sheet matches the panel by id instead of by class, and the expansion is taken whether or not Decky's tab is the active one and is not re-synced on a tab switch — a leaked expansion the QAM-close, unmount and dismount paths still clear |
   //
-  // `quickAccessMenuClasses` is in neither list, and its two members differ:
-  // `TabGroupPanel` is read only inside the stylesheet `utils/qamExpansion.ts`
-  // injects and falls back to a panel-id selector without it, while `ActiveTab`
-  // is the read with no fallback — the class that file's DOM walk tests the
-  // active tab by (`qamExpansion.ts:32-40` and `:175`, the distinction stated
-  // at the first).
+  // Every map but `playSectionClasses` blocks the panel, and that is the status
+  // quo rather than a reading of the table: see {@link AbsenceCost} for what
+  // moving one off it takes.
   truthy("appActionButtonClasses", "panel", () => appActionButtonClasses),
   truthy("appDetailsClasses", "panel", () => appDetailsClasses),
   truthy("basicAppDetailsSectionStylerClasses", "panel", () => basicAppDetailsSectionStylerClasses),
-  // The one name nothing acts on, and the only one of the five maps that
-  // styles nothing at all. Its single read in the program is inside `dumpTree`
-  // (`gameDetailPatch.tsx:133`), a debug dump that runs at most once per load,
-  // and the dump already copes: one line prints `UNDEFINED` where the class
-  // name would go and the search it guards is simply not attempted. The two
-  // lines below that read the local, not the binding. It is a `@decky/ui`
-  // export, which is what separates it from the glyph below — in the
+  // The only one of the five maps that styles nothing at all — the table above
+  // has its reads and what they cost. What is not in the table: it is a
+  // `@decky/ui` export, which is what separates it from the glyph below. In the
   // coexistence bundle the search behind it is DECKY's, so its repair is not
   // Tender's to name.
   truthy("playSectionClasses", "diagnostic", () => playSectionClasses),
