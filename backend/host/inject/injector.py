@@ -341,6 +341,11 @@ class PanelInjector:
         # window is the ordinary way that arrives — it is what a Steam restart
         # produces — and a real crash is unaffected, because the check that saw
         # it marks its reading taken and the record stays open for this call.
+        #
+        # Below the readiness wait rather than above it, for the same reason in
+        # the other direction: that wait can end in a return, and answering
+        # above it would throw the last injection's pending verdict away for an
+        # injection that never happened.
         await self._abandon_alive_check()
 
         fingerprint = await self._fingerprint(choice.files)
@@ -412,9 +417,12 @@ class PanelInjector:
                 await connection.call("Runtime.enable")
         except (CdpUnavailableError, TimeoutError) as exc:
             # The one state this design calls worse than no button: it is drawn,
-            # because the binding went on, and a press reaches nothing. Nothing
-            # here can take it back — the card was drawn by an evaluate that has
-            # already returned — so the log is what says so, and it names the
+            # because the binding went on, and a press reaches nothing. Taking
+            # the button back is POSSIBLE — ``Runtime.evaluate`` needs no enabled
+            # domain, which is why every other evaluate here works without one —
+            # and it is not worth doing: a second round trip on a connection
+            # this very refusal suggests is going, to reach a card that keeps no
+            # handle for one to find. So the log says it instead, and names the
             # way out, which is not inside Steam either.
             self._logger.warning(
                 f"inject: the load-failure card is up and its button cannot reach this backend ({exc}); pressing it "

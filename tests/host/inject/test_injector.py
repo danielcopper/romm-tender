@@ -435,6 +435,28 @@ class TestDidTheInterfaceSurviveIt:
 
         assert running.watchdog_record().get("failures") == 0
 
+    async def test_a_connection_lost_before_the_check_exists_is_closed_by_the_next_attempt(self, injecting):
+        """The record is armed, the connection goes, and no check was ever made.
+
+        ``CdpConnectionLost`` escapes the install of the card's callback, which
+        catches only the two refusals, so the attachment ends with an armed
+        record and nothing to answer for it. What closes it is the reattach's own
+        answer, before it reads one — and read unanswered it is a crash that
+        never happened.
+        """
+        running = await injecting(
+            targets=[FakeTarget(id=RENDERER, title="SharedJSContext"), FakeTarget(id="bpm", title="Big Picture")],
+            hold="Runtime.addBinding",
+        )
+        await wait_until(lambda: running.watchdog_record().get("open") is True)
+
+        await running.debugger.drop_connections()
+        running.debugger.hold_method = ""
+        running.debugger.held.set()
+
+        await wait_until(lambda: running.page.bootstraps)
+        assert running.watchdog_record().get("failures") == 0
+
     async def test_a_shutdown_before_the_check_even_exists_closes_the_record(self, injecting):
         """The record is armed a moment before the check that answers for it exists."""
         running = await injecting(
