@@ -145,13 +145,13 @@ whose copy ran them, from the build's own stamp and one reading of Decky's names
 `searchOwner` turns that into ONE verdict, which `describeFailure` words for the page and `describeSurvivedMiss` for the
 log line:
 
-| Verdict        | Bundle      | What was read                             | What the page says                                                                                                                          |
-| -------------- | ----------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `none`         | either      | no missed name is a package export        | Neither copy of `@decky/ui` ran these searches. **No repair is named** — see below.                                                         |
-| `tender`       | standalone  | —                                         | Tender's own copy searched and missed. **Update Tender.**                                                                                   |
-| `disagreement` | coexistence | a missed name is **not in** `DFL`         | Decky's copy does not carry the export: two separately installed programs disagreeing about the package. **Bring both to current.**         |
-| `mixed`        | coexistence | some missed names are not package exports | Decky's copy ran **some** of them and missed — update Decky Loader for those; the rest are not `@decky/ui` names, so neither copy ran them. |
-| `decky`        | coexistence | every missed name is **in** `DFL`         | Decky's copy searched and missed — its own interface and its other plugins are affected the same way. **Update Decky Loader.**              |
+| Verdict        | Bundle      | What was read                                                                         | What the page says                                                                                                                          |
+| -------------- | ----------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `none`         | either      | no missed name is a package export                                                    | Neither copy of `@decky/ui` ran these searches. **No repair is named** — see below.                                                         |
+| `tender`       | standalone  | —                                                                                     | Tender's own copy searched and missed. **Update Tender.**                                                                                   |
+| `disagreement` | coexistence | a missed name is **not in** `DFL`                                                     | Decky's copy does not carry the export: two separately installed programs disagreeing about the package. **Bring both to current.**         |
+| `mixed`        | coexistence | some missed names are not package exports, and Decky's copy carries every one that is | Decky's copy ran **some** of them and missed — update Decky Loader for those; the rest are not `@decky/ui` names, so neither copy ran them. |
+| `decky`        | coexistence | every missed name is **in** `DFL`                                                     | Decky's copy searched and missed — its own interface and its other plugins are affected the same way. **Update Decky Loader.**              |
 
 **The verdict is read once and worded twice**, rather than branched at each surface. The page and the log line answer
 the same question about the same machine, and when they each decided it for themselves the copies drifted: the log line
@@ -159,10 +159,18 @@ had the `mixed` case and the page did not, so a missed `SP_REACTDOM` beside any 
 and told the user Decky's copy had run searches Decky ran none of.
 
 **The order is a precedence, not a tally**, and `disagreement` is asked before `mixed` on purpose: a name Decky's copy
-does not export is demonstrated, where "which of the two went stale" is inferred, and bringing the pair to current
-repairs whatever else went stale beside it. That is why its sentence does not claim the disagreement is the whole of
-what happened. `frontend/src/boot/steamModules.test.ts` pins the precedence and the join — every verdict must reach a
-distinct sentence on each surface, so a case one of them loses is reported rather than absorbed by its neighbour.
+does not export is a fact about the two installs, where a name it exports with an empty value is a search result whose
+cause — Steam having moved what the predicate looks for — is inferred; and bringing the pair to current repairs whatever
+else went stale beside it. That is why its sentence does not claim the disagreement is the whole of what happened.
+`frontend/src/boot/steamModules.test.ts` pins the precedence and the join — every verdict must reach a distinct sentence
+on each surface, so a case one of them loses is reported rather than absorbed by its neighbour.
+
+`mixed` settles both halves rather than neither, and its sentences say so. Decky's copy carries every name asked of it
+and its searches for them still came back empty, so that copy is demonstrated stale in every `mixed` reading on either
+surface. What the REST demonstrates is where the two surfaces part, and the locked property above is what decides it: a
+non-blocking name the package does not export must be one Tender probes for itself, so on the log line the rest is
+always Tender's own probe and that line names both programs. On the page it may be an `SP_*` global instead, which
+belongs to no copy and has no repair to name, so the page names Decky's and stops there.
 
 The `none` row is asked first and is about neither copy. Four of the names checked are not `@decky/ui` lookups at all —
 the three `SP_*` globals, which a React bootstrap installs, and `ControllerGlyph`, which `utils/deckyUiInternals.ts`

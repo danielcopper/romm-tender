@@ -366,8 +366,11 @@ export function checkSteamModules(lookups: readonly SteamLookup[] = STEAM_LOOKUP
  * - `tender` — our own bundled copy ran them.
  * - `disagreement` — Decky's copy does not carry a name Tender asks it for:
  *   two separately installed programs disagreeing about the package.
- * - `mixed` — some of what missed is the package's and some is not, so what
- *   missed does not settle which program went stale.
+ * - `mixed` — some of what missed is the package's and some is not. Decky's
+ *   copy carries every name asked of it and its searches for them still came
+ *   back empty, so it is demonstrated stale; who the REST implicates depends on
+ *   which name it is, and the two surfaces are not in the same position about
+ *   that (see {@link describeFailure} and {@link describeSurvivedMiss}).
  * - `decky` — every missed search is one Decky Loader's copy ran, and that
  *   copy carries all of them.
  *
@@ -378,24 +381,38 @@ export function checkSteamModules(lookups: readonly SteamLookup[] = STEAM_LOOKUP
  * the user Decky's copy had run searches Decky ran none of. A verdict two
  * surfaces word is a verdict they cannot answer differently.
  *
- * **The order is a precedence, not a tally**, and two of the five turn on it.
- * `none` is asked first because {@link STEAM_LOOKUPS} carries names `@decky/ui`
- * does not export at all ({@link SteamLookup.deckyUiExport}) — the three React
- * globals and the glyph — and a miss confined to those belongs to no copy of
- * the package. `disagreement` is asked before `mixed` because it is
- * DEMONSTRATED where the others are inferred: a name Decky's copy does not
- * export is a fact about the two installs, while a name it exports with an
- * empty value is one more stale predicate. Its repair covers whatever else went
- * stale beside it, since bringing the pair to current updates both programs —
- * which is why the sentence for it must not claim the disagreement is the whole
- * of what happened.
+ * The ORDER these are asked in is {@link searchOwner}'s, and is stated there:
+ * this list is a vocabulary and nothing reads its order.
  */
 export const SEARCH_OWNERS = ["none", "tender", "disagreement", "mixed", "decky"] as const;
 
 /** One of {@link SEARCH_OWNERS}, which states what each answer means. */
 export type SearchOwner = (typeof SEARCH_OWNERS)[number];
 
-/** Read the verdict off one report and one reading of the machine. */
+/**
+ * Read the verdict off one report and one reading of the machine.
+ *
+ * **The chain below is a precedence, not a tally**: each line answers only what
+ * the ones above it did not, so moving any of them changes what it answers.
+ * Two of the orderings are decisions rather than consequences of the shapes.
+ *
+ * `none` is asked first because {@link STEAM_LOOKUPS} carries names `@decky/ui`
+ * does not export at all ({@link SteamLookup.deckyUiExport}) — the three React
+ * globals and the glyph — and a miss confined to those belongs to no copy of
+ * the package, so no line below may name one.
+ *
+ * `disagreement` is asked before `mixed` because a name Decky's copy does not
+ * export is a fact about the two INSTALLS, where a name it exports with an
+ * empty value is a search result whose cause — Steam having moved what the
+ * predicate looks for — is inferred. Its repair covers whatever else went stale
+ * beside it, since bringing the pair to current updates both programs, which is
+ * why the sentence for it must not claim the disagreement is the whole of what
+ * happened.
+ *
+ * The third ordering is the type's rather than this function's: only the
+ * `decky` arm of {@link SearchingCopy} carries `carriesEveryName` at all, so
+ * `tender` is answered before anything reads that field.
+ */
 export function searchOwner(report: StartupReport, copy: SearchingCopy): SearchOwner {
   if (report.missingPackageNames.length === 0) return "none";
   if (copy.owner === "tender") return "tender";
@@ -549,9 +566,9 @@ function describeSurvivedSearches(report: StartupReport, copy: SearchingCopy): s
       );
     case "mixed":
       return (
-        `Tender ran some of them itself and ${decky}'s copy of @decky/ui the rest, so which of the ` +
-        "two went stale is not settled by what missed. Bringing both Tender and Decky Loader to " +
-        "their current versions is the repair."
+        `Tender ran some of them itself and ${decky}'s copy of @decky/ui the rest, so both went ` +
+        "stale: a probe of Tender's own missed, and so did a search Decky's copy ran. Bringing " +
+        "both Tender and Decky Loader to their current versions is the repair."
       );
     case "decky":
       return (

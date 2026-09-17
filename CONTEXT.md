@@ -166,11 +166,13 @@ coexistence bundle runs Decky Loader's rather than ours. It is read ONCE per sta
 what stops the page and the log line from answering it differently. It gives SOME four answers instead of one — Tender's
 own copy searched and missed (update Tender); Decky's copy searched and missed (update Decky Loader, whose own interface
 and other plugins are affected the same way); Decky's copy does not export a name Tender asks it for, which is two
-separately installed programs disagreeing about the package (bring both to current); or what missed spans both kinds, so
-what missed does not settle which program went stale. The **package disagreement** is asked before the mixed answer
-because it is demonstrated where the other is inferred.
+separately installed programs disagreeing about the package (bring both to current); or what missed spans both kinds,
+which still settles Decky's copy — it carries every name asked of it and its searches for them came back empty all the
+same — and leaves the rest to whichever kind of name that is. The **package disagreement** is asked before the mixed
+answer because a name Decky's copy does not export is a fact about the two installs, where a name it exports with an
+empty value is a search result whose cause is inferred.
 
-Asked before all four: four of the names checked are not `@decky/ui` lookups at all — the three `SP_*` React globals and
+Asked before them all: four of the names checked are not `@decky/ui` lookups at all — the three `SP_*` React globals and
 `ControllerGlyph`, which Tender reaches with a predicate of its own — so a miss confined to those belongs to NO copy of
 the package and names none. The **fallback page** then names no repair either, because a global can be among them and
 who installed it on a machine running both programs is not this page's to decide. The log line is not in that position:

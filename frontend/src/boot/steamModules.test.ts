@@ -344,6 +344,12 @@ describe("what a miss costs the panel", () => {
     const sentence = describeSurvivedMiss(report, theirs(report));
     expect(sentence).toContain("2 of 3 searches into Steam's interface found nothing");
     expect(sentence).toContain("Tender ran some of them itself and Decky Loader v3.2.8's copy of @decky/ui the rest");
+    // What missed settles BOTH halves rather than neither: Decky's copy carries
+    // every name asked of it and its search still came back empty, and a probe
+    // Tender runs itself missed beside it. The line used to call that unsettled.
+    expect(sentence).toContain(
+      "so both went stale: a probe of Tender's own missed, and so did a search Decky's copy ran",
+    );
     expect(sentence).toContain("Bringing both Tender and Decky Loader to their current versions is the repair.");
     expect(sentence).not.toContain("ran them, not Tender's own");
     expect(sentence).not.toContain("a newer Tender is the repair");
@@ -363,10 +369,12 @@ describe("what a miss costs the panel", () => {
   it("calls a mixed miss a package disagreement when Decky's copy lacks one of the names", () => {
     // The precedence between the two answers, which nothing else pins: this
     // miss is both — one search of Tender's own and one of the package's — AND
-    // Decky's copy cannot account for the package's. A disagreement is
-    // DEMONSTRATED where "which of the two went stale" is inferred, so it wins,
-    // and its repair covers the other half anyway. Swap the two branches and
-    // this reads "not settled by what missed" over a fact that settles it.
+    // Decky's copy cannot account for the package's. A name Decky's copy does
+    // not export is a fact about the two installs, where a name it exports with
+    // an empty value is a search result whose cause is inferred, so the
+    // disagreement wins and its repair covers the other half anyway. Swap the
+    // two branches and this reads "so did a search Decky's copy ran" over a
+    // name Decky's copy never carried.
     const report = checkSteamModules([
       blocking("Focusable", true),
       cosmetic("ControllerGlyph", false),
