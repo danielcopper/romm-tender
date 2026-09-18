@@ -15,10 +15,13 @@ python3 build.py --install
 ```
 
 That renders everything and writes every shipped copy from the same render, so no two copies of one asset can drift
-apart. Needs `rsvg-convert` and `ffmpeg` on PATH, and — for the tab glyph alone — the frontend package's `prettier`,
-which the generated file is handed to before it is installed, so the repository's own formatting does not rewrite it
-afterwards. Without `--install` it writes to `out/` instead, which is the way to look at a change before it lands. Each
-of `--static`, `--gif` and `--tab-icon` narrows the run to itself, and `--install` then copies only what that run built.
+apart. Needs `rsvg-convert` and `ffmpeg` on PATH, and — for the tab glyph alone — the frontend package's `prettier`.
+**The installed glyph still needs formatting afterwards**: the build hands the copy in `out/` to prettier, but what
+lands in `frontend/src/` is unformatted, so `scripts/check_generated_tab_icon.py` rejects it until
+`prettier --write frontend/src/qam/tabIconArt.ts` has run — which the commit hook does anyway, and which is why nobody
+noticed until the check existed. Without `--install` it writes to `out/` instead, which is the way to look at a change
+before it lands. Each of `--static`, `--gif` and `--tab-icon` narrows the run to itself, and `--install` then copies
+only what that run built.
 
 | File                                                      | Where it goes                                        |
 | --------------------------------------------------------- | ---------------------------------------------------- |
@@ -32,10 +35,10 @@ of `--static`, `--gif` and `--tab-icon` narrows the run to itself, and `--instal
 | `tab-icon-art.ts`                                         | `frontend/src/qam/tabIconArt.ts` — the QAM tab glyph |
 
 The tab glyph is the one output that is not an image. Steam's Quick Access tab strip takes a React node rather than a
-file, so the glyph ships as generated TypeScript the panel draws from — which is what lets it ask for `currentColor` the
-way its neighbours in the strip do, and carry its fold as animation data. `tab-icon.svg` is written beside it and
-installed nowhere: it is the resting pose as a file, for looking at a change without opening Steam. What the glyph is
-and how it animates is `docs/architecture/qam-panel.md`; what it departs from, and why, is at `tabicon.STRIP_GEOMETRY`.
+file, so the glyph ships as generated TypeScript the panel draws from — which is what lets it ask for `currentColor` at
+all, and carry its fold as animation data. `tab-icon.svg` is written beside it and installed nowhere: it is the resting
+pose as a file, for looking at a change without opening Steam. What the glyph is and how it animates is
+`docs/architecture/qam-panel.md`; what it departs from, and why, is at `tabicon.STRIP_GEOMETRY`.
 
 Everything else ships twice except the lockup and `store_image.png`, which land once. The lockup is the README's banner,
 and the docs site draws its own header from the bare mark; nothing renders `store_image.png` at all, so `assets/` is the

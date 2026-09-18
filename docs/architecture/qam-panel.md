@@ -77,14 +77,17 @@ each is a way to get this wrong:
 
 **An already-mounted menu is adopted rather than waited for.** React flattens the renderer's `memo` wrapper at mount and
 carries the resolved type on the fiber, so swapping the module's export afterwards reaches nothing already on screen.
-That is React's own behaviour rather than `@decky/ui`'s, which supplies the patcher and not the flattening. Without the
-adoption the entry still arrives, at the menu's next remount. Decky adopts for the same reason.
+That is React's own behaviour rather than `@decky/ui`'s, which supplies the patcher and not the flattening, and #1897
+confirmed the consequence on the device — the patched renderer's own handler was never entered. Without the adoption the
+entry would arrive at the menu's next remount, which follows from what a remount does rather than from an observation.
+Decky adopts for the same reason.
 
 ### The glyph
 
 The mark reduced for the strip: no disc, one tone, the sync ring levelled, and the body as the D-pad cross. The strip
-carries single-tone free-standing glyphs — a bell, friends, a cog, a bolt, a note, a question mark, and Decky's plug —
-so a filled disc would be the only solid body in the row.
+carries nothing but single-tone free-standing glyphs — read off a screenshot rather than measured on the device — a
+bell, friends, a cog, a bolt, a note, a question mark, and Decky's plug — so a filled disc would be the only solid body
+in the row.
 
 It is **generated**, by `scripts/logo/tabicon.py` through `build.py --tab-icon`, into `frontend/src/qam/tabIconArt.ts`;
 the geometry comes from the mark's own drawing routines, so the two cannot drift. Its departures from the mark's

@@ -10,7 +10,8 @@
  * The flag the first lever sets is Steam's own and global, so whoever sets it
  * clears it: a wide page that leaks it leaves Steam's QAM expanded until the
  * Friends tab toggles it back. `useWideQamPanel` covers the three paths a
- * mounted page can observe; `collapseQamOnDismount` is the fourth.
+ * mounted page can observe. `collapseQamOnDismount` was the fourth, reached
+ * from Decky's teardown hook; nothing calls it now.
  *
  * The injected sheet carries two rules that are not about width: a focus
  * outline for a DISABLED button, which Steam's own stylesheet omits, and a
@@ -156,8 +157,11 @@ function expandWidePanel(root: HTMLElement): void {
 }
 
 /**
- * Collapse the panel from the plugin's `onDismount`, where no React cleanup runs
- * any more.
+ * Collapse the panel from outside React's own cleanup.
+ *
+ * Written for Decky's `onDismount`, which has no caller behind Tender's own
+ * Quick Access entry. Kept because the flag it clears is Steam's and global,
+ * so a lever that reaches it without a mounted component is worth having.
  */
 export function collapseQamOnDismount(): void {
   collapseWidePanel();
@@ -193,7 +197,7 @@ export function useWideQamPanel(rootRef: RefObject<HTMLElement | null>): void {
     // True while the question cannot be asked — no panel around us, or a probe
     // that came back undefined so there is no class name to look for. The other
     // default would make every wide page permanently narrow; this one costs a
-    // leaked expansion the QAM-close, unmount and dismount paths still clear.
+    // leaked expansion the QAM-close and unmount paths still clear.
     const owningTabActive = () => !activeTabClass || !panelParent || panelParent.classList.contains(activeTabClass);
 
     const syncPanelWidth = () => (owningTabActive() ? expandWidePanel(root) : collapseWidePanel());

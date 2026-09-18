@@ -15,9 +15,17 @@ Two ways to fail, and both matter:
 * someone changed the mark or `tabicon.STRIP_GEOMETRY` and did not re-run the
   build, so the committed glyph is a render of a geometry that no longer exists.
 
-The comparison goes through prettier, because the build does: the repository's
-commit hook formats TypeScript, so the committed file is the formatted one and a
-raw `ts_module()` would differ from it by whitespace alone.
+The comparison goes through prettier because the build does — `build_tab_icon`
+formats the file before installing it, so the committed copy is the formatted
+one. That is more than whitespace: prettier also rewrites the number literals
+the generator emits, `at: 0.0000` to `at: 0.0`, so a raw `ts_module()` differs
+from the committed file in the values themselves.
+
+**It runs in CI's `build` job, not in `lint` with the rest of the
+`scripts/check_*` family**, because prettier lives in the frontend's
+`node_modules` and `lint` installs Python alone. Without prettier it reports
+that it checked nothing rather than passing quietly, but it does not fail: a
+contributor who has not run `mise run setup` is not the person this is aimed at.
 """
 
 from __future__ import annotations
@@ -38,13 +46,21 @@ def main() -> int:
         print(f"FAIL: {GENERATED.relative_to(REPO)} does not exist")
         return 1
     if not PRETTIER.exists():
-        print(f"SKIP: {PRETTIER.relative_to(REPO)} not found — run `mise run setup` to check this")
+        print(
+            f"NOT CHECKED: {PRETTIER.relative_to(REPO)} is missing, so the tab glyph was not compared\n"
+            "             against its generator. Run `mise run setup` to check it here."
+        )
         return 0
 
     import tabicon  # noqa: PLC0415 — the generator only resolves once sys.path is set above
 
+    # `--stdin-filepath` and not `--parser`: prettier resolves its configuration
+    # from the path of the file it is formatting, and text arriving on stdin has
+    # none — so `--parser typescript` alone formats to prettier's defaults while
+    # the build, which writes the real file, formats to the repository's. The two
+    # then differ in line breaks and the check fails on a correct file.
     formatted = subprocess.run(
-        [str(PRETTIER), "--parser", "typescript"],
+        [str(PRETTIER), "--stdin-filepath", str(GENERATED)],
         input=tabicon.ts_module(),
         capture_output=True,
         text=True,
@@ -58,7 +74,9 @@ def main() -> int:
     print(
         f"FAIL: {GENERATED.relative_to(REPO)} is not what `scripts/logo/tabicon.py` emits today.\n"
         "      Either it was edited by hand, or the mark changed and the build was not re-run.\n"
-        "      Re-run `python3 scripts/logo/build.py --install --tab-icon` and commit the result."
+        "      Re-run `python3 scripts/logo/build.py --install --tab-icon`, then\n"
+        "      `frontend/node_modules/.bin/prettier --write frontend/src/qam/tabIconArt.ts` —\n"
+        "      the build installs the file unformatted, and this compares against the formatted one."
     )
     return 1
 

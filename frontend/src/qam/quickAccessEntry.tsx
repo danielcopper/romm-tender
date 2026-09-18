@@ -139,9 +139,11 @@ function findQuickAccessRenderers(): { browserView: unknown; embedded: unknown }
  * resolved type on the fiber, so swapping the module's export afterwards reaches
  * nothing that is already on screen. That is React's own behaviour, read off its
  * source rather than `@decky/ui`'s, which supplies the patcher and not the
- * flattening; #1897 observed the consequence, a leaf handler that never ran.
- * Without the adoption the entry still arrives — at the menu's next remount,
- * which is what the spike recorded. Decky adopts for the same reason.
+ * flattening — and #1897 confirmed the consequence on the device: the patched
+ * renderer's own handler was never entered (`outerCalls: 0`). Without the
+ * adoption the entry would arrive at the menu's next remount, which follows from
+ * the remount building a new array off the patched export rather than from an
+ * observation. Decky adopts for the same reason.
  *
  * It was briefly suspected of the four Steam failures during that spike and then
  * ruled out: the cause was `initModuleCache()` running on import, confirmed by

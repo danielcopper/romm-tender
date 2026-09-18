@@ -74,6 +74,13 @@ jobs:
       - name: Check the two panel bundles are the two bundles
         run: pnpm -C frontend check:bundle
 
+      # Here rather than in the `lint` job, which is the rest of the
+      # `scripts/check_*` family's home: the comparison goes through prettier,
+      # so it needs the frontend's node_modules, and `lint` installs Python
+      # alone. There it could only take its skip path and report nothing.
+      - name: Check the tab glyph matches its generator
+        run: python3 scripts/check_generated_tab_icon.py
+
       - name: Type check
         run: pnpm -C frontend typecheck
 
