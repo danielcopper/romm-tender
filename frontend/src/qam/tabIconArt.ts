@@ -50,7 +50,7 @@ export const TAB_ICON_REST: TabIconFoldStop = {
  *
  * Every stop's path data carries the same command sequence, so one
  * interpolates into the next. Stops where the pose does not move are not
- * emitted — the schedule's two holds are each one span between equal poses.
+ * emitted — three spans, because the rest hold is split by the loop boundary.
  */
 export const TAB_ICON_FOLD: readonly TabIconFoldStop[] = [
   TAB_ICON_REST,

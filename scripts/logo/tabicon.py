@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """The mark reduced for Steam's Quick Access tab strip, and the module the panel draws it from.
 
-Read off a screenshot of the strip rather than measured on the device: the glyphs
-there are single-tone and free-standing — a bell, friends, a cog, a bolt, a note,
-a question mark, and Decky's plug. A filled disc would be
-the only solid body in the row, so the disc goes and the two tones collapse into
-one. What is left is the pair of sync arrows around the D-pad cross, which is the
+Read off a screenshot of the strip rather than measured on the device: the strip
+carries nothing but single-tone, free-standing glyphs — a bell, friends, a cog, a
+bolt, a note, a question mark, and Decky's plug. A filled disc would be the only
+solid body in the row, so the disc goes and the two tones collapse into one. What is left is the pair of sync arrows around the D-pad cross, which is the
 mark's own body at full morph.
 
 Every departure from `gen.DEFAULT_GEOMETRY` is in {@link STRIP_GEOMETRY} with its
@@ -96,7 +95,9 @@ def fold_stops(
 
     Sampled uniformly and then thinned: consecutive samples that draw the same
     pair carry no information for an interpolating renderer, and the schedule
-    spends 61% of the loop parked at one pose or the other. The final stop is
+    spends just over half of it parked at one pose or the other (0.52 by the
+    schedule; 61% of the loop lies between stops this thins to one, because a
+    ramp's tails round to the same one-decimal path data). The final stop is
     always emitted at 1.0 so the loop closes on the pose it opened with.
     """
     stops: list[tuple[float, str, str]] = []
@@ -111,7 +112,8 @@ def fold_stops(
             continue
         stops.append((t, *pose))
     # An interpolating renderer needs every value to carry the same commands in
-    # the same order; a pose that does not simply drops the animation, silently.
+    # the same order; what a renderer does with a pose that does not is its own
+    # business — an error or a discrete fallback, either way not the fold.
     # `gen._arm_d` has a second branch for a vanishing outer radius, so this is a
     # geometry change away rather than impossible — assert it instead of saying it.
     shapes = {_commands(d) for _, a, b in stops for d in (a, b)}
@@ -132,7 +134,7 @@ def glyph(g: gen.Geometry = STRIP_GEOMETRY, morph: float = 1.0, size: int = 200)
     """The glyph as a standalone one-tone SVG, at a fixed pose. For looking at.
 
     What the panel renders is the module {@link ts_module} emits, not this —
-    the panel's copy carries the whole fold and inherits `currentColor`, which a
+    the panel's copy carries the whole fold and asks for `currentColor`, which a
     file on disk cannot do. This one exists so a change to the form can be seen
     without a build.
     """
@@ -220,7 +222,7 @@ def ts_module(
         f" *\n"
         f" * Every stop's path data carries the same command sequence, so one\n"
         f" * interpolates into the next. Stops where the pose does not move are not\n"
-        f" * emitted — the schedule's two holds are each one span between equal poses.\n"
+        f" * emitted — three spans, because the rest hold is split by the loop boundary.\n"
         f" */\n"
         f"export const TAB_ICON_FOLD: readonly TabIconFoldStop[] = [\n{rows},\n];\n\n"
         f"/** Seconds one loop takes — the mark's own {a.frames} frames at {a.fps} fps. */\n"

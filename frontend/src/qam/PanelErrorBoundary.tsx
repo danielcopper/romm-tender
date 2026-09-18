@@ -2,8 +2,8 @@
  * The boundary Tender's Quick Access panel renders inside, and its one action.
  *
  * `@decky/ui` has an `ErrorBoundary`, and it is not a component of its own: the
- * whole module is one `findModuleExport` sweep for a class of STEAM's carrying
- * `Reset`, `componentDidCatch` and `lastErrorKey`. Both bundles would resolve
+ * whole module is one `findModuleExport` sweep for a class of STEAM's with a
+ * `Reset` and a `componentDidCatch`, whose `render` mentions `lastErrorKey`. Both bundles would resolve
  * that same class. So the reason this one is ours is not whose it would
  * otherwise be — it is that a search into Steam's bundle can stop matching on a
  * client update, and a boundary is the one component whose absence is discovered
