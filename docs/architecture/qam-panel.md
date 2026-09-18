@@ -50,10 +50,9 @@ than replacing them.
 **Nothing in this path touches Decky.** Not `window.__TABS_HOOK_INSTANCE`, whose `deinit()` Decky's own constructor
 calls on whatever it finds there; and not its `add()` either — Decky's render counts its `decky`-marked entries against
 its own list length, and a foreign entry desynchronises that guard into re-pushing every tab with no convergence. The
-entry carries Tender's own marker and Tender's own key (`tender`, which is what Steam builds the panel element's id
-from), so it is invisible to that count. None of this is a presence check: the choice of bundle already asked whether
-Decky Loader is serving, from the machine rather than from the window ([loading-the-panel.md](loading-the-panel.md)),
-and the frontend does not re-ask.
+entry carries Tender's own marker and Tender's own key (`tender`), so it is invisible to that count. None of this is a
+presence check: the choice of bundle already asked whether Decky Loader is serving, from the machine rather than from
+the window ([loading-the-panel.md](loading-the-panel.md)), and the frontend does not re-ask.
 
 **Where the entry sits is not ours to set once.** `afterPatch` runs the previous handler first, so whoever patches last
 pushes last and lands lowest; measured both ways in the spike behind
@@ -77,15 +76,15 @@ each is a way to get this wrong:
   one such binding the entry makes is the visibility listener inside the glyph's `useQuickAccessVisible`.
 
 **An already-mounted menu is adopted rather than waited for.** React flattens the renderer's `memo` wrapper at mount and
-carries the resolved type on the fiber, so swapping the module's export afterwards reaches nothing already on screen —
-without the adoption the patch handler never runs at all, predicted from `@decky/ui`'s source and then measured. Decky
-does the same thing for the same reason.
+carries the resolved type on the fiber, so swapping the module's export afterwards reaches nothing already on screen.
+That is React's own behaviour rather than `@decky/ui`'s, which supplies the patcher and not the flattening. Without the
+adoption the entry still arrives, at the menu's next remount. Decky adopts for the same reason.
 
 ### The glyph
 
 The mark reduced for the strip: no disc, one tone, the sync ring levelled, and the body as the D-pad cross. The strip
-carries nothing but single-tone free-standing glyphs — a bell, friends, a cog, a bolt, a note, a question mark, and
-Decky's plug — so a filled disc would be the only solid body in the row.
+carries single-tone free-standing glyphs — a bell, friends, a cog, a bolt, a note, a question mark, and Decky's plug —
+so a filled disc would be the only solid body in the row.
 
 It is **generated**, by `scripts/logo/tabicon.py` through `build.py --tab-icon`, into `frontend/src/qam/tabIconArt.ts`;
 the geometry comes from the mark's own drawing routines, so the two cannot drift. Its departures from the mark's
@@ -112,8 +111,10 @@ and whether the glyph takes the colour of the selected tab.
 
 The panel renders inside `PanelErrorBoundary`, which has exactly one action. Without a boundary a throw inside the panel
 unmounts the tree it was rendered in — Steam's Quick Access view, not ours — so the fault would cost the reader every
-tab in the strip rather than one. `@decky/ui` re-exports Decky's `ErrorBoundary`, whose fallback offers Decky's repairs
-to a user who may not be running Decky; this one is Tender's, in both bundles.
+tab in the strip rather than one. `@decky/ui`'s own `ErrorBoundary` is not a component it defines: the module is one
+`findModuleExport` sweep for a class of Steam's, so both bundles would resolve the same one. This boundary is Tender's
+because a search into Steam's bundle can stop matching on a client update, and a boundary is the one component whose
+absence is discovered by the fault it was there to catch.
 
 **Reload** clears the caught error, and that is the whole of the rebuild: React has already unmounted the subtree by the
 time the button exists, so rendering it again mounts a new tree with no state carried over. It deliberately does not
@@ -152,23 +153,25 @@ How a page gets wide, measured on the device rather than read from documentation
   literal one would leave the panel simply never widening.
 - Every tab's content panel carries `max-width: 300px`; only Steam's Friends panel lifts it. A wide page injects one
   stylesheet whose `:has()` rule lifts the cap for a marker class on the plugin's own subtree. Class names come from
-  `quickAccessMenuClasses`, which can be `undefined`; `[id^="quickaccess_content_"]` is the fallback selector. Decky
-  registers one QAM tab (`QuickAccessTab.Decky = 999`), so the plugin's panel is `#quickaccess_content_999` — and
-  `TabGroupPanel` sits on that same element, measured, which is why walking the DOM by id and writing the CSS against
-  the class reach the same panel. That same sheet carries one rule that is not about width — Steam's own
-  `outline: outset #fff 2px` for a **disabled** button under `.gpfocus`, which Steam's stylesheet omits. A wide page
-  keeps its buttons rendered-and-disabled rather than hidden, so the stick lands on them and the focus ring would
-  otherwise disappear for that row; it rides in this sheet because the sheet is already scoped to the wide root and a
-  second injector for one selector would be a second thing to clear.
+  `quickAccessMenuClasses`, which can be `undefined`; `[id^="quickaccess_content_"]` is the fallback selector. Steam
+  builds that id from the key of whichever entry rendered the page, so the prefix is matched and never the whole id —
+  what a string key produces has not been measured. `TabGroupPanel` sits on that same element, measured under Decky's
+  numeric key, which is why walking the DOM by id and writing the CSS against the class reach the same panel. That same
+  sheet carries one rule that is not about width — Steam's own `outline: outset #fff 2px` for a **disabled** button
+  under `.gpfocus`, which Steam's stylesheet omits. A wide page keeps its buttons rendered-and-disabled rather than
+  hidden, so the stick lands on them and the focus ring would otherwise disappear for that row; it rides in this sheet
+  because the sheet is already scoped to the wide root and a second injector for one selector would be a second thing to
+  clear.
 - Result: the visible panel goes from 348 px to 854 px and the tab panel from 300 px to 806 px (854 minus the 48 px tab
   rail). The QAM browser view itself is 854 px wide in both states, so only the sliding container's geometry, read
   through `findSP()`, proves an expansion.
 
 The flag is Steam's and global, so the page that set it clears it: on unmount (navigation away, plugin closed), when the
 tab the page sits in stops being the active QAM tab (the `ActiveTab` class on the panel's parent — a tab switch is a
-class change, not an unmount), when the QAM closes (`useQuickAccessVisible`), and from `onDismount`. **Which tab that is
-is never asked**: the page walks up to the panel around it and reads the class off that panel's parent, so the same code
-answers for Tender's entry and for Decky's.
+class change, not an unmount), and when the QAM closes (`useQuickAccessVisible`). It no longer clears from `onDismount`:
+that was Decky's teardown hook and nothing calls it now. **Which tab that is is never asked**: the page walks up to the
+panel around it and reads the class off that panel's parent, so the same code answers for Tender's entry and for
+Decky's.
 
 Steam moves the same flag on its own, in both directions, and neither is a bug in the plugin. `OpenQuickAccessMenu`
 clears it (`SetQAMFriendsChatExpanded(false)`) on every QAM tab change away from Friends, which is a second net under
@@ -204,17 +207,19 @@ passage is about survives the difference: the same form answers the same number 
 offset reachable at all is that `QAMPanel` resets the panel's scroll inside a `requestAnimationFrame`, a frame after the
 page's own layout effect has already measured.
 
-**The height alone is not the whole fit, because the frame's own ancestors hang below it.** Decky wraps a plugin's
-content in a box that sits 34 px below the panel top — its plugin title — and takes `height: 100%` of a parent it is
-already inset within, so its bottom lands **50 px past that parent's**. Nothing of ours is painted in those 50 px, but
-the panel scrolls by them, and a scroll of that size takes the frame's Back row off the top. `WidePage` measures the
-overhang (`ancestorOverhang`, summed over each ancestor up to the scroller) and **cancels it with a negative bottom
-margin on the page root** rather than taking it out of the height: a margin changes what the box claims after itself,
-not where it paints, so the ancestors end where the scroller's box does and nothing on the page moves. The height and
-that pull-up are one measured value applied in one render, because **each half alone is measurably useless**: applied
-live to the running panel, the height without the margin overflows the scroller (`scrollHeight` 800 against a
-`clientHeight` of 750 — 50 px of scroll, which is what takes the Back row off the top), and the margin without the
-height moves nothing a reader sees, the page still ending on the same line with the same band under it.
+**The height alone is not the whole fit, because the frame's own ancestors can hang below it.** The chain this was
+written against was Decky Loader's: it wrapped a plugin's content in a box that sat 34 px below the panel top — its
+plugin title — and took `height: 100%` of a parent it was already inset within, so its bottom landed **50 px past that
+parent's**. Behind Tender's own Quick Access entry there is no such wrapper, and zero is a reading the routine below was
+written to survive rather than a case it had to be taught. Nothing of ours is painted in those 50 px, but the panel
+scrolls by them, and a scroll of that size takes the frame's Back row off the top. `WidePage` measures the overhang
+(`ancestorOverhang`, summed over each ancestor up to the scroller) and **cancels it with a negative bottom margin on the
+page root** rather than taking it out of the height: a margin changes what the box claims after itself, not where it
+paints, so the ancestors end where the scroller's box does and nothing on the page moves. The height and that pull-up
+are one measured value applied in one render, because **each half alone is measurably useless**: applied live to the
+running panel, the height without the margin overflows the scroller (`scrollHeight` 800 against a `clientHeight` of 750
+— 50 px of scroll, which is what takes the Back row off the top), and the margin without the height moves nothing a
+reader sees, the page still ending on the same line with the same band under it.
 
 **What makes the pull-up cancel anything is a structural assumption, and it is worth stating on its own**, because the
 overhang is measured against a PARENT and the margin is applied to our root. The boxes between our root and the scroller
@@ -345,12 +350,12 @@ returns to Main. The chip shares its line with the page title — one row, not t
 line used to cost, which on the Deck's body is most of what a detail pane has to spend. Back is also on **B**, and the
 binding lives in the panel's router (`frontend/src/index.tsx`) rather than on a page: one `Focusable` with
 `onCancelButton` wraps the mounted content **only while `page` is not `main`**, so every sub-page — wide and narrow —
-answers B from wherever focus sits, and Main answers nothing, so Decky's own B still leaves the plugin. That condition
-is what makes taking B safe: the escape route is never removed, it is exactly as far away as the user walked in, and the
-last press is never swallowed. Steam already prints "B ZURÜCK" in its footer legend, which this makes true rather than
-misleading, so no legend entry of ours is needed. The chip stays as the discoverable half and as the mouse path, and it
-carries **Steam's own B glyph** — drawn for the controller in the user's hands, so it is ○ on a PlayStation pad and the
-swapped face button under a Nintendo layout. `@decky/ui` does not re-export that component, so
+answers B from wherever focus sits, and Main answers nothing, so B does on Main whatever the menu holding the panel does
+with it. That condition is what makes taking B safe: the escape route is never removed, it is exactly as far away as the
+user walked in, and the last press is never swallowed. Steam already prints "B ZURÜCK" in its footer legend, which this
+makes true rather than misleading, so no legend entry of ours is needed. The chip stays as the discoverable half and as
+the mouse path, and it carries **Steam's own B glyph** — drawn for the controller in the user's hands, so it is ○ on a
+PlayStation pad and the swapped face button under a Nintendo layout. `@decky/ui` does not re-export that component, so
 `frontend/src/utils/deckyUiInternals.ts` reaches it by a module probe and types it as possibly absent; the chip falls
 back to its chevron the day the probe misses. The button number it passes is Steam's own action-button enum
 (`A=0, B=1, X=2, Y=3`), **not** `@decky/ui`'s `GamepadButton`, where 1 is A — the two disagree on every value, and the

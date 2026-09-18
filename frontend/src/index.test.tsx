@@ -74,7 +74,7 @@ vi.mock("./boot/steamModules", async () => {
 // which is how the panel reaches the screen in Steam. Under this suite that
 // would run the factory once at IMPORT — before the mocks below have a value to
 // hand it — and would then patch renderers the stubbed `@decky/ui` cannot find.
-// The installer's own behaviour is `qam/quickAccessEntry.test.tsx`'s; what this
+// The installer's own behaviour is `qam/quickAccessEntry.test.ts`'s; what this
 // file exercises is the factory, which it calls itself.
 vi.mock("./qam/quickAccessEntry", () => ({
   installQuickAccessEntry: vi.fn(() => ({ patched: true })),

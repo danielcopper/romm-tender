@@ -163,7 +163,7 @@ function scrollingAncestor(body: HTMLElement, view: Window): HTMLElement | null 
  * Steam's tab group renders the panel directly, in both bundles, because the
  * entry does not go through Decky's plugin list even where Decky is running.
  * That is a chain with no overhang, and it is the reason the routine had to
- * behave well at zero before it could behave well at fifty.
+ * behave well at zero, having been written against a chain that overhung by fifty.
  *
  * **This is what the root's negative bottom margin cancels, not what the body
  * gives up.** Subtracting it from the height instead is what left a band of the

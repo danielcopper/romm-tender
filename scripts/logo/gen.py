@@ -299,11 +299,11 @@ def _arm_d(
     end_r = w / 2 the two outer arcs meet and it is a semicircle.
 
     `places` trades precision for bytes. Two decimals is the reference; the strip
-    glyph asks for one, because it emits a whole fold's worth of these as CSS
-    keyframes and is drawn at a size where the second decimal is far below a
-    physical pixel. **The command sequence does not depend on it** — the same
-    `M L A L A L A Z` comes out at either precision, which is what lets CSS
-    interpolate one of these into another (`tabicon.py`).
+    glyph asks for one, because it emits a whole fold's worth of these as the
+    values of one SMIL animation and is drawn at a size where the second decimal
+    is far below a physical pixel. **The command sequence does not depend on it**
+    — the same `M L A L A L A Z` comes out at either precision, which is what
+    lets one of these interpolate into another (`tabicon.py`).
     """
     dx, dy = dot[0] - hub[0], dot[1] - hub[1]
     span = math.hypot(dx, dy)

@@ -6,7 +6,7 @@
  * it is the whole of the handler's effect: everything above it is `@decky/ui`
  * walking Steam's live React tree to find the array, which exists nowhere in
  * this environment. So these cases drive it with arrays of their own, and what
- * they establish is the three lifetime rules' visible half — added once, added
+ * they establish is the first two lifetime rules — added once, added
  * again to a replacement array, moved to the end on every pass.
  *
  * **What they cannot establish** is that the handler is ever called: that the

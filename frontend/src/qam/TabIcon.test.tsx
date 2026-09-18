@@ -76,6 +76,16 @@ describe("TabIcon", () => {
     expect(ringTurns(container)).toBe(1);
   });
 
+  it("takes the fold from the menu being open when the caller states nothing", () => {
+    // The suite's `@decky/ui` stub answers `useQuickAccessVisible` with true, so
+    // an unstated `active` is the menu-open case — the default every other case
+    // here overrides, and the one the strip actually renders with.
+    const { container } = render(<TabIcon syncing={false} />);
+
+    expect(crossFolds(container)).toBe(2);
+    expect(ringTurns(container)).toBe(0);
+  });
+
   it("folds while the pointer is on the glyph, and stops when it leaves", () => {
     const { container } = render(<TabIcon syncing={false} active={false} />);
 
