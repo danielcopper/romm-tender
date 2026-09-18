@@ -36,7 +36,7 @@ const WIDE_PANEL_STYLE_ID = "romm-wide-qam-styles";
 // on that same element — which is why walking the DOM by id lands where the CSS
 // below matches by class. **The prefix is the whole of what is matched**, and
 // deliberately so: the key belongs to whichever entry rendered the page — Decky's
-// there, Tender's own (`qam/quickAccessEntry.tsx`) behind its entry — so a
+// there, Tender's own (`qam/installEntry.tsx`) behind its entry — so a
 // selector naming one would stop matching the moment the other rendered it. What
 // id a string key produces has not been measured, and nothing here needs it to
 // be.

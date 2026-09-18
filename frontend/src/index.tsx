@@ -12,7 +12,7 @@ import { SyncPage } from "./bigpicture/SyncPage";
 import { DangerZone } from "./bigpicture/DangerZone";
 import { DownloadQueue } from "./bigpicture/DownloadQueue";
 import { OWNS_ENTRY_FOCUS_ATTR } from "./bigpicture/layout/WidePage";
-import { installQuickAccessEntry } from "./qam/quickAccessEntry";
+import { installQuickAccessEntry } from "./qam/installEntry";
 import { TabIcon } from "./qam/TabIcon";
 import { initUnitSyncManager, resetSyncCancel } from "./utils/syncManager";
 import { setSyncProgress, getSyncProgress, updateSyncProgress } from "./utils/syncProgress";
