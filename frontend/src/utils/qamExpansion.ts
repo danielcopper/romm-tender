@@ -29,10 +29,16 @@ export const WIDE_ROOT_CLASS = "romm-wide-qam-root";
 
 const WIDE_PANEL_STYLE_ID = "romm-wide-qam-styles";
 
-// Decky registers a single QAM tab (`QuickAccessTab.Decky = 999`), so the
-// plugin's panel is `#quickaccess_content_999`. Measured on the device: the id
-// and the `TabGroupPanel` class are on that same element, so walking the DOM by
-// id lands where the CSS below matches by class.
+// Steam gives each tab's content panel an id built from that tab's own key:
+// measured on the device under Decky, whose key is `QuickAccessTab.Decky = 999`
+// and whose panel is `#quickaccess_content_999`, with the `TabGroupPanel` class
+// on that same element — which is why walking the DOM by id lands where the CSS
+// below matches by class. **The prefix is the whole of what is matched**, and
+// deliberately so: the key belongs to whichever entry rendered the page — Decky's
+// there, Tender's own (`qam/quickAccessEntry.tsx`) behind its entry — so a
+// selector naming one would stop matching the moment the other rendered it. What
+// id a string key produces has not been measured, and nothing here needs it to
+// be.
 const PANEL_ID_SELECTOR = '[id^="quickaccess_content_"]';
 
 const TAB_PANEL_SELECTOR = quickAccessMenuClasses?.TabGroupPanel
@@ -41,10 +47,12 @@ const TAB_PANEL_SELECTOR = quickAccessMenuClasses?.TabGroupPanel
 
 // Steam caps every tab's content panel at 300 px and lifts it only for its own
 // Friends panel (ADR-0029). The cap is on the panel element itself: with these
-// rules up, the device measured `#quickaccess_content_999` at 806 px. The `> *`
-// line covers a child carrying a cap of its own, which was never separately
-// measured and costs one selector to keep. `:has()` scopes the lift to a panel
-// holding a wide page of ours.
+// rules up, the device measured the panel at 806 px — under Decky, where the id
+// was `#quickaccess_content_999`; the cap and the lift are properties of the
+// panel element and not of whose key named it. The `> *` line covers a child
+// carrying a cap of its own, which was never separately measured and costs one
+// selector to keep. `:has()` scopes the lift to a panel holding a wide page of
+// ours.
 //
 // The second rule is about focus rather than width, and rides along because it
 // needs the same sheet in the same document. A DISABLED button is still a focus
@@ -157,13 +165,20 @@ export function collapseQamOnDismount(): void {
 
 /**
  * Hold the panel wide for as long as the page owning `rootRef` is mounted, the
- * Decky tab is the active QAM tab, and the QAM is open. Losing any of the three
- * posts the hide message and drops the stylesheet; regaining it re-expands.
+ * tab this page sits in is the active QAM tab, and the QAM is open. Losing any
+ * of the three posts the hide message and drops the stylesheet; regaining it
+ * re-expands.
  *
- * The tab question is answered from the DOM inside the effect rather than from
- * React state: the plugin's panel renders on when another QAM tab is active
- * (`alwaysRender`), so a page mounting there would expand on its first pass and
- * retract on the next — a visible flash of Steam's own panel.
+ * **Which tab that is, is never asked.** The question is answered by walking up
+ * from the page's own root to the panel around it and reading Steam's
+ * active-tab class off that panel's parent — so it is true of Tender's own
+ * entry and of Decky's, and of anything else that might one day render this
+ * panel, without naming any of them.
+ *
+ * It is answered from the DOM inside the effect rather than from React state
+ * because a panel can be rendered while its tab is not the active one, so a page
+ * mounting there would expand on its first pass and retract on the next — a
+ * visible flash of Steam's own panel.
  */
 export function useWideQamPanel(rootRef: RefObject<HTMLElement | null>): void {
   const qamVisible = useQuickAccessVisible();
@@ -179,9 +194,9 @@ export function useWideQamPanel(rootRef: RefObject<HTMLElement | null>): void {
     // that came back undefined so there is no class name to look for. The other
     // default would make every wide page permanently narrow; this one costs a
     // leaked expansion the QAM-close, unmount and dismount paths still clear.
-    const deckyTabActive = () => !activeTabClass || !panelParent || panelParent.classList.contains(activeTabClass);
+    const owningTabActive = () => !activeTabClass || !panelParent || panelParent.classList.contains(activeTabClass);
 
-    const syncPanelWidth = () => (deckyTabActive() ? expandWidePanel(root) : collapseWidePanel());
+    const syncPanelWidth = () => (owningTabActive() ? expandWidePanel(root) : collapseWidePanel());
     syncPanelWidth();
 
     // Switching QAM tabs changes the parent's class and unmounts nothing, so the
