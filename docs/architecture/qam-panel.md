@@ -1,11 +1,12 @@
 # QAM panel
 
-The Quick Access Menu panel is the plugin's own surface inside Steam's QAM: the Decky tab, then the plugin's entry. It
-opens on **Main** and reaches every other page from there. Steam renders the QAM 348 px wide; a page of this plugin can
-widen it to 854 px — the width Steam's own Friends tab uses — for as long as that page is mounted. This page owns the
-panel's structure: which pages exist, which are wide, how a page is navigated and laid out, and where each action has
-its home. The game detail page is a Steam route, not part of the panel, and is out of scope here; the state it shares
-across its surfaces is the **Game-detail store** (CONTEXT.md).
+The Quick Access Menu panel is the plugin's own surface inside Steam's QAM, behind **Tender's own entry in the tab
+strip** — beside Decky Loader's where Decky is running, and on its own where it is not. It opens on **Main** and reaches
+every other page from there. Steam renders the QAM 348 px wide; a page of this plugin can widen it to 854 px — the width
+Steam's own Friends tab uses — for as long as that page is mounted. This page owns the panel's structure: which pages
+exist, which are wide, how a page is navigated and laid out, and where each action has its home. The game detail page is
+a Steam route, not part of the panel, and is out of scope here; the state it shares across its surfaces is the
+**Game-detail store** (CONTEXT.md).
 
 The structure below is the target decided in [#1809](https://github.com/danielcopper/romm-tender/issues/1809) and
 rebuilt one page at a time under [#1808](https://github.com/danielcopper/romm-tender/issues/1808). Where today's panel
@@ -18,6 +19,7 @@ without restating it. The width mechanism's decision record is
 
 | Module                                                                          | Responsibility                                                                                                                                                      |
 | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `frontend/src/qam/`                                                             | The entry itself: the patch that puts it in the strip, the tab glyph and its three states, and the boundary the panel renders inside                                |
 | `frontend/src/index.tsx` (`QAMPanel`)                                           | The router: one `Page` value, one mounted page, a module-level `currentPage` that survives a QAM remount                                                            |
 | `frontend/src/types/navigation.ts`                                              | The `Page` union — every page the router can land on                                                                                                                |
 | `frontend/src/bigpicture/MainPage.tsx`                                          | Main                                                                                                                                                                |
@@ -37,6 +39,87 @@ without restating it. The width mechanism's decision record is
 | `frontend/src/utils/syncResume.ts`                                              | Whether the next sync continues a run or starts one over, and what that puts on the Sync page's start button — the name the session-budget card quotes              |
 | `frontend/src/utils/syncProgress.ts`                                            | The frame every page reads a run from, and the one rule it enforces on its writers: a run that has ended stays ended                                                |
 | `frontend/src/utils/` module stores                                             | State that must outlive a page: sync progress, pending preview, downloads, prune, the game-detail caches                                                            |
+
+## The entry
+
+Steam ships no API for adding a Quick Access tab, so `frontend/src/qam/quickAccessEntry.tsx` patches the two renderers
+that draw the menu — the browser view Gaming Mode uses and the embedded one — and pushes an entry into the tab array
+they hand back. Decky Loader patches the same two renderers, and the two compose: `afterPatch` chains handlers rather
+than replacing them.
+
+**Nothing in this path touches Decky.** Not `window.__TABS_HOOK_INSTANCE`, whose `deinit()` Decky's own constructor
+calls on whatever it finds there; and not its `add()` either — Decky's render counts its `decky`-marked entries against
+its own list length, and a foreign entry desynchronises that guard into re-pushing every tab with no convergence. The
+entry carries Tender's own marker and Tender's own key (`tender`, which is what Steam builds the panel element's id
+from), so it is invisible to that count. None of this is a presence check: the choice of bundle already asked whether
+Decky Loader is serving, from the machine rather than from the window ([loading-the-panel.md](loading-the-panel.md)),
+and the frontend does not re-ask.
+
+**Where the entry sits is not ours to set once.** `afterPatch` runs the previous handler first, so whoever patches last
+pushes last and lands lowest; measured both ways in the spike behind
+[#1897](https://github.com/danielcopper/romm-tender/issues/1897) — patched before Decky booted, Tender came out above
+it, and re-patched beside a running Decky, below. Install order is a property of which program starts first, so the
+placement is re-asserted on every pass instead: the handler moves the entry to the end of the array each time it runs.
+Moving an entry is invisible to Decky's guard, which counts marked entries and never asks where they sit.
+
+**Every Quick Access remount builds a new tab array** — Gaming Mode to Desktop and back, or Big Picture opening in a
+window, replaces the menu's browser view and with it the React tree, the array and the document. Three consequences, and
+each is a way to get this wrong:
+
+- No array is held. The spike kept every array it had pushed into so that it could take its entries back out; that set
+  only grows, one dead array per remount for the life of the process. There is nothing to take back out here — the
+  injector refuses to load the panel into a context that already carries its marker, and what clears that marker is a JS
+  context rebuild, which takes this module and its patches with it — so the module holds no array and every dead one is
+  collectable with its view.
+- The entry is added again to whatever array the pass is handed, and the entry's own marker is what keeps a second pass
+  over an array it is already in from adding a second one.
+- Anything bound to the menu's own window is bound from inside the menu's React tree, so the remount re-binds it. The
+  one such binding the entry makes is the visibility listener inside the glyph's `useQuickAccessVisible`.
+
+**An already-mounted menu is adopted rather than waited for.** React flattens the renderer's `memo` wrapper at mount and
+carries the resolved type on the fiber, so swapping the module's export afterwards reaches nothing already on screen —
+without the adoption the patch handler never runs at all, predicted from `@decky/ui`'s source and then measured. Decky
+does the same thing for the same reason.
+
+### The glyph
+
+The mark reduced for the strip: no disc, one tone, the sync ring levelled, and the body as the D-pad cross. The strip
+carries nothing but single-tone free-standing glyphs — a bell, friends, a cog, a bolt, a note, a question mark, and
+Decky's plug — so a filled disc would be the only solid body in the row.
+
+It is **generated**, by `scripts/logo/tabicon.py` through `build.py --tab-icon`, into `frontend/src/qam/tabIconArt.ts`;
+the geometry comes from the mark's own drawing routines, so the two cannot drift. Its departures from the mark's
+geometry, and why each one, are at `tabicon.STRIP_GEOMETRY`.
+
+It animates by state, and the resting pose is always the cross with the ring level:
+
+| State                                                        | What moves                              |
+| ------------------------------------------------------------ | --------------------------------------- |
+| at rest                                                      | nothing                                 |
+| a sync run in flight                                         | the ring turns                          |
+| the entry active — the QAM open, or the pointer on the glyph | the cross folds to the buttons and back |
+| both                                                         | both                                    |
+
+The fold is the mark's own (`anim.morph_at`, its schedule and easing untouched) **inverted**, because the strip's
+resting pose is the cross where the mark's is the button pair. The motion is SMIL elements rendered conditionally rather
+than CSS, so an engine that runs none of it draws the paths' own resting `d` and there is no second description of the
+resting pose to keep in step.
+
+Two things about it are unmeasured and are on the device list: whether Steam's tab strip runs an animation there at all,
+and whether the glyph takes the colour of the selected tab.
+
+### The boundary
+
+The panel renders inside `PanelErrorBoundary`, which has exactly one action. Without a boundary a throw inside the panel
+unmounts the tree it was rendered in — Steam's Quick Access view, not ours — so the fault would cost the reader every
+tab in the strip rather than one. `@decky/ui` re-exports Decky's `ErrorBoundary`, whose fallback offers Decky's repairs
+to a user who may not be running Decky; this one is Tender's, in both bundles.
+
+**Reload** clears the caught error, and that is the whole of the rebuild: React has already unmounted the subtree by the
+time the button exists, so rendering it again mounts a new tree with no state carried over. It deliberately does not
+re-evaluate the bundle (the injector's job, and nothing in this tree can ask for it) nor re-run the plugin factory,
+which would install a second copy of every listener and patch it registers. What survives is the panel's module-level
+state — the open page, the sync progress, the caches — so a reader whose Settings page threw comes back to Settings.
 
 ## Two widths
 
@@ -82,8 +165,10 @@ How a page gets wide, measured on the device rather than read from documentation
   through `findSP()`, proves an expansion.
 
 The flag is Steam's and global, so the page that set it clears it: on unmount (navigation away, plugin closed), when the
-Decky tab stops being the active QAM tab (the `ActiveTab` class on the panel's parent — a tab switch is a class change,
-not an unmount), when the QAM closes (`useQuickAccessVisible`), and from `onDismount`.
+tab the page sits in stops being the active QAM tab (the `ActiveTab` class on the panel's parent — a tab switch is a
+class change, not an unmount), when the QAM closes (`useQuickAccessVisible`), and from `onDismount`. **Which tab that is
+is never asked**: the page walks up to the panel around it and reads the class off that panel's parent, so the same code
+answers for Tender's entry and for Decky's.
 
 Steam moves the same flag on its own, in both directions, and neither is a bug in the plugin. `OpenQuickAccessMenu`
 clears it (`SetQAMFriendsChatExpanded(false)`) on every QAM tab change away from Friends, which is a second net under
@@ -95,11 +180,11 @@ literal `"https://steamloopback.host"` — which is what `window.origin` is in t
 
 Steam's tabbed page fills its parent instead of growing, and nothing in the QAM chain provides a height. A wide page
 therefore measures the space left below its header and takes that as its height; its regions scroll inside it. A
-`min-height` is not enough — it clips. What is left after Decky's own title bar and the frame's Back-and-title row is
-the panel's `clientHeight` less the body's offset within it, so it follows the view rather than any recorded number:
-measured through CEF on the dev window's 764 px view, with the change below applied to the running panel, that is a body
-of **660 px** ending flush with the panel's box. A tabbed page spends 58 px of it on Steam's tab row, which is drawn
-over the top of the content pane rather than above it.
+`min-height` is not enough — it clips. What is left after whatever chrome sits above the page and the frame's
+Back-and-title row is the panel's `clientHeight` less the body's offset within it, so it follows the view rather than
+any recorded number: measured through CEF on the dev window's 764 px view, with the change below applied to the running
+panel, that is a body of **660 px** ending flush with the panel's box. A tabbed page spends 58 px of it on Steam's tab
+row, which is drawn over the top of the content pane rather than above it.
 
 **That measurement has to be free of the scrolling panel's own offset, and only a layout-relative one is**: the body's
 position inside the scroller's content — its viewport top minus the scroller's, plus the scroller's `scrollTop` —
@@ -338,9 +423,10 @@ platforms, which additionally are tabbed, so Steam places that focus and the fra
 
 **Data Management and Downloads are unmoved**, and declare nothing: each leads with its Back button, which is both the
 first stop and the first button, so the router's default already opens them there. Whatever the rule, the root it
-searches is the plugin's own content and nothing above it — Decky renders its panel title and the back arrow beside it
-outside that box, 34 px above it (the same inset whose bottom `WidePage`'s `ancestorOverhang` measures) — so no rule
-here could reach Decky's own chrome. The declaration, the finder, the shared set of shapes and the `.focus()` +
+searches is the plugin's own content and nothing above it — under Decky, its panel title and the back arrow beside it
+are rendered outside that box, 34 px above it (the same inset whose bottom `WidePage`'s `ancestorOverhang` measures);
+behind Tender's own entry there is no such chrome at all, because Steam's tab group renders the panel directly — so no
+rule here could reach anyone else's. The declaration, the finder, the shared set of shapes and the `.focus()` +
 `gpfocus` pair are `frontend/src/utils/entryFocus.ts`. It is a second attribute rather than a second use of the wide
 frame's `OWNS_ENTRY_FOCUS_ATTR` because the two answer different questions: that one says WHO places entry focus — it
 tells the router to place none, because the frame places its own — and this one says WHERE, for whichever of them places
