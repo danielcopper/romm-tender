@@ -35,9 +35,10 @@ Without `--install` it writes to `out/` instead, which is the way to look at a c
 
 The tab glyph is the one output that is not an image. Steam's Quick Access tab strip takes a React node rather than a
 file, so the glyph ships as generated TypeScript the panel draws from — which is what lets it ask for `currentColor` at
-all, and carry its fold as animation data. `tab-icon.svg` is written beside it and installed nowhere: it is the resting
-pose as a file, for looking at a change without opening Steam. What the glyph is and how it animates is
-`docs/architecture/qam-panel.md`; what it departs from, and why, is at `tabicon.STRIP_GEOMETRY`.
+all. Unlike the mark, **it does not animate**: the motion it shipped with cost roughly a third of a core for as long as
+the menu was open, measured on the device. `tab-icon.svg` is written beside it and installed nowhere: it is the same
+glyph as a file, for looking at a change without opening Steam. What the glyph is, and the reading behind its being
+static, is `docs/architecture/qam-panel.md`; what it departs from, and why, is at `tabicon.STRIP_GEOMETRY`.
 
 Everything else ships twice except the lockup and `store_image.png`, which land once. The lockup is the README's banner,
 and the docs site draws its own header from the bare mark; nothing renders `store_image.png` at all, so `assets/` is the
@@ -60,9 +61,7 @@ python3 gen.py --asset --morph 1    # the D-pad end of the fold
 python3 gen.py --asset --no-dots    # bare body, for judging silhouette
 python3 anim.py --plot              # the morph and spin schedule, frame by frame
 python3 anim.py --frame 18          # one frame's SVG
-python3 tabicon.py --svg            # the tab glyph at rest
-python3 tabicon.py --svg --morph 0  # the folded end of its fold
-python3 tabicon.py --stops          # the fold's keyframe stops
+python3 tabicon.py --svg            # the tab glyph
 ```
 
 ## Changing things
@@ -75,9 +74,10 @@ Five config objects, and nothing else worth editing:
 - **`gen.Geometry`** — every position and size, in a 200-unit square. Grouped by what they describe: the disc, the sync
   arrows, the button diamond, the dot shapes, the cross.
 - **`anim.Animation`** — frame count, rate, how far the ring turns, and where the morph's holds and ramps meet.
-- **`tabicon.STRIP_GEOMETRY`** — the tab glyph's departures from `gen.DEFAULT_GEOMETRY`, each with its reason. The glyph
-  reuses everything else: the arcs, the bars and the fold's schedule are the mark's own routines, and only the fold's
-  direction is inverted, because the strip rests as the cross where the mark rests as the buttons.
+- **`tabicon.STRIP_GEOMETRY`** — the tab glyph's departures from `gen.DEFAULT_GEOMETRY`, each with its reason; there is
+  one of them today. The glyph reuses everything else: the arcs and the bars are the mark's own routines, drawn at the
+  mark's own resting pose. Its one number of its own is `tabicon.HOLE_R`, which the mark has no use for — nothing else
+  cuts the buttons out of the bars.
 - **`lockup`'s module constants** — which typeface was cut and at what letter-spacing, the wordmark's cap height as a
   fraction of the disc, and the air between the two. Changing the typeface or the tracking means re-cutting (below); the
   two ratios take effect on the next render.

@@ -1,23 +1,17 @@
 /**
- * What the glyph asks the renderer for in each of its four states.
+ * What the glyph hands the renderer: the generated artwork, and no motion.
  *
- * The motion is SMIL elements rendered conditionally, so "which animation is
- * running" is a DOM question rather than a style question — which is the whole
- * reason it is testable here at all. happy-dom performs no layout and runs no
- * animation, so what these cases establish is the SELECTION: a state either puts
- * the element in the tree or leaves the path's own resting `d` standing alone.
- * Whether Steam's tab strip then runs it is a device question, named in this
- * cut's device list.
+ * happy-dom performs no layout and runs no animation, so what these cases
+ * establish is what is in the tree — which is all the second one needs, because
+ * an animation that is not authored cannot run. Whether the strip draws the
+ * glyph at the size and in the colour it asks for is a device question, named in
+ * this cut's device list.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
-import { act, fireEvent, render } from "@testing-library/react";
+import { describe, it, expect } from "vitest";
+import { render } from "@testing-library/react";
 import { TabIcon } from "./TabIcon";
-import { TAB_ICON_FOLD, TAB_ICON_REST } from "./tabIconArt";
-import { setSyncProgress, resetSyncProgressStoreForTests } from "../utils/syncProgress";
-import type { SyncProgress } from "../types";
-
-const running = (): SyncProgress => ({ running: true, stage: "applying", runId: "r1" });
+import { TAB_ICON_ARC, TAB_ICON_BARS, TAB_ICON_HOLES, TAB_ICON_HOLE_R } from "./tabIconArt";
 
 /** The glyph's own root, so a query cannot pick up something else's SVG. */
 const glyph = (container: HTMLElement) => {
@@ -26,90 +20,53 @@ const glyph = (container: HTMLElement) => {
   return root;
 };
 
-const ringTurns = (container: HTMLElement) => glyph(container).querySelectorAll("animateTransform").length;
-const crossFolds = (container: HTMLElement) => glyph(container).querySelectorAll("animate").length;
-
 describe("TabIcon", () => {
-  beforeEach(() => {
-    resetSyncProgressStoreForTests();
+  it("draws the generated artwork: the arc, both bars and the four holes", () => {
+    const { container } = render(<TabIcon />);
+    const root = glyph(container);
+
+    const drawn = [...root.querySelectorAll("path")].map((path) => path.getAttribute("d"));
+    expect(drawn).toContain(TAB_ICON_ARC.d);
+    expect(drawn).toContain(TAB_ICON_BARS.a);
+    expect(drawn).toContain(TAB_ICON_BARS.b);
+
+    const holes = [...root.querySelectorAll("circle")].map((circle) => ({
+      cx: Number(circle.getAttribute("cx")),
+      cy: Number(circle.getAttribute("cy")),
+      r: Number(circle.getAttribute("r")),
+    }));
+    expect(holes).toEqual(TAB_ICON_HOLES.map((hole) => ({ cx: hole.cx, cy: hole.cy, r: TAB_ICON_HOLE_R })));
   });
 
-  it("rests as the cross with the ring level, asking for no animation at all", () => {
-    const { container } = render(<TabIcon syncing={false} active={false} />);
+  it("cuts the holes out of the body instead of drawing them on it", () => {
+    // A hole drawn as a filled dot would disappear into the bar it sits on, so
+    // the four circles only mean anything while the body reads them as a mask.
+    const root = glyph(render(<TabIcon />).container);
 
-    expect(ringTurns(container)).toBe(0);
-    expect(crossFolds(container)).toBe(0);
-    // Both bars stand at the resting pose, which is what an engine that animates
-    // nothing draws — there is no second description of it to drift.
-    const bars = [...glyph(container).querySelectorAll("path")].map((path) => path.getAttribute("d"));
-    expect(bars).toContain(TAB_ICON_REST.a);
-    expect(bars).toContain(TAB_ICON_REST.b);
+    const mask = root.querySelector("mask");
+    if (!mask) throw new Error("the glyph defines no mask");
+    expect(mask.querySelectorAll("circle")).toHaveLength(TAB_ICON_HOLES.length);
+
+    const masked = root.querySelector(`[mask="url(#${mask.getAttribute("id")})"]`);
+    if (!masked) throw new Error("nothing in the glyph is masked by it");
+    expect(masked.querySelector(`path[d="${TAB_ICON_BARS.a}"]`)).not.toBeNull();
   });
 
-  it("turns the ring while a sync runs, and leaves the cross standing", () => {
-    const { container } = render(<TabIcon syncing active={false} />);
+  it("asks for no animation at all", () => {
+    // This is a performance decision, not a preference: the fold this replaced
+    // ran layout twice a frame for as long as the menu was open. A later change
+    // that brings SMIL back fails here rather than on someone's battery.
+    const root = glyph(render(<TabIcon />).container);
 
-    expect(ringTurns(container)).toBe(1);
-    expect(crossFolds(container)).toBe(0);
+    expect(root.querySelectorAll("animate, animateTransform, animateMotion, set")).toHaveLength(0);
   });
 
-  it("folds both bars while the entry is active, and leaves the ring level", () => {
-    const { container } = render(<TabIcon syncing={false} active />);
+  it("carries its own edge length, and takes the caller's over it", () => {
+    const { container } = render(<TabIcon />);
+    expect(glyph(container).getAttribute("width")).toBe("1.633em");
 
-    expect(ringTurns(container)).toBe(0);
-    expect(crossFolds(container)).toBe(2);
-  });
-
-  it("runs both when both", () => {
-    const { container } = render(<TabIcon syncing active />);
-
-    expect(ringTurns(container)).toBe(1);
-    expect(crossFolds(container)).toBe(2);
-  });
-
-  it("takes the ring's turn from the sync store when the caller states nothing", () => {
-    const { container } = render(<TabIcon active={false} />);
-    expect(ringTurns(container)).toBe(0);
-
-    act(() => setSyncProgress(running()));
-
-    expect(ringTurns(container)).toBe(1);
-  });
-
-  it("takes the fold from the menu being open when the caller states nothing", () => {
-    // The suite's `@decky/ui` stub answers `useQuickAccessVisible` with true, so
-    // an unstated `active` is the menu-open case — the default every other case
-    // here overrides, and the one the strip actually renders with.
-    const { container } = render(<TabIcon syncing={false} />);
-
-    expect(crossFolds(container)).toBe(2);
-    expect(ringTurns(container)).toBe(0);
-  });
-
-  it("folds while the pointer is on the glyph, and stops when it leaves", () => {
-    const { container } = render(<TabIcon syncing={false} active={false} />);
-
-    fireEvent.pointerEnter(glyph(container));
-    expect(crossFolds(container)).toBe(2);
-
-    fireEvent.pointerLeave(glyph(container));
-    expect(crossFolds(container)).toBe(0);
-  });
-
-  it("drives the fold from the pose list, first stop to last", () => {
-    const { container } = render(<TabIcon syncing={false} active />);
-
-    const fold = glyph(container).querySelector("animate");
-    // The value and time lists have to be the same length or the browser drops
-    // the animation, and the loop has to close on the pose it opened with.
-    const values = fold?.getAttribute("values")?.split(";") ?? [];
-    const times = fold?.getAttribute("keyTimes")?.split(";") ?? [];
-    expect(values).toEqual(TAB_ICON_FOLD.map((stop) => stop.a));
-    expect(times).toEqual(TAB_ICON_FOLD.map((stop) => stop.at.toFixed(4)));
-    expect(values.length).toBeGreaterThan(2);
-    expect(values[0]).toBe(TAB_ICON_REST.a);
-    expect(values[values.length - 1]).toBe(TAB_ICON_REST.a);
-    expect(times[0]).toBe("0.0000");
-    expect(times[times.length - 1]).toBe("1.0000");
+    const { container: sized } = render(<TabIcon size="3em" />);
+    expect(glyph(sized).getAttribute("width")).toBe("3em");
+    expect(glyph(sized).getAttribute("height")).toBe("3em");
   });
 });
