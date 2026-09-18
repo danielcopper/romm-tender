@@ -604,29 +604,34 @@ Format: **invariant** — tier — enforced by.
   spans the frontend entry and the backend injector, and nothing joins them. **Three halves fail green.** (1) The entry
   carries `tender` as its marker and its key and never `decky`, and nothing writes `window.__TABS_HOOK_INSTANCE` or
   calls `__TABS_HOOK_INSTANCE.add()`: Decky's own render counts its `decky`-marked entries against its list length, so a
-  foreign entry there desynchronises that guard into re-pushing every tab, +2 per re-render with no convergence, and its
-  constructor calls `deinit()` on whatever it finds in that global — both measured. Neither is a presence check and
-  neither may become one; which bundle is loaded was already decided from the machine
-  (`backend/host/inject/machine.py`). (2) **No tab array is held anywhere**, which is available only because there is no
-  unpatch: the injector refuses to load the panel into a context already carrying `window.__tender_panel__`
-  (`backend/host/inject/bootstrap.py`), and what clears that marker is a JS-context rebuild, which takes the module, its
-  patches and every array with it. Re-adding an unpatch is therefore also re-adding a reason to retain arrays, and the
-  spike's shape — a `Set` of every array ever pushed into — leaks one dead array per Quick Access remount, with the
-  strip's entries and their React elements, for the life of the process. (3) The placement is re-asserted on EVERY pass
-  rather than set at creation, because `afterPatch` runs the previous handler first: whoever patches last lands lowest,
-  measured both ways, and install order is a property of which program starts first. A handler that pushed once and
-  trusted the order goes green here and comes out above Decky on exactly the machines where Decky started first. The
+  foreign entry there desynchronises that guard into re-pushing every tab with no convergence, and its constructor calls
+  `deinit()` on whatever it finds in that global. **Both are read off Decky's source rather than measured** — the
+  `add()` route was deliberately never taken, so its runaway was never observed, and observing the `deinit()` would mean
+  breaking Decky's boot on purpose. Neither is a presence check and neither may become one; which bundle is loaded was
+  already decided from the machine (`backend/host/inject/machine.py`). (2) **No tab array is held anywhere**, which is
+  available only because there is no unpatch: the injector refuses to load the panel into a context already carrying
+  `window.__tender_panel__` (`backend/host/inject/bootstrap.py`), and what clears that marker is a JS-context rebuild,
+  which takes the module, its patches and every array with it. Re-adding an unpatch is therefore also re-adding a reason
+  to retain arrays, and the spike's shape — a `Set` of every array ever pushed into — leaks one dead array per Quick
+  Access remount, with the strip's entries and their React elements, for the life of the process. (3) The placement is
+  re-asserted on EVERY pass rather than set at creation, because `afterPatch` runs the previous handler first: whoever
+  patches last lands lowest, measured both ways, and install order is a property of which program starts first. A
+  handler that pushed once and trusted the order goes green here and comes out above Decky on exactly the machines where
+  TENDER started first — it pushes first and Decky pushes under it. Where Decky started first the single push already
+  lands lowest, which is the case re-assertion does not have to fix and the one a developer is most likely to test. The
   third rule's own half — **nothing binds to the Quick Access window at module scope** — is unmechanized and unpinned:
   that window is replaced by every remount, so a listener, observer or stylesheet held across one is bound to a document
   nothing renders. What holds today was measured rather than assumed — an unfiltered grep over `frontend/src` (tests
   aside) for `addEventListener(`, `new ResizeObserver`, `new MutationObserver`, `ownerDocument`, `defaultView` and
-  `createElement(`, with the enclosing function of every hit read — and every binding into that window sits inside an
-  effect or an event handler of a component the menu mounts: `qam/TabIcon.tsx` through `useQuickAccessVisible`,
-  `utils/qamExpansion.ts`'s stylesheet and `MutationObserver`, `utils/entryFocus.ts`'s focus listeners,
-  `bigpicture/layout/WidePage.tsx`'s `ResizeObserver`, and `bigpicture/layout/ScrollRegion.tsx`, which reads the view
-  per event and retains nothing. (`utils/styleInjector.ts` writes into `findSP()`'s document, which is the game page's
-  and not the menu's.) One added at module scope would work perfectly until the first Gaming-Mode-to-Desktop switch and
-  then do nothing, silently. Detail: `docs/architecture/qam-panel.md` → The entry
+  `createElement(`, with the enclosing function of every hit read. The sweep's own boundary is worth stating, because a
+  reader re-deriving it meets the other kind first: a `globalThis` listener binds SharedJSContext's window, which the
+  menu's remount does not touch, so those are out of scope however many of them there are. Every binding into the MENU's
+  window sits inside an effect or an event handler of a component the menu mounts: `qam/TabIcon.tsx` through
+  `useQuickAccessVisible`, `utils/qamExpansion.ts`'s stylesheet and `MutationObserver`, `utils/entryFocus.ts`'s focus
+  listeners, `bigpicture/layout/WidePage.tsx`'s `ResizeObserver`, and `bigpicture/layout/ScrollRegion.tsx`, which reads
+  the view per event and retains nothing. (`utils/styleInjector.ts` writes into `findSP()`'s document, which is the game
+  page's and not the menu's.) One added at module scope would work perfectly until the first Gaming-Mode-to-Desktop
+  switch and then do nothing, silently. Detail: `docs/architecture/qam-panel.md` → The entry
 - **Aggregate state mutated only via verb-named methods (no field assignment)** — check —
   `scripts/check_aggregate_field_assignment.py`
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, uow_factory) is called while a UoW is open on the

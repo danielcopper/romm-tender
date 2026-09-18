@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """The mark reduced for Steam's Quick Access tab strip, and the module the panel draws it from.
 
-The strip carries nothing but single-tone, free-standing glyphs — a bell, friends,
-a cog, a bolt, a note, a question mark, and Decky's plug. A filled disc would be
+Read off a screenshot of the strip rather than measured on the device: the glyphs
+there are single-tone and free-standing — a bell, friends, a cog, a bolt, a note,
+a question mark, and Decky's plug. A filled disc would be
 the only solid body in the row, so the disc goes and the two tones collapse into
 one. What is left is the pair of sync arrows around the D-pad cross, which is the
 mark's own body at full morph.
@@ -34,7 +35,7 @@ from dataclasses import replace
 import anim
 import gen
 
-# The fold's poses are emitted as CSS keyframes, so the whole loop ships as path
+# The fold's poses are emitted as SMIL animation values, so the whole loop ships as path
 # data and every stop costs bytes twice (two bars; the other two are one
 # `rotate(180)`). 36 over the loop puts a stop every 80 ms at the animation's own
 # 2.88 s, and the browser interpolates linearly between them — far finer than the
@@ -52,10 +53,11 @@ PLACES = 1
 # object stays the reference the mark is drawn from.
 #
 # * The stroke goes up by 1.3, because a hairline that reads at 512 px disappears
-#   at 24. `arrow_len`, `arrow_half` and `arrow_round` move with it — they are the
-#   arrowhead's proportions against the stroke it caps, which `Geometry` says in
-#   its own comment, so scaling one without the others turns the head into either
-#   a dart or a paddle.
+#   at 24. `arrow_half` and `arrow_round` move with it because `Geometry`'s own
+#   comment says they want to track `arc_w`; `arrow_len` is a reach along the
+#   tangent rather than a width against the stroke, and it is scaled here so the
+#   head keeps its proportion — scaling one without the others turns it into
+#   either a dart or a paddle.
 # * `arc_rot` goes to 0. The 6.34 in the mark pushes both arcs clockwise, which
 #   sits the gaps off the horizontal; in a disc that reads as motion, and in a row
 #   of upright glyphs it reads as a tilt. At 0 the gaps lie on the horizontal.
@@ -94,7 +96,7 @@ def fold_stops(
 
     Sampled uniformly and then thinned: consecutive samples that draw the same
     pair carry no information for an interpolating renderer, and the schedule
-    spends about half the loop parked at one pose or the other. The final stop is
+    spends 61% of the loop parked at one pose or the other. The final stop is
     always emitted at 1.0 so the loop closes on the pose it opened with.
     """
     stops: list[tuple[float, str, str]] = []
@@ -108,7 +110,19 @@ def fold_stops(
         if stops and stops[-1][1:] == pose and not last:
             continue
         stops.append((t, *pose))
+    # An interpolating renderer needs every value to carry the same commands in
+    # the same order; a pose that does not simply drops the animation, silently.
+    # `gen._arm_d` has a second branch for a vanishing outer radius, so this is a
+    # geometry change away rather than impossible — assert it instead of saying it.
+    shapes = {_commands(d) for _, a, b in stops for d in (a, b)}
+    if len(shapes) != 1:
+        raise AssertionError(f"fold stops disagree on their command sequence: {sorted(shapes)}")
     return stops
+
+
+def _commands(path: str) -> str:
+    """A path's command letters, in order — its shape for interpolation."""
+    return "".join(c for c in path if c.isalpha())
 
 
 # --------------------------------------------------------------------------- #

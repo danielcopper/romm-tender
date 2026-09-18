@@ -172,7 +172,7 @@ export const removeEventListener = <Args extends unknown[] = []>(
  * Wrap the factory that builds the panel.
  *
  * It answers with the factory unchanged, and calling it is somebody else's job:
- * `index.tsx` hands it to `qam/quickAccessEntry.ts`, which calls it exactly once
+ * `index.tsx` hands it to `qam/quickAccessEntry.tsx`, which calls it exactly once
  * and mounts what it answers with behind Tender's own Quick Access entry. That
  * seam is where it is so this module stays the wire and reaches no view — the
  * name is upstream's contract and the declaration is all of it that belongs

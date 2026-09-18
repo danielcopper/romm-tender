@@ -1,5 +1,5 @@
 /**
- * Tender's glyph in Steam's Quick Access tab strip, and the three states it
+ * Tender's glyph in Steam's Quick Access tab strip, and the four states it
  * animates in.
  *
  * The geometry is generated — `tabIconArt.ts`, written by `scripts/logo` from
@@ -22,12 +22,17 @@
  * two places and would degrade the same way only on an engine new enough to
  * animate `d` at all.
  *
- * **Two things about this are UNMEASURED.** Whether Steam's tab strip runs an
- * animation there at all, and whether the glyph takes the colour of the selected
- * tab (it asks for `currentColor` and nothing here establishes what that
- * inherits). Both are on the device list for this cut; neither is guessed at
- * here, and neither can make the glyph wrong — the worst either costs is a
- * resting pose in the wrong tone.
+ * **Four things about this are UNMEASURED**, all of them on the device list for
+ * this cut and none of them guessed at here. Whether Steam's tab strip runs an
+ * animation there at all. Whether the glyph takes the colour of the selected tab
+ * (it asks for `currentColor` and nothing here establishes what that inherits).
+ * What size the strip draws it at — the `1.4em` default below is the spike's
+ * value, carried over rather than measured. And whether the mirrored half folds:
+ * the second pair of bars is a `<use>` of the first, so it moves only if the
+ * engine runs the `<animate>` it clones into the shadow tree, and the suite
+ * cannot tell — it counts the two authored elements either way. The first three
+ * cost at worst a resting pose in the wrong tone or size; the fourth would show
+ * as two of the four arms folding.
  */
 
 import { useState, useSyncExternalStore, type FC } from "react";
@@ -48,8 +53,9 @@ import {
  *
  * Constants rather than `useId()`: one entry exists per Quick Access menu, and
  * a generated id would carry React's own punctuation into a URL fragment for no
- * gain. Two glyphs in one document would both reflect the first one's halves,
- * which is the same picture — they are identical by construction.
+ * gain. Two glyphs in one document would both reflect the first one's halves —
+ * the same picture while their states agree, which is every state but the
+ * pointer, the one input held per instance.
  */
 const RING_ID = "tender-tab-icon-ring";
 const BODY_ID = "tender-tab-icon-body";
@@ -79,7 +85,7 @@ export interface TabIconProps {
    * of it.
    */
   active?: boolean;
-  /** Edge length. The strip's own sizing is a device question (see the header). */
+  /** Edge length. `1.4em` is the #1897 spike's value, not a measurement (see the header). */
   size?: string;
 }
 

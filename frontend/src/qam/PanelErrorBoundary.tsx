@@ -1,11 +1,15 @@
 /**
  * The boundary Tender's Quick Access panel renders inside, and its one action.
  *
- * `@decky/ui` re-exports Decky Loader's `ErrorBoundary`, and the coexistence
- * bundle would therefore get Decky's — a component whose fallback offers Decky's
- * own repairs to a user who may not be running Decky at all. So this is ours, in
- * both bundles, which is also what keeps the two bundles rendering the same
- * fallback.
+ * `@decky/ui` has an `ErrorBoundary`, and it is not a component of its own: the
+ * whole module is one `findModuleExport` sweep for a class of STEAM's carrying
+ * `Reset`, `componentDidCatch` and `lastErrorKey`. Both bundles would resolve
+ * that same class. So the reason this one is ours is not whose it would
+ * otherwise be — it is that a search into Steam's bundle can stop matching on a
+ * client update, and a boundary is the one component whose absence is discovered
+ * by the fault it was there to catch. Ours cannot go missing, and its one action
+ * is the one #1942 asks for. What Steam's own fallback renders is not
+ * established here: the class lives in Steam's bundle, not in `node_modules`.
  *
  * **What the boundary buys is the rest of the menu.** Without one, a throw
  * inside the panel unmounts the tree it was rendered in — and that tree is

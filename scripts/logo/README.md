@@ -32,10 +32,10 @@ of `--static`, `--gif` and `--tab-icon` narrows the run to itself, and `--instal
 | `tab-icon-art.ts`                                         | `frontend/src/qam/tabIconArt.ts` — the QAM tab glyph |
 
 The tab glyph is the one output that is not an image. Steam's Quick Access tab strip takes a React node rather than a
-file, so the glyph ships as generated TypeScript the panel draws from — which is what lets it inherit `currentColor`
-like its neighbours in the strip and carry its fold as animation data. `tab-icon.svg` is written beside it and installed
-nowhere: it is the resting pose as a file, for looking at a change without opening Steam. What the glyph is and how it
-animates is `docs/architecture/qam-panel.md`; what it departs from, and why, is at `tabicon.STRIP_GEOMETRY`.
+file, so the glyph ships as generated TypeScript the panel draws from — which is what lets it ask for `currentColor` the
+way its neighbours in the strip do, and carry its fold as animation data. `tab-icon.svg` is written beside it and
+installed nowhere: it is the resting pose as a file, for looking at a change without opening Steam. What the glyph is
+and how it animates is `docs/architecture/qam-panel.md`; what it departs from, and why, is at `tabicon.STRIP_GEOMETRY`.
 
 Everything else ships twice except the lockup and `store_image.png`, which land once. The lockup is the README's banner,
 and the docs site draws its own header from the bare mark; nothing renders `store_image.png` at all, so `assets/` is the

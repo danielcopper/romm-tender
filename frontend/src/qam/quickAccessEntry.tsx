@@ -10,8 +10,9 @@
  * constructor calls `deinit()` on whatever it finds there, so writing it breaks
  * Decky's next boot — and not its `add()` either: Decky's own render counts the
  * `decky`-marked entries against its list length, and a foreign entry
- * desynchronises that guard into re-pushing every tab, twice per re-render, with
- * no convergence (measured in #1897). Our entry carries our own marker and our
+ * desynchronises that guard into re-pushing every tab with no convergence. Both
+ * of those are read off Decky's source rather than observed — #1897 deliberately
+ * did not take that route, so its runaway never ran. Our entry carries our own marker and our
  * own key and is invisible to that count. Neither is a presence check: the
  * bundle switch already asked whether Decky is serving
  * (`backend/host/inject/machine.py`) and the frontend does not re-ask.
@@ -50,8 +51,9 @@ import { PanelErrorBoundary } from "./PanelErrorBoundary";
  * entry as ours.
  *
  * Both are Tender's own. The key is what Steam builds the panel element's id
- * from — `quickaccess_content_tender`, which `utils/qamExpansion.ts` matches by
- * prefix. The marker is what makes a render pass over an array we have already
+ * from; what id a string key produces has not been measured, which is why
+ * `utils/qamExpansion.ts` matches the `quickaccess_content_` prefix and never
+ * the whole. The marker is what makes a render pass over an array we have already
  * pushed into a no-op, and it has to be the entry's own property rather than a
  * count kept here: a pass is not the only thing that can repeat, and an entry
  * that states what it is answers for an array this module has never seen.
@@ -81,9 +83,10 @@ const isOurs = (tab: unknown): tab is QuickAccessTabEntry =>
  * lands lowest. Measured both ways in #1897: patched before Decky booted, Tender
  * came out above it; re-patched beside a running Decky, below. Install order is
  * a property of which program starts first, which nothing here decides — so the
- * placement is re-asserted instead of relied upon. The menu re-renders often (33
- * passes over a few opens, measured), and moving an entry is invisible to
- * Decky's own guard, which counts marked entries and never asks where they sit.
+ * placement is re-asserted instead of relied upon. #1897 proved the re-assertion
+ * rather than assuming it: the entry was shoved to index 0 by hand and the next
+ * pass put it back at the end. Moving an entry is invisible to Decky's own
+ * guard, which counts marked entries and never asks where they sit.
  *
  * Reads no marker but our own: "last" is a statement about our entry, so it
  * holds against any number of other tab providers rather than against Decky
@@ -134,12 +137,17 @@ function findQuickAccessRenderers(): { browserView: unknown; embedded: unknown }
  *
  * React flattens the renderer's `memo` wrapper when it mounts and carries the
  * resolved type on the fiber, so swapping the module's export afterwards reaches
- * nothing that is already on screen — predicted from `@decky/ui`'s source and
- * then measured in #1897, where without this the patch handler never ran at all.
- * Decky does the same thing for the same reason. It was briefly suspected of
- * three Steam failures during that spike and then ruled out: the cause was
- * `initModuleCache()` running on import, confirmed by an A/B against Decky's own
- * copy of the package.
+ * nothing that is already on screen. That is React's own behaviour, read off its
+ * source rather than `@decky/ui`'s, which supplies the patcher and not the
+ * flattening; #1897 observed the consequence, a leaf handler that never ran.
+ * Without the adoption the entry still arrives — at the menu's next remount,
+ * which is what the spike recorded. Decky adopts for the same reason.
+ *
+ * It was briefly suspected of the four Steam failures during that spike and then
+ * ruled out: the cause was `initModuleCache()` running on import, confirmed by
+ * an A/B against Decky's own copy of the package. The spike nonetheless left the
+ * adoption off by default and labelled it unproven, so this is the first cut
+ * that ships it.
  */
 function adoptMountedMenu(renderers: { browserView: unknown; embedded: unknown }): void {
   const host = document.getElementById("root");
@@ -192,9 +200,11 @@ export function installQuickAccessEntry(factory: () => Plugin): QuickAccessEntry
     // so drawing a second copy would put the wrong one in the strip on exactly
     // the start-up this cut cannot test.
     tab: plugin.icon,
-    // The boundary wraps the panel and not the icon: a throw in the strip would
-    // take the whole menu down with no panel mounted to catch it, and the icon
-    // renders two constants and a boolean.
+    // The boundary wraps the panel and not the icon, because a boundary in the
+    // strip has no panel mounted to render its fallback into — a throw there
+    // takes the menu down whatever we do. That is the reason; the icon's own
+    // size is not one, since it subscribes to the sync store and asks the menu
+    // whether it is visible.
     panel: <PanelErrorBoundary>{plugin.content}</PanelErrorBoundary>,
     [TENDER_TAB_MARK]: true,
   };

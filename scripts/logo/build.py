@@ -212,8 +212,9 @@ INSTALL = {
     "lockup-animated-dark.gif": ("assets/lockup-animated-dark.gif",),
     # Not an image: the strip glyph lands in the panel's own source tree, because
     # the tab icon is a React node rather than a file the panel points at — it
-    # inherits `currentColor` and carries its fold as CSS keyframes, neither of
-    # which survives being an <img>.
+    # can inherit `currentColor` and carries its fold as SMIL values on the path
+    # data, neither of which survives being an <img>. Whether the strip's colour
+    # is what it ends up inheriting is a device question, open at #1942.
     "tab-icon-art.ts": ("frontend/src/qam/tabIconArt.ts",),
 }
 # A 1024px square of the bare mark. Nothing renders it — no page, no manifest —

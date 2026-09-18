@@ -82,6 +82,7 @@ run = [
     "python scripts/check_romm_min_version.py",
     "cd backend/native && sha256sum -c libgavel-x86_64-linux.so.sha256",
     "python scripts/check_vendored_trees.py",
+    "python scripts/check_generated_tab_icon.py",
 ]
 
 [tasks.gate]
