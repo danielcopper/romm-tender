@@ -35,7 +35,7 @@
       "automerge": true
     },
     {
-      "description": "Deliberate tight version ceiling: ruff is held <0.16 (0.x minors are breaking — new lint rules). allowedVersions stops Renovate from even proposing a version above the cap; without it, update-lockfile still raises a *minor* range-widening PR that would auto-merge. KEEP IN SYNC with requirements-dev.txt.",
+      "description": "Deliberate tight version ceiling: ruff is capped on a standing policy — 0.x minors may ship new lint rules — rather than on an observed break. The cap itself is the allowedVersions below, and it is the only copy of the number here: allowedVersions stops Renovate from even proposing a version above it; without it, update-lockfile still raises a *minor* range-widening PR that would auto-merge. KEEP IN SYNC with requirements-dev.txt.",
       "matchDepNames": [
         "ruff"
       ],
