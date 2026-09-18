@@ -845,6 +845,26 @@ the scope tells the readings apart: a surface of the plugin is a directory, a su
 subscribed to that page's game-detail store. _Avoid_: platform, target; _frontend_ (the whole of `frontend/src/` — both
 surfaces and everything below them).
 
+### Quick Access entry / entry marker / tab glyph
+
+The **Quick Access entry** is Tender's own row in Steam's Quick Access tab strip — the glyph in the rail and the panel
+behind it. It is added by patching the two renderers Steam draws the menu with and pushing an entry into the tab array
+they hand back, so it composes with Decky Loader's entry rather than going through it, and it appears whether or not
+Decky is running.
+
+The **entry marker** is the property the entry carries to say it is ours (`tender`), and it is what makes a render pass
+over an array the entry is already in add nothing. **It is not the injection's marker** — that one
+(`window.__tender_panel__`, → Injection) says a JS context already carries the panel, and the two are never called by
+the same name.
+
+The **tab glyph** is what the strip draws: the mark reduced to one tone with no disc, the sync ring levelled and the
+body as the D-pad cross. It is generated from the mark's own drawing routines (`scripts/logo/tabicon.py`) rather than
+drawn by hand, and it animates by state — the ring turns while a sync runs, the cross folds while the entry is
+**active** (the menu open, or the pointer on the glyph), both when both, and nothing at rest.
+
+_Avoid_: **tab** on its own for the entry, which is also Steam's word for the L1/R1 views inside a wide page (→ QAM
+page); **plugin entry** and **Decky tab**, neither of which this is.
+
 ### QAM page / Main / wide page
 
 What the plugin's Quick Access Menu panel shows at one time, chosen by the panel's router (`Page` in

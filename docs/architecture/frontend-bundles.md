@@ -295,6 +295,13 @@ Three properties are worth knowing before changing anything there:
 - **A dropped connection fails the calls that were already sent, and only those.** A frame still queued never left, so
   re-sending it is safe; one already on the wire may have run, and retrying it would repeat whatever it did.
 
+**The sixth is not the wire either, and it is the one the panel reaches the screen through.** `definePlugin` answers
+with the factory unchanged; `index.tsx` hands that factory to `frontend/src/qam/quickAccessEntry.tsx`, which calls it
+exactly once and mounts what it answers with behind Tender's own Quick Access entry ([qam-panel.md](qam-panel.md) → The
+entry). The seam is arranged that way so this module stays the wire and reaches no view — the name is upstream's
+contract and the declaration is all of it that belongs here. Under Decky Loader the call was Decky's; nothing else in
+the tree makes it, so without that line the panel is built for nobody.
+
 **Two of the six are not the wire at all.** `toaster` and `routerHook` were Decky Loader's own, and `@decky/api` only
 forwarded them. Their replacements are [#1901](https://github.com/danielcopper/romm-tender/issues/1901) — a toaster
 through Steam's own notification store, and the game-page patch installed by Tender's own installer — so until then both
