@@ -167,6 +167,14 @@ def build_gif(out: pathlib.Path, pal: gen.Palette, size: int, a: anim.Animation)
     print(f"  {small.name}  ({small.stat().st_size:,}b, 256px)")
 
 
+def _prettier() -> pathlib.Path:
+    """The frontend package's prettier, which the generated TypeScript needs."""
+    binary = REPO / "frontend" / "node_modules" / ".bin" / "prettier"
+    if not binary.exists():
+        sys.exit(f"not found: {binary} — run `mise run setup` first")
+    return binary
+
+
 def build_tab_icon(out: pathlib.Path) -> None:
     """The Quick Access strip glyph: a TypeScript module, and an SVG to look at.
 
@@ -175,19 +183,18 @@ def build_tab_icon(out: pathlib.Path) -> None:
     installed nowhere and is written beside it so a change to the form can be
     seen without opening Steam.
 
-    **The module is handed to prettier before it is installed**, because the
-    repository's commit hook and CI both format TypeScript and would otherwise
-    reformat this file after the build wrote it — at which point re-running the
-    build produces a diff nobody made and the generated file stops being
-    checkable against its generator.
+    **The module is handed to prettier**, because the repository's commit hook and
+    CI both format TypeScript and would otherwise reformat this file after the
+    build wrote it — at which point re-running the build produces a diff nobody
+    made and the generated file stops being checkable against its generator.
+    This copy is formatted for reading; the installed one is formatted again at
+    its destination, where the repository's own prettier configuration applies
+    ({@link install}).
     """
     out.mkdir(parents=True, exist_ok=True)
     ts = out / "tab-icon-art.ts"
     ts.write_text(tabicon.ts_module())
-    prettier = REPO / "frontend" / "node_modules" / ".bin" / "prettier"
-    if not prettier.exists():
-        sys.exit(f"not found: {prettier} — run `mise run setup` first")
-    _run([str(prettier), "--log-level", "warn", "--write", str(ts)])
+    _run([str(_prettier()), "--log-level", "warn", "--write", str(ts)])
     print(f"  {ts.name}  ({ts.stat().st_size:,}b, {len(tabicon.fold_stops())} fold stops)")
     svg = out / "tab-icon.svg"
     svg.write_text(tabicon.glyph())
@@ -239,6 +246,14 @@ def install(out: pathlib.Path, names: set[str]) -> None:
             sys.exit(f"not built: {src}")
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, dest)
+        # Formatted HERE and not in `out/`, because prettier resolves its
+        # configuration from the path of the file it is formatting and there is
+        # exactly one config in this repository, under `frontend/`. A run over
+        # the copy in `out/` therefore formats to prettier's defaults, and the
+        # result does not satisfy `pnpm -C frontend format:check` — measured: 73
+        # lines there against the 141 the frontend's own rules produce.
+        if dest.suffix == ".ts":
+            _run([str(_prettier()), "--log-level", "warn", "--write", str(dest)])
         print(f"  {dest.relative_to(REPO)}  ({dest.stat().st_size:,}b)")
 
 

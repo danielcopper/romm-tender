@@ -15,13 +15,12 @@ python3 build.py --install
 ```
 
 That renders everything and writes every shipped copy from the same render, so no two copies of one asset can drift
-apart. Needs `rsvg-convert` and `ffmpeg` on PATH, and — for the tab glyph alone — the frontend package's `prettier`.
-**The installed glyph still needs formatting afterwards**: the build hands the copy in `out/` to prettier, but what
-lands in `frontend/src/` is unformatted, so `scripts/check_generated_tab_icon.py` rejects it until
-`prettier --write frontend/src/qam/tabIconArt.ts` has run — which the commit hook does anyway, and which is why nobody
-noticed until the check existed. Without `--install` it writes to `out/` instead, which is the way to look at a change
-before it lands. Each of `--static`, `--gif` and `--tab-icon` narrows the run to itself, and `--install` then copies
-only what that run built.
+apart. Needs `rsvg-convert` and `ffmpeg` on PATH, and — for the tab glyph alone — the frontend package's `prettier`,
+which every installed TypeScript file is handed to **at its destination**: prettier resolves its configuration from the
+path of the file it formats, and this repository has exactly one, under `frontend/`. Formatting the copy in `out/`
+instead would format it to prettier's defaults, and the result would not satisfy `pnpm -C frontend format:check`.
+Without `--install` it writes to `out/` instead, which is the way to look at a change before it lands. Each of
+`--static`, `--gif` and `--tab-icon` narrows the run to itself, and `--install` then copies only what that run built.
 
 | File                                                      | Where it goes                                        |
 | --------------------------------------------------------- | ---------------------------------------------------- |

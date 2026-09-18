@@ -74,9 +74,7 @@ def main() -> int:
     print(
         f"FAIL: {GENERATED.relative_to(REPO)} is not what `scripts/logo/tabicon.py` emits today.\n"
         "      Either it was edited by hand, or the mark changed and the build was not re-run.\n"
-        "      Re-run `python3 scripts/logo/build.py --install --tab-icon`, then\n"
-        "      `frontend/node_modules/.bin/prettier --write frontend/src/qam/tabIconArt.ts` —\n"
-        "      the build installs the file unformatted, and this compares against the formatted one."
+        "      Re-run `python3 scripts/logo/build.py --install --tab-icon` and commit the result."
     )
     return 1
 
