@@ -299,11 +299,8 @@ def _arm_d(
     end_r = w / 2 the two outer arcs meet and it is a semicircle.
 
     `places` trades precision for bytes. Two decimals is the reference; the strip
-    glyph asks for one, because it emits a whole fold's worth of these as the
-    values of one SMIL animation and is drawn at a size where the second decimal
-    is far below a physical pixel. **The command sequence does not depend on it**
-    — the same `M L A L A L A Z` comes out at either precision, which is what
-    lets one of these interpolate into another (`tabicon.py`).
+    glyph asks for one, because it asks to be drawn 28 px across, where the second
+    decimal is far below a physical pixel (`tabicon.py`).
     """
     dx, dy = dot[0] - hub[0], dot[1] - hub[1]
     span = math.hypot(dx, dy)
@@ -348,11 +345,9 @@ def _arm(
 def arm_shape(g: Geometry, morph: float) -> tuple[float, float, float]:
     """Bar width, outer end radius and overhang at `morph`.
 
-    The three quantities the fold moves besides the hubs and dots, read out so
-    that the strip glyph folds by exactly the numbers the mark folds by rather
-    than by a second copy of them. At morph 0 all three fall back to the resting
-    capsule: full width, a semicircular end, and an overhang of exactly half that
-    width.
+    The three quantities the fold moves besides the hubs and dots. At morph 0 all
+    three fall back to the resting capsule: full width, a semicircular end, and an
+    overhang of exactly half that width.
     """
     rest_h = g.cap_w / 2.0
     w = g.cap_w * (1.0 + (g.dpad_bar_narrow - 1.0) * morph)
@@ -384,9 +379,6 @@ def _body(uid: str, g: Geometry, ink: tuple[str, str], morph: float) -> str:
     At morph 0 the hubs sit apart and each collinear pair merges into a capsule;
     at morph 1 both hubs are at the centre and the bars read as a D-pad cross.
     """
-    # The bars narrow, their ends unround and they reach further as the cross
-    # forms; `arm_shape` holds those three, so the strip glyph folds by the same
-    # numbers rather than by a copy of them.
     arms = "".join(f'<path d="{d}"/>' for d in arm_paths(g, morph) if d)
     return (
         f'<g fill="{ink[0]}">{arms}</g>'

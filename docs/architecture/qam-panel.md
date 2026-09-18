@@ -19,7 +19,7 @@ without restating it. The width mechanism's decision record is
 
 | Module                                                                          | Responsibility                                                                                                                                                      |
 | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `frontend/src/qam/`                                                             | The entry itself: the patch that puts it in the strip, the tab glyph and its three states, and the boundary the panel renders inside                                |
+| `frontend/src/qam/`                                                             | The entry itself: the patch that puts it in the strip, the tab glyph, and the boundary the panel renders inside                                                     |
 | `frontend/src/index.tsx` (`QAMPanel`)                                           | The router: one `Page` value, one mounted page, a module-level `currentPage` that survives a QAM remount                                                            |
 | `frontend/src/types/navigation.ts`                                              | The `Page` union — every page the router can land on                                                                                                                |
 | `frontend/src/bigpicture/MainPage.tsx`                                          | Main                                                                                                                                                                |
@@ -73,7 +73,8 @@ each is a way to get this wrong:
 - The entry is added again to whatever array the pass is handed, and the entry's own marker is what keeps a second pass
   over an array it is already in from adding a second one.
 - Anything bound to the menu's own window is bound from inside the menu's React tree, so the remount re-binds it. The
-  one such binding the entry makes is the visibility listener inside the glyph's `useQuickAccessVisible`.
+  entry itself binds nothing there — the glyph is static and reads no state at all — but a page the panel mounts does
+  (`utils/qamExpansion.ts`'s stylesheet and observer, `utils/entryFocus.ts`'s focus listeners).
 
 **An already-mounted menu is adopted rather than waited for.** React flattens the renderer's `memo` wrapper at mount and
 carries the resolved type on the fiber, so swapping the module's export afterwards reaches nothing already on screen.
@@ -84,31 +85,40 @@ Decky adopts for the same reason.
 
 ### The glyph
 
-The mark reduced for the strip: no disc, one tone, the sync ring levelled, and the body as the D-pad cross. The strip
-carries nothing but single-tone free-standing glyphs — read off a screenshot rather than measured on the device — a
-bell, friends, a cog, a bolt, a note, a question mark, and Decky's plug — so a filled disc would be the only solid body
-in the row.
+The mark reduced for the strip: no disc, one tone, the sync ring levelled, and the body as the button bars with the four
+button positions punched out of them. The strip carries nothing but single-tone free-standing glyphs — read off a
+screenshot rather than measured on the device — a bell, friends, a cog, a bolt, a note, a question mark, and Decky's
+plug — so a filled disc would be the only solid body in the row. The buttons are holes rather than dots for the same
+reason the disc went: with one tone a filled dot has nothing to be filled with that the bar is not already, so it
+disappears into the bar it sits on. They are cut at radius 12 in the 200-unit square, against the mark's own dot radius
+of 13.63 — at the mark's radius the 31.38-wide bar keeps two units either side of each dot and reads as a chain of
+blobs.
 
 It is **generated**, by `scripts/logo/tabicon.py` through `build.py --tab-icon`, into `frontend/src/qam/tabIconArt.ts`;
-the geometry comes from the mark's own drawing routines, so the two cannot drift. Its departures from the mark's
-geometry, and why each one, are at `tabicon.STRIP_GEOMETRY`.
+the geometry comes from the mark's own drawing routines, so the two cannot drift. Its one departure from the mark's
+geometry, and why, is at `tabicon.STRIP_GEOMETRY`.
 
-It animates by state, and the resting pose is always the cross with the ring level:
+**Nothing about it moves, and that is a measurement rather than a taste.** It shipped with a ring that turned while a
+sync ran and a body that folded while the entry was active. Read over CDP on the QuickAccess target in 6-second windows,
+with only the fold running:
 
-| State                                                        | What moves                              |
-| ------------------------------------------------------------ | --------------------------------------- |
-| at rest                                                      | nothing                                 |
-| a sync run in flight                                         | the ring turns                          |
-| the entry active — the QAM open, or the pointer on the glyph | the cross folds to the buttons and back |
-| both                                                         | both                                    |
+|                    | fold running | animation off |
+| ------------------ | ------------ | ------------- |
+| `TaskDuration`     | 1.726 s      | 0.0077 s      |
+| `LayoutCount`      | 720          | 1             |
+| `RecalcStyleCount` | 720          | 1             |
+| `LayoutDuration`   | 0.7626 s     | 0.001 s       |
 
-The fold is the mark's own (`anim.morph_at`, its schedule and easing untouched) **inverted**, because the strip's
-resting pose is the cross where the mark's is the button pair. The motion is SMIL elements rendered conditionally rather
-than CSS, so an engine that runs none of it draws the paths' own resting `d` and there is no second description of the
-resting pose to keep in step.
+That is roughly 29% of one core for as long as the menu is open, and a full layout plus style recalc 120 times a second
+— twice a frame at 60 Hz — because animating a path's `d` forces layout every frame. The ring's turn would have come on
+top of that; it could not be measured beside the fold, because starting a sync run was not possible in that session. On
+a handheld, that is not a trade a decoration rendering at 24 px gets to make. `TabIcon.test.tsx` fails if any SMIL
+element comes back, because the cost is invisible to every other check here.
 
-Two things about it are unmeasured and are on the device list: whether Steam's tab strip runs an animation there at all,
-and whether the glyph takes the colour of the selected tab.
+Two things about it are unmeasured and are on the device list: what size the strip draws it at, and whether it takes the
+colour of the selected tab. The glyph asks for 28 px as `1.633em` rather than as a pixel length, so it scales with
+Steam's UI — and the em-to-pixel mapping behind that number is itself a measurement rather than arithmetic: the `1.4em`
+it used to ask for drew a 24 px box under a 16 px parent, not the 22.4 px that font size states.
 
 ### The boundary
 

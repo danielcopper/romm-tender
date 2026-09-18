@@ -195,7 +195,7 @@ def build_tab_icon(out: pathlib.Path) -> None:
     ts = out / "tab-icon-art.ts"
     ts.write_text(tabicon.ts_module())
     _run([str(_prettier()), "--log-level", "warn", "--write", str(ts)])
-    print(f"  {ts.name}  ({ts.stat().st_size:,}b, {len(tabicon.fold_stops())} fold stops)")
+    print(f"  {ts.name}  ({ts.stat().st_size:,}b)")
     svg = out / "tab-icon.svg"
     svg.write_text(tabicon.glyph())
     print(f"  {svg.name}  ({svg.stat().st_size:,}b, not installed — for looking at)")
@@ -219,9 +219,8 @@ INSTALL = {
     "lockup-animated-dark.gif": ("assets/lockup-animated-dark.gif",),
     # Not an image: the strip glyph lands in the panel's own source tree, because
     # the tab icon is a React node rather than a file the panel points at — it
-    # can inherit `currentColor` and carries its fold as SMIL values on the path
-    # data, neither of which survives being an <img>. Whether the strip's colour
-    # is what it ends up inheriting is a device question, open at #1942.
+    # inherits `currentColor`, which does not survive being an <img>. Whether the
+    # strip's colour is what it ends up inheriting is a device question.
     "tab-icon-art.ts": ("frontend/src/qam/tabIconArt.ts",),
 }
 # A 1024px square of the bare mark. Nothing renders it — no page, no manifest —

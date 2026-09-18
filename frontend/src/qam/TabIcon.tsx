@@ -1,91 +1,62 @@
 /**
- * Tender's glyph in Steam's Quick Access tab strip, and the four states it
- * animates in.
+ * Tender's glyph in Steam's Quick Access tab strip.
  *
  * The geometry is generated — `tabIconArt.ts`, written by `scripts/logo` from
  * the mark's own drawing routines — so the strip glyph cannot drift away from
- * the mark. What is decided HERE is only the motion:
+ * the mark. Nothing is decided here but how those pieces are assembled: the arc
+ * and the bars are drawn twice under one `rotate(180)`, and the four button
+ * positions are punched out of the finished body by a mask.
  *
- * - **at rest** the cross stands and the ring is level. That is the pose the
- *   generated data's first stop carries, and it is what every path's own `d`
- *   attribute says, so it is also what an engine that animates nothing draws.
- * - **a sync in flight** turns the ring; the cross stands.
- * - **the entry active** — the Quick Access menu open, or the pointer on the
- *   glyph — folds the cross into the button pair and back; the ring stays level.
- * - **both** runs both.
+ * **It does not animate, and that is a measurement rather than a taste.** It
+ * shipped with a turning ring and a folding body; read over CDP on the
+ * QuickAccess target in 6-second windows, the fold alone cost 1.726 s of task
+ * time against 0.0077 s idle and ran layout and style recalc 720 times each —
+ * twice a frame at 60 Hz, because animating a path's `d` forces layout every
+ * frame. Roughly 29% of one core, for as long as the menu is open, for a glyph
+ * that was rendering at 24 px. An animation added back here costs that again:
+ * `docs/architecture/qam-panel.md` holds the reading in full.
  *
- * **The motion is SMIL, and that is a choice about degradation rather than a
- * preference.** An `<animate>` element that is not rendered leaves the path's own
- * `d` standing, so "not animating" and "at rest" are the same picture and there
- * is no second description of the resting pose to keep in step. The alternative
- * — CSS `@keyframes` over the `d` property — would have put the resting pose in
- * two places and would degrade the same way only on an engine new enough to
- * animate `d` at all.
- *
- * **Four things about this are UNMEASURED**, all of them on the device list for
- * this cut and none of them guessed at here. Whether Steam's tab strip runs an
- * animation there at all. Whether the glyph takes the colour of the selected tab
- * (it asks for `currentColor` and nothing here establishes what that inherits).
- * What size the strip draws it at — the `1.4em` default below is the spike's
- * value, carried over rather than measured. And whether the mirrored half folds:
- * the second pair of bars is a `<use>` of the first, so it moves only if the
- * engine runs the `<animate>` it clones into the shadow tree, and the suite
- * cannot tell — it counts the two authored elements either way. The first three
- * cost at worst a resting pose in the wrong tone or size; the fourth would show
- * as two of the four arms folding.
+ * **Two things about this are UNMEASURED**, both on the device list for this cut
+ * and neither guessed at here. What size the strip draws it at — `size` below
+ * asks for 28 px and nothing establishes what the strip does with that. And
+ * whether the glyph takes the colour of the selected tab: it asks for
+ * `currentColor` and nothing here establishes what that inherits.
  */
 
-import { useState, useSyncExternalStore, type FC } from "react";
-import { useQuickAccessVisible } from "@decky/ui";
-import { getSyncProgress, onSyncProgressChange } from "../utils/syncProgress";
+import type { FC } from "react";
 import {
   TAB_ICON_ARC,
+  TAB_ICON_BARS,
   TAB_ICON_CENTRE,
-  TAB_ICON_FOLD,
-  TAB_ICON_LOOP_SECONDS,
-  TAB_ICON_REST,
+  TAB_ICON_HOLE_R,
+  TAB_ICON_HOLES,
   TAB_ICON_VIEW_BOX,
 } from "./tabIconArt";
 
 /**
- * Where the glyph's two halves are defined, for the `<use>` that draws each one
- * a second time under a `rotate(180)`.
+ * Where the glyph's halves are defined, for the `<use>` that draws each one a
+ * second time under a `rotate(180)`, and where the holes are cut.
  *
- * Constants rather than `useId()`: one entry exists per Quick Access menu, and
- * a generated id would carry React's own punctuation into a URL fragment for no
- * gain. Two glyphs in one document would both reflect the first one's halves —
- * the same picture while their states agree, which is every state but the
- * pointer, the one input held per instance.
+ * Constants rather than `useId()`: one entry exists per Quick Access menu, and a
+ * generated id would carry React's own punctuation into a URL fragment for no
+ * gain. Two glyphs in one document would both reflect the first one's halves and
+ * both cut the first one's holes — which is the same picture, since nothing
+ * about the glyph varies between instances.
  */
 const RING_ID = "tender-tab-icon-ring";
 const BODY_ID = "tender-tab-icon-body";
+const HOLES_ID = "tender-tab-icon-holes";
 
-const LOOP = `${TAB_ICON_LOOP_SECONDS}s`;
-
-/** The fold's stops as SMIL wants them: one value list, one time list. */
-const foldValues = (arm: "a" | "b") => TAB_ICON_FOLD.map((stop) => stop[arm]).join(";");
-const FOLD_TIMES = TAB_ICON_FOLD.map((stop) => stop.at.toFixed(4)).join(";");
-
-/** Is a sync run in flight? The one fact the glyph reads from the plugin. */
-function useSyncInFlight(): boolean {
-  return useSyncExternalStore(onSyncProgressChange, () => getSyncProgress().running);
-}
+/**
+ * 28 px, at the em-to-pixel mapping measured on the device rather than derived
+ * from the parent's `font-size`: `1.4em` under a 16 px parent drew a 24 px box,
+ * not the 22.4 px that font size states. An em keeps the glyph scaling with
+ * Steam's UI where a pixel length would pin it.
+ */
+const GLYPH_SIZE = "1.633em";
 
 export interface TabIconProps {
-  /**
-   * Turn the ring. Defaults to the sync store, which is what the strip renders
-   * with; a caller passes it to draw one state on purpose.
-   */
-  syncing?: boolean;
-  /**
-   * Fold the cross. Defaults to the Quick Access menu being open, which the
-   * glyph reads for itself — `useQuickAccessVisible` resolves the menu's own
-   * window off Steam's navigation tree and listens on it, so it is asked and
-   * re-bound from inside the menu's React tree rather than held across a remount
-   * of it.
-   */
-  active?: boolean;
-  /** Edge length. `1.4em` is the #1897 spike's value, not a measurement (see the header). */
+  /** Edge length. See {@link GLYPH_SIZE} for what the default is and why. */
   size?: string;
 }
 
@@ -106,17 +77,7 @@ const Arc: FC = () => (
   </g>
 );
 
-export const TabIcon: FC<TabIconProps> = ({ syncing, active, size = "1.4em" }) => {
-  const storeSyncing = useSyncInFlight();
-  const menuOpen = useQuickAccessVisible();
-  const [pointerOn, setPointerOn] = useState(false);
-
-  const turning = syncing ?? storeSyncing;
-  // The pointer is its own reason to be active, and it is read here rather than
-  // with a `:hover` rule because a rule would need a stylesheet in the menu's
-  // document — one more thing bound to a view that is replaced on every remount,
-  // for a state React already delivers.
-  const folding = (active ?? menuOpen) || pointerOn;
+export const TabIcon: FC<TabIconProps> = ({ size = GLYPH_SIZE }) => {
   const turn = `rotate(180 ${TAB_ICON_CENTRE})`;
 
   return (
@@ -129,50 +90,32 @@ export const TabIcon: FC<TabIconProps> = ({ syncing, active, size = "1.4em" }) =
       // so the glyph must not announce itself a second time.
       aria-hidden="true"
       style={{ display: "block" }}
-      onPointerEnter={() => setPointerOn(true)}
-      onPointerLeave={() => setPointerOn(false)}
       data-testid="tender-tab-icon"
     >
       <g>
         <Arc />
         <use href={`#${RING_ID}`} transform={turn} />
-        {turning && (
-          <animateTransform
-            attributeName="transform"
-            attributeType="XML"
-            type="rotate"
-            from={`0 ${TAB_ICON_CENTRE}`}
-            to={`360 ${TAB_ICON_CENTRE}`}
-            dur={LOOP}
-            repeatCount="indefinite"
-          />
-        )}
       </g>
-      <g id={BODY_ID}>
-        <path d={TAB_ICON_REST.a} fill="currentColor">
-          {folding && (
-            <animate
-              attributeName="d"
-              values={foldValues("a")}
-              keyTimes={FOLD_TIMES}
-              dur={LOOP}
-              repeatCount="indefinite"
-            />
-          )}
-        </path>
-        <path d={TAB_ICON_REST.b} fill="currentColor">
-          {folding && (
-            <animate
-              attributeName="d"
-              values={foldValues("b")}
-              keyTimes={FOLD_TIMES}
-              dur={LOOP}
-              repeatCount="indefinite"
-            />
-          )}
-        </path>
+      {/*
+       * Luminance masking: white keeps the bar, black takes it away. The mask
+       * covers the finished body rather than one half of it, which is why it
+       * names all four positions where the bars name two — a `<use>` clones the
+       * bars, not what was cut out of them. The rect's percentages resolve
+       * against the view box, so it covers the square whatever `size` asks for.
+       */}
+      <mask id={HOLES_ID}>
+        <rect x="0" y="0" width="100%" height="100%" fill="#fff" />
+        {TAB_ICON_HOLES.map((hole) => (
+          <circle key={`${hole.cx},${hole.cy}`} cx={hole.cx} cy={hole.cy} r={TAB_ICON_HOLE_R} fill="#000" />
+        ))}
+      </mask>
+      <g mask={`url(#${HOLES_ID})`} fill="currentColor">
+        <g id={BODY_ID}>
+          <path d={TAB_ICON_BARS.a} />
+          <path d={TAB_ICON_BARS.b} />
+        </g>
+        <use href={`#${BODY_ID}`} transform={turn} />
       </g>
-      <use href={`#${BODY_ID}`} transform={turn} />
     </svg>
   );
 };

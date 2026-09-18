@@ -34,10 +34,10 @@
  * 2. **Re-assert the position on every pass** ({@link keepLast}).
  * 3. **Anything bound to the menu's own window is bound from inside the menu's
  *    React tree**, so the remount re-binds it. Nothing in this module binds
- *    anything there; the one binding the entry makes is the visibility listener
- *    inside `TabIcon`'s `useQuickAccessVisible`, which lives in an effect of a
- *    component the menu mounts. A listener attached here at module scope would
- *    be attached to a view that is already gone by the second remount.
+ *    anything there, and neither does the glyph — it is static and reads no
+ *    state; what does is inside effects of the pages the panel mounts. A
+ *    listener attached here at module scope would be attached to a view that is
+ *    already gone by the second remount.
  */
 
 import type { ReactNode } from "react";

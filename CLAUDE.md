@@ -625,11 +625,11 @@ Format: **invariant** — tier — enforced by.
   `createElement(`, with the enclosing function of every hit read. The sweep's own boundary is worth stating, because a
   reader re-deriving it meets the other kind first: a `globalThis` listener binds SharedJSContext's window, which the
   menu's remount does not touch, so those are out of scope however many of them there are. Every binding into the MENU's
-  window sits inside an effect or an event handler of a component the menu mounts: `qam/TabIcon.tsx` through
-  `useQuickAccessVisible`, `utils/qamExpansion.ts`'s stylesheet and `MutationObserver`, `utils/entryFocus.ts`'s focus
-  listeners, `bigpicture/layout/WidePage.tsx`'s `ResizeObserver`, and `bigpicture/layout/ScrollRegion.tsx`, which reads
-  the view per event and retains nothing. (`utils/styleInjector.ts` writes into `findSP()`'s document, which is the game
-  page's and not the menu's.) One added at module scope would work perfectly until the first Gaming-Mode-to-Desktop
+  window sits inside an effect or an event handler of a component the menu mounts: `utils/qamExpansion.ts`'s stylesheet
+  and `MutationObserver`, `utils/entryFocus.ts`'s focus listeners, `bigpicture/layout/WidePage.tsx`'s `ResizeObserver`,
+  and `bigpicture/layout/ScrollRegion.tsx`, which reads the view per event and retains nothing. The glyph binds nothing
+  at all — it is static and reads no state. (`utils/styleInjector.ts` writes into `findSP()`'s document, which is the
+  game page's and not the menu's.) One added at module scope would work perfectly until the first Gaming-Mode-to-Desktop
   switch and then do nothing, silently. Detail: `docs/architecture/qam-panel.md` → The entry
 - **Aggregate state mutated only via verb-named methods (no field assignment)** — check —
   `scripts/check_aggregate_field_assignment.py`
