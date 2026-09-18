@@ -15,21 +15,30 @@ python3 build.py --install
 ```
 
 That renders everything and writes every shipped copy from the same render, so no two copies of one asset can drift
-apart. Needs `rsvg-convert` and `ffmpeg` on PATH. Without `--install` it writes to `out/` instead, which is the way to
-look at a change before it lands.
+apart. Needs `rsvg-convert` and `ffmpeg` on PATH, and — for the tab glyph alone — the frontend package's `prettier`,
+which the generated file is handed to before it is installed, so the repository's own formatting does not rewrite it
+afterwards. Without `--install` it writes to `out/` instead, which is the way to look at a change before it lands. Each
+of `--static`, `--gif` and `--tab-icon` narrows the run to itself, and `--install` then copies only what that run built.
 
-| File                                                      | Where it goes                                       |
-| --------------------------------------------------------- | --------------------------------------------------- |
-| `logo.svg`                                                | `assets/`, `docs/assets/` — MkDocs' nav-bar mark    |
-| `logo.png` (512px)                                        | `assets/`, `docs/assets/` — the docs site's favicon |
-| `logo-animated.gif` (512px)                               | `assets/`, `docs/assets/` — the docs landing hero   |
-| `lockup.svg`, `lockup.png` (900px)                        | `assets/` — the banner at rest, light ground        |
-| `lockup-dark.svg`, `lockup-dark.png`                      | `assets/` — the banner at rest, dark ground         |
-| `lockup-animated.gif`, `lockup-animated-dark.gif` (600px) | `assets/` — the README banner                       |
-| `store_image.png` (1024px)                                | `assets/` — the square mark, for previews and links |
+| File                                                      | Where it goes                                        |
+| --------------------------------------------------------- | ---------------------------------------------------- |
+| `logo.svg`                                                | `assets/`, `docs/assets/` — MkDocs' nav-bar mark     |
+| `logo.png` (512px)                                        | `assets/`, `docs/assets/` — the docs site's favicon  |
+| `logo-animated.gif` (512px)                               | `assets/`, `docs/assets/` — the docs landing hero    |
+| `lockup.svg`, `lockup.png` (900px)                        | `assets/` — the banner at rest, light ground         |
+| `lockup-dark.svg`, `lockup-dark.png`                      | `assets/` — the banner at rest, dark ground          |
+| `lockup-animated.gif`, `lockup-animated-dark.gif` (600px) | `assets/` — the README banner                        |
+| `store_image.png` (1024px)                                | `assets/` — the square mark, for previews and links  |
+| `tab-icon-art.ts`                                         | `frontend/src/qam/tabIconArt.ts` — the QAM tab glyph |
 
-Everything ships twice except the lockup and `store_image.png`, which land once. The lockup is the README's banner, and
-the docs site draws its own header from the bare mark; nothing renders `store_image.png` at all, so `assets/` is the
+The tab glyph is the one output that is not an image. Steam's Quick Access tab strip takes a React node rather than a
+file, so the glyph ships as generated TypeScript the panel draws from — which is what lets it inherit `currentColor`
+like its neighbours in the strip and carry its fold as animation data. `tab-icon.svg` is written beside it and installed
+nowhere: it is the resting pose as a file, for looking at a change without opening Steam. What the glyph is and how it
+animates is `docs/architecture/qam-panel.md`; what it departs from, and why, is at `tabicon.STRIP_GEOMETRY`.
+
+Everything else ships twice except the lockup and `store_image.png`, which land once. The lockup is the README's banner,
+and the docs site draws its own header from the bare mark; nothing renders `store_image.png` at all, so `assets/` is the
 only place it needs to be.
 
 Each lockup ships in two variants because one cannot serve both grounds: the mark's ink falls to roughly 1.3:1 against
@@ -40,20 +49,23 @@ The animated lockup runs the same fold and spin as the bare mark, at 600px rathe
 for every pixel in every frame, and the third multiple of the rendered width buys sharpness nobody sees at the cost of
 roughly half the file again.
 
-`gen.py` and `anim.py` also stand alone, for looking at one thing:
+`gen.py`, `anim.py` and `tabicon.py` also stand alone, for looking at one thing:
 
 ```sh
-python3 gen.py                     # contact sheet of every palette
-python3 gen.py --asset steel       # one mark, transparent outside the disc
-python3 gen.py --asset --morph 1   # the D-pad end of the fold
-python3 gen.py --asset --no-dots   # bare body, for judging silhouette
-python3 anim.py --plot             # the morph and spin schedule, frame by frame
-python3 anim.py --frame 18         # one frame's SVG
+python3 gen.py                      # contact sheet of every palette
+python3 gen.py --asset steel        # one mark, transparent outside the disc
+python3 gen.py --asset --morph 1    # the D-pad end of the fold
+python3 gen.py --asset --no-dots    # bare body, for judging silhouette
+python3 anim.py --plot              # the morph and spin schedule, frame by frame
+python3 anim.py --frame 18          # one frame's SVG
+python3 tabicon.py --svg            # the tab glyph at rest
+python3 tabicon.py --svg --morph 0  # the folded end of its fold
+python3 tabicon.py --stops          # the fold's keyframe stops
 ```
 
 ## Changing things
 
-Four config objects, and nothing else worth editing:
+Five config objects, and nothing else worth editing:
 
 - **`gen.Palette`** — one row per candidate in `PALETTES`; `CHOSEN` names the one that ships. Each carries two facet
   pairs, disc and ink, given as (above-left, below-right), plus the two warm dot colours. How dark a candidate can go is
@@ -61,6 +73,9 @@ Four config objects, and nothing else worth editing:
 - **`gen.Geometry`** — every position and size, in a 200-unit square. Grouped by what they describe: the disc, the sync
   arrows, the button diamond, the dot shapes, the cross.
 - **`anim.Animation`** — frame count, rate, how far the ring turns, and where the morph's holds and ramps meet.
+- **`tabicon.STRIP_GEOMETRY`** — the tab glyph's departures from `gen.DEFAULT_GEOMETRY`, each with its reason. The glyph
+  reuses everything else: the arcs, the bars and the fold's schedule are the mark's own routines, and only the fold's
+  direction is inverted, because the strip rests as the cross where the mark rests as the buttons.
 - **`lockup`'s module constants** — which typeface was cut and at what letter-spacing, the wordmark's cap height as a
   fraction of the disc, and the air between the two. Changing the typeface or the tracking means re-cutting (below); the
   two ratios take effect on the next render.
