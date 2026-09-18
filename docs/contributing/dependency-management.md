@@ -49,18 +49,17 @@ everything is green.
 
 One Python dev tool is capped tighter than "next major", on a standing policy rather than on an observed break:
 
-| Dep    | Ceiling | Why                                       |
-| ------ | ------- | ----------------------------------------- |
-| `ruff` | `<0.16` | 0.x minors ship new lint rules (breaking) |
+| Dep    | Ceiling | Why                                        |
+| ------ | ------- | ------------------------------------------ |
+| `ruff` | `<0.16` | policy: 0.x minors may ship new lint rules |
 
 The ceiling lives in `requirements-dev.txt`. Renovate's `rangeStrategy: update-lockfile` refreshes the lock _within_ the
 range, but it does **not** stop a range-widening PR when a newer version is _above_ the ceiling — so `renovate.json`
 also carries an `allowedVersions` cap for that dep to keep Renovate from proposing the raise at all.
 
-**Heads up — this ceiling is duplicated:** the `<0.16` cap exists in **both** `requirements-dev.txt` and `renovate.json`
-(`allowedVersions`). If you deliberately raise it, change it in **both** places (the `renovate.json` rule is commented
-`KEEP IN SYNC`) — and in the table above, which is the third place the number is written down. This is the only version
-duplication Renovate forces on us.
+**Heads up — this ceiling is written in three places:** `requirements-dev.txt`, `renovate.json` (`allowedVersions`, the
+rule commented `KEEP IN SYNC`) and the table above. If you deliberately raise it, raise it in all three. This is the
+only version duplication Renovate forces on us.
 
 **A ceiling that is no longer needed is removed from all three, too.** `pytest-asyncio` was held `<1.4` until
 [#1886](https://github.com/danielcopper/romm-tender/pull/1886) rewrote the suite to stop relying on the implicit

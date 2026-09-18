@@ -311,18 +311,12 @@ the SonarCloud scan and its `sonar-gate` (they need `SONAR_TOKEN` and the CI cov
 - **basedpyright** — Type checking in CI. Checks all source files including the test suite (tests/ is not excluded).
 - **import-linter** — Layer boundary enforcement in CI (see Linting section above).
 - **pytest-cov** — Branch coverage reported to SonarCloud.
-- **pytest-timeout** — Bounds a single test at 120 s (`timeout` in `pytest.ini`) — its setup, call and teardown
-  together, since `timeout_func_only` is left off — so a test that blocks fails by name instead of running the CI job
-  out of its `timeout-minutes: 15` with nothing to say which test it was. The rest of the session still runs: the
-  default `signal` method raises inside the test rather than killing the process. Two of that method's limits are worth
-  knowing here. **The traceback is only as sharp as the block is synchronous** — a test stuck in `sleep` or a blocking
-  `recv()` points at that line, while one stuck on an `await` points into the event loop's own `select()`, so the test
-  name is the part to read there. And **the signal is only delivered between bytecodes**, so a block that has left the
-  interpreter is not interrupted until it comes back — a `ctypes` call into the compiled gavel core in `backend/native/`
-  is the shape that exists in this tree. The margin over the slowest honest test is sized against measured runs rather
-  than guaranteed by anything in the tests themselves: the hypothesis profile in `tests/conftest.py` sets
-  `deadline=None`, so a property test's duration follows the machine it runs on. A test that legitimately waits longer
-  raises its own with `@pytest.mark.timeout(<seconds>)` rather than the default being lifted for everyone.
+- **pytest-timeout** — Bounds a single test at 120 s (`timeout` in `pytest.ini`), so a test that blocks fails by name
+  instead of running the CI job out of its `timeout-minutes: 15` with nothing to say which test it was; on the main
+  thread the default `signal` method raises inside the test, so the rest of the session still runs. Reading such a
+  failure: the traceback is only as sharp as the block is synchronous — a test stuck on an `await` points into the event
+  loop's own `select()` rather than at the awaiting line, so the test name is what identifies it. A test that
+  legitimately waits longer raises its own with `@pytest.mark.timeout(<seconds>)`.
 
 ## Where the coding conventions live
 
