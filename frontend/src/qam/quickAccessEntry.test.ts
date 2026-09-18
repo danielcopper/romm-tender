@@ -16,7 +16,9 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { syncEntry, TENDER_TAB_KEY, type QuickAccessTabEntry } from "./quickAccessEntry";
+import { buildEntry, syncEntry, TENDER_TAB_KEY, type QuickAccessTabEntry } from "./quickAccessEntry";
+import { PanelErrorBoundary } from "./PanelErrorBoundary";
+import type { Plugin } from "../api/host";
 
 /** An entry shaped the way the installer builds it, minus the React nodes. */
 const tenderEntry = (): QuickAccessTabEntry => ({
@@ -117,5 +119,39 @@ describe("syncEntry", () => {
 
     expect(tabs[tabs.length - 1]).toBe(entry);
     expect(tabs).toHaveLength(5);
+  });
+});
+
+describe("buildEntry", () => {
+  const plugin = (over: Partial<Plugin> = {}): Plugin => ({
+    name: "Tender",
+    icon: "the-glyph" as unknown as Plugin["icon"],
+    content: "the-panel" as unknown as Plugin["content"],
+    ...over,
+  });
+
+  it("files the entry under Tender's own key and marks it as ours", () => {
+    const entry = buildEntry(plugin());
+
+    expect(entry.key).toBe(TENDER_TAB_KEY);
+    expect(entry.title).toBe("Tender");
+    // The marker, not the key, is what a later pass recognises it by.
+    expect((entry as unknown as Record<string, unknown>)[TENDER_TAB_KEY]).toBe(true);
+  });
+
+  it("draws the glyph the plugin declares rather than one of its own", () => {
+    // The start-up-failure branch answers with a different icon, so an entry
+    // that chose its own would draw the wrong one on exactly the start-up
+    // nothing here can test.
+    const icon = "a-different-glyph" as unknown as Plugin["icon"];
+
+    expect(buildEntry(plugin({ icon })).tab).toBe(icon);
+  });
+
+  it("puts the boundary around the panel and nothing around the glyph", () => {
+    const entry = buildEntry(plugin());
+
+    expect((entry.panel as { type: unknown }).type).toBe(PanelErrorBoundary);
+    expect(entry.tab).toBe("the-glyph");
   });
 });

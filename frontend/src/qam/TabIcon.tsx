@@ -125,7 +125,9 @@ export const TabIcon: FC<TabIconProps> = ({ syncing, active, size = "1.4em" }) =
       viewBox={TAB_ICON_VIEW_BOX}
       width={size}
       height={size}
-      role="presentation"
+      // Decorative: the strip entry carries the accessible name in its title,
+      // so the glyph must not announce itself a second time.
+      aria-hidden="true"
       style={{ display: "block" }}
       onPointerEnter={() => setPointerOn(true)}
       onPointerLeave={() => setPointerOn(false)}
