@@ -35,12 +35,19 @@
  *
  * ## What this file can and cannot see
  *
- * A name is checkable here only when its VALUE is the lookup's result. Three of
+ * **Nothing this check asks is answered by Steam's RUNTIME STATE.** Every entry
+ * below reads Steam's module registry or a global our own bootstrap installed —
+ * one registry, the same one in Big Picture and in the desktop client — and not
+ * what Steam has mounted or focused. A name answered that way has no verdict to
+ * give at the moment this runs and belongs in {@link ASKED_LIVE}, whose entries
+ * are asked by their own consumers when they are needed.
+ *
+ * A name is checkable here only when its VALUE is the lookup's result. Two of
  * the names the panel imports are wrappers that `@decky/ui` always defines and
  * that reach their lookups inside, so they are truthy whether the lookup found
  * anything or not — checking one would be a green light with nothing behind it.
  * They are listed in {@link UNVERIFIABLE} with what makes each one opaque,
- * rather than left out, because a name that is absent from both lists is the
+ * rather than left out, because a name that is absent from all four lists is the
  * only shape `steamModules.test.ts` fails on.
  */
 
@@ -71,7 +78,6 @@ import {
   appActionButtonClasses,
   appDetailsClasses,
   basicAppDetailsSectionStylerClasses,
-  findSP,
   playSectionClasses,
   quickAccessMenuClasses,
 } from "../utils/deckyUiInternals";
@@ -219,11 +225,6 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // perfectly truthy and does nothing.
   { name: "Navigation", found: () => Object.keys(Navigation).length > 0, deckyUiExport: true, absenceCost: "panel" },
 
-  // Asked by CALLING it: `findSP` is always a function and answers `undefined`
-  // when its probe missed, which is why `@decky/ui`'s own callers write
-  // `findSP() || window` around it.
-  { name: "findSP", found: () => findSP() !== undefined, deckyUiExport: true, absenceCost: "panel" },
-
   // The class maps and the glyph, which `deckyUiInternals.ts` already types
   // honestly. A missing class map does not throw: every read is either
   // optional-chained or guarded by one that is — `qamExpansion.ts:39` is a
@@ -271,23 +272,55 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
  * each with what makes it opaque.
  *
  * Listed rather than omitted: `steamModules.test.ts` sweeps every value the
- * panel imports from the package and fails on any name that is in neither this
- * list nor {@link STEAM_LOOKUPS} nor {@link PACKAGE_OWN}, so a new import has to
- * be classified before it can ship. Reaching what is behind one of these would
- * mean re-running its predicate here, which is the thing #1899 decided not to do
- * (`@decky/ui` owns the predicates, and we do not keep a second copy).
+ * panel imports from the package and fails on any name that is in none of this
+ * list, {@link STEAM_LOOKUPS}, {@link ASKED_LIVE} and {@link PACKAGE_OWN}, so a
+ * new import has to be classified before it can ship. Reaching what is behind
+ * one of these would mean re-running its predicate here, which is the thing
+ * #1899 decided not to do (`@decky/ui` owns the predicates, and we do not keep
+ * a second copy).
  */
 export const UNVERIFIABLE: Readonly<Record<string, string>> = {
   DropdownItem:
-    "an arrow function `@decky/ui` always defines; the lookup it renders " +
+    "an arrow function `@decky/ui` always defines; the lookup it reaches inside " +
     "(`DropdownItemInternal`) is module-private, so the export is truthy either way",
   showModal:
-    "an arrow function `@decky/ui` always defines; the lookup it renders " +
+    "an arrow function `@decky/ui` always defines; the lookup it reaches inside " +
     "(`showModalRaw`, `dist/components/Modal.js:3`) is module-private, so the export is " +
     "truthy whether or not that search found anything",
+};
+
+/**
+ * Names the panel imports from `@decky/ui` whose answer is Steam's RUNTIME
+ * STATE, asked by their own consumers at the moment they are needed.
+ *
+ * `findSP` is a real search that can come back empty, which is what keeps it out
+ * of {@link UNVERIFIABLE}; `useQuickAccessVisible` is a hook the package always
+ * defines, and is here because what it reads is the same trees.
+ *
+ * What separates both from {@link STEAM_LOOKUPS} is the axis they search. A
+ * module registry is one registry, the same one in Big Picture and in the
+ * desktop client. What Steam has mounted and what has focus is neither — the
+ * same question answers differently a second later — so a reading taken when the
+ * injector evaluates this bundle answers for a moment nobody chose, and refusing
+ * to mount the panel on it reports a fault that does not exist.
+ *
+ * `steamModules.test.ts` derives this set from `@decky/ui`'s own shipped source
+ * rather than trusting the list, so a name whose implementation starts reading
+ * the navigation trees cannot stay in {@link STEAM_LOOKUPS}.
+ */
+export const ASKED_LIVE: Readonly<Record<string, string>> = {
+  findSP:
+    "answers `window` when `document.title` is `SP` and otherwise searches the focus " +
+    "controller's active (else last active) context for the `GamepadUI_Full_Root` / " +
+    "`root_1_` navigation tree (`dist/utils/index.js`) — a context that carries no Big " +
+    "Picture tree until Big Picture has been opened. Its two consumers, " +
+    "`utils/styleInjector.ts`'s `hideNativePlaySection` and `showNativePlaySection`, ask " +
+    "it when the play button mounts and unmounts on a game page, and do nothing when it " +
+    "answers nothing",
   useQuickAccessVisible:
-    "a hook `@decky/ui` always defines; what it reads is a Steam store it reaches " +
-    "during render, so an import-time read says nothing about it",
+    "a hook `@decky/ui` always defines; it reaches the same navigation trees through its " +
+    "own `getQuickAccessWindow` during render (`dist/custom-hooks/useQuickAccessVisible.js`), " +
+    "so a reading taken at import says nothing about it",
 };
 
 /**

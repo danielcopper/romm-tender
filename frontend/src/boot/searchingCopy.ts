@@ -37,7 +37,7 @@
  * - **Did its search find anything?** That is the value, and it is what
  *   `steamModules.ts` already asks.
  *
- * The first question is put only about a name whose search MISSED, so the three
+ * The first question is put only about a name whose search MISSED, so the two
  * names in `steamModules.ts`'s `UNVERIFIABLE` never reach it — nothing asks
  * them, so they are never among the missing. Asking `in` of them would be
  * meaningful (a name the package does not export is absent whatever its value

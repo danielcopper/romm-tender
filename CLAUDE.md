@@ -706,11 +706,26 @@ Format: **invariant** — tier — enforced by.
   agreement; the provenance header names the commit it was taken at so the question can be re-asked rather than trusted
 - **Every value the panel imports from `@decky/ui` is classified by the start-up check** — test —
   `frontend/src/boot/steamModules.test.ts`, which sweeps every non-test module under `frontend/src/` and fails on a name
-  that is in none of the three lists (a search it asks, a name it cannot answer for, the package's own code). The swept
-  set is derived rather than listed, because a file missing from such a list carries no lock at all. **What it cannot
-  see is whether a classification is TRUE**: three names sit in the unverifiable list because they are wrappers the
-  package always defines, and moving a real search there to quieten the check would pass green and leave the panel
-  rendering a hole where the check reported everything resolved
+  that is in none of the four lists (a search it asks, a name it cannot answer for, a name answered by Steam's runtime
+  state, the package's own code). The swept set is derived rather than listed, because a file missing from such a list
+  carries no lock at all. **What it cannot see is whether a classification is TRUE**: two names sit in the unverifiable
+  list because they are wrappers the package always defines, and moving a real search there to quieten the check would
+  pass green and leave the panel rendering a hole where the check reported everything resolved. The one list it CAN
+  judge is `ASKED_LIVE`, which the test derives rather than checks for membership — it walks `@decky/ui`'s shipped
+  `dist/` for exported functions reaching `getGamepadNavigationTrees`, `getFocusNavController` or `document.title`
+  (through a module-private helper within a file, which is what carries `useQuickAccessVisible` through
+  `getQuickAccessWindow`) and holds that set, intersected with what the panel imports, EQUAL to the list's keys, with
+  none of it in `STEAM_LOOKUPS`. That axis is the rule the whole check rests on: every entry reads the module registry
+  or a bootstrap global — one registry, the same in both of Steam's modes — and not what Steam has mounted or focused,
+  which the same question answers differently a second later. A start-up reading of `findSP` refused to mount the panel
+  in the desktop client over a Big Picture tree that had not been built, and blamed Decky Loader for it. **What the
+  derivation cannot see is a runtime-state reader reached through a name the sweep does not know** — an arrow export, a
+  re-export, or another module's helper (`showModal` calls `findSP() || window` from `dist/components/Modal.js`) — and
+  it sees `function` declarations only, not nested in another. What the sweep cannot see it says nothing about: such a
+  name can sit in `STEAM_LOOKUPS` unflagged, which is the shape this cut removed by hand. What the narrowness cannot do
+  is put a registry search onto the live list in silence — a name the sweep did not derive fails the equality there. The
+  walk is `frontend/src/test-utils/jsFunctionScanner.ts`, a string-, comment- and regex-aware scan; why a regex could
+  not do it is on the docs page
 - **Whether every search answered and whether the panel may MOUNT are two questions, and a miss that costs less than the
   panel never takes the interface off the air** — check + test + prompt-only — the type carries the first half:
   `SteamLookup.absenceCost` is required, so a new entry does not compile until it states which of the three its absence

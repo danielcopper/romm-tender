@@ -2,17 +2,19 @@
  * Honest-typed re-exports of @decky/ui internal lookups whose runtime presence
  * isn't guaranteed.
  *
- * @decky/ui populates its class-map consts and `findSP` via `findClassModule` /
- * webpack module probes that can return `undefined` at runtime — its own code
- * even writes `findSP() || window`. Upstream still types them as always-present
- * (`declare const x: T`, `findSP(): Window`), so direct consumers get a lying
- * non-null type and their defensive `?.` guards read as dead code. TS cannot
- * re-type a `const`/function via `declare module` augmentation, so this thin
- * runtime re-export module re-declares each as `T | undefined`, making the
- * guards legitimate.
+ * @decky/ui populates its class-map consts via `findClassModule` / webpack
+ * module probes that can return `undefined` at runtime, and answers `findSP`
+ * from Steam's runtime state — `document.title`, else the focus controller's
+ * navigation trees — which carry no Big Picture tree until Big Picture has been
+ * opened; its own code even writes `findSP() || window`. Upstream still types
+ * them as always-present (`declare const x: T`, `findSP(): Window`), so direct
+ * consumers get a lying non-null type and their defensive `?.` guards read as
+ * dead code. TS cannot re-type a `const`/function via `declare module`
+ * augmentation, so this thin runtime re-export module re-declares each as
+ * `T | undefined`, making the guards legitimate.
  *
- * Any future @decky/ui value sourced from a findClassModule-style probe belongs
- * here, typed honestly.
+ * Any future @decky/ui value sourced from a findClassModule-style probe, or from
+ * Steam's runtime state, belongs here, typed honestly.
  */
 
 import type { CSSProperties, FC, FocusEventHandler, ReactNode } from "react";

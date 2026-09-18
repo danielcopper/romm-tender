@@ -112,6 +112,22 @@ missed is a name the panel renders with, the factory returns a fallback page and
 patch, no launch interceptor, no event listeners, no shortcut relocation. A half-working panel acts on what it cannot
 see, and nothing below the check is written to run without the components it was written against.
 
+**Nothing it asks is answered by Steam's runtime state.** Every entry reads Steam's module registry or a global the
+React bootstrap installed — one registry, the same one in Big Picture and in the desktop client (the desktop measurement
+below answered every registry name) — and not what Steam has mounted or focused. `findSP` is such a name: `@decky/ui`
+resolves it from `document.title`, or failing that from the focus controller's active (else last active) context, which
+carries no Big Picture tree until Big Picture has been opened. A reading of it when the injector evaluates the bundle
+answers for a moment nobody chose, and refusing to mount the panel on that answer reports a fault that does not exist —
+which is what happened in the desktop client, measured on the device (#1945). So it is classified as asked-live instead,
+and its two consumers in `utils/styleInjector.ts` ask it when the play button mounts and unmounts on a game page, and do
+nothing when it answers nothing.
+
+That is also why no mode question arises in the check at all. Twenty-eight of the twenty-nine entries were answered by
+something that does not differ between Steam's two modes; `findSP` was the only one that did, and it has left the list.
+(Measured in the desktop client, where twenty-eight of twenty-nine answered and `findSP` alone missed. The desktop
+client's own surface is [#831](https://github.com/danielcopper/decky-romm-sync/issues/831), and nothing here branches on
+a mode.)
+
 **Whether every search answered and whether the panel may mount are two questions**, and each entry states which one it
 bears on through what its absence costs: the `panel`, only its `appearance`, or only a `diagnostic`. Blocking is the
 status quo, which costs no evidence to stay at; moving a name off it is a decision taken per name, against each of its
@@ -219,16 +235,41 @@ it is exactly the skew being diagnosed — so the whole path is guarded and a fa
 sentence. `remote` beside it is release data about the published version and is never consulted: a release existing does
 not mean this machine installed it.
 
-**Three of the names the panel imports cannot be answered for**, and they are listed with the reason rather than left
-out: `DropdownItem`, `showModal` and `useQuickAccessVisible` are wrappers the package always defines, while what each
-reaches is module-private or read during render. `steamModules.test.ts` sweeps every value the panel imports from
-`@decky/ui` and fails on a name that is in none of its three lists, so a new import has to be classified before it can
-ship.
+**Two of the names the panel imports cannot be answered for**, and they are listed with the reason rather than left out:
+`DropdownItem` and `showModal` are wrappers the package always defines, while the lookup each one reaches inside is
+module-private, so the export is truthy whether or not that search found anything. `steamModules.test.ts` sweeps every
+value the panel imports from `@decky/ui` and fails on a name that is in none of its four lists — a search this check
+asks, a name it cannot answer for, a name answered by Steam's runtime state, or the package's own code — so a new import
+has to be classified before it can ship.
 
-That list is about VALUES, and the `in` reading above is a different axis — but the two do not meet, because the `in`
-question is only ever put about a name whose search missed, and nothing asks these three, so they are never among the
-missing. Asking `in` of them would be a check this tree does not have: whether Decky's copy carries a name whose value
-we never look at.
+**The runtime-state list is the one the test derives rather than trusts.** Which axis a name is answered on is a
+property of `@decky/ui`'s implementation, not of our opinion about it, so the test reads it there: it walks the
+package's shipped `dist/` for exported functions that reach `getGamepadNavigationTrees`, `getFocusNavController` or
+`document.title`, following module-private helpers within a file — which is what carries `useQuickAccessVisible` through
+its own `getQuickAccessWindow` — and then requires that set, intersected with what the panel imports, to be exactly the
+list. Both directions, so a live name cannot be left off it and a registry search cannot be parked on it. What the sweep
+cannot see is a name that reaches those readers through an arrow export, a re-export, or another module's helper:
+`showModal` is one, calling `findSP() || window` from `dist/components/Modal.js`. What the sweep cannot see it says
+nothing about: such a name can sit in the checked list unflagged, which is the shape this cut removed by hand. What the
+narrowness cannot do is put a registry search onto the live list in silence — a name the sweep did not derive fails the
+equality there.
+
+Reading the package's own source needs a scanner rather than a regex, and `frontend/src/test-utils/jsFunctionScanner.ts`
+is it: a brace inside a string literal is not structure, and `@decky/ui`'s `createPropListRegex` opens with `"const\{"`,
+which sends a counting regex to the end of its file and credits it with every read below it, without anything failing.
+The scanner skips strings, comments and regex literals, balances the parameter list, and throws on an opener it cannot
+close instead of answering to the end of the file — an unterminated string is not judged on its own: inside a body it
+still ends in that throw, at top level the scan simply ends. Regex literals are told from division by what significantly
+precedes the `/`, and the limit that matters is that `)` and `]` are absent from that set, so a regex written directly
+after a parenthesised expression would be scanned as code, with the same consequences its quotes and braces have
+anywhere else. Nothing can see that from inside; against the installed package it is pinned by the sweep named "reads no
+slash in the installed `@decky/ui` as division with a second slash after it on the line, which is the one shape the
+regex heuristic cannot tell apart".
+
+Those lists are about VALUES, and the `in` reading above is a different axis — but the two do not meet, because the `in`
+question is only ever put about a name whose search missed, and the check asks none of the four names in those two
+lists, so they are never among the missing. Asking `in` of them would be a check this tree does not have: whether
+Decky's copy carries a name whose value this check never reads.
 
 ## Talking to the backend
 

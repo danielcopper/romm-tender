@@ -3,10 +3,16 @@
  *
  * The lock is the first test: every value the panel imports from `@decky/ui`
  * must be classified — as a search this check asks, as a name it cannot answer
- * for, or as the package's own code. A name in none of the three is the one
- * shape that fails, and it is the shape that matters: an import added tomorrow
- * is a dependency nobody decided about, and the check would go on reporting
- * "everything resolved" while the panel rendered a hole.
+ * for, as a name answered by Steam's runtime state, or as the package's own
+ * code. A name in none of the four is the one shape that fails, and it is the
+ * shape that matters: an import added tomorrow is a dependency nobody decided
+ * about, and the check would go on reporting "everything resolved" while the
+ * panel rendered a hole.
+ *
+ * The third of those four is the one list this file DERIVES rather than trusts,
+ * from `@decky/ui`'s own shipped source: which axis a name is answered on is a
+ * property of the package's implementation, so reading it there is the only way
+ * the classification can be wrong and fail rather than wrong and green.
  *
  * It sweeps the source rather than naming the files, for the reason
  * `test-utils/componentSources.ts` gives at length: a file missing from a
@@ -18,8 +24,10 @@ import { globSync, readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
+import { declaredFunctions, divisionSlashes } from "../test-utils/jsFunctionScanner";
 import { type SearchingCopy, readSearchingCopy } from "./searchingCopy";
 import {
+  ASKED_LIVE,
   PACKAGE_OWN,
   SEARCH_OWNERS,
   STEAM_LOOKUPS,
@@ -101,9 +109,79 @@ function tenderOwnSearchNames(): string[] {
   return [...names].sort();
 }
 
+const DIST_DIR = `${process.cwd()}/node_modules/@decky/ui/dist/`;
+
+/**
+ * The reads of Steam's RUNTIME STATE in `@decky/ui`'s shipped source, spelled
+ * as that source spells them.
+ *
+ * `document.title` is `findSP`'s first question; the other two are the package's
+ * own readers of the focus controller, which is where every navigation tree is
+ * reached from. None of them asks Steam's module registry — they ask what Steam
+ * has mounted, which is what makes a start-up reading of them no verdict.
+ */
+const RUNTIME_STATE_READS = ["getGamepadNavigationTrees(", "getFocusNavController(", "document.title"];
+
+/** The two readers themselves: they read by definition, whatever their bodies happen to call. */
+const RUNTIME_STATE_READERS = ["getFocusNavController", "getGamepadNavigationTrees"];
+
+/**
+ * Every name `@decky/ui` exports whose implementation reads Steam's runtime
+ * state — derived from the package's own shipped source, never listed here.
+ *
+ * A function reads if its body performs one of {@link RUNTIME_STATE_READS}, if
+ * it IS one of {@link RUNTIME_STATE_READERS}, or if it calls something in the
+ * same file that does — which is what carries `useQuickAccessVisible` through
+ * its module-private `getQuickAccessWindow`.
+ *
+ * **What this sees is narrower than the sentence above**: `function`
+ * declarations only, not nested in another, and transitivity only WITHIN a
+ * file. A name that reaches the trees through an arrow export, through a
+ * re-export, or through another module's helper is invisible to it —
+ * `showModal` is exactly that, calling `findSP() || window` from
+ * `dist/components/Modal.js`, and it is classified on a different axis anyway.
+ *
+ * What the sweep cannot see it says nothing about: such a name can sit in
+ * {@link STEAM_LOOKUPS} unflagged, which is the shape this cut removed by hand.
+ * What the narrowness cannot do is put a registry search onto the live list in
+ * silence — a name the sweep did not derive fails the equality there.
+ */
+/** Every shipped `.js` of the installed package — the source both sweeps below read. */
+function distFiles(): string[] {
+  const files = globSync("**/*.js", { cwd: DIST_DIR });
+  if (files.length === 0) throw new Error(`No @decky/ui source found under ${DIST_DIR} — a sweep over nothing passes.`);
+  return files;
+}
+
+function runtimeStateNames(): string[] {
+  const exported = new Set<string>();
+  for (const relative of distFiles()) {
+    const functions = declaredFunctions(readFileSync(`${DIST_DIR}${relative}`, "utf8"));
+    const reads = new Set(
+      functions
+        .filter(
+          (fn) => RUNTIME_STATE_READERS.includes(fn.name) || RUNTIME_STATE_READS.some((read) => fn.body.includes(read)),
+        )
+        .map((fn) => fn.name),
+    );
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const fn of functions) {
+        if (reads.has(fn.name)) continue;
+        if (![...reads].some((reader) => fn.body.includes(`${reader}(`))) continue;
+        reads.add(fn.name);
+        grew = true;
+      }
+    }
+    for (const fn of functions) if (fn.exported && reads.has(fn.name)) exported.add(fn.name);
+  }
+  return [...exported].sort();
+}
+
 const classifiedNames = () => [
   ...STEAM_LOOKUPS.map((lookup) => lookup.name),
   ...Object.keys(UNVERIFIABLE),
+  ...Object.keys(ASKED_LIVE),
   ...Object.keys(PACKAGE_OWN),
 ];
 
@@ -119,6 +197,61 @@ describe("the start-up check's coverage of what the panel imports", () => {
     // a moved package name — and the test would compare an empty list against a
     // full one and pass, retiring itself in silence.
     expect(importedValueNames().length).toBeGreaterThan(20);
+  });
+
+  it("finds a name that reads Steam's runtime state, so a sweep that stopped matching cannot pass", () => {
+    // The same guard the import sweep carries, for the same reason: a renamed
+    // reader or a repackaged `dist/` would leave this deriving nothing. An empty
+    // set passes the "asks none of them" test below in silence, and fails the
+    // equality only while ASKED_LIVE has entries — this names the cause instead.
+    expect(runtimeStateNames()).toContain("findSP");
+  });
+
+  it("reads no slash in the installed @decky/ui as division with a second slash after it on the line, which is the one shape the regex heuristic cannot tell apart", () => {
+    // The scanner tells a regex literal from division by what precedes the `/`,
+    // and the reading it cannot check is a `/` it calls division that opens a
+    // literal after all — silent, because the literal's quotes and braces are
+    // then counted as code. Every such mistake has its closing `/` later on the
+    // same line, so this says the installed package contains no candidate at
+    // all. A failure names a line to read: either it is real division and this
+    // assertion is too strong for this package, or the heuristic has met the
+    // case it cannot see.
+    //
+    // **Measured today: the package contains no division at all**, so this
+    // ranges over an empty set and constrains the CURRENT install only in that
+    // it would speak up when one appears. That `divisionSlashes` reports
+    // division when there is division is held separately, by the scanner's own
+    // test, so an empty answer here cannot be the function having stopped
+    // working.
+    const candidates: string[] = [];
+    for (const relative of distFiles()) {
+      const source = readFileSync(`${DIST_DIR}${relative}`, "utf8");
+      for (const offset of divisionSlashes(source)) {
+        const lineEnd = source.indexOf("\n", offset);
+        const rest = source.slice(offset + 1, lineEnd === -1 ? source.length : lineEnd);
+        if (rest.includes("/")) candidates.push(`${relative}:${source.slice(0, offset).split("\n").length}`);
+      }
+    }
+    expect(candidates).toEqual([]);
+  });
+
+  it("classifies as asked-live exactly the imported names that read Steam's runtime state", () => {
+    // The axis, mechanized: the check asks Steam's module registry or a
+    // bootstrap global, and a name answered by what Steam has mounted or focused
+    // has no verdict to give at start-up. Both directions, because either one
+    // alone is a hole — a live name left off the list is a panel refused over a
+    // tree Big Picture had not built yet, and a registry search moved onto it is
+    // a search nothing asks any more.
+    const imported = new Set(importedValueNames());
+    expect(runtimeStateNames().filter((name) => imported.has(name))).toEqual(Object.keys(ASKED_LIVE).sort());
+  });
+
+  it("asks none of them at start-up", () => {
+    // Whatever the intersection above says about what the panel imports, no name
+    // the package answers from runtime state may be a search this check refuses
+    // to mount over.
+    const live = new Set(runtimeStateNames());
+    expect(STEAM_LOOKUPS.filter((lookup) => live.has(lookup.name)).map((lookup) => lookup.name)).toEqual([]);
   });
 
   it("classifies each name once, so a list cannot quietly absorb another's entries", () => {
