@@ -15,8 +15,9 @@
  * distinguishable from another: an empty panel looks exactly like a backend that
  * is not running, and the user's next step is different in each case. So it says
  * what missed, whose copy of `@decky/ui` the missed searches belonged to, the
- * one repair that follows, and where to report it. It does not try to work out
- * which Steam update did it, or to carry on with the parts that still resolve.
+ * repair that follows where one does, and where to report it. It does not try
+ * to work out which Steam update did it, or to carry on with the parts that
+ * still resolve.
  *
  * Whose copy that is arrives as a prop rather than being read here. The machine
  * is not what would stand in the way — `searchingCopy.test.ts` sets
@@ -30,7 +31,7 @@
 import type { CSSProperties, FC } from "react";
 
 import type { SearchingCopy } from "./searchingCopy";
-import { describeFailure, type StartupReport } from "./steamModules";
+import { describeFailure, namesAnUpdate, type StartupReport } from "./steamModules";
 
 const ISSUES_URL = "github.com/danielcopper/romm-tender/issues";
 
@@ -49,7 +50,6 @@ const nameList: CSSProperties = {
   background: "rgba(0, 0, 0, 0.25)",
   borderRadius: "4px",
 };
-const footnote: CSSProperties = { margin: 0, opacity: 0.75, fontSize: "12px" };
 
 /**
  * The names, as one block.
@@ -59,18 +59,16 @@ const footnote: CSSProperties = { margin: 0, opacity: 0.75, fontSize: "12px" };
  */
 const MissingNames: FC<{ names: readonly string[] }> = ({ names }) => <div style={nameList}>{names.join(", ")}</div>;
 
-export const StartupFailurePanel: FC<{ report: StartupReport; copy: SearchingCopy }> = ({ report, copy }) => (
-  <div style={page}>
-    <div style={heading}>Tender could not read Steam&apos;s interface</div>
-    <p style={paragraph}>{describeFailure(report, copy)}</p>
-    <p style={paragraph}>These are what it looked for and did not find:</p>
-    <MissingNames names={report.missing} />
-    <p style={paragraph}>
-      Nothing is wrong with your library and nothing has been changed. Tender has not started, so that a half-working
-      panel cannot act on what it cannot see.
-    </p>
-    <p style={footnote}>Please report this at {ISSUES_URL}, with the names above.</p>
-  </div>
-);
+export const StartupFailurePanel: FC<{ report: StartupReport; copy: SearchingCopy }> = ({ report, copy }) => {
+  const when = namesAnUpdate(report, copy) ? "If this keeps happening after the update" : "If this keeps happening";
+  return (
+    <div style={page}>
+      <div style={heading}>Tender can&apos;t start right now</div>
+      <p style={paragraph}>{describeFailure(report, copy)}</p>
+      <p style={paragraph}>{`${when}, please report it at ${ISSUES_URL} and include these names:`}</p>
+      <MissingNames names={report.missing} />
+    </div>
+  );
+};
 
 export default StartupFailurePanel;

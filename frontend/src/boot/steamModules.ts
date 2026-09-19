@@ -242,7 +242,7 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // | `appDetailsClasses` | `InnerContainer` in `findInsertionPoint` (`bigpicture/patches/gameDetailPatch.tsx:88`); `AppDetailsOverviewPanel` in the patch handler `registerGameDetailPatch` installs (`:231`, and its debug line `:242`) | `findInsertionPoint` returns `undefined`; the wrapper takes `""` | `InnerContainer` is a mark on a node of STEAM's, so without it the handler finds no insertion point and returns the tree untouched — no Tender section on the game page at all. Without `AppDetailsOverviewPanel` the wrapper is still inserted, outside `InnerContainer`'s flex and scroll layout |
   // | `basicAppDetailsSectionStylerClasses` | `PlaySection` in an unnamed `useEffect` of `CustomPlayButton` (`CustomPlayButton.tsx:220`) and on our own row in `RomMPlaySection` (`bigpicture/RomMPlaySection.tsx:1048`); also `dumpTree` (`gameDetailPatch.tsx:145-154`) | the effect does not call `hideNativePlaySection`; the row takes `""`; the dump prints `UNDEFINED` | the same member is both kinds at once: it names a node of Steam's for the hide, so Steam's own play section stays on screen beside ours, and a node of ours for the row's styling |
   // | `playSectionClasses` | `Container` in `dumpTree` alone (`gameDetailPatch.tsx:133-141`) | the dump prints `UNDEFINED` and skips the tree search it guards | one line of a debug dump that runs at most once per load names no class. Nothing a user can see |
-  // | `quickAccessMenuClasses` | `TabGroupPanel` at module scope (`utils/qamExpansion.ts:44-46`), read into the selectors of the injected sheet (`:100-101`); `ActiveTab` in `useWideQamPanel`'s effect (`:190`) | `TAB_PANEL_SELECTOR` becomes `PANEL_ID_SELECTOR`, the panel's id; `owningTabActive` defaults to true (`:197`, the default argued just above it) and the `MutationObserver` guarded at `:206` is never constructed | the sheet matches the panel by id instead of by class, and the expansion is taken whether or not the page's own tab is the active one and is not re-synced on a tab switch — a leaked expansion the QAM-close and unmount paths still clear |
+  // | `quickAccessMenuClasses` | `TabGroupPanel` at module scope (`utils/qamExpansion.ts:44-46`), read into the selectors of the injected sheet (`:100-101`); `ActiveTab` in `useWideQamPanel`'s effect (`:190`); `Title` in `buildEntry` (`qam/quickAccessEntry.tsx:128`), as the panel's heading | `TAB_PANEL_SELECTOR` becomes `PANEL_ID_SELECTOR`, the panel's id; `owningTabActive` defaults to true (`:197`, the default argued just above it) and the `MutationObserver` guarded at `:206` is never constructed; the heading's `className` is `undefined` | the sheet matches the panel by id instead of by class, and the expansion is taken whether or not the page's own tab is the active one and is not re-synced on a tab switch — a leaked expansion the QAM-close and unmount paths still clear. The heading is still drawn, unstyled, at body size |
   //
   // Every map but `playSectionClasses` blocks the panel, and that is the status
   // quo rather than a reading of the table: see {@link AbsenceCost} for what
@@ -471,8 +471,12 @@ export function searchOwner(report: StartupReport, copy: SearchingCopy): SearchO
 const deckyName = (copy: SearchingCopy): string =>
   copy.owner === "decky" && copy.version !== null ? `Decky Loader ${copy.version}` : "Decky Loader";
 
+/** Nothing at all answered — the bootstrap's fault rather than a stale predicate's. */
+const nothingAnswered = (report: StartupReport): boolean => report.missing.length === report.checked;
+
 /**
- * The one sentence that leads to a repair, for the page that replaces the panel.
+ * The page's case sentence — what happened, in the reader's terms, and what to
+ * do about it.
  *
  * Asked only where the panel may not mount, which is the moment that page
  * exists for; a miss the panel survives is worded by
@@ -481,80 +485,81 @@ const deckyName = (copy: SearchingCopy): string =>
  * All of them missing is not "many predicates broke at once" — it is the
  * globals bundle never having run, or Steam's registry having been read before
  * it was complete. That answer is about the bootstrap rather than about either
- * copy of `@decky/ui`, so the searching copy does not enter it.
+ * copy of `@decky/ui`, so the searching copy does not enter it. The sentence
+ * tells the reader Tender started before Steam was ready and to restart Steam;
+ * that is the plain reading of the second cause only, and the first is not
+ * ruled out by anything this check sees.
  *
  * Some of them missing is a stale predicate, and then whose predicate decides
  * the repair: {@link searchOwner} answers that, and this words each of its
  * answers for a user who is looking at a page instead of a panel.
  *
- * `none` and `mixed` stay silent about a repair — the first about the whole of
- * what missed, the second about part of it — and the reason is the same in both.
- * {@link STEAM_LOOKUPS} carries names `@decky/ui` does not export, and for the
- * three React globals among them there is no repair to offer: which
- * program installed them on a machine running both is #1900's question and not
- * one this page may decide — and in the standalone bundle, having that answer
- * would not settle it anyway, since a missing `SP_REACTDOM` there is
+ * `none` names no program to update, and `mixed` names one for the package's
+ * share of the miss only. {@link STEAM_LOOKUPS} carries names `@decky/ui` does
+ * not export, and for the three React globals among them no update follows
+ * from this branch: it keys on whose COPY ran a search, not on which program
+ * installed a global — and in the standalone bundle a missing `SP_REACTDOM` is
  * `globals.js` never having run or the ReactDOM predicate in `steamGlobals.ts`
  * having gone stale, a load-order fault and a version fault behind one symptom
- * with different repairs. So `none` names no repair at all, and `mixed` names
- * one for the package's share of the miss and stays silent about the rest.
+ * with different repairs. So `none` asks for a report, and `mixed` sends the
+ * user after Decky Loader and puts what is left on Tender's side, asking for a
+ * report rather than an update. That attribution is right for
+ * `ControllerGlyph`, whose predicate is ours in both bundles, and not for a
+ * global: `mixed` arises only in the coexistence bundle, which is loaded where
+ * Decky Loader is serving and has installed the globals itself.
  *
- * `ControllerGlyph` can appear in that silence too, and there it is a real loss
- * — `utils/deckyUiInternals.ts` reaches it with a `findModule` predicate of OURS
- * in both bundles, so a newer Tender is its repair, and keying the branch on
- * whose COPY ran the search cannot say so. What bounds that is only that the
- * glyph never brings this page up by itself: its absence costs appearance, so
- * it arrives beside a name that does cost the panel. Which verdict it lands in
- * follows from WHICH name that is, and both happen — beside a global it is the
- * `none` answer, whose silence is right anyway; beside a package name Decky's
- * copy carries it is `mixed`, and the glyph is that answer's unnamed rest with
- * no global anywhere in the miss. Its own sentence is printed by
- * {@link describeSurvivedMiss}.
+ * `ControllerGlyph` never brings this page up by itself — its absence costs
+ * appearance — so it arrives beside a name that does cost the panel. Beside a
+ * global it is the `none` answer; beside a package name Decky's copy carries it
+ * is `mixed`, and is that answer's rest. Its own sentence, naming a newer
+ * Tender, is printed by {@link describeSurvivedMiss}.
  */
 export function describeFailure(report: StartupReport, copy: SearchingCopy): string {
   if (report.panelMayMount) return "";
-  if (report.missing.length === report.checked) {
+  if (nothingAnswered(report)) {
     return (
-      "None of the searches into Steam's interface found anything. That is not a run of " +
-      "broken lookups — it means Steam's module registry was not readable when Tender " +
-      "read it, or Tender's React bootstrap never ran."
+      "Tender started before Steam was ready. Restarting Steam is the first thing to try; " +
+      "if this page comes back every time, please report it."
     );
   }
-  const scale = `${report.missing.length} of ${report.checked} searches into Steam's interface found nothing. `;
   const decky = deckyName(copy);
   switch (searchOwner(report, copy)) {
     case "none":
-      return scale + "None of them is a name @decky/ui exports, so neither copy of the package ran them.";
+      return "Tender couldn't set up the parts it needs from Steam. Please report this — the names below are what helps.";
     case "tender":
       return (
-        scale +
-        "Tender's own copy of @decky/ui ran them, so a Steam client update has moved what " +
-        "this version of Tender looks for. A newer Tender is the repair."
+        "Steam has changed, and this version of Tender doesn't know its way around the new one yet. " +
+        "Updating Tender should fix it."
       );
     case "disagreement":
       return (
-        scale +
-        `Tender reads them from ${decky}'s copy of @decky/ui, and that copy does not carry ` +
-        "some of the names Tender asks it for — two separately installed programs disagreeing " +
-        "about the package, whatever else went stale beside it. Bringing both Tender and Decky " +
-        "Loader to their current versions is the repair."
+        `Tender and ${decky} are out of step with each other: Tender asks Decky's shared part for ` +
+        "things it doesn't have. Updating both to their current versions should fix it."
       );
     case "mixed":
       return (
-        scale +
-        `${decky}'s copy of @decky/ui ran some of them, not Tender's own, so a Steam client ` +
-        "update has moved what Decky looks for — Decky's own interface and its other plugins " +
-        "are affected the same way, and a newer Decky Loader is the repair for those. The rest " +
-        "are not names @decky/ui exports, so neither copy of the package ran them."
+        `Steam has changed, and ${decky} doesn't know its way around the new one yet. Updating ` +
+        "Decky Loader fixes that part. If this page still appears afterwards, the rest is on " +
+        "Tender's side — please report it."
       );
     case "decky":
       return (
-        scale +
-        `${decky}'s copy of @decky/ui ran them, not Tender's own, so a Steam client update has ` +
-        "moved what Decky looks for — Decky's own interface and its other plugins are affected " +
-        "the same way. A newer Decky Loader is the repair."
+        `Steam has changed, and ${decky} doesn't know its way around the new one yet. Tender ` +
+        "shares that part with Decky, so it's affected too — and so are Decky's own menu and its " +
+        "other plugins. Updating Decky Loader should fix all of it."
       );
   }
+}
+
+/**
+ * Does the page's own sentence send the user to make an update?
+ *
+ * {@link describeFailure}'s answer for everything missing and for `none` asks
+ * for a report and names nothing to update, so the page's report line has no
+ * update to be "after" there.
+ */
+export function namesAnUpdate(report: StartupReport, copy: SearchingCopy): boolean {
+  return !nothingAnswered(report) && searchOwner(report, copy) !== "none";
 }
 
 /**
@@ -577,13 +582,13 @@ export function describeFailure(report: StartupReport, copy: SearchingCopy): str
  * `none` this line names one and the page names none at all: nothing that
  * missed is a name `@decky/ui` exports, so every one of them is a search Tender
  * runs with a module probe of its own and a newer Tender is the repair. The
- * page has to stay silent there because the three React globals reach ITS
- * `none`, and which program installed those on a machine running both is
- * #1900's question. They cannot reach HERE — their absence costs the panel —
- * and that is the property `steamModules.test.ts` holds, rather than the short
- * set of names it happens to produce today. `mixed` is the other one: here it
- * names a repair covering both programs, where the page names Decky's and stays
- * silent about the rest, for the same reason.
+ * page names no update there because the three React globals reach ITS
+ * `none`, and its verdict keys on whose copy ran a search rather than on which
+ * program installed a global. They cannot reach HERE — their absence costs the
+ * panel — and that is the property `steamModules.test.ts` holds, rather than
+ * the short set of names it happens to produce today. `mixed` is the other one:
+ * here it names a repair covering both programs, where the page names Decky's
+ * and asks for a report about the rest.
  */
 export function describeSurvivedMiss(report: StartupReport, copy: SearchingCopy): string {
   if (report.everySearchAnswered || !report.panelMayMount) return "";

@@ -146,18 +146,20 @@ name "a newer Tender" unconditionally, which was sound only while nothing that c
 exports; `playSectionClasses` is one, and in the coexistence bundle the search behind it is Decky's.
 
 Both surfaces answer every verdict below; where they come apart is the **repair**. On `none` the log line names one and
-the page names none at all: nothing that missed is a `@decky/ui` export, so every one of them is a search Tender runs
-with a module probe of its own, and a newer Tender is the repair. The page has to stay silent there because the three
-`SP_*` globals reach its `none` (below); they cannot reach the log line, because their absence costs the panel. **That
-is the property `steamModules.test.ts` locks** — a non-blocking name `@decky/ui` does not export must be one Tender
-probes for itself — rather than the short set of names it produces today, which would go stale the moment a second name
-moved. `mixed` is the other place they differ: the log line names a repair covering both programs, where the page names
-Decky's and stays silent about the rest, for the same reason.
+the page names no update at all: nothing that missed is a `@decky/ui` export, so every one of them is a search Tender
+runs with a module probe of its own, and a newer Tender is the repair. The page asks for a report there instead because
+the three `SP_*` globals reach its `none` (below); they cannot reach the log line, because their absence costs the
+panel. **That is the property `steamModules.test.ts` locks** — a non-blocking name `@decky/ui` does not export must be
+one Tender probes for itself — rather than the short set of names it produces today, which would go stale the moment a
+second name moved. `mixed` is the other place they differ: the log line names a repair covering both programs, where the
+page names Decky's and asks for a report about the rest, for the same reason.
 
 The page names every search that came back empty, and distinguishes **some** of them missing from **all** of them. All
 means something more basic than a stale predicate: the React bootstrap never ran, or Steam's module registry was read
-before it was complete — neither is `@decky/ui`'s doing, so that one answer is the same in both bundles. The page uses
-no `@decky/ui`, because a page built out of searches is the wrong thing to render when a search has missed.
+before it was complete — neither is `@decky/ui`'s doing, so that one answer is the same in both bundles. The page words
+it as Tender having started before Steam was ready, with restarting Steam as the first thing to try, which is the plain
+reading of the second cause and does not rule out the first. The page uses no `@decky/ui`, because a page built out of
+searches is the wrong thing to render when a search has missed.
 
 **Some of them missing has five answers, not one, because the predicates are not always ours.** Most belong to
 `@decky/ui`, and the coexistence bundle runs Decky Loader's copy of it. `frontend/src/boot/searchingCopy.ts` decides
@@ -165,13 +167,13 @@ whose copy ran them, from the build's own stamp and one reading of Decky's names
 `searchOwner` turns that into ONE verdict, which `describeFailure` words for the page and `describeSurvivedMiss` for the
 log line:
 
-| Verdict        | Bundle      | What was read                                                                         | What the page says                                                                                                                          |
-| -------------- | ----------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `none`         | either      | no missed name is a package export                                                    | Neither copy of `@decky/ui` ran these searches. **No repair is named** — see below.                                                         |
-| `tender`       | standalone  | —                                                                                     | Tender's own copy searched and missed. **Update Tender.**                                                                                   |
-| `disagreement` | coexistence | a missed name is **not in** `DFL`                                                     | Decky's copy does not carry the export: two separately installed programs disagreeing about the package. **Bring both to current.**         |
-| `mixed`        | coexistence | some missed names are not package exports, and Decky's copy carries every one that is | Decky's copy ran **some** of them and missed — update Decky Loader for those; the rest are not `@decky/ui` names, so neither copy ran them. |
-| `decky`        | coexistence | every missed name is **in** `DFL`                                                     | Decky's copy searched and missed — its own interface and its other plugins are affected the same way. **Update Decky Loader.**              |
+| Verdict        | Bundle      | What was read                                                                         | What the page says                                                                                                                  |
+| -------------- | ----------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `none`         | either      | no missed name is a package export                                                    | Tender could not set up the parts it needs from Steam. **No update is named**; it asks for a report — see below.                    |
+| `tender`       | standalone  | —                                                                                     | Steam has changed and this version of Tender does not know its way around it. **Update Tender.**                                    |
+| `disagreement` | coexistence | a missed name is **not in** `DFL`                                                     | Tender and Decky Loader are out of step: Tender asks Decky's shared part for things it does not have. **Update both.**              |
+| `mixed`        | coexistence | some missed names are not package exports, and Decky's copy carries every one that is | Steam has changed and Decky Loader does not know its way around it. **Update Decky Loader**; if the page persists, report the rest. |
+| `decky`        | coexistence | every missed name is **in** `DFL`                                                     | The same, and Decky's own menu and its other plugins are affected too. **Update Decky Loader.**                                     |
 
 **The verdict is read once and worded twice**, rather than branched at each surface. The page and the log line answer
 the same question about the same machine, and when they each decided it for themselves the copies drifted: the log line
@@ -190,7 +192,9 @@ and its searches for them still came back empty, so that copy is demonstrated st
 surface. What the REST demonstrates is where the two surfaces part, and the locked property above is what decides it: a
 non-blocking name the package does not export must be one Tender probes for itself, so on the log line the rest is
 always Tender's own probe and that line names both programs. On the page it may be an `SP_*` global instead, which
-belongs to no copy and has no repair to name, so the page names Decky's and stops there.
+belongs to no copy and has no update to name, so the page names Decky's and asks for a report about the rest, which it
+puts on Tender's side. That is right for `ControllerGlyph` and not established for a global: `mixed` arises only in the
+coexistence bundle, which is loaded where Decky Loader is serving and has installed the globals itself.
 
 The `none` row is asked first and is about neither copy. Four of the names checked are not `@decky/ui` lookups at all —
 the three `SP_*` globals, which a React bootstrap installs, and `ControllerGlyph`, which `utils/deckyUiInternals.ts`
@@ -198,19 +202,20 @@ reaches with a `findModule` predicate of its own — so a miss confined to those
 the row names none. For the globals that is also what stops a sentence sending the user after a program that did
 nothing: in the coexistence bundle the copy it would name is Decky's, and Decky's copy ran none of these searches.
 
-**The row names no repair either, and the two kinds of name behind that silence are not in the same position.** For the
-globals there is no repair to offer. Which program installed them on a machine running both now HAS an answer — the
-injector loads `globals.js` only where Decky Loader is not serving, so beside a serving Decky those globals are Decky's
+**The row names no update either, and the two kinds of name behind that are not in the same position.** For the globals
+there is no repair to offer. Which program installed them on a machine running both now HAS an answer — the injector
+loads `globals.js` only where Decky Loader is not serving, so beside a serving Decky those globals are Decky's
 ([how the panel gets into Steam](loading-the-panel.md#which-bundles-and-the-rule-that-cannot-bend)) — and **this page
 does not read it**: the branch keys on whose copy ran the search, not on which program installed a global, so it still
-names no repair. In the standalone bundle having the answer would not settle it anyway: a missing `SP_REACTDOM` there is
+names no update. In the standalone bundle having the answer would not settle it anyway: a missing `SP_REACTDOM` there is
 either `dist/globals.js` never having run (a load-order fault) or the ReactDOM predicate in `boot/steamGlobals.ts`
 having gone stale (a version fault, whose repair is a newer Tender), one symptom over two repairs. `ControllerGlyph` is
 the opposite case. Its predicate is **ours in both bundles**, so "update Tender" is its correct repair, and this row
 cannot say so — the price of keying the branch on whose COPY ran the search, which buying back takes a third axis, whose
 PREDICATE, rather than a reworded row. What that costs is bounded, because the glyph reaches this row only **alongside**
 a global, whose silence is right anyway: on its own it costs appearance alone and brings no page up, and beside a
-package name it is the `mixed` row's unnamed rest rather than this one's. Its own sentence is the log line above.
+package name it is the rest the `mixed` row puts on Tender's side rather than this one's. Its own sentence is the log
+line above.
 
 `SP_REACTDOM` is the only name that can reach this row alone — `SP_REACT` and `SP_JSX` are read while the panel bundle
 is being evaluated, so with either unset the bundle throws at import and the check never runs.

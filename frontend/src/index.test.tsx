@@ -246,7 +246,7 @@ describe("index.tsx — what the factory does when a Steam search found nothing"
     const plugin = pluginFactory();
     render(createElement("div", null, plugin.content));
 
-    expect(screen.getByText(/could not read Steam/i)).toBeInTheDocument();
+    expect(screen.getByText(/can't start right now/i)).toBeInTheDocument();
     expect(screen.getByText(/Focusable, PanelSection/)).toBeInTheDocument();
   });
 
@@ -307,7 +307,7 @@ describe("index.tsx — what the factory does when only a decoration was not fou
     const plugin = pluginFactory();
     render(createElement("div", null, plugin.content));
 
-    expect(screen.queryByText(/could not read Steam/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/can't start right now/i)).not.toBeInTheDocument();
     expect(registerGameDetailPatch).toHaveBeenCalled();
     plugin.onDismount();
   });

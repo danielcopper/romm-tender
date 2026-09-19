@@ -38,6 +38,7 @@ import {
   checkSteamModules,
   describeFailure,
   describeSurvivedMiss,
+  namesAnUpdate,
   searchOwner,
 } from "./steamModules";
 
@@ -339,8 +340,7 @@ describe("what the start-up check reports", () => {
     expect(report.everySearchAnswered).toBe(false);
     expect(report.panelMayMount).toBe(false);
     expect(report.missing).toEqual(["Tabs", "Spinner"]);
-    expect(describeFailure(report, ours)).toContain("2 of 3");
-    expect(describeFailure(report, ours)).toContain("Steam client update");
+    expect(describeFailure(report, ours)).toContain("Steam has changed");
   });
 
   it("separates the names a copy of @decky/ui can be asked about from the rest", () => {
@@ -354,8 +354,8 @@ describe("what the start-up check reports", () => {
     // registry that was never readable are different faults, and only the
     // second is fixed by looking at the bootstrap rather than at Steam.
     const report = checkSteamModules([lookup("Focusable", false), lookup("Tabs", false)]);
-    expect(describeFailure(report, ours)).toContain("not a run of");
-    expect(describeFailure(report, ours)).not.toContain("Steam client update");
+    expect(describeFailure(report, ours)).toContain("Tender started before Steam was ready.");
+    expect(describeFailure(report, ours)).not.toContain("Steam has changed");
   });
 
   it("blames neither copy when nothing at all resolved, in either bundle", () => {
@@ -422,7 +422,7 @@ describe("what a miss costs the panel", () => {
   it("keeps the panel off when a search the panel renders with missed", () => {
     const report = checkSteamModules([blocking("Focusable", false), cosmetic("ControllerGlyph", true)]);
     expect(report.panelMayMount).toBe(false);
-    expect(describeFailure(report, ours)).toContain("Steam client update");
+    expect(describeFailure(report, ours)).toContain("Steam has changed");
     // The fallback page is doing the reporting, so the log's cosmetic line must
     // not appear beside it saying the panel started.
     expect(describeSurvivedMiss(report, ours)).toBe("");
@@ -536,7 +536,7 @@ describe("what a miss costs the panel", () => {
     // Everything missing necessarily includes the names the panel renders with,
     // so this answer cannot be reached by a cosmetic miss and is unchanged.
     const report = checkSteamModules([blocking("Focusable", false), cosmetic("ControllerGlyph", false)]);
-    expect(describeFailure(report, ours)).toContain("not a run of");
+    expect(describeFailure(report, ours)).toContain("Tender started before Steam was ready.");
   });
 });
 
@@ -551,24 +551,27 @@ describe("whose copy the page blames for a stale search", () => {
 
   it("sends the user after Tender when Tender's own copy searched", () => {
     const sentence = describeFailure(stale, readSearchingCopy(stale, "standalone"));
-    expect(sentence).toContain("Tender's own copy of @decky/ui ran them");
-    expect(sentence).toContain("A newer Tender is the repair.");
+    expect(sentence).toBe(
+      "Steam has changed, and this version of Tender doesn't know its way around the new one yet. " +
+        "Updating Tender should fix it.",
+    );
   });
 
   it("sends the user after Decky when Decky's copy searched, and says who else it breaks", () => {
     const copy = readSearchingCopy(stale, "coexistence", () => ({ carries: () => true, version: "v3.2.8" }));
-    const sentence = describeFailure(stale, copy);
-    expect(sentence).toContain("Decky Loader v3.2.8's copy of @decky/ui ran them, not Tender's own");
-    expect(sentence).toContain("its other plugins are affected");
-    expect(sentence).toContain("A newer Decky Loader is the repair.");
+    expect(describeFailure(stale, copy)).toBe(
+      "Steam has changed, and Decky Loader v3.2.8 doesn't know its way around the new one yet. " +
+        "Tender shares that part with Decky, so it's affected too — and so are Decky's own menu and " +
+        "its other plugins. Updating Decky Loader should fix all of it.",
+    );
   });
 
   it("names Decky without a version when the version could not be read", () => {
     const copy = readSearchingCopy(stale, "coexistence", () => ({ carries: () => true, version: null }));
     const sentence = describeFailure(stale, copy);
-    expect(sentence).toContain("Decky Loader's copy of @decky/ui ran them");
+    expect(sentence).toContain("Steam has changed, and Decky Loader doesn't know its way around");
     expect(sentence).not.toContain("v3.2.8");
-    expect(sentence).toContain("A newer Decky Loader is the repair.");
+    expect(sentence).toContain("Updating Decky Loader should fix all of it.");
   });
 
   // `SP_REACTDOM` is a global a bootstrap installs, so it is a lookup neither
@@ -604,20 +607,17 @@ describe("whose copy the page blames for a stale search", () => {
       missed,
       readSearchingCopy(missed, bundle, () => ({ carries: () => true, version: "v3.2.8" })),
     );
-    expect(sentence).toContain(`${names.length} of ${names.length + 1}`);
-    expect(sentence).toContain("None of them is a name @decky/ui exports");
-    expect(sentence).not.toContain("ran them, not Tender's own");
-    expect(sentence).not.toContain("Tender's own copy of @decky/ui ran them");
-    expect(sentence).not.toContain("is the repair");
+    expect(sentence).toBe(
+      "Tender couldn't set up the parts it needs from Steam. Please report this — the names below are what helps.",
+    );
   });
 
-  it("leaves the glyph in the unnamed rest with no global anywhere in the miss", () => {
-    // What bounds the silence around `ControllerGlyph` is that its absence
-    // costs appearance, so it never brings this page up alone — NOT that it
-    // only ever arrives beside a global. A blocking `@decky/ui` name is the
-    // other company it can keep, and that is `mixed`, whose "rest" is the glyph
-    // and nothing else. `describeFailure` names no repair for it either way,
-    // which is what the bound is about.
+  it("puts the glyph in the rest on Tender's side with no global anywhere in the miss", () => {
+    // `ControllerGlyph` never brings this page up alone — its absence costs
+    // appearance — but it does not only ever arrive beside a global. A
+    // blocking `@decky/ui` name is the other company it can keep, and that is
+    // `mixed`, whose "rest" is the glyph and nothing else. The page asks for a
+    // report about that rest rather than naming a newer Tender.
     const missed = checkSteamModules([
       { name: "Tabs", found: () => true, deckyUiExport: true, absenceCost: "panel" },
       { name: "Focusable", found: () => false, deckyUiExport: true, absenceCost: "panel" },
@@ -627,17 +627,19 @@ describe("whose copy the page blames for a stale search", () => {
     expect(missed.panelMayMount).toBe(false);
     const copy = readSearchingCopy(missed, "coexistence", () => ({ carries: () => true, version: "v3.2.8" }));
     expect(searchOwner(missed, copy)).toBe("mixed");
-    const sentence = describeFailure(missed, copy);
-    expect(sentence).toContain("The rest are not names @decky/ui exports, so neither copy of the package ran them.");
-    expect(sentence).not.toContain("newer Tender");
+    expect(describeFailure(missed, copy)).toBe(
+      "Steam has changed, and Decky Loader v3.2.8 doesn't know its way around the new one yet. " +
+        "Updating Decky Loader fixes that part. If this page still appears afterwards, the rest is on " +
+        "Tender's side — please report it.",
+    );
   });
 
   it("calls it a disagreement about the package when Decky's copy lacks the name", () => {
     const copy = readSearchingCopy(stale, "coexistence", () => ({ carries: () => false, version: "v3.2.8" }));
-    const sentence = describeFailure(stale, copy);
-    expect(sentence).toContain("does not carry some of the names Tender asks it for");
-    expect(sentence).toContain("Bringing both Tender and Decky Loader to their current versions is the repair.");
-    expect(sentence).not.toContain("A Steam client update");
+    expect(describeFailure(stale, copy)).toBe(
+      "Tender and Decky Loader v3.2.8 are out of step with each other: Tender asks Decky's shared part " +
+        "for things it doesn't have. Updating both to their current versions should fix it.",
+    );
   });
 
   it("no longer credits Decky with the search for a global its copy never ran", () => {
@@ -654,9 +656,9 @@ describe("whose copy the page blames for a stale search", () => {
     const copy = readSearchingCopy(missed, "coexistence", () => ({ carries: () => true, version: "v3.2.8" }));
     expect(searchOwner(missed, copy)).toBe("mixed");
     const sentence = describeFailure(missed, copy);
-    expect(sentence).toContain("Decky Loader v3.2.8's copy of @decky/ui ran some of them, not Tender's own");
-    expect(sentence).toContain("The rest are not names @decky/ui exports, so neither copy of the package ran them.");
-    expect(sentence).not.toContain("ran them, not Tender's own");
+    expect(sentence).toContain("Updating Decky Loader fixes that part.");
+    expect(sentence).toContain("the rest is on Tender's side");
+    expect(sentence).not.toContain("Tender shares that part with Decky");
   });
 });
 
@@ -756,8 +758,8 @@ describe("the verdict the page and the log line share", () => {
     return { report, copy };
   };
 
-  // Both surfaces open with the same count of what missed, which says nothing
-  // about whose searches they were. Comparing the sentences whole would let two
+  // The log line opens with the count of what missed, which says nothing about
+  // whose searches they were. Comparing the sentences whole would let two
   // identical answers pass for different ones on the strength of that prefix,
   // so it is taken off — and asserted first, so a changed opening fails here
   // instead of silently cutting a sentence in the wrong place.
@@ -781,7 +783,7 @@ describe("the verdict the page and the log line share", () => {
   it("gives the page a distinct answer for every verdict, so none has fallen through to another", () => {
     const answers = SEARCH_OWNERS.map((owner) => {
       const { report, copy } = read(pageFixtures[owner]);
-      return answerOnly(describeFailure(report, copy), scaleOf(report));
+      return describeFailure(report, copy);
     });
     expect(answers.every((answer) => answer.length > 0)).toBe(true);
     expect(new Set(answers).size).toBe(SEARCH_OWNERS.length);
@@ -800,17 +802,39 @@ describe("the verdict the page and the log line share", () => {
     // The two word the answer differently on purpose — the page is a repair
     // instruction and the log is a record — but they may never point at
     // different programs for the same machine. `none` is excluded because that
-    // is the one verdict where the page is deliberately SILENT about a repair
-    // the log names: the three React globals reach the page and cannot reach
-    // the log, and who installed one on a machine running both programs is
-    // #1900's question.
+    // is the one verdict where the page deliberately names NO update the log
+    // names: the three React globals reach the page and cannot reach the log,
+    // and the verdict keys on whose copy ran a search, not on who installed a
+    // global.
     for (const owner of SEARCH_OWNERS.filter((value) => value !== "none")) {
       const page = read(pageFixtures[owner]);
       const log = read(logFixtures[owner]);
       const pageSentence = describeFailure(page.report, page.copy);
       const logSentence = describeSurvivedMiss(log.report, log.copy);
       expect(pageSentence.includes("Decky Loader")).toBe(logSentence.includes("Decky Loader"));
-      expect(pageSentence.includes("newer Tender")).toBe(logSentence.includes("newer Tender"));
+      expect(pageSentence.includes("Updating Tender")).toBe(logSentence.includes("newer Tender"));
     }
   });
+
+  it.each(SEARCH_OWNERS)("tells the report line whether the %s sentence names an update", (owner) => {
+    // The report line reads "after the update" off this predicate, so it must
+    // agree with the sentence above it: an update named there and not here
+    // drops the clause, one named here and not there invents an update.
+    const { report, copy } = read(pageFixtures[owner]);
+    expect(namesAnUpdate(report, copy)).toBe(owner !== "none");
+    expect(namesAnUpdate(report, copy)).toBe(describeFailure(report, copy).includes("Updating"));
+  });
+
+  it.each(["standalone", "coexistence"] as const)(
+    "names no update when nothing at all answered, in the %s bundle",
+    (bundle) => {
+      const report = checkSteamModules([missedLookup("Focusable", true, "panel"), missedLookup("Tabs", true, "panel")]);
+      const copy = readSearchingCopy(report, bundle, () => ({ carries: () => true, version: "v3.2.8" }));
+      expect(namesAnUpdate(report, copy)).toBe(false);
+      expect(describeFailure(report, copy)).toBe(
+        "Tender started before Steam was ready. Restarting Steam is the first thing to try; if this page " +
+          "comes back every time, please report it.",
+      );
+    },
+  );
 });
