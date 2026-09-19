@@ -30,6 +30,7 @@ const report = (missing: string[], checked = STEAM_LOOKUPS.length): StartupRepor
   panelMayMount: false,
   missing,
   missingPackageNames: missing,
+  missingFeatures: [],
   checked,
 });
 
@@ -112,7 +113,11 @@ describe("the fallback page", () => {
     // must not hand the user Decky's name for either, which would be a program
     // that did nothing here. The glyph arrives beside the global rather than
     // alone because on its own it no longer brings this page up at all.
-    const glyph: StartupReport = { ...report(["SP_REACTDOM", "ControllerGlyph"]), missingPackageNames: [] };
+    const glyph: StartupReport = {
+      ...report(["SP_REACTDOM", "ControllerGlyph"]),
+      missingPackageNames: [],
+      missingFeatures: [],
+    };
     render(<StartupFailurePanel report={glyph} copy={DECKYS} />);
     expect(
       screen.getByText(

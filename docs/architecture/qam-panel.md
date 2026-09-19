@@ -583,6 +583,7 @@ plugin stays a card without a jump, with Dismiss where the condition has a sensi
 | Settings were reset                         | text, backup path, Dismiss          | none — the card is the whole of it                    |
 | Cross-device playtime needs a fresh sign-in | text, **Open Connections**, Dismiss | Settings › Connections, where the accounts are        |
 | RetroDECK paths missing or unreadable       | warning card, no action             | none — the fix is outside the plugin                  |
+| Steam answers for no notifications          | warning card, no action             | none — the fix is a newer Tender                      |
 | RetroArch `input_driver` is wrong           | text, **Open Controller**           | Settings › Controller, which holds the Fix button     |
 | Save-file sorting changed                   | text, **Open Save Sync**            | Settings › Save Sync, which holds Migrate and Dismiss |
 | Sync paused on the session budget           | text, **Open Sync**                 | Sync, which holds Restart Steam now and Resume        |
@@ -591,24 +592,32 @@ Every row of that table is what the panel does today. The two full-page states �
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
 was the pre-rename plugin folder, which went with the plugin loader.
 
+The notifications row is the one condition read from the **start-up check's report** rather than from a backend answer
+or an event: a toast is raised through a search into Steam's bundle and a global Steam installs at module scope
+(`docs/architecture/frontend-bundles.md`), so either one missing is settled before anything mounts and cannot change
+afterwards. There is nothing to subscribe to and nothing to poll. It is a notice rather than a refusal to mount because
+the panel is entirely intact without it: syncs and downloads run, and every result a toast would have announced is on
+the page it belongs to.
+
 The playtime notice is the one that carries **two** buttons, and they sit side by side on one row rather than on two
 full-width ones: Main is the narrow page, and a notice costing three rows pushes the status block it sits above off the
 screen. Its jump is not an answer either — only a fresh sign-in ends the condition, so **Open Connections** leaves it
 standing and **Dismiss** remains the way to put it away for this view.
 
-Three of the six conditions above carry no Dismiss anywhere — RetroDECK paths, the `input_driver` fix and the session
-budget — so the absence is ordinary.
+Four of the seven conditions above carry no Dismiss anywhere — RetroDECK paths, the missing notifications, the
+`input_driver` fix and the session budget — so the absence is ordinary.
 
 ## Main
 
 Narrow, in this order: the settings-reset and playtime-scope notices, each a titled section of its own, both above
-everything else; the status block — the RetroDECK warning, then Connection, Last sync, Library, then the conditional
-slot and, while a run is going, Cancel Sync, then the transient line a just-ended run leaves behind (and a cancel whose
-call failed), and under all of those the three notices that carry a button (the RetroArch input driver, the save-file
-sorting, a run paused on the session budget); the download summary (up to two rows, an overflow count, a completed
-count, View All); the menu — Sync, Library, Settings, Data Management. **Those last three blocks carry no section title
-at all** — what separates one from the next is a hairline (`BlockSeparator`), which costs one pixel of height where a
-heading would cost a whole row. The layout study it was chosen from is [main-layouts.html](../assets/main-layouts.html).
+everything else; the status block — the RetroDECK warning and, where Steam answers for no notifications, the warning
+that says so, then Connection, Last sync, Library, then the conditional slot and, while a run is going, Cancel Sync,
+then the transient line a just-ended run leaves behind (and a cancel whose call failed), and under all of those the
+three notices that carry a button (the RetroArch input driver, the save-file sorting, a run paused on the session
+budget); the download summary (up to two rows, an overflow count, a completed count, View All); the menu — Sync,
+Library, Settings, Data Management. **Those last three blocks carry no section title at all** — what separates one from
+the next is a hairline (`BlockSeparator`), which costs one pixel of height where a heading would cost a whole row. The
+layout study it was chosen from is [main-layouts.html](../assets/main-layouts.html).
 
 **The menu is the navigation that is always there — complete, and always in the same place. The status rows state and do
 nothing. The single exception is one conditional slot that exists only while the Sync page has something to report; a

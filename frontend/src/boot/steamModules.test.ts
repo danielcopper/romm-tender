@@ -28,6 +28,7 @@ import { declaredFunctions, divisionSlashes } from "../test-utils/jsFunctionScan
 import { type SearchingCopy, readSearchingCopy } from "./searchingCopy";
 import {
   ASKED_LIVE,
+  NOTIFICATION_LOOKUPS,
   PACKAGE_OWN,
   SEARCH_OWNERS,
   STEAM_LOOKUPS,
@@ -38,6 +39,7 @@ import {
   checkSteamModules,
   describeFailure,
   describeSurvivedMiss,
+  notificationsMissing,
   searchOwner,
   sentenceAsksForAReport,
 } from "./steamModules";
@@ -81,19 +83,28 @@ function importedValueNames(): string[] {
 }
 
 /**
- * Every `export const X = findModule…(` in shipped source — the shape a probe
- * of Tender's OWN is written in today.
+ * Every name shipped source resolves off Steam FOR ITSELF, in the two shapes
+ * one is written in today.
  *
- * `findModule` and its siblings are `@decky/ui`'s readers of Steam's module
- * cache, but the predicate handed to one is ours and runs in both bundles —
- * which is the whole of what "Tender runs this search itself" means, and the
- * only thing that makes a repair Tender's to name.
+ * The first is `export const X = findModule…(`. `findModule` and its siblings
+ * are `@decky/ui`'s readers of Steam's module cache, but the predicate handed
+ * to one is ours and runs in both bundles — which is the whole of what "Tender
+ * runs this search itself" means, and the only thing that makes a repair
+ * Tender's to name.
  *
- * **What the regex sees is narrower than that sentence**: a probe behind a
- * wrapper, one assigned to a non-exported const, and one re-exported from
- * another module are all invisible to it. That costs nothing here, because the
- * only reader below treats an unseen name as NOT Tender's own and fails — so a
- * probe written in a shape this misses is reported, never waved through.
+ * The second is `export const X = (window as …).X`, a global STEAM installs
+ * that nothing in `@decky/ui` reaches at all. No copy of the package can be
+ * asked about such a name and no copy searched for it, so the repair is
+ * Tender's for exactly the same reason: Steam moved it, and this version of
+ * Tender is what reads the old place. The exported name must match the
+ * property read, or the entry is about a different global than it claims.
+ *
+ * **What the regexes see is narrower than those sentences**: a probe behind a
+ * wrapper, one assigned to a non-exported const, one re-exported from another
+ * module, and a global read through anything but a direct cast of `window` are
+ * all invisible to them. That costs nothing here, because the only reader below
+ * treats an unseen name as NOT Tender's own and fails — so a lookup written in
+ * a shape this misses is reported, never waved through.
  *
  * Swept rather than listed, for the reason {@link importedValueNames} gives.
  */
@@ -105,6 +116,9 @@ function tenderOwnSearchNames(): string[] {
       /export\s+const\s+(\w+)\s*(?::[^=]*?)?=\s*find(?:Module|ClassModule)\w*\s*\(/g,
     )) {
       names.add(match[1]!);
+    }
+    for (const match of source.matchAll(/export\s+const\s+(\w+)\s*:[^=]*?=\s*\(\s*window\s+as[^)]*\)\s*\.\s*(\w+)/g)) {
+      if (match[1] === match[2]) names.add(match[1]!);
     }
   }
   return [...names].sort();
@@ -276,9 +290,11 @@ describe("the start-up check's coverage of what the panel imports", () => {
     // What `describeSurvivedMiss` says when nothing that missed is a @decky/ui
     // export: Tender runs these searches itself, so a newer Tender is the
     // repair. True of `ControllerGlyph`, which `utils/deckyUiInternals.ts`
-    // reaches with a `findModule` predicate of ours in both bundles — and false
-    // of the three `SP_*` globals, which a React bootstrap installs and whose
-    // owner on a machine running both programs is #1900's open question.
+    // reaches with a `findModule` predicate of ours in both bundles, and of
+    // `NotificationStore`, a global Steam itself installs that no copy of the
+    // package reaches — and false of the three `SP_*` globals, which a React
+    // bootstrap installs and whose owner on a machine running both programs is
+    // #1900's open question.
     //
     // What keeps those three out of the sentence is their COST, not their
     // names: the panel does not mount without them, so they never reach the
@@ -293,17 +309,43 @@ describe("the start-up check's coverage of what the panel imports", () => {
     expect(wrong.map((lookup) => lookup.name)).toEqual([]);
   });
 
-  it("has a name at every absence cost, so none of the three is a value nothing uses", () => {
+  it("sweeps both shapes a lookup of Tender's own is written in, so neither can stop matching in silence", () => {
+    // The guard the sweep above needs for itself: it answers a set, and an
+    // empty one passes that filter for every name there is. One name per shape,
+    // because the two regexes fail independently — a probe read and a global
+    // read.
+    const ownSearches = new Set(tenderOwnSearchNames());
+    expect(ownSearches).toContain("ControllerGlyph");
+    expect(ownSearches).toContain("NotificationStore");
+  });
+
+  it("has a name at every absence cost, so none of the four is a value nothing uses", () => {
     // `panel` is the status quo and costs no evidence to stay at; moving a name
     // off it is a decision taken per name, against each of its consumers. This
-    // says only that all three answers are live — a cost nothing carries is a
+    // says only that all four answers are live — a cost nothing carries is a
     // branch no reader exercises, and the diagnostic one arrived with exactly
     // one name behind it.
     expect([...new Set(STEAM_LOOKUPS.map((lookup) => lookup.absenceCost))].sort()).toEqual([
       "appearance",
       "diagnostic",
+      "feature",
       "panel",
     ]);
+  });
+
+  it("names both lookups a toast is raised through, and asks about each of them", () => {
+    // The notice on Main and the two entries here spell the names from one
+    // place (`NOTIFICATION_LOOKUPS`), so this says the check actually carries
+    // an entry per name: a notice keyed on a lookup nobody asks about would
+    // never appear, whatever Steam did.
+    const asked = new Set(STEAM_LOOKUPS.map((lookup) => lookup.name));
+    expect(asked).toContain(NOTIFICATION_LOOKUPS.renderer);
+    expect(asked).toContain(NOTIFICATION_LOOKUPS.store);
+    const raisedThrough: readonly string[] = [NOTIFICATION_LOOKUPS.renderer, NOTIFICATION_LOOKUPS.store];
+    const costs = STEAM_LOOKUPS.filter((lookup) => raisedThrough.includes(lookup.name)).map(
+      (lookup) => lookup.absenceCost,
+    );
+    expect(costs).toEqual(["feature", "feature"]);
   });
 
   it("asks a real question of every search it lists", () => {
@@ -329,6 +371,7 @@ describe("what the start-up check reports", () => {
       panelMayMount: true,
       missing: [],
       missingPackageNames: [],
+      missingFeatures: [],
       checked: 2,
     });
     expect(describeFailure(report, ours)).toBe("");
@@ -387,6 +430,15 @@ describe("what a miss costs the panel", () => {
     found: () => present,
     deckyUiExport: true,
     absenceCost: "diagnostic",
+  });
+  // The fourth cost, in the shape both real entries have: not a `@decky/ui`
+  // export, because a toast is raised through a probe of ours and a global
+  // Steam installs.
+  const feature = (name: string, present: boolean): SteamLookup => ({
+    name,
+    found: () => present,
+    deckyUiExport: false,
+    absenceCost: "feature",
   });
   const ours: SearchingCopy = { owner: "tender" };
   const theirs = (report: StartupReport): SearchingCopy =>
@@ -530,6 +582,47 @@ describe("what a miss costs the panel", () => {
     expect(sentence).toContain("Decky Loader v3.2.8's copy of @decky/ui does not carry some of the names");
     expect(sentence).toContain("Bringing both Tender and Decky Loader to their current versions is the repair.");
     expect(sentence).not.toContain("ran them, not Tender's own");
+  });
+
+  it("lets the panel mount when all that missed was a whole feature, and says so in the log", () => {
+    // The fourth cost: the panel renders entirely well and something outside it
+    // is gone, so the mount is right and this line is the only thing anywhere
+    // that reports the loss.
+    const report = checkSteamModules([blocking("Focusable", true), feature("ToastRenderer", false)]);
+    expect(report.panelMayMount).toBe(true);
+    expect(report.missingFeatures).toEqual(["ToastRenderer"]);
+    expect(describeFailure(report, ours)).toBe("");
+    const sentence = describeSurvivedMiss(report, ours);
+    expect(sentence).toContain("Nothing that missed is needed to render the panel");
+    expect(sentence).toContain("Tender's notifications are off until it is updated.");
+    expect(sentence).toContain("Tender runs these searches itself, so a newer Tender is the repair.");
+  });
+
+  it("leaves that sentence out when nothing costing a feature missed", () => {
+    // Without this the sentence could be unconditional and every test above
+    // would still pass, telling a reader their notifications are off over a
+    // missing glyph.
+    const report = checkSteamModules([blocking("Focusable", true), cosmetic("ControllerGlyph", false)]);
+    expect(report.missingFeatures).toEqual([]);
+    expect(describeSurvivedMiss(report, ours)).not.toContain("notifications are off");
+  });
+
+  it("keeps the panel off when a feature search missed beside a blocking one", () => {
+    const report = checkSteamModules([blocking("Focusable", false), feature("ToastRenderer", false)]);
+    expect(report.panelMayMount).toBe(false);
+    expect(report.missingFeatures).toEqual(["ToastRenderer"]);
+    // The fallback page is doing the reporting; the log's mounted line must not
+    // appear beside it claiming Tender has started.
+    expect(describeSurvivedMiss(report, ours)).toBe("");
+  });
+
+  it("reads the notice on Main off either of the two lookups a toast is raised through", () => {
+    const renderer = checkSteamModules([blocking("Focusable", true), feature(NOTIFICATION_LOOKUPS.renderer, false)]);
+    const store = checkSteamModules([blocking("Focusable", true), feature(NOTIFICATION_LOOKUPS.store, false)]);
+    const neither = checkSteamModules([blocking("Focusable", true), cosmetic("ControllerGlyph", false)]);
+    expect(notificationsMissing(renderer)).toBe(true);
+    expect(notificationsMissing(store)).toBe(true);
+    expect(notificationsMissing(neither)).toBe(false);
   });
 
   it("still reaches the bootstrap answer when everything missed, cosmetic names included", () => {

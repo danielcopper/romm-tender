@@ -173,6 +173,8 @@ vi.mock("@decky/ui", async () => {
     Tabs: undefined,
     ScrollPanel: undefined,
     findModule: vi.fn(() => undefined),
+    findModuleExport: vi.fn(() => undefined),
+    findClassModule: vi.fn(() => undefined),
     findSP: vi.fn(() => undefined),
     ConfirmModal: (p: AnyProps) => ce("div", { "data-testid": "confirm-modal" }, p.children as never),
     DialogButton: ({

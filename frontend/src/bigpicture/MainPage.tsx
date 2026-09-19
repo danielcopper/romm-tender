@@ -26,6 +26,7 @@ import { requestSyncCancel } from "../utils/syncManager";
 import { useConnectionProbe } from "../utils/connectionProbe";
 import type { BackendFailed, ConnectionFailure } from "../utils/connectionProbe";
 import { retroDeckBanner, type RetroDeckBanner } from "../utils/retrodeckHealth";
+import { NOTIFICATIONS_UNAVAILABLE_NOTICE, notificationsUnavailable } from "../utils/notificationsHealth";
 import { VersionErrorCard, useVersionError } from "./VersionErrorCard";
 import { WarningCard } from "./WarningCard";
 import { DownloadProgressRow } from "./DownloadProgressRow";
@@ -587,6 +588,22 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
                 makes the notice itself a stop for focus-driven scrolling. */}
             <Focusable onActivate={() => {}}>
               <WarningCard title={retrodeckBanner.title} message={retrodeckBanner.message} compact />
+            </Focusable>
+          </PanelSectionRow>
+        )}
+        {/* Read from the start-up check's report rather than from state: both
+            searches behind it are answered before anything mounts and cannot
+            change afterwards, so there is nothing to subscribe to. It carries no
+            action for the same reason the RetroDECK warning above it does not —
+            the repair is outside the panel. */}
+        {notificationsUnavailable() && (
+          <PanelSectionRow>
+            <Focusable onActivate={() => {}}>
+              <WarningCard
+                title={NOTIFICATIONS_UNAVAILABLE_NOTICE.title}
+                message={NOTIFICATIONS_UNAVAILABLE_NOTICE.message}
+                compact
+              />
             </Focusable>
           </PanelSectionRow>
         )}

@@ -799,24 +799,33 @@ Format: **invariant** — tier — enforced by.
   not do it is on the docs page
 - **Whether every search answered and whether the panel may MOUNT are two questions, and a miss that costs less than the
   panel never takes the interface off the air** — check + test + prompt-only — the type carries the first half:
-  `SteamLookup.absenceCost` is required, so a new entry does not compile until it states which of the three its absence
-  costs — the `panel`, only its `appearance` (`ControllerGlyph`, whose only consumer `layout/WidePage.tsx` already draws
-  `‹ Back` in its place), or only a `diagnostic` (`playSectionClasses`, read nowhere but `gameDetailPatch.tsx`'s
-  one-shot `dumpTree`, which already prints `UNDEFINED` in its place) — and there is no default to arrive in.
-  `frontend/src/index.test.tsx` pins both factory branches — the panel mounts with everything registered, and the miss
-  reaches the log. **Blocking is the status quo and staying there costs no evidence: nothing here is a claim that every
-  other name was judged**, only that moving one OUT needs its every consumer read, one name at a time. **The join is
-  prompt-only and spans three places**: `checkSteamModules` derives `panelMayMount` from the costs, `index.tsx` gates
-  the fallback page on it and logs `describeSurvivedMiss` on the other side, and that sentence answers whose COPY of
-  `@decky/ui` ran the missed searches rather than naming a repair of its own — it used to say "a newer Tender"
-  unconditionally, which held only while nothing reaching it was a name the package exports, and `playSectionClasses` is
-  one. What `frontend/src/boot/steamModules.test.ts` locks is the property the line's remaining own answer rests on — a
-  non-blocking name `@decky/ui` does NOT export must be one Tender probes for itself (`findModule`, swept from the
-  source) — so the three `SP_*` globals, which the frontend cannot attribute to a program from inside the page, fail
-  there the moment one is made non-blocking, instead of shipping a repair aimed at whichever program did not install
-  them. Both directions fail quietly: call a real dependency cosmetic and the panel mounts and renders a hole, which is
-  the fault the whole check exists to tell apart from a backend that is not running; call a decoration blocking and one
-  missing glyph costs the user their entire interface, which is what this entry removed
+  `SteamLookup.absenceCost` is required, so a new entry does not compile until it states which of the four its absence
+  costs — the `panel`; a whole `feature` outside it (`ToastRenderer` and `NotificationStore`, without either of which no
+  toast appears at all and every page, sync and download is untouched); only its `appearance` (`ControllerGlyph`, whose
+  only consumer `layout/WidePage.tsx` already draws `‹ Back` in its place, and `toastClasses`, whose every read is
+  optional so the toast says what it says in an unstyled box); or only a `diagnostic` (`playSectionClasses`, read
+  nowhere but `gameDetailPatch.tsx`'s one-shot `dumpTree`, which already prints `UNDEFINED` in its place) — and there is
+  no default to arrive in. `frontend/src/index.test.tsx` pins both factory branches — the panel mounts with everything
+  registered, and the miss reaches the log. **Blocking is the status quo and staying there costs no evidence: nothing
+  here is a claim that every other name was judged**, only that moving one OUT needs its every consumer read, one name
+  at a time. **The join is prompt-only and spans three places**: `checkSteamModules` derives `panelMayMount` from the
+  costs, `index.tsx` gates the fallback page on it and logs `describeSurvivedMiss` on the other side, and that sentence
+  answers whose COPY of `@decky/ui` ran the missed searches rather than naming a repair of its own — it used to say "a
+  newer Tender" unconditionally, which held only while nothing reaching it was a name the package exports, and
+  `playSectionClasses` is one. What `frontend/src/boot/steamModules.test.ts` locks is the property the line's remaining
+  own answer rests on — a non-blocking name `@decky/ui` does NOT export must be one Tender resolves for itself, swept
+  from the source in the two shapes one is written in (`findModule…(`, and a direct cast of `window` whose exported name
+  equals the property read) — so the three `SP_*` globals, which the frontend cannot attribute to a program from inside
+  the page, fail there the moment one is made non-blocking, instead of shipping a repair aimed at whichever program did
+  not install them. **`feature` is the one cost with a second reader**, and that half is prompt-only in both directions:
+  `describeSurvivedMiss` adds a sentence naming TENDER as the repair, which holds only while every `feature` entry is a
+  search of Tender's own (a miss confined to non-exports cannot reach the `decky` verdict) — a `feature` entry the
+  package DOES export would put "update Tender" beside "update Decky Loader" in one paragraph — and
+  `notificationsMissing` turns the same report into Main's notice, reading the two names off `NOTIFICATION_LOOKUPS` so a
+  second spelling of either cannot leave the notice answering for a lookup nobody asked about. Both directions fail
+  quietly: call a real dependency cosmetic and the panel mounts and renders a hole, which is the fault the whole check
+  exists to tell apart from a backend that is not running; call a decoration blocking and one missing glyph costs the
+  user their entire interface, which is what this entry removed
 - **The start-up failure page names the copy of `@decky/ui` that actually ran the search that missed, and the repair
   that follows from it** — check + test + prompt-only — the artefact's stamp is checked
   (`frontend/scripts/check-bundle-shape.mjs`, per bundle and on `globals.js`, which must carry none), and the sentence

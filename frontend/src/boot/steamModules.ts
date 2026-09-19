@@ -75,11 +75,14 @@ import {
 
 import {
   ControllerGlyph,
+  NotificationStore,
+  ToastRenderer,
   appActionButtonClasses,
   appDetailsClasses,
   basicAppDetailsSectionStylerClasses,
   playSectionClasses,
   quickAccessMenuClasses,
+  toastClasses,
 } from "../utils/deckyUiInternals";
 import type { SearchingCopy } from "./searchingCopy";
 
@@ -89,6 +92,9 @@ import type { SearchingCopy } from "./searchingCopy";
  * - `panel` — the panel cannot be trusted to render without it, so nothing
  *   mounts. This is the status quo answer, and staying here costs no evidence:
  *   it is what the check did for every name.
+ * - `feature` — the panel renders whole and something OUTSIDE it is lost: a
+ *   function the reader would otherwise have, with every page still intact and
+ *   every result still readable on one of them.
  * - `appearance` — the panel renders and only looks poorer, because the one
  *   place that reads the name already draws something else when it is missing.
  * - `diagnostic` — nothing a user can see changes at all. Every read of the
@@ -97,14 +103,16 @@ import type { SearchingCopy } from "./searchingCopy";
  *
  * Moving a name off `panel` is what needs evidence, one name at a time: its
  * every consumer, read, and found either to cope with the absence or to be a
- * diagnostic. **Nothing in the program branches on the difference between the
- * last two** — `checkSteamModules`'s `!== "panel"` is the only reading of this
- * field there is — so what the value records today is WHY a name was moved off
- * blocking, not an answer anything consults. They are kept apart because they
- * are different questions, and a name that answered the wrong one would be
+ * diagnostic. **Only two of the four are read by anything**:
+ * `checkSteamModules`'s `!== "panel"` decides whether the panel mounts, and
+ * `feature` is what puts {@link describeSurvivedMiss}'s extra sentence in the
+ * log and the notice on Main. `appearance` and `diagnostic` are told apart by
+ * nothing in the program, so what those two record is WHY a name was moved off
+ * blocking rather than an answer anything consults. They are kept apart because
+ * they are different questions, and a name that answered the wrong one would be
  * hard to catch later: a decoration whose absence a reader can see is not a
- * name whose absence nothing renders at all. Neither keeps the panel off the
- * air, which is what the check asks separately
+ * name whose absence nothing renders at all. None of the last three keeps the
+ * panel off the air, which is what the check asks separately
  * ({@link StartupReport.panelMayMount}).
  *
  * Nothing derives this. The type is the mechanism — the field is required, so a
@@ -112,7 +120,7 @@ import type { SearchingCopy } from "./searchingCopy";
  * `steamModules.test.ts` holds is not the set but the property the log sentence
  * rests on ({@link describeSurvivedMiss}).
  */
-export type AbsenceCost = "panel" | "appearance" | "diagnostic";
+export type AbsenceCost = "panel" | "feature" | "appearance" | "diagnostic";
 
 /** One thing the panel depends on, and how to ask whether it is there. */
 export interface SteamLookup {
@@ -159,6 +167,18 @@ const truthyUnexported = (name: string, absenceCost: AbsenceCost, read: () => un
   ...truthy(name, absenceCost, read),
   deckyUiExport: false,
 });
+
+/**
+ * The two searches a toast is raised through, named once.
+ *
+ * Both {@link STEAM_LOOKUPS} and {@link notificationsMissing} spell them from
+ * here: a second copy of either name would leave the notice on Main answering
+ * for a lookup the check never asked about.
+ */
+export const NOTIFICATION_LOOKUPS = {
+  renderer: "ToastRenderer",
+  store: "NotificationStore",
+} as const;
 
 /**
  * Every Steam search the panel depends on, asked one at a time.
@@ -265,6 +285,25 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // consumer and already renders `‹ Back` where the glyph would be, so a miss
   // costs one chip its button picture and nothing else.
   truthyUnexported("ControllerGlyph", "appearance", () => ControllerGlyph),
+
+  // What a toast is drawn and pushed through (`utils/steamToaster.tsx`).
+  // Neither is a `@decky/ui` export: the renderer is a module probe of ours and
+  // the store is a global Steam installs at module scope, which is what makes
+  // it a reading of the install rather than of a moment.
+  //
+  // Both cost a `feature` and neither costs the panel: with either one absent
+  // no toast appears and nothing else changes — every sync, download and
+  // cleanup runs, and its result is on the page it belongs to. The toaster
+  // declines to push at all when one is missing, because an entry Steam has no
+  // drawing for would run our own data through its server-notification
+  // component in the user's toast window.
+  truthyUnexported(NOTIFICATION_LOOKUPS.renderer, "feature", () => ToastRenderer),
+  truthyUnexported(NOTIFICATION_LOOKUPS.store, "feature", () => NotificationStore),
+  // The class names Steam draws its own notifications with. Without them the
+  // toast still appears and still says what it says, in an unstyled box —
+  // `utils/steamToast.tsx` reads every one of them optionally, so a miss costs
+  // the layout and nothing else.
+  truthyUnexported("toastClasses", "appearance", () => toastClasses),
 ];
 
 /**
@@ -333,11 +372,16 @@ export const ASKED_LIVE: Readonly<Record<string, string>> = {
 export const PACKAGE_OWN: Readonly<Record<string, string>> = {
   afterPatch: "the package's own patcher",
   createReactTreePatcher: "the package's own tree patcher",
+  findClassModule: "the class-map reader itself",
   findInReactTree: "the package's own tree walk",
   findModule: "the module-cache reader itself",
   findModuleByExport: "the module-cache reader itself, asked by export",
+  findModuleExport: "the module-cache reader itself, asked about exports rather than modules",
   getReactRoot: "the package's own reader of a mounted React root",
   GamepadButton: "a TypeScript enum, compiled into the bundle",
+  injectFCTrampoline:
+    "the package's own function-component patcher — it reads the three React globals and " +
+    "rewrites the component's prototype, and searches for nothing",
 };
 
 /** What the check found. */
@@ -376,6 +420,15 @@ export interface StartupReport {
    * belongs to.
    */
   readonly missingPackageNames: readonly string[];
+  /**
+   * The subset of {@link missing} whose absence costs a feature rather than the
+   * panel — see {@link AbsenceCost}.
+   *
+   * It is what puts {@link describeSurvivedMiss}'s extra sentence in the log:
+   * the panel mounts and looks entirely well, so without that line nothing at
+   * all records that something the reader would have had is gone.
+   */
+  readonly missingFeatures: readonly string[];
   /** How many searches were asked. */
   readonly checked: number;
 }
@@ -388,8 +441,20 @@ export function checkSteamModules(lookups: readonly SteamLookup[] = STEAM_LOOKUP
     panelMayMount: missed.every((lookup) => lookup.absenceCost !== "panel"),
     missing: missed.map((lookup) => lookup.name),
     missingPackageNames: missed.filter((lookup) => lookup.deckyUiExport).map((lookup) => lookup.name),
+    missingFeatures: missed.filter((lookup) => lookup.absenceCost === "feature").map((lookup) => lookup.name),
     checked: lookups.length,
   };
+}
+
+/**
+ * Did either search a toast is raised through come back empty?
+ *
+ * Asked of the report rather than of the machine, so the notice on Main says
+ * exactly what the start-up check found — one reading, taken once.
+ */
+export function notificationsMissing(report: StartupReport): boolean {
+  const names: readonly string[] = [NOTIFICATION_LOOKUPS.renderer, NOTIFICATION_LOOKUPS.store];
+  return report.missing.some((name) => names.includes(name));
 }
 
 /**
@@ -580,6 +645,17 @@ export function sentenceAsksForAReport(report: StartupReport, copy: SearchingCop
  * whoever is asked why a button lost its glyph, or why a debug dump prints
  * `UNDEFINED` where a class name belongs.
  *
+ * A `feature`-cost miss adds a sentence of its own ahead of the verdict,
+ * because what is gone there is a whole function rather than a decoration —
+ * the toasts, today. It names Tender as what has to be updated, and that holds
+ * only while every `feature` entry is a search of Tender's own: a miss confined
+ * to names `@decky/ui` does not export cannot reach the `decky` verdict, whose
+ * repair is the other program. **Nothing enforces it.** A `feature` entry the
+ * package DOES export would put "update Tender" beside "update Decky Loader"
+ * inside one paragraph. Main carries the same fact as a notice
+ * ({@link notificationsMissing}), which is what a user sees; this is what a log
+ * reader sees.
+ *
  * It answers the same question the page answers — {@link searchOwner}'s, read
  * from the same verdict — rather than naming a repair of its own. It used to
  * name one unconditionally ("a newer Tender"), which was sound only while
@@ -602,9 +678,11 @@ export function sentenceAsksForAReport(report: StartupReport, copy: SearchingCop
  */
 export function describeSurvivedMiss(report: StartupReport, copy: SearchingCopy): string {
   if (report.everySearchAnswered || !report.panelMayMount) return "";
+  const featureLost = report.missingFeatures.length === 0 ? "" : "Tender's notifications are off until it is updated. ";
   return (
     `${report.missing.length} of ${report.checked} searches into Steam's interface found nothing. ` +
     "Nothing that missed is needed to render the panel, so Tender has started. " +
+    featureLost +
     describeSurvivedSearches(report, copy)
   );
 }

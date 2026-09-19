@@ -14,12 +14,20 @@
  * `T | undefined`, making the guards legitimate.
  *
  * Any future @decky/ui value sourced from a findClassModule-style probe, or from
- * Steam's runtime state, belongs here, typed honestly.
+ * Steam's runtime state, belongs here, typed honestly. A global Steam itself
+ * installs belongs here too, for the same reason and with the same shape: it is
+ * a name this code reads off a foreign program and cannot make appear, so the
+ * type has to admit that it may not be there.
  */
 
 import type { CSSProperties, FC, FocusEventHandler, ReactNode } from "react";
+
+import type { ToastData } from "../api/host";
 import {
+  findClassModule,
   findModule,
+  findModuleExport,
+  type ClassModule,
   appActionButtonClasses as _appActionButtonClasses,
   basicAppDetailsSectionStylerClasses as _basicAppDetailsSectionStylerClasses,
   appDetailsClasses as _appDetailsClasses,
@@ -152,3 +160,134 @@ export const ControllerGlyph: FC<ControllerGlyphProps> | undefined = findModule(
     return false;
   }
 })?.W;
+
+/** One notification as Steam's store carries it, with our own toast as its payload. */
+export interface SteamNotification {
+  nNotificationID: number;
+  rtCreated: number;
+  eType: number;
+  eSource: number;
+  nToastDurationMS: number;
+  bNewIndicator: boolean;
+  data: ToastData;
+}
+
+/**
+ * What the store keeps in its tray: one or more notifications of one type.
+ *
+ * A toast's own marker rides on `notifications[0]` rather than on the group,
+ * because the group is not a durable object — Steam's popup windows build one
+ * per render out of the single notification they are showing.
+ */
+export interface SteamNotificationGroup {
+  eType: number;
+  notifications: SteamNotification[];
+}
+
+/** The second argument Steam hands `ProcessNotification`'s `fnTray` callback. */
+export type SteamNotificationTray = SteamNotificationGroup[];
+
+/** How one notification is to be delivered. */
+export interface SteamNotificationInfo {
+  showToast: boolean;
+  sound: number;
+  playSound: boolean;
+  eFeature: number;
+  toastDurationMS: number;
+  /** Called with the notification and the live tray array when it is to be kept. */
+  fnTray: ((notification: SteamNotification, tray: SteamNotificationTray) => void) | null;
+}
+
+/** The two methods this code calls on Steam's notification store, and the counter it reads. */
+export interface SteamNotificationStore {
+  m_nNextTestNotificationID: number;
+  ProcessNotification(info: SteamNotificationInfo, notification: SteamNotification, eToastType: number): void;
+  RemoveGroupFromTray(group: SteamNotificationGroup): void;
+}
+
+/** What Steam's toast renderer is handed for one notification group. */
+export interface SteamToastRenderProps {
+  group?: SteamNotificationGroup;
+  /** Which surface is drawing — see `utils/steamToast.tsx` for the values. */
+  location?: number;
+  className?: string;
+}
+
+/** A `prototype.render` installed on the toast renderer by an FC trampoline. */
+export type SteamToastRenderFn = (this: { props: SteamToastRenderProps }, ...args: unknown[]) => ReactNode;
+
+/**
+ * Steam's toast renderer, reduced to the one thing this code touches.
+ *
+ * It is a function component, and the whole of what a patch does to it is
+ * replace `prototype.render` — so that is what the type states. Calling it is
+ * left out on purpose: nothing here renders it, and a call signature would
+ * invite one.
+ */
+export interface SteamToastRenderer {
+  prototype: { render?: SteamToastRenderFn };
+}
+
+/**
+ * Steam's toast renderer, the component every notification is drawn through.
+ *
+ * Found by the string its own body contains — it opens its result with
+ * `controller:"notification",method:` — because the module exports it under a
+ * minified name that changes with every Steam build.
+ *
+ * Its switch knows Valve's typed notifications and nothing else, so a
+ * notification of ours reaches its `default` arm and draws nothing at all.
+ * That is why `utils/steamToaster.tsx` puts its own drawing in front of it
+ * rather than pushing a notification and hoping.
+ */
+export const ToastRenderer: SteamToastRenderer | undefined = findModuleExport((e: unknown) => {
+  // The predicate is run against every export in Steam's registry, so one
+  // whose `toString` is not a function, or throws, must answer `false` rather
+  // than end the search.
+  try {
+    const source = (e as { toString?: () => unknown } | undefined)?.toString?.();
+    return typeof source === "string" && source.includes('controller:"notification",method:');
+  } catch {
+    return false;
+  }
+});
+
+/**
+ * Steam's notification store, which owns the toast queue and the tray.
+ *
+ * Steam assigns it at module scope, so it is there before any panel is loaded
+ * and reading it once is a reading of the install rather than of a moment —
+ * which is what lets the start-up check ask about it at all.
+ */
+export const NotificationStore: SteamNotificationStore | undefined = (
+  window as Window & { NotificationStore?: SteamNotificationStore }
+).NotificationStore;
+
+/**
+ * The class names Steam's own notification templates are drawn with.
+ *
+ * All three layouts come from this one map. Steam compiles the same stylesheet
+ * into four class modules and picks between them per surface; their rule bodies
+ * are identical, and only this one carries `ShortTemplate`, which is what makes
+ * the probe unambiguous.
+ */
+export interface ToastClasses {
+  readonly ShortTemplate?: string;
+  readonly TwoLine?: string;
+  readonly StandardTemplateContainer?: string;
+  readonly StandardTemplate?: string;
+  readonly StandardTemplateDesktop?: string;
+  readonly DesktopToastTemplate?: string;
+  readonly Content?: string;
+  readonly Header?: string;
+  readonly Title?: string;
+  readonly Timestamp?: string;
+  readonly Body?: string;
+  readonly StandardNotificationDescription?: string;
+  readonly StandardNotificationSubText?: string;
+  readonly Multiline?: string;
+  readonly NewIndicator?: string;
+}
+
+export const toastClasses: ToastClasses | undefined =
+  findClassModule((m: ClassModule) => Boolean(m.ShortTemplate)) ?? undefined;

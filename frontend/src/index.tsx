@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, FC, type ReactNode } from "react";
 import { Focusable } from "@decky/ui";
 import { StartupFailurePanel } from "./boot/StartupFailurePanel";
 import { readSearchingCopy } from "./boot/searchingCopy";
-import { checkSteamModules, describeFailure, describeSurvivedMiss } from "./boot/steamModules";
+import { checkSteamModules, describeFailure, describeSurvivedMiss, notificationsMissing } from "./boot/steamModules";
 import { MainPage } from "./bigpicture/MainPage";
 import { SettingsPage } from "./bigpicture/SettingsPage";
 import { LibraryPage } from "./bigpicture/LibraryPage";
@@ -66,6 +66,8 @@ import { initSessionManager, destroySessionManager } from "./utils/sessionManage
 import { findOutermostScrollParent } from "./utils/scrollHelpers";
 import { ENTRY_FOCUS_DELAY_MS, pageEntryStop, placeEntryFocus } from "./utils/entryFocus";
 import { collapseQamOnDismount } from "./utils/qamExpansion";
+import { setNotificationsUnavailable } from "./utils/notificationsHealth";
+import { steamToaster } from "./utils/steamToaster";
 import { detach } from "./utils/detach";
 import type {
   SyncProgress,
@@ -378,6 +380,11 @@ const tender = definePlugin(() => {
   // dump reads, which already prints `UNDEFINED` in its place — is the opposite
   // trade.
   const startup = checkSteamModules();
+  // Read once, here, and rendered by Main as a notice. Both names behind it are
+  // answered by Steam's module registry and a global Steam installs at module
+  // scope, so the answer cannot change while this process runs and there is
+  // nothing to poll.
+  setNotificationsUnavailable(notificationsMissing(startup));
   if (!startup.everySearchAnswered) {
     // Whose copy of `@decky/ui` ran the missed searches is read once, here, and
     // handed to the page and to both log lines: the three must not answer a
@@ -1158,6 +1165,10 @@ const tender = definePlugin(() => {
       detach(releaseAllPruneLeases());
       removeEventListener("prune_progress", pruneProgressListener);
       removeEventListener("prune_complete", pruneCompleteListener);
+      // Last, because it is the one step that hands something back to a program
+      // outside this one: Steam's toast renderer keeps whatever `render` it is
+      // left with for the rest of the session.
+      steamToaster.teardown();
     },
   };
 });

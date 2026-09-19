@@ -13,10 +13,17 @@
  *
  * `toaster` and `routerHook` were Decky Loader's own — `@decky/api` only
  * forwarded them (`api.toaster`, `api.routerHook`). There is no host answer for
- * either, and their real replacements are #1901: a toaster that pushes through
- * Steam's own notification store, and a route patch installed by our own
- * installer. Until then both are **declared placeholders** that do nothing, and
- * each says so at its own definition.
+ * either, so each gets a replacement of Tender's own rather than a backend
+ * route. `toaster` has one: it pushes through Steam's own notification store
+ * (`utils/steamToaster.tsx`). `routerHook` is still a **declared placeholder**
+ * that does nothing, and says so at its definition.
+ *
+ * **Neither reaches Decky Loader's API when one is running**, and what decides
+ * that is not purity. Both were the loader's own, and a replacement that
+ * borrowed one wherever it found one would behave differently on a machine
+ * running Decky from one without — the difference this program exists not to
+ * depend on. The machine this is tested on runs the loader, so borrowing would
+ * pass a device test for a reason nobody could identify afterwards.
  *
  * ## The types
  *
@@ -29,6 +36,7 @@
 
 import type { ReactNode } from "react";
 
+import { steamToaster } from "../utils/steamToaster";
 import { HostSocket, addressFromBundleUrl } from "./hostSocket";
 
 export { HostTransportError } from "./hostSocket";
@@ -183,27 +191,20 @@ export const definePlugin = (fn: () => Plugin): (() => Plugin) => fn;
 // -- the two that are not ------------------------------------------------------
 
 /**
- * PLACEHOLDER until #1901, which raises toasts through Steam's own notification
- * store. Until then a toast is logged and nothing appears on screen.
+ * Raises toasts through Steam's own notification store — the popup window, the
+ * queue behind it, the sound and the Quick Access entry are all Steam's.
  *
- * **It does not fall back to Decky Loader's toaster when one is there**, and the
- * reason is the device test rather than purity. The machine this is tested on
- * has Decky installed — disabled, but present — so a placeholder that borrowed
- * the loader's API whenever it found one would pass that test for a reason
- * nobody could identify afterwards. A test that cannot fail for the thing it is
- * testing is worth nothing.
+ * Everything about how that is done lives in `utils/steamToaster.tsx`,
+ * including what happens when the searches behind it come back empty: the toast
+ * is logged and nothing is pushed, because an entry Steam has no drawing for
+ * would go through its server-notification component instead.
  */
-export const toaster: Toaster = {
-  toast(toast: ToastData): ToastNotification {
-    console.warn(`[Tender] toast (not shown until #1901): ${String(toast.title)} — ${String(toast.body)}`);
-    return { data: toast, dismiss: () => {} };
-  },
-};
+export const toaster: Toaster = steamToaster;
 
 /**
- * PLACEHOLDER until #1901, which installs the game-page patch through Tender's
- * own installer instead of Decky's router hook. Until then `addPatch` answers
- * with the patch **unapplied**: Steam's game page carries no Tender section.
+ * PLACEHOLDER: there is no route installer of Tender's own yet, so `addPatch`
+ * answers with the patch **unapplied** and Steam's game page carries no Tender
+ * section.
  *
  * The patch is handed back rather than refused so that the registration and the
  * teardown in `gameDetailPatch.tsx` stay symmetrical — a `null` here would make
@@ -214,7 +215,7 @@ export const toaster: Toaster = {
  */
 export const routerHook: RouterHook = {
   addPatch(path: string, patch: RoutePatch): RoutePatch {
-    console.warn(`[Tender] route patch for ${path} is not installed until #1901`);
+    console.warn(`[Tender] route patch for ${path} is not installed — Tender has no route installer yet`);
     return patch;
   },
   removePatch(_path: string, _patch: RoutePatch): void {},

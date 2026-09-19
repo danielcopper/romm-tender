@@ -6,7 +6,8 @@
  * like a `vi.fn()`. The two placeholders are the only members here with a body
  * worth reading; `callable`, `addEventListener` and `removeEventListener` are
  * one-line delegations to `HostSocket`, which `hostSocket.test.ts` drives
- * against a socket of its own.
+ * against a socket of its own, and `toaster` is a delegation to
+ * `utils/steamToaster.tsx`, which its own file drives against supplied seams.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -36,8 +37,13 @@ describe("definePlugin", () => {
   });
 });
 
-describe("the toaster placeholder", () => {
-  it("hands back a dismissable handle carrying the toast, and shows nothing", () => {
+describe("the toaster", () => {
+  // There is no Steam under the test runner, so every search behind a toast
+  // misses here and what this file can reach is the answer to THAT — which is
+  // the answer a device gives after a Steam update has moved the searches. The
+  // push itself, the tray and the renderer's patch chain are driven against
+  // supplied seams in `utils/steamToaster.test.tsx`.
+  it("hands back a dismissable handle carrying the toast, and logs what it could not show", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const data = { title: "Tender", body: "Downloaded Chrono Trigger" };
 
@@ -45,20 +51,19 @@ describe("the toaster placeholder", () => {
 
     expect(raised.data).toBe(data);
     expect(() => raised.dismiss()).not.toThrow();
-    // Nothing reaches the screen until #1901, so the log is the whole of what a
-    // notice does — and the body is in it, because a log line that says only
-    // "a toast happened" is worth nothing to whoever reads it.
+    // The log is the whole of what a notice does when Steam answers for
+    // nothing — and the body is in it, because a line that says only "a toast
+    // happened" is worth nothing to whoever reads it.
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("Downloaded Chrono Trigger"));
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("#1901"));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("renderer or store is not there"));
   });
 
   it("reaches no loader API even where one exists", () => {
-    // The disqualifier is not purity: both placeholders stand in for the
-    // loader's own API, #1901 replaces them with Tender's, and one that
-    // borrowed wherever it found one would behave differently on a machine
-    // running Decky from one without. The reference machine DOES run the loader
-    // (plugin_loader active, 127.0.0.1:1337 listening, measured 2026-09-17), so
-    // that borrowing would show up on a device rather than hide there.
+    // The disqualifier is not purity: the toaster stands in for the loader's
+    // own API, and one that borrowed wherever it found one would behave
+    // differently on a machine running Decky from one without. The reference
+    // machine DOES run the loader, so that borrowing would show up on a device
+    // rather than hide there.
     const loader = { connect: vi.fn() };
     vi.stubGlobal("__DECKY_SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED_deckyLoaderAPIInit", loader);
     vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -82,7 +87,7 @@ describe("the routerHook placeholder", () => {
     // remove path unreachable and hide the day it starts mattering.
     expect(installed).toBe(patch);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("/library/app/:appid"));
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("#1901"));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("no route installer"));
   });
 
   it("takes the patch back without complaint", () => {
