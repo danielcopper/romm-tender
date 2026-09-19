@@ -111,19 +111,22 @@ run = [
 ]
 
 [tasks.dev]
-description = "Build the panel and run the backend, which serves it and loads it into Steam"
+description = "Build the panel, restart Steam into the window and display a dev:bpm* / dev:desktop* task last chose (the desktop client if none has), and run the backend, which loads the panel into it (restarts Steam)"
 depends = ["build"]
 raw = true
-# `exec` so Ctrl-C reaches the backend itself rather than mise: the process
-# unloads on SIGINT, and an interrupted unload leaves behind the half-finished
-# state its start-up routines exist to repair.
+# Why every task that runs the backend restarts Steam, and why the window is
+# remembered rather than read: docs/contributing/frontend-dev-loop.md.
 #
-# No display argument, deliberately: the backend loads the panel into Steam's
-# one JS context, which the desktop client and Big Picture share, so which
-# window shows it is the question of dev:bpm, dev:bpm-reset and dev:restart, not
-# of this task. It needs `~/.steam/steam/.cef-enable-remote-debugging` to exist
-# and Steam to have been started since that file appeared.
-run = "exec python backend/main.py"
+# The build runs first (a failed build costs no restart) and the backend is
+# exec'd last, because nothing after an `exec` runs. `exec` so Ctrl-C reaches
+# the backend itself rather than mise: the process unloads on SIGINT, and an
+# interrupted unload leaves behind the half-finished state its start-up
+# routines exist to repair. The backend needs
+# `~/.steam/steam/.cef-enable-remote-debugging` to exist.
+run = '''
+bash scripts/dev_steam.sh restart
+exec python backend/main.py
+'''
 
 [tasks.docs]
 description = "Serve the documentation site locally with live reload"
@@ -153,50 +156,53 @@ exec python3 scripts/dev_ui_scale.py "$usage_mode"
 '''
 
 [tasks."dev:bpm"]
-description = "Open windowed Big Picture on a chosen monitor, starting Steam into it if it is not running (no restart)"
+description = "Build the panel, restart Steam into windowed Big Picture on a chosen display, remember that for dev, and run the backend (restarts Steam)"
+depends = ["build"]
 raw = true
 usage = '''
 arg "[display]" help="Monitor for the Big Picture window: 'internal' or an output name (dp2, DP-3, ...)" default="internal"
-complete "display" run="bash scripts/dev_open_bpm.sh --list"
+complete "display" run="bash scripts/dev_place_window.sh --list"
 '''
-# Opens BPM non-blocking and places the window on the chosen display via a
-# short-lived KWin script — the same helper dev:bpm-reset uses, without its
-# Steam restart. An already running Steam keeps its JS context, so a panel
-# rebuilt since it was loaded does not appear here; that takes dev:bpm-reset.
+# dev, with the window chosen here rather than recalled.
 run = '''
-exec bash scripts/dev_open_bpm.sh "$usage_display"
+bash scripts/dev_steam.sh restart bpm "$usage_display"
+exec python backend/main.py
+'''
+
+[tasks."dev:desktop"]
+description = "Build the panel, restart Steam into the desktop client on a chosen display, remember that for dev, and run the backend (restarts Steam)"
+depends = ["build"]
+raw = true
+usage = '''
+arg "[display]" help="Monitor for the desktop client's window: 'internal' or an output name (dp2, DP-3, ...)" default="internal"
+complete "display" run="bash scripts/dev_place_window.sh --list"
+'''
+# dev, with the window chosen here rather than recalled.
+run = '''
+bash scripts/dev_steam.sh restart desktop "$usage_display"
+exec python backend/main.py
 '''
 
 [tasks."dev:bpm-reset"]
-description = "Restart Steam into windowed Big Picture — a fresh JS context, so a rebuilt panel is loaded (restarts Steam)"
+description = "Restart Steam into windowed Big Picture on a chosen display and remember that for dev — no build; a backend already running loads the panel (restarts Steam)"
 raw = true
 usage = '''
 arg "[display]" help="Monitor for the Big Picture window: 'internal' or an output name (dp2, DP-3, ...)" default="internal"
-complete "display" run="bash scripts/dev_open_bpm.sh --list"
+complete "display" run="bash scripts/dev_place_window.sh --list"
 '''
-# Why a restart is the loop rather than a workaround: docs/contributing/frontend-dev-loop.md,
-# "Seeing a change". Beside Decky Loader it also brings back Decky's own QAM,
-# which survives only the first Big Picture entry per Steam process.
-#
-# The display target is resolved BEFORE Steam is shut down, so a typo costs an
-# error message rather than a restart.
+# Beside Decky Loader the restart also brings back Decky's own QAM, which
+# survives only the first Big Picture entry per Steam process.
 run = '''
-bash scripts/dev_open_bpm.sh --resolve "$usage_display" >/dev/null
-echo "Shutting down Steam..."
-bash scripts/dev_steam.sh stop
-echo "Reopening Big Picture..."
-bash scripts/dev_open_bpm.sh "$usage_display"
+bash scripts/dev_steam.sh restart bpm "$usage_display"
 '''
 
-[tasks."dev:restart"]
-description = "Restart Steam into the desktop client — a fresh JS context, so a rebuilt panel is loaded (restarts Steam)"
+[tasks."dev:desktop-reset"]
+description = "Restart Steam into the desktop client on a chosen display and remember that for dev — no build; a backend already running loads the panel (restarts Steam)"
 raw = true
-# The same restart as dev:bpm-reset, without choosing a window: the desktop
-# client and Big Picture share one JS context, so either restart gives the
-# panel a fresh one.
+usage = '''
+arg "[display]" help="Monitor for the desktop client's window: 'internal' or an output name (dp2, DP-3, ...)" default="internal"
+complete "display" run="bash scripts/dev_place_window.sh --list"
+'''
 run = '''
-echo "Shutting down Steam..."
-bash scripts/dev_steam.sh stop
-echo "Starting Steam..."
-bash scripts/dev_steam.sh start
+bash scripts/dev_steam.sh restart desktop "$usage_display"
 '''

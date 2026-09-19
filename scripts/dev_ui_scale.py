@@ -32,7 +32,7 @@ leaves the rest of the window unpainted), this is Steam's real scale: the views 
 re-laid out and repainted for real.
 
 Half 2 — the window. KWin scripting over DBus (the same loadScript/run/unloadScript route
-``dev_open_bpm.sh`` uses for window placement) un-fullscreens the Big Picture window and
+``dev_place_window.sh`` uses for window placement) un-fullscreens the Big Picture window and
 sets its geometry so the CLIENT area is exactly 1280x800, on whatever output it already
 sits on. ``frameGeometry`` includes decorations, so the frame is corrected by the measured
 frame-vs-client delta until the client area lands exactly. The window's prior geometry and
@@ -165,7 +165,7 @@ _POLL_SEC = 2.0
 _QAM_TITLE_PREFIX = "quickaccess"
 _BPM_TITLE_MARKER = "bigpicture"
 
-# KWin scripting (window half). Same DBus route dev_open_bpm.sh uses for placement.
+# KWin scripting (window half). Same DBus route dev_place_window.sh uses for placement.
 _KWIN_SERVICE = "org.kde.KWin"
 _KWIN_SCRIPTING_PATH = "/Scripting"
 _KWIN_SCRIPT_NAME = "romm-tender-ui-scale"
@@ -385,8 +385,8 @@ function rect(r) {
   };
 }
 
-// Same heuristic as dev_open_bpm.sh: class "steam" covers the desktop client window and
-// Big Picture; BPM keeps the "Big Picture" brand across locales ("Big-Picture-Modus"), and
+// Same heuristic as dev_place_window.sh's Big Picture half: class "steam" covers the
+// desktop client window and Big Picture; BPM keeps the "Big Picture" brand across locales ("Big-Picture-Modus"), and
 // a fullscreen steam window is BPM as well (the client window is never fullscreen).
 function isBigPicture(win) {
   if (!win || !win.resourceClass ||
@@ -615,7 +615,7 @@ def _capture_window_state() -> BpmWindow | None:
 def _deck_window_origin(prior: BpmWindow, width: int, height: int) -> tuple[int, int]:
     """Centre a *width* x *height* frame on the output the window is ALREADY on.
 
-    Moving it between screens is dev_open_bpm.sh's job, not this tool's.
+    Moving it between screens is dev_place_window.sh's job, not this tool's.
     """
     geometry = prior.output_geometry
     if geometry is None:

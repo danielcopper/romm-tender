@@ -1,28 +1,39 @@
 # Frontend dev loop
 
-Iterate on the panel from Desktop Mode on the Steam Deck: edit code next to a windowed Big Picture window, with the
-backend running beside it. Nothing is deployed anywhere and no plugin loader is involved.
+Iterate on the panel from Desktop Mode on the Steam Deck: edit code next to one of Steam's windows — windowed Big
+Picture or the desktop client — with the backend running beside it. Nothing is deployed anywhere and no plugin loader is
+involved.
 
 ## The loop
 
 ```bash
-mise run dev             # build the panel, then run the backend in the foreground
-mise run dev:bpm-reset   # in another terminal: restart Steam into windowed Big Picture, optionally on a chosen display
-mise run dev:restart     # ...or restart Steam into the desktop client instead
+mise run dev                           # build, restart Steam into the remembered window, run the backend
+mise run dev:bpm [display]             # the same into windowed Big Picture on <display>, and remember that
+mise run dev:desktop [display]         # the same into the desktop client on <display>, and remember that
+mise run dev:bpm-reset [display]       # second terminal, wrong display: only the restart, into Big Picture
+mise run dev:desktop-reset [display]   # ...or into the desktop client
 ```
 
-Build and run, restart Steam, look. `mise run dev` takes no display and opens no window: it is not about a surface.
-Steam's desktop client and Big Picture render into one shared JS context, so the panel is loaded once for both, and
-which window you then look at is the restart's choice — `dev:bpm-reset` for Big Picture, `dev:restart` for the desktop
-client. Why a restart at all is under [Seeing a change](#seeing-a-change).
+`mise run dev` is the everyday command. It builds the three bundles, restarts Steam into the window and display you last
+chose, and runs the backend in the foreground. `dev:bpm` and `dev:desktop` do the same with the window named on the
+command line — that is how you switch between Big Picture and the desktop client, or move to another display — and `dev`
+keeps that choice from then on. Each of the three ends in the same known state: a Steam started afresh, and the panel
+loaded into it by a backend running the current build.
 
-`mise run dev` builds the three bundles and starts the backend. The backend serves `dist/` on a loopback port and loads
-the panel into Steam's renderer over the CEF debugger — see
-[How the panel gets into Steam](../architecture/loading-the-panel.md). Ctrl-C stops it and lets it unload.
+The two resets are for a window on the wrong display. They restart Steam into the window and display you name, and do
+nothing else — no build, and no backend of their own: a backend still running from `dev` in the first terminal loads the
+panel into the fresh Steam by itself. They remember their choice too, so the next `dev` does not put it back wrong.
 
-Two things have to be true for anything to be loaded: `~/.steam/steam/.cef-enable-remote-debugging` has to exist (create
-the empty file and restart Steam if it does not), and Steam has to be running. If Steam is not running the backend waits
-and attaches when it comes up, so the order of the two commands does not matter.
+The display argument defaults to `internal` — see [Choosing the display](#choosing-the-display). Every one of these
+tasks shuts the running Steam down first, so anything open in it closes; a Steam that is not running is simply started.
+A build that fails, or a display that matches nothing, stops the task before Steam is touched.
+
+The backend serves `dist/` on a loopback port and loads the panel into Steam's renderer over the CEF debugger — see
+[How the panel gets into Steam](../architecture/loading-the-panel.md). Ctrl-C stops it and lets it unload. It needs
+`~/.steam/steam/.cef-enable-remote-debugging` to exist: create the empty file once, and the next task's restart makes
+Steam read it.
+
+Keyboard shortcuts in the Big Picture window: **Ctrl+2** opens the Quick Access Menu, **Ctrl+1** the main menu.
 
 One start-up line on stderr prints an address with the port and the token in it — the deliberate exception to the token
 never being printed, and what makes the served root reachable by hand. **It is not the injector's choice**: the line is
@@ -37,27 +48,44 @@ Loader it names a file the injector did not load. Read it for the port and the t
     anyway, because `dist/globals.js` has not run. Let the backend load the panel; it picks the pair that is safe for
     the machine it is on.
 
-## Seeing a change
+## Why every task restarts Steam
 
-**There is no hot reload, and the Steam restart is the loop rather than a workaround.** The injector refuses a JS
-context that already carries the panel — it knows one by [its marker](../architecture/loading-the-panel.md#the-marker) —
-so a rebuilt bundle reaches Steam only when that context is rebuilt, which is what wipes the marker. A Steam restart is
-the one way to ask for that. `TENDER_INJECT=force` does not get round it: that switch belongs to the crash watchdog, and
-the marker check does not read it.
+**There is no hot reload, and no deploy smaller than the whole.** Three facts make it so:
 
-```bash
-mise run build           # rebuild the bundles (the backend can keep running)
-mise run dev:bpm-reset   # restart Steam into windowed Big Picture, on a chosen display
-mise run dev:restart     # or: restart Steam into the desktop client
+- **A rebuilt bundle needs a fresh JS context.** The injector refuses a context that already carries the panel — it
+  knows one by [its marker](../architecture/loading-the-panel.md#the-marker) — and only a rebuild of the context wipes
+  the marker. A Steam restart is the one way to ask for that. `TENDER_INJECT=force` does not get round it: that switch
+  belongs to the crash watchdog, and the marker check does not read it.
+- **A new backend strands the panel the old one loaded.** Every backend process makes its own admission token
+  (`new_token` in `backend/host/access.py`), and the panel reads its address and token off the URL it was loaded from
+  ([the token](../architecture/loading-the-panel.md#the-token)), so a restarted backend leaves the running panel holding
+  a token nobody accepts.
+- **Both windows are one load.** The desktop client and Big Picture render from one shared JS context, and the backend
+  loads the panel into it once. There is no loading into one window and not the other; the tasks differ only in which
+  window you end up looking at.
+
+A frontend change and a backend change are therefore the same step: Ctrl-C, and `mise run dev` again.
+
+## Why the window is remembered rather than read
+
+Steam does not come back in the window it was shut down from: a plain start after a shutdown opens the desktop client,
+even when windowed Big Picture was open before. So the restart has to be told which window to open, and asking the
+running Steam does not answer it — `SteamUIStore.m_mainInstanceUIMode` describes Steam's main instance, not the window
+on screen, and reads as the desktop client while a windowed Big Picture is open; which display a window sits on is
+KWin's to know, not Steam's. Remembering the last explicit choice needs no detection and comes out the same every time.
+
+The memory is one plain-text file per machine, `${XDG_STATE_HOME:-~/.local/state}/tender-dev/steam-window`:
+
+```text
+window=bpm
+display=dp2
 ```
 
-Both restart tasks shut the running Steam down first, so anything open in it closes. `mise run dev:bpm` opens Big
-Picture without a restart; on a Steam that is already running it shows the panel that context already carries.
-
-The backend serves whatever is in `dist/` at the moment the panel is imported, so a frontend change needs no backend
-restart. A **backend** change does: Ctrl-C and `mise run dev` again.
-
-Keyboard shortcuts in the BPM window: **Ctrl+2** opens the Quick Access Menu, **Ctrl+1** the main menu.
+`window` is `bpm` or `desktop`, and `display` any [display target](#choosing-the-display). Every `dev:bpm*` and
+`dev:desktop*` task writes it; `dev` only reads it, and with no file it opens the desktop client on `internal`. It lives
+outside the repository because the display you dock to belongs to the machine, and a file in the tree would start every
+new worktree with an empty memory. Edit or delete it by hand as you like. A remembered display that is no longer
+connected stops `dev` before Steam is touched, and the message names the tasks that choose another.
 
 ## Why the windowed Big Picture
 
@@ -66,23 +94,27 @@ Desktop Steam's Big Picture window runs the same gamepadui React app as Game Mod
 space**: by default the windowed BPM gives the QAM panel far more height than the Deck does. See
 [Display scale: the dev loop lies about height](#display-scale-the-dev-loop-lies-about-height).
 
-`mise run dev:bpm [display]` opens and places that window without building or running anything.
+`mise run dev:bpm [display]` opens it, and `dev` keeps opening it from then on.
 
 ### Choosing the display
 
-The optional argument is matched against the **real outputs** of the machine — output naming varies between Decks and
-docks (external outputs may be `DP-2`/`DP-3` rather than `DP-1`/`DP-2`), so nothing is hardcoded. List the selectable
-targets with `scripts/dev_open_bpm.sh --list`: it prints a lowercase short form per connected **and enabled** output
-(e.g. `edp1`, `dp2`, `dp3`), plus the `internal` alias while the built-in panel is enabled. Disabled outputs are neither
-listed nor resolvable — KWin can't place a window on them. The raw `kscreen-doctor -o` names (e.g. `DP-2`) are accepted
-as well — matching is case- and dash-insensitive, so `dp2`, `DP2` and `DP-2` all mean `DP-2`. The default `internal`
-resolves to the built-in panel (`eDP-*`); a target that matches no enabled output is a hard error before anything opens.
-On a docked Deck whose internal panel is disabled or disconnected, the default prints a warning and the BPM window
-simply opens wherever the window manager puts it.
+The optional display argument of the four `dev:bpm*` and `dev:desktop*` tasks is matched against the **real outputs** of
+the machine — output naming varies between Decks and docks (external outputs may be `DP-2`/`DP-3` rather than
+`DP-1`/`DP-2`), so nothing is hardcoded. List the selectable targets with `scripts/dev_place_window.sh --list`: it
+prints a lowercase short form per connected **and enabled** output (e.g. `edp1`, `dp2`, `dp3`), plus the `internal`
+alias while the built-in panel is enabled. Disabled outputs are neither listed nor resolvable — KWin can't place a
+window on them. The raw `kscreen-doctor -o` names (e.g. `DP-2`) are accepted as well — matching is case- and
+dash-insensitive, so `dp2`, `DP2` and `DP-2` all mean `DP-2`. The default `internal` resolves to the built-in panel
+(`eDP-*`); a target that matches no enabled output is a hard error before Steam is shut down. On a docked Deck whose
+internal panel is disabled or disconnected, the default prints a warning and the window simply opens wherever the window
+manager puts it.
 
-Placement itself is done by a short-lived KWin script loaded over DBus (`scripts/dev_open_bpm.sh`), which moves the Big
-Picture window to the target output and unloads itself again — if KWin scripting is unavailable, the loop still works
-and only the placement is skipped. The BPM window stays a normal desktop window: it can always be dragged elsewhere.
+Placement itself is done by a short-lived KWin script loaded over DBus (`scripts/dev_place_window.sh`), which moves the
+chosen window to the target output and unloads itself again — if KWin scripting is unavailable, the loop still works and
+only the placement is skipped. It finds the window by its caption, matched on what no locale translates: Big Picture's
+keeps the "Big Picture" brand ("Big-Picture-Modus" in German), and the desktop client's main window is captioned the
+bare "Steam", which sets it apart from Steam's popups. Either window stays a normal desktop window: it can always be
+dragged elsewhere.
 
 With [mise shell completions](https://mise.jdx.dev/installing-mise.html#shells) enabled (requires the `usage` CLI, e.g.
 `eval "$(mise completion bash)"` in your shell rc), the display argument tab-completes with those targets.
@@ -133,10 +165,10 @@ mise run dev:ui-scale auto     # rescue: force automatic scaling back on, and ex
 The task emulates the Deck with **both halves**:
 
 1. **The window.** KWin scripting over DBus (the same `loadScript`/`run`/`unloadScript` route
-   [`dev_open_bpm.sh`](#choosing-the-display) uses for placement) un-fullscreens the Big Picture window and sizes it so
-   its **client area is exactly 1280x800**, on whatever monitor it already sits on. `frameGeometry` includes the window
-   decoration, so the frame is corrected by the measured frame-vs-client delta until the client area lands exactly —
-   nothing about the decoration is hardcoded.
+   [`dev_place_window.sh`](#choosing-the-display) uses for placement) un-fullscreens the Big Picture window and sizes it
+   so its **client area is exactly 1280x800**, on whatever monitor it already sits on. `frameGeometry` includes the
+   window decoration, so the frame is corrected by the measured frame-vs-client delta until the client area lands
+   exactly — nothing about the decoration is hardcoded.
 2. **The scale.** The two undocumented calls Steam's own settings UI uses
    (`SteamClient.Window.SetGamepadUIAutoDisplayScale` / `SetGamepadUIManualDisplayScaleFactor`), driven through the CEF
    debugger on `localhost:8080`, so the views are **really re-laid out and repainted** — unlike CDP's
@@ -303,13 +335,14 @@ the state directory, and on stderr in the terminal `mise run dev` is running in.
 - **A card in the corner says Tender could not load its panel** — the bundle was served and did not mount. It names the
   log path; the reason it prints is the import's own. Its one button stops the injection for the life of this backend
   process and takes the card away — nothing is loaded again until `mise run dev` is started afresh.
-- **Big Picture reopened without the panel** — the injector loads the panel again by itself when Steam rebuilds its JS
-  context. If it did not, `mise run dev:bpm-reset` gives a context nobody has loaded anything into yet. It takes the
-  same optional display argument, e.g. `mise run dev:bpm-reset dp2`; `mise run dev:restart` does the same into the
-  desktop client.
-- **Big Picture opened on the wrong monitor** — placement matches the window by its title once it appears. Check what
-  the window manager actually saw with `journalctl --user -b | grep decky-bpm`: the log lists every window's caption and
-  output, and whether the move fired. The window stays a normal desktop window, so you can always drag it over yourself.
+- **Steam came back without the panel** — the injector loads the panel again by itself when Steam rebuilds its JS
+  context. If it did not, `mise run dev:bpm-reset` or `mise run dev:desktop-reset` gives a context nobody has loaded
+  anything into yet, and the backend still running from `dev` loads it.
+- **A window opened on the wrong monitor** — run the reset for that window with the right display, e.g.
+  `mise run dev:bpm-reset dp2`; it remembers the display, so the next `dev` uses it too. Placement matches the window by
+  its caption once it appears; check what the window manager actually saw with
+  `journalctl --user -b | grep tender-dev-window`: the log lists every window's caption and output, and whether the move
+  fired. The window stays a normal desktop window, so you can always drag it over yourself.
 - **A "screen sharing" portal dialog pops up when Big Picture opens** — that's Steam's own desktop capture (Game
   Recording / Remote Play) asking through the xdg-desktop-portal, because there is no gamescope to capture in desktop
   mode. It is unrelated to this tooling. **Turn Steam's Game Recording off** (Steam → Settings → Game Recording) — you

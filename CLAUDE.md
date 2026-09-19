@@ -290,12 +290,14 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
   `.release-please-manifest.json`, because the JS manifest it used to read moved under `frontend/` and deliberately
   carries no version. The note lives here rather than beside the badge: the badge sits inside a centred HTML block, and
   `deno fmt` puts blank lines around an HTML comment, which would end that block and unalign the row.
-- **Run it**: `mise run dev` (build the panel, then run the backend, which serves `dist/` and loads the panel into
-  Steam). Needs `~/.steam/steam/.cef-enable-remote-debugging`. **There is no hot reload** — a rebuilt bundle reaches
-  Steam when its JS context is rebuilt; `mise run dev:bpm-reset [display]` (into Big Picture) or `mise run dev:restart`
-  (into the desktop client) gives a fresh one, and both restart the running Steam. `mise run dev:bpm` opens windowed Big
-  Picture on a display; `mise run dev:ui-scale` forces the Deck's metrics. Guide:
-  `docs/contributing/frontend-dev-loop.md`
+- **Run it**: `mise run dev` (build the panel, restart Steam into the window and display last chosen, then run the
+  backend, which serves `dist/` and loads the panel into Steam). Needs `~/.steam/steam/.cef-enable-remote-debugging`.
+  **There is no hot reload, and every deploy is a full one** — a rebuilt bundle reaches Steam only in a fresh JS
+  context, and a new backend process strands the panel the old one loaded — so every task but `dev:ui-scale` restarts
+  the running Steam. `mise run dev:bpm [display]` / `mise run dev:desktop [display]` do what `dev` does into windowed
+  Big Picture or the desktop client and remember that choice for `dev`; `mise run dev:bpm-reset [display]` /
+  `mise run dev:desktop-reset [display]` only restart Steam (no build, the running backend loads the panel) and remember
+  too. `mise run dev:ui-scale` forces the Deck's metrics. Guide: `docs/contributing/frontend-dev-loop.md`
 - **Tooling**: mise manages node, pnpm, python, uv; venv auto-creates at `.venv`. Python deps are pinned in two
   lock/source pairs — `requirements-dev.lock` at the root, for `backend/`, `tests/` and `scripts/`, and
   `docs/requirements.lock` beside the documentation it builds — each compiled from the `.txt` next to it by
