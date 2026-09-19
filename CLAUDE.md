@@ -85,9 +85,10 @@ new code in it.
 - `testing-backend.md` — test tiers, gate tests, vendored conformance vectors.
 - `testing-frontend.md` — the backend-event harness, that `api/host` is stubbed suite-wide so no socket is ever opened,
   non-vacuous catch assertions.
-- `comments.md` — an inline comment is the exception: only an outside-world fact, a road not taken, or a constraint the
-  code cannot express. Re-read the comment on the line you touch — a stale one is worse than none, because it is
-  believed and nothing in the toolchain contradicts it. **No mechanical check exists.**
+- `comments.md` — a comment, docstrings included, is the exception: only an outside-world fact, a road not taken, or a
+  constraint the code cannot express. A fact has one home, and how a value was arrived at goes in the commit rather than
+  the file. Re-read the comment on the line you touch — a stale one is worse than none, because it is believed and
+  nothing in the toolchain contradicts it. **No mechanical check exists.**
 
 ## Documentation
 
