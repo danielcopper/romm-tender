@@ -125,9 +125,10 @@ export function buildEntry(plugin: Plugin): QuickAccessTabEntry {
     tab: plugin.icon,
     // The boundary wraps the panel and not the icon, because a boundary in the
     // strip has no panel mounted to render its fallback into — a throw there
-    // takes the menu down whatever we do. That is the reason; the icon's own
-    // size is not one, since it subscribes to the sync store and asks the menu
-    // whether it is visible.
+    // takes the menu down whatever we do. That is the whole of the reason, and
+    // it would stand for an icon of any size: this one is static artwork that
+    // reads no state, but a busier one would be left unwrapped for the same
+    // reason.
     panel: <PanelErrorBoundary>{plugin.content}</PanelErrorBoundary>,
     [TENDER_TAB_MARK]: true,
   };

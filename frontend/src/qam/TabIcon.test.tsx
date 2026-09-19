@@ -11,7 +11,7 @@
 import { describe, it, expect } from "vitest";
 import { render } from "@testing-library/react";
 import { TabIcon } from "./TabIcon";
-import { TAB_ICON_ARC, TAB_ICON_BARS, TAB_ICON_HOLES, TAB_ICON_HOLE_R } from "./tabIconArt";
+import { TAB_ICON_ARC, TAB_ICON_BARS } from "./tabIconArt";
 
 /** The glyph's own root, so a query cannot pick up something else's SVG. */
 const glyph = (container: HTMLElement) => {
@@ -21,7 +21,7 @@ const glyph = (container: HTMLElement) => {
 };
 
 describe("TabIcon", () => {
-  it("draws the generated artwork: the arc, both bars and the four holes", () => {
+  it("draws the generated artwork: the arc and both bars", () => {
     const { container } = render(<TabIcon />);
     const root = glyph(container);
 
@@ -29,27 +29,18 @@ describe("TabIcon", () => {
     expect(drawn).toContain(TAB_ICON_ARC.d);
     expect(drawn).toContain(TAB_ICON_BARS.a);
     expect(drawn).toContain(TAB_ICON_BARS.b);
-
-    const holes = [...root.querySelectorAll("circle")].map((circle) => ({
-      cx: Number(circle.getAttribute("cx")),
-      cy: Number(circle.getAttribute("cy")),
-      r: Number(circle.getAttribute("r")),
-    }));
-    expect(holes).toEqual(TAB_ICON_HOLES.map((hole) => ({ cx: hole.cx, cy: hole.cy, r: TAB_ICON_HOLE_R })));
   });
 
-  it("cuts the holes out of the body instead of drawing them on it", () => {
-    // A hole drawn as a filled dot would disappear into the bar it sits on, so
-    // the four circles only mean anything while the body reads them as a mask.
+  it("asks for the strip's own colour where the bars are filled", () => {
+    // The bars declare no fill, so an ancestor decides what they are painted
+    // in — and one declaring none leaves them at SVG's initial `fill`, black on
+    // the strip's dark ground. happy-dom resolves no colour and computes no
+    // style, so the attribute is the whole of what can be held from here.
     const root = glyph(render(<TabIcon />).container);
 
-    const mask = root.querySelector("mask");
-    if (!mask) throw new Error("the glyph defines no mask");
-    expect(mask.querySelectorAll("circle")).toHaveLength(TAB_ICON_HOLES.length);
-
-    const masked = root.querySelector(`[mask="url(#${mask.getAttribute("id")})"]`);
-    if (!masked) throw new Error("nothing in the glyph is masked by it");
-    expect(masked.querySelector(`path[d="${TAB_ICON_BARS.a}"]`)).not.toBeNull();
+    const bar = root.querySelector(`path[d="${TAB_ICON_BARS.a}"]`);
+    if (!bar) throw new Error("the glyph draws no bars");
+    expect(bar.closest("[fill]")?.getAttribute("fill")).toBe("currentColor");
   });
 
   it("authors none of SMIL's animation elements", () => {

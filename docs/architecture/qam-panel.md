@@ -89,18 +89,28 @@ Decky adopts for the same reason.
 
 ### The glyph
 
-The mark reduced for the strip: no disc, one tone, the sync ring levelled, and the body as the button bars with the four
-button positions punched out of them. The strip carries nothing but single-tone free-standing glyphs — read off a
-screenshot rather than measured on the device — a bell, friends, a cog, a bolt, a note, a question mark, and Decky's
-plug — so a filled disc would be the only solid body in the row. The buttons are holes rather than dots for the same
-reason the disc went: with one tone a filled dot has nothing to be filled with that the bar is not already, so it
-disappears into the bar it sits on. They are cut at radius 12 in the 200-unit square, against the mark's own dot radius
-of 13.63: in a bar 31.38 wide, the mark's radius leaves 2.06 units of bar either side of each hole and 12 leaves 3.69.
-Which of the two to cut was the owner's pick from renderings, and 12 is what was picked.
+The mark reduced for the strip: no disc, one tone, the sync ring levelled and thickened, and the body as the button bars
+drawn as solid capsules. The strip carries nothing but single-tone free-standing glyphs — read off a screenshot rather
+than measured on the device — a bell, friends, a cog, a bolt, a note, a question mark, and Decky's plug — so a filled
+disc would be the only solid body in the row.
+
+**Nothing marks the four button positions, and that is arithmetic rather than taste.** They shipped punched out of the
+bars as holes, on the reasoning that took the disc away: with one tone a filled dot has nothing to be filled with that
+the bar is not already, so it disappears into the bar it sits on. At strip size the bar cannot pay for the cut. The
+glyph is drawn at 28 px across a 200-unit square, so one unit is 0.14 px: a bar 31.38 units wide is 4.39 px, a hole at
+radius 12 is 3.36 px across, and what is left of the bar either side of one is 0.52 px. Half a pixel cannot draw a bar,
+so the holes ate the body instead of marking the buttons — which is what the owner saw in the real strip on the device,
+and why the bars are now solid.
+
+**The arc and its arrowhead are thickened by 1.3**, which is the same size read the other way: at 28 px the mark's own
+15.5 stroke lands at 2.17 px, the thinnest thing in a row of solid bodies. The mark's own weight was tried at that size
+and reads too fine. What was looked at is the artwork and not a build — each candidate was painted into the live glyph's
+`<svg>` over the CEF debugger — so what the pick rests on is this geometry at 28 px in the real strip, beside its
+neighbours.
 
 It is **generated**, by `scripts/logo/tabicon.py` through `build.py --tab-icon`, into `frontend/src/qam/tabIconArt.ts`;
-the geometry comes from the mark's own drawing routines, so the two cannot drift. Its one departure from the mark's
-geometry, and why, is at `tabicon.STRIP_GEOMETRY`.
+the geometry comes from the mark's own drawing routines, so the two cannot drift. Its two departures from the mark's
+geometry, and why, are at `tabicon.STRIP_GEOMETRY`.
 
 **Nothing about it moves, and that is a measurement rather than a taste.** It shipped with a ring that turned while a
 sync ran and a body that folded while the entry was active. Read over CDP on the QuickAccess target in 6-second windows,
@@ -121,7 +131,7 @@ it and what it would have added is simply unknown. On a handheld, that is not a 
 gets to make. `TabIcon.test.tsx` fails if any of SMIL's animation elements comes back — it can see nothing else, and
 motion driven from CSS or a rAF loop would pass it — because the cost is invisible to every other check here.
 
-Three things about it are unmeasured and are on this cut's device list
+Two things about it are unmeasured and are on this cut's device list
 ([#1946](https://github.com/danielcopper/romm-tender/pull/1946)):
 
 - **Whether it lands at the 28 px it asks for.** It asks in em rather than in pixels so it scales with Steam's UI, and
@@ -132,10 +142,6 @@ Three things about it are unmeasured and are on this cut's device list
   way.
 - **Whether it takes the colour of the selected tab.** It asks for `currentColor`; what that inherits in the strip is
   not established here.
-- **Whether the mark's own stroke reads at that size.** The glyph used to thicken the arc and its arrowhead by 1.3,
-  because a hairline that reads at 512 px disappears at 24. That bump is gone — the owner looked at both renderings at
-  strip size and chose the mark's own stroke — so the legibility question behind it is open again, at 28 px rather than
-  the 24 the 1.3 was picked for.
 
 ### The boundary
 

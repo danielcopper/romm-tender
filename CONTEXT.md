@@ -857,10 +857,11 @@ over an array the entry is already in add nothing. **It is not the injection's m
 (`window.__tender_panel__`, → Injection) says a JS context already carries the panel, and the two are never called by
 the same name.
 
-The **tab glyph** is what the strip draws: the mark reduced to one tone with no disc, the sync ring levelled and the
-body as the button bars, with the four button positions punched out of them as holes. It is generated from the mark's
-own drawing routines (`scripts/logo/tabicon.py`) rather than drawn by hand, and it is **static** — it reads no state and
-has none, because the motion it shipped with cost roughly 29% of one core for as long as the menu was open (→
+The **tab glyph** is what the strip draws: the mark reduced to one tone with no disc, the sync ring levelled and
+thickened for the size the strip draws it at, and the body as the button bars, solid and with nothing marking the four
+button positions — at 28 px a bar is 4.39 px wide and holds no second shape. It is generated from the mark's own drawing
+routines (`scripts/logo/tabicon.py`) rather than drawn by hand, and it is **static** — it reads no state and has none,
+because the motion it shipped with cost roughly 29% of one core for as long as the menu was open (→
 `docs/architecture/qam-panel.md`, The glyph).
 
 _Avoid_: **tab** on its own for the entry, which is also Steam's word for the L1/R1 views inside a wide page (→ QAM

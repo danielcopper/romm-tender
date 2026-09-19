@@ -74,11 +74,11 @@ Five config objects, and nothing else worth editing:
 - **`gen.Geometry`** — every position and size, in a 200-unit square. Grouped by what they describe: the disc, the sync
   arrows, the button diamond, the dot shapes, the cross.
 - **`anim.Animation`** — frame count, rate, how far the ring turns, and where the morph's holds and ramps meet.
-- **`tabicon.STRIP_GEOMETRY`** — the tab glyph's departures from `gen.DEFAULT_GEOMETRY`, each with its reason; there is
-  one of them today: `arc_rot`, which levels the arcs where the mark tilts them by 6.34. The glyph reuses everything
-  else: the arcs and the bars are the mark's own routines, and the bars are drawn at the mark's resting pose. Two
-  numbers are `tabicon`'s own — `HOLE_R`, which the mark has no use for because nothing else cuts the buttons out of the
-  bars, and `PLACES`, the precision this module's own numbers are written at.
+- **`tabicon.STRIP_GEOMETRY`** — the tab glyph's departures from `gen.DEFAULT_GEOMETRY`, each with its reason; there are
+  two of them today: `arc_rot`, which levels the arcs where the mark tilts them by 6.34, and a 1.3 on the arc stroke
+  with the three arrowhead numbers that have to move with it, which is legibility at the 28 px the strip draws. The
+  glyph reuses everything else: the arcs and the bars are the mark's own routines, and the bars are drawn at the mark's
+  resting pose. One number is `tabicon`'s own — `PLACES`, the precision this module's own numbers are written at.
 - **`lockup`'s module constants** — which typeface was cut and at what letter-spacing, the wordmark's cap height as a
   fraction of the disc, and the air between the two. Changing the typeface or the tracking means re-cutting (below); the
   two ratios take effect on the next render.
