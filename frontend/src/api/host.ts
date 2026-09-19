@@ -79,10 +79,28 @@ export interface RouterHook {
 
 /** What `definePlugin`'s factory answers with — the panel, and its teardown. */
 export interface Plugin {
+  /** The entry's title, which Steam files the panel under. */
   name: string;
+  /** Drawn in the Quick Access tab strip. */
   icon: ReactNode;
+  /** Drawn in the panel below the strip. */
   content?: ReactNode;
+  /**
+   * Decky Loader's word for "render this panel even while another tab is
+   * active". **Nothing reads it since the panel stopped being a Decky plugin**:
+   * behind Tender's own entry, whether an unselected tab's panel stays mounted
+   * is Steam's tab group's decision and there is no flag to ask it with. It
+   * stays because it records what a page may still rely on — `qamExpansion.ts`
+   * is written against a panel that can render while its tab is not active —
+   * and deleting it would delete the question with it.
+   */
   alwaysRender?: boolean;
+  /**
+   * Decky Loader's teardown hook. **Nothing calls it for the same reason**: a
+   * JS-context rebuild is what ends this panel, and it takes the whole context
+   * rather than unloading anything. The panel's own suite calls it to exercise
+   * the teardown paths it registers.
+   */
   onDismount?(): void;
 }
 
@@ -153,8 +171,12 @@ export const removeEventListener = <Args extends unknown[] = []>(
 /**
  * Wrap the factory that builds the panel.
  *
- * It answers with the factory unchanged. Whoever mounts the panel calls it —
- * which today is nobody in this tree: the Quick Access entry that will is #1901.
+ * It answers with the factory unchanged, and calling it is somebody else's job:
+ * `index.tsx` hands it to `qam/installEntry.tsx`, which calls it exactly once
+ * and mounts what it answers with behind Tender's own Quick Access entry. That
+ * seam is where it is so this module stays the wire and reaches no view — the
+ * name is upstream's contract and the declaration is all of it that belongs
+ * here.
  */
 export const definePlugin = (fn: () => Plugin): (() => Plugin) => fn;
 

@@ -388,7 +388,8 @@ backend/
     vdf/                             # Valve Data Format parser (Steam shortcuts.vdf)
       LICENSE                        # Upstream MIT license — preserved on redistribution
 frontend/src/                        # Frontend TypeScript
-  index.tsx                          # Plugin entry, event listeners, QAM router
+  index.tsx                          # Plugin entry, event listeners, QAM router, the Quick Access entry's install
+  qam/                               # Tender's own Quick Access entry: the patch, the tab glyph, the panel's boundary
   bigpicture/                        # The gamepad surface: React components (QAM pages, game detail UI)
     layout/                          # Wide-page frame primitives: WidePage, ScrollRegion, Columns, ListDetail, pane
     library/ settings/ sync/         # Component groups for the Library, Settings and Sync pages

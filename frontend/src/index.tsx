@@ -2,7 +2,6 @@ import { definePlugin, addEventListener, removeEventListener, toaster } from "./
 import { showToast, PLUGIN_NAME } from "./utils/toast";
 import { useState, useRef, useEffect, FC, type ReactNode } from "react";
 import { Focusable } from "@decky/ui";
-import { FaGamepad } from "react-icons/fa";
 import { StartupFailurePanel } from "./boot/StartupFailurePanel";
 import { readSearchingCopy } from "./boot/searchingCopy";
 import { checkSteamModules, describeFailure, describeSurvivedMiss } from "./boot/steamModules";
@@ -13,6 +12,8 @@ import { SyncPage } from "./bigpicture/SyncPage";
 import { DangerZone } from "./bigpicture/DangerZone";
 import { DownloadQueue } from "./bigpicture/DownloadQueue";
 import { OWNS_ENTRY_FOCUS_ATTR } from "./bigpicture/layout/WidePage";
+import { installQuickAccessEntry } from "./qam/installEntry";
+import { TabIcon } from "./qam/TabIcon";
 import { initUnitSyncManager, resetSyncCancel } from "./utils/syncManager";
 import { setSyncProgress, getSyncProgress, updateSyncProgress } from "./utils/syncProgress";
 import { estimatePlanSeconds } from "./utils/syncEstimate";
@@ -189,10 +190,12 @@ const QAMPanel: FC = () => {
 
   // B goes back one page, from wherever focus is — bound here rather than on a
   // page so the narrow pages get it too, and bound only while there IS a page to
-  // go back to. On Main nothing is bound, so B stays Decky's own and still
-  // leaves the plugin: the escape route is never removed, it is exactly as far
-  // away as the user walked in, and the last press is never swallowed. Steam
-  // already prints "B ZURÜCK" in its footer legend, which this makes true.
+  // go back to. On Main nothing is bound, so the press travels on to whatever the
+  // menu around the panel does with it — Steam's own close where Tender's entry
+  // holds the panel, Decky's back where Decky's does. The escape route is never
+  // removed either way, it is exactly as far away as the user walked in, and the
+  // last press is never swallowed. Steam already prints "B ZURÜCK" in its footer
+  // legend, which this makes true.
   return (
     <div ref={rootRef}>
       {page === "main" ? content : <Focusable onCancelButton={() => setPage("main")}>{content}</Focusable>}
@@ -354,7 +357,7 @@ function registerAppIds(map: Record<string, number[]>): void {
   }
 }
 
-export default definePlugin(() => {
+const tender = definePlugin(() => {
   // Before anything else runs, and before anything mounts: did every search into
   // Steam's own interface find what it was looking for?
   //
@@ -385,7 +388,7 @@ export default definePlugin(() => {
       console.error(`[${PLUGIN_NAME}] ${describeFailure(startup, copy)} Missing: ${startup.missing.join(", ")}`);
       return {
         name: PLUGIN_NAME,
-        icon: <FaGamepad />,
+        icon: <TabIcon />,
         content: <StartupFailurePanel report={startup} copy={copy} />,
         alwaysRender: true,
       };
@@ -1122,7 +1125,7 @@ export default definePlugin(() => {
 
   return {
     name: PLUGIN_NAME,
-    icon: <FaGamepad />,
+    icon: <TabIcon />,
     content: <QAMPanel />,
     alwaysRender: true,
     onDismount() {
@@ -1158,3 +1161,25 @@ export default definePlugin(() => {
     },
   };
 });
+
+export default tender;
+
+/**
+ * The bundle's last act: put Tender's entry in Steam's Quick Access strip.
+ *
+ * The composition root is here rather than inside `definePlugin`, which stays
+ * what its name says — a typed declaration of the panel — so the wire layer
+ * (`api/host.ts`) keeps its hands off the view. Under Decky Loader this line was
+ * Decky's; nothing else in the tree calls the factory, so without it the panel
+ * is built for nobody.
+ *
+ * Nothing is awaited and nothing branches on the result: an installation that
+ * found no renderer to patch says so on the console, and the panel simply never
+ * appears — there is no second way to show it that a fallback could take.
+ */
+const quickAccessEntry = installQuickAccessEntry(tender);
+if (!quickAccessEntry.patched) {
+  console.error(
+    `[${PLUGIN_NAME}] Steam's Quick Access renderers were not found, so there is no tab to mount the panel behind.`,
+  );
+}

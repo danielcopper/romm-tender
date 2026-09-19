@@ -278,14 +278,15 @@ def _faceted_arc(uid: str, a0: float, a1: float, ink: tuple[str, str], g: Geomet
     )
 
 
-def _arm(
+def _arm_d(
     hub: tuple[float, float],
     dot: tuple[float, float],
     w: float,
     end_r: float,
     overhang: float,
+    places: int = 2,
 ) -> str:
-    """One bar, hub to `overhang` past its dot: half-round at the hub, `end_r` outside.
+    """One bar's path data, hub to `overhang` past its dot: half-round at the hub, `end_r` outside.
 
     The hub end is always a half-round centred exactly *on* the hub, never past it.
     Every bar sharing a hub therefore shares one cap circle, so the union of two
@@ -296,6 +297,10 @@ def _arm(
 
     Only the outer end takes `end_r`, so its roundness is free to differ: at
     end_r = w / 2 the two outer arcs meet and it is a semicircle.
+
+    `places` trades precision for bytes. Two decimals is the reference; the strip
+    glyph asks for one, because it asks to be drawn 28 px across, where the second
+    decimal is far below a physical pixel (`tabicon.py`).
     """
     dx, dy = dot[0] - hub[0], dot[1] - hub[1]
     span = math.hypot(dx, dy)
@@ -309,7 +314,7 @@ def _arm(
     ax, ay = hub  # the hub itself, centre of the inner half-round
 
     def pt(x: float, y: float) -> str:
-        return f"{x:.2f} {y:.2f}"
+        return f"{x:.{places}f} {y:.{places}f}"
 
     p0 = pt(ax + px * h, ay + py * h)
     p1 = pt(bx + px * h - ux * r, by + py * h - uy * r)
@@ -317,12 +322,58 @@ def _arm(
     p3 = pt(bx - px * (h - r), by - py * (h - r))
     p4 = pt(bx - px * h - ux * r, by - py * h - uy * r)
     p5 = pt(ax - px * h, ay - py * h)
-    hub_cap = f"A {h:.2f} {h:.2f} 0 0 0 {p0}"
+    hub_cap = f"A {h:.{places}f} {h:.{places}f} 0 0 0 {p0}"
     if r < 0.01:
         square = f"{pt(bx + px * h, by + py * h)} L {pt(bx - px * h, by - py * h)}"
-        return f'<path d="M {p0} L {square} L {p5} {hub_cap} Z"/>'
-    arc = f"A {r:.2f} {r:.2f} 0 0 0"
-    return f'<path d="M {p0} L {p1} {arc} {p2} L {p3} {arc} {p4} L {p5} {hub_cap} Z"/>'
+        return f"M {p0} L {square} L {p5} {hub_cap} Z"
+    arc = f"A {r:.{places}f} {r:.{places}f} 0 0 0"
+    return f"M {p0} L {p1} {arc} {p2} L {p3} {arc} {p4} L {p5} {hub_cap} Z"
+
+
+def _arm(
+    hub: tuple[float, float],
+    dot: tuple[float, float],
+    w: float,
+    end_r: float,
+    overhang: float,
+) -> str:
+    """{@link _arm_d} as a drawable element, which is what the mark places."""
+    d = _arm_d(hub, dot, w, end_r, overhang)
+    return f'<path d="{d}"/>' if d else ""
+
+
+def arm_shape(g: Geometry, morph: float) -> tuple[float, float, float]:
+    """Bar width, outer end radius and overhang at `morph`.
+
+    The three quantities the fold moves besides the hubs and dots. At morph 0 all
+    three fall back to the resting capsule: full width, a semicircular end, and an
+    overhang of exactly half that width.
+
+    Public so the fold's own numbers can be read off without re-deriving them from
+    `Geometry`; its only caller today is {@link arm_paths}, just below.
+    """
+    rest_h = g.cap_w / 2.0
+    w = g.cap_w * (1.0 + (g.dpad_bar_narrow - 1.0) * morph)
+    return (
+        w,
+        (w / 2.0) * (1.0 + (g.dpad_end_round - 1.0) * morph),
+        rest_h + (g.dpad_overhang * g.dpad_scale - rest_h) * morph,
+    )
+
+
+def arm_paths(g: Geometry, morph: float, places: int = 2) -> tuple[str, ...]:
+    """The four bars' path data at `morph`, in `_diamond`'s draw order.
+
+    Point-symmetric about the disc centre by construction — bars 2 and 3 are
+    bars 0 and 1 reflected through it, because `_diamond` builds each hub and dot
+    as the negation of its partner and the morph moves a dot by its own radius
+    and bearing, which a reflection preserves. The strip glyph emits the first
+    two and draws the others with one `rotate(180)`.
+    """
+    ul, lr, corners = _diamond(g, morph)
+    hubs = (ul, lr)
+    w, end_r, overhang = arm_shape(g, morph)
+    return tuple(_arm_d(hubs[hub], (x, y), w, end_r, overhang, places) for hub, x, y, _ in corners)
 
 
 def _body(uid: str, g: Geometry, ink: tuple[str, str], morph: float) -> str:
@@ -331,16 +382,7 @@ def _body(uid: str, g: Geometry, ink: tuple[str, str], morph: float) -> str:
     At morph 0 the hubs sit apart and each collinear pair merges into a capsule;
     at morph 1 both hubs are at the centre and the bars read as a D-pad cross.
     """
-    ul, lr, corners = _diamond(g, morph)
-    hubs = (ul, lr)
-    # The bars narrow, their ends unround and they reach further as the cross forms.
-    # At morph 0 all three fall back to the resting capsule the static asset needs:
-    # full width, a semicircular end, and an overhang of exactly half that width.
-    rest_h = g.cap_w / 2.0
-    w = g.cap_w * (1.0 + (g.dpad_bar_narrow - 1.0) * morph)
-    end_r = (w / 2.0) * (1.0 + (g.dpad_end_round - 1.0) * morph)
-    overhang = rest_h + (g.dpad_overhang * g.dpad_scale - rest_h) * morph
-    arms = "".join(_arm(hubs[hub], (x, y), w, end_r, overhang) for hub, x, y, _ in corners)
+    arms = "".join(f'<path d="{d}"/>' for d in arm_paths(g, morph) if d)
     return (
         f'<g fill="{ink[0]}">{arms}</g>'
         f'<clipPath id="bd{uid}"><polygon points="{_half_plane(g)}"/></clipPath>'

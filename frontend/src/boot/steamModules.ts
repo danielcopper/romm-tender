@@ -242,7 +242,7 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // | `appDetailsClasses` | `InnerContainer` in `findInsertionPoint` (`bigpicture/patches/gameDetailPatch.tsx:88`); `AppDetailsOverviewPanel` in the patch handler `registerGameDetailPatch` installs (`:231`, and its debug line `:242`) | `findInsertionPoint` returns `undefined`; the wrapper takes `""` | `InnerContainer` is a mark on a node of STEAM's, so without it the handler finds no insertion point and returns the tree untouched — no Tender section on the game page at all. Without `AppDetailsOverviewPanel` the wrapper is still inserted, outside `InnerContainer`'s flex and scroll layout |
   // | `basicAppDetailsSectionStylerClasses` | `PlaySection` in an unnamed `useEffect` of `CustomPlayButton` (`CustomPlayButton.tsx:220`) and on our own row in `RomMPlaySection` (`bigpicture/RomMPlaySection.tsx:1048`); also `dumpTree` (`gameDetailPatch.tsx:145-154`) | the effect does not call `hideNativePlaySection`; the row takes `""`; the dump prints `UNDEFINED` | the same member is both kinds at once: it names a node of Steam's for the hide, so Steam's own play section stays on screen beside ours, and a node of ours for the row's styling |
   // | `playSectionClasses` | `Container` in `dumpTree` alone (`gameDetailPatch.tsx:133-141`) | the dump prints `UNDEFINED` and skips the tree search it guards | one line of a debug dump that runs at most once per load names no class. Nothing a user can see |
-  // | `quickAccessMenuClasses` | `TabGroupPanel` at module scope (`utils/qamExpansion.ts:38-40`), read into the selectors of the injected sheet (`:92-93`); `ActiveTab` in `useWideQamPanel`'s effect (`:175`) | `TAB_PANEL_SELECTOR` becomes `PANEL_ID_SELECTOR`, the panel's id; `deckyTabActive` defaults to true (`:182`, the default argued at `:178-181`) and the `MutationObserver` guarded at `:191` is never constructed | the sheet matches the panel by id instead of by class, and the expansion is taken whether or not Decky's tab is the active one and is not re-synced on a tab switch — a leaked expansion the QAM-close, unmount and dismount paths still clear |
+  // | `quickAccessMenuClasses` | `TabGroupPanel` at module scope (`utils/qamExpansion.ts:44-46`), read into the selectors of the injected sheet (`:100-101`); `ActiveTab` in `useWideQamPanel`'s effect (`:190`) | `TAB_PANEL_SELECTOR` becomes `PANEL_ID_SELECTOR`, the panel's id; `owningTabActive` defaults to true (`:197`, the default argued just above it) and the `MutationObserver` guarded at `:206` is never constructed | the sheet matches the panel by id instead of by class, and the expansion is taken whether or not the page's own tab is the active one and is not re-synced on a tab switch — a leaked expansion the QAM-close and unmount paths still clear |
   //
   // Every map but `playSectionClasses` blocks the panel, and that is the status
   // quo rather than a reading of the table: see {@link AbsenceCost} for what
@@ -335,6 +335,8 @@ export const PACKAGE_OWN: Readonly<Record<string, string>> = {
   createReactTreePatcher: "the package's own tree patcher",
   findInReactTree: "the package's own tree walk",
   findModule: "the module-cache reader itself",
+  findModuleByExport: "the module-cache reader itself, asked by export",
+  getReactRoot: "the package's own reader of a mounted React root",
   GamepadButton: "a TypeScript enum, compiled into the bundle",
 };
 

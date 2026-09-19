@@ -11,6 +11,7 @@ Both must be on PATH.
     build.py --palette <name>     a palette other than the chosen one
     build.py --static             only the static SVG + PNGs and the lockup
     build.py --gif                only the animated GIF
+    build.py --tab-icon           only the Quick Access strip glyph
     build.py --size <px>          master raster size (default 512)
 
 `--install` is the one to run after changing the mark: it writes every shipped
@@ -32,6 +33,7 @@ import sys
 import anim
 import gen
 import lockup
+import tabicon
 
 HERE = pathlib.Path(__file__).parent
 PNG_SIZES = (1024, 512, 256, 128, 64, 32)
@@ -165,6 +167,40 @@ def build_gif(out: pathlib.Path, pal: gen.Palette, size: int, a: anim.Animation)
     print(f"  {small.name}  ({small.stat().st_size:,}b, 256px)")
 
 
+def _prettier() -> pathlib.Path:
+    """The frontend package's prettier, which the generated TypeScript needs."""
+    binary = REPO / "frontend" / "node_modules" / ".bin" / "prettier"
+    if not binary.exists():
+        sys.exit(f"not found: {binary} — run `mise run setup` first")
+    return binary
+
+
+def build_tab_icon(out: pathlib.Path) -> None:
+    """The Quick Access strip glyph: a TypeScript module, and an SVG to look at.
+
+    The only build step here that rasterises nothing, so it needs neither
+    `rsvg-convert` nor `ffmpeg`. The panel imports the module; the SVG is
+    installed nowhere and is written beside it so a change to the form can be
+    seen without opening Steam.
+
+    **The module is handed to prettier**, because the repository's commit hook and
+    CI both format TypeScript and would otherwise reformat this file after the
+    build wrote it — at which point re-running the build produces a diff nobody
+    made and the generated file stops being checkable against its generator.
+    This copy is formatted for reading; the installed one is formatted again at
+    its destination, where the repository's own prettier configuration applies
+    ({@link install}).
+    """
+    out.mkdir(parents=True, exist_ok=True)
+    ts = out / "tab-icon-art.ts"
+    ts.write_text(tabicon.ts_module())
+    _run([str(_prettier()), "--log-level", "warn", "--write", str(ts)])
+    print(f"  {ts.name}  ({ts.stat().st_size:,}b)")
+    svg = out / "tab-icon.svg"
+    svg.write_text(tabicon.glyph())
+    print(f"  {svg.name}  ({svg.stat().st_size:,}b, not installed — for looking at)")
+
+
 REPO = HERE.parent.parent
 
 # Where each shipped file goes. The mark lands twice because MkDocs only serves
@@ -181,6 +217,11 @@ INSTALL = {
     "lockup-dark.png": ("assets/lockup-dark.png",),
     "lockup-animated.gif": ("assets/lockup-animated.gif",),
     "lockup-animated-dark.gif": ("assets/lockup-animated-dark.gif",),
+    # Not an image: the strip glyph lands in the panel's own source tree, because
+    # the tab icon is a React node rather than a file the panel points at — it
+    # inherits `currentColor`, which does not survive being an <img>. Whether the
+    # strip's colour is what it ends up inheriting is a device question.
+    "tab-icon-art.ts": ("frontend/src/qam/tabIconArt.ts",),
 }
 # A 1024px square of the bare mark. Nothing renders it — no page, no manifest —
 # it is the copy to hand out wherever a link preview or a listing wants one
@@ -188,15 +229,30 @@ INSTALL = {
 STORE_IMAGE = ("logo-1024.png", "assets/store_image.png")
 
 
-def install(out: pathlib.Path) -> None:
-    """Copy the freshly built files over the ones the repo ships."""
-    pairs = [(out / src, REPO / dest) for src, dests in INSTALL.items() for dest in dests]
-    pairs.append((out / STORE_IMAGE[0], REPO / STORE_IMAGE[1]))
+def install(out: pathlib.Path, names: set[str]) -> None:
+    """Copy the freshly built files over the ones the repo ships.
+
+    `names` is what this run actually built, so a narrowed build installs its own
+    outputs and nothing else. Anything named that is missing is an error rather
+    than a skip: a silent one would leave a shipped copy standing while the run
+    that was supposed to replace it reported success.
+    """
+    pairs = [(out / src, REPO / dest) for src, dests in INSTALL.items() if src in names for dest in dests]
+    if STORE_IMAGE[0] in names:
+        pairs.append((out / STORE_IMAGE[0], REPO / STORE_IMAGE[1]))
     for src, dest in pairs:
         if not src.exists():
             sys.exit(f"not built: {src}")
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, dest)
+        # Formatted HERE and not in `out/`, because prettier resolves its
+        # configuration from the path of the file it is formatting and there is
+        # exactly one config in this repository, under `frontend/`. A run over
+        # the copy in `out/` therefore formats to prettier's defaults, and the
+        # result does not satisfy `pnpm -C frontend format:check` — measured: 73
+        # lines there against the 141 the frontend's own rules produce.
+        if dest.suffix == ".ts":
+            _run([str(_prettier()), "--log-level", "warn", "--write", str(dest)])
         print(f"  {dest.relative_to(REPO)}  ({dest.stat().st_size:,}b)")
 
 
@@ -206,15 +262,24 @@ if __name__ == "__main__":
     name = argv[argv.index("--palette") + 1] if "--palette" in argv else gen.CHOSEN
     size = int(argv[argv.index("--size") + 1]) if "--size" in argv else 512
     pal = gen.BY_NAME[name]
-    only_static, only_gif = "--static" in argv, "--gif" in argv
+    only_static, only_gif, only_tab = "--static" in argv, "--gif" in argv, "--tab-icon" in argv
+    # Each --only flag narrows to itself; none of them means everything.
+    everything = not (only_static or only_gif or only_tab)
 
     print(f"palette: {pal.name}   out: {out}")
-    if not only_gif:
+    built: set[str] = set()
+    if everything or only_static:
         build_static(out, pal, size)
         build_lockup(out, pal)
-    if not only_static:
+        built |= {"logo.svg", "logo.png", STORE_IMAGE[0]}
+        built |= {n for n in INSTALL if n.startswith("lockup") and not n.endswith(".gif")}
+    if everything or only_gif:
         build_gif(out, pal, size, anim.DEFAULT_ANIMATION)
         build_lockup_gif(out, pal, anim.DEFAULT_ANIMATION)
+        built |= {n for n in INSTALL if n.endswith(".gif")}
+    if everything or only_tab:
+        build_tab_icon(out)
+        built.add("tab-icon-art.ts")
     if "--install" in argv:
         print("installing:")
-        install(out)
+        install(out, built)

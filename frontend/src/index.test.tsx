@@ -70,6 +70,17 @@ vi.mock("./boot/steamModules", async () => {
   return { ...actual, checkSteamModules: () => startupAnswer };
 });
 
+// index.tsx's last act is to hand the factory to the Quick Access installer,
+// which is how the panel reaches the screen in Steam. Under this suite that
+// would run the factory once at IMPORT — before the mocks below have a value to
+// hand it — and would then patch renderers the stubbed `@decky/ui` cannot find.
+// What a render pass does to a tab array is `qam/quickAccessEntry.test.ts`'s;
+// the install itself reaches Steam and is device-verified only. What this
+// file exercises is the factory, which it calls itself.
+vi.mock("./qam/installEntry", () => ({
+  installQuickAccessEntry: vi.fn(() => ({ patched: true })),
+}));
+
 vi.mock("./bigpicture/patches/gameDetailPatch", () => ({
   registerGameDetailPatch: vi.fn(),
   unregisterGameDetailPatch: vi.fn(),
@@ -2298,10 +2309,11 @@ describe("index.tsx — where entry focus lands on a page swap", () => {
     }
   });
 
-  it("takes B back one page, and leaves Main's B to Decky", async () => {
+  it("takes B back one page, and binds nothing on Main", async () => {
     // The escape route is never removed: on a sub-page B returns to Main, and on
-    // Main nothing is bound, so Decky's own back still leaves the plugin. Steam
-    // already prints "B ZURÜCK" — this makes it true rather than misleading.
+    // Main nothing is bound, so the press travels on to whatever holds the panel.
+    // Steam already prints "B ZURÜCK" — this makes it true rather than
+    // misleading.
     const plugin = pluginFactory();
     const { container } = render(plugin.content);
 

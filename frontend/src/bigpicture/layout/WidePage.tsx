@@ -5,8 +5,9 @@
  * height.
  *
  * Back on the gamepad is **B**, bound once by the panel's router for every
- * sub-page (`frontend/src/index.tsx`) rather than here — so the narrow pages
- * get it too, and Main, which has nowhere to go back to, keeps Decky's own B.
+ * sub-page (`frontend/src/index.tsx`) rather than here, so the narrow pages get
+ * it too. Main has nowhere to go back to and binds nothing, so B there is
+ * whatever the menu holding the panel does with it.
  * What the frame has to do is get out of the way: Steam's tabbed page binds the
  * content pane's `onCancelButton` to "focus the tab row" unless
  * `cancelSkipTabHeader` is passed, so the first B inside a tab would be
@@ -136,8 +137,9 @@ const BackChipLabel: FC = () =>
 /**
  * The nearest ancestor that scrolls `body`, or `null` when nothing does.
  *
- * The QAM's own tab panel is one (`#quickaccess_content_999` computes
- * `overflow-y: auto`), and it is the element whose bottom edge bounds the page.
+ * The QAM's own tab panel is one — the element Steam ids
+ * `quickaccess_content_<tab key>` computes `overflow-y: auto` — and it is the
+ * element whose bottom edge bounds the page.
  */
 function scrollingAncestor(body: HTMLElement, view: Window): HTMLElement | null {
   for (let el = body.parentElement; el; el = el.parentElement) {
@@ -150,11 +152,18 @@ function scrollingAncestor(body: HTMLElement, view: Window): HTMLElement | null 
 /**
  * How far `body`'s own ancestors hang below their parents, up to `scroller`.
  *
- * Decky wraps a plugin's content in a box that overhangs: it sits below the
- * panel top by the height of Decky's own plugin title and takes `height: 100%`
- * of a parent it is already inset within, so its bottom lands that far past
- * that parent's. Nothing of ours is painted in those pixels — but the panel
+ * An overhang is a box between the page and the scroller whose bottom lands past
+ * its own parent's. Nothing of ours is painted in those pixels — but the panel
  * scrolls by them, and that is enough to take the Back row off the top.
+ *
+ * **The chain this was written against was Decky Loader's**, which wraps a
+ * plugin's content in exactly such a box: it sits below the panel top by the
+ * height of Decky's own plugin title and takes `height: 100%` of a parent it is
+ * already inset within. Tender's own Quick Access entry has no such wrapper —
+ * Steam's tab group renders the panel directly, in both bundles, because the
+ * entry does not go through Decky's plugin list even where Decky is running.
+ * That is a chain with no overhang, and it is the reason the routine had to
+ * behave well at zero, having been written against a chain that overhung by fifty.
  *
  * **This is what the root's negative bottom margin cancels, not what the body
  * gives up.** Subtracting it from the height instead is what left a band of the
