@@ -73,8 +73,12 @@ each is a way to get this wrong:
 - The entry is added again to whatever array the pass is handed, and the entry's own marker is what keeps a second pass
   over an array it is already in from adding a second one.
 - Anything bound to the menu's own window is bound from inside the menu's React tree, so the remount re-binds it. The
-  entry itself binds nothing there — the glyph is static and reads no state at all — but a page the panel mounts does
-  (`utils/qamExpansion.ts`'s stylesheet and observer, `utils/entryFocus.ts`'s focus listeners).
+  entry itself binds nothing there — the glyph is static and reads no state at all — but a page the panel mounts does:
+  `utils/qamExpansion.ts`'s stylesheet and `MutationObserver`, `utils/entryFocus.ts`'s focus listeners,
+  `bigpicture/layout/WidePage.tsx`'s `ResizeObserver`, and `bigpicture/layout/ScrollRegion.tsx`, which reads the view
+  per event and retains nothing. Each of the four sits inside an effect or an event handler of a component the menu
+  mounts, which is what makes the remount re-bind it; one held at module scope would work until the first
+  Gaming-Mode-to-Desktop switch and then do nothing, silently.
 
 **An already-mounted menu is adopted rather than waited for.** React flattens the renderer's `memo` wrapper at mount and
 carries the resolved type on the fiber, so swapping the module's export afterwards reaches nothing already on screen.
@@ -91,8 +95,8 @@ screenshot rather than measured on the device — a bell, friends, a cog, a bolt
 plug — so a filled disc would be the only solid body in the row. The buttons are holes rather than dots for the same
 reason the disc went: with one tone a filled dot has nothing to be filled with that the bar is not already, so it
 disappears into the bar it sits on. They are cut at radius 12 in the 200-unit square, against the mark's own dot radius
-of 13.63 — at the mark's radius the 31.38-wide bar keeps two units either side of each dot and reads as a chain of
-blobs.
+of 13.63: in a bar 31.38 wide, the mark's radius leaves 2.06 units of bar either side of each hole and 12 leaves 3.69.
+Which of the two to cut was the owner's pick from renderings, and 12 is what was picked.
 
 It is **generated**, by `scripts/logo/tabicon.py` through `build.py --tab-icon`, into `frontend/src/qam/tabIconArt.ts`;
 the geometry comes from the mark's own drawing routines, so the two cannot drift. Its one departure from the mark's
@@ -110,15 +114,28 @@ with only the fold running:
 | `LayoutDuration`   | 0.7626 s     | 0.001 s       |
 
 That is roughly 29% of one core for as long as the menu is open, and a full layout plus style recalc 120 times a second
-— twice a frame at 60 Hz — because animating a path's `d` forces layout every frame. The ring's turn would have come on
-top of that; it could not be measured beside the fold, because starting a sync run was not possible in that session. On
-a handheld, that is not a trade a decoration rendering at 24 px gets to make. `TabIcon.test.tsx` fails if any SMIL
-element comes back, because the cost is invisible to every other check here.
+— twice a frame at 60 Hz — because animating a path's `d` forces layout every frame. **The ring was not running in
+either reading**, so nothing here is a measurement of it: starting a sync run was not possible in that session. It was
+an `<animateTransform type="rotate">` on a `<g>` rather than an animation of `d`, so the mechanism above does not reach
+it and what it would have added is simply unknown. On a handheld, that is not a trade a decoration rendering at 24 px
+gets to make. `TabIcon.test.tsx` fails if any of SMIL's animation elements comes back — it can see nothing else, and
+motion driven from CSS or a rAF loop would pass it — because the cost is invisible to every other check here.
 
-Two things about it are unmeasured and are on the device list: what size the strip draws it at, and whether it takes the
-colour of the selected tab. The glyph asks for 28 px as `1.633em` rather than as a pixel length, so it scales with
-Steam's UI — and the em-to-pixel mapping behind that number is itself a measurement rather than arithmetic: the `1.4em`
-it used to ask for drew a 24 px box under a 16 px parent, not the 22.4 px that font size states.
+Three things about it are unmeasured and are on this cut's device list
+([#1946](https://github.com/danielcopper/romm-tender/pull/1946)):
+
+- **Whether it lands at the 28 px it asks for.** It asks in em rather than in pixels so it scales with Steam's UI, and
+  the `1.633em` it asks with is scaled off a measurement rather than arithmetic: the `1.4em` it used to carry drew a box
+  of 24 px, which is 17.14 px to the em. That is not the 16 px parent `font-size` read beside it, so plain CSS em
+  resolution cannot be the whole story, and what sits between the two was never established — nor was it established
+  that the strip takes the length it is handed rather than clamping it. The 1.633 needs only the ratio and holds either
+  way.
+- **Whether it takes the colour of the selected tab.** It asks for `currentColor`; what that inherits in the strip is
+  not established here.
+- **Whether the mark's own stroke reads at that size.** The glyph used to thicken the arc and its arrowhead by 1.3,
+  because a hairline that reads at 512 px disappears at 24. That bump is gone — the owner looked at both renderings at
+  strip size and chose the mark's own stroke — so the legibility question behind it is open again, at 28 px rather than
+  the 24 the 1.3 was picked for.
 
 ### The boundary
 

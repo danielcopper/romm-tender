@@ -621,8 +621,11 @@ Format: **invariant** — tier — enforced by.
   third rule's own half — **nothing binds to the Quick Access window at module scope** — is unmechanized and unpinned:
   that window is replaced by every remount, so a listener, observer or stylesheet held across one is bound to a document
   nothing renders. What holds today was measured rather than assumed — an unfiltered grep over `frontend/src` (tests
-  aside) for `addEventListener(`, `new ResizeObserver`, `new MutationObserver`, `ownerDocument`, `defaultView` and
-  `createElement(`, with the enclosing function of every hit read. The sweep's own boundary is worth stating, because a
+  aside) for `addEventListener(`, `ResizeObserver`, `MutationObserver`, `ownerDocument`, `defaultView` and
+  `createElement(`, with the enclosing function of every hit read. **Neither observer term is prefixed with `new`**, and
+  that is what makes it find anything: this repo's realm rule takes the constructor off the node's own view, so every
+  observer here is spelled `new view.ResizeObserver` or `new panelView.MutationObserver`, and a pattern anchored on
+  `new ResizeObserver` matches nothing in `frontend/src` at all. The sweep's own boundary is worth stating, because a
   reader re-deriving it meets the other kind first: a `globalThis` listener binds SharedJSContext's window, which the
   menu's remount does not touch, so those are out of scope however many of them there are. Every binding into the MENU's
   window sits inside an effect or an event handler of a component the menu mounts: `utils/qamExpansion.ts`'s stylesheet

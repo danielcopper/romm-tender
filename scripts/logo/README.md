@@ -35,7 +35,7 @@ Without `--install` it writes to `out/` instead, which is the way to look at a c
 
 The tab glyph is the one output that is not an image. Steam's Quick Access tab strip takes a React node rather than a
 file, so the glyph ships as generated TypeScript the panel draws from — which is what lets it ask for `currentColor` at
-all. Unlike the mark, **it does not animate**: the motion it shipped with cost roughly a third of a core for as long as
+all. Unlike the mark, **it does not animate**: the motion it shipped with cost roughly 29% of one core for as long as
 the menu was open, measured on the device. `tab-icon.svg` is written beside it and installed nowhere: it is the same
 glyph as a file, for looking at a change without opening Steam. What the glyph is, and the reading behind its being
 static, is `docs/architecture/qam-panel.md`; what it departs from, and why, is at `tabicon.STRIP_GEOMETRY`.
@@ -75,9 +75,10 @@ Five config objects, and nothing else worth editing:
   arrows, the button diamond, the dot shapes, the cross.
 - **`anim.Animation`** — frame count, rate, how far the ring turns, and where the morph's holds and ramps meet.
 - **`tabicon.STRIP_GEOMETRY`** — the tab glyph's departures from `gen.DEFAULT_GEOMETRY`, each with its reason; there is
-  one of them today. The glyph reuses everything else: the arcs and the bars are the mark's own routines, drawn at the
-  mark's own resting pose. Its one number of its own is `tabicon.HOLE_R`, which the mark has no use for — nothing else
-  cuts the buttons out of the bars.
+  one of them today: `arc_rot`, which levels the arcs where the mark tilts them by 6.34. The glyph reuses everything
+  else: the arcs and the bars are the mark's own routines, and the bars are drawn at the mark's resting pose. Two
+  numbers are `tabicon`'s own — `HOLE_R`, which the mark has no use for because nothing else cuts the buttons out of the
+  bars, and `PLACES`, the precision this module's own numbers are written at.
 - **`lockup`'s module constants** — which typeface was cut and at what letter-spacing, the wordmark's cap height as a
   fraction of the disc, and the air between the two. Changing the typeface or the tracking means re-cutting (below); the
   two ratios take effect on the next render.

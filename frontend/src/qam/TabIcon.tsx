@@ -3,24 +3,30 @@
  *
  * The geometry is generated — `tabIconArt.ts`, written by `scripts/logo` from
  * the mark's own drawing routines — so the strip glyph cannot drift away from
- * the mark. Nothing is decided here but how those pieces are assembled: the arc
- * and the bars are drawn twice under one `rotate(180)`, and the four button
- * positions are punched out of the finished body by a mask.
+ * the mark. What is decided here is how those pieces are assembled: the arc and
+ * the bars are drawn twice under one `rotate(180)`, and the four button
+ * positions are punched out of the finished body by a mask. The one number of
+ * its own is the default edge length, {@link GLYPH_SIZE}.
  *
  * **It does not animate, and that is a measurement rather than a taste.** It
  * shipped with a turning ring and a folding body; read over CDP on the
  * QuickAccess target in 6-second windows, the fold alone cost 1.726 s of task
- * time against 0.0077 s idle and ran layout and style recalc 720 times each —
+ * time against 0.0077 s with the animation off — the menu open and the glyph
+ * drawn in both readings — and ran layout and style recalc 720 times each —
  * twice a frame at 60 Hz, because animating a path's `d` forces layout every
  * frame. Roughly 29% of one core, for as long as the menu is open, for a glyph
  * that was rendering at 24 px. An animation added back here costs that again:
  * `docs/architecture/qam-panel.md` holds the reading in full.
  *
- * **Two things about this are UNMEASURED**, both on the device list for this cut
- * and neither guessed at here. What size the strip draws it at — `size` below
- * asks for 28 px and nothing establishes what the strip does with that. And
- * whether the glyph takes the colour of the selected tab: it asks for
- * `currentColor` and nothing here establishes what that inherits.
+ * **Three things about this are UNMEASURED**, all on this cut's device list
+ * (#1946) and none guessed at here. Whether `size` below lands at the 28 px it
+ * is aiming for: its `1.633em` is scaled off a mapping measured at `1.4em`, and
+ * neither that the mapping holds at this value nor that the strip takes the
+ * length it is handed rather than clamping it has been established. Whether the
+ * glyph takes the colour of the selected tab: it asks for `currentColor` and
+ * nothing here establishes what that inherits. And whether the mark's own stroke
+ * reads at this size at all — the glyph used to thicken it by 1.3 for 24 px and
+ * no longer does (`tabicon.STRIP_GEOMETRY`).
  */
 
 import type { FC } from "react";
@@ -48,10 +54,12 @@ const BODY_ID = "tender-tab-icon-body";
 const HOLES_ID = "tender-tab-icon-holes";
 
 /**
- * 28 px, at the em-to-pixel mapping measured on the device rather than derived
- * from the parent's `font-size`: `1.4em` under a 16 px parent drew a 24 px box,
- * not the 22.4 px that font size states. An em keeps the glyph scaling with
- * Steam's UI where a pixel length would pin it.
+ * 28 px, at the em-to-pixel mapping measured on the device: `1.4em` drew a 24 px
+ * box, which is 17.14 px to the em. That is not the 16 px parent `font-size`
+ * read beside it, so plain CSS em resolution cannot be the whole story and what
+ * sits between the two was never established. The derivation needs only the
+ * ratio — 28 / 17.14 = 1.633 — and holds whatever produces it. An em keeps the
+ * glyph scaling with Steam's UI where a pixel length would pin it.
  */
 const GLYPH_SIZE = "1.633em";
 

@@ -2,10 +2,10 @@
  * What the glyph hands the renderer: the generated artwork, and no motion.
  *
  * happy-dom performs no layout and runs no animation, so what these cases
- * establish is what is in the tree — which is all the second one needs, because
- * an animation that is not authored cannot run. Whether the strip draws the
- * glyph at the size and in the colour it asks for is a device question, named in
- * this cut's device list.
+ * establish is what is in the tree — which is all the animation case needs,
+ * because an animation that is not authored cannot run. Whether the strip draws
+ * the glyph at the size and in the colour it asks for is a device question,
+ * named in this cut's device list (#1946).
  */
 
 import { describe, it, expect } from "vitest";
@@ -52,13 +52,18 @@ describe("TabIcon", () => {
     expect(masked.querySelector(`path[d="${TAB_ICON_BARS.a}"]`)).not.toBeNull();
   });
 
-  it("asks for no animation at all", () => {
+  it("authors none of SMIL's animation elements", () => {
     // This is a performance decision, not a preference: the fold this replaced
     // ran layout twice a frame for as long as the menu was open. A later change
-    // that brings SMIL back fails here rather than on someone's battery.
+    // that brings SMIL back fails here rather than on someone's battery. The
+    // query names every SMIL animation element; motion driven from CSS
+    // `@keyframes` or a rAF loop is authored nowhere in this tree and passes it
+    // untouched.
     const root = glyph(render(<TabIcon />).container);
 
-    expect(root.querySelectorAll("animate, animateTransform, animateMotion, set")).toHaveLength(0);
+    expect(root.querySelectorAll("animate, animateTransform, animateMotion, animateColor, set, discard")).toHaveLength(
+      0,
+    );
   });
 
   it("carries its own edge length, and takes the caller's over it", () => {
