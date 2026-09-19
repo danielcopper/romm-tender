@@ -608,11 +608,11 @@ describe("whose copy the page blames for a stale search", () => {
       readSearchingCopy(missed, bundle, () => ({ carries: () => true, version: "v3.2.8" })),
     );
     expect(sentence).toBe(
-      "Tender couldn't set up the parts it needs from Steam. Please report this — the names below are what helps.",
+      "Tender couldn't find the parts it needs from Steam. Please report this — the names below are what helps.",
     );
   });
 
-  it("puts the glyph in the rest on Tender's side with no global anywhere in the miss", () => {
+  it("leaves the glyph in the unnamed rest with no global anywhere in the miss", () => {
     // `ControllerGlyph` never brings this page up alone — its absence costs
     // appearance — but it does not only ever arrive beside a global. A
     // blocking `@decky/ui` name is the other company it can keep, and that is
@@ -629,8 +629,7 @@ describe("whose copy the page blames for a stale search", () => {
     expect(searchOwner(missed, copy)).toBe("mixed");
     expect(describeFailure(missed, copy)).toBe(
       "Steam has changed, and Decky Loader v3.2.8 doesn't know its way around the new one yet. " +
-        "Updating Decky Loader fixes that part. If this page still appears afterwards, the rest is on " +
-        "Tender's side — please report it.",
+        "Updating Decky Loader fixes that part. If this page still appears afterwards, please report it.",
     );
   });
 
@@ -657,7 +656,7 @@ describe("whose copy the page blames for a stale search", () => {
     expect(searchOwner(missed, copy)).toBe("mixed");
     const sentence = describeFailure(missed, copy);
     expect(sentence).toContain("Updating Decky Loader fixes that part.");
-    expect(sentence).toContain("the rest is on Tender's side");
+    expect(sentence).toContain("If this page still appears afterwards, please report it.");
     expect(sentence).not.toContain("Tender shares that part with Decky");
   });
 });

@@ -817,17 +817,17 @@ Format: **invariant** — tier — enforced by.
   this branch cannot say so; restoring it here would take a third axis (whose PREDICATE, not whose copy), never a
   reworded answer. What bounds that cost is only that the glyph's absence costs appearance, so it never brings the page
   up alone and `describeSurvivedMiss` prints its sentence into the log whenever it is the whole of the miss. **It is NOT
-  bounded to the company of a global**: beside a blocking `@decky/ui` name the verdict is `mixed` and the glyph is the
-  rest that answer puts on Tender's side, asking for a report rather than naming an update, with no global anywhere in
-  the miss — `steamModules.test.ts`'s "puts the glyph in the rest on Tender's side with no global anywhere in the miss"
-  is that case. Four quiet ways back: a runtime probe instead of the stamp (`typeof DFL !== "undefined"` is true of a
-  standalone bundle loaded beside a running Decky), asking `in DFL` about a name `@decky/ui` never exported (`SP_*`,
-  `ControllerGlyph` — a package disagreement reported on every miss, which is what `SteamLookup.deckyUiExport` and its
-  sweep-derived lock exist to prevent), reading an unreadable `DFL` as an absence rather than as nothing established,
-  and letting the reading THROW at all — `definePlugin`'s factory reads it before it returns anything, so an unguarded
-  `window.DFL` or `name in DFL` costs the page AND the log line and leaves the blank panel the check exists to tell
-  apart from a dead backend. The version beside the name is an enrichment only — `_versionInfo.current` is internal,
-  guarded, and every sentence is complete without it; `remote` beside it is the PUBLISHED version and is never consulted
+  bounded to the company of a global**: beside a blocking `@decky/ui` name the verdict is `mixed` and the glyph is that
+  answer's unnamed rest, asking for a report rather than naming an update, with no global anywhere in the miss —
+  `steamModules.test.ts`'s "leaves the glyph in the unnamed rest with no global anywhere in the miss" is that case. Four
+  quiet ways back: a runtime probe instead of the stamp (`typeof DFL !== "undefined"` is true of a standalone bundle
+  loaded beside a running Decky), asking `in DFL` about a name `@decky/ui` never exported (`SP_*`, `ControllerGlyph` — a
+  package disagreement reported on every miss, which is what `SteamLookup.deckyUiExport` and its sweep-derived lock
+  exist to prevent), reading an unreadable `DFL` as an absence rather than as nothing established, and letting the
+  reading THROW at all — `definePlugin`'s factory reads it before it returns anything, so an unguarded `window.DFL` or
+  `name in DFL` costs the page AND the log line and leaves the blank panel the check exists to tell apart from a dead
+  backend. The version beside the name is an enrichment only — `_versionInfo.current` is internal, guarded, and every
+  sentence is complete without it; `remote` beside it is the PUBLISHED version and is never consulted
 - **A coverage exclusion names a property of the code, never a place: every frontend-scoped entry stands in BOTH
   `frontend/vitest.config.ts`'s `coverage.exclude` and `sonar-project.properties`' `sonar.coverage.exclusions`, every
   file entry carries its reason as a `// coverage-exempt:` marker in the file's own first lines, and every marked file

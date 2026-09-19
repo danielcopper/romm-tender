@@ -101,8 +101,7 @@ describe("the fallback page", () => {
     expect(
       screen.getByText(
         "Steam has changed, and Decky Loader v3.2.8 doesn't know its way around the new one yet. " +
-          "Updating Decky Loader fixes that part. If this page still appears afterwards, the rest is on " +
-          "Tender's side — please report it.",
+          "Updating Decky Loader fixes that part. If this page still appears afterwards, please report it.",
       ),
     ).toBeInTheDocument();
   });
@@ -117,7 +116,7 @@ describe("the fallback page", () => {
     render(<StartupFailurePanel report={glyph} copy={DECKYS} />);
     expect(
       screen.getByText(
-        "Tender couldn't set up the parts it needs from Steam. Please report this — the names below are what helps.",
+        "Tender couldn't find the parts it needs from Steam. Please report this — the names below are what helps.",
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Decky Loader/)).not.toBeInTheDocument();

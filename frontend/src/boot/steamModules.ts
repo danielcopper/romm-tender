@@ -502,11 +502,9 @@ const nothingAnswered = (report: StartupReport): boolean => report.missing.lengt
  * `globals.js` never having run or the ReactDOM predicate in `steamGlobals.ts`
  * having gone stale, a load-order fault and a version fault behind one symptom
  * with different repairs. So `none` asks for a report, and `mixed` sends the
- * user after Decky Loader and puts what is left on Tender's side, asking for a
- * report rather than an update. That attribution is right for
- * `ControllerGlyph`, whose predicate is ours in both bundles, and not for a
- * global: `mixed` arises only in the coexistence bundle, which is loaded where
- * Decky Loader is serving and has installed the globals itself.
+ * user after Decky Loader and asks for a report about what is left, naming no
+ * party for it: that rest can be `ControllerGlyph`, whose predicate is ours, or
+ * a global Decky Loader installed.
  *
  * `ControllerGlyph` never brings this page up by itself — its absence costs
  * appearance — so it arrives beside a name that does cost the panel. Beside a
@@ -525,7 +523,7 @@ export function describeFailure(report: StartupReport, copy: SearchingCopy): str
   const decky = deckyName(copy);
   switch (searchOwner(report, copy)) {
     case "none":
-      return "Tender couldn't set up the parts it needs from Steam. Please report this — the names below are what helps.";
+      return "Tender couldn't find the parts it needs from Steam. Please report this — the names below are what helps.";
     case "tender":
       return (
         "Steam has changed, and this version of Tender doesn't know its way around the new one yet. " +
@@ -539,8 +537,7 @@ export function describeFailure(report: StartupReport, copy: SearchingCopy): str
     case "mixed":
       return (
         `Steam has changed, and ${decky} doesn't know its way around the new one yet. Updating ` +
-        "Decky Loader fixes that part. If this page still appears afterwards, the rest is on " +
-        "Tender's side — please report it."
+        "Decky Loader fixes that part. If this page still appears afterwards, please report it."
       );
     case "decky":
       return (

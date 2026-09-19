@@ -169,7 +169,7 @@ log line:
 
 | Verdict        | Bundle      | What was read                                                                         | What the page says                                                                                                                  |
 | -------------- | ----------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `none`         | either      | no missed name is a package export                                                    | Tender could not set up the parts it needs from Steam. **No update is named**; it asks for a report — see below.                    |
+| `none`         | either      | no missed name is a package export                                                    | Tender could not find the parts it needs from Steam. **No update is named**; it asks for a report — see below.                      |
 | `tender`       | standalone  | —                                                                                     | Steam has changed and this version of Tender does not know its way around it. **Update Tender.**                                    |
 | `disagreement` | coexistence | a missed name is **not in** `DFL`                                                     | Tender and Decky Loader are out of step: Tender asks Decky's shared part for things it does not have. **Update both.**              |
 | `mixed`        | coexistence | some missed names are not package exports, and Decky's copy carries every one that is | Steam has changed and Decky Loader does not know its way around it. **Update Decky Loader**; if the page persists, report the rest. |
@@ -192,9 +192,9 @@ and its searches for them still came back empty, so that copy is demonstrated st
 surface. What the REST demonstrates is where the two surfaces part, and the locked property above is what decides it: a
 non-blocking name the package does not export must be one Tender probes for itself, so on the log line the rest is
 always Tender's own probe and that line names both programs. On the page it may be an `SP_*` global instead, which
-belongs to no copy and has no update to name, so the page names Decky's and asks for a report about the rest, which it
-puts on Tender's side. That is right for `ControllerGlyph` and not established for a global: `mixed` arises only in the
-coexistence bundle, which is loaded where Decky Loader is serving and has installed the globals itself.
+belongs to no copy and has no update to name, so the page names Decky's and asks for a report about the rest, naming no
+party for it: that rest can be `ControllerGlyph`, whose predicate is ours, or a global, which in the coexistence bundle
+— the only one `mixed` arises in — Decky Loader has installed.
 
 The `none` row is asked first and is about neither copy. Four of the names checked are not `@decky/ui` lookups at all —
 the three `SP_*` globals, which a React bootstrap installs, and `ControllerGlyph`, which `utils/deckyUiInternals.ts`
@@ -214,8 +214,7 @@ the opposite case. Its predicate is **ours in both bundles**, so "update Tender"
 cannot say so — the price of keying the branch on whose COPY ran the search, which buying back takes a third axis, whose
 PREDICATE, rather than a reworded row. What that costs is bounded, because the glyph reaches this row only **alongside**
 a global, whose silence is right anyway: on its own it costs appearance alone and brings no page up, and beside a
-package name it is the rest the `mixed` row puts on Tender's side rather than this one's. Its own sentence is the log
-line above.
+package name it is the `mixed` row's unnamed rest rather than this one's. Its own sentence is the log line above.
 
 `SP_REACTDOM` is the only name that can reach this row alone — `SP_REACT` and `SP_JSX` are read while the panel bundle
 is being evaluated, so with either unset the bundle throws at import and the check never runs.
