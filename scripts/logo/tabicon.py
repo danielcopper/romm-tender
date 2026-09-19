@@ -11,9 +11,10 @@ tone a filled dot has nothing to be filled with that the bar is not already.
 
 **The glyph does not move.** It shipped animated and the cost was measured on the
 device over CDP, on the QuickAccess target, in 6-second windows: with the fold
-running the task took 1.726 s against 0.0077 s idle, and layout and style recalc
-each ran 720 times — twice a frame at 60 Hz — because animating a path's `d`
-forces layout every frame. That is roughly 29% of one core for as long as the
+running the task took 1.726 s against 0.0077 s with the animation off — the menu
+was open and the glyph drawn in both readings — and layout and style recalc each
+ran 720 times, twice a frame at 60 Hz, because animating a path's `d` forces
+layout every frame. That is roughly 29% of one core for as long as the
 menu is open, for a glyph that was rendering at 24 px across.
 `docs/architecture/qam-panel.md` holds the reading in full.
 
@@ -36,15 +37,19 @@ from dataclasses import replace
 
 import gen
 
-# One decimal instead of the mark's two. The glyph asks for 28 px across a 200-unit
-# square, so the second decimal is worth about 1/700 of a pixel.
+# One decimal instead of the mark's two, for the numbers this module formats
+# itself: the bars, the hole centres and `TAB_ICON_HOLE_R`. It does not reach the
+# arc — `TAB_ICON_ARC.d` and its arrowhead arrive already formatted from
+# `gen._arc_d` and `gen._arrowhead`, at three decimals and two. The glyph asks for
+# 28 px across a 200-unit square, so the second decimal is worth about 1/700 of a
+# pixel.
 PLACES = 1
 
 # The button positions are holes rather than dots: the glyph has one tone, so a
 # filled dot disappears into the bar it sits on. The hole is narrower than the
-# mark's own dot — 13.63 against a bar 31.38 wide leaves two units of bar each
-# side and reads as a chain of blobs; at 12 the bar holds together and the four
-# positions still read.
+# mark's own dot: at the mark's 13.63 a bar 31.38 wide keeps 2.06 units either
+# side of each hole, and at 12 it keeps 3.69. Which of the two to cut was the
+# owner's pick from renderings, and 12 is what was picked.
 HOLE_R = 12.0
 
 # --------------------------------------------------------------------------- #
@@ -56,6 +61,15 @@ HOLE_R = 12.0
 # * `arc_rot` goes to 0. The 6.34 in the mark pushes both arcs clockwise, which
 #   sits the gaps off the horizontal; in a disc that reads as motion, and in a row
 #   of upright glyphs it reads as a tilt. At 0 the gaps lie on the horizontal.
+#
+# A second departure was DROPPED, and the reason is a choice rather than a
+# consequence. The arc stroke and its arrowhead used to be scaled by 1.3 (`arc_w`,
+# `arrow_len`, `arrow_half`, `arrow_round`), on the grounds that a hairline that
+# reads at 512 px disappears at 24. Nothing else here made that bump unnecessary —
+# the owner looked at both renderings at strip size and chose the mark's own
+# stroke. So the legibility argument the bump was answering is open again, and now
+# at the 28 px the glyph asks for rather than the 24 the 1.3 was picked for. That
+# is a device question and is on this cut's list (#1946).
 STRIP_GEOMETRY = replace(gen.DEFAULT_GEOMETRY, arc_rot=0.0)
 
 
@@ -102,9 +116,11 @@ _MASK_ID = "tab-icon-holes"
 def glyph(g: gen.Geometry = STRIP_GEOMETRY, size: int = 200) -> str:
     """The glyph as a standalone one-tone SVG. For looking at.
 
-    What the panel renders is the module {@link ts_module} emits, not this — the
-    panel's copy asks for `currentColor`, which a file on disk cannot do. This one
-    exists so a change to the form can be seen without a build.
+    What the panel renders is the module {@link ts_module} emits, not this. Both
+    ask for `currentColor`; what this one adds is a `color` on the root, pinning
+    what that resolves to, where the panel's copy inherits it from the strip
+    around it. This one exists so a change to the form can be seen without a
+    build.
     """
     arc_d, head = ring_arc(g)
     arms = "".join(f'<path d="{d}"/>' for d in body_bars(g) if d)

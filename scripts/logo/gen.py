@@ -348,6 +348,9 @@ def arm_shape(g: Geometry, morph: float) -> tuple[float, float, float]:
     The three quantities the fold moves besides the hubs and dots. At morph 0 all
     three fall back to the resting capsule: full width, a semicircular end, and an
     overhang of exactly half that width.
+
+    Public so the fold's own numbers can be read off without re-deriving them from
+    `Geometry`; its only caller today is {@link arm_paths}, just below.
     """
     rest_h = g.cap_w / 2.0
     w = g.cap_w * (1.0 + (g.dpad_bar_narrow - 1.0) * morph)
