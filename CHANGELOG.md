@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.0](https://github.com/danielcopper/romm-tender/compare/tender-v0.33.0...tender-v1.0.0) (2026-09-19)
+
+
+### Features
+
+* **frontend:** the panel runs without Decky Loader ([#1932](https://github.com/danielcopper/romm-tender/issues/1932)) ([6f71fda](https://github.com/danielcopper/romm-tender/commit/6f71fda7a96ab9097fc4e7e9ff8ae36aaa56b9f3)), closes [#1899](https://github.com/danielcopper/romm-tender/issues/1899)
+* **host:** serve the backend over a loopback HTTP and WebSocket server ([#1920](https://github.com/danielcopper/romm-tender/issues/1920)) ([6e47c53](https://github.com/danielcopper/romm-tender/commit/6e47c53aa571371f7b8a89ca59033f3cacd6f402)), closes [#1898](https://github.com/danielcopper/romm-tender/issues/1898)
+* **inject:** the backend loads the panel into Steam itself ([#1937](https://github.com/danielcopper/romm-tender/issues/1937)) ([7558291](https://github.com/danielcopper/romm-tender/commit/75582916dcb87831388b7acf49cd382948a37d9b)), closes [#1900](https://github.com/danielcopper/romm-tender/issues/1900)
+
+
+### Bug Fixes
+
+* **ci:** let release-please's version bump past the docs check ([#1927](https://github.com/danielcopper/romm-tender/issues/1927)) ([f541941](https://github.com/danielcopper/romm-tender/commit/f541941a698aa71dcb94aceb95320b3128771176))
+* **readme:** read the release badge's version from the release manifest ([#1926](https://github.com/danielcopper/romm-tender/issues/1926)) ([79323db](https://github.com/danielcopper/romm-tender/commit/79323dbdca1df4fb405f6d92aa66233c0a24b81c))
+* **startup:** the check asks the module registry, never steam's runtime state ([#1947](https://github.com/danielcopper/romm-tender/issues/1947)) ([269671f](https://github.com/danielcopper/romm-tender/commit/269671f7109e3936ff000f897d3a7c7dd97e4140)), closes [#1945](https://github.com/danielcopper/romm-tender/issues/1945)
+
 ## [0.33.0](https://github.com/danielcopper/romm-tender/compare/tender-v0.32.0...tender-v0.33.0) (2026-09-14)
 
 
