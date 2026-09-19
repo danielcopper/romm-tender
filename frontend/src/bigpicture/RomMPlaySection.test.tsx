@@ -175,6 +175,7 @@ vi.mock("@decky/ui", async () => {
     findModule: vi.fn(() => undefined),
     findModuleExport: vi.fn(() => undefined),
     findClassModule: vi.fn(() => undefined),
+    ErrorBoundary: undefined,
     findSP: vi.fn(() => undefined),
     ConfirmModal: (p: AnyProps) => ce("div", { "data-testid": "confirm-modal" }, p.children as never),
     DialogButton: ({

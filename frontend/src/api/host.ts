@@ -18,12 +18,8 @@
  * (`utils/steamToaster.tsx`). `routerHook` is still a **declared placeholder**
  * that does nothing, and says so at its definition.
  *
- * **Neither reaches Decky Loader's API when one is running**, and what decides
- * that is not purity. Both were the loader's own, and a replacement that
- * borrowed one wherever it found one would behave differently on a machine
- * running Decky from one without — the difference this program exists not to
- * depend on. The machine this is tested on runs the loader, so borrowing would
- * pass a device test for a reason nobody could identify afterwards.
+ * **Neither reaches Decky Loader's API when one is running.** Why, once:
+ * `docs/architecture/frontend-bundles.md`.
  *
  * ## The types
  *
@@ -194,10 +190,8 @@ export const definePlugin = (fn: () => Plugin): (() => Plugin) => fn;
  * Raises toasts through Steam's own notification store — the popup window, the
  * queue behind it, the sound and the Quick Access entry are all Steam's.
  *
- * Everything about how that is done lives in `utils/steamToaster.tsx`,
- * including what happens when the searches behind it come back empty: the toast
- * is logged and nothing is pushed, because an entry Steam has no drawing for
- * would go through its server-notification component instead.
+ * Everything about how that is done, including what happens when the lookups
+ * behind it come back empty, lives in `utils/steamToaster.tsx`.
  */
 export const toaster: Toaster = steamToaster;
 

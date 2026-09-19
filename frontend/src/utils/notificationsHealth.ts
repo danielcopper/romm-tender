@@ -1,16 +1,9 @@
 /**
  * Whether Tender can raise a toast at all, and the notice that says so.
  *
- * Steam's toast renderer and its notification store are both searches into
- * Steam's own bundle, and either one missing takes every toast off the air
- * (`utils/steamToaster.tsx`). The panel still works — syncs run, downloads run,
- * every result is on the pages — so the answer is a notice rather than a
- * refusal to mount.
- *
  * The value is written once, from the start-up check's report, and read from
- * render. Nothing subscribes and nothing polls: both names are read off Steam's
- * module registry and a global Steam installs at module scope, so the answer
- * cannot change while the process runs.
+ * render. Why nothing subscribes and nothing polls is on the docs page
+ * (`docs/architecture/qam-panel.md`, "Notices and homes").
  */
 
 let unavailable = false;
@@ -25,13 +18,17 @@ export function notificationsUnavailable(): boolean {
   return unavailable;
 }
 
+/** Put the module back to what a fresh process holds. */
+export function resetNotificationsHealthForTests(): void {
+  unavailable = false;
+}
+
 /**
  * The notice's copy. It names no action because there is none inside the
- * plugin: Steam moved what this version of Tender looks for, so the repair is
- * a newer Tender.
+ * plugin.
  */
 export const NOTIFICATIONS_UNAVAILABLE_NOTICE = {
-  title: "Steam notifications unavailable",
+  title: "Tender's notifications unavailable",
   message:
     "Steam has changed, and Tender can't show its notifications right now. Syncs and downloads still work — check " +
     "this panel for their results. Updating Tender should fix it.",

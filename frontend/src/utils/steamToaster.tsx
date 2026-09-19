@@ -7,36 +7,21 @@
  * of that is reimplemented here and none of it can be — the popup is a native
  * window Steam opens.
  *
- * Nothing here reaches Decky Loader. A toaster that borrowed the loader's when
- * it found one would behave differently on a machine running Decky from one
- * without, which is the difference this program exists not to depend on.
+ * Why a missing drawing means no push, why the chain is re-checked before every
+ * push rather than watched, and why none of this reaches Decky Loader's own
+ * toaster: `docs/architecture/frontend-bundles.md`.
  *
- * ## Two halves, and the push is useless without the drawing
- *
- * Steam draws every notification through one component whose switch knows
- * Valve's typed notifications only, so an entry of ours draws nothing there.
- * Our drawing has to be in front of that component before anything is pushed —
- * which is why a missing renderer is a reason not to push at all (the toast is
- * logged instead). Pushing without it would run our own data through Steam's
- * server-notification component in every user's toast window.
- *
- * ## The chain, and why it is re-checked rather than watched
- *
- * The component is patched by replacing `prototype.render`, and `@decky/ui`'s
- * `injectFCTrampoline` — which is how Decky Loader patches the same component —
- * overwrites that property outright with no guard against a second
- * application. Whoever applies it second orphans the first, in either order.
- * So this never installs over a chain it has not just read: it wraps whatever
- * `render` it finds, and looks again before every push. A check at push time is
- * enough because a toast is drawn only after it is pushed, and it needs no
- * accessor trick and no observer to be right.
+ * The one thing the code below cannot state for itself is the ORDER: the check
+ * at push time is enough only because a toast is drawn after it is pushed,
+ * never before.
  */
 
 import { injectFCTrampoline } from "@decky/ui";
-import type { FC, ReactNode } from "react";
+import type { FC, PropsWithChildren, ReactNode } from "react";
 
 import type { ToastData, ToastNotification, Toaster } from "../api/host";
 import {
+  ErrorBoundary,
   NotificationStore,
   ToastRenderer,
   toastClasses,
@@ -75,13 +60,10 @@ const STEAM_TOAST_TYPE_NEW = 0;
 /**
  * A notification of ours, told apart from Steam's by a mark of our own.
  *
- * The mark rides on the notification rather than on the group because a group
- * is not a durable object: Steam's two popup windows build one per render out
- * of the single notification they are showing, so a mark left on a group is
- * gone by the time the renderer sees it.
- *
- * It is deliberately not Decky Loader's `decky` — two programs marking their
- * entries with one name would each draw the other's.
+ * The mark rides on the notification rather than on the group because Steam's
+ * popup windows build a group per render out of the single notification they
+ * are showing, so a mark left on a group is gone by the time the renderer sees
+ * it. Why the name is not Decky Loader's: `docs/architecture/frontend-bundles.md`.
  */
 interface TenderNotification extends SteamNotification {
   tender: true;
@@ -102,6 +84,8 @@ export interface SteamToasterSeams {
   readonly renderer: SteamToastRenderer | undefined;
   readonly store: SteamNotificationStore | undefined;
   readonly classes: ToastClasses | undefined;
+  /** Steam's own, so a throw in our drawing stops here instead of in its tree. */
+  readonly errorBoundary: FC<PropsWithChildren> | undefined;
   readonly installTrampoline: (renderer: SteamToastRenderer) => void;
   readonly log: (message: string) => void;
 }
@@ -115,7 +99,7 @@ export interface SteamToaster extends Toaster {
 const describeToast = (toast: ToastData): string => `${String(toast.title)} — ${String(toast.body)}`;
 
 export function createSteamToaster(seams: SteamToasterSeams): SteamToaster {
-  const { renderer, store, classes, installTrampoline, log } = seams;
+  const { renderer, store, classes, errorBoundary: Boundary, installTrampoline, log } = seams;
   let drawing: InstalledDrawing | null = null;
 
   /** The notification a toast of ours is being drawn for, or `null` for anyone else's. */
@@ -125,7 +109,7 @@ export function createSteamToaster(seams: SteamToasterSeams): SteamToaster {
     return (notification as Partial<TenderNotification>).tender === true ? notification : null;
   };
 
-  const link = (previous: SteamToastRenderFn): InstalledDrawing => {
+  const link = (previous: SteamToastRenderFn, Boundary: FC<PropsWithChildren>): InstalledDrawing => {
     let retired = false;
     const render: SteamToastRenderFn = function (
       this: { props: SteamToastRenderProps },
@@ -134,13 +118,15 @@ export function createSteamToaster(seams: SteamToasterSeams): SteamToaster {
       const mine = retired ? null : ourNotification(this.props);
       if (mine === null) return previous.apply(this, args);
       return (
-        <SteamToast
-          toast={mine.data}
-          location={this.props.location}
-          createdMs={mine.rtCreated}
-          newIndicator={mine.bNewIndicator}
-          classes={classes ?? {}}
-        />
+        <Boundary>
+          <SteamToast
+            toast={mine.data}
+            location={this.props.location}
+            createdMs={mine.rtCreated}
+            newIndicator={mine.bNewIndicator}
+            classes={classes ?? {}}
+          />
+        </Boundary>
       );
     };
     return {
@@ -157,17 +143,21 @@ export function createSteamToaster(seams: SteamToasterSeams): SteamToaster {
    * there. Answers whether a toast pushed now would be drawn by us.
    */
   const ensureDrawing = (): boolean => {
-    if (renderer === undefined) return false;
+    if (renderer === undefined || Boundary === undefined) return false;
     try {
       const prototype = renderer.prototype;
       if (drawing !== null && prototype.render === drawing.render) return true;
-      // An own `render` means a trampoline is already installed — Decky
-      // Loader's, or ours from a previous install. Applying a second one over
-      // it would orphan whoever is in the chain.
+      // An own `render` means a trampoline is already installed — any patcher's,
+      // ours included. Applying a second one over it would orphan whoever is in
+      // the chain.
       if (!Object.prototype.hasOwnProperty.call(prototype, "render")) installTrampoline(renderer);
       const previous = prototype.render;
       if (typeof previous !== "function") return false;
-      drawing = link(previous);
+      // The link we are replacing is left in the chain by whatever overwrote it
+      // and would go on drawing from there, so it is retired before the new one
+      // goes on top.
+      drawing?.retire();
+      drawing = link(previous, Boundary);
       prototype.render = drawing.render;
       return true;
     } catch (e) {
@@ -178,13 +168,18 @@ export function createSteamToaster(seams: SteamToasterSeams): SteamToaster {
 
   const toast = (data: ToastData): ToastNotification => {
     if (store === undefined || !ensureDrawing()) {
-      log(`[Tender] toast not shown — Steam's notification renderer or store is not there: ${describeToast(data)}`);
+      log(`[Tender] toast not shown — Steam has no toast drawing Tender can use: ${describeToast(data)}`);
       return { data, dismiss: () => {} };
     }
 
     const durationMs = data.duration ?? DEFAULT_TOAST_DURATION_MS;
+    const id = store.m_nNextTestNotificationID++;
     const notification: TenderNotification = {
-      nNotificationID: store.m_nNextTestNotificationID++,
+      // Both spellings, one value: `RemoveGroupFromTray` matches a group on
+      // `notifications[0].notificationID` and the tab list uses it as its React
+      // key, while `nNotificationID` is the counter's own name.
+      notificationID: id,
+      nNotificationID: id,
       rtCreated: Date.now(),
       eType: STEAM_NOTIFICATION_TYPE_GENERAL,
       eSource: STEAM_NOTIFICATION_SOURCE_CLIENT,
@@ -194,11 +189,10 @@ export function createSteamToaster(seams: SteamToasterSeams): SteamToaster {
       tender: true,
     };
 
-    // A toast is kept in the notifications tab only when it carries subtext.
-    // The popup layout has no room for one (321x81 px, `overflow: hidden`), so
-    // subtext is the call site saying there is more to read than the popup
-    // showed — and an entry nobody can learn anything new from is one more row
-    // for the reader to clear.
+    // A toast is kept in the notifications tab only when it carries subtext: the
+    // popup is a fixed-size window that clips, so subtext is the call site
+    // saying there is more to read than the popup showed — and an entry nobody
+    // can learn anything new from is one more row for the reader to clear.
     let group: SteamNotificationGroup | null = null;
     const info: SteamNotificationInfo = {
       showToast: true,
@@ -255,13 +249,14 @@ export function createSteamToaster(seams: SteamToasterSeams): SteamToaster {
  * The toaster the panel raises its toasts through.
  *
  * The trampoline seam casts because `injectFCTrampoline` is typed for the
- * component it renders, where everything here wants the one property a patch
- * touches — see {@link SteamToastRenderer}.
+ * component it renders, where everything here wants the one property this code
+ * reads and writes — see {@link SteamToastRenderer}.
  */
 export const steamToaster: SteamToaster = createSteamToaster({
   renderer: ToastRenderer,
   store: NotificationStore,
   classes: toastClasses,
+  errorBoundary: ErrorBoundary,
   installTrampoline: (renderer) => {
     injectFCTrampoline(renderer as unknown as FC);
   },

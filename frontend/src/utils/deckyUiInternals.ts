@@ -20,7 +20,7 @@
  * type has to admit that it may not be there.
  */
 
-import type { CSSProperties, FC, FocusEventHandler, ReactNode } from "react";
+import type { CSSProperties, FC, FocusEventHandler, PropsWithChildren, ReactNode } from "react";
 
 import type { ToastData } from "../api/host";
 import {
@@ -28,6 +28,7 @@ import {
   findModule,
   findModuleExport,
   type ClassModule,
+  ErrorBoundary as _ErrorBoundary,
   appActionButtonClasses as _appActionButtonClasses,
   basicAppDetailsSectionStylerClasses as _basicAppDetailsSectionStylerClasses,
   appDetailsClasses as _appDetailsClasses,
@@ -163,6 +164,8 @@ export const ControllerGlyph: FC<ControllerGlyphProps> | undefined = findModule(
 
 /** One notification as Steam's store carries it, with our own toast as its payload. */
 export interface SteamNotification {
+  /** What `RemoveGroupFromTray` matches a group on, and the tab list's React key. */
+  notificationID: number;
   nNotificationID: number;
   rtCreated: number;
   eType: number;
@@ -172,13 +175,7 @@ export interface SteamNotification {
   data: ToastData;
 }
 
-/**
- * What the store keeps in its tray: one or more notifications of one type.
- *
- * A toast's own marker rides on `notifications[0]` rather than on the group,
- * because the group is not a durable object — Steam's popup windows build one
- * per render out of the single notification they are showing.
- */
+/** What the store keeps in its tray: one or more notifications of one type. */
 export interface SteamNotificationGroup {
   eType: number;
   notifications: SteamNotification[];
@@ -217,12 +214,11 @@ export interface SteamToastRenderProps {
 export type SteamToastRenderFn = (this: { props: SteamToastRenderProps }, ...args: unknown[]) => ReactNode;
 
 /**
- * Steam's toast renderer, reduced to the one thing this code touches.
+ * Steam's toast renderer, reduced to the one property this code reads and
+ * writes: `prototype.render`.
  *
- * It is a function component, and the whole of what a patch does to it is
- * replace `prototype.render` — so that is what the type states. Calling it is
- * left out on purpose: nothing here renders it, and a call signature would
- * invite one.
+ * Calling it is left out on purpose — nothing here renders it, and a call
+ * signature would invite one.
  */
 export interface SteamToastRenderer {
   prototype: { render?: SteamToastRenderFn };
@@ -235,10 +231,9 @@ export interface SteamToastRenderer {
  * `controller:"notification",method:` — because the module exports it under a
  * minified name that changes with every Steam build.
  *
- * Its switch knows Valve's typed notifications and nothing else, so a
- * notification of ours reaches its `default` arm and draws nothing at all.
- * That is why `utils/steamToaster.tsx` puts its own drawing in front of it
- * rather than pushing a notification and hoping.
+ * What it would draw for a notification of ours, and why `utils/steamToaster.tsx`
+ * puts a drawing in front of it, is on the docs page
+ * (`docs/architecture/frontend-bundles.md`).
  */
 export const ToastRenderer: SteamToastRenderer | undefined = findModuleExport((e: unknown) => {
   // The predicate is run against every export in Steam's registry, so one
@@ -266,10 +261,8 @@ export const NotificationStore: SteamNotificationStore | undefined = (
 /**
  * The class names Steam's own notification templates are drawn with.
  *
- * All three layouts come from this one map. Steam compiles the same stylesheet
- * into four class modules and picks between them per surface; their rule bodies
- * are identical, and only this one carries `ShortTemplate`, which is what makes
- * the probe unambiguous.
+ * Several class maps carry these template names; exactly one carries
+ * `ShortTemplate`, which is what the probe keys on.
  */
 export interface ToastClasses {
   readonly ShortTemplate?: string;
@@ -291,3 +284,13 @@ export interface ToastClasses {
 
 export const toastClasses: ToastClasses | undefined =
   findClassModule((m: ClassModule) => Boolean(m.ShortTemplate)) ?? undefined;
+
+/**
+ * Steam's own error boundary, which `@decky/ui` reaches with a `findModuleExport`
+ * predicate — so it is `undefined` whenever that predicate misses, where
+ * upstream types it as a component that is always there.
+ *
+ * It is what keeps a throw inside a toast of ours from reaching Steam's
+ * notification tree, which draws everyone's entries.
+ */
+export const ErrorBoundary: FC<PropsWithChildren> | undefined = _ErrorBoundary;

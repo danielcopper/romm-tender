@@ -75,6 +75,7 @@ import {
 
 import {
   ControllerGlyph,
+  ErrorBoundary,
   NotificationStore,
   ToastRenderer,
   appActionButtonClasses,
@@ -106,7 +107,8 @@ import type { SearchingCopy } from "./searchingCopy";
  * diagnostic. **Only two of the four are read by anything**:
  * `checkSteamModules`'s `!== "panel"` decides whether the panel mounts, and
  * `feature` is what puts {@link describeSurvivedMiss}'s extra sentence in the
- * log and the notice on Main. `appearance` and `diagnostic` are told apart by
+ * log. Main's notice reads NAMES rather than this field
+ * ({@link notificationsMissing}). `appearance` and `diagnostic` are told apart by
  * nothing in the program, so what those two record is WHY a name was moved off
  * blocking rather than an answer anything consults. They are kept apart because
  * they are different questions, and a name that answered the wrong one would be
@@ -169,15 +171,16 @@ const truthyUnexported = (name: string, absenceCost: AbsenceCost, read: () => un
 });
 
 /**
- * The two searches a toast is raised through, named once.
+ * The searches a toast is raised through, named once.
  *
  * Both {@link STEAM_LOOKUPS} and {@link notificationsMissing} spell them from
- * here: a second copy of either name would leave the notice on Main answering
+ * here: a second copy of any of them would leave the notice on Main answering
  * for a lookup the check never asked about.
  */
 export const NOTIFICATION_LOOKUPS = {
   renderer: "ToastRenderer",
   store: "NotificationStore",
+  errorBoundary: "ErrorBoundary",
 } as const;
 
 /**
@@ -286,19 +289,18 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // costs one chip its button picture and nothing else.
   truthyUnexported("ControllerGlyph", "appearance", () => ControllerGlyph),
 
-  // What a toast is drawn and pushed through (`utils/steamToaster.tsx`).
-  // Neither is a `@decky/ui` export: the renderer is a module probe of ours and
-  // the store is a global Steam installs at module scope, which is what makes
-  // it a reading of the install rather than of a moment.
+  // What a toast is drawn and pushed through (`utils/steamToaster.tsx`). All
+  // three cost a `feature` and none costs the panel: with any one absent no
+  // toast appears and nothing else changes — every sync, download and cleanup
+  // runs, and its result is on the page it belongs to. The toaster declines to
+  // push at all while one is missing; why, and why the error boundary is one of
+  // the three, is on `docs/architecture/frontend-bundles.md`.
   //
-  // Both cost a `feature` and neither costs the panel: with either one absent
-  // no toast appears and nothing else changes — every sync, download and
-  // cleanup runs, and its result is on the page it belongs to. The toaster
-  // declines to push at all when one is missing, because an entry Steam has no
-  // drawing for would run our own data through its server-notification
-  // component in the user's toast window.
+  // The renderer is a module probe of ours and the store is a global Steam
+  // installs, so neither is a `@decky/ui` export. The error boundary is one.
   truthyUnexported(NOTIFICATION_LOOKUPS.renderer, "feature", () => ToastRenderer),
   truthyUnexported(NOTIFICATION_LOOKUPS.store, "feature", () => NotificationStore),
+  truthy(NOTIFICATION_LOOKUPS.errorBoundary, "feature", () => ErrorBoundary),
   // The class names Steam draws its own notifications with. Without them the
   // toast still appears and still says what it says, in an unstyled box —
   // `utils/steamToast.tsx` reads every one of them optionally, so a miss costs
@@ -379,9 +381,7 @@ export const PACKAGE_OWN: Readonly<Record<string, string>> = {
   findModuleExport: "the module-cache reader itself, asked about exports rather than modules",
   getReactRoot: "the package's own reader of a mounted React root",
   GamepadButton: "a TypeScript enum, compiled into the bundle",
-  injectFCTrampoline:
-    "the package's own function-component patcher — it reads the three React globals and " +
-    "rewrites the component's prototype, and searches for nothing",
+  injectFCTrampoline: "the package's own function-component patcher; it searches for nothing",
 };
 
 /** What the check found. */
@@ -410,9 +410,8 @@ export interface StartupReport {
    * The subset of {@link missing} that `@decky/ui` exports.
    *
    * These are the only names a copy of the package can be asked about, which is
-   * what `searchingCopy.ts` asks Decky's. The rest of `missing` — the three
-   * globals, the glyph — would answer "not exported" for a Decky in perfect
-   * step with us.
+   * what `searchingCopy.ts` asks Decky's. The rest of `missing` would answer
+   * "not exported" for a Decky in perfect step with us.
    *
    * Empty while {@link missing} is not is therefore a statement in its own
    * right: nothing that missed was a search either copy of the package ran, and
@@ -447,13 +446,15 @@ export function checkSteamModules(lookups: readonly SteamLookup[] = STEAM_LOOKUP
 }
 
 /**
- * Did either search a toast is raised through come back empty?
+ * Did any search a toast is raised through come back empty?
  *
  * Asked of the report rather than of the machine, so the notice on Main says
- * exactly what the start-up check found — one reading, taken once.
+ * exactly what the start-up check found — one reading, taken once. It reads the
+ * NAMES rather than the `feature` cost, so a future entry at that cost does not
+ * quietly claim the notifications are what went missing.
  */
 export function notificationsMissing(report: StartupReport): boolean {
-  const names: readonly string[] = [NOTIFICATION_LOOKUPS.renderer, NOTIFICATION_LOOKUPS.store];
+  const names: readonly string[] = Object.values(NOTIFICATION_LOOKUPS);
   return report.missing.some((name) => names.includes(name));
 }
 
@@ -497,9 +498,9 @@ export type SearchOwner = (typeof SEARCH_OWNERS)[number];
  * Two of the orderings are decisions rather than consequences of the shapes.
  *
  * `none` is asked first because {@link STEAM_LOOKUPS} carries names `@decky/ui`
- * does not export at all ({@link SteamLookup.deckyUiExport}) — the three React
- * globals and the glyph — and a miss confined to those belongs to no copy of
- * the package, so no line below may name one.
+ * does not export at all ({@link SteamLookup.deckyUiExport}), and a miss
+ * confined to those belongs to no copy of the package, so no line below may
+ * name one.
  *
  * `disagreement` is asked before `mixed` because a name Decky's copy does not
  * export is a fact about the two INSTALLS, where a name it exports with an
@@ -646,15 +647,11 @@ export function sentenceAsksForAReport(report: StartupReport, copy: SearchingCop
  * `UNDEFINED` where a class name belongs.
  *
  * A `feature`-cost miss adds a sentence of its own ahead of the verdict,
- * because what is gone there is a whole function rather than a decoration —
- * the toasts, today. It names Tender as what has to be updated, and that holds
- * only while every `feature` entry is a search of Tender's own: a miss confined
- * to names `@decky/ui` does not export cannot reach the `decky` verdict, whose
- * repair is the other program. **Nothing enforces it.** A `feature` entry the
- * package DOES export would put "update Tender" beside "update Decky Loader"
- * inside one paragraph. Main carries the same fact as a notice
- * ({@link notificationsMissing}), which is what a user sees; this is what a log
- * reader sees.
+ * because what is gone there is a whole function rather than a decoration. It
+ * names no repair — the verdict sentence right after it does, and that one is
+ * right under every answer, including the ones that name Decky Loader. Main
+ * carries the same fact as a notice ({@link notificationsMissing}), which is
+ * what a user sees; this is what a log reader sees.
  *
  * It answers the same question the page answers — {@link searchOwner}'s, read
  * from the same verdict — rather than naming a repair of its own. It used to
@@ -666,19 +663,19 @@ export function sentenceAsksForAReport(report: StartupReport, copy: SearchingCop
  *
  * Both surfaces answer every verdict; where they come apart is the REPAIR. On
  * `none` this line names one and the page names none at all: nothing that
- * missed is a name `@decky/ui` exports, so every one of them is a search Tender
- * runs with a module probe of its own and a newer Tender is the repair. The
- * page names no update there because the three React globals reach ITS
- * `none`, and its verdict keys on whose copy ran a search rather than on which
- * program installed a global. They cannot reach HERE — their absence costs the
- * panel — and that is the property `steamModules.test.ts` holds, rather than
- * the short set of names it happens to produce today. `mixed` is the other one:
- * here it names a repair covering both programs, where the page names Decky's
- * and asks for a report about the rest.
+ * missed is a name `@decky/ui` exports, so every one of them is a lookup Tender
+ * makes itself and a newer Tender is the repair. The page names no update
+ * there because the three React globals reach ITS `none`, and its verdict keys
+ * on whose copy ran a search rather than on which program installed a global.
+ * They cannot reach HERE — their absence costs the panel — and that is the
+ * property `steamModules.test.ts` holds, rather than the short set of names it
+ * happens to produce today. `mixed` is the other one: here it names a repair
+ * covering both programs, where the page names Decky's and asks for a report
+ * about the rest.
  */
 export function describeSurvivedMiss(report: StartupReport, copy: SearchingCopy): string {
   if (report.everySearchAnswered || !report.panelMayMount) return "";
-  const featureLost = report.missingFeatures.length === 0 ? "" : "Tender's notifications are off until it is updated. ";
+  const featureLost = report.missingFeatures.length === 0 ? "" : "Tender's notifications are off. ";
   return (
     `${report.missing.length} of ${report.checked} searches into Steam's interface found nothing. ` +
     "Nothing that missed is needed to render the panel, so Tender has started. " +
@@ -692,7 +689,7 @@ function describeSurvivedSearches(report: StartupReport, copy: SearchingCopy): s
   const decky = deckyName(copy);
   switch (searchOwner(report, copy)) {
     case "none":
-      return "None of them is a name @decky/ui exports — Tender runs these searches itself, so a newer Tender is the repair.";
+      return "None of them is a name @decky/ui exports — Tender looks these up itself, so a newer Tender is the repair.";
     case "tender":
       return "Tender ran these searches, so a newer Tender is the repair.";
     case "disagreement":

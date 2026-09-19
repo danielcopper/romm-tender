@@ -593,11 +593,11 @@ migration — are not notices; they replace the page, and neither carries a cond
 was the pre-rename plugin folder, which went with the plugin loader.
 
 The notifications row is the one condition read from the **start-up check's report** rather than from a backend answer
-or an event: a toast is raised through a search into Steam's bundle and a global Steam installs at module scope
-(`docs/architecture/frontend-bundles.md`), so either one missing is settled before anything mounts and cannot change
-afterwards. There is nothing to subscribe to and nothing to poll. It is a notice rather than a refusal to mount because
-the panel is entirely intact without it: syncs and downloads run, and every result a toast would have announced is on
-the page it belongs to.
+or an event. What a toast is raised through is two searches into Steam's bundle and a global Steam installs at module
+scope ([how the panel is built and loaded](frontend-bundles.md)), so a miss is settled before anything mounts and cannot
+change afterwards: there is nothing to subscribe to and nothing to poll. It is a notice rather than a refusal to mount
+because the panel is entirely intact without it: syncs and downloads run, and every result a toast would have announced
+is on the page it belongs to.
 
 The playtime notice is the one that carries **two** buttons, and they sit side by side on one row rather than on two
 full-width ones: Main is the narrow page, and a notice costing three rows pushes the status block it sits above off the

@@ -288,19 +288,19 @@ describe("the start-up check's coverage of what the panel imports", () => {
 
   it("keeps a search neither copy of @decky/ui owns off the mount-anyway path", () => {
     // What `describeSurvivedMiss` says when nothing that missed is a @decky/ui
-    // export: Tender runs these searches itself, so a newer Tender is the
-    // repair. True of `ControllerGlyph`, which `utils/deckyUiInternals.ts`
-    // reaches with a `findModule` predicate of ours in both bundles, and of
+    // export: Tender looks these up itself, so a newer Tender is the repair.
+    // True of `ControllerGlyph`, which `utils/deckyUiInternals.ts` reaches with
+    // a `findModule` predicate of ours in both bundles, and of
     // `NotificationStore`, a global Steam itself installs that no copy of the
-    // package reaches — and false of the three `SP_*` globals, which a React
-    // bootstrap installs and whose owner on a machine running both programs is
-    // #1900's open question.
+    // package reaches — and false of the `SP_*` globals, which a React
+    // bootstrap installs and which the frontend cannot attribute to a program
+    // from inside the page.
     //
-    // What keeps those three out of the sentence is their COST, not their
-    // names: the panel does not mount without them, so they never reach the
-    // line this stands behind. That is the property, and asserting it rather
-    // than the short set it produces is what makes a name added tomorrow fail
-    // here instead of shipping a repair aimed at the wrong program.
+    // What keeps those out of the sentence is their COST, not their names: the
+    // panel does not mount without them, so they never reach the line this
+    // stands behind. That is the property, and asserting it rather than the
+    // short set it produces is what makes a name added tomorrow fail here
+    // instead of shipping a repair aimed at the wrong program.
     const ownSearches = new Set(tenderOwnSearchNames());
     expect(ownSearches.size).toBeGreaterThan(0);
     const wrong = STEAM_LOOKUPS.filter(
@@ -333,19 +333,24 @@ describe("the start-up check's coverage of what the panel imports", () => {
     ]);
   });
 
-  it("names both lookups a toast is raised through, and asks about each of them", () => {
-    // The notice on Main and the two entries here spell the names from one
-    // place (`NOTIFICATION_LOOKUPS`), so this says the check actually carries
-    // an entry per name: a notice keyed on a lookup nobody asks about would
-    // never appear, whatever Steam did.
-    const asked = new Set(STEAM_LOOKUPS.map((lookup) => lookup.name));
-    expect(asked).toContain(NOTIFICATION_LOOKUPS.renderer);
-    expect(asked).toContain(NOTIFICATION_LOOKUPS.store);
-    const raisedThrough: readonly string[] = [NOTIFICATION_LOOKUPS.renderer, NOTIFICATION_LOOKUPS.store];
-    const costs = STEAM_LOOKUPS.filter((lookup) => raisedThrough.includes(lookup.name)).map(
-      (lookup) => lookup.absenceCost,
-    );
-    expect(costs).toEqual(["feature", "feature"]);
+  it("asks about every lookup a toast is raised through, at the cost that keeps the panel up", () => {
+    // The notice on Main and the entries here spell the names from one place
+    // (`NOTIFICATION_LOOKUPS`), so this says the check actually carries an
+    // entry per name: a notice keyed on a lookup nobody asks about would never
+    // appear, whatever Steam did.
+    const raisedThrough: readonly string[] = Object.values(NOTIFICATION_LOOKUPS);
+    const entries = STEAM_LOOKUPS.filter((lookup) => raisedThrough.includes(lookup.name));
+    expect(entries.map((lookup) => lookup.name).sort()).toEqual([...raisedThrough].sort());
+    expect(entries.map((lookup) => lookup.absenceCost)).toEqual(raisedThrough.map(() => "feature"));
+  });
+
+  it("asks about the toast class map, at the cost an unstyled toast is worth", () => {
+    // It is the one lookup behind a toast that does NOT stop the push: every
+    // read of it in `utils/steamToast.tsx` is optional, so a miss costs the
+    // layout and the toast still says what it says.
+    const classes = STEAM_LOOKUPS.find((lookup) => lookup.name === "toastClasses");
+    expect(classes?.absenceCost).toBe("appearance");
+    expect(Object.values(NOTIFICATION_LOOKUPS)).not.toContain("toastClasses");
   });
 
   it("asks a real question of every search it lists", () => {
@@ -432,12 +437,19 @@ describe("what a miss costs the panel", () => {
     absenceCost: "diagnostic",
   });
   // The fourth cost, in the shape both real entries have: not a `@decky/ui`
-  // export, because a toast is raised through a probe of ours and a global
-  // Steam installs.
+  // export, like two of the three real ones.
   const feature = (name: string, present: boolean): SteamLookup => ({
     name,
     found: () => present,
     deckyUiExport: false,
+    absenceCost: "feature",
+  });
+  // The third: `ErrorBoundary` IS a `@decky/ui` export, so in the coexistence
+  // bundle a miss of it alone is DECKY's search and the verdict is `decky`.
+  const exportedFeature = (name: string, present: boolean): SteamLookup => ({
+    name,
+    found: () => present,
+    deckyUiExport: true,
     absenceCost: "feature",
   });
   const ours: SearchingCopy = { owner: "tender" };
@@ -459,7 +471,7 @@ describe("what a miss costs the panel", () => {
     const sentence = describeSurvivedMiss(report, ours);
     expect(sentence).toContain("1 of 2 searches into Steam's interface found nothing");
     expect(sentence).toContain("Nothing that missed is needed to render the panel");
-    expect(sentence).toContain("Tender runs these searches itself, so a newer Tender is the repair.");
+    expect(sentence).toContain("Tender looks these up itself, so a newer Tender is the repair.");
     expect(describeFailure(report, ours)).toBe("");
   });
 
@@ -594,8 +606,58 @@ describe("what a miss costs the panel", () => {
     expect(describeFailure(report, ours)).toBe("");
     const sentence = describeSurvivedMiss(report, ours);
     expect(sentence).toContain("Nothing that missed is needed to render the panel");
-    expect(sentence).toContain("Tender's notifications are off until it is updated.");
-    expect(sentence).toContain("Tender runs these searches itself, so a newer Tender is the repair.");
+    expect(sentence).toContain("Tender's notifications are off.");
+    expect(sentence).toContain("Tender looks these up itself, so a newer Tender is the repair.");
+  });
+
+  it("names no repair of its own for the lost feature, under every verdict", () => {
+    // The sentence is general over the cost, and one of the three entries
+    // behind it IS a `@decky/ui` export — so a miss of that one in the
+    // coexistence bundle is Decky's search, and a sentence saying "until Tender
+    // is updated" would sit beside "a newer Decky Loader is the repair". It
+    // states the loss and leaves the repair to the verdict.
+    const fixtures: Record<SearchOwner, () => { report: StartupReport; copy: SearchingCopy }> = {
+      none: () => {
+        const report = checkSteamModules([blocking("Focusable", true), feature("NotificationStore", false)]);
+        return { report, copy: theirs(report) };
+      },
+      tender: () => {
+        const report = checkSteamModules([blocking("Focusable", true), exportedFeature("ErrorBoundary", false)]);
+        return { report, copy: readSearchingCopy(report, "standalone") };
+      },
+      disagreement: () => {
+        const report = checkSteamModules([blocking("Focusable", true), exportedFeature("ErrorBoundary", false)]);
+        return {
+          report,
+          copy: readSearchingCopy(report, "coexistence", () => ({ carries: () => false, version: "v3.2.8" })),
+        };
+      },
+      mixed: () => {
+        const report = checkSteamModules([
+          blocking("Focusable", true),
+          feature("NotificationStore", false),
+          exportedFeature("ErrorBoundary", false),
+        ]);
+        return { report, copy: theirs(report) };
+      },
+      decky: () => {
+        const report = checkSteamModules([blocking("Focusable", true), exportedFeature("ErrorBoundary", false)]);
+        return { report, copy: theirs(report) };
+      },
+    };
+
+    for (const owner of SEARCH_OWNERS) {
+      const { report, copy } = fixtures[owner]();
+      expect(searchOwner(report, copy)).toBe(owner);
+      expect(report.panelMayMount).toBe(true);
+      const sentence = describeSurvivedMiss(report, copy);
+      expect(sentence).toContain("Tender's notifications are off.");
+      expect(sentence).not.toContain("notifications are off until");
+    }
+    // And the one verdict that would have contradicted it names Decky alone.
+    const { report, copy } = fixtures.decky();
+    expect(describeSurvivedMiss(report, copy)).toContain("a newer Decky Loader is the repair");
+    expect(describeSurvivedMiss(report, copy)).not.toContain("newer Tender");
   });
 
   it("leaves that sentence out when nothing costing a feature missed", () => {
@@ -616,13 +678,20 @@ describe("what a miss costs the panel", () => {
     expect(describeSurvivedMiss(report, ours)).toBe("");
   });
 
-  it("reads the notice on Main off either of the two lookups a toast is raised through", () => {
-    const renderer = checkSteamModules([blocking("Focusable", true), feature(NOTIFICATION_LOOKUPS.renderer, false)]);
-    const store = checkSteamModules([blocking("Focusable", true), feature(NOTIFICATION_LOOKUPS.store, false)]);
+  it("reads the notice on Main off any one of the lookups a toast is raised through", () => {
+    for (const name of Object.values(NOTIFICATION_LOOKUPS)) {
+      expect(notificationsMissing(checkSteamModules([blocking("Focusable", true), feature(name, false)]))).toBe(true);
+    }
     const neither = checkSteamModules([blocking("Focusable", true), cosmetic("ControllerGlyph", false)]);
-    expect(notificationsMissing(renderer)).toBe(true);
-    expect(notificationsMissing(store)).toBe(true);
     expect(notificationsMissing(neither)).toBe(false);
+  });
+
+  it("does not claim the notifications went missing over some other feature", () => {
+    // It reads the names rather than the cost, so a `feature` entry added for
+    // something else cannot put this notice on Main.
+    const other = checkSteamModules([blocking("Focusable", true), feature("SomeOtherFeature", false)]);
+    expect(other.missingFeatures).toEqual(["SomeOtherFeature"]);
+    expect(notificationsMissing(other)).toBe(false);
   });
 
   it("still reaches the bootstrap answer when everything missed, cosmetic names included", () => {

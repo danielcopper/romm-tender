@@ -1,14 +1,13 @@
 // What a test here CANNOT see: Steam's notification store, its toast queue and
 // its popup windows are all absent under happy-dom, so the store below records
-// what it was handed and nothing reacts to it. That a `31` is a type Steam's
-// per-type table knows, and that the popup appears at all, are device
-// questions. What is pinned is the shape of the push, which of the two ways a
-// toast can end up in the tray, and the renderer chain — the last being the one
-// half that can silently orphan another program's patch.
+// what it was handed and nothing reacts to it. Whether the popup appears at all
+// is a device question. What is pinned is the shape of the push, which of the
+// two ways a toast can end up in the tray, and the renderer chain — the last
+// being the one half that can silently orphan another program's patch.
 
 import { describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
-import { createElement, type ReactNode } from "react";
+import { createElement, type PropsWithChildren, type ReactNode } from "react";
 
 import type { ToastData } from "../api/host";
 import type {
@@ -48,15 +47,21 @@ function fakeStore(): SteamNotificationStore & {
       // a dismiss would remove ever comes into existence.
       info.fnTray?.(notification, tray);
     },
+    // Matched the way Steam's does — on the first notification's
+    // `notificationID`, not on the group object's identity.
     RemoveGroupFromTray(group) {
-      removed.push(group);
+      const id = group.notifications[0]?.notificationID;
+      const index = tray.findIndex((held) => held.notifications[0]?.notificationID === id);
+      if (index === -1) return;
+      removed.push(tray[index]!);
+      tray.splice(index, 1);
     },
   };
 }
 
 /**
  * A stand-in for Steam's toast renderer: a plain function, because what is
- * patched is its `prototype.render` and only a function declaration has one.
+ * patched is its `prototype.render` and an arrow function has no prototype.
  */
 function fakeRenderer(): SteamToastRenderer {
   function ValveToastRenderer(): null {
@@ -72,16 +77,33 @@ const installTrampoline = (renderer: SteamToastRenderer): void => {
   };
 };
 
+/** Steam's own boundary, reduced to the one thing a test can see: it renders. */
+const fakeErrorBoundary = ({ children }: PropsWithChildren): ReactNode =>
+  createElement("div", { "data-testid": "error-boundary" }, children);
+
 const seams = (over: Partial<SteamToasterSeams> = {}): SteamToasterSeams => ({
   renderer: fakeRenderer(),
   store: fakeStore(),
   classes: { ShortTemplate: "c-short", StandardTemplate: "c-standard", Body: "c-body" },
+  errorBoundary: fakeErrorBoundary,
   installTrampoline,
   log: vi.fn(),
   ...over,
 });
 
 const TOAST: ToastData = { title: "Tender", body: "Sync finished" };
+
+/** One of Steam's own, carrying no mark of ours. */
+const VALVE_NOTIFICATION: SteamNotification = {
+  notificationID: 1,
+  nNotificationID: 1,
+  rtCreated: 0,
+  eType: 4,
+  eSource: 2,
+  nToastDurationMS: 5000,
+  bNewIndicator: false,
+  data: { title: "Steam", body: "A friend is online" },
+};
 
 /** One group as Steam builds it for a popup: the notification, wrapped. */
 const groupFor = (notification: SteamNotification): SteamNotificationGroup => ({
@@ -118,6 +140,7 @@ describe("what a toast pushes into Steam's notification store", () => {
     expect(store.pushed).toHaveLength(1);
     const { info, notification, eToastType } = store.pushed[0]!;
     expect(eToastType).toBe(0);
+    expect(notification.notificationID).toBe(700);
     expect(notification.nNotificationID).toBe(700);
     expect(notification.eType).toBe(31);
     expect(notification.eSource).toBe(1);
@@ -137,13 +160,12 @@ describe("what a toast pushes into Steam's notification store", () => {
     const toaster = createSteamToaster(seams({ store }));
     toaster.toast(TOAST);
     toaster.toast(TOAST);
+    expect(store.pushed.map((p) => p.notification.notificationID)).toEqual([700, 701]);
     expect(store.pushed.map((p) => p.notification.nNotificationID)).toEqual([700, 701]);
     expect(store.m_nNextTestNotificationID).toBe(702);
   });
 
   it("marks the notification as Tender's, and not with Decky Loader's name", () => {
-    // Two programs marking their entries with one name would each draw the
-    // other's, so the mark is ours and the check for it is exact.
     const store = fakeStore();
     createSteamToaster(seams({ store })).toast(TOAST);
     const notification = store.pushed[0]!.notification as unknown as Record<string, unknown>;
@@ -191,12 +213,24 @@ describe("which toasts are kept in the notifications tab", () => {
     transient.dismiss();
     expect(store.removed).toEqual([]);
     kept.dismiss();
-    expect(store.removed).toEqual([store.tray[0]]);
+    expect(store.removed.map((g) => g.notifications[0]!.notificationID)).toEqual([700]);
+    expect(store.tray).toEqual([]);
+  });
+
+  it("drops the toast that was dismissed, where the tray holds more than one", () => {
+    // Steam matches a group on `notifications[0].notificationID` rather than on
+    // the object, so an id it cannot find removes the wrong entry or none.
+    const store = fakeStore();
+    const toaster = createSteamToaster(seams({ store }));
+    const older = toaster.toast({ ...TOAST, subtext: "14 games" });
+    toaster.toast({ ...TOAST, subtext: "3 saves" });
+
+    older.dismiss();
+    expect(store.removed.map((g) => g.notifications[0]!.notificationID)).toEqual([700]);
+    expect(store.tray.map((g) => g.notifications[0]!.notificationID)).toEqual([701]);
   });
 
   it("never throws out of dismiss, whatever Steam does with the group", () => {
-    // The caller is a `.then` in a sync path; a throw here would take the
-    // continuation with it for nothing a user could act on.
     const store = fakeStore();
     const log = vi.fn();
     store.RemoveGroupFromTray = () => {
@@ -218,8 +252,8 @@ describe("which toasts are kept in the notifications tab", () => {
   });
 });
 
-describe("a Steam that answers for neither the renderer nor the store", () => {
-  it("pushes nothing when the store is missing, and logs the toast instead", () => {
+describe("a Steam that answers for something a toast is raised through", () => {
+  it("logs the toast and hands back an inert handle when the store is missing", () => {
     const log = vi.fn();
     const toaster = createSteamToaster(seams({ store: undefined, log }));
     const raised = toaster.toast(TOAST);
@@ -229,14 +263,19 @@ describe("a Steam that answers for neither the renderer nor the store", () => {
   });
 
   it("pushes nothing when the renderer is missing, even though the store would take it", () => {
-    // The safety rule: an entry Steam has no drawing of ours in front of runs
-    // our own data through its server-notification component, in the user's
-    // toast window.
     const store = fakeStore();
     const log = vi.fn();
     createSteamToaster(seams({ renderer: undefined, store, log })).toast(TOAST);
     expect(store.pushed).toEqual([]);
-    expect(log).toHaveBeenCalledWith(expect.stringContaining("renderer or store is not there"));
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("no toast drawing Tender can use"));
+  });
+
+  it("pushes nothing when the error boundary is missing, so a throw of ours cannot reach Steam's tree", () => {
+    const store = fakeStore();
+    const log = vi.fn();
+    createSteamToaster(seams({ errorBoundary: undefined, store, log })).toast(TOAST);
+    expect(store.pushed).toEqual([]);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("no toast drawing Tender can use"));
   });
 
   it("pushes nothing when the trampoline refuses to install", () => {
@@ -273,9 +312,6 @@ describe("the renderer's render chain", () => {
   });
 
   it("wraps a render that is already there rather than applying a second trampoline", () => {
-    // `injectFCTrampoline` overwrites `prototype.render` outright and has no
-    // guard against a second application, so applying one over Decky Loader's
-    // would orphan it — and over ours, the other way round.
     const renderer = fakeRenderer();
     installTrampoline(renderer);
     const install = vi.fn(installTrampoline);
@@ -283,7 +319,7 @@ describe("the renderer's render chain", () => {
     expect(install).not.toHaveBeenCalled();
   });
 
-  it("draws our own toast for a group of ours", () => {
+  it("draws our own toast for a group of ours, inside Steam's error boundary", () => {
     const renderer = fakeRenderer();
     const store = fakeStore();
     const toaster = createSteamToaster(seams({ renderer, store }));
@@ -291,6 +327,7 @@ describe("the renderer's render chain", () => {
 
     const drawn = drawWith(renderer, { group: groupFor(notification), location: 3 });
     expect(drawn.queryByText("Sync finished")).not.toBeNull();
+    expect(drawn.queryByTestId("error-boundary")).not.toBeNull();
     expect(drawn.queryByTestId("valve-drawing")).toBeNull();
   });
 
@@ -299,17 +336,9 @@ describe("the renderer's render chain", () => {
     const toaster = createSteamToaster(seams({ renderer }));
     toaster.toast(TOAST);
 
-    const valve: SteamNotification = {
-      nNotificationID: 1,
-      rtCreated: 0,
-      eType: 4,
-      eSource: 2,
-      nToastDurationMS: 5000,
-      bNewIndicator: false,
-      data: { title: "Steam", body: "A friend is online" },
-    };
-    const drawn = drawWith(renderer, { group: groupFor(valve), location: 1 });
+    const drawn = drawWith(renderer, { group: groupFor(VALVE_NOTIFICATION), location: 1 });
     expect(drawn.queryByTestId("valve-drawing")).not.toBeNull();
+    expect(drawn.queryByTestId("error-boundary")).toBeNull();
   });
 
   it("hands back a render with no group at all rather than drawing an empty toast", () => {
@@ -319,9 +348,6 @@ describe("the renderer's render chain", () => {
   });
 
   it("wraps again when somebody replaced our render between two toasts", () => {
-    // The ordinary case, not an exotic one: Decky Loader starting or reloading
-    // after us overwrites the property and orphans our link. The re-check
-    // happens at push time because a toast is drawn only after it is pushed.
     const renderer = fakeRenderer();
     const store = fakeStore();
     const toaster = createSteamToaster(seams({ renderer, store }));
@@ -348,16 +374,30 @@ describe("the renderer's render chain", () => {
     };
     toaster.toast(TOAST);
 
-    const valve: SteamNotification = {
-      nNotificationID: 1,
-      rtCreated: 0,
-      eType: 4,
-      eSource: 2,
-      nToastDurationMS: 5000,
-      bNewIndicator: false,
-      data: { title: "Steam", body: "A friend is online" },
+    expect(
+      drawWith(renderer, { group: groupFor(VALVE_NOTIFICATION), location: 1 }).queryByTestId("second-patcher"),
+    ).not.toBeNull();
+  });
+
+  it("stops the link it replaces from drawing, so only one of ours is ever live", () => {
+    // The replaced link is still in the chain — whatever overwrote it delegates
+    // through it — so without retiring it a teardown that restores nothing
+    // would leave it drawing from underneath.
+    const renderer = fakeRenderer();
+    const store = fakeStore();
+    const toaster = createSteamToaster(seams({ renderer, store }));
+    toaster.toast(TOAST);
+
+    const ours = renderer.prototype.render as SteamToastRenderFn;
+    renderer.prototype.render = function (this: { props: SteamToastRenderProps }, ...args: unknown[]): ReactNode {
+      return createElement("div", { "data-testid": "second-patcher" }, ours.apply(this, args) as ReactNode);
     };
-    expect(drawWith(renderer, { group: groupFor(valve), location: 1 }).queryByTestId("second-patcher")).not.toBeNull();
+    const notification = raiseAndDraw(toaster, store);
+    toaster.teardown();
+
+    const drawn = drawWith(renderer, { group: groupFor(notification), location: 3 });
+    expect(drawn.queryByTestId("second-patcher")).not.toBeNull();
+    expect(drawn.queryByText("Sync finished")).toBeNull();
   });
 });
 

@@ -591,11 +591,6 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
             </Focusable>
           </PanelSectionRow>
         )}
-        {/* Read from the start-up check's report rather than from state: both
-            searches behind it are answered before anything mounts and cannot
-            change afterwards, so there is nothing to subscribe to. It carries no
-            action for the same reason the RetroDECK warning above it does not —
-            the repair is outside the panel. */}
         {notificationsUnavailable() && (
           <PanelSectionRow>
             <Focusable onActivate={() => {}}>

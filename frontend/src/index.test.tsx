@@ -183,7 +183,11 @@ vi.mock("./utils/launcherRelocation", () => ({
 
 import { applyAllPlaytime, registerMetadataPatches, applyAllMetadata } from "./utils/metadataPatches";
 import { getLauncherState, setLauncherRelocated } from "./utils/launcherStore";
-import { notificationsUnavailable, setNotificationsUnavailable } from "./utils/notificationsHealth";
+import {
+  notificationsUnavailable,
+  resetNotificationsHealthForTests,
+  setNotificationsUnavailable,
+} from "./utils/notificationsHealth";
 import { steamToaster } from "./utils/steamToaster";
 import { registerRomMAppId, unregisterRomMAppId } from "./utils/rommAppIds";
 import definePluginResult from "./index";
@@ -332,7 +336,7 @@ describe("index.tsx — what the factory records about the toasts", () => {
   // the notice would simply never appear.
   afterEach(() => {
     startupAnswer = everythingResolved();
-    setNotificationsUnavailable(false);
+    resetNotificationsHealthForTests();
   });
 
   it("records that the notice is owed when a lookup a toast is raised through missed", () => {
@@ -360,9 +364,6 @@ describe("index.tsx — what the factory records about the toasts", () => {
   });
 
   it("hands Steam's toast renderer back at dismount", () => {
-    // The one teardown step that gives something back to a program outside
-    // this one: whatever `render` the renderer is left with, it keeps for the
-    // rest of the session.
     const teardown = vi.spyOn(steamToaster, "teardown");
     const plugin = pluginFactory();
     expect(teardown).not.toHaveBeenCalled();

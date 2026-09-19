@@ -1,11 +1,8 @@
 /**
  * How one of Tender's toasts is drawn, in each of the three places Steam draws
- * a notification.
- *
- * Steam's own renderer switches on the notification's type and knows Valve's
- * typed notifications only, so an entry of ours reaches its `default` arm and
- * draws nothing. `utils/steamToaster.tsx` puts this component in front of it
- * for the groups that are ours; everything here is presentation.
+ * a notification. `utils/steamToaster.tsx` puts this component in front of
+ * Steam's own renderer for the groups that are ours; everything here is
+ * presentation.
  *
  * The class names are Steam's own (`utils/deckyUiInternals.ts`'s
  * `toastClasses`), so a toast of ours is laid out and animated by the same
@@ -21,13 +18,8 @@ import type { ToastData } from "../api/host";
 import type { ToastClasses } from "./deckyUiInternals";
 
 /**
- * Where Steam is drawing the notification.
- *
- * Steam's own values, read out of its bundle: the renderer turns the prop into
- * a telemetry submethod name through a switch over `0 invalid`, `1 gamepad`,
- * `2 desktop`, `3 tray`, `4 all`, `5 push`, and the three call sites that reach
- * this component pass 1 from the Big Picture popup window, 2 from the
- * desktop-client popup and 3 from the Quick Access notifications tab.
+ * Where Steam is drawing the notification. Source: `library.js`, function `Bn`
+ * (reached as `ey3`), in the Steam client build on disk.
  */
 export const TOAST_LOCATION_BIG_PICTURE_POPUP = 1;
 export const TOAST_LOCATION_DESKTOP_POPUP = 2;
@@ -49,11 +41,10 @@ const shortTime = (createdMs: number): string =>
   new Date(createdMs).toLocaleTimeString(undefined, { timeStyle: "short" });
 
 /**
- * The Big Picture popup, which is a native window of a fixed 321x81 px with
- * `overflow: hidden` — so a taller layout is not a layout that scrolls, it is
- * one whose lower half nobody can ever see. `TwoLine` is Steam's own answer to
- * that and the tallest thing that fits, which is why the subtext has no home
- * here.
+ * The Big Picture popup, which is a native window of a fixed size that clips —
+ * so a taller layout is not one that scrolls, it is one whose lower half nobody
+ * can ever see, and the subtext has no home here. `TwoLine` is Steam's own
+ * two-line variant of the same template.
  */
 const BigPicturePopup: FC<SteamToastProps> = ({ toast, classes }) => (
   <div className={classNames(classes.ShortTemplate, classes.TwoLine)}>
@@ -67,9 +58,9 @@ const BigPicturePopup: FC<SteamToastProps> = ({ toast, classes }) => (
 );
 
 /**
- * The desktop client's popup. `Multiline` on the body is the difference that
- * matters: without it Steam clips a description to one line with an ellipsis,
- * and the desktop popup is the one place with room for the two the class buys.
+ * The desktop client's popup. `Multiline` on the body is what keeps a long one
+ * off a single clipped line — without the class Steam ellipsises a description
+ * after one.
  */
 const DesktopPopup: FC<SteamToastProps> = ({ toast, classes }) => (
   <div className={classes.StandardTemplateContainer}>

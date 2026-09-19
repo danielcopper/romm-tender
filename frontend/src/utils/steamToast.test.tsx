@@ -1,9 +1,9 @@
 // What a test here CANNOT see: happy-dom loads none of Steam's stylesheets, so
 // every class below is an attribute value and nothing more. That a toast fits
-// the 321x81 px popup window, that the tab entry is reachable with a
-// controller, and that `Multiline` buys a second line are all device
-// questions — what is pinned here is which layout is chosen and which of
-// Steam's classes each element carries, because those are what decide it.
+// the popup window, that the tab entry is reachable with a controller, and that
+// `Multiline` buys a second line are all device questions — what is pinned here
+// is which layout is chosen and which of Steam's classes each element carries,
+// because those are what decide it.
 
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
@@ -62,8 +62,6 @@ describe("the Big Picture popup layout", () => {
   });
 
   it("leaves the subtext out, because the popup window is fixed and clips it", () => {
-    // The window is 321x81 px with `overflow: hidden`, so a third line is not
-    // a line that scrolls — it is one nobody can ever read.
     draw({ ...TOAST, subtext: "14 games" }, TOAST_LOCATION_BIG_PICTURE_POPUP);
     expect(screen.queryByText("14 games")).toBeNull();
   });

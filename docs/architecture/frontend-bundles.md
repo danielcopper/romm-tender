@@ -131,20 +131,21 @@ a mode.)
 **Whether every search answered and whether the panel may mount are two questions**, and each entry states which one it
 bears on through what its absence costs: the `panel`, a whole `feature` outside it, only its `appearance`, or only a
 `diagnostic`. Blocking is the status quo, which costs no evidence to stay at; moving a name off it is a decision taken
-per name, against each of its consumers. Four names have been moved so far. `ControllerGlyph` costs appearance —
-`bigpicture/layout/WidePage.tsx` is its one consumer and already draws `‹ Back` where the glyph would be — and so does
-`toastClasses`, whose every read is optional, leaving a toast that says everything it says in an unstyled box.
-`playSectionClasses` costs a diagnostic: its one read in the program is inside `gameDetailPatch.tsx`'s one-shot
-`dumpTree`, which already prints `UNDEFINED` where the class name would go, so nothing a user can see changes at all.
-`ToastRenderer` and `NotificationStore` cost a feature: without either one no toast appears at all, and every page,
-every sync and every download is untouched — the result a toast would have announced is on the page it belongs to.
+per name, against each of its consumers. `ControllerGlyph` costs appearance — `bigpicture/layout/WidePage.tsx` is its
+one consumer and already draws `‹ Back` where the glyph would be — and so does `toastClasses`, whose every read is
+optional, leaving a toast that says everything it says in an unstyled box. `playSectionClasses` costs a diagnostic: its
+one read in the program is inside `gameDetailPatch.tsx`'s one-shot `dumpTree`, which already prints `UNDEFINED` where
+the class name would go, so nothing a user can see changes at all. `ToastRenderer`, `NotificationStore` and
+`ErrorBoundary` cost a feature: without any one of them no toast appears at all, and every page, every sync and every
+download is untouched — the result a toast would have announced is on the page it belongs to.
 
 **Two of the four costs are read by something and two are not.** `checkSteamModules`'s `!== "panel"` decides whether the
-panel mounts, and `feature` is what adds a sentence to the log line below and puts a notice on Main
-(`docs/architecture/qam-panel.md` → "Notices and homes"). `appearance` and `diagnostic` are told apart by nothing in the
-program, so those two record why a name was moved off blocking rather than deciding anything. They stay apart because
-they answer different questions: a decoration whose absence a reader can see is not a name whose absence nothing renders
-at all.
+panel mounts, and `feature` is what adds a sentence to the log line below. The notice on Main reads the lookup NAMES
+instead (`notificationsMissing`, over `NOTIFICATION_LOOKUPS`), so a future `feature` entry for something else cannot
+make the panel claim the notifications are what went missing. `appearance` and `diagnostic` are told apart by nothing in
+the program, so those two record why a name was moved off blocking rather than deciding anything. They stay apart
+because they answer different questions: a decoration whose absence a reader can see is not a name whose absence nothing
+renders at all.
 
 When nothing that missed was needed to render the panel it mounts normally, and **the log line is then the only thing
 that reports it at all**: `describeSurvivedMiss` says how many searches missed, that none of them is needed to render
@@ -153,19 +154,20 @@ name "a newer Tender" unconditionally, which was sound only while nothing that c
 exports; `playSectionClasses` is one, and in the coexistence bundle the search behind it is Decky's.
 
 A `feature`-cost miss adds one more sentence ahead of that verdict, because what is gone there is a whole function
-rather than a decoration: today, the toasts. It names Tender as what has to be updated, and that holds only while every
-`feature` entry is a search of Tender's own — a miss confined to names `@decky/ui` does not export cannot reach the
-`decky` verdict, whose repair is the other program. **Nothing enforces that.** A `feature` entry the package DOES export
-would put "update Tender" beside "update Decky Loader" inside one paragraph.
+rather than a decoration: today, the toasts. It states the loss and names **no repair of its own** — the verdict
+sentence right after it does, and that one is right under every answer. It has to be: `ErrorBoundary` is a `@decky/ui`
+export, so a miss of it alone in the coexistence bundle is Decky's copy's search and the repair named beside it is a
+newer Decky Loader.
 
 Both surfaces answer every verdict below; where they come apart is the **repair**. On `none` the log line names one and
-the page names no update at all: nothing that missed is a `@decky/ui` export, so every one of them is a search Tender
-runs with a module probe of its own, and a newer Tender is the repair. The page asks for a report there instead because
-the three `SP_*` globals reach its `none` (below); they cannot reach the log line, because their absence costs the
-panel. **That is the property `steamModules.test.ts` locks** — a non-blocking name `@decky/ui` does not export must be
-one Tender probes for itself — rather than the short set of names it produces today, which would go stale the moment a
-second name moved. `mixed` is the other place they differ: the log line names a repair covering both programs, where the
-page names Decky's and asks for a report about the rest, for the same reason.
+the page names no update at all: nothing that missed is a `@decky/ui` export, so every one of them is a lookup Tender
+makes itself, and a newer Tender is the repair. The page asks for a report there instead because the three `SP_*`
+globals reach its `none` (below); they cannot reach the log line, because their absence costs the panel. **That is the
+property `steamModules.test.ts` locks** — a non-blocking name `@decky/ui` does not export must be one Tender resolves
+for itself, either a module probe (`findModule…(`) or a direct read of a global off `window` — rather than the short set
+of names it produces today, which would go stale the moment a second name moved. `mixed` is the other place they differ:
+the log line names a repair covering both programs, where the page names Decky's and asks for a report about the rest,
+for the same reason.
 
 The page names every search that came back empty, and distinguishes **some** of them missing from **all** of them. All
 means something more basic than a stale predicate: the React bootstrap never ran, or Steam's module registry was read
@@ -325,39 +327,41 @@ forwarded them, so each needs a replacement of Tender's rather than a backend ro
 and its animation, the queue behind it, the sound, and the entry left in the Quick Access notifications tab.
 `routerHook` is still a **declared placeholder that does nothing**: Steam's game page carries no Tender section.
 
-The toaster is two halves and the push is useless without the other one. Steam draws every notification through a single
-component whose switch knows Valve's typed notifications only, so an entry of ours reaches its `default` arm and draws
-nothing at all — which is why the drawing is put in front of that component before anything is pushed, and why a missing
-renderer means the toast is **logged instead of pushed**. Pushing without a drawing of ours would run Tender's own data
-through Steam's server-notification component, in the user's toast window.
+The toaster is two halves and the push is useless without the other one. Steam's renderer has no `case` for the type
+these notifications carry; its `default` arm resolves to Steam's server-notification component, which reads fields our
+payload does not have. So the drawing is put in front of that component before anything is pushed, and a toast the
+drawing cannot be installed for is **logged instead of pushed**. Three lookups have to answer for that to work — the
+renderer itself, the `NotificationStore` to push into, and `@decky/ui`'s `ErrorBoundary`, which keeps a throw inside our
+own drawing from reaching the tree that draws everyone's notifications — and a miss of any one of them stops the push.
 
 That component is patched by replacing `prototype.render`, and `@decky/ui`'s `injectFCTrampoline` — which is how Decky
 Loader patches the same component — overwrites that property outright with no guard against a second application:
 whoever applies it second orphans the first, in either order and in both bundles. So Tender never installs over a chain
 it has not just read. It wraps whatever `render` it finds, and looks again before every push; a check at push time is
-enough because a toast is drawn only after it is pushed, so no accessor trick and no observer is needed. At dismount it
-puts back what it found where its own link is still on top, and turns that link into a pass-through where somebody
-wrapped over it — cutting it out there would take the later patcher's drawing with it.
+enough because a toast is drawn only after it is pushed, so no accessor trick and no observer is needed. A link it
+replaces is retired as it goes, because whatever overwrote it may still delegate through it. At dismount it puts back
+what it found where its own link is still on top, and turns that link into a pass-through where somebody wrapped over it
+— cutting it out there would take the later patcher's drawing with it.
 
 There are three layouts, chosen from the `location` Steam passes the renderer, and all of their class names come from
-one map (`findClassModule((m) => m.ShortTemplate)`). Steam's own values, read out of its bundle: **1** is the Big
-Picture popup, **2** the desktop-client popup and **3** the Quick Access notifications tab — a switch in the renderer's
-own module turns the prop into a telemetry submethod name over `0 invalid, 1 gamepad, 2 desktop, 3 tray, 4 all, 5 push`,
-and those three are the values its three call sites pass. The Big Picture popup is a native window of a fixed 321x81 px
-with `overflow: hidden`, so it gets Steam's two-line short template and carries no subtext; the desktop popup and the
-tab entry carry one. An unrecognised location falls back to the tab layout, which is the only one that imposes no size
-of its own. A toast is **kept** in the tab only where it carries subtext — the popup had no room to show that, so there
-is something new to read there; without one the entry would be a row the reader has to clear for nothing.
+one map (`findClassModule((m) => m.ShortTemplate)`): several class maps carry these template names and exactly one
+carries `ShortTemplate`. Steam's own values, from `library.js`'s function `Bn` (reached as `ey3`), which turns the prop
+into a telemetry submethod name over `0 invalid, 1 gamepad, 2 desktop, 3 tray, 4 all, 5 push`: **1** is the Big Picture
+popup, **2** the desktop-client popup and **3** the Quick Access notifications tab. Location 3 has a second consumer,
+the desktop client's own notifications menu — but that menu skips client-sourced entries, which is what a Tender toast
+is, so a kept toast is listed in the Quick Access tab and nowhere else. The Big Picture popup is a native window of a
+fixed size that clips (innerWidth/innerHeight 321x81, `body { overflow: hidden }`, read over the debugger), so it gets
+Steam's two-line short template and carries no subtext; the desktop popup and the tab entry carry one. An unrecognised
+location falls back to the tab layout, which is the only one that imposes no size of its own. A toast is **kept** in the
+tab only where it carries subtext — the popup had no room to show that, so there is something new to read there; without
+one the entry would be a row the reader has to clear for nothing.
 
 Neither of the two reaches Decky's loader API when one happens to be present, and what decides that is not purity: both
 were the loader's own, and one that borrowed wherever it found one would behave differently on a machine running Decky
 from one without — the difference this program exists not to depend on. Tender's own marker on a notification is
 deliberately not Decky's `decky`, for the same reason read the other way: two programs marking their entries with one
-name would each draw the other's.
-
-**The reference machine runs Decky Loader** — measured while building the injector: `plugin_loader.service` active and
-enabled, and `127.0.0.1:1337` listening. So a borrowing replacement would be visible there rather than hidden, and the
-two programs' patches on Steam's toast renderer are an arrangement that has to work rather than a hypothetical.
+name would each draw the other's. What Decky Loader does here is read from its own source, `frontend/src/toaster.tsx` on
+upstream `main`.
 
 ## What the tests here can and cannot see
 

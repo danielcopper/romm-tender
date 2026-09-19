@@ -344,11 +344,15 @@ vi.mock("@decky/ui", () => {
     findModule: vi.fn(() => undefined),
     findModuleExport: vi.fn(() => undefined),
     findClassModule: vi.fn(() => undefined),
-    // Steam's own React is not here either, and the real trampoline reads
-    // `SP_REACTDOM.version` at its first line. Every test that cares about the
-    // toast renderer's patch chain supplies its own install seam
-    // (`utils/steamToaster.tsx`), so this only has to exist.
+    // Steam's own React is not here either, and the real trampoline reads the
+    // `SP_*` globals. Every test that cares about the toast renderer's patch
+    // chain supplies its own install seam (`utils/steamToaster.tsx`), so this
+    // only has to exist.
     injectFCTrampoline: vi.fn(() => ({ component: () => null })),
+    // Steam's own boundary, which @decky/ui finds with a predicate — so it is
+    // `undefined` here like every other probe, and the toaster's own tests pass
+    // one in.
+    ErrorBoundary: undefined,
     // The QAM is open for any test that renders a wide page; the hook's
     // clear-on-close path is exercised in
     // frontend/src/utils/qamExpansion.test.tsx.
