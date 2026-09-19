@@ -42,6 +42,7 @@
 
 import type { ReactNode } from "react";
 import type { Plugin } from "../api/host";
+import { quickAccessMenuClasses } from "../utils/deckyUiInternals";
 import { PanelErrorBoundary } from "./PanelErrorBoundary";
 
 /**
@@ -62,7 +63,8 @@ const TENDER_TAB_MARK = "tender";
 /** What Steam's tab strip renders one entry from, plus our own marker. */
 export interface QuickAccessTabEntry {
   key: string;
-  title: string;
+  /** Drawn above the panel as the tab's heading. */
+  title: ReactNode;
   /** Drawn in the strip. */
   tab: ReactNode;
   /** Drawn in the panel below it. */
@@ -117,7 +119,13 @@ export function syncEntry(tabs: unknown[], entry: QuickAccessTabEntry): void {
 export function buildEntry(plugin: Plugin): QuickAccessTabEntry {
   return {
     key: TENDER_TAB_KEY,
-    title: plugin.name,
+    // An element carrying Steam's own heading class, because Steam's tabs hand
+    // it one: a bare string lands as a text node in the panel container at body
+    // size — 16 px / 400 measured, against 22 px / 700 for the tabs beside it.
+    // Without the class map the start-up check has already refused the panel,
+    // so this heads the fallback page, and it costs that page its styling
+    // rather than its heading.
+    title: <div className={quickAccessMenuClasses?.Title}>{plugin.name}</div>,
     // The glyph the plugin declares, not one chosen here: `icon` is what the
     // factory answers with and the fallback page answers with a different node,
     // so drawing a second copy would put the wrong one in the strip on exactly

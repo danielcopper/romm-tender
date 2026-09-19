@@ -47,6 +47,14 @@ that draw the menu — the browser view Gaming Mode uses and the embedded one �
 they hand back. Decky Loader patches the same two renderers, and the two compose: `afterPatch` chains handlers rather
 than replacing them.
 
+**The entry's heading is an element carrying Steam's own heading class** (`quickAccessMenuClasses.Title`), with the
+plugin's name inside it, rather than the name as a string. That is a measurement and not a preference: in the running
+Quick Access document, Steam's own tabs head their panels with an element carrying that class, drawn at 22 px / weight
+700, while a bare string lands as a plain text node in the panel container at body size, 16 px / weight 400 — which is
+what the entry shipped with. Without the class map the start-up check has already refused the panel, so the heading
+stands over the start-up failure page, and it is drawn unstyled rather than not at all. The panel's content carries no
+heading of its own: Steam draws the tab's, and a second would be two.
+
 **Nothing in this path touches Decky.** Not `window.__TABS_HOOK_INSTANCE`, whose `deinit()` Decky's own constructor
 calls on whatever it finds there; and not its `add()` either — Decky's render counts its `decky`-marked entries against
 its own list length, and a foreign entry desynchronises that guard into re-pushing every tab with no convergence. The

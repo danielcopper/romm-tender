@@ -15,10 +15,22 @@
  * faked those out would be asserting against a tree it wrote itself.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { buildEntry, syncEntry, TENDER_TAB_KEY, type QuickAccessTabEntry } from "./quickAccessEntry";
 import { PanelErrorBoundary } from "./PanelErrorBoundary";
 import type { Plugin } from "../api/host";
+
+// The class map is a webpack probe, so the suite-wide `@decky/ui` stub answers
+// `undefined` for it. A getter lets one case hand the entry a map and the next
+// take it away again, which a plain value fixed at mock time could not.
+const probe = vi.hoisted(() => ({ classes: undefined as Record<string, string> | undefined }));
+vi.mock("../utils/deckyUiInternals", () => ({
+  get quickAccessMenuClasses() {
+    return probe.classes;
+  },
+}));
 
 /** An entry shaped the way the installer builds it, minus the React nodes. */
 const tenderEntry = (): QuickAccessTabEntry => ({
@@ -134,9 +146,30 @@ describe("buildEntry", () => {
     const entry = buildEntry(plugin());
 
     expect(entry.key).toBe(TENDER_TAB_KEY);
-    expect(entry.title).toBe("Tender");
     // The marker, not the key, is what a later pass recognises it by.
     expect((entry as unknown as Record<string, unknown>)[TENDER_TAB_KEY]).toBe(true);
+  });
+
+  describe("heading", () => {
+    afterEach(() => {
+      probe.classes = undefined;
+    });
+
+    it("draws the plugin's name in an element carrying Steam's own heading class", () => {
+      // A bare string lands in the panel at body size, 16 px / 400, where
+      // Steam's own tabs head theirs at 22 px / 700 through this class.
+      probe.classes = { Title: "Title_hash" };
+
+      render(buildEntry(plugin({ name: "Another Name" })).title as ReactElement);
+
+      expect(screen.getByText("Another Name")).toHaveClass("Title_hash");
+    });
+
+    it("still draws the name when the class map is missing", () => {
+      render(buildEntry(plugin()).title as ReactElement);
+
+      expect(screen.getByText("Tender")).not.toHaveAttribute("class");
+    });
   });
 
   it("draws the glyph the plugin declares rather than one of its own", () => {
