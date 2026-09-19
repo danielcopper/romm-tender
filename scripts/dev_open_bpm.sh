@@ -359,16 +359,4 @@ fi
 
 # Open Big Picture. Harmless no-op if it is already open; if Steam is not
 # running, this cold-starts it straight into BPM.
-#
-# Launch through the user's systemd manager, NOT this shell: `mise run` and the
-# project venv prepend their own PATH + set VIRTUAL_ENV, and steam-jupiter's
-# 32-bit runtime check fails in that polluted environment on a cold start
-# ("You are missing the following 32-bit libraries: libc.so.6"). systemd-run
-# --user runs steam in the pristine session environment (clean PATH, but
-# DISPLAY / WAYLAND_DISPLAY / DBUS intact) that Game Mode itself uses.
-if command -v systemd-run >/dev/null 2>&1; then
-  systemd-run --user --collect --quiet -- steam steam://open/bigpicture >/dev/null 2>&1 &
-else
-  # No systemd user manager: best-effort scrub of the venv marker and detach.
-  nohup env -u VIRTUAL_ENV steam steam://open/bigpicture >/dev/null 2>&1 &
-fi
+bash "$(dirname "$0")/dev_steam.sh" start steam://open/bigpicture

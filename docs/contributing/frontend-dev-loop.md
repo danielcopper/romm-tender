@@ -6,9 +6,15 @@ backend running beside it. Nothing is deployed anywhere and no plugin loader is 
 ## The loop
 
 ```bash
-mise run dev         # build the panel, then run the backend in the foreground
-mise run dev:bpm     # in another terminal: open windowed Big Picture, optionally on a chosen display
+mise run dev             # build the panel, then run the backend in the foreground
+mise run dev:bpm-reset   # in another terminal: restart Steam into windowed Big Picture, optionally on a chosen display
+mise run dev:restart     # ...or restart Steam into the desktop client instead
 ```
+
+Build and run, restart Steam, look. `mise run dev` takes no display and opens no window: it is not about a surface.
+Steam's desktop client and Big Picture render into one shared JS context, so the panel is loaded once for both, and
+which window you then look at is the restart's choice — `dev:bpm-reset` for Big Picture, `dev:restart` for the desktop
+client. Why a restart at all is under [Seeing a change](#seeing-a-change).
 
 `mise run dev` builds the three bundles and starts the backend. The backend serves `dist/` on a loopback port and loads
 the panel into Steam's renderer over the CEF debugger — see
@@ -33,13 +39,20 @@ Loader it names a file the injector did not load. Read it for the port and the t
 
 ## Seeing a change
 
-**There is no hot reload.** The injector loads the panel into a JS context once and knows it by a marker on the window;
-a rebuilt bundle reaches Steam when that context is rebuilt, which is what wipes the marker.
+**There is no hot reload, and the Steam restart is the loop rather than a workaround.** The injector refuses a JS
+context that already carries the panel — it knows one by [its marker](../architecture/loading-the-panel.md#the-marker) —
+so a rebuilt bundle reaches Steam only when that context is rebuilt, which is what wipes the marker. A Steam restart is
+the one way to ask for that. `TENDER_INJECT=force` does not get round it: that switch belongs to the crash watchdog, and
+the marker check does not read it.
 
 ```bash
 mise run build           # rebuild the bundles (the backend can keep running)
-mise run dev:bpm-reset   # restart Steam into a fresh renderer, on a chosen display
+mise run dev:bpm-reset   # restart Steam into windowed Big Picture, on a chosen display
+mise run dev:restart     # or: restart Steam into the desktop client
 ```
+
+Both restart tasks shut the running Steam down first, so anything open in it closes. `mise run dev:bpm` opens Big
+Picture without a restart; on a Steam that is already running it shows the panel that context already carries.
 
 The backend serves whatever is in `dist/` at the moment the panel is imported, so a frontend change needs no backend
 restart. A **backend** change does: Ctrl-C and `mise run dev` again.
@@ -291,8 +304,9 @@ the state directory, and on stderr in the terminal `mise run dev` is running in.
   log path; the reason it prints is the import's own. Its one button stops the injection for the life of this backend
   process and takes the card away — nothing is loaded again until `mise run dev` is started afresh.
 - **Big Picture reopened without the panel** — the injector loads the panel again by itself when Steam rebuilds its JS
-  context. If it did not, `mise run dev:bpm-reset` gives a renderer nobody has loaded anything into yet. It takes the
-  same optional display argument, e.g. `mise run dev:bpm-reset dp2`.
+  context. If it did not, `mise run dev:bpm-reset` gives a context nobody has loaded anything into yet. It takes the
+  same optional display argument, e.g. `mise run dev:bpm-reset dp2`; `mise run dev:restart` does the same into the
+  desktop client.
 - **Big Picture opened on the wrong monitor** — placement matches the window by its title once it appears. Check what
   the window manager actually saw with `journalctl --user -b | grep decky-bpm`: the log lists every window's caption and
   output, and whether the move fired. The window stays a normal desktop window, so you can always drag it over yourself.

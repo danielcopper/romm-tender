@@ -292,8 +292,9 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
   `deno fmt` puts blank lines around an HTML comment, which would end that block and unalign the row.
 - **Run it**: `mise run dev` (build the panel, then run the backend, which serves `dist/` and loads the panel into
   Steam). Needs `~/.steam/steam/.cef-enable-remote-debugging`. **There is no hot reload** — a rebuilt bundle reaches
-  Steam when its JS context is rebuilt; `mise run dev:bpm-reset [display]` gives a fresh one. `mise run dev:bpm` opens
-  windowed Big Picture on a display; `mise run dev:ui-scale` forces the Deck's metrics. Guide:
+  Steam when its JS context is rebuilt; `mise run dev:bpm-reset [display]` (into Big Picture) or `mise run dev:restart`
+  (into the desktop client) gives a fresh one, and both restart the running Steam. `mise run dev:bpm` opens windowed Big
+  Picture on a display; `mise run dev:ui-scale` forces the Deck's metrics. Guide:
   `docs/contributing/frontend-dev-loop.md`
 - **Tooling**: mise manages node, pnpm, python, uv; venv auto-creates at `.venv`. Python deps are pinned in two
   lock/source pairs — `requirements-dev.lock` at the root, for `backend/`, `tests/` and `scripts/`, and

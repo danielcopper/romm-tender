@@ -118,11 +118,11 @@ raw = true
 # unloads on SIGINT, and an interrupted unload leaves behind the half-finished
 # state its start-up routines exist to repair.
 #
-# This is the whole development loop now. The backend serves `dist/` over its
-# own loopback port and loads the panel into Steam through the CEF debugger, so
-# nothing is copied anywhere and no plugin loader is restarted. It needs
-# `~/.steam/steam/.cef-enable-remote-debugging` to exist and Steam to have been
-# started since that file appeared.
+# No display argument, deliberately: the backend loads the panel into Steam's
+# one JS context, which the desktop client and Big Picture share, so which
+# window shows it is the question of dev:bpm, dev:bpm-reset and dev:restart, not
+# of this task. It needs `~/.steam/steam/.cef-enable-remote-debugging` to exist
+# and Steam to have been started since that file appeared.
 run = "exec python backend/main.py"
 
 [tasks.docs]
@@ -153,58 +153,50 @@ exec python3 scripts/dev_ui_scale.py "$usage_mode"
 '''
 
 [tasks."dev:bpm"]
-description = "Open windowed Big Picture on a chosen monitor (no deploy, no watch loop)"
+description = "Open windowed Big Picture on a chosen monitor, starting Steam into it if it is not running (no restart)"
 raw = true
 usage = '''
 arg "[display]" help="Monitor for the Big Picture window: 'internal' or an output name (dp2, DP-3, ...)" default="internal"
 complete "display" run="bash scripts/dev_open_bpm.sh --list"
 '''
-# Opens BPM non-blocking (starting Steam straight into it if it isn't running)
-# and places the window on the chosen display via a short-lived KWin script —
-# the same helper dev:bpm-reset uses, without its Steam restart. Pairs with a
-# backend started by `mise run dev` in another terminal.
+# Opens BPM non-blocking and places the window on the chosen display via a
+# short-lived KWin script — the same helper dev:bpm-reset uses, without its
+# Steam restart. An already running Steam keeps its JS context, so a panel
+# rebuilt since it was loaded does not appear here; that takes dev:bpm-reset.
 run = '''
 exec bash scripts/dev_open_bpm.sh "$usage_display"
 '''
 
 [tasks."dev:bpm-reset"]
-description = "Restart Steam into windowed Big Picture (a fresh renderer the panel is loaded into again)"
+description = "Restart Steam into windowed Big Picture — a fresh JS context, so a rebuilt panel is loaded (restarts Steam)"
 raw = true
 usage = '''
 arg "[display]" help="Monitor for the Big Picture window: 'internal' or an output name (dp2, DP-3, ...)" default="internal"
 complete "display" run="bash scripts/dev_open_bpm.sh --list"
 '''
-# Fail fast on a typo'd display target before shutting Steam down.
+# Why a restart is the loop rather than a workaround: docs/contributing/frontend-dev-loop.md,
+# "Seeing a change". Beside Decky Loader it also brings back Decky's own QAM,
+# which survives only the first Big Picture entry per Steam process.
+#
+# The display target is resolved BEFORE Steam is shut down, so a typo costs an
+# error message rather than a restart.
 run = '''
 bash scripts/dev_open_bpm.sh --resolve "$usage_display" >/dev/null
-# A Steam restart is the one way to a renderer nobody has loaded anything into
-# yet, which is what makes it the way to see a freshly built panel: the backend
-# loads the panel again on its own when Steam rebuilds its JS context.
-# It is also the Decky habit this task was written for — Decky's UI survives
-# only the FIRST Big Picture entry per Steam process, and leaving BPM and
-# re-entering loses its QAM until Steam restarts.
 echo "Shutting down Steam..."
-# Run steam through the user systemd manager, not this shell: mise + the venv
-# pollute PATH/VIRTUAL_ENV, which trips steam-jupiter's 32-bit runtime check.
-# systemd-run --user gives it the pristine session environment (see
-# scripts/dev_open_bpm.sh for the full rationale).
-if command -v systemd-run >/dev/null 2>&1; then
-  systemd-run --user --collect --quiet --wait -- steam -shutdown >/dev/null 2>&1 || true
-else
-  env -u VIRTUAL_ENV steam -shutdown >/dev/null 2>&1 || true
-fi
-# Wait for the running instance to actually exit (up to ~30 s) — reopening too
-# early just talks to the dying process.
-for _ in $(seq 1 30); do
-  if ! pgrep -x steam >/dev/null; then break; fi
-  sleep 1
-done
-if pgrep -x steam >/dev/null; then
-  echo "Steam is still running after 30 s — close it manually, then re-run this task." >&2
-  exit 1
-fi
+bash scripts/dev_steam.sh stop
 echo "Reopening Big Picture..."
-# The helper opens BPM non-blocking and places the window on the chosen
-# display (default: internal panel) via a short-lived KWin script.
 bash scripts/dev_open_bpm.sh "$usage_display"
+'''
+
+[tasks."dev:restart"]
+description = "Restart Steam into the desktop client — a fresh JS context, so a rebuilt panel is loaded (restarts Steam)"
+raw = true
+# The same restart as dev:bpm-reset, without choosing a window: the desktop
+# client and Big Picture share one JS context, so either restart gives the
+# panel a fresh one.
+run = '''
+echo "Shutting down Steam..."
+bash scripts/dev_steam.sh stop
+echo "Starting Steam..."
+bash scripts/dev_steam.sh start
 '''
