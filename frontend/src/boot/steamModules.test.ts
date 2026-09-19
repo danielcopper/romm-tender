@@ -436,8 +436,8 @@ describe("what a miss costs the panel", () => {
     deckyUiExport: true,
     absenceCost: "diagnostic",
   });
-  // The fourth cost, in the shape both real entries have: not a `@decky/ui`
-  // export, like two of the three real ones.
+  // The fourth cost, not a `@decky/ui` export — like two of the three real
+  // entries.
   const feature = (name: string, present: boolean): SteamLookup => ({
     name,
     found: () => present,
@@ -545,7 +545,7 @@ describe("what a miss costs the panel", () => {
     // every name asked of it and its search still came back empty, and a probe
     // Tender runs itself missed beside it. The line used to call that unsettled.
     expect(sentence).toContain(
-      "so both went stale: a probe of Tender's own missed, and so did a search Decky's copy ran",
+      "so both went stale: a lookup of Tender's own missed, and so did a search Decky's copy ran",
     );
     expect(sentence).toContain("Bringing both Tender and Decky Loader to their current versions is the repair.");
     expect(sentence).not.toContain("ran them, not Tender's own");

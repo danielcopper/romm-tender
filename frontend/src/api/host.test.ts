@@ -56,7 +56,7 @@ describe("the toaster", () => {
     // nothing — and the body is in it, because a line that says only "a toast
     // happened" is worth nothing to whoever reads it.
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("Downloaded Chrono Trigger"));
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("no toast drawing Tender can use"));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("what Tender raises toasts through is missing"));
   });
 
   it("reaches no loader API even where one exists", () => {

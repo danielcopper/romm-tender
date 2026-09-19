@@ -817,16 +817,16 @@ Format: **invariant** — tier — enforced by.
   resolves for itself, swept from the source in the two shapes one is written in (a `find(?:Module|ClassModule)\w*`
   call, and a direct cast of `window` whose exported name equals the property read) — so the three `SP_*` globals, which
   the frontend cannot attribute to a program from inside the page, fail there the moment one is made non-blocking,
-  instead of shipping a repair aimed at whichever program did not install them. **`feature` is the one cost with a
-  second reader**, and that half is prompt-only: `describeSurvivedMiss` adds a sentence stating the loss and naming NO
-  repair of its own, because the verdict sentence beside it names one that is right under every answer — `ErrorBoundary`
-  is a `@decky/ui` export, so a miss of it alone in the coexistence bundle is `decky`, whose repair is the other
-  program. Main's notice is NOT a reader of this field: `notificationsMissing` reads the NAMES off
-  `NOTIFICATION_LOOKUPS`, so a `feature` entry added for something else cannot make the panel claim the notifications
-  are what went missing, and a second spelling of any of the three cannot leave the notice answering for a lookup nobody
-  asked about. Both directions fail quietly: call a real dependency cosmetic and the panel mounts and renders a hole,
-  which is the fault the whole check exists to tell apart from a backend that is not running; call a decoration blocking
-  and one missing glyph costs the user their entire interface, which is what this entry removed
+  instead of shipping a repair aimed at whichever program did not install them. **`feature`'s one reader is
+  prompt-only**: `describeSurvivedMiss` adds a sentence stating the loss and naming NO repair of its own, because the
+  verdict sentence beside it names one that is right under every answer — `ErrorBoundary` is a `@decky/ui` export, so a
+  miss of it alone in the coexistence bundle is `decky`, whose repair is the other program. Main's notice is NOT a
+  second reader of this field: `notificationsMissing` reads the NAMES off `NOTIFICATION_LOOKUPS`, so a `feature` entry
+  added for something else cannot make the panel claim the notifications are what went missing, and a second spelling of
+  any of the three cannot leave the notice answering for a lookup nobody asked about. Both directions fail quietly: call
+  a real dependency cosmetic and the panel mounts and renders a hole, which is the fault the whole check exists to tell
+  apart from a backend that is not running; call a decoration blocking and one missing glyph costs the user their entire
+  interface, which is what this entry removed
 - **The start-up failure page names the copy of `@decky/ui` that actually ran the search that missed, and the repair
   that follows from it** — check + test + prompt-only — the artefact's stamp is checked
   (`frontend/scripts/check-bundle-shape.mjs`, per bundle and on `globals.js`, which must carry none), and the sentence

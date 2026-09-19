@@ -701,7 +701,7 @@ function describeSurvivedSearches(report: StartupReport, copy: SearchingCopy): s
     case "mixed":
       return (
         `Tender ran some of them itself and ${decky}'s copy of @decky/ui the rest, so both went ` +
-        "stale: a probe of Tender's own missed, and so did a search Decky's copy ran. Bringing " +
+        "stale: a lookup of Tender's own missed, and so did a search Decky's copy ran. Bringing " +
         "both Tender and Decky Loader to their current versions is the repair."
       );
     case "decky":

@@ -153,9 +153,9 @@ export function createSteamToaster(seams: SteamToasterSeams): SteamToaster {
       if (!Object.prototype.hasOwnProperty.call(prototype, "render")) installTrampoline(renderer);
       const previous = prototype.render;
       if (typeof previous !== "function") return false;
-      // The link we are replacing is left in the chain by whatever overwrote it
-      // and would go on drawing from there, so it is retired before the new one
-      // goes on top.
+      // Whatever overwrote the link we are replacing may still delegate through
+      // it, and it would go on drawing from there — so it is retired before the
+      // new one goes on top.
       drawing?.retire();
       drawing = link(previous, Boundary);
       prototype.render = drawing.render;
@@ -168,7 +168,9 @@ export function createSteamToaster(seams: SteamToasterSeams): SteamToaster {
 
   const toast = (data: ToastData): ToastNotification => {
     if (store === undefined || !ensureDrawing()) {
-      log(`[Tender] toast not shown — Steam has no toast drawing Tender can use: ${describeToast(data)}`);
+      log(
+        `[Tender] toast not shown — what Tender raises toasts through is missing in this Steam: ${describeToast(data)}`,
+      );
       return { data, dismiss: () => {} };
     }
 

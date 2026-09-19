@@ -267,7 +267,7 @@ describe("a Steam that answers for something a toast is raised through", () => {
     const log = vi.fn();
     createSteamToaster(seams({ renderer: undefined, store, log })).toast(TOAST);
     expect(store.pushed).toEqual([]);
-    expect(log).toHaveBeenCalledWith(expect.stringContaining("no toast drawing Tender can use"));
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("what Tender raises toasts through is missing"));
   });
 
   it("pushes nothing when the error boundary is missing, so a throw of ours cannot reach Steam's tree", () => {
@@ -275,7 +275,7 @@ describe("a Steam that answers for something a toast is raised through", () => {
     const log = vi.fn();
     createSteamToaster(seams({ errorBoundary: undefined, store, log })).toast(TOAST);
     expect(store.pushed).toEqual([]);
-    expect(log).toHaveBeenCalledWith(expect.stringContaining("no toast drawing Tender can use"));
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("what Tender raises toasts through is missing"));
   });
 
   it("pushes nothing when the trampoline refuses to install", () => {
@@ -380,9 +380,9 @@ describe("the renderer's render chain", () => {
   });
 
   it("stops the link it replaces from drawing, so only one of ours is ever live", () => {
-    // The replaced link is still in the chain — whatever overwrote it delegates
-    // through it — so without retiring it a teardown that restores nothing
-    // would leave it drawing from underneath.
+    // Whatever overwrote the replaced link may still delegate through it, as
+    // the second patcher below does — so without retiring it a teardown that
+    // restores nothing would leave it drawing from underneath.
     const renderer = fakeRenderer();
     const store = fakeStore();
     const toaster = createSteamToaster(seams({ renderer, store }));
