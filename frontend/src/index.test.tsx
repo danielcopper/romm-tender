@@ -62,7 +62,6 @@ const everythingResolved = (): StartupReport => ({
   panelMayMount: true,
   missing: [],
   missingPackageNames: [],
-  missingFeatures: [],
   checked: 27,
 });
 let startupAnswer: StartupReport = everythingResolved();
@@ -232,7 +231,6 @@ describe("index.tsx — what the factory does when a Steam search found nothing"
     panelMayMount: false,
     missing: ["Focusable", "PanelSection"],
     missingPackageNames: ["Focusable", "PanelSection"],
-    missingFeatures: [],
     checked: 27,
   };
   // The refusal is logged on purpose, and the suite fails a test that emits an
@@ -294,7 +292,6 @@ describe("index.tsx — what the factory does when only a decoration was not fou
     panelMayMount: true,
     missing: ["ControllerGlyph"],
     missingPackageNames: [],
-    missingFeatures: [],
     checked: 27,
   };
   let consoleWarn: ReturnType<typeof vi.spyOn>;
@@ -346,7 +343,6 @@ describe("index.tsx — what the factory records about the toasts", () => {
       panelMayMount: true,
       missing: ["ToastRenderer"],
       missingPackageNames: [],
-      missingFeatures: ["ToastRenderer"],
       checked: 27,
     };
     const plugin = pluginFactory();

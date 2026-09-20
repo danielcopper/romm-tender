@@ -139,13 +139,13 @@ the class name would go, so nothing a user can see changes at all. `ToastRendere
 `ErrorBoundary` cost a feature: without any one of them no toast appears at all, and every page, every sync and every
 download is untouched — the result a toast would have announced is on the page it belongs to.
 
-**Two of the four costs are read by something and two are not.** `checkSteamModules`'s `!== "panel"` decides whether the
-panel mounts, and `feature` is what adds a sentence to the log line below. The notice on Main reads the lookup NAMES
-instead (`notificationsMissing`, over `NOTIFICATION_LOOKUPS`), so a future `feature` entry for something else cannot
-make the panel claim the notifications are what went missing. `appearance` and `diagnostic` are told apart by nothing in
-the program, so those two record why a name was moved off blocking rather than deciding anything. They stay apart
-because they answer different questions: a decoration whose absence a reader can see is not a name whose absence nothing
-renders at all.
+**Only one of the four costs is read by anything.** `checkSteamModules`'s `!== "panel"` decides whether the panel
+mounts; `feature`, `appearance` and `diagnostic` are told apart by nothing in the program, so all three record why a
+name is off blocking rather than deciding anything. They stay apart because they answer different questions: a whole
+function the reader loses is not a decoration whose absence they can see, and neither is a name whose absence nothing
+renders at all. Both the notice on Main and the extra log sentence below read the lookup NAMES instead
+(`notificationsMissing`, over `NOTIFICATION_LOOKUPS`), so a future `feature` entry for something else cannot make either
+claim the notifications are what went missing.
 
 When nothing that missed was needed to render the panel it mounts normally, and **the log line is then the only thing
 that reports it at all**: `describeSurvivedMiss` says how many searches missed, that none of them is needed to render
@@ -153,8 +153,8 @@ the panel, and then answers the same question the fallback page answers — whos
 name "a newer Tender" unconditionally, which was sound only while nothing that could reach it was a name the package
 exports; `playSectionClasses` is one, and in the coexistence bundle the search behind it is Decky's.
 
-A `feature`-cost miss adds one more sentence ahead of that verdict, because what is gone there is a whole function
-rather than a decoration: today, the toasts. It states the loss and names **no repair of its own** — the verdict
+A miss of something a toast is raised through adds one more sentence ahead of that verdict, because what is gone there
+is a whole function rather than a decoration. It states the loss and names **no repair of its own** — the verdict
 sentence right after it does, and that one is right under every answer. It has to be: `ErrorBoundary` is a `@decky/ui`
 export, so a miss of it alone in the coexistence bundle is Decky's copy's search and the repair named beside it is a
 newer Decky Loader.

@@ -376,7 +376,6 @@ describe("what the start-up check reports", () => {
       panelMayMount: true,
       missing: [],
       missingPackageNames: [],
-      missingFeatures: [],
       checked: 2,
     });
     expect(describeFailure(report, ours)).toBe("");
@@ -602,7 +601,6 @@ describe("what a miss costs the panel", () => {
     // that reports the loss.
     const report = checkSteamModules([blocking("Focusable", true), feature("ToastRenderer", false)]);
     expect(report.panelMayMount).toBe(true);
-    expect(report.missingFeatures).toEqual(["ToastRenderer"]);
     expect(describeFailure(report, ours)).toBe("");
     const sentence = describeSurvivedMiss(report, ours);
     expect(sentence).toContain("Nothing that missed is needed to render the panel");
@@ -610,12 +608,20 @@ describe("what a miss costs the panel", () => {
     expect(sentence).toContain("Tender looks these up itself, so a newer Tender is the repair.");
   });
 
-  it("names no repair of its own for the lost feature, under every verdict", () => {
-    // The sentence is general over the cost, and one of the three entries
-    // behind it IS a `@decky/ui` export — so a miss of that one in the
-    // coexistence bundle is Decky's search, and a sentence saying "until Tender
-    // is updated" would sit beside "a newer Decky Loader is the repair". It
-    // states the loss and leaves the repair to the verdict.
+  it("says nothing about the notifications over a feature that is not one of theirs", () => {
+    // The mirror of Main's own rule: the sentence reads the names, so a
+    // `feature` entry added for something else does not put it in the log.
+    const report = checkSteamModules([blocking("Focusable", true), feature("SomeOtherFeature", false)]);
+    expect(report.panelMayMount).toBe(true);
+    expect(describeSurvivedMiss(report, ours)).not.toContain("notifications are off");
+  });
+
+  it("names no repair of its own for the lost notifications, under every verdict", () => {
+    // One of the three lookups behind the sentence IS a `@decky/ui` export — so
+    // a miss of that one in the coexistence bundle is Decky's search, and a
+    // sentence saying "until Tender is updated" would sit beside "a newer Decky
+    // Loader is the repair". It states the loss and leaves the repair to the
+    // verdict.
     const fixtures: Record<SearchOwner, () => { report: StartupReport; copy: SearchingCopy }> = {
       none: () => {
         const report = checkSteamModules([blocking("Focusable", true), feature("NotificationStore", false)]);
@@ -660,19 +666,17 @@ describe("what a miss costs the panel", () => {
     expect(describeSurvivedMiss(report, copy)).not.toContain("newer Tender");
   });
 
-  it("leaves that sentence out when nothing costing a feature missed", () => {
+  it("leaves that sentence out when nothing a toast is raised through missed", () => {
     // Without this the sentence could be unconditional and every test above
     // would still pass, telling a reader their notifications are off over a
     // missing glyph.
     const report = checkSteamModules([blocking("Focusable", true), cosmetic("ControllerGlyph", false)]);
-    expect(report.missingFeatures).toEqual([]);
     expect(describeSurvivedMiss(report, ours)).not.toContain("notifications are off");
   });
 
   it("keeps the panel off when a feature search missed beside a blocking one", () => {
     const report = checkSteamModules([blocking("Focusable", false), feature("ToastRenderer", false)]);
     expect(report.panelMayMount).toBe(false);
-    expect(report.missingFeatures).toEqual(["ToastRenderer"]);
     // The fallback page is doing the reporting; the log's mounted line must not
     // appear beside it claiming Tender has started.
     expect(describeSurvivedMiss(report, ours)).toBe("");
@@ -690,7 +694,6 @@ describe("what a miss costs the panel", () => {
     // It reads the names rather than the cost, so a `feature` entry added for
     // something else cannot put this notice on Main.
     const other = checkSteamModules([blocking("Focusable", true), feature("SomeOtherFeature", false)]);
-    expect(other.missingFeatures).toEqual(["SomeOtherFeature"]);
     expect(notificationsMissing(other)).toBe(false);
   });
 

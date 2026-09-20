@@ -25,7 +25,6 @@ const report = (missing: string[], missingPackageNames = missing, checked = STEA
   panelMayMount: false,
   missing,
   missingPackageNames,
-  missingFeatures: [],
   checked,
 });
 

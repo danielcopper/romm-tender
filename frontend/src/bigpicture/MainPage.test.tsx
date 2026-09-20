@@ -3168,7 +3168,7 @@ describe("MainPage", () => {
       await flushAsync();
       expect(await findByText(NOTIFICATIONS_UNAVAILABLE_NOTICE.title)).toBeInTheDocument();
       expect(await findByText(/Syncs and downloads still work/)).toBeInTheDocument();
-      expect(await findByText(/Updating Tender should fix it/)).toBeInTheDocument();
+      expect(await findByText(/An update should fix it/)).toBeInTheDocument();
     });
 
     it("says nothing at all when every lookup behind a toast answered", async () => {
@@ -3176,7 +3176,7 @@ describe("MainPage", () => {
       const { queryByText } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
       expect(queryByText(NOTIFICATIONS_UNAVAILABLE_NOTICE.title)).toBeNull();
-      expect(queryByText(/Updating Tender should fix it/)).toBeNull();
+      expect(queryByText(/An update should fix it/)).toBeNull();
     });
   });
 

@@ -104,23 +104,19 @@ import type { SearchingCopy } from "./searchingCopy";
  *
  * Moving a name off `panel` is what needs evidence, one name at a time: its
  * every consumer, read, and found either to cope with the absence or to be a
- * diagnostic. **Only two of the four are read by anything**:
- * `checkSteamModules`'s `!== "panel"` decides whether the panel mounts, and
- * `feature` is what puts {@link describeSurvivedMiss}'s extra sentence in the
- * log. Main's notice reads NAMES rather than this field
- * ({@link notificationsMissing}). `appearance` and `diagnostic` are told apart by
- * nothing in the program, so what those two record is WHY a name was moved off
- * blocking rather than an answer anything consults. They are kept apart because
+ * diagnostic. **`checkSteamModules`'s `!== "panel"` is the only reading of this
+ * field there is**, so the other three are told apart by nothing in the
+ * program: what they record is WHY a name is off blocking, never an answer
+ * anything consults — the notice on Main and the log's own extra sentence both
+ * read NAMES instead ({@link notificationsMissing}). They are kept apart because
  * they are different questions, and a name that answered the wrong one would be
  * hard to catch later: a decoration whose absence a reader can see is not a
- * name whose absence nothing renders at all. None of the last three keeps the
- * panel off the air, which is what the check asks separately
+ * name whose absence nothing renders at all. None of the three keeps the panel
+ * off the air, which is what the check asks separately
  * ({@link StartupReport.panelMayMount}).
  *
- * Nothing derives this. The type is the mechanism — the field is required, so a
- * new entry does not compile until somebody answers — and what
- * `steamModules.test.ts` holds is not the set but the property the log sentence
- * rests on ({@link describeSurvivedMiss}).
+ * Nothing derives this. The type is the mechanism: the field is required, so a
+ * new entry does not compile until somebody answers.
  */
 export type AbsenceCost = "panel" | "feature" | "appearance" | "diagnostic";
 
@@ -419,15 +415,6 @@ export interface StartupReport {
    * belongs to.
    */
   readonly missingPackageNames: readonly string[];
-  /**
-   * The subset of {@link missing} whose absence costs a feature rather than the
-   * panel — see {@link AbsenceCost}.
-   *
-   * It is what puts {@link describeSurvivedMiss}'s extra sentence in the log:
-   * the panel mounts and looks entirely well, so without that line nothing at
-   * all records that something the reader would have had is gone.
-   */
-  readonly missingFeatures: readonly string[];
   /** How many searches were asked. */
   readonly checked: number;
 }
@@ -440,18 +427,18 @@ export function checkSteamModules(lookups: readonly SteamLookup[] = STEAM_LOOKUP
     panelMayMount: missed.every((lookup) => lookup.absenceCost !== "panel"),
     missing: missed.map((lookup) => lookup.name),
     missingPackageNames: missed.filter((lookup) => lookup.deckyUiExport).map((lookup) => lookup.name),
-    missingFeatures: missed.filter((lookup) => lookup.absenceCost === "feature").map((lookup) => lookup.name),
     checked: lookups.length,
   };
 }
 
 /**
- * Did any search a toast is raised through come back empty?
+ * Did any lookup a toast is raised through come back empty?
  *
- * Asked of the report rather than of the machine, so the notice on Main says
- * exactly what the start-up check found — one reading, taken once. It reads the
- * NAMES rather than the `feature` cost, so a future entry at that cost does not
- * quietly claim the notifications are what went missing.
+ * Asked of the report rather than of the machine, so the notice on Main and the
+ * log line say exactly what the start-up check found — one reading, taken once.
+ * Both read these NAMES rather than the `feature` cost, so an entry added at
+ * that cost for something else cannot claim the notifications are what went
+ * missing.
  */
 export function notificationsMissing(report: StartupReport): boolean {
   const names: readonly string[] = Object.values(NOTIFICATION_LOOKUPS);
@@ -646,12 +633,12 @@ export function sentenceAsksForAReport(report: StartupReport, copy: SearchingCop
  * whoever is asked why a button lost its glyph, or why a debug dump prints
  * `UNDEFINED` where a class name belongs.
  *
- * A `feature`-cost miss adds a sentence of its own ahead of the verdict,
- * because what is gone there is a whole function rather than a decoration. It
- * names no repair — the verdict sentence right after it does, and that one is
- * right under every answer, including the ones that name Decky Loader. Main
- * carries the same fact as a notice ({@link notificationsMissing}), which is
- * what a user sees; this is what a log reader sees.
+ * A miss of something a toast is raised through ({@link notificationsMissing})
+ * adds a sentence of its own ahead of the verdict, because what is gone there
+ * is a whole function rather than a decoration. It names no repair — the
+ * verdict sentence right after it does, and that one is right under every
+ * answer, including the ones that name Decky Loader. Main carries the same fact
+ * as a notice, which is what a user sees; this is what a log reader sees.
  *
  * It answers the same question the page answers — {@link searchOwner}'s, read
  * from the same verdict — rather than naming a repair of its own. It used to
@@ -675,7 +662,7 @@ export function sentenceAsksForAReport(report: StartupReport, copy: SearchingCop
  */
 export function describeSurvivedMiss(report: StartupReport, copy: SearchingCopy): string {
   if (report.everySearchAnswered || !report.panelMayMount) return "";
-  const featureLost = report.missingFeatures.length === 0 ? "" : "Tender's notifications are off. ";
+  const featureLost = notificationsMissing(report) ? "Tender's notifications are off. " : "";
   return (
     `${report.missing.length} of ${report.checked} searches into Steam's interface found nothing. ` +
     "Nothing that missed is needed to render the panel, so Tender has started. " +

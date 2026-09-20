@@ -583,7 +583,7 @@ plugin stays a card without a jump, with Dismiss where the condition has a sensi
 | Settings were reset                         | text, backup path, Dismiss          | none — the card is the whole of it                    |
 | Cross-device playtime needs a fresh sign-in | text, **Open Connections**, Dismiss | Settings › Connections, where the accounts are        |
 | RetroDECK paths missing or unreadable       | warning card, no action             | none — the fix is outside the plugin                  |
-| Steam answers for no notifications          | warning card, no action             | none — the fix is a newer Tender                      |
+| Steam answers for no notifications          | warning card, no action             | none — the fix is outside the plugin                  |
 | RetroArch `input_driver` is wrong           | text, **Open Controller**           | Settings › Controller, which holds the Fix button     |
 | Save-file sorting changed                   | text, **Open Save Sync**            | Settings › Save Sync, which holds Migrate and Dismiss |
 | Sync paused on the session budget           | text, **Open Sync**                 | Sync, which holds Restart Steam now and Resume        |

@@ -31,5 +31,5 @@ export const NOTIFICATIONS_UNAVAILABLE_NOTICE = {
   title: "Tender's notifications unavailable",
   message:
     "Steam has changed, and Tender can't show its notifications right now. Syncs and downloads still work — check " +
-    "this panel for their results. Updating Tender should fix it.",
+    "this panel for their results. An update should fix it.",
 } as const;
