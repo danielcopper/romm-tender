@@ -13,6 +13,16 @@
 #       A Steam that is not running is started; one still running ~30 s after
 #       the shutdown request fails the restart (exit 1).
 #
+#   dev_steam.sh restart-remembered [display]
+#       Restart into the remembered window, on <display> — which is remembered
+#       in its place. An empty or absent <display> is `restart` with no
+#       arguments: the remembered display stands and nothing is written.
+#       A window NAMED on the command line states an intent, so leaving its
+#       display out is part of that intent and is remembered as "placed
+#       nowhere". This verb repeats an intent instead, so leaving the display
+#       out means "as before" — otherwise a caller whose only business is the
+#       window would throw the chosen display away.
+#
 # Both the shutdown and the start launch steam through the user's systemd
 # manager, NOT this shell: `mise run` and the project venv prepend their own PATH
 # and set VIRTUAL_ENV, and steam-jupiter's 32-bit runtime check fails in that
@@ -145,13 +155,34 @@ restart_steam() {
   fi
 }
 
+restart_remembered() {
+  local given="${1:-}"
+  if [ -z "$given" ]; then
+    restart_steam
+    return
+  fi
+  # `recall` leaves WINDOW standing for the desktop client when it finds
+  # nothing, which is the same window a bare restart would open.
+  if recall; then
+    echo "Remembered: $WINDOW ($MEMORY_FILE) — on $given."
+  else
+    echo "Nothing remembered ($MEMORY_FILE) — the desktop client, on $given."
+  fi
+  restart_steam "$WINDOW" "$given"
+}
+
 case "${1:-}" in
   restart)
     shift
     restart_steam "$@"
     ;;
+  restart-remembered)
+    shift
+    restart_remembered "$@"
+    ;;
   *)
     echo "usage: dev_steam.sh restart [bpm|desktop [display]]" >&2
+    echo "       dev_steam.sh restart-remembered [display]" >&2
     exit 2
     ;;
 esac

@@ -10,6 +10,8 @@ involved.
 mise run dev                           # build, restart Steam into the remembered window, run the backend
 mise run dev:bpm [display]             # the same into windowed Big Picture on <display>, and remember that
 mise run dev:desktop [display]         # the same into the desktop client on <display>, and remember that
+mise run dev:backend                   # build and run the backend against the Steam already running
+mise run dev:frontend [display]        # build and restart Steam; the running backend loads the panel
 mise run dev:bpm-reset [display]       # second terminal, wrong display: only the restart, into Big Picture
 mise run dev:desktop-reset [display]   # ...or into the desktop client
 ```
@@ -24,10 +26,36 @@ The two resets are for a window on the wrong display. They restart Steam into th
 nothing else — no build, and no backend of their own: a backend still running from `dev` in the first terminal loads the
 panel into the fresh Steam by itself. They remember their choice too, so the next `dev` does not put it back wrong.
 
-The display argument is optional, and with none given the window is placed nowhere — see
-[Choosing the display](#choosing-the-display). Every one of these tasks shuts the running Steam down first, so anything
-open in it closes; a Steam that is not running is simply started. A build that fails, or a display that matches nothing,
-stops the task before Steam is touched.
+`dev:backend` and `dev:frontend` are `dev` split in two, for when only one of its halves is what you want. `dev:backend`
+builds and runs the backend against the Steam that is already there and restarts nothing — the task to reach for after a
+reset, or beside a Steam that is up and carrying no panel. `dev:frontend` is the mirror: it builds and restarts Steam,
+and leaves the backend you already have running alone, so the rebuilt panel reaches a fresh context without a sync in
+flight being killed to get it there.
+
+`dev:backend` is the wrong task beside a panel that is already loaded: the injector refuses a context that carries its
+marker, so nothing is loaded, and the panel already in that context cannot reach the new backend either, because every
+backend process mints its own admission token. Those are the same two facts that make the other tasks restart Steam —
+and what makes `dev:frontend` worth having, because the restart is exactly what they call for.
+
+The display argument is optional, and leaving it out means one thing on a task that names a window and another on
+`dev:frontend`, which repeats one — see [Choosing the display](#choosing-the-display). Every one of these tasks but
+`dev:backend` shuts the running Steam down first, so anything open in it closes; a Steam that is not running is simply
+started. A build that fails, or a display that matches nothing, stops the task before Steam is touched.
+
+**The five tasks that build first ask who holds the single-instance lock** — `backend.lock`, beside the database — and
+refuse before Steam is touched when the answer is the wrong one. Which answer that is depends on what the task is for,
+so the question has two directions:
+
+- `dev`, `dev:bpm`, `dev:desktop` and `dev:backend` start a backend, so they refuse when one **already holds** the lock,
+  naming the lock file and the process that has it. Stop that backend, or use a `-reset` task, which starts none.
+  Without the question the restart goes ahead regardless and the second backend exits a line later, leaving a freshly
+  started Steam with no panel in it and one line of stderr to say why.
+- `dev:frontend` starts none, so it refuses when **nobody holds** it: a restart with no backend behind it gives a fresh
+  Steam that nothing loads a panel into. The message names `dev:backend` and `dev`, the two that start one.
+
+The two resets ask nothing at all, deliberately: they build nothing and start nothing, so they remain the way out of
+either refusal. And the reading is a moment's answer rather than a guarantee — a backend started in another terminal a
+second later is not stopped by it, and a lock that cannot be read at all is reported as such and the task carries on.
 
 The backend serves `dist/` on a loopback port and loads the panel into Steam's renderer over the CEF debugger — see
 [How the panel gets into Steam](../architecture/loading-the-panel.md). Ctrl-C stops it and lets it unload. It needs
@@ -49,7 +77,7 @@ Loader it names a file the injector did not load. Read it for the port and the t
     anyway, because `dist/globals.js` has not run. Let the backend load the panel; it picks the pair that is safe for
     the machine it is on.
 
-## Why every task restarts Steam
+## Why the loop restarts Steam
 
 **There is no hot reload, and no deploy smaller than the whole.** Three facts make it so:
 
@@ -84,10 +112,11 @@ display=dp2
 
 `window` is `bpm` or `desktop`; `display` is any [display target](#choosing-the-display), or empty when the task that
 wrote it named no display — which means the window is placed nowhere. Every `dev:bpm*` and `dev:desktop*` task writes
-it; `dev` only reads it, and with no file it opens the desktop client and places it nowhere. It lives outside the
-repository because the display you dock to belongs to the machine, and a file in the tree would start every new worktree
-with an empty memory. Edit or delete it by hand as you like. A remembered display that is no longer connected stops
-`dev` before Steam is touched, and the message names the tasks that choose another.
+it, and `dev:frontend` writes the display when it is given one. `dev` only reads it, and with no file it opens the
+desktop client and places it nowhere. It lives outside the repository because the display you dock to belongs to the
+machine, and a file in the tree would start every new worktree with an empty memory. Edit or delete it by hand as you
+like. A remembered display that is no longer connected stops `dev` before Steam is touched, and the message names the
+tasks that choose another.
 
 ## Why the windowed Big Picture
 
@@ -100,18 +129,23 @@ space**: by default the windowed BPM gives the QAM panel far more height than th
 
 ### Choosing the display
 
-The optional display argument of the four `dev:bpm*` and `dev:desktop*` tasks is matched against the **real outputs** of
-the machine — output naming varies between Decks and docks (external outputs may be `DP-2`/`DP-3` rather than
-`DP-1`/`DP-2`), so nothing is hardcoded. List the selectable targets with `scripts/dev_place_window.sh --list`: it
-prints a lowercase short form per connected **and enabled** output (e.g. `edp1`, `dp2`, `dp3`), plus the `internal`
-alias while the built-in panel is enabled. Disabled outputs are neither listed nor resolvable — KWin can't place a
-window on them. The raw `kscreen-doctor -o` names (e.g. `DP-2`) are accepted as well — matching is case- and
-dash-insensitive, so `dp2`, `DP2` and `DP-2` all mean `DP-2`. `internal` resolves to the built-in panel (`eDP-*`); a
-target that matches no enabled output is a hard error before Steam is shut down. **Omit the argument and nothing is
-placed**: no target is resolved, no placement is armed, and the window opens wherever Steam and the window manager put
-it — and that is what the task remembers, so the next `dev` places nothing either. Asking for `internal` explicitly on a
-docked Deck whose internal panel is disabled or disconnected prints a warning and likewise leaves the window where the
-window manager puts it.
+The optional display argument of the four `dev:bpm*` and `dev:desktop*` tasks and of `dev:frontend` is matched against
+the **real outputs** of the machine — output naming varies between Decks and docks (external outputs may be
+`DP-2`/`DP-3` rather than `DP-1`/`DP-2`), so nothing is hardcoded. List the selectable targets with
+`scripts/dev_place_window.sh --list`: it prints a lowercase short form per connected **and enabled** output (e.g.
+`edp1`, `dp2`, `dp3`), plus the `internal` alias while the built-in panel is enabled. Disabled outputs are neither
+listed nor resolvable — KWin can't place a window on them. The raw `kscreen-doctor -o` names (e.g. `DP-2`) are accepted
+as well — matching is case- and dash-insensitive, so `dp2`, `DP2` and `DP-2` all mean `DP-2`. `internal` resolves to the
+built-in panel (`eDP-*`); a target that matches no enabled output is a hard error before Steam is shut down. Asking for
+`internal` explicitly on a docked Deck whose internal panel is disabled or disconnected prints a warning and leaves the
+window where the window manager puts it.
+
+**What omitting the argument means differs between the two kinds of task, and the difference is deliberate.** On
+`dev:bpm` and `dev:desktop` you are STATING an intent, so leaving the display out is part of it: **nothing is placed** —
+no target is resolved, no placement is armed, the window opens wherever Steam and the window manager put it, and that is
+what the task remembers, so the next `dev` places nothing either. `dev:frontend` REPEATS the last intent instead, so
+leaving the display out means "as before": the remembered display stands and nothing is written. A task whose whole job
+is to get a rebuilt panel in front of you would otherwise throw away the display you had chosen.
 
 Placement itself is done by a short-lived KWin script loaded over DBus (`scripts/dev_place_window.sh`), which moves the
 chosen window to the target output and unloads itself again — if KWin scripting is unavailable, the loop still works and
@@ -344,7 +378,8 @@ the state directory, and on stderr in the terminal `mise run dev` is running in.
   process and takes the card away — nothing is loaded again until `mise run dev` is started afresh.
 - **Steam came back without the panel** — the injector loads the panel again by itself when Steam rebuilds its JS
   context. If it did not, `mise run dev:bpm-reset` or `mise run dev:desktop-reset` gives a context nobody has loaded
-  anything into yet, and the backend still running from `dev` loads it.
+  anything into yet, and the backend still running from `dev` loads it. With no backend left running,
+  `mise run dev:backend` puts one against that Steam without restarting it a second time.
 - **A window opened on the wrong monitor** — run the reset for that window with the right display, e.g.
   `mise run dev:bpm-reset dp2`; it remembers the display, so the next `dev` uses it too. Placement picks the window out
   by caption and fullscreen state, among those already open and those that appear afterwards; check what the window
