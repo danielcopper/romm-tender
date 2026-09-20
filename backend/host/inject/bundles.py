@@ -58,6 +58,19 @@ class BundleChoice:
     because: str
     ready_when: str
 
+    @property
+    def globals_at(self) -> int | None:
+        """Where in :attr:`files` the bundle that installs the globals sits.
+
+        The bootstrap calls that bundle's installer after importing it and
+        before importing the panel, so WHICH of the files it is is answered
+        where the files are chosen rather than counted out by the evaluated
+        source — which would be reading "the first of two" off an order it does
+        not own. ``None`` where the choice carries no such bundle, and then
+        nothing is installed at all.
+        """
+        return self.files.index(GLOBALS_BUNDLE) if GLOBALS_BUNDLE in self.files else None
+
 
 def choose_bundles(*, decky_is_serving: bool) -> BundleChoice:
     """Pick the bundles to load, given whether Decky Loader is serving."""

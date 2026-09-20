@@ -11,15 +11,15 @@ them is chosen, and what happens when that goes wrong.
 
 From the debugger port answering to the panel being there:
 
-| Step               | What it is                                                                                                   |
-| ------------------ | ------------------------------------------------------------------------------------------------------------ |
-| List the targets   | `GET /json` on `127.0.0.1:8080`, retried until Steam has named its renderer                                  |
-| Attach             | one WebSocket to the `SharedJSContext` target's `webSocketDebuggerUrl`                                       |
-| `Page.enable`      | so `Page.domContentEventFired` arrives; subscribed to before it is enabled, so none is missed                |
-| Ask for the marker | `typeof window["__tender_panel__"] !== "undefined"` — a context that already carries the panel is left alone |
-| Wait until ready   | Steam's module registry, and beside Decky its copy of `@decky/ui` as well                                    |
-| Evaluate           | one expression that claims the marker and imports the chosen bundles in order                                |
-| Ask again, later   | is Steam's interface still there? — see [the crash watchdog](#the-crash-watchdog)                            |
+| Step               | What it is                                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| List the targets   | `GET /json` on `127.0.0.1:8080`, retried until Steam has named its renderer                                              |
+| Attach             | one WebSocket to the `SharedJSContext` target's `webSocketDebuggerUrl`                                                   |
+| `Page.enable`      | so `Page.domContentEventFired` arrives; subscribed to before it is enabled, so none is missed                            |
+| Ask for the marker | `typeof window["__tender_panel__"] !== "undefined"` — a context that already carries the panel is left alone             |
+| Wait until ready   | Steam's module registry, and beside Decky its copy of `@decky/ui` as well                                                |
+| Evaluate           | one expression that claims the marker, imports the chosen bundles in order, and calls the globals installer between them |
+| Ask again, later   | is Steam's interface still there? — see [the crash watchdog](#the-crash-watchdog)                                        |
 
 After that the loop waits on two subscriptions and nothing else — `Page.domContentEventFired`, which says the marker has
 been wiped, and `Runtime.bindingCalled`, which is [the card's one button](#one-button-and-an-address-in-plain-text). It
@@ -41,10 +41,18 @@ Picture window down — the only crash cause ever observed here
 
 So there are two answers and they are not two spellings of one thing:
 
-| The machine                 | Loaded                        | Why                                                                      |
-| --------------------------- | ----------------------------- | ------------------------------------------------------------------------ |
-| Decky Loader is not serving | `globals.js`, then `index.js` | nothing else is loading into Steam, so Tender installs the React globals |
-| Decky Loader is serving     | `index-coexistence.js` alone  | the loader has installed those globals and holds a loaded `@decky/ui`    |
+| The machine                 | Loaded                                       | Why                                                                      |
+| --------------------------- | -------------------------------------------- | ------------------------------------------------------------------------ |
+| Decky Loader is not serving | `globals.js`, its installer, then `index.js` | nothing else is loading into Steam, so Tender installs the React globals |
+| Decky Loader is serving     | `index-coexistence.js` alone                 | the loader has installed those globals and holds a loaded `@decky/ui`    |
+
+**Importing the React bootstrap installs nothing — calling it does.** That bundle only defines `installGlobals` and
+leaves it on the window; the expression calls it by name between the two imports, and imports the panel **only** where
+the report it answers with says all three globals are set. The panel reads those globals while its own modules evaluate,
+so importing it with one missing throws there, before any code of ours can notice — which is why a missing one is
+refused here instead, and the sentence it is refused with is what [the card](#the-load-failure-card) shows and what the
+injector logs. Which of the loaded files carries the installer is the bundle choice's own answer, so the expression
+counts nothing out for itself; where the choice carries no such file, nothing is called at all.
 
 **The answer comes from the machine, never from the window.** At the earliest moment an injection is possible, every
 marker Decky eventually sets — `DFL`, `DeckyPluginLoader`, `DeckyBackend`, `deckyAuthToken`, `deckyHasLoaded` — is still

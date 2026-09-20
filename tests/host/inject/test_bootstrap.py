@@ -6,12 +6,19 @@ import json
 import re
 import shutil
 import subprocess
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 from host.inject.bootstrap import (
+    GLOBALS_INSTALLER,
+    GLOBALS_MISSING,
+    GLOBALS_NONE,
     MARKER,
+    NO_INSTALLER,
+    STEAM_NOT_READY,
+    STEAM_READY,
     STOP,
     STOP_BINDING,
     STOP_NOTE,
@@ -25,6 +32,8 @@ from host.inject.bootstrap import (
 TOKEN = "a-secret-admission-token"
 URLS = (f"http://127.0.0.1:27737/globals.js?token={TOKEN}", f"http://127.0.0.1:27737/index.js?token={TOKEN}")
 
+_STEAM_GLOBALS_TS = Path(__file__).resolve().parents[3] / "frontend" / "src" / "boot" / "steamGlobals.ts"
+
 
 def facts(**overrides):
     values = {
@@ -33,6 +42,7 @@ def facts(**overrides):
         "steam_build": "1788652215",
         "log_path": "/home/deck/.local/state/romm-tender/backend.log",
         "urls": URLS,
+        "globals_at": 0,
         "token": TOKEN,
         "binding": STOP_BINDING,
     }
@@ -75,6 +85,100 @@ class TestWhatTheSourceCarries:
         awkward = '/tmp/"; window.owned = 1; //'
         carried = folded_facts(build_bootstrap(facts(log_path=awkward)))
         assert carried["log_path"] == awkward
+
+
+def loading(source: str) -> str:
+    """The part that imports the bundles, without the card that may follow."""
+    return source[source.index("  const installTheGlobals") : source.index("  const el =")]
+
+
+def installer(source: str) -> str:
+    """The helper that calls the installer and reads what it answered."""
+    return source[source.index("  const installTheGlobals") : source.index("  const loadAll")]
+
+
+class TestInstallingTheGlobals:
+    def test_the_installer_is_called_between_the_two_imports(self):
+        """There is one import statement, in a loop, and the call is after it.
+
+        So the order is read off three facts rather than off a second import
+        written out below the first: the loop imports, the call follows it in the
+        same turn, and it is gated on the one index the choice named — which for
+        the standalone pair is the bundle that defines the installer.
+        """
+        source = build_bootstrap(facts())
+        body = loading(source)
+        assert body.count("await import(") == 1
+        assert body.index("await import(T.urls[i]);") < body.index("if (i === T.globals_at)")
+        assert body.index("if (i === T.globals_at)") < body.index("await installTheGlobals();")
+        assert folded_facts(source)["globals_at"] == 0
+        assert len(folded_facts(source)["urls"]) == 2
+
+    def test_nothing_is_called_where_no_bundle_in_the_list_installs_anything(self):
+        """Beside Decky the loader installed them, so this may install nothing."""
+        source = build_bootstrap(facts(globals_at=None, urls=URLS[1:]))
+        assert folded_facts(source)["globals_at"] is None
+        # ``i`` counts from 0 and is never null, so the gate never opens.
+        assert "if (i === T.globals_at)" in loading(source)
+
+    def test_a_missing_global_stops_the_panel_being_imported(self):
+        """The call throws and is awaited, so the loop never reaches the panel.
+
+        A report read into a flag, or a call left un-awaited, would import the
+        panel anyway — and the panel reads those globals while its own modules
+        evaluate, so it would throw there instead, with nothing left to say why.
+        """
+        source = build_bootstrap(facts())
+        assert "await installTheGlobals();" in loading(source)
+        assert "throw new Error(" in installer(source)
+
+    def test_the_refusal_names_the_missing_globals_and_whether_steam_was_ready(self):
+        source = build_bootstrap(facts())
+        carried = folded_facts(source)
+        assert carried["globals_missing"] == GLOBALS_MISSING
+        assert carried["steam_ready"] == STEAM_READY
+        assert carried["steam_not_ready"] == STEAM_NOT_READY
+        body = installer(source)
+        assert 'missing.join(", ")' in body
+        assert "report && report.steamReady ? T.steam_ready : T.steam_not_ready" in body
+
+    def test_the_names_are_the_installers_own_rather_than_a_list_kept_here(self):
+        """A list spelled here is one more thing to keep in step with the panel."""
+        body = installer(build_bootstrap(facts()))
+        assert "Object.keys(installed)" in body
+
+    def test_a_report_that_names_nothing_is_a_refusal_rather_than_a_pass(self):
+        source = build_bootstrap(facts())
+        assert folded_facts(source)["globals_none"] == GLOBALS_NONE
+        assert "names.length === 0 || missing.length > 0" in installer(source)
+
+    def test_a_bundle_that_left_no_installer_is_reported_as_that(self):
+        source = build_bootstrap(facts())
+        assert folded_facts(source)["no_installer"] == NO_INSTALLER
+        assert 'typeof install !== "function"' in installer(source)
+
+    def test_the_refusal_carries_no_address_and_no_token(self):
+        """The sentence reaches the card and the log, so it carries neither."""
+        body = installer(build_bootstrap(facts()))
+        assert "T.urls" not in body
+        assert "T.token" not in body
+        assert TOKEN not in body
+
+
+class TestTheInstallersName:
+    def test_it_is_spelled_the_same_in_both_languages(self):
+        """The one name this backend and the panel's own bundle both write.
+
+        Read as text rather than imported, because nothing here runs TypeScript:
+        a rename on either side has to fail somewhere, and this is the only place
+        the two spellings meet.
+        """
+        written = _STEAM_GLOBALS_TS.read_text(encoding="utf-8")
+        assert f"w.{GLOBALS_INSTALLER} = installGlobals;" in written
+
+    def test_the_source_reaches_it_by_that_name(self):
+        assert folded_facts(build_bootstrap(facts()))["installer"] == GLOBALS_INSTALLER
+        assert "win[T.installer]" in build_bootstrap(facts())
 
 
 class TestTheToken:

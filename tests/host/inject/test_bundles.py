@@ -24,6 +24,12 @@ class TestAloneOnTheMachine:
         assert "webpackChunksteamui" in choice.ready_when
         assert "DFL" not in choice.ready_when
 
+    def test_it_says_which_of_the_files_carries_the_installer(self):
+        """Read off the files rather than counted out by the evaluated source."""
+        choice = choose_bundles(decky_is_serving=False)
+        assert choice.globals_at is not None
+        assert choice.files[choice.globals_at] == GLOBALS_BUNDLE
+
 
 class TestBesideDeckyLoader:
     def test_globals_are_never_loaded_where_decky_is_serving(self):
@@ -37,6 +43,10 @@ class TestBesideDeckyLoader:
 
     def test_the_standalone_panel_is_never_loaded_beside_decky_either(self):
         assert STANDALONE_PANEL not in choose_bundles(decky_is_serving=True).files
+
+    def test_there_is_nothing_to_install_and_the_choice_says_so(self):
+        """Decky's loader installed them; this choice may install nothing."""
+        assert choose_bundles(decky_is_serving=True).globals_at is None
 
     def test_it_waits_for_deckys_copy_as_well_as_the_registry(self):
         choice = choose_bundles(decky_is_serving=True)

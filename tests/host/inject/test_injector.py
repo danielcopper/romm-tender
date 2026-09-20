@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 import host.inject.injector as injector_module
-from host.inject.bootstrap import MARKER, STOP_BINDING, STOP_PAYLOAD, marker_present_expression
+from host.inject.bootstrap import GLOBALS_INSTALLER, MARKER, STOP_BINDING, STOP_PAYLOAD, marker_present_expression
 from host.inject.bundles import COEXISTENCE_PANEL, GLOBALS_BUNDLE, STANDALONE_PANEL, choose_bundles
 from host.inject.injector import InjectionSetup, PanelInjector
 from host.inject.watchdog import INJECT_FORCE, INJECT_OFF, WATCHDOG_FILENAME, CrashWatchdog, Fingerprint
@@ -212,6 +212,27 @@ def carried_facts(bootstrap: str) -> dict[str, Any]:
     return json.loads(found.group(1))
 
 
+class TestInstallingTheGlobals:
+    async def test_the_source_is_told_which_address_defines_the_installer(self, injecting):
+        """The index is the bundle choice's answer, carried through untouched."""
+        running = await injecting()
+        await wait_until(lambda: running.page.bootstraps)
+        carried = carried_facts(running.page.bootstraps[0])
+        assert carried["installer"] == GLOBALS_INSTALLER
+        assert GLOBALS_BUNDLE in carried["urls"][carried["globals_at"]]
+
+    async def test_beside_decky_there_is_no_such_address_and_it_says_so(self, injecting):
+        loader = await asyncio.start_server(lambda r, w: None, host="127.0.0.1", port=0)
+        port = loader.sockets[0].getsockname()[1]
+        try:
+            running = await injecting(page=a_page(decky_is_serving=True), decky_port=port)
+            await wait_until(lambda: running.page.bootstraps)
+            assert carried_facts(running.page.bootstraps[0])["globals_at"] is None
+        finally:
+            loader.close()
+            await loader.wait_closed()
+
+
 class TestTheCardsOneButton:
     async def test_its_callback_is_installed_before_the_card_can_exist(self, injecting):
         """The card is drawn by the evaluate, so the button is wired before it runs."""
@@ -396,6 +417,23 @@ class TestDidTheInterfaceSurviveIt:
             running.debugger.targets = [FakeTarget(id=RENDERER, title="SharedJSContext")]
             await wait_until(lambda: any("Steam's interface is gone" in r.message for r in caplog.records))
         assert running.watchdog_record().get("open") is True
+
+    async def test_a_panel_that_refused_to_load_is_not_a_crash_of_steam(self, injecting):
+        """The record closes clean: a refusal is a load failure like any other.
+
+        Refusing to import the panel because a global is missing answers
+        ``{ok: false}`` exactly as a bundle that threw does, and the interface is
+        untouched either way. Counted as a crash it would take two such refusals
+        to stop the injection for good — over a fault a newer bundle repairs.
+        """
+        page = a_page()
+        page.bootstrap_answer = {"ok": False, "reason": "the globals could not all be installed", "shown": True}
+        running = await injecting(
+            page=page,
+            targets=[FakeTarget(id=RENDERER, title="SharedJSContext"), FakeTarget(id="bpm", title="Big Picture")],
+        )
+        await wait_until(lambda: running.watchdog_record().get("open") is False)
+        assert running.watchdog_record()["failures"] == 0
 
     async def test_an_injection_with_nothing_else_open_is_not_judged(self, injecting, caplog):
         with caplog.at_level(logging.INFO, logger="test_injector"):

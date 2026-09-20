@@ -375,6 +375,7 @@ class PanelInjector:
                             steam_build=fingerprint.steam,
                             log_path=self._log_path,
                             urls=tuple(self._asset_url(name) for name in choice.files),
+                            globals_at=choice.globals_at,
                             token=self._token,
                             binding=binding,
                         )

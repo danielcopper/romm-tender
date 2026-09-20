@@ -184,10 +184,9 @@ export async function installGlobals(): Promise<GlobalsReport> {
     // which is a perfectly truthy object — so `installed.SP_JSX` would say true
     // when nothing was found.
     //
-    // **That report is the whole of what this buys**: it is there for the
-    // injector to read out of THIS bundle before it decides whether to load the
-    // panel (#1900). Nothing reads it yet — until something does, the honesty
-    // below buys nothing at all. The panel itself gets no chance to notice: a
+    // **That report is the whole of what this buys**: the injector's bootstrap
+    // reads it out of THIS bundle and imports the panel only where all three
+    // are installed. The panel itself gets no chance to notice: a
     // module-scope `SP_JSX.jsx` sits in its import graph (`dist/index.js:4892`,
     // from `PlatformDetail.tsx`), so with `SP_JSX` unset it throws while being
     // evaluated — before `definePlugin`'s factory exists, and long before any
@@ -222,10 +221,10 @@ export async function installGlobals(): Promise<GlobalsReport> {
   };
 }
 
-// The injector (#1900) will evaluate this bundle and then call the function. It
-// is reachable by name as well, so the same bundle can be driven by hand from
-// the CEF debugger — which is how the spike measured it and how a device test
-// reproduces one.
+// The injector's bootstrap calls this by name after importing the bundle and
+// before importing the panel, and imports the panel only where the report says
+// all three are installed. The same name is what drives this bundle by hand
+// from the CEF debugger.
 w.__TENDER_INSTALL_GLOBALS = installGlobals;
 
 export default installGlobals;
