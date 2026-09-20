@@ -38,8 +38,8 @@ import {
   checkSteamModules,
   describeFailure,
   describeSurvivedMiss,
-  namesAnUpdate,
   searchOwner,
+  sentenceAsksForAReport,
 } from "./steamModules";
 
 const SRC_DIR = `${process.cwd()}/src/`;
@@ -815,21 +815,29 @@ describe("the verdict the page and the log line share", () => {
     }
   });
 
-  it.each(SEARCH_OWNERS)("tells the report line whether the %s sentence names an update", (owner) => {
-    // The report line reads "after the update" off this predicate, so it must
-    // agree with the sentence above it: an update named there and not here
-    // drops the clause, one named here and not there invents an update.
+  it.each(SEARCH_OWNERS)("tells the report line whether the %s sentence has already asked for a report", (owner) => {
+    // The line under the sentence drops its own request off this predicate, so
+    // it must agree with the sentence above it: asked there and not here and
+    // the page asks twice in a row, here and not there and it never asks at
+    // all. The sentence is searched rather than quoted, because what is being
+    // held is whether it asks and not how it is worded.
     const { report, copy } = read(pageFixtures[owner]);
-    expect(namesAnUpdate(report, copy)).toBe(owner !== "none");
-    expect(namesAnUpdate(report, copy)).toBe(describeFailure(report, copy).includes("Updating"));
+    const sentence = describeFailure(report, copy);
+    const asked = sentenceAsksForAReport(report, copy);
+    expect(asked).toBe(owner === "none" || owner === "mixed");
+    expect(asked).toBe(/please report/i.test(sentence));
+    // And every sentence that does NOT ask names an update, which is what lets
+    // the other form of the line say "after the update" with no predicate of
+    // its own. `mixed` is the one that does both, and takes the short line.
+    expect(asked || sentence.includes("Updating")).toBe(true);
   });
 
   it.each(["standalone", "coexistence"] as const)(
-    "names no update when nothing at all answered, in the %s bundle",
+    "asks for a report in its own sentence when nothing at all answered, in the %s bundle",
     (bundle) => {
       const report = checkSteamModules([missedLookup("Focusable", true, "panel"), missedLookup("Tabs", true, "panel")]);
       const copy = readSearchingCopy(report, bundle, () => ({ carries: () => true, version: "v3.2.8" }));
-      expect(namesAnUpdate(report, copy)).toBe(false);
+      expect(sentenceAsksForAReport(report, copy)).toBe(true);
       expect(describeFailure(report, copy)).toBe(
         "Tender started before Steam was ready. Restarting Steam is the first thing to try; if this page " +
           "comes back every time, please report it.",

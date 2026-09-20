@@ -33,7 +33,7 @@
 import type { CSSProperties, FC } from "react";
 
 import type { SearchingCopy } from "./searchingCopy";
-import { describeFailure, namesAnUpdate, type StartupReport } from "./steamModules";
+import { describeFailure, sentenceAsksForAReport, type StartupReport } from "./steamModules";
 
 const ISSUES_URL = "github.com/danielcopper/romm-tender/issues";
 
@@ -62,12 +62,14 @@ const nameList: CSSProperties = {
 const MissingNames: FC<{ names: readonly string[] }> = ({ names }) => <div style={nameList}>{names.join(", ")}</div>;
 
 export const StartupFailurePanel: FC<{ report: StartupReport; copy: SearchingCopy }> = ({ report, copy }) => {
-  const when = namesAnUpdate(report, copy) ? "If this keeps happening after the update" : "If this keeps happening";
+  const reportLine = sentenceAsksForAReport(report, copy)
+    ? `You can do that at ${ISSUES_URL} — please include these names:`
+    : `If this keeps happening after the update, please report it at ${ISSUES_URL} and include these names:`;
   return (
     <div style={page}>
       <div style={heading}>Tender can&apos;t start right now</div>
       <p style={paragraph}>{describeFailure(report, copy)}</p>
-      <p style={paragraph}>{`${when}, please report it at ${ISSUES_URL} and include these names:`}</p>
+      <p style={paragraph}>{reportLine}</p>
       <MissingNames names={report.missing} />
     </div>
   );

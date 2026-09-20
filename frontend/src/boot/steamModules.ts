@@ -549,14 +549,27 @@ export function describeFailure(report: StartupReport, copy: SearchingCopy): str
 }
 
 /**
- * Does the page's own sentence send the user to make an update?
+ * Has the page's own sentence already asked the user for a report?
  *
- * {@link describeFailure}'s answer for everything missing and for `none` asks
- * for a report and names nothing to update, so the page's report line has no
- * update to be "after" there.
+ * The line under it comes in two forms and this chooses between them: where
+ * the sentence has asked, the line only says where to send it, because asking
+ * twice in two consecutive sentences reads as a stutter. The other form asks in
+ * full and says "after the update" with no predicate of its own, which it may
+ * do because every sentence that does not ask names an update
+ * ({@link describeFailure}).
+ *
+ * `mixed` is why this is not the same question as whether the sentence names an
+ * update: its sentence does both, so it takes the short line and the "after the
+ * update" clause is carried by the sentence above it.
+ *
+ * Read off the verdict rather than off the sentence's own text, which a
+ * rewording would flip in silence; `steamModules.test.ts` holds the two against
+ * each other instead.
  */
-export function namesAnUpdate(report: StartupReport, copy: SearchingCopy): boolean {
-  return !nothingAnswered(report) && searchOwner(report, copy) !== "none";
+export function sentenceAsksForAReport(report: StartupReport, copy: SearchingCopy): boolean {
+  if (nothingAnswered(report)) return true;
+  const owner = searchOwner(report, copy);
+  return owner === "none" || owner === "mixed";
 }
 
 /**

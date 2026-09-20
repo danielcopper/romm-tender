@@ -141,24 +141,26 @@ describe("the fallback page", () => {
     mixed: { report: { ...report(["SP_REACTDOM", "Tabs"]), missingPackageNames: ["Tabs"] }, copy: DECKYS },
     decky: { report: report(["Tabs"]), copy: DECKYS },
   };
-  const AFTER_AN_UPDATE = `If this keeps happening after the update, please report it at ${ISSUES} and include these names:`;
-  const WITH_NO_UPDATE = `If this keeps happening, please report it at ${ISSUES} and include these names:`;
+  const ASKS_IN_FULL = `If this keeps happening after the update, please report it at ${ISSUES} and include these names:`;
+  const SAYS_ONLY_WHERE = `You can do that at ${ISSUES} — please include these names:`;
 
   it.each(SEARCH_OWNERS)("puts the report line in the form the %s sentence calls for", (owner) => {
     const { report: missed, copy } = verdictCases[owner];
     expect(searchOwner(missed, copy)).toBe(owner);
     render(<StartupFailurePanel report={missed} copy={copy} />);
-    // Only where the sentence above names no update does the line drop "after
-    // the update" — there is nothing to be after, and the sentence has already
-    // asked for the report.
-    expect(screen.getByText(owner === "none" ? WITH_NO_UPDATE : AFTER_AN_UPDATE)).toBeInTheDocument();
+    // Where the sentence above has already asked for a report, the line only
+    // says where to send it — the page asking twice in a row is the whole of
+    // what these two forms are for. `mixed` takes the short one although its
+    // sentence names an update, because that sentence carries the clause.
+    const asked = owner === "none" || owner === "mixed";
+    expect(screen.getByText(asked ? SAYS_ONLY_WHERE : ASKS_IN_FULL)).toBeInTheDocument();
   });
 
   it.each([
     ["Tender's", OURS],
     ["Decky's", DECKYS],
-  ] as const)("puts the report line with no update in it when none of them answered, under %s copy", (_, copy) => {
+  ] as const)("puts the short report line under the too-early sentence, under %s copy", (_, copy) => {
     render(<StartupFailurePanel report={report(["Tabs", "Focusable"], 2)} copy={copy} />);
-    expect(screen.getByText(WITH_NO_UPDATE)).toBeInTheDocument();
+    expect(screen.getByText(SAYS_ONLY_WHERE)).toBeInTheDocument();
   });
 });
