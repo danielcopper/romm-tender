@@ -13,6 +13,7 @@ from the live settings dict and dispatches to the runtime logger.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -27,14 +28,26 @@ from lib.list_result import ErrorCode
 from lib.url_host import is_valid_server_url
 
 if TYPE_CHECKING:
-    import logging
-
     from services.protocols import SettingsPersister, SteamConfigStore, UnitOfWorkFactory
 
 
 _MASK_PLACEHOLDER = "••••"
 _VALID_LOG_LEVELS = ("debug", "info", "warn", "error")
 _VALID_STEAM_INPUT_MODES = ("default", "force_on", "force_off")
+
+# The level names the frontend sends against the stdlib level each record is
+# stamped with. Written out rather than resolved through ``logging`` by name,
+# which would look equivalent — it even answers 30 for ``WARN`` — but answers
+# the string ``"Level TRACE"`` for a name it does not know, and this value
+# comes off an untrusted wire. A table cannot do that: an unrecognised name
+# misses it and takes the ``debug`` default below, which is the level the
+# threshold above already weighs such a message at.
+_RECORD_LEVELS: dict[str, int] = {
+    "debug": logging.DEBUG,
+    "info": logging.INFO,
+    "warn": logging.WARNING,
+    "error": logging.ERROR,
+}
 
 # What the user is told about a refused custom-header list. Each template may name
 # the offending header, never its value. ``Authorization`` gets its own sentence
@@ -99,6 +112,24 @@ class SettingsService:
         self._settings = config.settings
         self._uow_factory = config.uow_factory
         self._logger = config.logger
+        # A level of its own, so that a frontend record is stamped with the
+        # level its caller named instead of one the injected logger would
+        # allow. The DEBUG records this admits are still written, even though
+        # the root sits higher: a logger's level decides only whether the
+        # record is CREATED, and once it exists ``callHandlers`` walks up to
+        # the root running the handlers it finds, consulting no ancestor's
+        # level on the way. So this reads as though the root at INFO should
+        # swallow them, and it does not — raising this logger's level back is
+        # the change that silently deletes every debug line here.
+        # ``host.logging_setup.configure_logging`` owns what the root's level
+        # is and why nothing moves it; levelling the injected logger instead
+        # would hand the same reprieve to every ``logger.debug`` in the
+        # backend, none of which this setting is meant to reach.
+        #
+        # It decides the stamp and never the threshold — whether a frontend
+        # line is written at all is `log_level`'s, below, and nothing here.
+        self._frontend_logger = config.logger.getChild("frontend")
+        self._frontend_logger.setLevel(logging.DEBUG)
         self._settings_persister = config.settings_persister
         self._steam_config = config.steam_config
 
@@ -247,19 +278,17 @@ class SettingsService:
     def frontend_log(self, level: str, message: str) -> None:
         """Log a frontend message respecting the configured log_level threshold.
 
-        Messages below the configured threshold are dropped silently.
-        Unknown level strings are treated as ``debug`` (the lowest
-        threshold) so misrouted frontend calls still surface when
-        ``log_level=debug``.
+        Messages below the configured threshold are dropped silently; a message
+        above it is recorded at the level the caller named, so a twice-a-second
+        debug poll reads as a debug line rather than as ordinary operation.
+        Unknown level strings are treated as ``debug`` on both counts — the
+        lowest threshold, so misrouted frontend calls still surface when
+        ``log_level=debug``, and the lowest stamp, so one is never presented as
+        something the caller did not claim.
         """
         configured = self._settings.get("log_level", "warn")
         if self.LOG_LEVELS.get(level, 0) >= self.LOG_LEVELS.get(configured, 2):
-            if level == "error":
-                self._logger.error(f"[FE] {message}")
-            elif level == "warn":
-                self._logger.warning(f"[FE] {message}")
-            else:
-                self._logger.info(f"[FE] {message}")
+            self._frontend_logger.log(_RECORD_LEVELS.get(level, logging.DEBUG), f"[FE] {message}")
 
     # ── Steam Input ──────────────────────────────────────────────────────
 

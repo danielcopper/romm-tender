@@ -10,12 +10,27 @@ import pytest
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 
 from domain.rom import Rom
+from host.logging_setup import LOG_FILENAME, configure_logging
 from services.settings import SettingsService, SettingsServiceConfig
 
 
 @pytest.fixture
 def settings() -> dict[str, Any]:
     return {}
+
+
+@pytest.fixture
+def restore_root_logger():
+    """Put the root logger back — the suite's own logging must survive this file."""
+    root = logging.getLogger()
+    saved, level = list(root.handlers), root.level
+    yield
+    for handler in list(root.handlers):
+        root.removeHandler(handler)
+        handler.close()
+    for handler in saved:
+        root.addHandler(handler)
+    root.setLevel(level)
 
 
 @pytest.fixture
@@ -428,62 +443,118 @@ class TestGetKnownRegions:
 # ── frontend_log ───────────────────────────────────────────────────────
 
 
+def _recorded(caplog: pytest.LogCaptureFixture) -> list[tuple[str, str]]:
+    """The (level name, message) of every record captured so far."""
+    return [(record.levelname, record.message) for record in caplog.records]
+
+
 class TestFrontendLog:
-    def test_warn_configured_drops_info(self, service, settings):
-        settings["log_level"] = "warn"
-        service._logger = MagicMock()
-        service.frontend_log("info", "msg")
-        service._logger.info.assert_not_called()
-        service._logger.warning.assert_not_called()
-        service._logger.error.assert_not_called()
+    """The setting decides whether a line is written; the caller decides its level."""
 
-    def test_warn_configured_drops_debug(self, service, settings):
-        settings["log_level"] = "warn"
-        service._logger = MagicMock()
-        service.frontend_log("debug", "msg")
-        service._logger.info.assert_not_called()
-
-    def test_warn_configured_emits_warn(self, service, settings):
-        settings["log_level"] = "warn"
-        service._logger = MagicMock()
-        service.frontend_log("warn", "watch out")
-        service._logger.warning.assert_called_once_with("[FE] watch out")
-
-    def test_warn_configured_emits_error(self, service, settings):
-        settings["log_level"] = "warn"
-        service._logger = MagicMock()
-        service.frontend_log("error", "boom")
-        service._logger.error.assert_called_once_with("[FE] boom")
-
-    def test_debug_configured_emits_debug_and_info(self, service, settings):
+    @pytest.mark.parametrize(
+        ("level", "levelname"),
+        [("debug", "DEBUG"), ("info", "INFO"), ("warn", "WARNING"), ("error", "ERROR")],
+    )
+    def test_the_record_carries_the_level_the_caller_named(self, service, settings, caplog, level, levelname):
         settings["log_level"] = "debug"
-        service._logger = MagicMock()
+        service.frontend_log(level, "msg")
+        assert _recorded(caplog) == [(levelname, "[FE] msg")]
+
+    def test_warn_configured_drops_info(self, service, settings, caplog):
+        settings["log_level"] = "warn"
+        service.frontend_log("info", "msg")
+        assert _recorded(caplog) == []
+
+    def test_warn_configured_drops_debug(self, service, settings, caplog):
+        settings["log_level"] = "warn"
+        service.frontend_log("debug", "msg")
+        assert _recorded(caplog) == []
+
+    def test_warn_configured_emits_warn(self, service, settings, caplog):
+        settings["log_level"] = "warn"
+        service.frontend_log("warn", "watch out")
+        assert _recorded(caplog) == [("WARNING", "[FE] watch out")]
+
+    def test_warn_configured_emits_error(self, service, settings, caplog):
+        settings["log_level"] = "warn"
+        service.frontend_log("error", "boom")
+        assert _recorded(caplog) == [("ERROR", "[FE] boom")]
+
+    def test_debug_configured_keeps_the_two_apart(self, service, settings, caplog):
+        settings["log_level"] = "debug"
         service.frontend_log("debug", "d")
         service.frontend_log("info", "i")
-        # Both go through logger.info
-        assert service._logger.info.call_args_list == [
-            (("[FE] d",),),
-            (("[FE] i",),),
-        ]
+        assert _recorded(caplog) == [("DEBUG", "[FE] d"), ("INFO", "[FE] i")]
 
-    def test_unknown_level_treated_as_debug(self, service, settings):
+    def test_unknown_level_treated_as_debug(self, service, settings, caplog):
         # Unknown level maps to threshold 0 (debug); with warn (2) configured it is dropped.
         settings["log_level"] = "warn"
-        service._logger = MagicMock()
         service.frontend_log("trace", "noise")
-        service._logger.info.assert_not_called()
+        assert _recorded(caplog) == []
 
-    def test_missing_log_level_defaults_warn(self, service, settings):
+    def test_unknown_level_is_recorded_as_debug(self, service, settings, caplog):
+        settings["log_level"] = "debug"
+        service.frontend_log("trace", "noise")
+        assert _recorded(caplog) == [("DEBUG", "[FE] noise")]
+
+    def test_missing_log_level_defaults_warn(self, service, settings, caplog):
         settings.pop("log_level", None)
-        service._logger = MagicMock()
         service.frontend_log("info", "msg")
-        service._logger.info.assert_not_called()
+        assert _recorded(caplog) == []
         service.frontend_log("warn", "msg2")
-        service._logger.warning.assert_called_once_with("[FE] msg2")
+        assert _recorded(caplog) == [("WARNING", "[FE] msg2")]
 
     def test_returns_none(self, service):
-        # Decky callable contract — frontend_log returns nothing meaningful.
+        # Callable contract — frontend_log returns nothing meaningful.
         assert service.frontend_log("info", "msg") is None
+
+
+class TestAFrontendDebugLineIsWrittenRatherThanDropped:
+    """The join the mapping alone cannot pin: the process's own root level.
+
+    ``configure_logging`` levels the root at INFO and the ``log_level`` setting
+    never moves it, so a frontend debug record emitted through the injected
+    logger would be dropped instead of written — the mapping above would then
+    be green over a line nobody can read.
+    """
+
+    def test_it_reaches_the_log_file_the_entry_point_configures(
+        self,
+        settings,
+        uow,
+        settings_persister,
+        steam_config,
+        tmp_path,
+        restore_root_logger,
+    ):
+        root = configure_logging(str(tmp_path / "state"), "tok")
+        service = SettingsService(
+            config=SettingsServiceConfig(
+                settings=settings,
+                uow_factory=FakeUnitOfWorkFactory(uow=uow),
+                logger=root,
+                settings_persister=settings_persister,
+                steam_config=steam_config,
+            ),
+        )
+        settings["log_level"] = "debug"
+
+        service.frontend_log("debug", "adoption poll tick")
+
+        written = (tmp_path / "state" / LOG_FILENAME).read_text()
+        assert "[DEBUG]: [FE] adoption poll tick" in written
+
+    def test_the_root_the_entry_point_configures_still_drops_its_own_debug_records(
+        self,
+        tmp_path,
+        restore_root_logger,
+    ):
+        """The reprieve is the frontend logger's alone — nothing else gained one."""
+        root = configure_logging(str(tmp_path / "state"), "tok")
+
+        root.debug("a backend trace")
+
+        assert "a backend trace" not in (tmp_path / "state" / LOG_FILENAME).read_text()
 
 
 # ── save_steam_input_setting ──────────────────────────────────────────

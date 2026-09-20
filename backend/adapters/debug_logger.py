@@ -20,10 +20,10 @@ class SettingsAwareDebugLogger:
 
     The settings dict is bound by reference at construction so QAM-side
     edits are observed without restart. Messages route through
-    ``logger.info`` (matching the existing frontend-log surface so users
-    see both their own frontend messages and backend debug traces in the
-    same stream) when ``log_level`` is ``"debug"``; any other level
-    silently drops the message.
+    ``logger.info`` when ``log_level`` is ``"debug"``; any other level
+    silently drops the message. ``info`` rather than ``debug`` because a DEBUG
+    record here is judged against the root's level, which drops it rather than
+    writing it (``host.logging_setup.configure_logging``).
     """
 
     _LOG_LEVELS: ClassVar[dict[str, int]] = {"debug": 0, "info": 1, "warn": 2, "error": 3}

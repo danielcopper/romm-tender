@@ -400,58 +400,44 @@ class TestLogLevel:
         assert result["log_level"] == "warn"
 
     @pytest.mark.asyncio
-    async def test_frontend_log_respects_level(self, plugin):
+    async def test_frontend_log_respects_level(self, plugin, caplog):
         """frontend_log only logs when message level >= configured level."""
-        from unittest.mock import patch
-
-        import decky
-
         plugin.settings["log_level"] = "warn"
-        with (
-            patch.object(decky.logger, "info") as mock_info,
-            patch.object(decky.logger, "warning") as mock_warning,
-            patch.object(decky.logger, "error") as mock_error,
-        ):
-            await plugin.frontend_log("debug", "debug msg")
-            await plugin.frontend_log("info", "info msg")
-            await plugin.frontend_log("warn", "warn msg")
-            await plugin.frontend_log("error", "error msg")
-            mock_info.assert_not_called()
-            mock_warning.assert_called_once_with("[FE] warn msg")
-            mock_error.assert_called_once_with("[FE] error msg")
+        await plugin.frontend_log("debug", "debug msg")
+        await plugin.frontend_log("info", "info msg")
+        await plugin.frontend_log("warn", "warn msg")
+        await plugin.frontend_log("error", "error msg")
+
+        assert [(r.levelname, r.message) for r in caplog.records] == [
+            ("WARNING", "[FE] warn msg"),
+            ("ERROR", "[FE] error msg"),
+        ]
 
     @pytest.mark.asyncio
-    async def test_frontend_log_debug_level_logs_all(self, plugin):
-        """With log_level=debug, all levels are logged."""
-        from unittest.mock import patch
-
-        import decky
-
+    async def test_frontend_log_debug_level_logs_all(self, plugin, caplog):
+        """With log_level=debug, all levels are logged — each at its own."""
         plugin.settings["log_level"] = "debug"
-        with (
-            patch.object(decky.logger, "info") as mock_info,
-            patch.object(decky.logger, "warning") as mock_warning,
-            patch.object(decky.logger, "error") as mock_error,
-        ):
-            await plugin.frontend_log("debug", "d")
-            await plugin.frontend_log("info", "i")
-            await plugin.frontend_log("warn", "w")
-            await plugin.frontend_log("error", "e")
-            assert mock_info.call_count == 2  # debug + info both use logger.info
-            mock_warning.assert_called_once_with("[FE] w")
-            mock_error.assert_called_once_with("[FE] e")
+        await plugin.frontend_log("debug", "d")
+        await plugin.frontend_log("info", "i")
+        await plugin.frontend_log("warn", "w")
+        await plugin.frontend_log("error", "e")
+
+        assert [(r.levelname, r.message) for r in caplog.records] == [
+            ("DEBUG", "[FE] d"),
+            ("INFO", "[FE] i"),
+            ("WARNING", "[FE] w"),
+            ("ERROR", "[FE] e"),
+        ]
 
     @pytest.mark.asyncio
-    async def test_debug_log_backward_compat(self, plugin):
-        """debug_log callable delegates to frontend_log('debug', ...)."""
-        from unittest.mock import patch
-
-        import decky
-
+    async def test_debug_log_backward_compat(self, plugin, caplog):
+        """debug_log reaches the log as a debug line of its own."""
         plugin.settings["log_level"] = "debug"
-        with patch.object(decky.logger, "info") as mock_info:
-            await plugin.debug_log("test backward compat")
-            mock_info.assert_called_once_with("[FE] test backward compat")
+        await plugin.debug_log("test backward compat")
+
+        assert [(r.levelname, r.message) for r in caplog.records] == [
+            ("DEBUG", "[FE] test backward compat"),
+        ]
 
     def test_migration_debug_logging_true(self, plugin, tmp_path):
         """Old debug_logging=True migrates to log_level='debug'."""
