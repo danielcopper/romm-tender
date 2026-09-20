@@ -170,16 +170,16 @@ locally with `mise run docs`.
   measured. The sync writes the name in place too (`rewriteShortcutIdentity`), and nothing has established what that
   does to the appId; do not read the exe measurement as covering it.
 - **Frontend API**: `@decky/ui` for Steam's components, and `frontend/src/api/host.ts` for everything `@decky/api` used
-  to give us — same six export names, so a call site reads the same. Four of the six go over the backend's WebSocket;
-  **`toaster` and `routerHook` are declared placeholders that do nothing** until #1901, so no toast appears and Steam's
-  game page carries no Tender section. Neither reaches Decky's loader API when one is present, and what decides that is
-  not purity: those two are the loader's own, #1901 replaces them with Tender's, and a placeholder that borrowed one
-  wherever it found one would behave differently on a machine with Decky from one without — which is the difference this
-  program exists not to depend on. **The reference machine runs the loader** (measured: `plugin_loader.service` active
-  and enabled, `127.0.0.1:1337` listening), so that borrowing would show up there rather than hide, which is the
-  opposite of what this note used to say. `definePlugin` is no longer inert beside them: `index.tsx` hands the factory
-  it answers with to `qam/quickAccessEntry.tsx`, which calls it once and mounts the panel behind Tender's own Quick
-  Access entry.
+  to give us — same six export names, so a call site reads the same. Four of the six go over the backend's WebSocket.
+  `toaster` pushes into Steam's own notification store and draws its entries itself, chained behind whatever already
+  patches Steam's toast renderer (`docs/architecture/frontend-bundles.md`, "Talking to the backend"). **`routerHook` is
+  a declared placeholder that does nothing** until #1944, so Steam's game page carries no Tender section. Neither
+  reaches Decky's loader API when one is present, and what decides that is not purity: those two were the loader's own,
+  and one that borrowed the loader's wherever it found it would behave differently on a machine with Decky from one
+  without — which is the difference this program exists not to depend on. **The reference machine runs the loader**
+  (measured: `plugin_loader.service` active and enabled, `127.0.0.1:1337` listening), so that borrowing would show up
+  there rather than hide. `definePlugin` is no longer inert beside them: `index.tsx` hands the factory it answers with
+  to `qam/quickAccessEntry.tsx`, which calls it once and mounts the panel behind Tender's own Quick Access entry.
 - **A callable must be `async def`**: even where the body is synchronous. The set a caller can reach is exactly the
   public `async def` on `Plugin` — `host.dispatch.reachable_methods` resolves it off the loaded class,
   `scripts/check_callable_manifest.py` derives the same set from the source, and `tests/host/test_dispatch.py` asserts
