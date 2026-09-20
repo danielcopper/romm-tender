@@ -356,7 +356,8 @@ location falls back to the tab layout, which is the only one that imposes no siz
 tab only where it carries subtext — the popup had no room to show that, so there is something new to read there; without
 one the entry would be a row the reader has to clear for nothing. In that entry the subtext wraps in full: Steam's own
 rule for the line ends it after one line, or two with `Multiline`, and a reason cut to two lines was the thing the tab
-was chosen to avoid.
+was chosen to avoid. The entry grows with it — Steam's template is a fixed 50 px, which a wrapped subtext would run out
+of over the next row.
 
 Neither of the two reaches Decky's loader API when one happens to be present, and what decides that is not purity: both
 were the loader's own, and one that borrowed wherever it found one would behave differently on a machine running Decky

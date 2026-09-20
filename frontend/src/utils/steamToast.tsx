@@ -45,6 +45,13 @@ const classNames = (...names: (string | undefined | false)[]): string => names.f
  */
 const SUBTEXT_UNCLIPPED: CSSProperties = { whiteSpace: "normal", overflow: "visible", textOverflow: "clip" };
 
+/**
+ * `StandardTemplate` is 50 px tall in the same stylesheet, so an entry whose
+ * subtext wraps would run out of its box over the next row: the height follows
+ * the content, from Steam's own as the floor.
+ */
+const ENTRY_GROWS: CSSProperties = { height: "auto", minHeight: "50px" };
+
 const shortTime = (createdMs: number): string =>
   new Date(createdMs).toLocaleTimeString(undefined, { timeStyle: "short" });
 
@@ -97,7 +104,7 @@ const DesktopPopup: FC<PopupProps> = ({ toast, classes }) => (
  */
 const NotificationTabEntry: FC<Omit<SteamToastProps, "location">> = ({ toast, createdMs, newIndicator, classes }) => (
   <Focusable onActivate={() => {}} className={classes.StandardTemplateContainer}>
-    <div className={classes.StandardTemplate}>
+    <div className={classes.StandardTemplate} style={ENTRY_GROWS}>
       <div className={classes.Content}>
         <div className={classes.Header}>
           <div className={classes.Title}>{toast.title}</div>

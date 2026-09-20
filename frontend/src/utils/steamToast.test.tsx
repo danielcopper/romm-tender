@@ -119,6 +119,10 @@ describe("the Quick Access notification-tab layout", () => {
     const subtext = container.querySelector<HTMLElement>(".c-subtext");
     expect(subtext?.style.whiteSpace).toBe("normal");
     expect(subtext?.style.overflow).toBe("visible");
+    // ...and the entry grows with it, from Steam's own height as the floor.
+    const entry = container.querySelector<HTMLElement>(".c-standard");
+    expect(entry?.style.height).toBe("auto");
+    expect(entry?.style.minHeight).toBe("50px");
   });
 
   it("is a focus stop, so a reader can reach it and Steam can scroll it into view", () => {
