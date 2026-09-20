@@ -847,10 +847,10 @@ surfaces and everything below them).
 
 ### Quick Access entry / entry marker / tab glyph
 
-The **Quick Access entry** is Tender's own row in Steam's Quick Access tab strip — the glyph in the rail and the panel
-behind it. It is added by patching the two renderers Steam draws the menu with and pushing an entry into the tab array
-they hand back, so it composes with Decky Loader's entry rather than going through it, and it appears whether or not
-Decky is running.
+The **Quick Access entry** is Tender's own row in Steam's Quick Access tab strip — the glyph in the rail, the panel
+behind it, and the **entry's heading** Steam draws above that panel from what the entry hands it. It is added by
+patching the two renderers Steam draws the menu with and pushing an entry into the tab array they hand back, so it
+composes with Decky Loader's entry rather than going through it, and it appears whether or not Decky is running.
 
 The **entry marker** is the property the entry carries to say it is ours (`tender`), and it is what makes a render pass
 over an array the entry is already in add nothing. **It is not the injection's marker** — that one
@@ -859,13 +859,14 @@ the same name.
 
 The **tab glyph** is what the strip draws: the mark reduced to one tone with no disc, the sync ring levelled and
 thickened for the size the strip draws it at, and the body as the button bars, solid and with nothing marking the four
-button positions — at 28 px a bar is 4.39 px wide and holds no second shape. It is generated from the mark's own drawing
-routines (`scripts/logo/tabicon.py`) rather than drawn by hand, and it is **static** — it reads no state and has none,
-because the motion it shipped with cost roughly 29% of one core for as long as the menu was open (→
+button positions — at the size the glyph asks for a bar is too narrow to hold a second shape. It is generated from the
+mark's own drawing routines (`scripts/logo/tabicon.py`) rather than drawn by hand, and it is **static** — it reads no
+state and has none, because the motion it shipped with cost roughly 29% of one core for as long as the menu was open (→
 `docs/architecture/qam-panel.md`, The glyph).
 
 _Avoid_: **tab** on its own for the entry, which is also Steam's word for the L1/R1 views inside a wide page (→ QAM
-page); **plugin entry** and **Decky tab**, neither of which this is.
+page); **plugin entry** and **Decky tab**, neither of which this is; **the tab's heading** and **the panel's heading**
+for the entry's heading, which is one thing and takes one name.
 
 ### QAM page / Main / wide page
 

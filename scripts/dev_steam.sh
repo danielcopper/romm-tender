@@ -14,10 +14,10 @@
 #       the shutdown request fails the restart (exit 1).
 #
 # Both the shutdown and the start launch steam through the user's systemd
-# manager, NOT this shell: `mise run` and the project venv prepend their own
-# PATH and set VIRTUAL_ENV,
-# and steam-jupiter's 32-bit runtime check fails in that environment on a cold
-# start ("You are missing the following 32-bit libraries: libc.so.6").
+# manager, NOT this shell: `mise run` and the project venv prepend their own PATH
+# and set VIRTUAL_ENV, and steam-jupiter's 32-bit runtime check fails in that
+# environment on a cold start ("You are missing the following 32-bit libraries:
+# libc.so.6").
 # systemd-run --user runs steam in the pristine session environment (clean
 # PATH, with DISPLAY / WAYLAND_DISPLAY / DBUS intact) that Game Mode itself
 # uses. Without a systemd user manager, scrubbing VIRTUAL_ENV is the

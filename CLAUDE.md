@@ -7,8 +7,10 @@ settings, sync, downloads, and BIOS management.
 
 The backend runs as **its own process** and hosts the panel itself over a loopback port
 ([ADR-0036](docs/adr/0036-the-backend-hosts-itself.md)); it was a Decky Loader plugin up to 0.33. It also LOADS the
-panel, into Steam's renderer over the CEF debugger — so `mise run dev` is now "build, then run the backend", and the
-Decky-shaped deploy tasks are gone. The installer, the user unit and the XDG paths are a separate cut (#1902).
+panel, into Steam's renderer over the CEF debugger — so `mise run dev` is now "build, restart Steam, then run the
+backend", and the Decky-shaped deploy tasks are gone. **It shuts the running Steam down**, because a rebuilt bundle
+reaches Steam only in a fresh JS context; which tasks do that, and which window they come back into, is under
+Development below. The installer, the user unit and the XDG paths are a separate cut (#1902).
 
 ## What belongs in this file
 

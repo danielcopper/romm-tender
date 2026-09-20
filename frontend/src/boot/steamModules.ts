@@ -227,8 +227,8 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
 
   // The class maps and the glyph, which `deckyUiInternals.ts` already types
   // honestly. A missing class map does not throw: every read is either
-  // optional-chained or guarded by one that is — `qamExpansion.ts:39` is a
-  // plain member read, reached only from the true arm of line 38's `?.` test.
+  // optional-chained or guarded by one that is — `qamExpansion.ts:46` is a
+  // plain member read, reached only from the true arm of line 45's `?.` test.
   //
   // What the absence costs is per map and is a table rather than a paragraph,
   // because a paragraph is summarised and a cell is checked. Every row below
@@ -242,7 +242,7 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // | `appDetailsClasses` | `InnerContainer` in `findInsertionPoint` (`bigpicture/patches/gameDetailPatch.tsx:88`); `AppDetailsOverviewPanel` in the patch handler `registerGameDetailPatch` installs (`:231`, and its debug line `:242`) | `findInsertionPoint` returns `undefined`; the wrapper takes `""` | `InnerContainer` is a mark on a node of STEAM's, so without it the handler finds no insertion point and returns the tree untouched — no Tender section on the game page at all. Without `AppDetailsOverviewPanel` the wrapper is still inserted, outside `InnerContainer`'s flex and scroll layout |
   // | `basicAppDetailsSectionStylerClasses` | `PlaySection` in an unnamed `useEffect` of `CustomPlayButton` (`CustomPlayButton.tsx:220`) and on our own row in `RomMPlaySection` (`bigpicture/RomMPlaySection.tsx:1048`); also `dumpTree` (`gameDetailPatch.tsx:145-154`) | the effect does not call `hideNativePlaySection`; the row takes `""`; the dump prints `UNDEFINED` | the same member is both kinds at once: it names a node of Steam's for the hide, so Steam's own play section stays on screen beside ours, and a node of ours for the row's styling |
   // | `playSectionClasses` | `Container` in `dumpTree` alone (`gameDetailPatch.tsx:133-141`) | the dump prints `UNDEFINED` and skips the tree search it guards | one line of a debug dump that runs at most once per load names no class. Nothing a user can see |
-  // | `quickAccessMenuClasses` | `TabGroupPanel` at module scope (`utils/qamExpansion.ts:44-46`), read into the selectors of the injected sheet (`:100-101`); `ActiveTab` in `useWideQamPanel`'s effect (`:190`); `Title` in `buildEntry` (`qam/quickAccessEntry.tsx:128`), as the panel's heading | `TAB_PANEL_SELECTOR` becomes `PANEL_ID_SELECTOR`, the panel's id; `owningTabActive` defaults to true (`:197`, the default argued just above it) and the `MutationObserver` guarded at `:206` is never constructed; the heading's `className` is `undefined` | the sheet matches the panel by id instead of by class, and the expansion is taken whether or not the page's own tab is the active one and is not re-synced on a tab switch — a leaked expansion the QAM-close and unmount paths still clear. The heading is still drawn, unstyled, at body size |
+  // | `quickAccessMenuClasses` | `TabGroupPanel` at module scope (`utils/qamExpansion.ts:45-47`), read into the selectors of the injected sheet (`:101-102`); `ActiveTab` in `useWideQamPanel`'s effect (`:194`); `Title` in `buildEntry` (`qam/quickAccessEntry.tsx:130`), as the entry's heading | `TAB_PANEL_SELECTOR` becomes `PANEL_ID_SELECTOR`, the panel's id; `owningTabActive` defaults to true (`:201`, the default argued just above it) and the `MutationObserver` guarded at `:210` is never constructed; the heading's `className` is `undefined` | the sheet matches the panel by id instead of by class, and the expansion is taken whether or not the page's own tab is the active one and is not re-synced on a tab switch — a leaked expansion the QAM-close and unmount paths still clear. The heading is still drawn, unstyled, at body size |
   //
   // Every map but `playSectionClasses` blocks the panel, and that is the status
   // quo rather than a reading of the table: see {@link AbsenceCost} for what
@@ -439,10 +439,10 @@ export type SearchOwner = (typeof SEARCH_OWNERS)[number];
  * `disagreement` is asked before `mixed` because a name Decky's copy does not
  * export is a fact about the two INSTALLS, where a name it exports with an
  * empty value is a search result whose cause — Steam having moved what the
- * predicate looks for — is inferred. Its repair covers whatever else went stale
- * beside it, since bringing the pair to current updates both programs, which is
- * why the sentence for it must not claim the disagreement is the whole of what
- * happened.
+ * predicate looks for — is inferred. What makes that safe to word narrowly is
+ * the repair rather than the wording: the sentence for it sends the reader to
+ * update BOTH programs, so it covers whatever else went stale beside the
+ * disagreement without having to claim the disagreement was all of it.
  *
  * The third ordering is the type's rather than this function's: only the
  * `decky` arm of {@link SearchingCopy} carries `carriesEveryName` at all, so

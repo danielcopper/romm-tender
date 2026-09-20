@@ -9,22 +9,18 @@
  * is the default edge length, {@link GLYPH_SIZE}.
  *
  * **It does not animate, and that is a measurement rather than a taste.** It
- * shipped with a turning ring and a folding body; read over CDP on the
- * QuickAccess target in 6-second windows, the fold alone cost 1.726 s of task
- * time against 0.0077 s with the animation off — the menu open and the glyph
- * drawn in both readings — and ran layout and style recalc 720 times each —
- * twice a frame at 60 Hz, because animating a path's `d` forces layout every
- * frame. Roughly 29% of one core, for as long as the menu is open, for a glyph
- * that was rendering at 24 px. An animation added back here costs that again:
+ * shipped with a turning ring and a folding body, and the fold alone cost
+ * roughly 29% of one core for as long as the menu was open — measured on the
+ * device over CDP. An animation added back here costs that again:
  * `docs/architecture/qam-panel.md` holds the reading in full.
  *
- * **Two things about this are UNMEASURED**, both on this cut's device list
- * (#1946) and neither guessed at here. Whether `size` below lands at the 28 px
- * it is aiming for: its `1.633em` is scaled off a mapping measured at `1.4em`,
- * and neither that the mapping holds at this value nor that the strip takes the
- * length it is handed rather than clamping it has been established. And whether
- * the glyph takes the colour of the selected tab: it asks for `currentColor` and
- * nothing here establishes what that inherits.
+ * **Two things about this are UNMEASURED**, and neither is guessed at here.
+ * Whether `size` below lands at the 28 px it is aiming for: its `1.633em` is
+ * scaled off a mapping measured at `1.4em`, and neither that the mapping holds
+ * at this value nor that the strip takes the length it is handed rather than
+ * clamping it has been established. And whether the glyph takes the colour of
+ * the selected tab: it asks for `currentColor` and nothing here establishes what
+ * that inherits.
  */
 
 import type { FC } from "react";

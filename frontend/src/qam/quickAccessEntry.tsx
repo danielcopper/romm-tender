@@ -63,7 +63,7 @@ const TENDER_TAB_MARK = "tender";
 /** What Steam's tab strip renders one entry from, plus our own marker. */
 export interface QuickAccessTabEntry {
   key: string;
-  /** Drawn above the panel as the tab's heading. */
+  /** Drawn above the panel as the entry's heading. */
   title: ReactNode;
   /** Drawn in the strip. */
   tab: ReactNode;
@@ -112,19 +112,21 @@ export function syncEntry(tabs: unknown[], entry: QuickAccessTabEntry): void {
 /**
  * The entry Steam's tab strip renders Tender from.
  *
- * Pure in the plugin it is handed: everything decided here is decided from
- * `plugin`, which is what makes it answerable without Steam. Putting it in the
- * strip is {@link installQuickAccessEntry}'s, in `installEntry.tsx`.
+ * Everything here is decided from `plugin` and from one read of Steam's own
+ * bundle — `quickAccessMenuClasses`, for the heading — so answering for it
+ * without Steam means handing it that class map, which is what the suite mocks.
+ * Putting the entry in the strip is {@link installQuickAccessEntry}'s, in
+ * `installEntry.tsx`.
  */
 export function buildEntry(plugin: Plugin): QuickAccessTabEntry {
   return {
     key: TENDER_TAB_KEY,
     // An element carrying Steam's own heading class, because Steam's tabs hand
     // it one: a bare string lands as a text node in the panel container at body
-    // size — 16 px / 400 measured, against 22 px / 700 for the tabs beside it.
-    // Without the class map the start-up check has already refused the panel,
-    // so this heads the fallback page, and it costs that page its styling
-    // rather than its heading.
+    // size, well under what the tabs beside it are drawn at — the two readings
+    // are in `docs/architecture/qam-panel.md`, The entry. Without the class map
+    // the start-up check has already refused the panel, so this heads the
+    // fallback page, and it costs that page its styling rather than its heading.
     title: <div className={quickAccessMenuClasses?.Title}>{plugin.name}</div>,
     // The glyph the plugin declares, not one chosen here: `icon` is what the
     // factory answers with and the fallback page answers with a different node,

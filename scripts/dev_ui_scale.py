@@ -385,9 +385,10 @@ function rect(r) {
   };
 }
 
-// Same heuristic as dev_place_window.sh's Big Picture half: class "steam" covers the
-// desktop client window and Big Picture; BPM keeps the "Big Picture" brand across locales ("Big-Picture-Modus"), and
-// a fullscreen steam window is BPM as well (the client window is never fullscreen).
+// Same heuristic as dev_place_window.sh's Big Picture half: class "steam" covers
+// the desktop client window and Big Picture; BPM keeps the "Big Picture" brand
+// across locales ("Big-Picture-Modus"), and a fullscreen steam window is BPM as
+// well (the client window is never fullscreen).
 function isBigPicture(win) {
   if (!win || !win.resourceClass ||
       String(win.resourceClass).toLowerCase() !== "steam") {

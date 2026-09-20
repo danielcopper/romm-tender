@@ -76,7 +76,7 @@ Five config objects, and nothing else worth editing:
 - **`anim.Animation`** — frame count, rate, how far the ring turns, and where the morph's holds and ramps meet.
 - **`tabicon.STRIP_GEOMETRY`** — the tab glyph's departures from `gen.DEFAULT_GEOMETRY`, each with its reason; there are
   two of them today: `arc_rot`, which levels the arcs where the mark tilts them by 6.34, and a 1.3 on the arc stroke
-  with the three arrowhead numbers that have to move with it, which is legibility at the 28 px the strip draws. The
+  with the three arrowhead numbers that have to move with it, which is legibility at the size the strip asks for. The
   glyph reuses everything else: the arcs and the bars are the mark's own routines, and the bars are drawn at the mark's
   resting pose. One number is `tabicon`'s own — `PLACES`, the precision this module's own numbers are written at.
 - **`lockup`'s module constants** — which typeface was cut and at what letter-spacing, the wordmark's cap height as a

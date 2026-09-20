@@ -115,10 +115,13 @@ window manager puts it.
 
 Placement itself is done by a short-lived KWin script loaded over DBus (`scripts/dev_place_window.sh`), which moves the
 chosen window to the target output and unloads itself again — if KWin scripting is unavailable, the loop still works and
-only the placement is skipped. It finds the window by its caption, matched on what no locale translates: Big Picture's
-keeps the "Big Picture" brand ("Big-Picture-Modus" in German), and the desktop client's main window is captioned the
-bare "Steam", which sets it apart from Steam's popups. Either window stays a normal desktop window: it can always be
-dragged elsewhere.
+only the placement is skipped. It sweeps the windows already open first and then watches for one to appear, so a Steam
+that was already running is covered as well as a cold-started one. Which window is which is decided by the caption with
+a fullscreen test beside it, because the class `steam` covers the desktop client, Big Picture and Steam's own popups
+alike: Big Picture is a caption carrying "picture" — which survives the German "Big-Picture-Modus" — **or** any
+fullscreen `steam` window, which covers a locale that translates the title outright; the desktop client's main window is
+the bare caption "Steam" and not fullscreen, which is a German client's spelling too but is not claimed for every
+locale. Either window stays a normal desktop window: it can always be dragged elsewhere.
 
 With [mise shell completions](https://mise.jdx.dev/installing-mise.html#shells) enabled (requires the `usage` CLI, e.g.
 `eval "$(mise completion bash)"` in your shell rc), the display argument tab-completes with those targets.
@@ -343,10 +346,10 @@ the state directory, and on stderr in the terminal `mise run dev` is running in.
   context. If it did not, `mise run dev:bpm-reset` or `mise run dev:desktop-reset` gives a context nobody has loaded
   anything into yet, and the backend still running from `dev` loads it.
 - **A window opened on the wrong monitor** — run the reset for that window with the right display, e.g.
-  `mise run dev:bpm-reset dp2`; it remembers the display, so the next `dev` uses it too. Placement matches the window by
-  its caption once it appears; check what the window manager actually saw with
-  `journalctl --user -b | grep tender-dev-window`: the log lists every window's caption and output, and whether the move
-  fired. The window stays a normal desktop window, so you can always drag it over yourself.
+  `mise run dev:bpm-reset dp2`; it remembers the display, so the next `dev` uses it too. Placement picks the window out
+  by caption and fullscreen state, among those already open and those that appear afterwards; check what the window
+  manager actually saw with `journalctl --user -b | grep tender-dev-window`: the log lists every window's caption and
+  output, and whether the move fired. The window stays a normal desktop window, so you can always drag it over yourself.
 - **A "screen sharing" portal dialog pops up when Big Picture opens** — that's Steam's own desktop capture (Game
   Recording / Remote Play) asking through the xdg-desktop-portal, because there is no gamescope to capture in desktop
   mode. It is unrelated to this tooling. **Turn Steam's Game Recording off** (Steam → Settings → Game Recording) — you

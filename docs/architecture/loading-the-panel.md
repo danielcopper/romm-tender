@@ -175,8 +175,10 @@ comes back to the backend — any error text has the token replaced with `<token
 
 ## Running it
 
-`mise run dev` builds the panel and runs the backend, which serves `dist/` and loads it. It needs
-`~/.steam/steam/.cef-enable-remote-debugging` to exist and Steam to have started since it appeared. See
+`mise run dev` builds the panel, **restarts the running Steam**, and runs the backend, which serves `dist/` and loads
+it. The restart is the task's own — a rebuilt bundle reaches Steam only in a fresh JS context — so whatever is open in
+Steam when the task starts is closed. It needs `~/.steam/steam/.cef-enable-remote-debugging` to exist, which Steam reads
+when it starts — so the task's own restart is what picks the file up. See
 [the dev loop](../contributing/frontend-dev-loop.md).
 
 ## What the tests here can and cannot see

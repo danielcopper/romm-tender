@@ -3,21 +3,16 @@
 
 Read off a screenshot of the strip rather than measured on the device: the strip
 carries nothing but single-tone, free-standing glyphs — a bell, friends, a cog, a
-bolt, a note, a question mark, and Decky's plug. A filled disc would be the only
-solid body in the row, so the disc goes and the two tones collapse into one. What
-is left is the pair of sync arrows around the button bars — the mark's own body
-at rest, drawn as solid capsules. Nothing marks the four button positions: the
-strip draws the glyph at 28 px, where a bar is 4.39 px wide and there is no room
-inside one for a second shape. `docs/architecture/qam-panel.md` holds that
-arithmetic.
+bolt, a note, a question mark, and Decky's plug. Every one of them is a bare
+silhouette, so a disc behind ours would be the only backing plate in the row: the
+disc goes and the two tones collapse into one. What is left is the pair of sync
+arrows around the button bars — the mark's own body at rest, drawn as solid
+capsules. Nothing marks the four button positions: at the size the glyph asks for
+a bar is too narrow to hold a second shape. `docs/architecture/qam-panel.md`
+holds that arithmetic.
 
-**The glyph does not move.** It shipped animated and the cost was measured on the
-device over CDP, on the QuickAccess target, in 6-second windows: with the fold
-running the task took 1.726 s against 0.0077 s with the animation off — the menu
-was open and the glyph drawn in both readings — and layout and style recalc each
-ran 720 times, twice a frame at 60 Hz, because animating a path's `d` forces
-layout every frame. That is roughly 29% of one core for as long as the
-menu is open, for a glyph that was rendering at 24 px across.
+**The glyph does not move.** It shipped animated, and the motion cost roughly 29%
+of one core for as long as the menu was open — measured on the device over CDP.
 `docs/architecture/qam-panel.md` holds the reading in full.
 
 Every departure from `gen.DEFAULT_GEOMETRY` is in {@link STRIP_GEOMETRY} with its
@@ -60,14 +55,10 @@ PLACES = 1
 #   stroke it caps, so `arrow_half` and `arrow_round` track `arc_w` — and
 #   `arrow_len` is scaled here beside them because a head that widens without
 #   lengthening reads as a paddle rather than an arrow. This is a legibility
-#   departure at the size the strip draws, not a redrawing of the mark: at 28 px
-#   one unit of the 200-unit square is 0.14 px, so the mark's own 15.5 stroke
-#   lands at 2.17 px — the thinnest thing in a strip whose other glyphs are solid
-#   bodies. The mark's own weight was tried there and read too fine, and 1.3 is
-#   what the owner picked seeing both at that size. What was looked at is the
-#   artwork rather than a build: each candidate was painted into the live glyph's
-#   `<svg>` over the CEF debugger, so what the pick rests on is this geometry at
-#   28 px in the real strip, beside its neighbours.
+#   departure at strip size, not a redrawing of the mark: at the
+#   28 px the glyph asks for, the mark's own 15.5 stroke lands at 2.17 px — the
+#   thinnest thing in a row of solid silhouettes.
+#   `docs/architecture/qam-panel.md` holds the arithmetic and the argument.
 STRIP_GEOMETRY = replace(
     gen.DEFAULT_GEOMETRY,
     arc_rot=0.0,

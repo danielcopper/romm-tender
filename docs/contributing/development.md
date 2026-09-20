@@ -186,16 +186,20 @@ Every backend feature or callable where testing makes sense should have unit tes
 mise run dev
 ```
 
-Builds the panel and runs the backend in the foreground. The backend binds a loopback port, serves `dist/` from it, and
-loads the panel into Steam's renderer over the CEF debugger — nothing is copied into a plugin directory and no plugin
-loader is restarted. Ctrl-C stops it and lets it unload.
+Builds the panel, **restarts the running Steam**, and runs the backend in the foreground. The backend binds a loopback
+port, serves `dist/` from it, and loads the panel into Steam's renderer over the CEF debugger — nothing is copied into a
+plugin directory and no plugin loader is restarted. Ctrl-C stops it and lets it unload.
 
-It needs `~/.steam/steam/.cef-enable-remote-debugging` to exist and Steam to have been started since that file appeared.
-Steam does not have to be running when the backend starts; it attaches when Steam comes up.
+**The restart closes whatever is open in Steam**, and the task does it rather than leaving it to you: there is no hot
+reload, so a rebuilt bundle reaches Steam only in a fresh JS context, and a new backend process strands the panel the
+old one loaded. Steam comes back into the window and display a `dev:bpm*` / `dev:desktop*` task last chose — the desktop
+client, placed nowhere, if none has. A Steam that is not running is simply started.
 
-There is no hot reload: a rebuilt bundle reaches Steam when its JS context is rebuilt. The whole loop, the Big Picture
-window, and how to judge layout at the Deck's real metrics are in [Frontend dev loop](frontend-dev-loop.md); what the
-injector does and how it protects the Steam UI from itself is in
+It needs `~/.steam/steam/.cef-enable-remote-debugging` to exist, which Steam reads when it starts — so the task's own
+restart is what picks the file up.
+
+The whole loop, the Big Picture window, and how to judge layout at the Deck's real metrics are in
+[Frontend dev loop](frontend-dev-loop.md); what the injector does and how it protects the Steam UI from itself is in
 [How the panel gets into Steam](../architecture/loading-the-panel.md).
 
 Two switches exist, both read from the environment at start-up: `TENDER_INJECT=off` serves the panel and loads it

@@ -99,22 +99,19 @@ Decky adopts for the same reason.
 
 The mark reduced for the strip: no disc, one tone, the sync ring levelled and thickened, and the body as the button bars
 drawn as solid capsules. The strip carries nothing but single-tone free-standing glyphs — read off a screenshot rather
-than measured on the device — a bell, friends, a cog, a bolt, a note, a question mark, and Decky's plug — so a filled
-disc would be the only solid body in the row.
+than measured on the device — a bell, friends, a cog, a bolt, a note, a question mark, and Decky's plug — every one of
+them a bare silhouette, so a disc behind ours would be the only backing plate in the row.
 
 **Nothing marks the four button positions, and that is arithmetic rather than taste.** They shipped punched out of the
 bars as holes, on the reasoning that took the disc away: with one tone a filled dot has nothing to be filled with that
 the bar is not already, so it disappears into the bar it sits on. At strip size the bar cannot pay for the cut. The
-glyph is drawn at 28 px across a 200-unit square, so one unit is 0.14 px: a bar 31.38 units wide is 4.39 px, a hole at
+glyph asks for 28 px across a 200-unit square, so one unit is 0.14 px: a bar 31.38 units wide is 4.39 px, a hole at
 radius 12 is 3.36 px across, and what is left of the bar either side of one is 0.52 px. Half a pixel cannot draw a bar,
-so the holes ate the body instead of marking the buttons — which is what the owner saw in the real strip on the device,
-and why the bars are now solid.
+so the holes ate the body instead of marking the buttons, and the bars are solid.
 
-**The arc and its arrowhead are thickened by 1.3**, which is the same size read the other way: at 28 px the mark's own
-15.5 stroke lands at 2.17 px, the thinnest thing in a row of solid bodies. The mark's own weight was tried at that size
-and reads too fine. What was looked at is the artwork and not a build — each candidate was painted into the live glyph's
-`<svg>` over the CEF debugger — so what the pick rests on is this geometry at 28 px in the real strip, beside its
-neighbours.
+**The arc and its arrowhead are thickened by 1.3**, which is the same size read the other way: at the 28 px the glyph
+asks for, the mark's own 15.5 stroke lands at 2.17 px, the thinnest thing in a row of solid silhouettes. The mark's own
+weight reads too fine there, and the 1.3 is what the arc carries instead.
 
 It is **generated**, by `scripts/logo/tabicon.py` through `build.py --tab-icon`, into `frontend/src/qam/tabIconArt.ts`;
 the geometry comes from the mark's own drawing routines, so the two cannot drift. Its two departures from the mark's
@@ -139,8 +136,7 @@ it and what it would have added is simply unknown. On a handheld, that is not a 
 gets to make. `TabIcon.test.tsx` fails if any of SMIL's animation elements comes back — it can see nothing else, and
 motion driven from CSS or a rAF loop would pass it — because the cost is invisible to every other check here.
 
-Two things about it are unmeasured and are on this cut's device list
-([#1946](https://github.com/danielcopper/romm-tender/pull/1946)):
+Two things about it are unmeasured, and neither is guessed at:
 
 - **Whether it lands at the 28 px it asks for.** It asks in em rather than in pixels so it scales with Steam's UI, and
   the `1.633em` it asks with is scaled off a measurement rather than arithmetic: the `1.4em` it used to carry drew a box

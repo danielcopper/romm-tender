@@ -32,7 +32,7 @@ vi.mock("../utils/deckyUiInternals", () => ({
   },
 }));
 
-/** An entry shaped the way the installer builds it, minus the React nodes. */
+/** An entry shaped the way the installer builds it, with stand-ins for its three nodes: `syncEntry` renders none. */
 const tenderEntry = (): QuickAccessTabEntry => ({
   key: TENDER_TAB_KEY,
   title: "Tender",
@@ -156,8 +156,9 @@ describe("buildEntry", () => {
     });
 
     it("draws the plugin's name in an element carrying Steam's own heading class", () => {
-      // A bare string lands in the panel at body size, 16 px / 400, where
-      // Steam's own tabs head theirs at 22 px / 700 through this class.
+      // A bare string lands in the panel at body size; Steam's own tabs head
+      // theirs larger and bolder through this class. The two readings are in
+      // `docs/architecture/qam-panel.md`, The entry.
       probe.classes = { Title: "Title_hash" };
 
       render(buildEntry(plugin({ name: "Another Name" })).title as ReactElement);

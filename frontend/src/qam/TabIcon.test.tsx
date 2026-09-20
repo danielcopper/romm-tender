@@ -4,8 +4,8 @@
  * happy-dom performs no layout and runs no animation, so what these cases
  * establish is what is in the tree — which is all the animation case needs,
  * because an animation that is not authored cannot run. Whether the strip draws
- * the glyph at the size and in the colour it asks for is a device question,
- * named in this cut's device list (#1946).
+ * the glyph at the size and in the colour it asks for is a device question, and
+ * nothing in this suite reaches it.
  */
 
 import { describe, it, expect } from "vitest";

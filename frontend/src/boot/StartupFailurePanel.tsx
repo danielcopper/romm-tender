@@ -2,8 +2,9 @@
  * What the panel shows instead of itself when a Steam search came back empty.
  *
  * **It uses no `@decky/ui`.** Most of that package is searches into Steam's own
- * bundle — `steamModules.ts` classifies 25 of the 33 members this project imports
- * as exactly that — and this page exists precisely because such a search missed.
+ * bundle — every entry `steamModules.ts`'s `STEAM_LOOKUPS` marks
+ * `deckyUiExport` is one, and they are most of what this project imports from
+ * the package — and this page exists precisely because such a search missed.
  * A page built from them could be the next thing to render nothing.
  * Plain elements and inline styles only, so that whatever else is broken, this
  * still draws.
@@ -14,10 +15,11 @@
  * **Report, do not diagnose.** The page's whole job is to make one fault
  * distinguishable from another: an empty panel looks exactly like a backend that
  * is not running, and the user's next step is different in each case. So it says
- * what missed, whose copy of `@decky/ui` the missed searches belonged to, the
- * repair that follows where one does, and where to report it. It does not try
- * to work out which Steam update did it, or to carry on with the parts that
- * still resolve.
+ * what missed, the repair that follows where one does — a program to update, and
+ * only where the verdict can attribute one — and where to report it. It names no
+ * copy of `@decky/ui` and no party the verdict cannot place; it does not try to
+ * work out which Steam update did it, or to carry on with the parts that still
+ * resolve.
  *
  * Whose copy that is arrives as a prop rather than being read here. The machine
  * is not what would stand in the way — `searchingCopy.test.ts` sets
