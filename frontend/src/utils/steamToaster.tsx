@@ -150,7 +150,7 @@ export function createSteamToaster(seams: SteamToasterSeams): SteamToaster {
       // An own `render` means a trampoline is already installed — any patcher's,
       // ours included. Applying a second one over it would orphan whoever is in
       // the chain.
-      if (!Object.prototype.hasOwnProperty.call(prototype, "render")) installTrampoline(renderer);
+      if (Object.getOwnPropertyDescriptor(prototype, "render") === undefined) installTrampoline(renderer);
       const previous = prototype.render;
       if (typeof previous !== "function") return false;
       // Whatever overwrote the link we are replacing may still delegate through

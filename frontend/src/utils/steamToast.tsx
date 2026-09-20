@@ -46,7 +46,9 @@ const shortTime = (createdMs: number): string =>
  * can ever see, and the subtext has no home here. `TwoLine` is Steam's own
  * two-line variant of the same template.
  */
-const BigPicturePopup: FC<SteamToastProps> = ({ toast, classes }) => (
+type PopupProps = Pick<SteamToastProps, "toast" | "classes">;
+
+const BigPicturePopup: FC<PopupProps> = ({ toast, classes }) => (
   <div className={classNames(classes.ShortTemplate, classes.TwoLine)}>
     <div className={classes.Content}>
       <div className={classes.Header}>
@@ -62,7 +64,7 @@ const BigPicturePopup: FC<SteamToastProps> = ({ toast, classes }) => (
  * off a single clipped line — without the class Steam ellipsises a description
  * after one.
  */
-const DesktopPopup: FC<SteamToastProps> = ({ toast, classes }) => (
+const DesktopPopup: FC<PopupProps> = ({ toast, classes }) => (
   <div className={classes.StandardTemplateContainer}>
     <div className={classNames(classes.DesktopToastTemplate, classes.StandardTemplateDesktop)}>
       <div className={classes.Content}>
@@ -85,7 +87,7 @@ const DesktopPopup: FC<SteamToastProps> = ({ toast, classes }) => (
  * row nobody can scroll past. There is nothing to activate — a toast of ours
  * names no destination — so the handler is empty and buys the stop alone.
  */
-const NotificationTabEntry: FC<SteamToastProps> = ({ toast, createdMs, newIndicator, classes }) => (
+const NotificationTabEntry: FC<Omit<SteamToastProps, "location">> = ({ toast, createdMs, newIndicator, classes }) => (
   <Focusable onActivate={() => {}} className={classes.StandardTemplateContainer}>
     <div className={classes.StandardTemplate}>
       <div className={classes.Content}>
@@ -116,13 +118,13 @@ const NotificationTabEntry: FC<SteamToastProps> = ({ toast, createdMs, newIndica
  * of the three that is right to render anywhere: it carries every field a toast
  * can have and imposes no size of its own.
  */
-export const SteamToast: FC<SteamToastProps> = (props): ReactNode => {
-  switch (props.location) {
+export const SteamToast: FC<SteamToastProps> = ({ location, ...entry }): ReactNode => {
+  switch (location) {
     case TOAST_LOCATION_BIG_PICTURE_POPUP:
-      return <BigPicturePopup {...props} />;
+      return <BigPicturePopup toast={entry.toast} classes={entry.classes} />;
     case TOAST_LOCATION_DESKTOP_POPUP:
-      return <DesktopPopup {...props} />;
+      return <DesktopPopup toast={entry.toast} classes={entry.classes} />;
     default:
-      return <NotificationTabEntry {...props} />;
+      return <NotificationTabEntry {...entry} />;
   }
 };
