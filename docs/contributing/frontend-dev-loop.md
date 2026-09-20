@@ -42,9 +42,10 @@ The display argument is optional, and leaving it out means one thing on a task t
 `dev:backend` shuts the running Steam down first, so anything open in it closes; a Steam that is not running is simply
 started. A build that fails, or a display that matches nothing, stops the task before Steam is touched.
 
-**The five tasks that build first ask who holds the single-instance lock** — `backend.lock`, beside the database — and
-refuse before Steam is touched when the answer is the wrong one. Which answer that is depends on what the task is for,
-so the question has two directions:
+**The five tasks that build ask who holds the single-instance lock before anything else they do** — `backend.lock`,
+beside the database — and refuse on the wrong answer, before the build as well as before Steam: no refusal here is one
+the task could go on from, so a build ahead of it is a build thrown away. Which answer is the wrong one depends on what
+the task is for, so the question has two directions:
 
 - `dev`, `dev:bpm`, `dev:desktop` and `dev:backend` start a backend, so they refuse when one **already holds** the lock,
   naming the lock file and the process that has it. Stop that backend, or use a `-reset` task, which starts none.

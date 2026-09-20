@@ -112,22 +112,26 @@ run = [
 
 [tasks.dev]
 description = "Build the panel, restart Steam into the window and display a dev:bpm* / dev:desktop* task last chose (the desktop client, placed nowhere, if none has), and run the backend, which loads the panel into it — dev:frontend and dev:backend in one (restarts Steam)"
-depends = ["build"]
 raw = true
 # Why this task restarts Steam rather than loading into the one that is up,
 # and why the window is remembered rather than read:
 # docs/contributing/frontend-dev-loop.md.
 #
-# The build runs first (a failed build costs no restart), the lock is asked
-# before the restart for the same reason (a backend that cannot start costs a
-# message rather than a Steam with no panel in it), and the backend is exec'd
-# last, because nothing after an `exec` runs. `exec` so Ctrl-C reaches the
-# backend itself rather than mise: the process unloads on SIGINT, and an
-# interrupted unload leaves behind the half-finished state its start-up
+# Each step is ordered ahead of the one it would otherwise waste. The lock is
+# asked first: it is the cheapest question there is, and every refusal it can
+# give is one this task cannot recover from, so anything ahead of it is spent
+# for nothing. The build follows, so a failed build costs no restart; the
+# restart follows that; and the backend is exec'd last, because nothing after
+# an `exec` runs. The build is a line in this block rather than a `depends`
+# entry for that reason alone — mise runs a dependency ahead of the whole
+# block, which would put it ahead of the question too. `exec` so Ctrl-C
+# reaches the backend itself rather than mise: the process unloads on SIGINT,
+# and an interrupted unload leaves behind the half-finished state its start-up
 # routines exist to repair. The backend needs
 # `~/.steam/steam/.cef-enable-remote-debugging` to exist.
 run = '''
 python scripts/dev_backend_lock.py
+mise run build
 bash scripts/dev_steam.sh restart
 exec python backend/main.py
 '''
@@ -161,7 +165,6 @@ exec python3 scripts/dev_ui_scale.py "$usage_mode"
 
 [tasks."dev:bpm"]
 description = "Build the panel, restart Steam into windowed Big Picture on a chosen display (none: placed nowhere), remember that for dev, and run the backend (restarts Steam)"
-depends = ["build"]
 raw = true
 usage = '''
 arg "[display]" help="Monitor for the Big Picture window: 'internal' or an output name (dp2, DP-3, ...). Omitted, the window is placed nowhere and dev remembers that."
@@ -170,13 +173,13 @@ complete "display" run="bash scripts/dev_place_window.sh --list"
 # dev, with the window chosen here rather than recalled.
 run = '''
 python scripts/dev_backend_lock.py
+mise run build
 bash scripts/dev_steam.sh restart bpm "${usage_display:-}"
 exec python backend/main.py
 '''
 
 [tasks."dev:desktop"]
 description = "Build the panel, restart Steam into the desktop client on a chosen display (none: placed nowhere), remember that for dev, and run the backend (restarts Steam)"
-depends = ["build"]
 raw = true
 usage = '''
 arg "[display]" help="Monitor for the desktop client's window: 'internal' or an output name (dp2, DP-3, ...). Omitted, the window is placed nowhere and dev remembers that."
@@ -185,13 +188,13 @@ complete "display" run="bash scripts/dev_place_window.sh --list"
 # dev, with the window chosen here rather than recalled.
 run = '''
 python scripts/dev_backend_lock.py
+mise run build
 bash scripts/dev_steam.sh restart desktop "${usage_display:-}"
 exec python backend/main.py
 '''
 
 [tasks."dev:backend"]
 description = "Build the panel and run the backend against the Steam already running — dev without the restart. The task after a dev:*-reset, or beside a Steam carrying no panel; beside one that already carries a panel it loads nothing, and that panel cannot reach it either"
-depends = ["build"]
 raw = true
 # Starts a backend without restarting Steam. What it cannot do — load into a
 # context that already carries the panel's marker, or be reached by a panel a
@@ -199,12 +202,12 @@ raw = true
 # tasks above do: docs/contributing/frontend-dev-loop.md.
 run = '''
 python scripts/dev_backend_lock.py
+mise run build
 exec python backend/main.py
 '''
 
 [tasks."dev:frontend"]
 description = "Build the panel and restart Steam into the remembered window ([display] moves it there and is remembered; none repeats the remembered display) — dev without the backend: the one already running loads the panel itself, so a sync in flight survives. Refuses when no backend is running"
-depends = ["build"]
 raw = true
 usage = '''
 arg "[display]" help="Move the remembered window to this display: 'internal' or an output name (dp2, DP-3, ...). Omitted, the remembered display stands — this task repeats a choice rather than stating one."
@@ -215,6 +218,7 @@ complete "display" run="bash scripts/dev_place_window.sh --list"
 # nothing loads a panel into.
 run = '''
 python scripts/dev_backend_lock.py --require-running
+mise run build
 bash scripts/dev_steam.sh restart-remembered "${usage_display:-}"
 '''
 
