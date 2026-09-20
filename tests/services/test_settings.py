@@ -20,20 +20,6 @@ def settings() -> dict[str, Any]:
 
 
 @pytest.fixture
-def restore_root_logger():
-    """Put the root logger back — the suite's own logging must survive this file."""
-    root = logging.getLogger()
-    saved, level = list(root.handlers), root.level
-    yield
-    for handler in list(root.handlers):
-        root.removeHandler(handler)
-        handler.close()
-    for handler in saved:
-        root.addHandler(handler)
-    root.setLevel(level)
-
-
-@pytest.fixture
 def uow() -> FakeUnitOfWork:
     return FakeUnitOfWork()
 

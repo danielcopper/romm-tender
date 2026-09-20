@@ -395,8 +395,9 @@ def bootstrap(
     prune_artifacts = PruneArtifactAdapter(cache_dir=directories.cache_dir)
     steam_recovery = SteamRecoveryAdapter(user_home=user_home, logger=logger)
     # Built here rather than beside its peers below because the transport wants
-    # it: a bare `logger.debug` never reaches the log the user reads, since
-    # nothing sets a level on this logger and `log_level` gates this seam alone.
+    # it: `log_level` gates this seam, where a bare `logger.debug` reaches no log
+    # the user reads — the root's level, and why nothing moves it, is
+    # `host.logging_setup.configure_logging`'s.
     debug_logger = SettingsAwareDebugLogger(settings=settings, logger=logger)
     http_adapter = RommHttpAdapter(settings, directories.code_dir, logger, user_agent, log_debug=debug_logger)
     romm_api = RommApiAdapter(http_adapter)

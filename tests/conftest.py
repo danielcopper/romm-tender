@@ -91,6 +91,20 @@ def fake_steamgrid_db_api():
     return FakeSteamGridDbApi()
 
 
+@pytest.fixture
+def restore_root_logger():
+    """Put the root logger back — the suite's own logging must survive this file."""
+    root = logging.getLogger()
+    saved, level = list(root.handlers), root.level
+    yield
+    for handler in list(root.handlers):
+        root.removeHandler(handler)
+        handler.close()
+    for handler in saved:
+        root.addHandler(handler)
+    root.setLevel(level)
+
+
 @pytest.fixture(autouse=True)
 def _reset_decky_mock_paths():
     """Refresh per-test temp dirs on the mock decky module.

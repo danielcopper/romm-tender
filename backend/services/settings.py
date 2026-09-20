@@ -8,7 +8,8 @@ on-disk persistence is fired through the injected
 filesystem directly.
 
 Frontend-log routing also lives here — it reads the configured level
-from the live settings dict and dispatches to the runtime logger.
+from the live settings dict and records through a child of the injected
+logger, which carries a level of its own.
 """
 
 from __future__ import annotations
@@ -36,12 +37,12 @@ _VALID_LOG_LEVELS = ("debug", "info", "warn", "error")
 _VALID_STEAM_INPUT_MODES = ("default", "force_on", "force_off")
 
 # The level names the frontend sends against the stdlib level each record is
-# stamped with. Written out rather than resolved through ``logging`` by name,
-# which would look equivalent — it even answers 30 for ``WARN`` — but answers
-# the string ``"Level TRACE"`` for a name it does not know, and this value
-# comes off an untrusted wire. A table cannot do that: an unrecognised name
-# misses it and takes the ``debug`` default below, which is the level the
-# threshold above already weighs such a message at.
+# stamped with. Written out rather than resolved through ``logging`` by name:
+# ``getLevelName`` answers a number for the uppercase spellings only, and the
+# wire sends lowercase, so every level this code meets comes back as a string
+# — ``getLevelName("warn")`` is ``"Level warn"``. A table cannot do that: a
+# name it does not hold misses it and takes the ``debug`` default below, which
+# is the level the threshold above already weighs such a message at.
 _RECORD_LEVELS: dict[str, int] = {
     "debug": logging.DEBUG,
     "info": logging.INFO,
@@ -114,21 +115,21 @@ class SettingsService:
         self._logger = config.logger
         # A level of its own, so that a frontend record is stamped with the
         # level its caller named instead of one the injected logger would
-        # allow. The DEBUG records this admits are still written, even though
-        # the root sits higher: a logger's level decides only whether the
-        # record is CREATED, and once it exists ``callHandlers`` walks up to
-        # the root running the handlers it finds, consulting no ancestor's
-        # level on the way. So this reads as though the root at INFO should
-        # swallow them, and it does not — raising this logger's level back is
-        # the change that silently deletes every debug line here.
-        # ``host.logging_setup.configure_logging`` owns what the root's level
-        # is and why nothing moves it; levelling the injected logger instead
-        # would hand the same reprieve to every ``logger.debug`` in the
-        # backend, none of which this setting is meant to reach.
+        # allow. The DEBUG records it admits are still written where an
+        # ancestor sits higher: a logger's level decides only whether the
+        # record is CREATED, and ``callHandlers`` then walks up to the root
+        # running the handlers it finds, consulting no ancestor LOGGER's
+        # level. It does test each HANDLER's own level, which costs these
+        # records nothing only while the root's two sit at ``NOTSET`` —
+        # ``host.logging_setup.configure_logging`` owns that and the root's
+        # level. Dropping this ``setLevel``, or raising it, deletes every debug
+        # line here in silence; levelling the injected logger instead would hand
+        # the same reprieve to every ``logger.debug`` in the backend, none of
+        # which this setting is meant to reach.
         #
         # It decides the stamp and never the threshold — whether a frontend
         # line is written at all is `log_level`'s, below, and nothing here.
-        self._frontend_logger = config.logger.getChild("frontend")
+        self._frontend_logger = config.logger.getChild(f"{__name__}.frontend")
         self._frontend_logger.setLevel(logging.DEBUG)
         self._settings_persister = config.settings_persister
         self._steam_config = config.steam_config
@@ -279,12 +280,11 @@ class SettingsService:
         """Log a frontend message respecting the configured log_level threshold.
 
         Messages below the configured threshold are dropped silently; a message
-        above it is recorded at the level the caller named, so a twice-a-second
-        debug poll reads as a debug line rather than as ordinary operation.
-        Unknown level strings are treated as ``debug`` on both counts — the
-        lowest threshold, so misrouted frontend calls still surface when
-        ``log_level=debug``, and the lowest stamp, so one is never presented as
-        something the caller did not claim.
+        above it is recorded at the level the caller named. Unknown level strings
+        are treated as ``debug`` on both counts — the lowest threshold, so
+        misrouted frontend calls still surface when ``log_level=debug``, and the
+        lowest stamp, so one is never presented as something the caller did not
+        claim.
         """
         configured = self._settings.get("log_level", "warn")
         if self.LOG_LEVELS.get(level, 0) >= self.LOG_LEVELS.get(configured, 2):

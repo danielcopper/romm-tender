@@ -224,10 +224,10 @@ class RommHttpAdapter:
         the answer that separates a mis-saved setting from a rejected one.
 
         It goes through the injected ``log_debug`` seam rather than
-        ``logger.debug``: nothing in this plugin sets a level on the runtime
-        logger, and the user's ``log_level`` setting gates only that seam, so a
-        ``logger.debug`` call reaches no log a user can read — measured on the
-        device, where this line was invisible with the level set to debug.
+        ``logger.debug``, which reaches no log a user can read —
+        ``host.logging_setup.configure_logging`` owns the root's level and why
+        nothing moves it. The user's ``log_level`` setting gates this seam; it
+        reaches ``logger.debug`` nowhere.
         """
         names = tuple(attached)
         if names == self._logged_header_names:

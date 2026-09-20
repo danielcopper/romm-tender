@@ -6,8 +6,6 @@ import logging
 import sys
 from logging.handlers import RotatingFileHandler
 
-import pytest
-
 from host.logging_setup import (
     LOG_BACKUP_COUNT,
     LOG_FILENAME,
@@ -16,20 +14,6 @@ from host.logging_setup import (
     RedactingFormatter,
     configure_logging,
 )
-
-
-@pytest.fixture
-def restore_root_logger():
-    """Put the root logger back — the suite's own logging must survive this file."""
-    root = logging.getLogger()
-    saved, level = list(root.handlers), root.level
-    yield
-    for handler in list(root.handlers):
-        root.removeHandler(handler)
-        handler.close()
-    for handler in saved:
-        root.addHandler(handler)
-    root.setLevel(level)
 
 
 class TestConfigureLogging:
