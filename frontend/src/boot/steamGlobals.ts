@@ -142,7 +142,12 @@ export interface GlobalsReport {
   source: "decky" | "tender" | "unknown";
   /** Did Steam report itself initialised before the deadline? */
   steamReady: boolean;
-  /** Which of the three are set now. */
+  /**
+   * Which of the three are set now. Every key of it must be true or the panel
+   * is not imported — the injector's bootstrap gates on the keys this object
+   * carries rather than on a list of its own, so a fourth one added here is a
+   * fourth one that has to be installed.
+   */
   installed: { SP_REACT: boolean; SP_REACTDOM: boolean; SP_JSX: boolean };
   /** Steam's React version, when it could be read. */
   reactVersion: string | null;
@@ -190,8 +195,7 @@ export async function installGlobals(): Promise<GlobalsReport> {
     // module-scope `SP_JSX.jsx` sits in its import graph (`dist/index.js:4892`,
     // from `PlatformDetail.tsx`), so with `SP_JSX` unset it throws while being
     // evaluated — before `definePlugin`'s factory exists, and long before any
-    // check inside it could run. An honest `false` here is what would keep that
-    // bundle from being loaded at all.
+    // check inside it could run.
     //
     // `SP_REACT` and `SP_REACTDOM` have no such hole: a miss leaves them unset.
     // Decky has none either — its block reads `jsxModule.jsxs` bare and throws

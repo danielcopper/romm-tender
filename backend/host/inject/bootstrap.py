@@ -16,13 +16,12 @@ fallback page here (CONTEXT.md → Load-failure card): that one is a React
 component rendered inside a panel that DID mount, when a search into Steam's own
 interface came back empty.
 
-**The globals are installed between the two imports, and the panel is imported
-only if all of them are there.** Evaluating the React bootstrap DEFINES its
-installer and leaves it on the window; it installs nothing until somebody calls
-it. The panel reads those globals while its own modules evaluate, so importing
-it with one missing throws before any code of ours can notice — which is why a
-missing one is refused here instead, and the sentence it is refused with is what
-the card shows and the injector logs.
+**The globals installer is called between importing the bundle that defines it
+and importing the panel, and the panel is not imported unless the report says
+every global it names is installed.** Evaluating that bundle only DEFINES the
+installer and leaves it on the window; it installs nothing until it is called.
+Why the refusal sits here rather than at the panel:
+``docs/architecture/loading-the-panel.md``.
 
 **It never takes the machine over.** Whether Steam's controller focus can reach
 a node appended to its document from outside its own React tree is not
@@ -65,11 +64,9 @@ STOP_BINDING = "__tender_stop_loading__"
 STOP_PAYLOAD = "stop"
 
 # The window property the React bootstrap leaves its installer on
-# (``frontend/src/boot/steamGlobals.ts``). Evaluating that bundle only DEFINES
-# the function; the three globals the panel renders through exist once it has
-# been called, so the source below calls it by this name between the two
-# imports. The name is spelled in two languages and
-# ``tests/host/inject/test_bootstrap.py`` holds the two against each other.
+# (``frontend/src/boot/steamGlobals.ts``), and the name the source below calls it
+# by. Spelled in two languages, with nothing but
+# ``tests/host/inject/test_bootstrap.py`` holding the two against each other.
 GLOBALS_INSTALLER = "__TENDER_INSTALL_GLOBALS"
 
 _FACTS_PLACEHOLDER = "__TENDER_FACTS__"
@@ -99,11 +96,13 @@ _SOURCE = """
     const report = await install();
     const installed = (report && report.installed) || {};
     const names = Object.keys(installed);
+    if (names.length === 0) {
+      throw new Error(T.globals_unreported);
+    }
     const missing = names.filter((name) => !installed[name]);
-    if (names.length === 0 || missing.length > 0) {
-      const named = missing.length > 0 ? missing.join(", ") : T.globals_none;
+    if (missing.length > 0) {
       throw new Error(
-        `${T.globals_missing} ${named}. ${report && report.steamReady ? T.steam_ready : T.steam_not_ready}`
+        `${T.globals_missing} ${missing.join(", ")}. ${report.steamReady ? T.steam_ready : T.steam_not_ready}`
       );
     }
   };
@@ -233,7 +232,7 @@ class BootstrapFacts:
     stop: str
     stop_note: str
     globals_missing: str
-    globals_none: str
+    globals_unreported: str
     steam_ready: str
     steam_not_ready: str
     no_installer: str
@@ -261,18 +260,15 @@ STOP = "Stop trying until Tender restarts"
 # has, for the same reason: the way out of a state Steam is in cannot be inside
 # Steam.
 STOP_NOTE = "That is Tender's own backend process. The panel is loaded again the next time it starts."
-# What the card shows and the injector logs when the installer ran and the panel
-# was therefore not imported. The panel reads those globals while its own modules
-# evaluate, so one of them missing is no panel at all rather than a degraded one
-# — which is why this is a refusal to import rather than a warning beside it. The
-# names are not spelled here: they come back in the installer's own report, so
-# this backend states no list it would have to keep in step with the frontend.
+# The names are not spelled here: they come back in the installer's own report,
+# so this backend states no list it would have to keep in step with the frontend.
 GLOBALS_MISSING = "The panel was not loaded: the globals it renders through could not all be installed. Missing:"
-# The same refusal where the report named nothing at all — an answer this source
-# cannot read is not an answer that everything is fine.
-GLOBALS_NONE = "the installer named none"
+# Thrown on its own rather than folded into the sentence above, because an
+# answer naming nothing names no missing global either — and an answer this
+# unreadable is no evidence about Steam's registry, so it claims none.
+GLOBALS_UNREPORTED = "The panel was not loaded: the installer answered without saying what it installed."
 STEAM_READY = "Steam's module registry had reported itself ready."
-STEAM_NOT_READY = "Steam's module registry had not reported itself ready, so the searches read an incomplete one."
+STEAM_NOT_READY = "Steam's module registry had not reported itself ready, so a search may have read an incomplete one."
 # The globals bundle was imported and left nothing to call. A panel imported
 # after it would throw on its first read of a global — the fault this path
 # exists to report rather than reproduce.
@@ -320,7 +316,7 @@ def build_facts(
         stop=STOP,
         stop_note=STOP_NOTE,
         globals_missing=GLOBALS_MISSING,
-        globals_none=GLOBALS_NONE,
+        globals_unreported=GLOBALS_UNREPORTED,
         steam_ready=STEAM_READY,
         steam_not_ready=STEAM_NOT_READY,
         no_installer=NO_INSTALLER,

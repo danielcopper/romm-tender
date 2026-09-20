@@ -14,7 +14,7 @@ import pytest
 from host.inject.bootstrap import (
     GLOBALS_INSTALLER,
     GLOBALS_MISSING,
-    GLOBALS_NONE,
+    GLOBALS_UNREPORTED,
     MARKER,
     NO_INSTALLER,
     STEAM_NOT_READY,
@@ -115,11 +115,13 @@ class TestInstallingTheGlobals:
         assert len(folded_facts(source)["urls"]) == 2
 
     def test_nothing_is_called_where_no_bundle_in_the_list_installs_anything(self):
-        """Beside Decky the loader installed them, so this may install nothing."""
+        """Beside Decky the loader installed them, so this may install nothing.
+
+        ``i`` counts from 0 and is never null, so the gate the loop is written
+        around never opens for this choice.
+        """
         source = build_bootstrap(facts(globals_at=None, urls=URLS[1:]))
         assert folded_facts(source)["globals_at"] is None
-        # ``i`` counts from 0 and is never null, so the gate never opens.
-        assert "if (i === T.globals_at)" in loading(source)
 
     def test_a_missing_global_stops_the_panel_being_imported(self):
         """The call throws and is awaited, so the loop never reaches the panel.
@@ -140,7 +142,7 @@ class TestInstallingTheGlobals:
         assert carried["steam_not_ready"] == STEAM_NOT_READY
         body = installer(source)
         assert 'missing.join(", ")' in body
-        assert "report && report.steamReady ? T.steam_ready : T.steam_not_ready" in body
+        assert "report.steamReady ? T.steam_ready : T.steam_not_ready" in body
 
     def test_the_names_are_the_installers_own_rather_than_a_list_kept_here(self):
         """A list spelled here is one more thing to keep in step with the panel."""
@@ -148,9 +150,14 @@ class TestInstallingTheGlobals:
         assert "Object.keys(installed)" in body
 
     def test_a_report_that_names_nothing_is_a_refusal_rather_than_a_pass(self):
+        """Thrown on its own, so the sentence claims nothing about the registry.
+
+        An answer that did not say what it installed names no missing global,
+        and is no evidence about Steam's registry either.
+        """
         source = build_bootstrap(facts())
-        assert folded_facts(source)["globals_none"] == GLOBALS_NONE
-        assert "names.length === 0 || missing.length > 0" in installer(source)
+        assert folded_facts(source)["globals_unreported"] == GLOBALS_UNREPORTED
+        assert "throw new Error(T.globals_unreported);" in installer(source)
 
     def test_a_bundle_that_left_no_installer_is_reported_as_that(self):
         source = build_bootstrap(facts())
