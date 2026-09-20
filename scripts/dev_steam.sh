@@ -5,8 +5,11 @@
 # Usage:
 #   dev_steam.sh restart [bpm|desktop [display]]
 #       Restart Steam into windowed Big Picture or the desktop client, its
-#       window placed on <display> (default "internal"), and remember both.
-#       With no window, restart into the remembered one and remember nothing.
+#       window placed on <display>, and remember both. With no <display> the
+#       window is placed nowhere — and that is what is remembered, so the next
+#       bare restart places nothing either. With no window at all, restart into
+#       the remembered one (the desktop client, placed nowhere, when nothing is
+#       remembered) and remember nothing.
 #       A Steam that is not running is started; one still running ~30 s after
 #       the shutdown request fails the restart (exit 1).
 #
@@ -59,19 +62,21 @@ remember() {
   printf 'window=%s\ndisplay=%s\n' "$1" "$2" > "$MEMORY_FILE"
 }
 
-# Sets WINDOW and TARGET from the memory file; the desktop client on the
-# internal panel when nothing is remembered.
+# Sets WINDOW and TARGET from the memory file, TARGET empty for "placed
+# nowhere"; status 1 when nothing is remembered, WINDOW and TARGET then
+# standing for the desktop client, placed nowhere.
 recall() {
   local key value
   WINDOW="desktop"
-  TARGET="internal"
-  [ -f "$MEMORY_FILE" ] || return 0
+  TARGET=""
+  [ -f "$MEMORY_FILE" ] || return 1
   while IFS='=' read -r key value || [ -n "$key" ]; do
     case "$key" in
       window) WINDOW="$value" ;;
       display) TARGET="$value" ;;
     esac
   done < "$MEMORY_FILE"
+  return 0
 }
 
 restart_steam() {
@@ -79,11 +84,18 @@ restart_steam() {
   if [ $# -gt 0 ]; then
     explicit=1
     WINDOW="$1"
-    TARGET="${2:-internal}"
+    TARGET="${2:-}"
   else
     explicit=0
-    recall
-    echo "Remembered: $WINDOW on $TARGET ($MEMORY_FILE)"
+    if recall; then
+      if [ -n "$TARGET" ]; then
+        echo "Remembered: $WINDOW on $TARGET ($MEMORY_FILE)"
+      else
+        echo "Remembered: $WINDOW, no display ($MEMORY_FILE)"
+      fi
+    else
+      echo "Nothing remembered ($MEMORY_FILE) — the desktop client, placed nowhere."
+    fi
   fi
   case "$WINDOW" in
     bpm | desktop) ;;
@@ -93,14 +105,18 @@ restart_steam() {
       return 1
       ;;
   esac
-  # Resolved BEFORE Steam is shut down, so a display that matches nothing costs
-  # an error message rather than a restart.
-  if ! output=$(bash "$PLACE_WINDOW" --resolve "$TARGET"); then
-    if [ "$explicit" = 0 ]; then
-      echo "  The remembered display is not connected. Choose one with" \
-        "\`mise run dev:bpm <display>\` or \`mise run dev:desktop <display>\`." >&2
+  # No display asked for is no placement: nothing to resolve, and nothing armed
+  # below. Otherwise resolved BEFORE Steam is shut down, so a display that
+  # matches nothing costs an error message rather than a restart.
+  output=""
+  if [ -n "$TARGET" ]; then
+    if ! output=$(bash "$PLACE_WINDOW" --resolve "$TARGET"); then
+      if [ "$explicit" = 0 ]; then
+        echo "  The remembered display is not connected. Choose one with" \
+          "\`mise run dev:bpm <display>\` or \`mise run dev:desktop <display>\`." >&2
+      fi
+      return 1
     fi
-    return 1
   fi
 
   echo "Shutting down Steam..."

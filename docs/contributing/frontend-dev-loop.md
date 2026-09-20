@@ -24,9 +24,10 @@ The two resets are for a window on the wrong display. They restart Steam into th
 nothing else — no build, and no backend of their own: a backend still running from `dev` in the first terminal loads the
 panel into the fresh Steam by itself. They remember their choice too, so the next `dev` does not put it back wrong.
 
-The display argument defaults to `internal` — see [Choosing the display](#choosing-the-display). Every one of these
-tasks shuts the running Steam down first, so anything open in it closes; a Steam that is not running is simply started.
-A build that fails, or a display that matches nothing, stops the task before Steam is touched.
+The display argument is optional, and with none given the window is placed nowhere — see
+[Choosing the display](#choosing-the-display). Every one of these tasks shuts the running Steam down first, so anything
+open in it closes; a Steam that is not running is simply started. A build that fails, or a display that matches nothing,
+stops the task before Steam is touched.
 
 The backend serves `dist/` on a loopback port and loads the panel into Steam's renderer over the CEF debugger — see
 [How the panel gets into Steam](../architecture/loading-the-panel.md). Ctrl-C stops it and lets it unload. It needs
@@ -81,11 +82,12 @@ window=bpm
 display=dp2
 ```
 
-`window` is `bpm` or `desktop`, and `display` any [display target](#choosing-the-display). Every `dev:bpm*` and
-`dev:desktop*` task writes it; `dev` only reads it, and with no file it opens the desktop client on `internal`. It lives
-outside the repository because the display you dock to belongs to the machine, and a file in the tree would start every
-new worktree with an empty memory. Edit or delete it by hand as you like. A remembered display that is no longer
-connected stops `dev` before Steam is touched, and the message names the tasks that choose another.
+`window` is `bpm` or `desktop`; `display` is any [display target](#choosing-the-display), or empty when the task that
+wrote it named no display — which means the window is placed nowhere. Every `dev:bpm*` and `dev:desktop*` task writes
+it; `dev` only reads it, and with no file it opens the desktop client and places it nowhere. It lives outside the
+repository because the display you dock to belongs to the machine, and a file in the tree would start every new worktree
+with an empty memory. Edit or delete it by hand as you like. A remembered display that is no longer connected stops
+`dev` before Steam is touched, and the message names the tasks that choose another.
 
 ## Why the windowed Big Picture
 
@@ -104,10 +106,12 @@ the machine — output naming varies between Decks and docks (external outputs m
 prints a lowercase short form per connected **and enabled** output (e.g. `edp1`, `dp2`, `dp3`), plus the `internal`
 alias while the built-in panel is enabled. Disabled outputs are neither listed nor resolvable — KWin can't place a
 window on them. The raw `kscreen-doctor -o` names (e.g. `DP-2`) are accepted as well — matching is case- and
-dash-insensitive, so `dp2`, `DP2` and `DP-2` all mean `DP-2`. The default `internal` resolves to the built-in panel
-(`eDP-*`); a target that matches no enabled output is a hard error before Steam is shut down. On a docked Deck whose
-internal panel is disabled or disconnected, the default prints a warning and the window simply opens wherever the window
-manager puts it.
+dash-insensitive, so `dp2`, `DP2` and `DP-2` all mean `DP-2`. `internal` resolves to the built-in panel (`eDP-*`); a
+target that matches no enabled output is a hard error before Steam is shut down. **Omit the argument and nothing is
+placed**: no target is resolved, no placement is armed, and the window opens wherever Steam and the window manager put
+it — and that is what the task remembers, so the next `dev` places nothing either. Asking for `internal` explicitly on a
+docked Deck whose internal panel is disabled or disconnected prints a warning and likewise leaves the window where the
+window manager puts it.
 
 Placement itself is done by a short-lived KWin script loaded over DBus (`scripts/dev_place_window.sh`), which moves the
 chosen window to the target output and unloads itself again — if KWin scripting is unavailable, the loop still works and

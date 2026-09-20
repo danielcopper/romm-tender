@@ -111,7 +111,7 @@ run = [
 ]
 
 [tasks.dev]
-description = "Build the panel, restart Steam into the window and display a dev:bpm* / dev:desktop* task last chose (the desktop client if none has), and run the backend, which loads the panel into it (restarts Steam)"
+description = "Build the panel, restart Steam into the window and display a dev:bpm* / dev:desktop* task last chose (the desktop client, placed nowhere, if none has), and run the backend, which loads the panel into it (restarts Steam)"
 depends = ["build"]
 raw = true
 # Why every task that runs the backend restarts Steam, and why the window is
@@ -156,53 +156,53 @@ exec python3 scripts/dev_ui_scale.py "$usage_mode"
 '''
 
 [tasks."dev:bpm"]
-description = "Build the panel, restart Steam into windowed Big Picture on a chosen display, remember that for dev, and run the backend (restarts Steam)"
+description = "Build the panel, restart Steam into windowed Big Picture on a chosen display (none: placed nowhere), remember that for dev, and run the backend (restarts Steam)"
 depends = ["build"]
 raw = true
 usage = '''
-arg "[display]" help="Monitor for the Big Picture window: 'internal' or an output name (dp2, DP-3, ...)" default="internal"
+arg "[display]" help="Monitor for the Big Picture window: 'internal' or an output name (dp2, DP-3, ...). Omitted, the window is placed nowhere and dev remembers that."
 complete "display" run="bash scripts/dev_place_window.sh --list"
 '''
 # dev, with the window chosen here rather than recalled.
 run = '''
-bash scripts/dev_steam.sh restart bpm "$usage_display"
+bash scripts/dev_steam.sh restart bpm "${usage_display:-}"
 exec python backend/main.py
 '''
 
 [tasks."dev:desktop"]
-description = "Build the panel, restart Steam into the desktop client on a chosen display, remember that for dev, and run the backend (restarts Steam)"
+description = "Build the panel, restart Steam into the desktop client on a chosen display (none: placed nowhere), remember that for dev, and run the backend (restarts Steam)"
 depends = ["build"]
 raw = true
 usage = '''
-arg "[display]" help="Monitor for the desktop client's window: 'internal' or an output name (dp2, DP-3, ...)" default="internal"
+arg "[display]" help="Monitor for the desktop client's window: 'internal' or an output name (dp2, DP-3, ...). Omitted, the window is placed nowhere and dev remembers that."
 complete "display" run="bash scripts/dev_place_window.sh --list"
 '''
 # dev, with the window chosen here rather than recalled.
 run = '''
-bash scripts/dev_steam.sh restart desktop "$usage_display"
+bash scripts/dev_steam.sh restart desktop "${usage_display:-}"
 exec python backend/main.py
 '''
 
 [tasks."dev:bpm-reset"]
-description = "Restart Steam into windowed Big Picture on a chosen display and remember that for dev — no build; a backend already running loads the panel (restarts Steam)"
+description = "Restart Steam into windowed Big Picture on a chosen display (none: placed nowhere) and remember that for dev — no build; a backend already running loads the panel (restarts Steam)"
 raw = true
 usage = '''
-arg "[display]" help="Monitor for the Big Picture window: 'internal' or an output name (dp2, DP-3, ...)" default="internal"
+arg "[display]" help="Monitor for the Big Picture window: 'internal' or an output name (dp2, DP-3, ...). Omitted, the window is placed nowhere and dev remembers that."
 complete "display" run="bash scripts/dev_place_window.sh --list"
 '''
 # Beside Decky Loader the restart also brings back Decky's own QAM, which
 # survives only the first Big Picture entry per Steam process.
 run = '''
-bash scripts/dev_steam.sh restart bpm "$usage_display"
+bash scripts/dev_steam.sh restart bpm "${usage_display:-}"
 '''
 
 [tasks."dev:desktop-reset"]
-description = "Restart Steam into the desktop client on a chosen display and remember that for dev — no build; a backend already running loads the panel (restarts Steam)"
+description = "Restart Steam into the desktop client on a chosen display (none: placed nowhere) and remember that for dev — no build; a backend already running loads the panel (restarts Steam)"
 raw = true
 usage = '''
-arg "[display]" help="Monitor for the desktop client's window: 'internal' or an output name (dp2, DP-3, ...)" default="internal"
+arg "[display]" help="Monitor for the desktop client's window: 'internal' or an output name (dp2, DP-3, ...). Omitted, the window is placed nowhere and dev remembers that."
 complete "display" run="bash scripts/dev_place_window.sh --list"
 '''
 run = '''
-bash scripts/dev_steam.sh restart desktop "$usage_display"
+bash scripts/dev_steam.sh restart desktop "${usage_display:-}"
 '''
