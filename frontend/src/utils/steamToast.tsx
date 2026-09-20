@@ -12,7 +12,7 @@
  */
 
 import { Focusable } from "@decky/ui";
-import type { FC, ReactNode } from "react";
+import type { CSSProperties, FC, ReactNode } from "react";
 
 import type { ToastData } from "../api/host";
 import type { ToastClasses } from "./deckyUiInternals";
@@ -36,6 +36,14 @@ export interface SteamToastProps {
 }
 
 const classNames = (...names: (string | undefined | false)[]): string => names.filter(Boolean).join(" ");
+
+/**
+ * Steam's subtext rule allows one line, or two with `Multiline`, and ends the
+ * rest in an ellipsis (`css/chunk~2dcc5aaf7.css`, `StandardNotificationSubText`).
+ * The tab entry is where a reason has to be readable in full, so its subtext
+ * takes neither and wraps as far as it runs.
+ */
+const SUBTEXT_UNCLIPPED: CSSProperties = { whiteSpace: "normal", overflow: "visible", textOverflow: "clip" };
 
 const shortTime = (createdMs: number): string =>
   new Date(createdMs).toLocaleTimeString(undefined, { timeStyle: "short" });
@@ -97,7 +105,9 @@ const NotificationTabEntry: FC<Omit<SteamToastProps, "location">> = ({ toast, cr
         </div>
         <div className={classes.StandardNotificationDescription}>{toast.body}</div>
         {toast.subtext !== undefined && (
-          <div className={classNames(classes.StandardNotificationSubText, classes.Multiline)}>{toast.subtext}</div>
+          <div className={classes.StandardNotificationSubText} style={SUBTEXT_UNCLIPPED}>
+            {toast.subtext}
+          </div>
         )}
       </div>
       {newIndicator && (

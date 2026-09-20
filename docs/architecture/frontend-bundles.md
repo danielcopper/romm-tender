@@ -354,7 +354,9 @@ fixed size that clips (innerWidth/innerHeight 321x81, `body { overflow: hidden }
 Steam's two-line short template and carries no subtext; the desktop popup and the tab entry carry one. An unrecognised
 location falls back to the tab layout, which is the only one that imposes no size of its own. A toast is **kept** in the
 tab only where it carries subtext — the popup had no room to show that, so there is something new to read there; without
-one the entry would be a row the reader has to clear for nothing.
+one the entry would be a row the reader has to clear for nothing. In that entry the subtext wraps in full: Steam's own
+rule for the line ends it after one line, or two with `Multiline`, and a reason cut to two lines was the thing the tab
+was chosen to avoid.
 
 Neither of the two reaches Decky's loader API when one happens to be present, and what decides that is not purity: both
 were the loader's own, and one that borrowed wherever it found one would behave differently on a machine running Decky

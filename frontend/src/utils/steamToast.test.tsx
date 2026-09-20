@@ -105,10 +105,20 @@ describe("the Quick Access notification-tab layout", () => {
     expect(container.querySelector(".c-container > .c-standard")).not.toBeNull();
     expect(classesOf("Tender")).toBe("c-title");
     expect(classesOf("Sync finished")).toBe("c-description");
-    expect(classesOf("14 games")).toBe("c-subtext c-multiline");
+    expect(classesOf("14 games")).toBe("c-subtext");
     expect(container.querySelector(".c-timestamp")?.textContent).toBe(
       new Date(CREATED_MS).toLocaleTimeString(undefined, { timeStyle: "short" }),
     );
+  });
+
+  it("lets the subtext wrap as far as it runs, where Steam's own rule would end it in an ellipsis", () => {
+    const { container } = draw(
+      { ...TOAST, subtext: "a reason longer than two lines" },
+      TOAST_LOCATION_NOTIFICATION_TAB,
+    );
+    const subtext = container.querySelector<HTMLElement>(".c-subtext");
+    expect(subtext?.style.whiteSpace).toBe("normal");
+    expect(subtext?.style.overflow).toBe("visible");
   });
 
   it("is a focus stop, so a reader can reach it and Steam can scroll it into view", () => {
