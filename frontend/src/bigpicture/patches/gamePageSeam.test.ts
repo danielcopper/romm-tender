@@ -65,16 +65,19 @@ describe("picking the one factory out of the registry", () => {
     expect(id).toBeUndefined();
   });
 
-  it("answers the same over a narrowed set as over the whole one", () => {
+  it("names the same factory over a narrowed set as over the whole one", () => {
     // The two-stage search hands it the shaped modules first and every module
-    // second, and it is told nothing about which it is reading. A helper that
-    // had learned about the set it was handed would answer one of the two
-    // passes differently from the other.
-    const all = sources(["1", "nothing to see"], ["2", APP_DETAILS_SOURCE], ["3", "renderFunc alone"]);
-    const narrowed = sources(["2", APP_DETAILS_SOURCE]);
-    expect(soleMatchingFactory(narrowed, matchesAppDetailsFactory)).toBe(
-      soleMatchingFactory(all, matchesAppDetailsFactory),
-    );
+    // second, and it is told nothing about which it is reading. Each side names
+    // the id rather than being compared to the other, because two refusals
+    // compare equal and would pin nothing.
+    const whole = sources(["1", "nothing to see"], ["2", APP_DETAILS_SOURCE], ["3", "renderFunc alone"]);
+    expect(soleMatchingFactory(whole, matchesAppDetailsFactory)).toBe("2");
+    // The narrowed side is a generator, which is what both production call
+    // sites pass — the sources are read one at a time rather than collected.
+    function* narrowed(): Generator<readonly [string, string]> {
+      yield ["2", APP_DETAILS_SOURCE];
+    }
+    expect(soleMatchingFactory(narrowed(), matchesAppDetailsFactory)).toBe("2");
   });
 
   it("stops reading the registry at the second match", () => {
