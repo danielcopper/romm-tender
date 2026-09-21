@@ -83,7 +83,7 @@ function importedValueNames(): string[] {
 }
 
 /**
- * Every name shipped source resolves off Steam FOR ITSELF, in the two shapes
+ * Every name shipped source resolves off Steam FOR ITSELF, in the three shapes
  * one is written in today.
  *
  * The first is `export const X = findModule…(`. `findModule` and its siblings
@@ -98,6 +98,12 @@ function importedValueNames(): string[] {
  * Tender's for exactly the same reason: Steam moved it, and this version of
  * Tender is what reads the old place. The exported name must match the
  * property read, or the entry is about a different global than it claims.
+ *
+ * The third is `export const X = searchSteamFactories(`, a reader of ours over
+ * Steam's module FACTORIES. `@decky/ui` has no such reader — every one of its
+ * own asks the loaded exports — so both the search and the predicate are
+ * Tender's in both bundles, which is the same property the first shape carries
+ * and is why the repair is the same.
  *
  * **What the regexes see is narrower than those sentences**: a probe behind a
  * wrapper, one assigned to a non-exported const, one re-exported from another
@@ -119,6 +125,9 @@ function tenderOwnSearchNames(): string[] {
     }
     for (const match of source.matchAll(/export\s+const\s+(\w+)\s*:[^=]*?=\s*\(\s*window\s+as[^)]*\)\s*\.\s*(\w+)/g)) {
       if (match[1] === match[2]) names.add(match[1]!);
+    }
+    for (const match of source.matchAll(/export\s+const\s+(\w+)\s*(?::[^=]*?)?=\s*searchSteamFactories\s*\(/g)) {
+      names.add(match[1]!);
     }
   }
   return [...names].sort();
@@ -309,14 +318,15 @@ describe("the start-up check's coverage of what the panel imports", () => {
     expect(wrong.map((lookup) => lookup.name)).toEqual([]);
   });
 
-  it("sweeps both shapes a lookup of Tender's own is written in, so neither can stop matching in silence", () => {
+  it("sweeps all three shapes a lookup of Tender's own is written in, so none can stop matching in silence", () => {
     // The guard the sweep above needs for itself: it answers a set, and an
     // empty one passes that filter for every name there is. One name per shape,
-    // because the two regexes fail independently — a probe read and a global
-    // read.
+    // because the three regexes fail independently — a probe read, a global
+    // read and a scan over Steam's module factories.
     const ownSearches = new Set(tenderOwnSearchNames());
     expect(ownSearches).toContain("ControllerGlyph");
     expect(ownSearches).toContain("NotificationStore");
+    expect(ownSearches).toContain("AppDetailsRoute");
   });
 
   it("has a name at every absence cost, so none of the four is a value nothing uses", () => {

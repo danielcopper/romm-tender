@@ -73,6 +73,7 @@ import {
   showContextMenu,
 } from "@decky/ui";
 
+import { AppDetailsRoute } from "../bigpicture/patches/installGamePagePatch";
 import {
   ControllerGlyph,
   ErrorBoundary,
@@ -258,16 +259,20 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // | Map | Read at | Falls back to | What its absence costs |
   // | --- | --- | --- | --- |
   // | `appActionButtonClasses` | every button branch of `CustomPlayButton` (`bigpicture/CustomPlayButton.tsx:1426-1860`), for `PlayButtonContainer` / `PlayButton` / `Green` / `Throbber` | the class is simply absent — dropped from the list (`.filter(Boolean)`), replaced by `""`, or left undefined where it is the whole of the prop | our own play and download buttons keep their shape and lose Steam's, so a box of ours no longer matches the ones beside it |
-  // | `appDetailsClasses` | `InnerContainer` in `findInsertionPoint` (`bigpicture/patches/gameDetailPatch.tsx:88`); `AppDetailsOverviewPanel` in the patch handler `registerGameDetailPatch` installs (`:231`, and its debug line `:242`) | `findInsertionPoint` returns `undefined`; the wrapper takes `""` | `InnerContainer` is a mark on a node of STEAM's, so without it the handler finds no insertion point and returns the tree untouched — no Tender section on the game page at all. Without `AppDetailsOverviewPanel` the wrapper is still inserted, outside `InnerContainer`'s flex and scroll layout |
-  // | `basicAppDetailsSectionStylerClasses` | `PlaySection` in an unnamed `useEffect` of `CustomPlayButton` (`CustomPlayButton.tsx:220`) and on our own row in `RomMPlaySection` (`bigpicture/RomMPlaySection.tsx:1048`); also `dumpTree` (`gameDetailPatch.tsx:145-154`) | the effect does not call `hideNativePlaySection`; the row takes `""`; the dump prints `UNDEFINED` | the same member is both kinds at once: it names a node of Steam's for the hide, so Steam's own play section stays on screen beside ours, and a node of ours for the row's styling |
-  // | `playSectionClasses` | `Container` in `dumpTree` alone (`gameDetailPatch.tsx:133-141`) | the dump prints `UNDEFINED` and skips the tree search it guards | one line of a debug dump that runs at most once per load names no class. Nothing a user can see |
+  // | `appDetailsClasses` | `InnerContainer` in `findInsertionPoint` (`bigpicture/patches/gameDetailPatch.tsx:91`); `AppDetailsOverviewPanel` in the patch handler `registerGameDetailPatch` installs (`:225`, and its debug line `:234`) | `findInsertionPoint` returns `undefined`; the wrapper takes `""` | `InnerContainer` is a mark on a node of STEAM's, so without it the handler finds no insertion point and returns the tree untouched — no Tender section on the game page at all. Without `AppDetailsOverviewPanel` the wrapper is still inserted, outside `InnerContainer`'s flex and scroll layout |
+  // | `basicAppDetailsSectionStylerClasses` | `PlaySection` in an unnamed `useEffect` of `CustomPlayButton` (`CustomPlayButton.tsx:220`) and on our own row in `RomMPlaySection` (`bigpicture/RomMPlaySection.tsx:1048`); also `dumpTree` (`gameDetailPatch.tsx:148-157`) | the effect does not call `hideNativePlaySection`; the row takes `""`; the dump prints `UNDEFINED` | the same member is both kinds at once: it names a node of Steam's for the hide, so Steam's own play section stays on screen beside ours, and a node of ours for the row's styling |
+  // | `playSectionClasses` | `Container` in `dumpTree` alone (`gameDetailPatch.tsx:136-144`) | the dump prints `UNDEFINED` and skips the tree search it guards | one line of a debug dump that runs at most once per load names no class. Nothing a user can see |
   // | `quickAccessMenuClasses` | `TabGroupPanel` at module scope (`utils/qamExpansion.ts:45-47`), read into the selectors of the injected sheet (`:101-102`); `ActiveTab` in `useWideQamPanel`'s effect (`:194`); `Title` in `buildEntry` (`qam/quickAccessEntry.tsx:130`), as the entry's heading | `TAB_PANEL_SELECTOR` becomes `PANEL_ID_SELECTOR`, the panel's id; `owningTabActive` defaults to true (`:201`, the default argued just above it) and the `MutationObserver` guarded at `:210` is never constructed; the heading's `className` is `undefined` | the sheet matches the panel by id instead of by class, and the expansion is taken whether or not the page's own tab is the active one and is not re-synced on a tab switch — a leaked expansion the QAM-close and unmount paths still clear. The heading is still drawn, unstyled, at body size |
   //
-  // Every map but `playSectionClasses` blocks the panel, and that is the status
-  // quo rather than a reading of the table: see {@link AbsenceCost} for what
-  // moving one off it takes.
+  // Three of the five block the panel, and that is the status quo rather than a
+  // reading of the table: see {@link AbsenceCost} for what moving one off it
+  // takes. The two that do not are the two whose every read is in
+  // `gameDetailPatch.tsx`, which draws outside the panel.
   truthy("appActionButtonClasses", "panel", () => appActionButtonClasses),
-  truthy("appDetailsClasses", "panel", () => appDetailsClasses),
+  // Every read of it is on the game page, so its absence costs that page's
+  // Tender section and leaves every panel page whole — the same loss, and for
+  // the same surface, as the route below.
+  truthy("appDetailsClasses", "feature", () => appDetailsClasses),
   truthy("basicAppDetailsSectionStylerClasses", "panel", () => basicAppDetailsSectionStylerClasses),
   // The only one of the five maps that styles nothing at all — the table above
   // has its reads and what they cost. What is not in the table: it is a
@@ -302,6 +307,17 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
   // `utils/steamToast.tsx` reads every one of them optionally, so a miss costs
   // the layout and nothing else.
   truthyUnexported("toastClasses", "appearance", () => toastClasses),
+
+  // The module Steam draws its game page's route from, which is where Tender's
+  // own section is installed (`bigpicture/patches/installGamePagePatch.ts`). A
+  // search of ours in both bundles: `@decky/ui` reads the module registry and
+  // never the factory sources this one matches on, so no copy of the package
+  // can be asked about the name.
+  //
+  // It costs a feature and never the panel: with it missing every page of the
+  // panel renders and works, and what is lost is Steam's game page carrying no
+  // Tender section — no play button of ours, no game info panel.
+  truthyUnexported("AppDetailsRoute", "feature", () => AppDetailsRoute().length > 0),
 ];
 
 /**
@@ -369,6 +385,7 @@ export const ASKED_LIVE: Readonly<Record<string, string>> = {
  */
 export const PACKAGE_OWN: Readonly<Record<string, string>> = {
   afterPatch: "the package's own patcher",
+  beforePatch: "the package's own patcher, asked to run before the original",
   createReactTreePatcher: "the package's own tree patcher",
   findClassModule: "the class-map reader itself",
   findInReactTree: "the package's own tree walk",
@@ -378,6 +395,10 @@ export const PACKAGE_OWN: Readonly<Record<string, string>> = {
   getReactRoot: "the package's own reader of a mounted React root",
   GamepadButton: "a TypeScript enum, compiled into the bundle",
   injectFCTrampoline: "the package's own function-component patcher; it searches for nothing",
+  modules:
+    "the module cache itself — the Map every `findModule` above reads, filled once when the " +
+    "package loads. It is always a Map, so asking whether it is there answers nothing; what an " +
+    "empty one costs is reported by the searches over it, each under its own name",
 };
 
 /** What the check found. */
