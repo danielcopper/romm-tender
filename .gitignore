@@ -4,6 +4,9 @@ node_modules/
 # Build output
 dist/
 
+# Release tarballs — `mise run package`
+build/
+
 # MkDocs build output
 site/
 

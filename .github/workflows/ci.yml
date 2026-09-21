@@ -223,6 +223,11 @@ jobs:
       # set EQUALS its manifest as well as matching it byte for byte.
       - name: Check vendored trees against their manifests
         run: python scripts/check_vendored_trees.py
+      # The scripts a user runs outside this repository. ubuntu-latest ships
+      # shellcheck, so there is nothing to install. The other scripts here are
+      # developer tooling and stay out of scope.
+      - name: Shellcheck the release scripts
+        run: shellcheck scripts/package.sh
 
   # Skipped when SONAR_TOKEN is structurally unavailable: Dependabot PRs and
   # PRs from forks (GitHub withholds secrets from `pull_request` runs whose head
