@@ -1,29 +1,22 @@
 /**
- * The six exports, against the real module.
+ * The five exports, against the real module.
  *
  * `test-setup.ts` replaces `api/host` for the whole suite, so this file has to
  * take the stub off again — otherwise it would assert that a `vi.fn()` behaves
- * like a `vi.fn()`. `routerHook`, the one placeholder left, is the only member
- * here with a body worth reading; `callable`, `addEventListener` and
- * `removeEventListener` are one-line delegations to `HostSocket`, which
- * `hostSocket.test.ts` drives against a socket of its own, and `toaster` is a
- * delegation to `utils/steamToaster.tsx`, which its own file drives against
- * supplied seams.
+ * like a `vi.fn()`. Every member here is a one-line delegation: `callable`,
+ * `addEventListener` and `removeEventListener` to `HostSocket`, which
+ * `hostSocket.test.ts` drives against a socket of its own, and `toaster` to
+ * `utils/steamToaster.tsx`, which its own file drives against supplied seams.
+ * What this file holds is what the delegation itself does — the handle a toast
+ * answers with, the listener handed straight back, and a call made from a
+ * bundle served without a token.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.unmock("./host");
 
-import {
-  addEventListener,
-  callable,
-  definePlugin,
-  removeEventListener,
-  routerHook,
-  toaster,
-  type Plugin,
-} from "./host";
+import { addEventListener, callable, definePlugin, removeEventListener, toaster, type Plugin } from "./host";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -68,26 +61,6 @@ describe("the toaster", () => {
 
     expect(loader.connect).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
-  });
-});
-
-describe("the routerHook placeholder", () => {
-  it("answers with the patch unapplied, and names the route it did not patch", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const patch = (tree: unknown) => tree;
-
-    const installed = routerHook.addPatch("/library/app/:appid", patch);
-
-    // Handed back rather than refused, so that the registration and the teardown
-    // in `gameDetailPatch.tsx` stay symmetrical: a null here would make the
-    // remove path unreachable and hide the day it starts mattering.
-    expect(installed).toBe(patch);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("/library/app/:appid"));
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("no route installer"));
-  });
-
-  it("takes the patch back without complaint", () => {
-    expect(() => routerHook.removePatch("/library/app/:appid", (tree: unknown) => tree)).not.toThrow();
   });
 });
 

@@ -1,24 +1,21 @@
 /**
  * What the panel used to get from `@decky/api`, from Tender's own host instead.
  *
- * Six names, the same six, so no call site changes meaning: `callable`,
- * `addEventListener`, `removeEventListener`, `toaster`, `routerHook` and
- * `definePlugin`. Four of them are the wire — they go over the WebSocket in
- * `hostSocket.ts`. **Two of them are not the wire at all**, and they live here
- * anyway because this module replaces one import specifier with another: making
- * the reader distinguish would put two imports at every call site for a
- * distinction the call sites do not have.
+ * Five names, so no call site changes meaning: `callable`, `addEventListener`,
+ * `removeEventListener`, `toaster` and `definePlugin`. Four of them are the
+ * wire — they go over the WebSocket in `hostSocket.ts`. **One of them is not
+ * the wire at all**, and it lives here anyway because this module replaces one
+ * import specifier with another: making the reader distinguish would put two
+ * imports at every call site for a distinction the call sites do not have.
  *
- * ## The two that are not the wire
+ * ## The one that is not the wire
  *
- * `toaster` and `routerHook` were Decky Loader's own — `@decky/api` only
- * forwarded them (`api.toaster`, `api.routerHook`). There is no host answer for
- * either, so each gets a replacement of Tender's own rather than a backend
- * route. `toaster` has one: it pushes through Steam's own notification store
- * (`utils/steamToaster.tsx`). `routerHook` is still a **declared placeholder**
- * that does nothing, and says so at its definition.
+ * `toaster` was Decky Loader's own — `@decky/api` only forwarded it
+ * (`api.toaster`). There is no host answer for it, so it gets a replacement of
+ * Tender's own rather than a backend route: it pushes through Steam's own
+ * notification store (`utils/steamToaster.tsx`).
  *
- * **Neither reaches Decky Loader's API when one is running.** Why, once:
+ * **It does not reach Decky Loader's API when one is running.** Why, once:
  * `docs/architecture/frontend-bundles.md`.
  *
  * ## The types
@@ -63,22 +60,6 @@ export interface ToastNotification {
 /** Raises toasts under the plugin's name. */
 export interface Toaster {
   toast(toast: ToastData): ToastNotification;
-}
-
-/**
- * A patch on one of Steam's routes: it is handed the route's React tree and
- * answers with the tree to render.
- *
- * `unknown` on both sides because that is what the one call site can say about
- * it — Steam's internal tree has no published type, and `gameDetailPatch.tsx`
- * walks it with its own guards.
- */
-export type RoutePatch = (route: unknown) => unknown;
-
-/** Installs and removes route patches. Two methods, because two are called. */
-export interface RouterHook {
-  addPatch(path: string, patch: RoutePatch): RoutePatch;
-  removePatch(path: string, patch: RoutePatch): void;
 }
 
 /** What `definePlugin`'s factory answers with — the panel, and its teardown. */
@@ -184,7 +165,7 @@ export const removeEventListener = <Args extends unknown[] = []>(
  */
 export const definePlugin = (fn: () => Plugin): (() => Plugin) => fn;
 
-// -- the two that are not ------------------------------------------------------
+// -- the one that is not -------------------------------------------------------
 
 /**
  * Raises toasts through Steam's own notification store — the popup window, the
@@ -194,23 +175,3 @@ export const definePlugin = (fn: () => Plugin): (() => Plugin) => fn;
  * behind it come back empty, lives in `utils/steamToaster.tsx`.
  */
 export const toaster: Toaster = steamToaster;
-
-/**
- * PLACEHOLDER: there is no route installer of Tender's own yet, so `addPatch`
- * answers with the patch **unapplied** and Steam's game page carries no Tender
- * section.
- *
- * The patch is handed back rather than refused so that the registration and the
- * teardown in `gameDetailPatch.tsx` stay symmetrical — a `null` here would make
- * the remove path unreachable and hide the day it starts mattering.
- *
- * Same reason as the toaster for not reaching Decky's router hook when one
- * exists: it would make the device test pass for an unidentifiable reason.
- */
-export const routerHook: RouterHook = {
-  addPatch(path: string, patch: RoutePatch): RoutePatch {
-    console.warn(`[Tender] route patch for ${path} is not installed — Tender has no route installer yet`);
-    return patch;
-  },
-  removePatch(_path: string, _patch: RoutePatch): void {},
-};

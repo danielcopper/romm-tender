@@ -8,7 +8,7 @@
  *
  * Only DialogButton works as a focusable element in this injection context —
  * Focusable wrappers around non-interactive content don't register with
- * Steam's gamepad engine when injected via routerHook.addPatch.
+ * Steam's gamepad engine when injected into the game page's own React tree.
  */
 
 /**

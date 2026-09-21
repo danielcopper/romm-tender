@@ -113,10 +113,6 @@ vi.mock("./api/host", async () => {
     definePlugin: (fn: unknown) => fn,
     addEventListener: bus.mockAddEventListener,
     removeEventListener: bus.mockRemoveEventListener,
-    // Named explicitly rather than left off: Vitest throws on an import of a
-    // name a mock factory does not define, so an omission breaks every file that
-    // reaches the route patch.
-    routerHook: { addPatch: vi.fn((_path: string, patch: unknown) => patch), removePatch: vi.fn() },
   };
 });
 
@@ -344,6 +340,16 @@ vi.mock("@decky/ui", () => {
     findModule: vi.fn(() => undefined),
     findModuleExport: vi.fn(() => undefined),
     findClassModule: vi.fn(() => undefined),
+    // The patcher and the registry the game-page install reaches Steam through.
+    // Named explicitly rather than left off: Vitest throws on an import of a
+    // name a mock factory does not define, and the start-up check imports that
+    // module for the one search it asks about. Nothing here is ever called —
+    // the install refuses before it patches anything, because happy-dom has no
+    // `webpackChunksteamui` to ask.
+    afterPatch: vi.fn(),
+    beforePatch: vi.fn(),
+    getReactRoot: vi.fn(() => undefined),
+    modules: new Map<string, unknown>(),
     // Steam's own React is not here either, and the real trampoline reads the
     // `SP_*` globals. Every test that cares about the toast renderer's patch
     // chain supplies its own install seam (`utils/steamToaster.tsx`), so this
