@@ -101,12 +101,12 @@ class TestTheDrawing:
 
     def test_the_two_tones_come_from_the_palette_the_build_ships(self, generator):
         """Written down nowhere: a drawing in colours the mark is not in is a different mark."""
-        sys.path.insert(0, str(_REPO_ROOT / "scripts" / "logo"))
-        import gen  # a sibling of the generator, resolved through the path set above
+        gen = _load(_REPO_ROOT / "scripts" / "logo" / "gen.py", "gen")
+        shipped = gen.BY_NAME[gen.CHOSEN]
 
         ring, button = generator.tones()
 
-        assert (ring, button) == (gen.BY_NAME[gen.CHOSEN].disc[0], gen.BY_NAME[gen.CHOSEN].dot_peach)
+        assert (ring, button) == (shipped.disc[0], shipped.dot_peach)
 
     def test_a_run_is_one_colour_and_the_runs_cover_the_row(self, generator):
         """The installer splits runs and prints them; it never counts columns."""

@@ -26,7 +26,9 @@ from __future__ import annotations
 import hashlib
 import os
 import pty
+import re
 import selectors
+import shutil
 import subprocess
 import tarfile
 from pathlib import Path
@@ -43,6 +45,7 @@ _ARCHIVE = f"romm-tender-{_VERSION}.tar.gz"
 _DOWNLOAD_BASE = "https://example.invalid/releases/download"
 _RELEASE_API = "https://example.invalid/repos/releases/latest"
 _DEBUGGER_PROBE = "http://127.0.0.1:8080/json/version"
+_MIGRATION_NOTES = "https://danielcopper.github.io/romm-tender/user-guide/getting-started/"
 
 # What the packager is handed. Only the three entries install.sh requires need
 # real content; the rest have to exist because the packager refuses a tree that
@@ -95,6 +98,7 @@ if [ -n "$out" ]; then cp "$source" "$out"; else cat "$source"; fi
 """
 
 _PYTHON_STUB = """#!/usr/bin/env bash
+printf 'python %s\\n' "${STUB_PYTHON_VERSION:-3.13}"
 exit "${STUB_PYTHON_EXIT:-0}"
 """
 
@@ -147,6 +151,10 @@ class Install:
         base = {
             "PATH": f"{self.stubs}:{os.environ.get('PATH', '/usr/bin:/bin')}",
             "HOME": str(self.home),
+            # A real terminal is in a UTF-8 locale, and that is what decides
+            # whether the mark and the row marks are drawn as glyphs. The cases
+            # that test the other answer override it.
+            "LANG": "C.UTF-8",
             "XDG_RUNTIME_DIR": str(self.runtime),
             "TENDER_PYTHON": str(self.python),
             "TENDER_CODE_DIR": str(self.code),
@@ -267,6 +275,74 @@ def _drain(pid: int, master: int, timeout: float = 30.0) -> tuple[int, str]:
     return code, b"".join(chunks).decode(errors="replace")
 
 
+_ANSI = re.compile(r"\x1b\[([\d;]*)([A-Za-z])")
+
+
+def _screen(transcript: str) -> str:
+    """What the terminal SHOWS after replaying *transcript*, colour removed.
+
+    The installer rewrites its four rows in place, so the bytes that reached the
+    pty are not what a reader sees: a row appears once per frame the spinner
+    drew and the marks sit inside colour escapes, which is why a plain
+    ``in output`` test cannot ask what the run ended up saying. Replaying the
+    carriage returns, the line clears and the cursor moves answers that, and it
+    is the only way to assert that something was drawn OVER — the evidence for
+    which is the absence of what used to be there.
+
+    Handles exactly what this script writes: ``\r``, ``\n``, ``\033[K``,
+    ``\033[<n>A`` and SGR colour, which is dropped.
+    """
+    rows: list[str] = [""]
+    row = column = 0
+    position = 0
+    while position < len(transcript):
+        match = _ANSI.match(transcript, position)
+        if match:
+            kind = match.group(2)
+            count = int(match.group(1) or 1) if match.group(1).isdigit() else 1
+            if kind == "A":
+                row = max(0, row - count)
+            elif kind == "B":
+                row += count
+            elif kind == "K":
+                while len(rows) <= row:
+                    rows.append("")
+                rows[row] = rows[row][:column]
+            position = match.end()
+            continue
+        character = transcript[position]
+        position += 1
+        if character == "\r":
+            column = 0
+        elif character == "\n":
+            row += 1
+            column = 0
+        else:
+            while len(rows) <= row:
+                rows.append("")
+            line = rows[row].ljust(column)
+            rows[row] = line[:column] + character + line[column + 1 :]
+            column += 1
+    return "\n".join(line.rstrip() for line in rows)
+
+
+def _logo_rows(name: str) -> list[str]:
+    """The mark's rows as install.sh carries them, with the colour runs removed.
+
+    Read out of the script rather than written here, because the whole point of
+    generating the art is that no copy of it is maintained by hand — and a test
+    holding a second copy would be exactly that.
+    """
+    text = _INSTALL.read_text(encoding="utf-8")
+    block = text[text.index(f"{name}=(") :]
+    block = block[: block.index("\n)")]
+    rows = []
+    for line in block.splitlines()[1:]:
+        runs = line.strip().strip("'").split("|")
+        rows.append("".join(run.split(":", 1)[1] for run in runs))
+    return rows
+
+
 def _refusals(stderr: str) -> list[str]:
     """Every line on which this script refused — one per abort, by its prefix.
 
@@ -367,28 +443,50 @@ class TestAFreshInstall:
         assert (machine.code / "bin" / "tender-rom-launcher").is_file()
         assert not (machine.code / "romm-tender").exists()
 
-    def test_every_phase_says_what_it_is_doing_before_it_does_it(self, machine):
-        """Several seconds pass with nothing to show, and silence there reads as a hang."""
-        machine.data.mkdir(parents=True, exist_ok=True)
-        (machine.data / "covers").mkdir()
-        (machine.data / "covers" / "a.png").write_text("a", encoding="utf-8")
+    def test_the_four_rows_report_the_whole_run_in_order(self, machine):
+        """The run is four rows, and each says what it did rather than only that it ran."""
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert result.returncode == 0, result.stderr
+        rows = [
+            "[ok] Checking    python 3.13",
+            f"[ok] Installing  {_ARCHIVE}",
+            "[ok] Service     romm-tender.service",
+            "[--] Steam       debugger not answering yet",
+        ]
+        at = [result.stdout.index(row) for row in rows]
+        assert at == sorted(at), "the rows are reported in the order they run"
+
+    def test_the_service_row_names_the_port_once_the_backend_has_bound_one(self, machine):
+        """The backend's own note of the port it bound, which is the proof it came up.
+
+        Usually absent: this run has only just asked systemd to start the unit,
+        and the note is written once the backend is up. The row says what it can
+        see either way rather than claiming the stronger answer.
+        """
+        port_dir = machine.runtime / "romm-tender"
+        port_dir.mkdir(parents=True, exist_ok=True)
+        (port_dir / "port").write_text("27737\n", encoding="utf-8")
 
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
 
         assert result.returncode == 0, result.stderr
-        announced = [
-            f"unpacking {_ARCHIVE}",
-            "moving 1 cover to the cache",
-            "writing the service",
-            "starting romm-tender",
-            "checking Steam's debugger",
-        ]
-        at = [result.stdout.index(line) for line in announced]
-        assert all(line in result.stdout for line in announced)
-        assert at == sorted(at), "the phases are announced in the order they run"
+        assert "[ok] Service     romm-tender.service running on 127.0.0.1:27737" in result.stdout
+
+    def test_the_service_row_says_what_it_can_see_with_no_port_file(self, machine):
+        """The ordinary case on a fresh install, and not a fault."""
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert "[ok] Service     romm-tender.service enabled and started" in result.stdout
+
+    def test_the_checking_row_names_each_answer_as_it_gets_it(self, machine):
+        """A row that only said "checking" would be four seconds of nothing."""
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert "python 3.13 - systemd - Steam - no Decky plugin" in result.stdout
 
     def test_a_piped_run_carries_no_carriage_returns(self, machine):
-        """No terminal, no spinner: every phase's line is written once, forwards.
+        """No terminal, no spinner: every row is written once, forwards.
 
         Asked of the raw bytes. Universal newlines turn every ``\r`` into
         ``\n`` while decoding, so the same assertion over ``run`` holds no
@@ -399,7 +497,7 @@ class TestAFreshInstall:
         assert result.returncode == 0, result.stderr
         assert b"\r" not in result.stdout
         assert b"\x1b" not in result.stdout
-        assert f"unpacking {_ARCHIVE} … done".encode() in result.stdout
+        assert f"[ok] Installing  {_ARCHIVE}".encode() in result.stdout
 
     def test_the_closing_summary_is_one_aligned_block(self, machine):
         """A blank line, then two labelled rows on one column, then what to do next.
@@ -411,9 +509,10 @@ class TestAFreshInstall:
         """
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
 
-        assert "\nTender is installed.\n" in result.stdout
-        assert "  Status:   systemctl --user status romm-tender" in result.stdout
-        assert f"  Log:      {machine.state}/backend.log" in result.stdout
+        assert "Next: restart Steam, then open the Quick Access menu." in result.stdout
+        assert "  Status  systemctl --user status romm-tender" in result.stdout
+        assert f"  Log     {machine.state}/backend.log" in result.stdout
+        assert result.stdout.rstrip().endswith(f"{machine.state}/backend.log")
 
     def test_the_unit_names_every_root_as_an_absolute_path(self, machine):
         """The installer and the service share no environment, so nothing may be derived at runtime."""
@@ -487,14 +586,16 @@ class TestAFreshInstall:
     def test_a_silent_debugger_asks_for_a_steam_restart(self, machine):
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
 
-        assert "Restart Steam once" in result.stdout
+        assert "Next: restart Steam, then open the Quick Access menu." in result.stdout
+        assert "[--] Steam       debugger not answering yet" in result.stdout
         assert _DEBUGGER_PROBE in machine.curl_calls()
 
     def test_a_debugger_that_answers_does_not(self, machine):
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_DEBUGGER="answer")
 
-        assert "Restart Steam once" not in result.stdout
-        assert "Quick Access menu once the backend has loaded it" in result.stdout
+        assert "restart Steam" not in result.stdout
+        assert "Next: open the Quick Access menu." in result.stdout
+        assert "[ok] Steam       debugger answering" in result.stdout
 
 
 class TestThePreflight:
@@ -576,7 +677,7 @@ class TestTheAcknowledgement:
 
         assert result.returncode == 1
         assert "run with --yes" in result.stderr
-        assert "migration notes" in result.stdout
+        assert "Coming from the Decky plugin?" in result.stdout
         assert not machine.code.exists()
 
     def test_yes_passes_it(self, machine):
@@ -596,7 +697,7 @@ class TestTheAcknowledgement:
         _code, output = machine.on_a_terminal("--from", str(machine.tmp_path / "gone.tar.gz"), answer="y", NO_COLOR="1")
 
         assert "\033[" not in output
-        assert "Did you run Tender as a Decky plugin before?" in output
+        assert "Coming from the Decky plugin?" in _screen(output)
 
     def test_an_empty_no_color_says_nothing(self, machine):
         """The other half of the convention, and the one a `-n` test gets wrong."""
@@ -678,25 +779,36 @@ class TestTheAcknowledgement:
         assert not any("--progress-bar" in line for line in machine.curl_argv())
 
     def test_a_phase_that_aborts_closes_its_line_before_the_message(self, machine):
-        """`failed` belongs to the line it is about, so it comes before the reason."""
+        """The reason belongs ON the row it is about, and before the record of it."""
         corrupt = machine.tmp_path / "corrupt.tar.gz"
         corrupt.write_bytes(b"this is not a gzip stream")
 
         code, output = machine.on_a_terminal("--from", str(corrupt), answer="y")
 
         assert code == 1
-        assert "unpacking corrupt.tar.gz … failed" in output
-        assert output.index("… failed") < output.index("install.sh: the tarball could not be unpacked")
+        assert "✗ Installing  the tarball could not be unpacked" in _screen(output)
+        assert output.index("Installing  the tarball could not be unpacked") < output.index(
+            "install.sh: the tarball could not be unpacked"
+        )
 
-    def test_the_spinner_finishes_every_line_it_opened(self, machine):
-        """Only a terminal gets one, so only this tier can see it end.
+    def test_each_row_is_left_on_screen_once_in_its_finished_form(self, machine):
+        """The block is rewritten in place, so what matters is what is LEFT.
 
-        A spinner is a process of its own, forked while its phase's message was
-        set, so one that outlives its phase goes on drawing THAT message over
-        whatever came after it. Seeing that needs a later phase long enough for
-        a second frame, which is what the delay buys: a run with none is over
-        faster than one frame, and then the transcript of a spinner that was
-        never stopped is identical to the transcript of one that was.
+        A spinner draws the whole block — it moves the cursor up over the four
+        rows and writes them again — so a run that lost track of how many lines
+        are on screen does not leave a stray frame somewhere: it writes the
+        block a second time further down, or over the summary that follows it.
+        Both are absences, which is why this reads the replayed screen rather
+        than the bytes.
+
+        Seeing any of it needs a phase long enough for a second frame, which is
+        what the delay buys: a run with none is over faster than one frame.
+
+        **What this cannot see is a spinner left running at a row's end.** The
+        EXIT trap stops the last one, and an extra one drawing mid-run draws the
+        same block, so the damage is a race on the bookkeeping rather than
+        anything a transcript shows. That one is carried by `row_end` and by
+        nothing else.
         """
         code, output = machine.on_a_terminal(
             "--from",
@@ -706,18 +818,13 @@ class TestTheAcknowledgement:
         )
 
         assert code == 0, output
-        for phase in (
-            f"unpacking {_ARCHIVE}",
-            "writing the service",
-            "starting romm-tender",
-            "checking Steam's debugger",
-        ):
-            finished = f"{phase} … done"
-            assert output.count(finished) == 1, phase
-            assert phase not in output.split(finished, 1)[1], f"{phase} was still being drawn after it ended"
-        tail = output[output.index("Tender is installed.") :]
-        assert "…" not in tail, "nothing is still drawing after the summary"
-        assert tail.rstrip().endswith("Quick Access menu.")
+        screen = _screen(output).splitlines()
+        # By the row rather than over the whole screen: the mark IS Braille, so
+        # every spinner frame is also a cell of the drawing above it.
+        for mark, label in (("✓", "Checking"), ("✓", "Installing"), ("✓", "Service"), ("✗", "Steam")):
+            drawn = [line for line in screen if line.startswith(f"{mark} {label}")]
+            assert len(drawn) == 1, f"{label} is not on screen exactly once in its finished form"
+        assert "\n".join(screen).rstrip().endswith(f"{machine.state}/backend.log")
 
     def test_it_is_not_shown_once_its_expiry_has_passed(self, machine):
         """The warning carries an expiry in the code so it does not outlive its reason."""
@@ -743,11 +850,10 @@ class TestTheCoversMoveOnce:
         assert (machine.cache / "covers" / "a.png").read_text(encoding="utf-8") == "a"
         assert (machine.cache / "artwork" / "b.png").read_text(encoding="utf-8") == "b"
         assert not (machine.data / "covers").exists()
-        assert "moving 1 cover to the cache" in result.stdout
-        assert "1 cover moved to the cache." in result.stdout
-        assert "1 artwork file moved to the cache." in result.stdout
+        assert "moved to the cache: 1 cover + 1 artwork file" in result.stdout
 
     def test_a_file_the_cache_already_holds_is_never_overwritten(self, machine):
+        """And says nothing about it: after the first run that is what EVERY file is."""
         self._seed(machine, "covers", {"a.png": "old"})
         (machine.cache / "covers").mkdir(parents=True)
         (machine.cache / "covers" / "a.png").write_text("new", encoding="utf-8")
@@ -756,7 +862,7 @@ class TestTheCoversMoveOnce:
 
         assert (machine.cache / "covers" / "a.png").read_text(encoding="utf-8") == "new"
         assert (machine.data / "covers" / "a.png").read_text(encoding="utf-8") == "old"
-        assert "0 covers moved to the cache; 1 was already there and was left in place." in result.stdout
+        assert "moved to the cache" not in result.stdout
 
     def test_a_move_that_fails_is_reported_as_a_failure_not_as_a_duplicate(self, machine):
         """The two reasons a file stays are not the same news.
@@ -778,11 +884,11 @@ class TestTheCoversMoveOnce:
         assert result.returncode == 0, result.stderr
         assert "could not move 1 cover;" in result.stderr
         assert "already there" not in result.stdout
-        assert "moving 1 cover to the cache … failed" in result.stdout
+        assert "could not move 1 cover; see above" in result.stdout
         assert (machine.data / "covers" / "a.png").is_file()
 
     def test_the_sentences_are_plural_above_one(self, machine):
-        """The counts decide the nouns and the verbs, both of them, in both sentences."""
+        """The counts decide the nouns, and only what MOVED is counted."""
         self._seed(machine, "covers", {f"c{n}.png": "x" for n in range(5)})
         self._seed(machine, "artwork", {f"a{n}.png": "x" for n in range(3)})
         (machine.cache / "covers").mkdir(parents=True)
@@ -791,10 +897,7 @@ class TestTheCoversMoveOnce:
 
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
 
-        assert "moving 5 covers to the cache" in result.stdout
-        assert "3 covers moved to the cache; 2 were already there and were left in place." in result.stdout
-        assert "moving 3 artwork files to the cache" in result.stdout
-        assert "3 artwork files moved to the cache." in result.stdout
+        assert "moved to the cache: 3 covers + 3 artwork files" in result.stdout
 
     def test_a_folder_holding_only_a_dotfile_costs_no_line(self, machine):
         """The count and the move have to see the same files.
@@ -808,8 +911,7 @@ class TestTheCoversMoveOnce:
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
 
         assert result.returncode == 0, result.stderr
-        assert "moving" not in result.stdout
-        assert "to the cache" not in result.stdout
+        assert "moved to the cache" not in result.stdout
         assert (machine.data / "covers" / ".keep").is_file()
 
     def test_nothing_else_under_the_data_root_is_touched(self, machine):
@@ -962,7 +1064,7 @@ class TestWhatItDownloads:
         result = machine.run("--from", str(tarball), "--yes")
 
         assert result.returncode == 0, result.stderr
-        assert f"verified {tarball} against its checksum" in result.stdout
+        assert "(not verified)" not in result.stdout
 
     def test_a_local_file_that_does_not_match_its_checksum_is_refused(self, machine):
         tarball = _build_tarball(machine.tmp_path)
@@ -982,7 +1084,7 @@ class TestWhatItDownloads:
         result = machine.run("--from", str(tarball), "--yes")
 
         assert result.returncode == 0, result.stderr
-        assert "local file, not verified" in result.stdout
+        assert f"[ok] Installing  {_ARCHIVE} (not verified)" in result.stdout
 
     def test_a_tarball_missing_what_a_release_must_carry_is_refused(self, machine):
         """Nothing is renamed into place until the staged tree has been looked at."""
@@ -1127,3 +1229,102 @@ class TestTheNoteIsSpelledOnceOnEachSide:
         script = _INSTALL.read_text(encoding="utf-8")
 
         assert f'MARKER_NOTE="{DEBUGGER_MARKER_NOTE}"' in script
+
+
+class TestHowTheRunLooks:
+    """The greeter and the four rows, which only a terminal ever sees whole."""
+
+    def test_a_wide_terminal_puts_the_mark_beside_the_text(self, machine):
+        """Braille cells, and the text block on the same lines as the drawing."""
+        _code, output = machine.on_a_terminal(
+            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="100"
+        )
+
+        screen = _screen(output)
+        drawn = [row for row in _logo_rows("LOGO_BRAILLE") if row.strip()]
+        for row in drawn[1:4]:
+            assert row.strip() in screen
+        beside = [line for line in screen.splitlines() if drawn[0].strip() in line]
+        assert beside, "the mark's first row is not on screen"
+        assert beside[0].rstrip().endswith("TENDER"), "the text block is not beside the mark"
+
+    def test_a_narrow_terminal_puts_the_mark_above_the_text(self, machine):
+        _code, output = machine.on_a_terminal("--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="70")
+
+        screen = _screen(output).splitlines()
+        drawn = [row for row in _logo_rows("LOGO_BRAILLE") if row.strip()]
+        mark_at = next(index for index, line in enumerate(screen) if drawn[0].strip() in line)
+        name_at = next(index for index, line in enumerate(screen) if line.strip() == "TENDER")
+        assert mark_at < name_at
+        assert not screen[mark_at].rstrip().endswith("TENDER")
+
+    def test_a_terminal_with_no_utf8_gets_the_ascii_mark(self, machine):
+        """The Braille cells would be replacement characters, which is worse than no art."""
+        _code, output = machine.on_a_terminal(
+            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="100", LANG="C"
+        )
+
+        screen = _screen(output)
+        drawn = [row for row in _logo_rows("LOGO_ASCII") if row.strip()]
+        for row in drawn[1:4]:
+            assert row.strip() in screen
+        assert "⢀" not in screen
+        assert "[ok] Checking" in screen
+
+    def test_the_four_rows_end_in_one_mark_each(self, machine):
+        _code, output = machine.on_a_terminal("--from", str(_build_tarball(machine.tmp_path)), answer="y")
+
+        screen = _screen(output)
+        assert "\x1b[" in output, "a terminal run writes escapes"
+        for mark, label in (("✓", "Checking"), ("✓", "Installing"), ("✓", "Service"), ("✗", "Steam")):
+            assert len([line for line in screen.splitlines() if line.startswith(f"{mark} {label}")]) == 1
+
+    def test_the_warning_is_four_lines_and_asks_once(self, machine):
+        code, output = machine.on_a_terminal("--from", str(machine.tmp_path / "gone.tar.gz"), answer="y")
+
+        assert code == 1
+        screen = _screen(output).splitlines()
+        first = next(index for index, line in enumerate(screen) if line.startswith("⚠"))
+        assert screen[first] == "⚠  Coming from the Decky plugin?"
+        assert screen[first + 1] == "   Your old Steam shortcuts will not be recognised."
+        assert screen[first + 2] == f"   Read first: {_MIGRATION_NOTES}"
+        assert screen[first + 3].startswith("   Continue? [y/N]")
+
+    def test_a_piped_run_draws_no_mark_at_all(self, machine):
+        """Art in a log file is something somebody has to scroll past."""
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        for row in _logo_rows("LOGO_BRAILLE") + _logo_rows("LOGO_ASCII"):
+            assert row.strip() not in result.stdout or not row.strip()
+        assert result.stdout.startswith("TENDER\n")
+
+    def test_no_color_on_a_terminal_still_draws_the_mark(self, machine):
+        """NO_COLOR asks for a plain transcript, not for a run that says less."""
+        _code, output = machine.on_a_terminal(
+            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="100", NO_COLOR="1"
+        )
+
+        assert "\033[" not in output
+        drawn = [row for row in _logo_rows("LOGO_BRAILLE") if row.strip()]
+        assert drawn[0].strip() in output
+        assert "[ok] Checking" in output
+
+    @pytest.mark.parametrize(
+        ("reason", "extra"),
+        [
+            ("Flatpak Steam is not supported", {}),
+            ("no native Steam installation found", {}),
+        ],
+    )
+    def test_a_refusal_lands_on_the_row_it_belongs_to(self, machine, reason, extra):
+        """The row says what went wrong, rather than only that something did."""
+        if reason.startswith("Flatpak"):
+            (machine.home / ".var" / "app" / "com.valvesoftware.Steam").mkdir(parents=True)
+        else:
+            shutil.rmtree(machine.steam_root)
+
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes", **extra)
+
+        assert result.returncode == 1
+        assert f"[!!] Checking    {reason}" in result.stdout
+        assert _refusals(result.stderr) == [f"install.sh: {reason}"]
