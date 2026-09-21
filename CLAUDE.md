@@ -10,7 +10,9 @@ The backend runs as **its own process** and hosts the panel itself over a loopba
 panel, into Steam's renderer over the CEF debugger — so `mise run dev` is now "build, restart Steam, then run the
 backend", and the Decky-shaped deploy tasks are gone. **It shuts the running Steam down**, because a rebuilt bundle
 reaches Steam only in a fresh JS context; which tasks do that, and which window they come back into, is under
-Development below. The installer, the user unit and the XDG paths are a separate cut (#1902).
+Development below. A user installs it with `install.sh`, which writes a systemd **user** unit and resolves every root
+once into it; the launcher every Steam shortcut starts through lives at `~/.local/bin/tender-rom-launcher` and is not
+under any root this program owns.
 
 ## What belongs in this file
 
@@ -279,6 +281,10 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
   inside `mise run gate`.
 - **Gate**: `mise run gate` (the full CI battery in one command — mirrors every PR check; slow. Run before pushing.)
 - **Setup**: `mise run setup` (installs JS + Python dependencies)
+- **Package**: `mise run package` (production frontend build, then `scripts/package.sh` → `build/romm-tender-<V>.tar.gz`
+  plus its `.sha256`). `bash install.sh --from build/romm-tender-<V>.tar.gz` installs that build the way a release is
+  installed; `install.sh --uninstall` takes it back out. **Neither is ever run against your own machine from a test** —
+  every execution in `tests/scripts/` happens under a `tmp_path` HOME with a stub `PATH`.
 - **Release**: release-please, configured as `release-type: simple` (`release-please-config.json`). What it proposes is
   normally computed from `.release-please-manifest.json` plus the commits since — but **not today**:
   `release-as: "1.0.0"` overrides that computation on every run, so every release PR proposes 1.0.0 until the key is
