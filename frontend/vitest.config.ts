@@ -52,6 +52,7 @@ export default defineConfig({
         "src/test-utils/**",
         "src/test-setup.ts",
         "src/bigpicture/patches/gameDetailPatch.tsx",
+        "src/bigpicture/patches/installGamePagePatch.ts",
         "src/qam/installEntry.tsx",
         "src/utils/styleInjector.ts",
       ],

@@ -1,6 +1,6 @@
-// coverage-exempt: a monkey-patch into Steam's own game-detail route — its
-// subject is Steam's React tree, which happy-dom does not have, so every path
-// here can only be exercised on the device.
+// coverage-exempt: a monkey-patch into Steam's own game page — its subject is
+// Steam's React tree, which happy-dom does not have, so every path here can
+// only be exercised on the device.
 /**
  * React-tree patch that swaps Steam's native app-details overview panel for
  * our RomMPlaySection + RomMGameInfoPanel pair on RomM shortcuts. Everything
@@ -8,10 +8,12 @@
  * between Steam builds, so `any` is the honest type. Per #617, narrowing
  * predicates here buy almost no safety for several lines of churn per site,
  * so the file is exempt from `@typescript-eslint/no-explicit-any`.
+ *
+ * Where this patch is installed — Steam's game-page route, through a seam of
+ * Tender's own — is `installGamePagePatch.ts`.
  */
 
-import { routerHook } from "../../api/host";
-import { afterPatch, findInReactTree, createReactTreePatcher } from "@decky/ui";
+import { findInReactTree, createReactTreePatcher } from "@decky/ui";
 import {
   appDetailsClasses,
   playSectionClasses,
@@ -20,9 +22,10 @@ import {
 import { RomMPlaySection } from "../RomMPlaySection";
 import { RomMGameInfoPanel } from "../RomMGameInfoPanel";
 import { debugLog } from "../../api/backend";
-import type { RoutePatch } from "../../api/host";
 import { detach } from "../../utils/detach";
 import { isRomMAppId, rommAppIdCount } from "../../utils/rommAppIds";
+import { installGamePagePatch, type GamePagePatchHandle } from "./installGamePagePatch";
+import { PLUGIN_NAME } from "../../utils/toast";
 
 // Tracks which appIds have already had their tree dumped (once per page load)
 let treeDumped = false;
@@ -158,116 +161,102 @@ function dumpTree(container: any, appId: number): void {
   detach(debugLog(`===== END DEEP TREE DUMP =====`));
 }
 
-let gamePatch: RoutePatch | null = null;
+let gamePatch: GamePagePatchHandle | null = null;
 
 export function registerGameDetailPatch() {
-  gamePatch = routerHook.addPatch(
-    "/library/app/:appid",
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Steam internal React tree; runtime shape is dynamic, no upstream types ship
-    (tree: any) => {
+  const patchHandler = createReactTreePatcher(
+    [
+      // Navigate to the node whose children carry the overview prop
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Steam internal React tree; runtime shape is dynamic, no upstream types ship
-      const routeProps = findInReactTree(tree, (x: any) => x?.renderFunc);
-      if (routeProps) {
-        const patchHandler = createReactTreePatcher(
-          [
-            // Navigate to the node whose children carry the overview prop
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Steam internal React tree; runtime shape is dynamic, no upstream types ship
-            (node: any) =>
-              findInReactTree(
-                node,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Steam internal React tree; runtime shape is dynamic, no upstream types ship
-                (x: any) => x?.props?.children?.props?.overview,
-              )?.props?.children,
-          ],
+      (node: any) =>
+        findInReactTree(
+          node,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Steam internal React tree; runtime shape is dynamic, no upstream types ship
-          (_args: unknown[], ret?: any) => {
-            const container = findInsertionPoint(ret);
-            if (typeof container !== "object" || !container) {
-              return ret;
-            }
-
-            // Extract appId from the overview object higher up in the tree
-            const overviewNode = findInReactTree(
-              ret,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Steam internal React tree; runtime shape is dynamic, no upstream types ship
-              (x: any) => x?.props?.overview?.appid,
-            );
-            const appId: number | undefined = overviewNode?.props?.overview?.appid;
-
-            if (!appId) {
-              return ret;
-            }
-
-            // Only apply RomM modifications for RomM shortcuts
-            const isRomM = isRomMAppId(appId);
-            detach(debugLog(`gameDetailPatch: appId=${appId} isRomM=${isRomM} setSize=${rommAppIdCount()}`));
-
-            dumpTree(container, appId);
-
-            // For RomM games: replace the native AppDetailsOverviewPanel
-            // (which renders Play button + tabs + all native content via `se`)
-            // with our RomMPlaySection and RomMGameInfoPanel.
-            if (isRomM) {
-              const children = container.props.children;
-
-              // Deduplication: don't inject if already present
-              const alreadyHasPlayBtn = children.some(
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Steam internal React tree; runtime shape is dynamic, no upstream types ship
-                (c: any) => c?.key === "romm-play-section",
-              );
-              if (!alreadyHasPlayBtn) {
-                const nativeOverviewIdx = findNativeOverviewIndex(children);
-
-                const rommPlaySection = <RomMPlaySection key="romm-play-section" appId={appId} />;
-
-                const rommInfoPanel = <RomMGameInfoPanel key="romm-info-panel" appId={appId} />;
-
-                // Wrap in a container with the native AppDetailsOverviewPanel
-                // CSS class so it participates in InnerContainer's flex layout
-                // and scroll system the same way the native panel does.
-                const rommWrapper = (
-                  <div
-                    key="romm-play-section"
-                    className={appDetailsClasses?.AppDetailsOverviewPanel || ""}
-                    data-romm="true"
-                  >
-                    {rommPlaySection}
-                    {rommInfoPanel}
-                  </div>
-                );
-
-                if (nativeOverviewIdx >= 0) {
-                  detach(
-                    debugLog(
-                      `gameDetailPatch: replacing AppDetailsOverviewPanel at index ${nativeOverviewIdx} with RomM wrapper (cls=${appDetailsClasses?.AppDetailsOverviewPanel})`,
-                    ),
-                  );
-                  children.splice(nativeOverviewIdx, 1, rommWrapper);
-                } else {
-                  detach(
-                    debugLog(`gameDetailPatch: AppDetailsOverviewPanel not found, inserting RomM wrapper at index 1`),
-                  );
-                  children.splice(1, 0, rommWrapper);
-                }
-              }
-            }
-
-            return ret;
-          },
-          "RomMGameDetail",
-        );
-
-        afterPatch(routeProps, "renderFunc", patchHandler);
+          (x: any) => x?.props?.children?.props?.overview,
+        )?.props?.children,
+    ],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Steam internal React tree; runtime shape is dynamic, no upstream types ship
+    (_args: unknown[], ret?: any) => {
+      const container = findInsertionPoint(ret);
+      if (typeof container !== "object" || !container) {
+        return ret;
       }
 
-      return tree;
+      // Extract appId from the overview object higher up in the tree
+      const overviewNode = findInReactTree(
+        ret,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Steam internal React tree; runtime shape is dynamic, no upstream types ship
+        (x: any) => x?.props?.overview?.appid,
+      );
+      const appId: number | undefined = overviewNode?.props?.overview?.appid;
+
+      if (!appId) {
+        return ret;
+      }
+
+      // Only apply RomM modifications for RomM shortcuts
+      const isRomM = isRomMAppId(appId);
+      detach(debugLog(`gameDetailPatch: appId=${appId} isRomM=${isRomM} setSize=${rommAppIdCount()}`));
+
+      dumpTree(container, appId);
+
+      // For RomM games: replace the native AppDetailsOverviewPanel
+      // (which renders Play button + tabs + all native content via `se`)
+      // with our RomMPlaySection and RomMGameInfoPanel.
+      if (isRomM) {
+        const children = container.props.children;
+
+        // Deduplication: don't inject if already present
+        const alreadyHasPlayBtn = children.some(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Steam internal React tree; runtime shape is dynamic, no upstream types ship
+          (c: any) => c?.key === "romm-play-section",
+        );
+        if (!alreadyHasPlayBtn) {
+          const nativeOverviewIdx = findNativeOverviewIndex(children);
+
+          const rommPlaySection = <RomMPlaySection key="romm-play-section" appId={appId} />;
+
+          const rommInfoPanel = <RomMGameInfoPanel key="romm-info-panel" appId={appId} />;
+
+          // Wrap in a container with the native AppDetailsOverviewPanel
+          // CSS class so it participates in InnerContainer's flex layout
+          // and scroll system the same way the native panel does.
+          const rommWrapper = (
+            <div key="romm-play-section" className={appDetailsClasses?.AppDetailsOverviewPanel || ""} data-romm="true">
+              {rommPlaySection}
+              {rommInfoPanel}
+            </div>
+          );
+
+          if (nativeOverviewIdx >= 0) {
+            detach(
+              debugLog(
+                `gameDetailPatch: replacing AppDetailsOverviewPanel at index ${nativeOverviewIdx} with RomM wrapper (cls=${appDetailsClasses?.AppDetailsOverviewPanel})`,
+              ),
+            );
+            children.splice(nativeOverviewIdx, 1, rommWrapper);
+          } else {
+            detach(debugLog(`gameDetailPatch: AppDetailsOverviewPanel not found, inserting RomM wrapper at index 1`));
+            children.splice(1, 0, rommWrapper);
+          }
+        }
+      }
+
+      return ret;
     },
+    "RomMGameDetail",
   );
+
+  gamePatch = installGamePagePatch(patchHandler);
+  if (!gamePatch.installed) {
+    // The start-up check asks the same question before anything mounts and is
+    // what a user is told; this line is for whoever has the log open and is
+    // looking at the game page rather than at the panel.
+    console.warn(`[${PLUGIN_NAME}] Steam's game-page route was not found, so no Tender section will appear on it.`);
+  }
 }
 
 export function unregisterGameDetailPatch() {
-  if (gamePatch) {
-    routerHook.removePatch("/library/app/:appid", gamePatch);
-    gamePatch = null;
-  }
+  gamePatch?.unpatch();
+  gamePatch = null;
 }
