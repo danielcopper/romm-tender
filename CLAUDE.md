@@ -582,6 +582,20 @@ Format: **invariant** — tier — enforced by.
   loader's server answers" and "Decky is rendering" is deliberately left on the safe side, and the ordering measurement
   (Tender loading first is safe) may not be leant on to close it the other way: a reconnect puts the same question at a
   moment when Steam has been up for an hour. Detail: `docs/architecture/loading-the-panel.md`
+- **Where the globals bundle is loaded, its installer is CALLED between the import that defines it and the panel import,
+  and the panel is not imported unless the report says every global it names is installed** — test + prompt-only —
+  `tests/host/inject/test_bootstrap.py::TestItRunsUnderNode` runs the bootstrap under node against a stub page, with the
+  bundles as `data:` modules that record having run and that leave the installer on the window where the real one does,
+  and pins the order, the refusal and each refusal's sentence; `test_bundles.py` pins that the globals bundle comes
+  first; `TestTheInstallersName` holds the property's spelling in Python to `frontend/src/boot/steamGlobals.ts`. The
+  rule spans three modules in two languages: `host/inject/bundles.py` says WHICH file installs (`globals_at`),
+  `host/inject/bootstrap.py` turns that into import, call, import and into the gate, and `steamGlobals.ts` leaves the
+  installer under the shared name and decides the report's keys. **What nothing checks is the seam the node tier
+  stubs**: the stub report is written from the TypeScript interface rather than derived from it, so a `GlobalsReport`
+  that renamed the `installed` field passes every test named here and fails on a device the same silent way — the
+  bootstrap reads no keys, refuses, and leaves no panel, a card, and a green suite. Renaming the keys INSIDE `installed`
+  costs nothing, because the gate is generic over whatever the report names; renaming `steamReady` costs only the
+  readiness sentence, and nothing on either side holds one spelling to the other
 - **An injection that could not be observed is never counted as a crash, and this process answers for its own record
   before it reads one** — test + prompt-only — `tests/host/inject/test_watchdog.py` pins the state machine in every
   direction and which of the three answers settles an armed record;
