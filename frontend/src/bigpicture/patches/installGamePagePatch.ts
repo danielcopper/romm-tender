@@ -20,7 +20,13 @@
 
 import { afterPatch, beforePatch, getReactRoot, modules, type GenericPatchHandler, type Patch } from "@decky/ui";
 
-import { matchesAppDetailsFactory, patchableMemos, soleMatchingFactory, wrapRouteRenderFunc } from "./gamePageSeam";
+import {
+  hasRouteModuleShape,
+  matchesAppDetailsFactory,
+  patchableMemos,
+  soleMatchingFactory,
+  wrapRouteRenderFunc,
+} from "./gamePageSeam";
 
 /** Steam's own webpack `require`, reduced to the map of module factories. */
 interface SteamWebpackRequire {
@@ -55,16 +61,35 @@ function steamWebpackRequire(): SteamWebpackRequire | undefined {
   return found;
 }
 
-/** Each module factory's id beside its source text, read one at a time. */
-function* factorySources(webpackRequire: SteamWebpackRequire): Generator<readonly [string, string]> {
-  for (const id of Object.keys(webpackRequire.m)) {
-    let source: string;
-    try {
-      source = String(webpackRequire.m[id]);
-    } catch {
-      continue;
-    }
-    yield [id, source];
+/** One factory's source text, or nothing where it cannot be read. */
+function factorySource(webpackRequire: SteamWebpackRequire, id: string): string | undefined {
+  try {
+    return String(webpackRequire.m[id]);
+  } catch {
+    return undefined;
+  }
+}
+
+/** The named factories' sources, read one at a time. */
+function* sourcesOf(webpackRequire: SteamWebpackRequire, ids: Iterable<string>): Generator<readonly [string, string]> {
+  for (const id of ids) {
+    const source = factorySource(webpackRequire, id);
+    if (source !== undefined) yield [id, source];
+  }
+}
+
+/** Every module Steam ships, in the order its registry holds them. */
+const everyFactoryId = (webpackRequire: SteamWebpackRequire): Iterable<string> => Object.keys(webpackRequire.m);
+
+/**
+ * The modules whose exports have the shape the route module has.
+ *
+ * Read off values already loaded, so reaching one costs a property read where
+ * reaching a factory's source costs the source text of a module.
+ */
+function* shapedFactoryIds(): Generator<string> {
+  for (const [id, exports] of modules) {
+    if (hasRouteModuleShape(exports)) yield id;
   }
 }
 
@@ -75,9 +100,9 @@ type FactorySearch = () => readonly object[];
  * Ask Steam's registry for the one module a predicate matches, and answer with
  * the exports of it a patch can be installed on.
  *
- * Asked at most once. The scan reads the source text of every module Steam
- * ships and both the start-up check and the install want the answer, so the
- * first reader pays for it and every later one is handed what it found.
+ * Asked at most once. Both the start-up check and the install want the answer
+ * and the search can reach every module Steam ships, so the first reader pays
+ * for it and every later one is handed what it found.
  *
  * Nothing invalidates it: Steam's registry is built before any panel is loaded
  * and a rebuild of it is a rebuild of the JS context, which takes this module
@@ -88,10 +113,27 @@ function searchSteamFactories(matches: (source: string) => boolean): FactorySear
   return () => (answer ??= readPatchableExports(matches));
 }
 
+/**
+ * Which module the route comes from, asked of the cheap set first.
+ *
+ * The predicate that decides is the factory's source text, and reading the
+ * source of every module Steam ships is not free at start-up — the check asks
+ * for this answer before the panel mounts. So the shape pass goes first and
+ * only its handful of sources are read; the full scan stands behind it for the
+ * day Steam gives that module an export of another kind, and answers the same
+ * question over a superset of the same set.
+ */
+function routeModuleId(webpackRequire: SteamWebpackRequire, matches: (source: string) => boolean): string | undefined {
+  return (
+    soleMatchingFactory(sourcesOf(webpackRequire, shapedFactoryIds()), matches) ??
+    soleMatchingFactory(sourcesOf(webpackRequire, everyFactoryId(webpackRequire)), matches)
+  );
+}
+
 function readPatchableExports(matches: (source: string) => boolean): readonly object[] {
   const webpackRequire = steamWebpackRequire();
   if (!webpackRequire) return [];
-  const id = soleMatchingFactory(factorySources(webpackRequire), matches);
+  const id = routeModuleId(webpackRequire, matches);
   if (id === undefined) return [];
   return patchableMemos(modules.get(id));
 }

@@ -9,7 +9,13 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { matchesAppDetailsFactory, patchableMemos, soleMatchingFactory, wrapRouteRenderFunc } from "./gamePageSeam";
+import {
+  hasRouteModuleShape,
+  matchesAppDetailsFactory,
+  patchableMemos,
+  soleMatchingFactory,
+  wrapRouteRenderFunc,
+} from "./gamePageSeam";
 
 const APP_DETAILS_SOURCE = 'e.renderFunc&&e.renderFunc(t),n(r.AppDetailsOverviewPanel),i(o.InnerContainer,"x")';
 
@@ -59,6 +65,18 @@ describe("picking the one factory out of the registry", () => {
     expect(id).toBeUndefined();
   });
 
+  it("answers the same over a narrowed set as over the whole one", () => {
+    // The two-stage search hands it the shaped modules first and every module
+    // second, and it is told nothing about which it is reading. A helper that
+    // had learned about the set it was handed would answer one of the two
+    // passes differently from the other.
+    const all = sources(["1", "nothing to see"], ["2", APP_DETAILS_SOURCE], ["3", "renderFunc alone"]);
+    const narrowed = sources(["2", APP_DETAILS_SOURCE]);
+    expect(soleMatchingFactory(narrowed, matchesAppDetailsFactory)).toBe(
+      soleMatchingFactory(all, matchesAppDetailsFactory),
+    );
+  });
+
   it("stops reading the registry at the second match", () => {
     // The scan reads the source text of every module Steam ships, so the answer
     // is settled where it is settled rather than after another two thousand
@@ -72,6 +90,65 @@ describe("picking the one factory out of the registry", () => {
     }
     expect(soleMatchingFactory(watched(), matchesAppDetailsFactory)).toBeUndefined();
     expect(read.mock.calls.flat()).toEqual(["1", "2"]);
+  });
+});
+
+describe("recognising the shape the route module has", () => {
+  const throwingExport = (exports: object, name: string): object => {
+    Object.defineProperty(exports, name, {
+      enumerable: true,
+      get() {
+        throw new Error("module evaluation failed");
+      },
+    });
+    return exports;
+  };
+
+  it("takes a module whose every export is a patchable memo, of which there are two", () => {
+    expect(hasRouteModuleShape({ xA: memo(() => null), kg: memo(() => null) })).toBe(true);
+  });
+
+  it("takes one with more than two, since the shape is a floor and not a count", () => {
+    // The code depends on no number: what it rests on is that the exports are
+    // all memos. A predicate written to the count would stop matching the day
+    // Steam adds a third component to the same module.
+    expect(hasRouteModuleShape({ a: memo(() => null), b: memo(() => null), c: memo(() => null) })).toBe(true);
+  });
+
+  it("refuses one carrying anything that is not a patchable memo", () => {
+    // The point of the shape is that it is cheap and specific. A module with a
+    // plain function beside a memo is most of Steam's registry.
+    expect(hasRouteModuleShape({ route: memo(() => null), helper: () => null })).toBe(false);
+    expect(hasRouteModuleShape({ route: memo(() => null), text: "InnerContainer" })).toBe(false);
+    expect(hasRouteModuleShape({ route: memo(() => null), bare: memo("not a function") })).toBe(false);
+  });
+
+  it("refuses a single export, however memo-shaped", () => {
+    expect(hasRouteModuleShape({ only: memo(() => null) })).toBe(false);
+  });
+
+  it("refuses one whose getter throws, rather than letting the throw out", () => {
+    // Every module in Steam's registry is asked this, so one that cannot be
+    // read has to answer rather than end the walk.
+    const exports = throwingExport({ route: memo(() => null) }, "broken");
+    expect(() => hasRouteModuleShape(exports)).not.toThrow();
+    expect(hasRouteModuleShape(exports)).toBe(false);
+  });
+
+  it("refuses it even beside enough readable memos, since unreadable is not a memo", () => {
+    // The distinction a shorter test misses: refusing the module is not the
+    // same as passing the unreadable export over. Skipping it would call a
+    // module that carries something nobody could read the shape this narrows
+    // to — and the full scan behind the shape pass reaches that module anyway.
+    const exports = throwingExport({ route: memo(() => null), page: memo(() => null) }, "broken");
+    expect(hasRouteModuleShape(exports)).toBe(false);
+  });
+
+  it("refuses exports that are not an object, and an empty one", () => {
+    expect(hasRouteModuleShape(undefined)).toBe(false);
+    expect(hasRouteModuleShape(null)).toBe(false);
+    expect(hasRouteModuleShape(() => null)).toBe(false);
+    expect(hasRouteModuleShape({})).toBe(false);
   });
 });
 

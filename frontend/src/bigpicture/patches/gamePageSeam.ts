@@ -59,16 +59,46 @@ const isPatchableMemo = (value: unknown): value is object =>
   (value as { $$typeof?: unknown }).$$typeof === REACT_MEMO &&
   typeof (value as { type?: unknown }).type === "function";
 
+/** One export read on its own, so a getter that throws costs only that export. */
+function readExport(exports: object, name: string): unknown {
+  try {
+    return (exports as Record<string, unknown>)[name];
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Could this module be the one the game page's route comes from, judged by the
+ * SHAPE of its exports alone?
+ *
+ * Every export a patchable memo, and more than one of them. That is what the
+ * module looks like in Steam today — it exports the route component and the
+ * page component and nothing else — and it is a question about values already
+ * in hand, where asking what a factory's source says means reading the source
+ * text of a module. What it is FOR is at `soleMatchingFactory`'s caller: this
+ * narrows the set whose sources are read, and it decides nothing on its own.
+ *
+ * Being wrong either way costs only work. A module that should have passed and
+ * did not is still reached by the full scan behind it; one that passes and is
+ * not the module costs one source read and fails the predicate that matters.
+ */
+export function hasRouteModuleShape(exports: unknown): boolean {
+  if (typeof exports !== "object" || exports === null) return false;
+  const names = Object.keys(exports);
+  if (names.length < 2) return false;
+  return names.every((name) => isPatchableMemo(readExport(exports, name)));
+}
+
 /**
  * The exports of that module a patch can be installed on: every `React.memo`
  * whose `type` is a function.
  *
  * All of them are taken rather than the route component picked out, because
- * nothing on an export says which one it is — the names are minified and the
- * two that are there differ only in what their bodies read. Patching both is
- * safe because the handler acts on what React passes: only the route component
- * is ever rendered with a `renderFunc`, so on any other export the handler
- * finds nothing to do.
+ * nothing on an export says which one it is — the names are minified and they
+ * differ only in what their bodies read. Patching them all is safe because the
+ * handler acts on what React passes: only the route component is ever rendered
+ * with a `renderFunc`, so on any other export the handler finds nothing to do.
  *
  * A webpack namespace defines its exports as getters, and one belonging to a
  * module whose own evaluation failed throws on read — so each is read on its
@@ -78,12 +108,7 @@ export function patchableMemos(exports: unknown): object[] {
   if (typeof exports !== "object" || exports === null) return [];
   const found: object[] = [];
   for (const name of Object.keys(exports)) {
-    let value: unknown;
-    try {
-      value = (exports as Record<string, unknown>)[name];
-    } catch {
-      continue;
-    }
+    const value = readExport(exports, name);
     if (isPatchableMemo(value)) found.push(value);
   }
   return found;

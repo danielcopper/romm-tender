@@ -667,25 +667,25 @@ Format: **invariant** — tier — enforced by.
 - **Tender's section reaches Steam's game page through the ROUTE component's `renderFunc`, and never through the page
   component's own `type`** — test + prompt-only — `frontend/src/bigpicture/patches/gamePageSeam.test.ts` pins the half
   that is decidable without Steam: the factory predicate in both directions, that two matching factories answer as no
-  match, the memo selection (including an export whose getter throws), and the per-render decision — wrapped once per
-  PROPS object, never per component and never per `renderFunc`. Each case mutation-checked. **Everything the install
-  does with those answers is device-only**: obtaining Steam's webpack `require`, reading the factory sources, patching
-  the memo and adopting a mounted page are `installGamePagePatch.ts`, which is coverage-exempt because a suite that
-  faked any of it would assert against a registry and a fiber tree it wrote itself. The rule spans that file, the seam
-  module, the patch it installs (`gameDetailPatch.tsx`) and the start-up check, and nothing joins them. **Why the page
-  component is the wrong seam is the half a reader will re-derive wrongly**: `@decky/ui`'s tree patcher caches the
-  wrapped component per ORIGINAL type (`dist/utils/react/treepatcher.js`, `handleStep`), so once any plugin has wrapped
-  the page component every later render goes through that cached copy and a patch installed on the original is never
-  entered again. That is the ordinary case rather than a corner: this backend starts after Steam has been running, so
-  Decky's plugins have already wrapped the page. The failure is silent and machine-dependent — green suite, green gate,
-  and the section simply never appears on a machine that runs Decky Loader while appearing on one that does not, which
-  is the difference this program exists not to depend on. Two further halves nothing checks: the install patches EVERY
-  memo export of that module whose `type` is a function rather than picking the route out (nothing on an export says
-  which one it is, and a handler on the other finds no `renderFunc` to wrap), and the start-up check's `AppDetailsRoute`
-  entry costs a `feature` beside `appDetailsClasses`, which costs one for the same reason — every read of it is in that
-  same patch. Moving either to `panel` takes the whole interface off the air for a section outside it; moving a panel
-  name to `feature` beside them renders a hole. Detail: `docs/architecture/frontend-bundles.md` → Tender's section on
-  Steam's game page
+  match, the shape predicate that decides whose sources are read at all, the memo selection (including an export whose
+  getter throws), and the per-render decision — wrapped once per PROPS object, never per component and never per
+  `renderFunc`. Each case mutation-checked. **Everything the install does with those answers is device-only**: obtaining
+  Steam's webpack `require`, reading the factory sources, patching the memo and adopting a mounted page are
+  `installGamePagePatch.ts`, which is coverage-exempt because a suite that faked any of it would assert against a
+  registry and a fiber tree it wrote itself. The rule spans that file, the seam module, the patch it installs
+  (`gameDetailPatch.tsx`) and the start-up check, and nothing joins them. **Why the page component is the wrong seam is
+  the half a reader will re-derive wrongly**: `@decky/ui`'s tree patcher caches the wrapped component per ORIGINAL type
+  (`dist/utils/react/treepatcher.js`, `handleStep`), so once any plugin has wrapped the page component every later
+  render goes through that cached copy and a patch installed on the original is never entered again. That is the
+  ordinary case rather than a corner: this backend starts after Steam has been running, so Decky's plugins have already
+  wrapped the page. The failure is silent and machine-dependent — green suite, green gate, and the section simply never
+  appears on a machine that runs Decky Loader while appearing on one that does not, which is the difference this program
+  exists not to depend on. Two further halves nothing checks: the install patches EVERY memo export of that module whose
+  `type` is a function rather than picking the route out (nothing on an export says which one it is, and a handler on
+  the other finds no `renderFunc` to wrap), and the start-up check's `AppDetailsRoute` entry costs a `feature` beside
+  `appDetailsClasses`, which costs one for the same reason — every read of it is in that same patch. Moving either to
+  `panel` takes the whole interface off the air for a section outside it; moving a panel name to `feature` beside them
+  renders a hole. Detail: `docs/architecture/frontend-bundles.md` → Tender's section on Steam's game page
 - **Aggregate state mutated only via verb-named methods (no field assignment)** — check —
   `scripts/check_aggregate_field_assignment.py`
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, uow_factory) is called while a UoW is open on the
