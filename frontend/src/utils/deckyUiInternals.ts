@@ -37,6 +37,7 @@ import {
   ScrollPanel as _ScrollPanel,
   Tabs as _Tabs,
   findSP as _findSP,
+  getGamepadNavigationTrees as _getGamepadNavigationTrees,
   type TabsProps,
 } from "@decky/ui";
 
@@ -107,6 +108,33 @@ export interface ScrollPanelProps {
 export const ScrollPanel: FC<ScrollPanelProps> | undefined = _ScrollPanel;
 
 export const findSP = (): Window | undefined => _findSP();
+
+/**
+ * One of Steam's gamepad navigation trees, reduced to what this code reads off
+ * it: the id it is looked up by and the element its root is mounted on.
+ *
+ * `@decky/ui` reads these trees under two vocabularies — `findSP` reads `m_ID`,
+ * `Root` and `Element` where its Quick Access lookup reads the names below — so
+ * this is not the whole shape and is not a description of one.
+ */
+export interface GamepadNavigationTree {
+  id?: string;
+  m_Root?: { m_element?: Element };
+}
+
+/**
+ * Steam's navigation trees for the focus controller's active (else last active)
+ * context — `undefined` while that context carries none, which is the desktop
+ * client until Big Picture has been opened.
+ *
+ * Upstream types it `any`, so every caller's guard reads as a guard over
+ * something that is always there. The array's MEMBERS are optional because
+ * upstream's own lookup guards them (`tree?.id`,
+ * `dist/custom-hooks/useQuickAccessVisible.js`), which is a statement about the
+ * array that its type has to carry.
+ */
+export const getGamepadNavigationTrees = (): (GamepadNavigationTree | undefined)[] | undefined =>
+  _getGamepadNavigationTrees();
 
 /**
  * What Steam's controller-glyph image takes. `button` is Steam's OWN button

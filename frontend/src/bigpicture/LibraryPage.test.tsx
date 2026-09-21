@@ -150,10 +150,6 @@ vi.mock("@decky/ui", async () => {
         typeof p.label === "string" ? p.label : null,
       ),
     Spinner: () => ce("div", { "data-testid": "spinner" }),
-    // The QAM is open for any test that renders a wide page; the hook's
-    // clear-on-close path is exercised in
-    // frontend/src/utils/qamExpansion.test.tsx.
-    useQuickAccessVisible: () => true,
   };
 });
 

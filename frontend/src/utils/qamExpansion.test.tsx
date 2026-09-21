@@ -17,8 +17,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, act } from "@testing-library/react";
 import { useRef, useSyncExternalStore, type FC } from "react";
 
-// --- @decky/ui: only useQuickAccessVisible, backed by a store the tests flip.
-// deckyUiInternals is mocked too, so nothing else in this graph reaches @decky/ui.
+// --- The QAM's own visibility, backed by a store the tests flip. It keeps its
+// own stub rather than taking test-setup.ts's, whose `() => true` cannot drive
+// the clear-on-close path. The module under test has two first-party imports
+// and both are mocked here — this one and deckyUiInternals — so nothing in this
+// graph reaches @decky/ui.
 let qamVisible = true;
 const visibilityListeners = new Set<() => void>();
 const subscribeVisibility = (onChange: () => void) => {
@@ -28,7 +31,7 @@ const subscribeVisibility = (onChange: () => void) => {
   };
 };
 
-vi.mock("@decky/ui", () => ({
+vi.mock("./quickAccessVisible", () => ({
   useQuickAccessVisible: () => useSyncExternalStore(subscribeVisibility, () => qamVisible),
 }));
 

@@ -146,7 +146,6 @@ vi.mock("@decky/ui", () => ({
     ),
   ConfirmModal: (p: AnyProps) => createElement("div", { "data-testid": "confirm-modal" }, p.children as never),
   showModal: vi.fn(),
-  useQuickAccessVisible: () => true,
 }));
 
 // The wide frame reaches Steam's tabbed page and its scroll panel through this

@@ -328,9 +328,11 @@ export const STEAM_LOOKUPS: readonly SteamLookup[] = [
  * panel imports from the package and fails on any name that is in none of this
  * list, {@link STEAM_LOOKUPS}, {@link ASKED_LIVE} and {@link PACKAGE_OWN}, so a
  * new import has to be classified before it can ship. Reaching what is behind
- * one of these would mean re-running its predicate here, which is the thing
- * #1899 decided not to do (`@decky/ui` owns the predicates, and we do not keep
- * a second copy).
+ * one of these would mean this check re-running the package's own predicate,
+ * which is what it declines to do: a second copy of a predicate would answer
+ * about itself rather than about the value the panel will use. One `@decky/ui`
+ * body is copied in the tree — `utils/quickAccessVisible.ts`, which states why
+ * at its own module — and it is not one of these lookups.
  */
 export const UNVERIFIABLE: Readonly<Record<string, string>> = {
   DropdownItem:
@@ -346,9 +348,8 @@ export const UNVERIFIABLE: Readonly<Record<string, string>> = {
  * Names the panel imports from `@decky/ui` whose answer is Steam's RUNTIME
  * STATE, asked by their own consumers at the moment they are needed.
  *
- * `findSP` is a real search that can come back empty, which is what keeps it out
- * of {@link UNVERIFIABLE}; `useQuickAccessVisible` is a hook the package always
- * defines, and is here because what it reads is the same trees.
+ * Both answer with what they found and can find nothing, which is what keeps
+ * them out of {@link UNVERIFIABLE}.
  *
  * What separates both from {@link STEAM_LOOKUPS} is the axis they search. A
  * module registry is one registry, the same one in Big Picture and in the
@@ -370,10 +371,13 @@ export const ASKED_LIVE: Readonly<Record<string, string>> = {
     "`utils/styleInjector.ts`'s `hideNativePlaySection` and `showNativePlaySection`, ask " +
     "it when the play button mounts and unmounts on a game page, and do nothing when it " +
     "answers nothing",
-  useQuickAccessVisible:
-    "a hook `@decky/ui` always defines; it reaches the same navigation trees through its " +
-    "own `getQuickAccessWindow` during render (`dist/custom-hooks/useQuickAccessVisible.js`), " +
-    "so a reading taken at import says nothing about it",
+  getGamepadNavigationTrees:
+    "the trees themselves: the focus controller's active (else last active) context carries " +
+    "them, and answers `undefined` while it carries none (`dist/utils/index.js`) — the state " +
+    "`findSP` above reads through. `utils/quickAccessVisible.ts` asks it when a wide page " +
+    "renders, through `utils/deckyUiInternals.ts`'s honest-typed re-export, which is also the " +
+    "import this check's own sweep reads; that moment is one the injector's reading cannot " +
+    "stand in for",
 };
 
 /**

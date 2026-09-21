@@ -22,8 +22,8 @@
  */
 
 import { useEffect, type RefObject } from "react";
-import { useQuickAccessVisible } from "@decky/ui";
 import { quickAccessMenuClasses } from "./deckyUiInternals";
+import { useQuickAccessVisible } from "./quickAccessVisible";
 
 /** Marker class on a wide page's root, matched by the injected `:has()` rule. */
 export const WIDE_ROOT_CLASS = "romm-wide-qam-root";
@@ -169,9 +169,9 @@ export function collapseQamOnDismount(): void {
 
 /**
  * Hold the panel wide for as long as the page owning `rootRef` is mounted, the
- * tab this page sits in is the active QAM tab, and the QAM is open. Losing any
- * of the three posts the hide message and drops the stylesheet; regaining it
- * re-expands.
+ * tab this page sits in is the active QAM tab, and the QAM is not known to be
+ * closed. Losing any of the three posts the hide message and drops the
+ * stylesheet; regaining it re-expands.
  *
  * **Which tab that is, is never asked.** The question is answered by walking up
  * from the page's own root to the panel around it and reading Steam's

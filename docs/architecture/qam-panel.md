@@ -213,6 +213,15 @@ that was Decky's teardown hook and nothing calls it now. **Which tab that is is 
 panel around it and reads the class off that panel's parent, so the same code answers for Tender's entry and for
 Decky's.
 
+**Both of those questions proceed when they cannot be answered**, and each one costs at worst an expansion the other
+paths still clear — the alternative default leaves a wide page permanently narrow with nothing saying why. The tab
+question cannot be asked when no panel is found around the page, or when the class probe came back `undefined`. The
+visibility question cannot be asked when Steam's focus controller holds no navigation trees, which is the desktop client
+until Big Picture has been opened: the menu's window is reached through the `QuickAccess-NA` tree, so with no trees
+there is nothing to read a document's visibility off. It is asked through `utils/quickAccessVisible.ts`, Tender's own
+copy of `@decky/ui`'s hook, because upstream's throws on that reading instead of answering — why a copy rather than a
+guard at the call site is written out at that module, along with what else it changes besides the guard.
+
 Steam moves the same flag on its own, in both directions, and neither is a bug in the plugin. `OpenQuickAccessMenu`
 clears it (`SetQAMFriendsChatExpanded(false)`) on every QAM tab change away from Friends, which is a second net under
 the plugin's own `ActiveTab` observer; and the Friends tab's list expands it from `onFocusWithin`, so Friends goes wide

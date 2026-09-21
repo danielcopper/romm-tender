@@ -359,9 +359,18 @@ vi.mock("@decky/ui", () => {
     // `undefined` here like every other probe, and the toaster's own tests pass
     // one in.
     ErrorBoundary: undefined,
-    // The QAM is open for any test that renders a wide page; the hook's
-    // clear-on-close path is exercised in
-    // frontend/src/utils/qamExpansion.test.tsx.
-    useQuickAccessVisible: () => true,
   };
 });
+
+// The QAM is open for any test that renders a wide page. The real hook reads
+// Steam's navigation trees through ./utils/deckyUiInternals, which happy-dom
+// cannot answer, so stubbing the hook here is what spares every wide-page test
+// from stubbing that getter too. Taking this mock away is loud rather than
+// silent, but only by accident of what the factories above and in the page
+// tests omit — .claude/rules/testing-frontend.md states what that rests on.
+// The hook's own branches are covered by
+// frontend/src/utils/quickAccessVisible.test.ts, and its clear-on-close path by
+// frontend/src/utils/qamExpansion.test.tsx.
+vi.mock("./utils/quickAccessVisible", () => ({
+  useQuickAccessVisible: () => true,
+}));

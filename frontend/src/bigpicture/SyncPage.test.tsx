@@ -134,7 +134,6 @@ vi.mock("@decky/ui", async () => {
     // A no-render stub: the modal body is inspected off the showModal mock.
     ConfirmModal: () => null,
     showModal: vi.fn(),
-    useQuickAccessVisible: () => true,
   };
 });
 
