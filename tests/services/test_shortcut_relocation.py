@@ -3,7 +3,11 @@
 The service answers a question with three outcomes and stamps a completion that
 nothing ever clears, so the cases that matter are the ones where it must NOT
 stamp: an answer it could not establish has to leave the question open, or the
-shortcuts it never reached stay on the old path for the life of the install.
+shortcuts it never reached stay where they are for the life of the install.
+
+Ownership is one ending. A shortcut naming a launcher that ends any other way is
+foreign here, including one this program wrote under an earlier name, so it is
+neither repointed nor counted — the cases below pin both directions.
 """
 
 from __future__ import annotations
@@ -25,10 +29,14 @@ from services.shortcut_relocation import (
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
-_HOME = "/home/deck/.local/share/romm-tender/bin/rom-launcher"
-_HOME_DIR = "/home/deck/.local/share/romm-tender/bin"
-_OLD = "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher"
-_RENAMED = "/home/deck/homebrew/plugins/romm-tender/bin/rom-launcher"
+_HOME = "/home/deck/.local/bin/tender-rom-launcher"
+_HOME_DIR = "/home/deck/.local/bin"
+# Ours, and not at the home yet — a shortcut written against a bin root the
+# install has since been told a different value for.
+_ELSEWHERE = "/home/deck/.local/opt/bin/tender-rom-launcher"
+_ELSEWHERE_TOO = "/opt/tender/bin/tender-rom-launcher"
+# Not ours: the ending an earlier version of this program wrote.
+_SUPERSEDED = "/home/deck/.local/share/romm-tender/bin/rom-launcher"
 
 
 class _FakeSteamConfig:
@@ -77,8 +85,8 @@ def _stamped() -> FakeUnitOfWork:
 
 class TestWhatIsLeftToDo:
     @pytest.mark.asyncio
-    async def test_names_every_shortcut_still_pointing_into_a_plugin_folder(self):
-        service, _, _ = _make(exes={10: _OLD, 20: _RENAMED, 30: _HOME, 40: "/usr/bin/other"})
+    async def test_names_every_shortcut_of_ours_that_is_not_at_the_home(self):
+        service, _, _ = _make(exes={10: _ELSEWHERE, 20: _ELSEWHERE_TOO, 30: _HOME, 40: "/usr/bin/other"})
 
         assert await service.get_shortcut_relocation() == {
             "status": "outstanding",
@@ -99,6 +107,13 @@ class TestWhatIsLeftToDo:
 
         assert await service.get_shortcut_relocation() == {"status": "done"}
 
+    @pytest.mark.asyncio
+    async def test_a_shortcut_on_the_superseded_ending_is_not_ours_to_repoint(self):
+        """One ending is the whole of ownership — an earlier version's is not it."""
+        service, _, _ = _make(exes={10: _SUPERSEDED})
+
+        assert await service.get_shortcut_relocation() == {"status": "done"}
+
 
 class TestTheCompletionStamp:
     @pytest.mark.asyncio
@@ -114,7 +129,7 @@ class TestTheCompletionStamp:
     @pytest.mark.asyncio
     async def test_a_stamped_install_reads_no_shortcut_file_at_all(self):
         """The plugin start already carries enough checks; this one must not be permanent."""
-        service, steam_config, _ = _make(exes={10: _OLD}, uow=_stamped())
+        service, steam_config, _ = _make(exes={10: _ELSEWHERE}, uow=_stamped())
 
         assert await service.get_shortcut_relocation() == {"status": "done"}
         assert steam_config.reads == 0
@@ -123,7 +138,7 @@ class TestTheCompletionStamp:
     async def test_handing_out_a_plan_stamps_nothing(self):
         """The writes have not happened yet, and a later reading is what will say they did."""
         uow = FakeUnitOfWork()
-        service, _, _ = _make(exes={10: _OLD}, uow=uow)
+        service, _, _ = _make(exes={10: _ELSEWHERE}, uow=uow)
 
         await service.get_shortcut_relocation()
 
@@ -211,7 +226,7 @@ class TestWhenNothingMayBeRewritten:
     @pytest.mark.asyncio
     async def test_a_launcher_not_at_its_home_blocks_the_rewrite(self):
         """This start's launcher install failed, so there is nowhere safe to point."""
-        service, steam_config, _ = _make(exes={10: _OLD}, at_home=False)
+        service, steam_config, _ = _make(exes={10: _ELSEWHERE}, at_home=False)
 
         answer = await service.get_shortcut_relocation()
 
@@ -241,7 +256,7 @@ class TestWhenNothingMayBeRewritten:
     @pytest.mark.asyncio
     async def test_a_launcher_not_at_home_stamps_nothing_either(self):
         uow = FakeUnitOfWork()
-        service, _, _ = _make(exes={10: _OLD}, at_home=False, uow=uow)
+        service, _, _ = _make(exes={10: _ELSEWHERE}, at_home=False, uow=uow)
 
         await service.get_shortcut_relocation()
 

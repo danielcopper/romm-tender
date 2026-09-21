@@ -52,7 +52,7 @@ function unit(launchOptions: string, runId = "run-1"): SyncApplyUnitData {
       {
         rom_id: 42,
         name: "Test ROM",
-        exe: "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher",
+        exe: "/home/deck/homebrew/plugins/decky-romm-sync/bin/tender-rom-launcher",
         start_dir: "/home/deck",
         launch_options: launchOptions,
         platform_name: "PSX",
@@ -94,7 +94,7 @@ describe("syncManager — existing-shortcut update uses confirm-poll", () => {
 });
 
 describe("syncManager — group-aware emit: one Steam shortcut per game (ADR-0021)", () => {
-  const EXE = "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher";
+  const EXE = "/home/deck/homebrew/plugins/decky-romm-sync/bin/tender-rom-launcher";
 
   beforeEach(() => {
     setLaunchOptionsConfirmed.mockClear();
@@ -212,7 +212,7 @@ describe("syncManager — group-aware emit: one Steam shortcut per game (ADR-002
 });
 
 describe("syncManager — registers resolved appIds as RomM-owned at ack time (#1205)", () => {
-  const EXE = "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher";
+  const EXE = "/home/deck/homebrew/plugins/decky-romm-sync/bin/tender-rom-launcher";
 
   beforeEach(() => {
     setLaunchOptionsConfirmed.mockClear();
@@ -535,7 +535,7 @@ describe("syncManager — every frame it writes names the chunk's run", () => {
 });
 
 describe("syncManager — chunked apply (#1025)", () => {
-  const EXE = "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher";
+  const EXE = "/home/deck/homebrew/plugins/decky-romm-sync/bin/tender-rom-launcher";
 
   beforeEach(() => {
     setLaunchOptionsConfirmed.mockClear();
@@ -755,7 +755,7 @@ describe("syncManager — chunked apply (#1025)", () => {
 });
 
 describe("syncManager — applies cover artwork to created shortcuts via the API (#1391)", () => {
-  const EXE = "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher";
+  const EXE = "/home/deck/homebrew/plugins/decky-romm-sync/bin/tender-rom-launcher";
   const setCustomArtwork = vi.fn().mockResolvedValue(undefined);
   // logError is a plain wrapper (not a callable), so spy to observe the fail-soft path.
   let logErrorSpy: ReturnType<typeof vi.spyOn>;
@@ -1127,7 +1127,7 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
 });
 
 describe("syncManager — adopts orphan shortcuts instead of creating duplicates (#1366)", () => {
-  const EXE = "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher";
+  const EXE = "/home/deck/homebrew/plugins/decky-romm-sync/bin/tender-rom-launcher";
   const setShortcutName = vi.fn();
   const setShortcutExe = vi.fn();
   const setShortcutStartDir = vi.fn();

@@ -43,15 +43,17 @@ launch-options write for the (majority) uninstalled case also avoids `setLaunchO
 
 ### Where the exe points
 
-Every shortcut's `exe` is `<data root>/bin/rom-launcher` — under the user's own home, not in the directory the program
-is installed in, because a shortcut's `exe` is the one thing about it this program cannot repair from inside: an update
-that replaced its own install directory would leave every game pointing at a file nothing puts back
-([ADR-0032](../adr/0032-shortcuts-are-rewritten-in-place.md); the roots themselves are
+Every shortcut's `exe` is `<bin root>/tender-rom-launcher` — `~/.local/bin/tender-rom-launcher` by default, the place
+XDG names for a user's own executables. Not in the directory the program is installed in, because a shortcut's `exe` is
+the one thing about it this program cannot repair from inside: an update that replaced its own install directory would
+leave every game pointing at a file nothing puts back. Not under the data root either, which holds the database and
+nothing executable ([ADR-0038](../adr/0038-the-launcher-lives-in-local-bin.md), which supersedes
+[ADR-0032](../adr/0032-shortcuts-are-rewritten-in-place.md) on the home; the roots themselves are
 [ADR-0036](../adr/0036-the-backend-hosts-itself.md)). The backend installs this release's launcher there unconditionally
 on every start.
 
-Shortcuts written before that move are repointed once, at plugin load. The **backend** decides which: it parses
-`shortcuts.vdf` and returns the app IDs whose `exe` still ends in `/bin/rom-launcher` but is not the launcher's home,
+Shortcuts of ours that are not at that home are repointed once, at panel load. The **backend** decides which: it parses
+`shortcuts.vdf` and returns the app IDs whose `exe` ends in `/bin/tender-rom-launcher` but is not the launcher's home,
 plus the `exe` and `startDir` to write (`get_shortcut_relocation`). The frontend writes exactly those and reports; it
 records nothing (`frontend/src/utils/launcherRelocation.ts`). The transition is stamped by the NEXT start's own reading
 of that file, once Steam has written its in-memory shortcuts out — after which no start reads it again. An app
@@ -60,12 +62,13 @@ shortcut at every start.
 
 Three properties of that path are load-bearing:
 
-- **It ends in `/bin/rom-launcher`.** Ownership is decided by that suffix and nothing else (`isRomMShortcutDetails`,
-  `domain/shortcut_data.py::select_shortcuts_to_relocate`, and `backend/services/prune/requests.py`), so a launcher kept
-  under any other last two components makes every shortcut written before the move stop being recognised as ours.
-- **A shortcut nobody has repointed still launches.** The package still ships `bin/rom-launcher`, so the old path stays
-  a real file; the rewrite is a repair, not a cutover, and nothing is written at all while the backend reports the
-  launcher as not at its home.
+- **It ends in `/bin/tender-rom-launcher`.** Ownership is decided by that suffix and nothing else
+  (`isRomMShortcutDetails`, `domain/shortcut_data.py::select_shortcuts_to_relocate`, and
+  `backend/services/prune/requests.py`), so a launcher kept under any other last two components makes every shortcut
+  written before that change stop being recognised as ours.
+- **One ending is the whole of ownership.** A shortcut naming a launcher an earlier version of this program wrote is
+  foreign here: not recognised, not repointed, not counted, not pruned. A user coming from 0.33 removes all non-Steam
+  shortcuts and syncs again ([ADR-0038](../adr/0038-the-launcher-lives-in-local-bin.md)).
 - **The app id in the file is signed.** `shortcuts.vdf` stores it as a signed int32 (`to_signed_app_id`) while every
   `SteamClient.Apps.Set*` takes the unsigned form, so anything reading ids back out of the file converts them
   (`to_unsigned_app_id`). A negative id names no shortcut and fails silently.
@@ -78,15 +81,16 @@ Three properties of that path are load-bearing:
 Pass the raw path:
 
 ```typescript
-SteamClient.Apps.SetShortcutExe(appId, "/home/deck/.local/share/romm-tender/bin/rom-launcher");
+SteamClient.Apps.SetShortcutExe(appId, "/home/deck/.local/bin/tender-rom-launcher");
 ```
 
 ### Updating existing shortcuts
 
 Steam **assigns** a shortcut's `appId` when `AddShortcut` creates it, and that `appId` is **stable for the shortcut's
 lifetime**. The plugin never computes it: it records Steam's assigned id in `roms.shortcut_app_id` and detects ownership
-by the exe path (`…/bin/rom-launcher`), not by re-deriving the id. (The historical "`appId` is `CRC32(exe + appName)`"
-formula does not hold on current Steam — see [App IDs and Artwork](#app-ids-and-artwork).) Two consequences follow:
+by the exe path (`…/bin/tender-rom-launcher`), not by re-deriving the id. (The historical "`appId` is
+`CRC32(exe + appName)`" formula does not hold on current Steam — see [App IDs and Artwork](#app-ids-and-artwork).) Two
+consequences follow:
 
 - **`launchOptions` and `startDir` are appId-safe.** Changing either on an existing shortcut keeps the same `appId`, so
   the shortcut's identity, artwork, collection membership, and `roms.shortcut_app_id` binding all survive.
@@ -135,7 +139,7 @@ three lanes:
   sibling, so the fresh `rom_id` takes the **new** lane: a fresh `AddShortcut` with a **new** appId, and the old
   shortcut is torn down by the stale path. Artwork and collection membership are re-established for the new shortcut.
   This is honest degradation — the identity link the rebind lane needs is gone, so the shortcut cannot be preserved.
-- **Untracked orphans → adoption at create time.** A live RomM-owned shortcut (exe ends `/bin/rom-launcher`) that
+- **Untracked orphans → adoption at create time.** A live RomM-owned shortcut (exe ends `/bin/tender-rom-launcher`) that
   carries **no** DB binding — a crashed run's uncommitted in-flight shortcut, or a zombie left after a DB reset — is
   invisible to both the rebind lane (no `roms` row) and the stale path (nothing to unbind), so a naive create would
   leave a duplicate (`#1366`). When such a ROM reaches the create path, the frontend **adopts** the orphan instead: it
@@ -227,8 +231,8 @@ that identity in the recovery handle, and adds only that user's grid artwork, bo
 relevant controller setting. Cleanup must use those exact captured roots even if the active account changes later.
 
 Every action event is deduplicated and serialized. Before any Steam mutation, the frontend claims its token from the
-backend, re-reads the live shortcut, and requires the appId to exist with an exe ending in `/bin/rom-launcher`. Only
-then does shortcut removal capture a fresh complete snapshot, compare it with the sealed snapshot, call
+backend, re-reads the live shortcut, and requires the appId to exist with an exe ending in `/bin/tender-rom-launcher`.
+Only then does shortcut removal capture a fresh complete snapshot, compare it with the sealed snapshot, call
 `RemoveShortcut(appId)` once, and poll the live store until absence. Identical claim retries are idempotent. Completion
 reporting uses bounded retries of the same payload without repeating the Steam operation. If every completion report is
 lost, the claimed lease expires as an ambiguous partial and retains source data. A `RemoveShortcut` call followed by an
@@ -263,9 +267,9 @@ It runs **before** the sync builds its work queue — so the unbind lands before
 the skip-preview (`start_sync`) and preview (`sync_preview`) paths:
 
 1. `getLiveRomMShortcutAppIds()` (`frontend/src/utils/steamShortcuts.ts`) scans Steam's live shortcuts and returns the
-   raw appIds of every RomM-owned shortcut (exe ends with `/bin/rom-launcher`), regardless of any backend binding. It
-   returns `null` when the store was **unreadable** (`collectionStore` absent) versus `[]` when the scan **ran and found
-   none** — a load-bearing distinction.
+   raw appIds of every RomM-owned shortcut (exe ends with `/bin/tender-rom-launcher`), regardless of any backend
+   binding. It returns `null` when the store was **unreadable** (`collectionStore` absent) versus `[]` when the scan
+   **ran and found none** — a load-bearing distinction.
 2. `reconcileStaleShortcuts()` (`frontend/src/utils/syncManager.ts`) skips the reconcile on a `null` scan (reconciling
    against "couldn't look" would unbind every binding), and otherwise calls the `reconcile_shortcuts` callable with the
    live set. It is best-effort: a scan or backend failure is logged and swallowed, never blocking the sync.
@@ -344,15 +348,15 @@ Steam stores non-Steam shortcuts in a binary VDF file at:
 
 Each entry has these key fields:
 
-| VDF Field       | Format       | Notes                                                                                                                                                                                                                                                 |
-| --------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AppName`       | string       | Display name                                                                                                                                                                                                                                          |
-| `Exe`           | string       | Executable path. `AddShortcut`-created entries store it **unquoted** (on-device inspection) — the API handles any quoting internally                                                                                                                  |
-| `StartDir`      | string       | Start directory. Stored **unquoted** for `AddShortcut`-created entries                                                                                                                                                                                |
-| `LaunchOptions` | string       | The full launch command the `bin/rom-launcher` exec wrapper runs, e.g. `flatpak run net.retrodeck.retrodeck "/path/to/game.iso"` — or `""` (placeholder) for an uninstalled ROM. No `romm:<id>` marker; ownership is detected by the exe path instead |
-| `appid`         | signed int32 | Assigned by Steam when `AddShortcut` runs; stored as the signed int32 form (`to_signed_app_id`)                                                                                                                                                       |
-| `icon`          | string       | Icon path or hash                                                                                                                                                                                                                                     |
-| `tags`          | object       | Steam collection tags. The plugin manages collections via `collectionStore` (machine-scoped names like `RomM: N64 (steamdeck)`), not by writing this VDF field.                                                                                       |
+| VDF Field       | Format       | Notes                                                                                                                                                                                                                                                        |
+| --------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AppName`       | string       | Display name                                                                                                                                                                                                                                                 |
+| `Exe`           | string       | Executable path. `AddShortcut`-created entries store it **unquoted** (on-device inspection) — the API handles any quoting internally                                                                                                                         |
+| `StartDir`      | string       | Start directory. Stored **unquoted** for `AddShortcut`-created entries                                                                                                                                                                                       |
+| `LaunchOptions` | string       | The full launch command the `bin/tender-rom-launcher` exec wrapper runs, e.g. `flatpak run net.retrodeck.retrodeck "/path/to/game.iso"` — or `""` (placeholder) for an uninstalled ROM. No `romm:<id>` marker; ownership is detected by the exe path instead |
+| `appid`         | signed int32 | Assigned by Steam when `AddShortcut` runs; stored as the signed int32 form (`to_signed_app_id`)                                                                                                                                                              |
+| `icon`          | string       | Icon path or hash                                                                                                                                                                                                                                            |
+| `tags`          | object       | Steam collection tags. The plugin manages collections via `collectionStore` (machine-scoped names like `RomM: N64 (steamdeck)`), not by writing this VDF field.                                                                                              |
 
 ### shortcuts.vdf is memory-authoritative
 
@@ -526,7 +530,7 @@ immediate remount cannot let the old chain write launch options or invoke `RunGa
 | `backend/adapters/steam_config.py`                    | `SteamConfigAdapter` — VDF read/write, grid dir, shortcut icon write, Steam Input config                                                                                                                                                                                                                                                       |
 | `backend/services/library/`                           | LibraryService — builds shortcut data, drives per-unit sync apply                                                                                                                                                                                                                                                                              |
 | `backend/domain/sgdb_artwork.py`                      | `to_signed_app_id`, SGDB asset-type/endpoint maps                                                                                                                                                                                                                                                                                              |
-| `bin/rom-launcher`                                    | Pure `exec "$@"` wrapper invoked by Steam — runs the full launch command baked into the shortcut's launch options; owns no state, no path resolution, no emulator knowledge. Shipped here, **run from `<data root>/bin/rom-launcher`**: `bootstrap()` installs this copy there at every start (ADR-0032)                                       |
+| `bin/tender-rom-launcher`                             | Pure `exec "$@"` wrapper invoked by Steam — runs the full launch command baked into the shortcut's launch options; owns no state, no path resolution, no emulator knowledge. Shipped here, **run from `<bin root>/tender-rom-launcher`**: `bootstrap()` installs this copy there at every start (ADR-0038)                                     |
 
 ## Common Pitfalls
 

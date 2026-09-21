@@ -139,7 +139,7 @@ const ShortcutRemovalSection: FC<ShortcutRemovalSectionProps> = ({
         } else {
           // The backend list is the DB binding map (roms.shortcut_app_id). A
           // crashed sync run's in-flight chunk can leave RomM-owned shortcuts in
-          // Steam (exe = bin/rom-launcher) that were never committed — no binding,
+          // Steam (exe = bin/tender-rom-launcher) that were never committed — no binding,
           // so the backend never returns them. The live exe-ownership scan sees
           // them; remove the UNION so no orphan is left behind (#1381).
           const backendAppIds = result.app_ids ?? [];

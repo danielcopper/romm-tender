@@ -1,11 +1,13 @@
 """ShortcutRelocationService — pointing the existing shortcuts at the launcher's home.
 
-Owns one question the frontend asks at start-up: which Steam shortcuts still
-name a launcher inside a program install directory rather than the launcher's
-home under the data root, and may they be repointed. Nothing here
-writes to Steam — the frontend owns every shortcut mutation — and nothing here
-decides where the launcher lives; the composition root settles that and hands
-the answer in.
+Owns one question the frontend asks at start-up: which of our Steam shortcuts
+name a launcher somewhere other than the launcher's installed home, and may they
+be repointed. A shortcut is ours by one ending and nothing else
+(``domain/user_data_location.py``), so what this service repoints is a shortcut
+of ours that is not yet at that home; a shortcut naming any other launcher is
+foreign and is left alone. Nothing here writes to Steam — the frontend owns
+every shortcut mutation — and nothing here decides where the launcher lives; the
+composition root settles that and hands the answer in.
 
 A one-time transition task with a recorded completion, in the shape of a schema
 migration: once a reading of Steam's shortcut file finds nothing of ours outside
@@ -68,8 +70,8 @@ class ShortcutRelocationService:
 
         Returns a discriminated status union (``.claude/rules/callables.md``):
 
-        - ``{"status": "done"}`` — no shortcut of ours names a plugin folder any
-          more. Either the completion is already stamped, in which case nothing
+        - ``{"status": "done"}`` — every shortcut of ours is at the launcher's
+          home. Either the completion is already stamped, in which case nothing
           at all is read, or this call read the file and found nothing to do and
           stamped it. **This is the only thing that ever stamps it**, and what it
           rests on is the file rather than anybody's report: the frontend can say
@@ -98,14 +100,14 @@ class ShortcutRelocationService:
         that no in-flight state can make wrong.
 
         **The gap this leaves, deliberately.** The stamp is permanent and
-        nothing clears it: a shortcut that turns up later carrying the old path
-        — restored from a backup, written by a downgraded build — stays on it,
-        and no start will look again. It keeps launching, because the package
-        still ships ``bin/rom-launcher`` at that path; what it does NOT keep is
-        agreement with this service, which goes on answering ``done``. Clearing
-        the stamp on Force Full Sync was considered and rejected: it would only
-        ever reach a user who had already diagnosed the shortcut, and that button
-        carries enough meanings already.
+        nothing clears it: a shortcut of ours that turns up later somewhere
+        other than the home — restored from a backup, written by a downgraded
+        build — stays where it is, and no start will look again. It keeps
+        launching for as long as a launcher is at the path it names; what it
+        does NOT keep is agreement with this service, which goes on answering
+        ``done``. Clearing the stamp on Force Full Sync was considered and
+        rejected: it would only ever reach a user who had already diagnosed the
+        shortcut, and that button carries enough meanings already.
         """
         if await self._already_done():
             return {"status": "done"}

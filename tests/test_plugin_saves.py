@@ -75,7 +75,7 @@ def plugin(tmp_path):
             loop=running_loop(),
             logger=decky.logger,
             plugin_dir=decky.DECKY_PLUGIN_DIR,
-            launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/rom-launcher",
+            launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/tender-rom-launcher",
             # The service seam is fire-and-forget (``EventEmitter`` answers
             # ``None``); the plugin's own sink answers whether anybody heard.
             # Two seams, deliberately not one.

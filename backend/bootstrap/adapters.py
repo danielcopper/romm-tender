@@ -64,7 +64,7 @@ from adapters.system_clock import SystemClock
 from adapters.system_uuid_gen import SystemUuidGen
 from domain.identity import PACKAGE_NAME, VERSION
 from domain.state_migrations import fold_legacy_save_sync_settings, migrate_settings
-from domain.user_data_location import launcher_path
+from domain.user_data_location import launcher_in_bin_dir, launcher_path
 
 if TYPE_CHECKING:
     import asyncio
@@ -310,25 +310,28 @@ def bootstrap(
     # and every later seam (uuid_gen/sleeper neighbours, runtime bundle).
     clock = SystemClock()
 
-    # The launcher is code rather than data, and it lives under the data root
-    # rather than beside the program: a shortcut's ``exe`` names it, and that is
-    # the one thing about a shortcut this program cannot repair from inside. It
-    # is written on every start rather than once, so the launcher a shortcut runs
+    # The launcher is installed outside every directory this program owns: a
+    # shortcut's ``exe`` names it, and that is the one thing about a shortcut
+    # this program cannot repair from inside. The bin root is XDG's place for a
+    # user's own executables, and a place the uninstaller never removes — so a
+    # shortcut goes on working after the program that wrote it is gone. It is
+    # written on every start rather than once, so the launcher a shortcut runs
     # is always the one this release ships — installed once, it would freeze at
     # whatever version the day of the move happened to bring.
     #
     # The path a new shortcut is built against follows the INSTALL, not the
-    # intent: the data root only where this start actually got the launcher into
+    # intent: the bin root only where this start actually got the launcher into
     # it, and the copy the release ships otherwise. A start whose write failed is
     # the second case, and pointing a shortcut at a home the write never reached
     # would name a file that is not there.
+    installed_launcher = launcher_in_bin_dir(directories.bin_dir)
     launcher_at_home = LauncherInstallAdapter(
         source=launcher_path(directories.code_dir),
-        destination=launcher_path(directories.data_dir),
+        destination=installed_launcher,
         logger=logger,
     ).install()
     launcher = ShortcutLauncher(
-        path=launcher_path(directories.data_dir if launcher_at_home else directories.code_dir),
+        path=installed_launcher if launcher_at_home else launcher_path(directories.code_dir),
         at_home=launcher_at_home,
     )
 

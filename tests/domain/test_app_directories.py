@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from domain.app_directories import (
+    ENV_BIN_DIR,
     ENV_CACHE_DIR,
     ENV_CODE_DIR,
     ENV_CONFIG_DIR,
@@ -45,6 +46,10 @@ class TestTheBuiltInDefaults:
     def test_the_code_directory_falls_back_to_where_the_program_sits(self):
         assert resolve().code_dir == CODE_FALLBACK
 
+    def test_the_bin_directory_is_where_a_users_own_executables_go(self):
+        """Named by the basedir spec as a path, so there is no XDG rung above it."""
+        assert resolve().bin_dir == f"{HOME}/.local/bin"
+
     def test_the_runtime_directory_falls_back_to_the_state_directory(self):
         """XDG names no default for it; the note there is a hint either way."""
         answer = resolve()
@@ -78,6 +83,12 @@ class TestTheXdgRung:
         assert answer.data_dir == f"/elsewhere/{APP_DIR_NAME}"
         assert answer.config_dir == f"{HOME}/.config/{APP_DIR_NAME}"
 
+    def test_no_xdg_variable_moves_the_bin_directory(self):
+        """There is none for it, and it is not named after this program either."""
+        answer = resolve(**{XDG_DATA_HOME: "/elsewhere", XDG_CONFIG_HOME: "/elsewhere"})
+
+        assert answer.bin_dir == f"{HOME}/.local/bin"
+
 
 class TestTheInstallersRung:
     """The top rung: the answers written into the unit, used verbatim."""
@@ -90,6 +101,7 @@ class TestTheInstallersRung:
             (ENV_CACHE_DIR, "cache_dir"),
             (ENV_STATE_DIR, "state_dir"),
             (ENV_CODE_DIR, "code_dir"),
+            (ENV_BIN_DIR, "bin_dir"),
         ],
     )
     def test_each_answer_is_taken_as_it_stands(self, variable, attribute):
@@ -135,3 +147,7 @@ class TestTheSplitBetweenTheRoots:
 
         for root in (answer.config_dir, answer.data_dir, answer.cache_dir, answer.state_dir):
             assert root.endswith(f"/{APP_DIR_NAME}")
+
+    def test_the_bin_directory_is_not(self):
+        """It is shared with every other program the user installed for themselves."""
+        assert not resolve().bin_dir.endswith(f"/{APP_DIR_NAME}")

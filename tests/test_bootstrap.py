@@ -65,8 +65,17 @@ from services.version_switch import VersionSwitchService
 _GAVEL = GavelNativeAdapter()
 
 
+def _current_umask() -> int:
+    """This process's umask, read the only way there is — by setting it and putting it back."""
+    import os
+
+    current = os.umask(0o022)
+    os.umask(current)
+    return current
+
+
 def _directories_at(tmp_path) -> AppDirectories:
-    """The six directories a run is told about, all under ``tmp_path``."""
+    """The seven directories a run is told about, all under ``tmp_path``."""
     return AppDirectories(
         config_dir=str(tmp_path / "config"),
         data_dir=str(tmp_path / "data"),
@@ -74,6 +83,7 @@ def _directories_at(tmp_path) -> AppDirectories:
         state_dir=str(tmp_path / "state"),
         runtime_dir=str(tmp_path / "run"),
         code_dir=str(tmp_path / "plugin"),
+        bin_dir=str(tmp_path / "home" / ".local" / "bin"),
     )
 
 
@@ -284,7 +294,7 @@ class TestBootstrapInstallsTheLauncher:
 
     @staticmethod
     def _ship(tmp_path) -> bytes:
-        shipped = tmp_path / "plugin" / "bin" / "rom-launcher"
+        shipped = tmp_path / "plugin" / "bin" / "tender-rom-launcher"
         shipped.parent.mkdir(parents=True, exist_ok=True)
         shipped.write_bytes(b'#!/bin/bash\nexec "$@"\n')
         shipped.chmod(0o755)
@@ -292,9 +302,9 @@ class TestBootstrapInstallsTheLauncher:
 
     @staticmethod
     def _home(tmp_path) -> pathlib.Path:
-        return tmp_path / "data" / "bin" / "rom-launcher"
+        return tmp_path / "home" / ".local" / "bin" / "tender-rom-launcher"
 
-    def test_the_launcher_is_installed_under_the_users_data_root(self, tmp_path):
+    def test_the_launcher_is_installed_into_the_bin_root(self, tmp_path):
         content = self._ship(tmp_path)
 
         result = _bootstrap_for(tmp_path)
@@ -304,7 +314,7 @@ class TestBootstrapInstallsTheLauncher:
         assert self._home(tmp_path).read_bytes() == content
 
     def test_the_launcher_is_not_left_beside_the_program(self, tmp_path):
-        """The data root and the code root are two of six strings on one struct.
+        """The bin root and the code root are two of seven strings on one struct.
 
         Nothing but this pins which of them the launcher followed, and the whole
         point of the launcher's home is that a shortcut's ``exe`` must not name a
@@ -316,6 +326,19 @@ class TestBootstrapInstallsTheLauncher:
 
         assert str(tmp_path / "plugin") not in result.launcher.path
         assert str(tmp_path / "cache") not in result.launcher.path
+        assert str(tmp_path / "data") not in result.launcher.path
+
+    def test_the_bin_root_is_created_at_the_umasks_mode(self, tmp_path):
+        """A shared directory: narrowing it would bind every other program's files."""
+        import os
+        import stat
+
+        self._ship(tmp_path)
+
+        _bootstrap_for(tmp_path)
+
+        mode = stat.S_IMODE(os.stat(self._home(tmp_path).parent).st_mode)
+        assert mode == 0o777 & ~_current_umask()
 
     def test_a_launcher_the_release_did_not_ship_leaves_the_start_running(self, tmp_path):
         """The one thing that must not happen is the plugin failing to start over it.
@@ -327,7 +350,7 @@ class TestBootstrapInstallsTheLauncher:
         result = _bootstrap_for(tmp_path)
 
         assert result.launcher.at_home is False
-        assert result.launcher.path == str(tmp_path / "plugin" / "bin" / "rom-launcher")
+        assert result.launcher.path == str(tmp_path / "plugin" / "bin" / "tender-rom-launcher")
 
 
 class TestBootstrapSettingsResetMarker:
@@ -428,7 +451,7 @@ class TestWireServices:
             "uow_factory": FakeUnitOfWorkFactory(),
             "directories": _directories_at(tmp_path),
             "launcher": ShortcutLauncher(
-                path=str(tmp_path / "data" / "bin" / "rom-launcher"),
+                path=str(tmp_path / "home" / ".local" / "bin" / "tender-rom-launcher"),
                 at_home=True,
             ),
         }

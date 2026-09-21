@@ -14,7 +14,7 @@ from domain.shortcut_data import (
 
 # The launcher's home under the user's data root: what the composition root
 # hands the builder now that the launcher no longer lives in the plugin folder.
-_LAUNCHER = "/home/deck/.local/share/romm-tender/bin/rom-launcher"
+_LAUNCHER = "/home/deck/.local/bin/tender-rom-launcher"
 
 
 class TestResolveEmulatorInvocation:
@@ -388,7 +388,7 @@ class TestBuildShortcutsData:
     def test_exe_path_contains_rom_launcher(self):
         roms = [{"id": 1, "name": "Game"}]
         result = build_shortcuts_data(roms, _LAUNCHER, {}, {})
-        assert result[0]["exe"].endswith("/bin/rom-launcher")
+        assert result[0]["exe"].endswith("/bin/tender-rom-launcher")
 
     def test_start_dir_is_parent_of_exe(self):
         roms = [{"id": 1, "name": "Game"}]
@@ -499,29 +499,40 @@ class TestBuildShortcutsDataVersionMetadata:
 class TestSelectShortcutsToRelocate:
     """Which live shortcuts still have to be pointed at the launcher's home."""
 
-    _OLD = "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher"
-    _RENAMED = "/home/deck/homebrew/plugins/romm-tender/bin/rom-launcher"
+    # Ours by its ending, wherever it was written.
+    _ELSEWHERE = "/home/deck/.local/opt/bin/tender-rom-launcher"
+    _ELSEWHERE_TOO = "/opt/tender/bin/tender-rom-launcher"
 
-    def test_picks_a_shortcut_written_by_either_plugin_folder_name(self):
-        exes = {10: self._OLD, 20: self._RENAMED}
+    # Not ours: the ending an earlier version of this program wrote. Ownership
+    # is one ending, so this is a foreign shortcut and is never selected.
+    _SUPERSEDED = "/home/deck/.local/share/romm-tender/bin/rom-launcher"
+
+    def test_picks_a_shortcut_of_ours_wherever_it_was_written(self):
+        exes = {10: self._ELSEWHERE, 20: self._ELSEWHERE_TOO}
 
         assert select_shortcuts_to_relocate(exes, _LAUNCHER) == [10, 20]
 
+    def test_never_picks_a_shortcut_on_the_superseded_ending(self):
+        """One ending is the whole of ownership — an earlier version's is not it."""
+        assert select_shortcuts_to_relocate({10: self._SUPERSEDED}, _LAUNCHER) == []
+
     def test_skips_a_shortcut_already_on_the_launchers_home(self):
-        assert select_shortcuts_to_relocate({10: _LAUNCHER, 20: self._OLD}, _LAUNCHER) == [20]
+        assert select_shortcuts_to_relocate({10: _LAUNCHER, 20: self._ELSEWHERE}, _LAUNCHER) == [20]
 
     def test_never_picks_a_shortcut_that_is_not_ours(self):
         assert select_shortcuts_to_relocate({10: "/usr/bin/some-other-game"}, _LAUNCHER) == []
 
     def test_a_quoted_exe_is_still_ours(self):
         """AddShortcut stores it bare; reading a hand-quoted one as foreign strands it."""
-        assert select_shortcuts_to_relocate({10: f'"{self._OLD}"'}, _LAUNCHER) == [10]
+        assert select_shortcuts_to_relocate({10: f'"{self._ELSEWHERE}"'}, _LAUNCHER) == [10]
 
     def test_a_quoted_exe_already_on_the_home_is_still_skipped(self):
         assert select_shortcuts_to_relocate({10: f'"{_LAUNCHER}"'}, _LAUNCHER) == []
 
     def test_the_answer_is_sorted(self):
-        assert select_shortcuts_to_relocate({30: self._OLD, 10: self._OLD, 20: self._OLD}, _LAUNCHER) == [10, 20, 30]
+        assert select_shortcuts_to_relocate(
+            {30: self._ELSEWHERE, 10: self._ELSEWHERE, 20: self._ELSEWHERE}, _LAUNCHER
+        ) == [10, 20, 30]
 
     def test_an_empty_reading_selects_nothing(self):
         assert select_shortcuts_to_relocate({}, _LAUNCHER) == []

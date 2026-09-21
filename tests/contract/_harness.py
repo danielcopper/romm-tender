@@ -127,15 +127,17 @@ class ContractHarness:
     # The in-memory process table behind the stop-game ladder. Tests seed ``pids``
     # (and ``survive_stop`` / ``alive``) to stage what the kill should find.
     game_process: FakeGameProcessControlAdapter
-    # The three directories a contract test ever has to look in, read back off
+    # The four directories a contract test ever has to look in, read back off
     # what the run was TOLD rather than composed here: ``settings.json`` under
-    # the config root, the database under the data root, and everything
-    # re-derivable from the server — covers, artwork — under the cache root. The
+    # the config root, the database under the data root, everything
+    # re-derivable from the server — covers, artwork — under the cache root, and
+    # the launcher every shortcut runs through in the bin root. The cache/data
     # split is not filing tidiness: a system that clears caches must be able to
     # clear one and not the other.
     settings_dir: str
     data_dir: str
     cache_dir: str
+    bin_dir: str
 
 
 def _single_attempt_pass_through(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
@@ -149,7 +151,7 @@ def _single_attempt_pass_through(fn: Callable[..., Any], *args: Any, **kwargs: A
     return fn(*args, **kwargs)
 
 
-# The real ``bin/rom-launcher`` is a bash exec wrapper; what the installer does
+# The real ``bin/tender-rom-launcher`` is a bash exec wrapper; what the installer does
 # with it is byte-for-byte, so the contents only have to be stable.
 _SHIPPED_LAUNCHER = b'#!/bin/bash\nexec "$@"\n'
 
@@ -166,10 +168,10 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
     logger = logging.getLogger("contract")
 
     # The launcher the release ships, staged where a real install has it: the
-    # start-up install copies it to the data root, and without it every contract
-    # test would run against the one state a real device never has — a plugin
+    # start-up install copies it to the bin root, and without it every contract
+    # test would run against the one state a real device never has — a program
     # package with no launcher in it.
-    shipped_launcher = tmp_path / "plugin" / "bin" / "rom-launcher"
+    shipped_launcher = tmp_path / "plugin" / "bin" / "tender-rom-launcher"
     shipped_launcher.parent.mkdir(parents=True, exist_ok=True)
     shipped_launcher.write_bytes(_SHIPPED_LAUNCHER)
 
@@ -183,6 +185,7 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
             state_dir=str(tmp_path / "state"),
             runtime_dir=str(tmp_path / "run"),
             code_dir=str(tmp_path / "plugin"),
+            bin_dir=str(tmp_path / "home" / ".local" / "bin"),
         ),
         user_home=str(tmp_path / "home"),
         logger=logger,
@@ -282,4 +285,5 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
         settings_dir=result.directories.config_dir,
         data_dir=result.directories.data_dir,
         cache_dir=result.directories.cache_dir,
+        bin_dir=result.directories.bin_dir,
     )

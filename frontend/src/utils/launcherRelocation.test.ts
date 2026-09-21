@@ -1,6 +1,6 @@
 /**
  * Exercises the plugin-load pass that points every RomM-owned shortcut at the
- * launcher's home outside the plugin folder (ADR-0032).
+ * launcher's home outside every directory this program owns (ADR-0038).
  *
  * Which shortcuts need the write is the backend's answer, read out of
  * `shortcuts.vdf`, and so is recording that the transition is over. What this
@@ -15,8 +15,8 @@ import { relocateShortcutsToLauncher } from "./launcherRelocation";
 
 vi.mock("../api/backend");
 
-const NEW_LAUNCHER = "/home/deck/.local/share/romm-tender/bin/rom-launcher";
-const NEW_START_DIR = "/home/deck/.local/share/romm-tender/bin";
+const NEW_LAUNCHER = "/home/deck/.local/bin/tender-rom-launcher";
+const NEW_START_DIR = "/home/deck/.local/bin";
 
 function stubSteam(): { setExe: ReturnType<typeof vi.fn>; setStartDir: ReturnType<typeof vi.fn> } {
   const setExe = vi.fn();

@@ -267,7 +267,7 @@ class TestWireShortcuts:
         entry = {
             "rom_id": 1,
             "name": "Game",
-            "exe": "/bin/rom-launcher",
+            "exe": "/bin/tender-rom-launcher",
             "start_dir": "/bin",
             "launch_options": "",
             "platform_name": "N64",
@@ -279,7 +279,7 @@ class TestWireShortcuts:
             {
                 "rom_id": 1,
                 "name": "Game",
-                "exe": "/bin/rom-launcher",
+                "exe": "/bin/tender-rom-launcher",
                 "start_dir": "/bin",
                 "launch_options": "",
                 "platform_name": "N64",

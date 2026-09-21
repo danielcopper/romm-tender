@@ -159,7 +159,7 @@ class TestShortcutDataFormat:
         """
         from domain.shortcut_data import build_shortcuts_data
 
-        launcher = "/home/deck/.local/share/romm-tender/bin/rom-launcher"
+        launcher = "/home/deck/.local/share/romm-tender/bin/tender-rom-launcher"
 
         result = build_shortcuts_data([{"id": 1, "name": "Game"}], launcher, {}, {})
 
@@ -171,7 +171,7 @@ class TestShortcutDataFormat:
 
         result = build_shortcuts_data(
             [{"id": 42, "name": "Game"}],
-            "/data/bin/rom-launcher",
+            "/data/bin/tender-rom-launcher",
             {42: "/roms/n64/game.z64"},
             {},
         )
@@ -181,7 +181,7 @@ class TestShortcutDataFormat:
         """Start dir must be the directory containing the launcher."""
         from domain.shortcut_data import build_shortcuts_data
 
-        launcher = "/home/deck/.local/share/romm-tender/bin/rom-launcher"
+        launcher = "/home/deck/.local/share/romm-tender/bin/tender-rom-launcher"
 
         result = build_shortcuts_data([{"id": 1, "name": "Game"}], launcher, {}, {})
 

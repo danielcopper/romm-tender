@@ -1,7 +1,7 @@
 """Where this program's directories are, computed from an environment.
 
-Contract: the pure mapping from an environment and a home directory to the six
-places this backend reads and writes. Nothing here touches the filesystem or
+Contract: the pure mapping from an environment and a home directory to the
+seven places this backend reads and writes. Nothing here touches the filesystem or
 reads ``os.environ`` itself — the environment arrives as an argument, which is
 what makes the whole ladder checkable against a table.
 
@@ -38,6 +38,7 @@ ENV_DATA_DIR = "TENDER_DATA_DIR"
 ENV_CACHE_DIR = "TENDER_CACHE_DIR"
 ENV_STATE_DIR = "TENDER_STATE_DIR"
 ENV_CODE_DIR = "TENDER_CODE_DIR"
+ENV_BIN_DIR = "TENDER_BIN_DIR"
 
 # Second rung. ``XDG_RUNTIME_DIR`` is the only one of these that is reliably set
 # on the reference machine; the other four were measured unset in both the login
@@ -52,7 +53,7 @@ XDG_RUNTIME_DIR = "XDG_RUNTIME_DIR"
 
 @dataclass(frozen=True)
 class AppDirectories:
-    """The six places this backend uses, each already named after the program."""
+    """The seven places this backend uses, five of them named after the program."""
 
     config_dir: str
     """User intent — ``settings.json`` and nothing else."""
@@ -71,6 +72,16 @@ class AppDirectories:
 
     code_dir: str
     """The program itself — the launcher it ships is copied out of here."""
+
+    bin_dir: str
+    """Where a user's own executables go — the launcher is installed here.
+
+    The one field NOT named after this program: it is a directory shared with
+    every other program the user installed for themselves, so a name of ours in
+    it would be wrong. XDG names no variable for it either — the basedir spec
+    names the path itself — so the ladder here is :data:`ENV_BIN_DIR` and then
+    the built-in default, with no XDG rung between them.
+    """
 
 
 def resolve_directories(environ: Mapping[str, str], user_home: str, code_fallback: str) -> AppDirectories:
@@ -101,6 +112,7 @@ def resolve_directories(environ: Mapping[str, str], user_home: str, code_fallbac
         state_dir=state_dir,
         runtime_dir=os.path.join(runtime_home, APP_DIR_NAME) if runtime_home else state_dir,
         code_dir=_first(environ, ENV_CODE_DIR, code_fallback),
+        bin_dir=_first(environ, ENV_BIN_DIR, os.path.join(user_home, ".local", "bin")),
     )
 
 

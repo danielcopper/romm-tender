@@ -5,7 +5,7 @@ Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 
 This tier reaches the answer through the real ``bootstrap()`` and a real SQLite
 database, which is what makes it worth having: the launcher path is derived from
-the data root this run was told about, the completion stamp is a real
+the bin root this run was told about, the completion stamp is a real
 ``kv_config`` row, and the reading is a real ``shortcuts.vdf`` parse. A unit test
 can only be told all three.
 
@@ -20,7 +20,14 @@ import os
 
 from _vendor import vdf
 
-_HOME_SUFFIX = os.path.join("bin", "rom-launcher")
+_LAUNCHER_NAME = "tender-rom-launcher"
+
+# Ours by its ending, and not at the home the run was told about.
+_ELSEWHERE = f"/home/deck/.local/opt/bin/{_LAUNCHER_NAME}"
+
+# Not ours: the ending an earlier version of this program wrote. Ownership is
+# one ending, so this is a foreign shortcut here and is left where it is.
+_SUPERSEDED = "/home/deck/.local/share/romm-tender/bin/rom-launcher"
 
 
 def _write_shortcuts(harness, entries: list[tuple[int, str]]) -> None:
@@ -36,7 +43,7 @@ def _write_shortcuts(harness, entries: list[tuple[int, str]]) -> None:
 
 
 def _launcher_home(harness) -> str:
-    return os.path.join(harness.data_dir, _HOME_SUFFIX)
+    return os.path.join(harness.bin_dir, _LAUNCHER_NAME)
 
 
 async def test_no_steam_directory_at_all_blocks_rather_than_reporting_nothing_to_do(harness):
@@ -54,8 +61,8 @@ async def test_a_machine_with_no_shortcut_file_is_already_done(harness):
     assert await harness.plugin.get_shortcut_relocation() == {"status": "done"}
 
 
-async def test_a_shortcut_in_a_plugin_folder_is_named_for_rewriting(harness):
-    _write_shortcuts(harness, [(1, "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher")])
+async def test_a_shortcut_of_ours_away_from_the_home_is_named_for_rewriting(harness):
+    _write_shortcuts(harness, [(1, _ELSEWHERE)])
 
     result = await harness.plugin.get_shortcut_relocation()
 
@@ -70,7 +77,7 @@ async def test_a_shortcut_in_a_plugin_folder_is_named_for_rewriting(harness):
 async def test_a_foreign_shortcut_is_never_named(harness):
     _write_shortcuts(
         harness,
-        [(1, "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher"), (2, "/usr/bin/some-other-game")],
+        [(1, _ELSEWHERE), (2, "/usr/bin/some-other-game")],
     )
 
     result = await harness.plugin.get_shortcut_relocation()
@@ -84,15 +91,22 @@ async def test_a_library_already_on_the_home_is_done(harness):
     assert await harness.plugin.get_shortcut_relocation() == {"status": "done"}
 
 
+async def test_a_shortcut_on_the_superseded_ending_is_not_ours(harness):
+    """One ending is the whole of ownership, so an earlier version's is foreign here."""
+    _write_shortcuts(harness, [(1, _SUPERSEDED)])
+
+    assert await harness.plugin.get_shortcut_relocation() == {"status": "done"}
+
+
 async def test_the_reported_exe_is_a_real_file_the_start_installed(harness):
     """It is the frontend's authority to repoint every shortcut, so it exists."""
-    _write_shortcuts(harness, [(1, "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher")])
+    _write_shortcuts(harness, [(1, _ELSEWHERE)])
 
     result = await harness.plugin.get_shortcut_relocation()
 
     assert os.path.isfile(result["exe"])
     assert os.access(result["exe"], os.X_OK)
-    assert result["exe"].endswith("/bin/rom-launcher")
+    assert result["exe"].endswith(f"/bin/{_LAUNCHER_NAME}")
 
 
 async def test_a_completed_rewrite_is_stamped_on_the_following_reading(harness):
@@ -102,7 +116,7 @@ async def test_a_completed_rewrite_is_stamped_on_the_following_reading(harness):
     which is why nothing here reports the rewrite done — the next reading finds
     the new paths and closes the question itself.
     """
-    _write_shortcuts(harness, [(1, "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher")])
+    _write_shortcuts(harness, [(1, _ELSEWHERE)])
     assert (await harness.plugin.get_shortcut_relocation())["status"] == "outstanding"
 
     # The frontend has written, and Steam has since flushed its memory to disk.
@@ -113,7 +127,7 @@ async def test_a_completed_rewrite_is_stamped_on_the_following_reading(harness):
 
 async def test_a_reading_that_still_finds_them_stamps_nothing(harness):
     """A pass whose writes are not in the file yet leaves the question open."""
-    _write_shortcuts(harness, [(1, "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher")])
+    _write_shortcuts(harness, [(1, _ELSEWHERE)])
 
     first = await harness.plugin.get_shortcut_relocation()
     second = await harness.plugin.get_shortcut_relocation()
@@ -124,10 +138,10 @@ async def test_a_reading_that_still_finds_them_stamps_nothing(harness):
 
 
 async def test_the_stamp_closes_the_question_for_every_later_start(harness):
-    """Permanent by design: a shortcut that turns up later on the old path stays on it."""
+    """Permanent by design: a shortcut that turns up later away from the home stays there."""
     _write_shortcuts(harness, [(1, _launcher_home(harness))])
     assert await harness.plugin.get_shortcut_relocation() == {"status": "done"}
 
-    _write_shortcuts(harness, [(1, "/home/deck/homebrew/plugins/decky-romm-sync/bin/rom-launcher")])
+    _write_shortcuts(harness, [(1, _ELSEWHERE)])
 
     assert await harness.plugin.get_shortcut_relocation() == {"status": "done"}

@@ -28,7 +28,7 @@ describe("handlePruneAction", () => {
     vi.mocked(isRomMShortcutDetails).mockReturnValue(true);
     vi.mocked(getAppDetails).mockResolvedValue({
       strDisplayName: "Removed Game",
-      strShortcutExe: "/plugin/bin/rom-launcher",
+      strShortcutExe: "/plugin/bin/tender-rom-launcher",
       strShortcutStartDir: "/plugin",
       strLaunchOptions: "launch-command",
     });
@@ -42,7 +42,7 @@ describe("handlePruneAction", () => {
   it("captures bounded Steam state without file bytes", async () => {
     vi.mocked(getAppDetails).mockResolvedValue({
       strDisplayName: "Removed Game",
-      strShortcutExe: "/plugin/bin/rom-launcher",
+      strShortcutExe: "/plugin/bin/tender-rom-launcher",
       strShortcutStartDir: "/plugin",
       strLaunchOptions: "launch-command",
     });
@@ -77,7 +77,7 @@ describe("handlePruneAction", () => {
       snapshot: {
         app_id: 9001,
         name: "Removed Game",
-        exe: "/plugin/bin/rom-launcher",
+        exe: "/plugin/bin/tender-rom-launcher",
         start_dir: "/plugin",
         launch_options: "launch-command",
         minutes_playtime_forever: 120,
@@ -128,7 +128,7 @@ describe("handlePruneAction", () => {
   it("fails closed when Steam playtime state is unavailable", async () => {
     vi.mocked(getAppDetails).mockResolvedValue({
       strDisplayName: "Removed Game",
-      strShortcutExe: "/plugin/bin/rom-launcher",
+      strShortcutExe: "/plugin/bin/tender-rom-launcher",
       strShortcutStartDir: "/plugin",
       strLaunchOptions: "launch-command",
     });
@@ -162,7 +162,7 @@ describe("handlePruneAction", () => {
     vi.mocked(backend.fetchCoverBase64).mockResolvedValue({ base64: "cover" });
     const setArtwork = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("SteamClient", { Apps: { SetCustomArtworkForApp: setArtwork } });
-    vi.mocked(getAppDetails).mockResolvedValue({ strShortcutExe: "/plugin/bin/rom-launcher" });
+    vi.mocked(getAppDetails).mockResolvedValue({ strShortcutExe: "/plugin/bin/tender-rom-launcher" });
     const changed = vi.fn();
     globalThis.addEventListener("romm_data_changed", changed);
 
@@ -331,7 +331,7 @@ describe("handlePruneAction", () => {
       expected_snapshot: {
         app_id: 9001,
         name: "Earlier Name",
-        exe: "/plugin/bin/rom-launcher",
+        exe: "/plugin/bin/tender-rom-launcher",
         start_dir: "/plugin",
         launch_options: "launch-command",
         minutes_playtime_forever: null,

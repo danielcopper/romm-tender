@@ -220,9 +220,10 @@ def select_shortcuts_to_relocate(exes: Mapping[int, str], launcher_exe: str) -> 
     *exes* maps a live shortcut's app ID to the ``exe`` it currently carries —
     every non-Steam shortcut, ours and foreign. Ownership is the
     :data:`~domain.user_data_location.LAUNCHER_EXE_SUFFIX` ending and nothing
-    else, which is what lets a shortcut written by either plugin folder name be
-    recognised and repointed without anything having recorded where it came
-    from.
+    else, which is what lets a shortcut of ours be recognised and repointed
+    wherever it was written, without anything having recorded where it came
+    from. A shortcut naming a launcher that does not end that way is foreign,
+    whoever wrote it, and is never selected.
 
     Surrounding quotes are stripped before both tests. ``AddShortcut`` stores
     the path unquoted, so ours are bare; a hand-added shortcut can be quoted,
@@ -252,8 +253,9 @@ def build_shortcuts_data(
 
     *launcher_exe* is the launcher every built shortcut's ``exe`` names, and the
     directory holding it is the ``start_dir`` written beside it. It is handed in
-    rather than composed here because its home is under the user's data root,
-    which one start's migration settles and only the composition root knows.
+    rather than composed here because its home is outside every directory this
+    program owns, which one start's install settles and only the composition
+    root knows.
 
     *installed_paths* maps ``rom_id`` to the resolved on-disk launch path. An
     installed ROM gets a full launch command in ``launch_options``; a ROM absent

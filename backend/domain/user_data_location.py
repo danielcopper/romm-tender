@@ -1,11 +1,11 @@
 """Where the plugin's user data lives.
 
 Contract: the name every directory this program derives for itself carries, two
-roots composed out of a home directory, and the launcher's place beneath one of
-them. Nothing here touches the filesystem.
+roots composed out of a home directory, and the two ways the launcher's path is
+composed. Nothing here touches the filesystem.
 
 ``domain/app_directories.py`` is what actually answers where the directories
-are, and it names five of its six after the constant below. The two functions
+are, and it names five of its seven after the constant below. The two functions
 here compose the same two names from a home directory alone; they have no
 production caller today.
 
@@ -21,8 +21,8 @@ from __future__ import annotations
 import os
 
 # The name every directory this program derives for itself carries — the two
-# below, and five of the six in ``domain/app_directories.py``. Never derived from
-# ``domain/identity.py``'s ``PACKAGE_NAME``, which happens to spell it
+# below, and five of the seven in ``domain/app_directories.py``. Never derived
+# from ``domain/identity.py``'s ``PACKAGE_NAME``, which happens to spell it
 # identically: that one names the package a server is told about and is free to
 # be renamed with it, and a one-line edit there would then move every user's
 # library on the next start, with nothing failing and nothing said.
@@ -41,36 +41,34 @@ def config_root(user_home: str) -> str:
 
 
 def data_root(user_home: str) -> str:
-    """The root holding the database, the launcher and the legacy state file.
+    """The root holding the database and the legacy state file.
 
     Covers and artwork are NOT here — they are re-derivable from the server and
-    live under the cache root (``domain/app_directories.py``).
+    live under the cache root (``domain/app_directories.py``). Neither is the
+    launcher: it is an executable, and it lives in the directory a user's own
+    executables go in, which is not named after this program at all.
     """
     return os.path.join(user_home, ".local", "share", APP_DIR_NAME)
 
 
-# The two path components the launcher sits under, and the suffix a shortcut is
-# recognised by. Derived from one tuple rather than written twice: the suffix IS
-# the components, and a second spelling of them is exactly how ownership
-# detection would drift away from where the file is put.
-_LAUNCHER_COMPONENTS = ("bin", "rom-launcher")
+# The launcher's own file name, the directory name it sits in where a root is
+# what a caller has, and the suffix a shortcut is recognised by. All three are
+# derived from one tuple rather than written out again: the suffix IS the
+# components, and a second spelling of them is exactly how ownership detection
+# would drift away from where the file is put.
+_LAUNCHER_COMPONENTS = ("bin", "tender-rom-launcher")
 LAUNCHER_EXE_SUFFIX = "/" + "/".join(_LAUNCHER_COMPONENTS)
 
 
 def launcher_path(root: str) -> str:
-    """The launcher's place beneath *root* — the data root, or the directory the program ships in.
+    """The launcher's place beneath *root*, a directory holding a ``bin`` of its own.
 
-    Its home is under the data root, outside the directory the program itself
-    occupies, because a shortcut's ``exe`` is the one thing about it this
-    program cannot repair from inside: an update that replaced its own install
-    directory would leave every game pointing at a file nothing is going to put
-    back. That was literal under the plugin loader, which deleted a plugin's
-    folder whole before unpacking an update; it stays true of any install step
-    that replaces the program in place. The release's own copy still ships at
-    the same two components below the install directory, which is why one
-    function answers for both.
+    That is the copy the release ships — ``launcher_path(code_dir)`` — and the
+    only caller left. The INSTALLED launcher is not beneath a root of this
+    program's at all: it goes straight into the shared directory a user's own
+    executables live in, which is :func:`launcher_in_bin_dir`.
 
-    Those two components are not free. A shortcut is recognised as ours by its
+    The two components are not free. A shortcut is recognised as ours by its
     ``exe`` ENDING in :data:`LAUNCHER_EXE_SUFFIX` —
     ``frontend/src/utils/steamShortcuts.ts`` and ``services/prune/requests.py``
     both match that suffix as their own literal — so a launcher kept anywhere
@@ -78,3 +76,20 @@ def launcher_path(root: str) -> str:
     written before that change stop being recognised as ours.
     """
     return os.path.join(root, *_LAUNCHER_COMPONENTS)
+
+
+def launcher_in_bin_dir(bin_dir: str) -> str:
+    """The launcher's place inside *bin_dir*, the directory it is installed into.
+
+    *bin_dir* is ``AppDirectories.bin_dir`` — a shared directory, already named
+    ``bin`` by whoever owns it, so the file goes directly in rather than under a
+    ``bin`` of its own. The file name is the same one :func:`launcher_path`'s
+    last component spells.
+
+    A ``bin_dir`` whose own last component is NOT ``bin`` therefore yields a
+    path that does not end in :data:`LAUNCHER_EXE_SUFFIX`, and every shortcut
+    built against it stops being recognised as ours. Nothing here can enforce
+    that — the value arrives from the environment — so the default and the
+    installer both name a directory called ``bin``.
+    """
+    return os.path.join(bin_dir, _LAUNCHER_COMPONENTS[-1])

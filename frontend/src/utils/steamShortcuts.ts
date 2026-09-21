@@ -3,12 +3,15 @@ import { getAppIdRomIdMap, syncHeartbeat, logError, logInfo } from "../api/backe
 import { delay } from "./pacedOps";
 
 /**
- * Ownership marker: RomM-managed shortcuts launch through the plugin's
- * `bin/rom-launcher` exec wrapper. A shortcut whose `strShortcutExe` ends with
- * this suffix is ours regardless of its launch options (which now carry the
+ * Ownership marker: Tender-managed shortcuts launch through the
+ * `tender-rom-launcher` exec wrapper. A shortcut whose `strShortcutExe` ends
+ * with this suffix is ours regardless of its launch options (which carry the
  * full RetroDECK command, not a `romm:<id>` marker).
+ *
+ * This one ending is the whole of ownership. A shortcut naming any other
+ * launcher is foreign, including one an earlier version of this program wrote.
  */
-const ROM_LAUNCHER_SUFFIX = "/bin/rom-launcher";
+const ROM_LAUNCHER_SUFFIX = "/bin/tender-rom-launcher";
 
 export function isRomMShortcutDetails(details: SteamAppDetails | null): details is SteamAppDetails {
   return (
@@ -86,7 +89,7 @@ export function setLaunchOptionsConfirmed(appId: number, value: string, timeoutM
 
 /**
  * Scan Steam's live shortcut store and return the appIds of every RomM-owned
- * shortcut — those whose `strShortcutExe` ends with `/bin/rom-launcher` (the
+ * shortcut — those whose `strShortcutExe` ends with `/bin/tender-rom-launcher` (the
  * live-in-Steam ownership marker), regardless of any backend binding.
  *
  * Returns the raw live appId list, or `null` when the scan could **not** run
@@ -133,7 +136,7 @@ export async function getLiveRomMShortcutAppIds(): Promise<number[] | null> {
  * Enumerate the appIds of ALL live non-Steam shortcuts — RomM-owned AND
  * foreign — from Steam's collection store. This is the keep-set for the
  * orphaned grid-image cleanup, so unlike `getLiveRomMShortcutAppIds` there is
- * deliberately NO rom-launcher filter: every live shortcut's artwork must be
+ * deliberately NO launcher filter: every live shortcut's artwork must be
  * protected, not just ours.
  *
  * Returns `null` when the scan could not run (`collectionStore` /
@@ -154,7 +157,7 @@ export function getAllNonSteamShortcutAppIds(): number[] | null {
  * Scan all non-Steam shortcuts and return those managed by RomM.
  *
  * A shortcut is RomM-owned when BOTH hold: its `strShortcutExe` ends with
- * `/bin/rom-launcher` (live-in-Steam ownership marker) AND its appId is bound
+ * `/bin/tender-rom-launcher` (live-in-Steam ownership marker) AND its appId is bound
  * to a rom_id in the backend's `get_app_id_rom_id_map()` (the authoritative
  * rom_id↔appId binding now that launch options no longer carry the id). After
  * a DB reset the backend map is empty, so our shortcuts are detected by exe but

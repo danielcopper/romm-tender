@@ -42,7 +42,7 @@ let _scanCache: { runId: string; map: Map<number, number>; liveAppIds: number[] 
 /**
  * Once-per-run pool of adoptable ORPHAN shortcuts, built LAZILY on the first
  * create-path candidate of a run. An orphan is a live RomM-owned shortcut (exe
- * ends ``/bin/rom-launcher``) that carries NO DB binding — a crashed run's
+ * ends ``/bin/tender-rom-launcher``) that carries NO DB binding — a crashed run's
  * uncommitted in-flight shortcut, or a zombie left after a DB reset. Without
  * adoption the create path mints a fresh ``AddShortcut`` for a ROM the orphan
  * already represents, leaving a visible duplicate (#1366). Keyed by Steam

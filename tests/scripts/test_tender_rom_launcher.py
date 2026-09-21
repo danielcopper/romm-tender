@@ -1,4 +1,4 @@
-"""Tests for ``bin/rom-launcher`` — the Steam shortcut exec wrapper.
+"""Tests for ``bin/tender-rom-launcher`` — the Steam shortcut exec wrapper.
 
 The launcher is a pure exec wrapper: Steam hands it the full launch command
 (emulator invocation + ROM path) as argv, and it execs exactly that. It owns no
@@ -13,7 +13,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-_LAUNCHER = Path(__file__).resolve().parents[2] / "bin" / "rom-launcher"
+_LAUNCHER = Path(__file__).resolve().parents[2] / "bin" / "tender-rom-launcher"
 
 
 def _run_launcher(*args: str) -> subprocess.CompletedProcess[str]:
@@ -49,7 +49,7 @@ def test_no_args_exits_with_usage() -> None:
     result = _run_launcher()
 
     assert result.returncode == 1
-    assert "Usage: rom-launcher <command> [args...]" in result.stderr
+    assert "Usage: tender-rom-launcher <command> [args...]" in result.stderr
 
 
 def test_propagates_nonzero_exit_code() -> None:

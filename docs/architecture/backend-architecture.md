@@ -342,9 +342,9 @@ collection stamps; platform stamps are deliberately preserved
 ([removed-game-cleanup.md](removed-game-cleanup.md#discovery)).
 
 Frontend Steam events use a claim/complete protocol. A claim checks the run, token, discriminant, appId, target, exact
-single-binding group, and current binding before the frontend rechecks the live `rom-launcher` executable and mutates
-Steam. The lease is monotonic-clock bounded and rechecked after asynchronous validation; an identical repeat claim is
-idempotent, while mismatched or expired claims cannot authorize a mutation. Repoint commits through the normal
+single-binding group, and current binding before the frontend rechecks the live `tender-rom-launcher` executable and
+mutates Steam. The lease is monotonic-clock bounded and rechecked after asynchronous validation; an identical repeat
+claim is idempotent, while mismatched or expired claims cannot authorize a mutation. Repoint commits through the normal
 version-switch authority first; shortcut removal is immediately reconciled to an unbound local row after Steam confirms
 absence. A claimed action whose completion is lost, or a `RemoveShortcut`/launch-options write that was attempted but
 could not be confirmed, is an explicit ambiguous partial. A pre-mutation refusal remains an ordinary failure. A later
@@ -1555,8 +1555,8 @@ fires so the UI doesn't hang on "downloading". Firmware downloads surface the sa
 Beyond the disk-prune and orphaned-`SyncRun` reconciliation, this service owns the **startup launch-options reconcile**
 (#1043). `launch_options` (the full Steam-shortcut launch command) is written only event-driven — at sync, at
 download-complete, and on RetroDECK-home migration (ADR-0009) — so any path that misses its bake leaves an installed
-shortcut stuck on the `""` placeholder, and `bin/rom-launcher` then runs with no args and exits non-zero. There was no
-backstop short of a Force Full Sync or uninstall/reinstall.
+shortcut stuck on the `""` placeholder, and `bin/tender-rom-launcher` then runs with no args and exits non-zero. There
+was no backstop short of a Force Full Sync or uninstall/reinstall.
 
 `get_installed_relaunch_options()` is the read half of the fix: a 0-arg read that returns `[{app_id, launch_options}]`
 for every ROM that is both **installed** (has a `rom_installs` row) and **bound** (its `roms.shortcut_app_id` is set).
@@ -2211,16 +2211,22 @@ that is installed rather than migrated into.
 
 ### The launcher's home
 
-`<data root>/bin/rom-launcher` is the file every Steam shortcut's `exe` names, and `bootstrap()` puts this release's
-copy there on **every** start ([ADR-0032](../adr/0032-shortcuts-are-rewritten-in-place.md)).
-`adapters/launcher_install.py` owns the write; `domain/user_data_location.py::launcher_path` owns where it goes, and
-answers for the shipped copy under the plugin folder as well, so the two components that make up `/bin/rom-launcher`
-have one spelling — the suffix ownership detection matches is derived from that same tuple.
+`<bin root>/tender-rom-launcher` — `~/.local/bin/tender-rom-launcher` by default — is the file every Steam shortcut's
+`exe` names, and `bootstrap()` puts this release's copy there on **every** start
+([ADR-0038](../adr/0038-the-launcher-lives-in-local-bin.md)). `adapters/launcher_install.py` owns the write;
+`domain/user_data_location.py` owns where it goes, through two composers over one tuple — `launcher_in_bin_dir` for the
+installed copy and `launcher_path` for the one the release ships beside the program — so the components that make up
+`/bin/tender-rom-launcher` have one spelling, and the suffix ownership detection matches is derived from that same
+tuple.
 
-The reason it left the plugin folder is that Decky deletes that folder whole before unpacking an update. The reason it
-is written on every start rather than once is that a launcher installed once would freeze at whatever version the day of
-the move brought. The reason it is written through a staging file that is renamed on — never in place — is that a game
-running right now is executing that file, and bash reads a script as it runs it.
+The bin root is the one directory on `AppDirectories` not named after this program: it is shared with every other
+program the user installed for themselves, which is why the install creates it at the umask's mode rather than
+owner-only, and why an uninstaller leaves it alone. The reason the launcher is there rather than beside the code is that
+an update replaces the code directory, and a shortcut's `exe` must not name a file inside something that gets replaced.
+The reason it is not under the data root is that the data root holds the only copy of the user's library and nothing
+executable. The reason it is written on every start rather than once is that a launcher installed once would freeze at
+whatever version the day of the move brought. The reason it is written through a staging file that is renamed on — never
+in place — is that a game running right now is executing that file, and bash reads a script as it runs it.
 
 **It is unconditional.** There was once an ordering to respect here — the install had to wait for a start-up migration's
 data half to land, because writing into an empty data root would have settled that migration's first rung for the life

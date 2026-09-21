@@ -2,12 +2,20 @@
 
 Tender keeps what it knows about your library in folders under your own home directory, each named after Tender itself:
 
-| Folder                        | What is in it                                                                                                                              |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `~/.config/romm-tender/`      | Your settings — server address, sign-in, which platforms and collections you sync                                                          |
-| `~/.local/share/romm-tender/` | The library database, playtime and save-sync state, and the small `bin/rom-launcher` file every one of your Steam shortcuts starts through |
-| `~/.cache/romm-tender/`       | Cached cover art and artwork                                                                                                               |
-| `~/.local/state/romm-tender/` | Tender's log file, `backend.log`                                                                                                           |
+| Folder                        | What is in it                                                                     |
+| ----------------------------- | --------------------------------------------------------------------------------- |
+| `~/.config/romm-tender/`      | Your settings — server address, sign-in, which platforms and collections you sync |
+| `~/.local/share/romm-tender/` | The library database, and playtime and save-sync state                            |
+| `~/.cache/romm-tender/`       | Cached cover art and artwork                                                      |
+| `~/.local/state/romm-tender/` | Tender's log file, `backend.log`                                                  |
+
+Three more places sit outside those folders, because none of them holds anything of yours:
+
+| Where                              | What it is                                                                                                                                                                                                                                    |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `~/.local/bin/tender-rom-launcher` | The small program every one of your Steam shortcuts starts through. It sits in the folder your own programs go in, shared with anything else you installed for yourself, and uninstalling Tender leaves it there so your games keep launching |
+| `~/.local/lib/romm-tender/`        | Tender itself. Replaced whole when you update, removed when you uninstall                                                                                                                                                                     |
+| `/run/user/<id>/romm-tender/`      | One note saying which port Tender is answering on while it runs. Your session clears it when you log out                                                                                                                                      |
 
 Your **games** are not in any of them. Downloaded ROMs, BIOS files and save files live in RetroDECK's own folders,
 exactly as before, and nothing on this page moves them.
@@ -32,11 +40,20 @@ cannot move them again.
 ## If your folders are somewhere else
 
 The folders above are the defaults. Tender asks its environment first, so an installer that sets `TENDER_CONFIG_DIR`,
-`TENDER_DATA_DIR`, `TENDER_CACHE_DIR` or `TENDER_STATE_DIR` decides where they go; failing that it follows the standard
-`XDG_*` variables, and only then falls back to the paths in the table. It resolves this once when it starts and writes
-the program, database and cache folders it settled on into its log, so the **last** `host: code …` line in `backend.log`
-tells you which ones this install is actually using. Look for the last one rather than the first: the log is appended to
-across runs, so the top of the file belongs to an older start.
+`TENDER_DATA_DIR`, `TENDER_CACHE_DIR`, `TENDER_STATE_DIR`, `TENDER_CODE_DIR` or `TENDER_BIN_DIR` decides where they go;
+failing that it follows the standard `XDG_*` variables — there is none for the launcher's folder, so that one is either
+`TENDER_BIN_DIR` or the default — and only then falls back to the paths in the tables above.
+
+The installer settles all of them once and writes them into Tender's service file, so
+
+```bash
+systemctl --user cat romm-tender
+```
+
+prints the answers this install is running on, one `Environment=` line each. Tender also resolves them at every start
+and logs the program, database and cache folders, so the **last** `host: code …` line in `backend.log` says the same
+thing. Look for the last one rather than the first: the log is appended to across runs, so the top of the file belongs
+to an older start.
 
 ## Coming from an older version
 

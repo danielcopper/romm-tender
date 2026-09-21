@@ -1,4 +1,4 @@
-"""Tests for the start-up install that keeps the launcher out of the plugin folder.
+"""Tests for the start-up install that puts the launcher in the user's bin directory.
 
 Every case runs against a real file under ``tmp_path``: what the adapter is for
 is what it does to a filesystem — the mode it lands, the inode it leaves alone,
@@ -17,16 +17,23 @@ from adapters.launcher_install import LauncherInstallAdapter
 _SHIPPED = b'#!/bin/bash\nexec "$@"\n'
 
 
+def _umask() -> int:
+    """This process's umask, read the only way there is — by setting it and putting it back."""
+    current = os.umask(0o022)
+    os.umask(current)
+    return current
+
+
 def _make(tmp_path, *, source: str | None = None, destination: str | None = None) -> LauncherInstallAdapter:
     return LauncherInstallAdapter(
-        source=source if source is not None else str(tmp_path / "plugin" / "bin" / "rom-launcher"),
-        destination=destination if destination is not None else str(tmp_path / "data" / "bin" / "rom-launcher"),
+        source=source if source is not None else str(tmp_path / "plugin" / "bin" / "tender-rom-launcher"),
+        destination=destination if destination is not None else str(tmp_path / "data" / "bin" / "tender-rom-launcher"),
         logger=logging.getLogger("test"),
     )
 
 
 def _ship(tmp_path, content: bytes = _SHIPPED) -> None:
-    shipped = tmp_path / "plugin" / "bin" / "rom-launcher"
+    shipped = tmp_path / "plugin" / "bin" / "tender-rom-launcher"
     shipped.parent.mkdir(parents=True, exist_ok=True)
     shipped.write_bytes(content)
     shipped.chmod(0o755)
@@ -38,7 +45,7 @@ class TestInstallingIt:
 
         assert _make(tmp_path).install() is True
 
-        installed = tmp_path / "data" / "bin" / "rom-launcher"
+        installed = tmp_path / "data" / "bin" / "tender-rom-launcher"
         assert installed.read_bytes() == _SHIPPED
 
     def test_the_installed_launcher_is_executable_by_its_owner_and_nobody_else(self, tmp_path):
@@ -51,15 +58,28 @@ class TestInstallingIt:
 
         _make(tmp_path).install()
 
-        mode = stat.S_IMODE((tmp_path / "data" / "bin" / "rom-launcher").stat().st_mode)
+        mode = stat.S_IMODE((tmp_path / "data" / "bin" / "tender-rom-launcher").stat().st_mode)
         assert mode == 0o700
 
-    def test_the_directory_it_creates_is_owner_only_too(self, tmp_path):
+    def test_the_directory_it_creates_is_left_to_the_umask(self, tmp_path):
+        """It is the user's shared bin directory, not ours to narrow on everyone's behalf."""
         _ship(tmp_path)
 
         _make(tmp_path).install()
 
-        assert stat.S_IMODE((tmp_path / "data" / "bin").stat().st_mode) == 0o700
+        mode = stat.S_IMODE((tmp_path / "data" / "bin").stat().st_mode)
+        assert mode == 0o777 & ~_umask()
+
+    def test_an_existing_directory_keeps_the_mode_it_had(self, tmp_path):
+        """Someone else's directory, and a mode this adapter never states."""
+        _ship(tmp_path)
+        existing = tmp_path / "data" / "bin"
+        existing.mkdir(parents=True)
+        existing.chmod(0o755)
+
+        _make(tmp_path).install()
+
+        assert stat.S_IMODE(existing.stat().st_mode) == 0o755
 
     def test_the_staging_file_is_never_wider_than_the_launcher_it_becomes(self, tmp_path, monkeypatch):
         """There is no window in which the launcher is readable by anyone the final one is not."""
@@ -80,7 +100,7 @@ class TestInstallingIt:
     def test_a_launcher_an_older_release_left_wider_is_narrowed(self, tmp_path):
         """Same bytes, wrong mode: the ordinary write is the only path that narrows it."""
         _ship(tmp_path)
-        installed = tmp_path / "data" / "bin" / "rom-launcher"
+        installed = tmp_path / "data" / "bin" / "tender-rom-launcher"
         installed.parent.mkdir(parents=True)
         installed.write_bytes(_SHIPPED)
         installed.chmod(0o755)
@@ -94,12 +114,12 @@ class TestInstallingIt:
 
         _make(tmp_path).install()
 
-        assert sorted(os.listdir(tmp_path / "data" / "bin")) == ["rom-launcher"]
+        assert sorted(os.listdir(tmp_path / "data" / "bin")) == ["tender-rom-launcher"]
 
     def test_it_replaces_a_launcher_whose_content_differs(self, tmp_path):
         """Every release brings its own, so an older one is overwritten rather than kept."""
         _ship(tmp_path)
-        installed = tmp_path / "data" / "bin" / "rom-launcher"
+        installed = tmp_path / "data" / "bin" / "tender-rom-launcher"
         installed.parent.mkdir(parents=True)
         installed.write_bytes(b'#!/bin/bash\n# an older release\nexec "$@"\n')
         installed.chmod(0o755)
@@ -115,7 +135,7 @@ class TestInstallingIt:
         interpreter mid-script — bash reads a script as it runs it.
         """
         _ship(tmp_path)
-        installed = tmp_path / "data" / "bin" / "rom-launcher"
+        installed = tmp_path / "data" / "bin" / "tender-rom-launcher"
         installed.parent.mkdir(parents=True)
         installed.write_bytes(b'#!/bin/bash\n# an older release\nexec "$@"\n')
         installed.chmod(0o755)
@@ -128,7 +148,7 @@ class TestInstallingIt:
     def test_it_rewrites_a_launcher_that_lost_its_executable_bit(self, tmp_path):
         """Right bytes, no execute fails every game exactly as a missing file does."""
         _ship(tmp_path)
-        installed = tmp_path / "data" / "bin" / "rom-launcher"
+        installed = tmp_path / "data" / "bin" / "tender-rom-launcher"
         installed.parent.mkdir(parents=True)
         installed.write_bytes(_SHIPPED)
         installed.chmod(0o644)
@@ -144,7 +164,7 @@ class TestLeavingItAlone:
         _ship(tmp_path)
         adapter = _make(tmp_path)
         adapter.install()
-        installed = tmp_path / "data" / "bin" / "rom-launcher"
+        installed = tmp_path / "data" / "bin" / "tender-rom-launcher"
         untouched = installed.stat().st_ino
 
         assert adapter.install() is True
@@ -170,11 +190,11 @@ class TestWhenItCannotBeDone:
     def test_a_failed_write_leaves_no_half_written_launcher_at_the_path(self, tmp_path):
         """The rename is what publishes it, so a failure never shows a partial file."""
         _ship(tmp_path)
-        destination = tmp_path / "data" / "bin" / "rom-launcher"
+        destination = tmp_path / "data" / "bin" / "tender-rom-launcher"
         destination.parent.mkdir(parents=True)
         destination.mkdir()
 
         assert _make(tmp_path).install() is False
 
         assert destination.is_dir()
-        assert sorted(os.listdir(destination.parent)) == ["rom-launcher"]
+        assert sorted(os.listdir(destination.parent)) == ["tender-rom-launcher"]

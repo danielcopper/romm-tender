@@ -1,5 +1,5 @@
 #!/bin/bash
-# rom-launcher — Steam shortcut launcher for the Tender plugin.
+# tender-rom-launcher — Steam shortcut launcher for Tender.
 # Steam invokes it with the full launch command (emulator invocation + ROM
 # path) in the shortcut's launch options. Pure exec wrapper: it runs exactly
 # what it is handed and owns no state, no path resolution, no emulator knowledge.
@@ -7,7 +7,7 @@
 set -euo pipefail
 
 if [[ $# -eq 0 ]]; then
-    echo "Usage: rom-launcher <command> [args...]" >&2
+    echo "Usage: tender-rom-launcher <command> [args...]" >&2
     exit 1
 fi
 

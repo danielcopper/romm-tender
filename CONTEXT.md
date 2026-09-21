@@ -94,24 +94,27 @@ identifier" — the display name is machine-read too, by the frontend that puts 
 
 ### The program's directories
 
-The six directories this program reads and writes, resolved **once from the environment** by the entry point and handed
-to `bootstrap()`, which derives none of them (`domain/app_directories.py`). The ladder is `TENDER_*` first — what an
-installer resolved and wrote into the service unit — then the XDG variables, then built-in defaults; the back two rungs
-are for a start by hand.
+The seven directories this program reads and writes, resolved **once from the environment** by the entry point and
+handed to `bootstrap()`, which derives none of them (`domain/app_directories.py`). The ladder is `TENDER_*` first — what
+an installer resolved and wrote into the service unit — then the XDG variables, then built-in defaults; the back two
+rungs are for a start by hand.
 
 - **config root** — user-intent configuration: the settings file and its siblings.
-- **data root** — what cannot be fetched again: the database, the launcher, the single-instance lock.
+- **data root** — what cannot be fetched again: the database and the single-instance lock.
 - **cache root** — what can: the cover and artwork caches.
 - **state root** — the log file.
 - **runtime root** — the port file, in a directory the session clears at logout.
 - **code root** — where the program itself sits; the launcher it ships is copied out of here.
+- **bin root** — where a user's own executables go; the launcher is installed here, and every shortcut's `exe` names it.
 
 The data/cache split is the load-bearing one: a system that clears caches must be able to clear one and not the other.
-All but the code root are named after `APP_DIR_NAME` — that one is wherever the program was installed, so it carries no
-name of ours. Every reader takes the six off the one `AppDirectories` the entry point resolved, which reaches
-`bootstrap()` as an argument and the services as `WiringConfig.directories`; nothing composes a directory of its own
-from a home or a folder name. `resolve_directories` has exactly one caller (`main.py`), and `config_root` / `data_root`
-have none left.
+All but the code root and the bin root are named after `APP_DIR_NAME` — the code root is wherever the program was
+installed, and the bin root is shared with every other program the user installed for themselves, so neither carries a
+name of ours. The bin root has no XDG variable either: the basedir spec names the path, so its ladder is
+`TENDER_BIN_DIR` and then the built-in default. Every reader takes the seven off the one `AppDirectories` the entry
+point resolved, which reaches `bootstrap()` as an argument and the services as `WiringConfig.directories`; nothing
+composes a directory of its own from a home or a folder name. `resolve_directories` has exactly one caller (`main.py`),
+and `config_root` / `data_root` have none left.
 
 _Avoid_: **Decky-assigned directory** — those were named after the plugin's own folder, which is what made the data move
 on a rename, and nothing derives a directory from a folder name any more. Also avoid: plugin directory, install
@@ -329,9 +332,9 @@ The two path fields on `RomInstall` (`domain/rom_install.py`) answer different q
 - **`file_path`** — the **launch file**: the single file that is the ROM's launch identity. Present for every ROM;
   save-path resolution, ES-DE core resolution, and the displayed filename all derive from it. It is the **default**
   launch target baked into the Steam shortcut's `launch_options` (`flatpak run … "<file_path>"`, run by the
-  `rom-launcher` exec wrapper per [ADR-0009](docs/adr/0009-launcher-pure-exec-wrapper-baked-launch-options.md), which
-  superseded the dynamic SQLite read of [ADR-0005](docs/adr/0005-launcher-resolves-path-from-sqlite.md)) — but the baked
-  launch **target** may be **overridden at bake time** without rewriting `file_path`: a multi-disc pin bakes the
+  `tender-rom-launcher` exec wrapper per [ADR-0009](docs/adr/0009-launcher-pure-exec-wrapper-baked-launch-options.md),
+  which superseded the dynamic SQLite read of [ADR-0005](docs/adr/0005-launcher-resolves-path-from-sqlite.md)) — but the
+  baked launch **target** may be **overridden at bake time** without rewriting `file_path`: a multi-disc pin bakes the
   selected disc's path
   ([ADR-0014](docs/adr/0014-per-game-disc-selection-in-db-applied-as-bake-time-launch-path-override.md)), and a
   folder-boot system (PS3/RPCS3) bakes the game **directory** rather than the nested launch file
