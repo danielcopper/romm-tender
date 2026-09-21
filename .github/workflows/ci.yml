@@ -229,6 +229,11 @@ jobs:
       # tooling and stay out of scope.
       - name: Shellcheck the installer and the packager
         run: shellcheck install.sh scripts/package.sh
+      # shellcheck has no rule for this one: `exit` inside `$(...)` ends the
+      # subshell, so a shell function that answers with a value and aborts on a
+      # bad input does neither, and the caller runs on with an empty answer.
+      - name: Check that no $()-valued shell function reaches exit
+        run: python scripts/check_shell_answer_functions.py
 
   # Skipped when SONAR_TOKEN is structurally unavailable: Dependabot PRs and
   # PRs from forks (GitHub withholds secrets from `pull_request` runs whose head

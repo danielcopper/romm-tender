@@ -765,6 +765,17 @@ Format: **invariant** — tier — enforced by.
   file, and the entry earns its place because that one call can land inside a UoW. One `# pragma: no uow-check` covers
   both families — it suppresses the line, and no seam is in both lists, so where a line does name two seams it silences
   both
+- **A shell function whose value is taken with `$(...)` never reaches `exit` — it answers, and its caller aborts** —
+  check — `scripts/check_shell_answer_functions.py` over `install.sh`, `scripts/package.sh` and every `*.sh` under
+  `scripts/` and `bin/`. `exit` inside a command substitution ends that subshell and nothing else, so such a function
+  prints its message and the CALLER runs on with an empty answer — a second complaint about the emptiness, or a request
+  built out of it, and non-zero either way, which is why the shape survives a test that reads only the status. Which
+  helper ends the run is DERIVED (a function reaches `exit` if it runs one or calls a same-file function that does), so
+  a second abort helper is covered the day it is written; the check follows the chain and names it. Its reading is a
+  hand-written lexer — quotes, comments, heredocs, `$( )` and backtick nesting — not a bash parser, and four things pass
+  it: a function reached through a **variable or `eval`**, `( f )` and `f | cmd` (both swallow an `exit` the same way
+  and are a wider rule nobody has needed), an `exit` produced by expansion rather than written, and a function **defined
+  inside another**, which is neither a node in the graph nor a name a substitution is matched against
 - **Services never call clocks / sleep / uuid / random directly (inject the Protocol)** — check —
   `scripts/check_cosmic_call_bans.sh`
 - **No module in `services/`, `bootstrap/`, `adapters/`, `domain/`, `lib/` or `models/` crosses the ~1000-LOC

@@ -303,6 +303,20 @@ a large file under `tests/` is the one-file-per-source-module rule working, `scr
 needs a per-scope glob before it can be added. There is deliberately no `--update` flag — re-baselining should be a
 reviewable diff, never a command someone runs to get back to green.
 
+`mise run lint` (and CI) also runs `scripts/check_shell_answer_functions.py`, which holds the repository's shell to one
+rule: **a function whose value is taken with `$(...)` never reaches `exit`.** `exit` inside a command substitution ends
+that subshell and nothing else, so a function that answers with a value and aborts on a bad input does neither — it
+prints its message, and the caller carries on with an empty answer, complaining a second time about the emptiness or
+building a request out of it. Both end up non-zero, which is why the shape survives a test that only reads the status.
+The answer is that such a function RETURNS non-zero and its caller aborts.
+
+Which helper ends the run is derived rather than listed: a function "reaches exit" if it runs `exit` itself or calls one
+of the same file's functions that does, so a second abort helper is covered the day it is written. What the gate scans
+is `install.sh`, `scripts/package.sh` and every `*.sh` under `scripts/` and `bin/`, through a hand-written lexer that
+knows quotes, comments, heredocs and nesting — not a bash parser. Its blind spots are listed in the script's docstring
+and in CLAUDE.md's register; the two worth knowing here are that a function reached through a variable is invisible to
+it, and that `( f )` and `f | cmd` swallow an `exit` the same way without being checked.
+
 The frontend has no size gate — deliberately, because a threshold only works when something else forbids the cheap way
 of getting under it, and `frontend/src/` has no equivalent of `service-independence`. What it has instead is direction
 rules, in `frontend/eslint.config.js` via `eslint-plugin-import-x`: `frontend/src/utils/` and `frontend/src/api/` may

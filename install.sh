@@ -116,9 +116,8 @@ TEXT
 }
 
 # Ends the run. **A function whose VALUE is taken with `$(...)` never calls this**
-# — it answers instead, returning non-zero and leaving the message to its
-# caller, because `exit` inside a command substitution ends only that subshell
-# and the caller carries on with an empty answer.
+# — it answers instead, and its caller aborts. Why, and what the gate can and
+# cannot see: scripts/check_shell_answer_functions.py.
 abort() {
     echo "install.sh: $1" >&2
     [ $# -lt 2 ] || echo "  $2" >&2

@@ -87,6 +87,7 @@ run = [
     # the packager whose tarball it takes. The rest are developer tooling and
     # stay out of scope.
     "shellcheck install.sh scripts/package.sh",
+    "python scripts/check_shell_answer_functions.py",
 ]
 
 [tasks.gate]

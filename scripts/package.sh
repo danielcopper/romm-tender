@@ -94,9 +94,8 @@ usage() {
 }
 
 # Ends the run. **A function whose VALUE is taken with `$(...)` never calls this**
-# — it answers instead, and its caller aborts — because `exit` inside a command
-# substitution ends only that subshell. Same rule as install.sh, stated there
-# too.
+# — it answers instead, and its caller aborts. Why, and what the gate can and
+# cannot see: scripts/check_shell_answer_functions.py.
 abort() {
     echo "package.sh: $1" >&2
     exit 1
