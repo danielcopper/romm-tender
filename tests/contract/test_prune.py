@@ -413,13 +413,17 @@ async def test_frontend_core_continuation_lease_blocks_prune_until_ack(harness, 
     await harness.plugin._prune_service.shutdown()
 
 
-async def _wait_for_prune_action(harness, action: str):
-    for _ in range(200):
+async def _wait_for_prune_action(harness, action: str, *, timeout: float = 5.0):
+    # A deadline rather than an iteration count: what the service does between
+    # two polls is not bounded by the poll's own latency.
+    deadline = asyncio.get_running_loop().time() + timeout
+    while True:
         for emitted in harness.emit.await_args_list:
             if emitted.args[0] == "prune_action_required" and emitted.args[1]["action"] == action:
                 return emitted.args[1]
-        await asyncio.sleep(0.001)
-    raise AssertionError(f"Prune action {action} was not emitted")
+        if asyncio.get_running_loop().time() >= deadline:
+            raise AssertionError(f"Prune action {action} was not emitted within {timeout} s")
+        await asyncio.sleep(0.01)
 
 
 async def test_recovery_on_repoint_uses_real_save_inventory_filesystem_and_sqlite(harness):
