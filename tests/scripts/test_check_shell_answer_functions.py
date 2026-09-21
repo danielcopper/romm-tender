@@ -261,16 +261,38 @@ b="$(value_of y)"
         assert len(findings) == 2
         assert [f.split(":")[1] for f in findings] == ["6", "7"]
 
+    def test_two_different_functions_on_one_line_are_two_findings(self, check, tmp_path):
+        """The key is the line AND the function: collapsing on the line alone loses one."""
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+first() {
+    exit 1
+}
+
+second() {
+    exit 2
+}
+
+both="$(first) $(second)"
+""",
+        )
+
+        assert len(findings) == 2
+        assert {f.split("$(")[1].split(" ")[0] for f in findings} == {"first", "second"}
+
 
 class TestWhatTheLexerHasToGetRight:
     def test_exit_in_a_comment_does_not_count(self, check, tmp_path):
+        """A whole line that is only `# exit 1` — command position, commented out."""
         assert (
             _findings(
                 check,
                 tmp_path,
                 """#!/usr/bin/env bash
 reader() {
-    # exit 1 would be wrong here
+    # exit 1
     echo "value"
 }
 
@@ -279,6 +301,28 @@ x="$(reader)"
             )
             == []
         )
+
+    def test_an_apostrophe_in_a_comment_does_not_swallow_the_code_after_it(self, check, tmp_path):
+        """A comment ends at its newline; its quotes are text, not an open string.
+
+        Read the other way, everything from the apostrophe to the next quote
+        anywhere in the file becomes string, and the exit below it disappears.
+        """
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+reader() {
+    # it's a comment with an apostrophe
+    exit 1
+}
+
+x="$(reader)"
+""",
+        )
+
+        assert len(findings) == 1
+        assert "reader -> exit" in findings[0]
 
     def test_exit_inside_a_heredoc_does_not_count(self, check, tmp_path):
         """A heredoc is text the script EMITS; the exit in it is not this script's."""
@@ -302,6 +346,28 @@ x="$(reader)"
             == []
         )
 
+    def test_a_herestring_is_not_a_heredoc(self, check, tmp_path):
+        """`<<<` takes a word, not a body; read as `<<` it blanks the rest of the file."""
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+abort() {
+    exit 1
+}
+
+reader() {
+    read -r line <<< "one line"
+    abort "after a herestring"
+}
+
+y="$(reader)"
+""",
+        )
+
+        assert len(findings) == 1
+        assert "reader -> abort -> exit" in findings[0]
+
     def test_a_function_defined_inside_a_heredoc_is_not_a_function_here(self, check, tmp_path):
         """The real `scripts/dev_place_window.sh` embeds JavaScript with `function` in it."""
         assert (
@@ -324,13 +390,16 @@ x="$(arm /tmp/x)"
         )
 
     def test_exit_in_a_single_quoted_string_does_not_count(self, check, tmp_path):
+        """The string stands alone on its line, so `exit` is in command position inside it."""
         assert (
             _findings(
                 check,
                 tmp_path,
                 """#!/usr/bin/env bash
 reader() {
-    echo 'exit 1'
+    printf '%s' \
+'exit 1'
+    echo ok
 }
 
 x="$(reader)"
@@ -355,8 +424,58 @@ x="$(reader)"
             == []
         )
 
-    def test_a_parameter_expansion_does_not_break_the_brace_count(self, check, tmp_path):
-        """``${x}`` braces are not block braces, so a body must not end at one."""
+    def test_an_unquoted_expansion_does_not_end_the_function(self, check, tmp_path):
+        """The `}` of an UNQUOTED `${x}` is followed by a space, like a block's.
+
+        Judged by what follows it, that brace closed the function and every
+        `exit` below it was invisible — a silent green over a real defect. What
+        decides is what comes BEFORE: a block brace is a word in command
+        position, and this one is the tail of a word.
+        """
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+abort() {
+    exit 1
+}
+
+reader() {
+    local x=1
+    echo ${x}
+    abort "after an unquoted expansion"
+}
+
+y="$(reader)"
+""",
+        )
+
+        assert len(findings) == 1
+        assert "reader -> abort -> exit" in findings[0]
+
+    def test_a_find_exec_brace_does_not_end_the_function(self, check, tmp_path):
+        """`{}` in `find … -exec rm {} \\;` is the same shape, from a different direction."""
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+abort() {
+    exit 1
+}
+
+reader() {
+    find . -name '*.tmp' -exec rm {} \\;
+    abort "after find -exec"
+}
+
+y="$(reader)"
+""",
+        )
+
+        assert len(findings) == 1
+        assert "reader -> abort -> exit" in findings[0]
+
+    def test_a_quoted_parameter_expansion_does_not_break_the_brace_count(self, check, tmp_path):
         findings = _findings(
             check,
             tmp_path,
@@ -374,6 +493,80 @@ x="$(reader a b c)"
 
         assert len(findings) == 1
         assert "reader -> exit" in findings[0]
+
+    def test_arithmetic_is_not_a_heredoc(self, check, tmp_path):
+        """`$(( 1 << 3 ))` carries a `<<`, and reading it as one blanks the rest of the file."""
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+abort() {
+    exit 1
+}
+
+reader() {
+    local bits=$(( 1 << 3 ))
+    echo "$bits"
+    abort "after a shift"
+}
+
+y="$(reader)"
+""",
+        )
+
+        assert len(findings) == 1
+        assert "reader -> abort -> exit" in findings[0]
+
+    def test_a_case_pattern_is_not_a_call(self, check, tmp_path):
+        """`abort)` names a pattern. Reading it as a call invents an edge that is not there."""
+        assert (
+            _findings(
+                check,
+                tmp_path,
+                """#!/usr/bin/env bash
+abort() {
+    exit 1
+}
+
+reader() {
+    case "$1" in
+        abort) echo "the word abort, not a call" ;;
+        *) echo "$1" ;;
+    esac
+}
+
+y="$(reader ok)"
+""",
+            )
+            == []
+        )
+
+    def test_an_expansion_naming_a_function_is_not_a_call(self, check, tmp_path):
+        """`${step}` reads a variable that happens to share a name with a function."""
+        assert (
+            _findings(
+                check,
+                tmp_path,
+                """#!/usr/bin/env bash
+abort() {
+    exit 1
+}
+
+step() {
+    abort "x"
+}
+
+reader() {
+    local step=3
+    echo ${step}
+    printf 'done\\n'
+}
+
+y="$(reader)"
+""",
+            )
+            == []
+        )
 
     def test_the_function_keyword_form_is_collected(self, check, tmp_path):
         findings = _findings(
@@ -439,6 +632,141 @@ x="$(printf 'x' | reader)"
         )
 
         assert len(findings) == 1
+
+
+class TestWhatKeepsAWordInCommandPosition:
+    """Two small lists decide whether an edge is seen at all, and both fail silently."""
+
+    def test_a_call_behind_a_keyword_is_still_a_call(self, check, tmp_path):
+        """`if helper; then` is the only edge here: drop `if` from TRANSPARENT and it vanishes."""
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+helper() {
+    exit 1
+}
+
+reader() {
+    if helper; then
+        echo yes
+    fi
+}
+
+y="$(reader)"
+""",
+        )
+
+        assert len(findings) == 1
+        assert "reader -> helper -> exit" in findings[0]
+
+    def test_a_call_behind_an_assignment_prefix_is_still_a_call(self, check, tmp_path):
+        """`LANG=C helper` runs helper. Reading the assignment as the command loses the edge."""
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+helper() {
+    exit 1
+}
+
+reader() {
+    LANG=C helper
+}
+
+y="$(reader)"
+""",
+        )
+
+        assert len(findings) == 1
+        assert "reader -> helper -> exit" in findings[0]
+
+    def test_a_valued_call_behind_local_is_seen(self, check, tmp_path):
+        """`local x="$(f)"` is the shape this gate exists for, and `local` must be transparent."""
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+reader() {
+    exit 1
+}
+
+caller() {
+    local v
+    local v="$(reader)"
+    echo "$v"
+}
+
+caller
+""",
+        )
+
+        assert len(findings) == 1
+
+
+class TestACallInsideASubstitutionIsNotAnEdge:
+    """The gate's own premise, read backwards.
+
+    An ``exit`` inside ``$( )`` ends the subshell, so a function that calls
+    another THROUGH one does not inherit its exit. Treating it as an edge
+    reports the outer site too, with a chain that claims something untrue.
+    """
+
+    def test_a_nested_pair_is_reported_once_at_the_inner_site(self, check, tmp_path):
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+abort() {
+    exit 1
+}
+
+inner() {
+    abort "x"
+}
+
+outer() {
+    local v
+    v="$(inner)"
+    echo "$v"
+}
+
+y="$(outer)"
+""",
+        )
+
+        assert len(findings) == 1
+        assert "$(inner …)" in findings[0]
+        assert ":12:" in findings[0], "the inner substitution, which is the site to fix"
+
+    def test_a_function_whose_only_exit_is_behind_a_substitution_is_not_one(self, check, tmp_path):
+        """It really does carry on: the subshell ends, and the function does not.
+
+        ``$(dies)`` is a site of its own and is reported. What must NOT follow
+        is a second finding at ``$(reader)``: ``reader`` does not exit, so
+        taking its value is not the shape this gate is about.
+        """
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+dies() {
+    exit 1
+}
+
+reader() {
+    local ignored
+    ignored="$(dies || true)"
+    echo "still here"
+}
+
+y="$(reader)"
+""",
+        )
+
+        assert len(findings) == 1
+        assert "$(dies …)" in findings[0]
+        assert not any("$(reader …)" in finding for finding in findings)
 
 
 class TestTheBlindSpots:
@@ -512,6 +840,12 @@ class TestTheRealScripts:
         assert "install.sh" in names
         assert "scripts/package.sh" in names
 
+    def test_the_launcher_is_named_because_the_glob_cannot_see_it(self, check):
+        """`bin/tender-rom-launcher` is bash under a name with no extension."""
+        names = [display for _path, display in check.files_in_scope()]
+
+        assert "bin/tender-rom-launcher" in names
+
     def test_the_scope_picks_up_the_developer_scripts_beside_them(self, check):
         """A glob rather than a list, so a new script is covered on the day it is written."""
         names = [display for _path, display in check.files_in_scope()]
@@ -531,7 +865,7 @@ class TestTheRealScripts:
         functions = check._find_functions(masked)
         valued = {
             word
-            for _index, body_start, body_end in check._substitutions(masked)
+            for _index, body_start, body_end in check._substitutions(masked.text)
             for word, _at in check._command_words(masked.text[body_start:body_end], body_start)
             if word in functions
         }

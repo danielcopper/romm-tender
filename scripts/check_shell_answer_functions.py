@@ -22,23 +22,47 @@ What is scanned is :data:`NAMED_FILES` plus every ``*.sh`` under
 shell file that exists. The scan is surface syntax over a hand-written lexer
 (quotes, comments, heredocs, ``$( )`` and backtick nesting), not a bash parser.
 
-**What it cannot see**, and does not pretend to:
+**The reading is hand-written, so a construct it gets wrong drops real code in
+silence** — the failure is a function that is never collected or a body that
+ends early, and either way the ``exit`` below it is simply not there. Three such
+shapes were found by review and are fixed: a closing ``}`` judged by what
+follows it (an unquoted ``${x}`` or a ``find … -exec rm {} \\;`` ended the
+enclosing function), ``$(( 1 << 3 ))`` read as a heredoc (which blanked the rest
+of the file), and a parameter expansion naming a function read as a call to it.
+
+**The blind spots named here** are the ones left, deliberately or for want of a
+reason to close them:
 
 * a function reached through a **variable or ``eval``** — ``cmd=f; x="$($cmd)"``
-  names no function this scan can resolve;
+  names no function this scan can resolve. ``step`` in ``install.sh`` is the
+  live example: it reaches its command through ``"$@"``;
 * ``( f )`` and ``f | cmd`` — a subshell and a pipeline swallow an ``exit`` the
   same way a substitution does, and neither is checked here. This gate is about
   the shape that has actually gone wrong in this repository; the other two are a
   wider rule nobody has needed yet;
+* a **``)`` inside a substitution** — ``$(case "$1" in a) … esac)`` ends the
+  substitution early for this scan, so a call after that ``)`` is unseen;
+* a **backtick substitution inside double quotes** — ``x="`f`"`` is read as
+  string text, where ``x="$(f)"`` is read as code;
 * ``exit`` written inside a **heredoc or a string** — masked with the rest of
   the text, so a heredoc that emits a script containing ``exit`` is not a
   finding, which is right, and a function whose ``exit`` is somehow produced by
-  expansion is missed, which is the price;
+  expansion is missed, which is the price. The same goes for a ``$(f)`` written
+  inside ``$(( … ))`` or ``${ … }``, both of which are masked whole;
 * a function **defined inside another function** — only top-level definitions
   are collected, so a nested one is neither a node in the graph nor a name a
   substitution can be matched against;
+* a function **defined twice at the top level** — the last body wins, so a
+  definition guarded by an ``if`` is judged by whichever branch is written last
+  rather than by both;
 * ``exit`` reached through an **external command or a sourced file** — the graph
   spans one file, and nothing here follows ``source``.
+
+**A call written inside ``$( )`` is not an edge in the call graph**, which is
+the gate's own premise read backwards: an ``exit`` there ends the subshell, not
+the function around it. So ``outer`` calling ``$(inner)`` does not inherit
+``inner``'s exit, and a nested pair is reported once — at the inner
+substitution, which is the site to fix.
 
 Exit 0 when no answer-function ends the run, 1 with one line per finding.
 """
@@ -47,12 +71,18 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# The shell this repository ships and runs. The two named files are the ones a
-# USER executes; the globs pick up the developer scripts beside them.
-NAMED_FILES: tuple[str, ...] = ("install.sh", "scripts/package.sh")
+# The shell this repository ships and runs. The named files are the ones the
+# glob cannot see: the two a USER executes, and the launcher, which is bash in
+# `bin/` under a name with no extension. The globs pick up the developer scripts
+# beside them.
+NAMED_FILES: tuple[str, ...] = ("install.sh", "scripts/package.sh", "bin/tender-rom-launcher")
 GLOB_ROOTS: tuple[str, ...] = ("scripts", "bin")
 GLOB_PATTERN = "*.sh"
 
@@ -149,6 +179,12 @@ def _mask(source: str) -> str:
                 blank(index)
                 index += 1
                 continue
+            if char == "$" and source.startswith("$((", index):
+                index = _skip_arithmetic(source, index, blank)
+                continue
+            if char == "$" and source.startswith("${", index):
+                index = _skip_expansion(source, index, blank)
+                continue
             if char == "$" and source.startswith("$(", index):
                 stack.append("code")
                 index += 2
@@ -180,6 +216,17 @@ def _mask(source: str) -> str:
                 stack.append("bt")
             index += 1
             continue
+        # Before ``$(``, which it starts with, and before the heredoc test,
+        # whose ``<<`` it can contain: ``$(( 1 << 3 ))`` used to open a heredoc
+        # and blank the rest of the file.
+        if source.startswith("$((", index):
+            index = _skip_arithmetic(source, index, blank)
+            continue
+        # A parameter expansion is a word, not code: it can name a function
+        # (``${step}``) without calling one, and its braces are not a block's.
+        if source.startswith("${", index):
+            index = _skip_expansion(source, index, blank)
+            continue
         if source.startswith("$(", index):
             stack.append("code")
             index += 2
@@ -188,7 +235,7 @@ def _mask(source: str) -> str:
             stack.pop()
             index += 1
             continue
-        if source.startswith("<<", index) and not source.startswith("<<<", index):
+        if _opens_a_heredoc(source, index):
             index = _note_heredoc(source, index, pending_heredocs)
             continue
         index += 1
@@ -199,6 +246,59 @@ def _mask(source: str) -> str:
 def _opens_a_comment(source: str, index: int) -> bool:
     """A ``#`` starts a comment only at the start of a word."""
     return index == 0 or source[index - 1] in " \t\n;&|()"
+
+
+def _opens_a_heredoc(source: str, index: int) -> bool:
+    """Whether a heredoc starts at *index*.
+
+    ``<<``, not ``<<<``, and only where a redirection may begin: after
+    whitespace, after another command's end, or after a file descriptor number.
+    """
+    if not source.startswith("<<", index) or source.startswith("<<<", index):
+        return False
+    before = source[index - 1] if index else "\n"
+    return before in " \t\n;&|()" or before.isdigit()
+
+
+def _skip_arithmetic(source: str, index: int, blank: Callable[[int], None]) -> int:
+    """Blank a ``$(( … ))`` and answer the index past it.
+
+    Blanked whole rather than read: what is inside is arithmetic, and the one
+    thing it could carry that this gate wants — a ``$(f)`` in a default — is
+    rare enough to name as a blind spot rather than to parse for.
+    """
+    depth = 0
+    position = index + 2
+    while position < len(source):
+        if source[position] == "(":
+            depth += 1
+        elif source[position] == ")":
+            depth -= 1
+            if depth == 0:
+                break
+        position += 1
+    end = min(position + 1, len(source))
+    for cursor in range(index, end):
+        blank(cursor)
+    return end
+
+
+def _skip_expansion(source: str, index: int, blank: Callable[[int], None]) -> int:
+    """Blank a ``${ … }`` and answer the index past it."""
+    depth = 0
+    position = index + 1
+    while position < len(source):
+        if source[position] == "{":
+            depth += 1
+        elif source[position] == "}":
+            depth -= 1
+            if depth == 0:
+                break
+        position += 1
+    end = min(position + 1, len(source))
+    for cursor in range(index, end):
+        blank(cursor)
+    return end
 
 
 def _note_heredoc(source: str, index: int, pending: list[tuple[str, bool]]) -> int:
@@ -225,7 +325,7 @@ def _note_heredoc(source: str, index: int, pending: list[tuple[str, bool]]) -> i
     return cursor
 
 
-def _skip_heredoc(source: str, index: int, delimiter: str, strip_tabs: bool, blank) -> int:
+def _skip_heredoc(source: str, index: int, delimiter: str, strip_tabs: bool, blank: Callable[[int], None]) -> int:
     """Blank the body of one heredoc and answer the index just past its terminator."""
     length = len(source)
     while index < length:
@@ -244,17 +344,23 @@ def _skip_heredoc(source: str, index: int, delimiter: str, strip_tabs: bool, bla
 
 
 def _is_block_brace(text: str, index: int) -> bool:
-    """Whether the brace at *index* opens or closes a block rather than an expansion.
+    """Whether the brace at *index* opens or closes a block rather than something else.
 
-    A block brace is a word of its own: bash requires it, and ``${var}``'s are
-    not, which is what keeps a parameter expansion out of the brace count
-    without having to parse one.
+    Both are decided by what comes BEFORE, because both are words in command
+    position — bash requires that of a block brace, and it is what a `}` in
+    ``${var}`` or in ``find … -exec rm {} \\;`` can never be. An opening brace
+    additionally has to be followed by a separator, which is what keeps the
+    ``{`` of ``{}`` out.
+
+    Reading what comes AFTER a closing brace instead is the shape this replaced:
+    a `}` followed by a space matched, so an unquoted ``${x}`` at the end of a
+    word ended the enclosing function and every ``exit`` below it went unseen.
     """
     before = text[index - 1] if index else "\n"
-    after = text[index + 1] if index + 1 < len(text) else "\n"
     if text[index] == "{":
+        after = text[index + 1] if index + 1 < len(text) else "\n"
         return before in " \t\n;&|()" and after in " \t\n"
-    return before in " \t\n;&|" or after in " \t\n;&|)"
+    return before in " \t\n;&|"
 
 
 def _find_functions(masked: Masked) -> dict[str, tuple[int, int, int]]:
@@ -338,7 +444,14 @@ def _command_words(text: str, offset: int) -> list[tuple[str, int]]:
         while index < length and text[index] not in " \t\n" and text[index] not in COMMAND_OPENERS:
             index += 1
         word = text[start:index]
+        after = text[index] if index < length else "\n"
         if not at_command:
+            continue
+        if after == ")":
+            # A `case` pattern (`abort) …`) or the end of a subshell, neither of
+            # which calls anything. A substitution's own body never ends in `)`,
+            # because the scan hands over the text inside it.
+            at_command = False
             continue
         if "=" in word and word.split("=", 1)[0].replace("_", "a").isalnum():
             continue  # an assignment prefix; the next word still opens the command
@@ -349,9 +462,8 @@ def _command_words(text: str, offset: int) -> list[tuple[str, int]]:
     return words
 
 
-def _substitutions(masked: Masked) -> list[tuple[int, int, int]]:
+def _substitutions(text: str) -> list[tuple[int, int, int]]:
     """Every ``$( )`` and backtick substitution: ``(index, body_start, body_end)``."""
-    text = masked.text
     found: list[tuple[int, int, int]] = []
     index = 0
     length = len(text)
@@ -385,6 +497,22 @@ def _matching_paren(text: str, opening: int) -> int | None:
     return None
 
 
+def _without_substitutions(text: str) -> str:
+    """*text* with every substitution's body blanked, same length.
+
+    A call written inside ``$( )`` cannot end the function around it — that is
+    the whole premise of this gate, read in the other direction — so those words
+    are not edges in the call graph and an ``exit`` among them is not this
+    function's. Each such substitution is judged as a site of its own anyway.
+    """
+    out = list(text)
+    for _index, body_start, body_end in _substitutions(text):
+        for cursor in range(body_start, body_end):
+            if out[cursor] != "\n":
+                out[cursor] = " "
+    return "".join(out)
+
+
 def _exit_chain(name: str, graph: dict[str, set[str]], exits: set[str]) -> list[str] | None:
     """The shortest call chain from *name* to a function that runs ``exit``, or ``None``."""
     queue: list[list[str]] = [[name]]
@@ -411,7 +539,8 @@ def scan(path: Path, display: str) -> list[str]:
     exits: set[str] = set()
     for name, (_line, body_start, body_end) in functions.items():
         called: set[str] = set()
-        for word, _at in _command_words(masked.text[body_start:body_end], body_start):
+        body = _without_substitutions(masked.text[body_start:body_end])
+        for word, _at in _command_words(body, body_start):
             if word == "exit":
                 exits.add(name)
             elif word in functions and word != name:
@@ -424,7 +553,7 @@ def scan(path: Path, display: str) -> list[str]:
     # one function written on one line report once — the same line, the same
     # function and the same fix.
     findings: dict[tuple[int, str], str] = {}
-    for index, body_start, body_end in _substitutions(masked):
+    for _index, body_start, body_end in _substitutions(masked.text):
         for word, at in _command_words(masked.text[body_start:body_end], body_start):
             if word not in functions:
                 continue
@@ -432,7 +561,7 @@ def scan(path: Path, display: str) -> list[str]:
             if chain is None:
                 continue
             route = " -> ".join([*chain, "exit"])
-            line = masked.line_of(at if at > index else index)
+            line = masked.line_of(at)
             findings[(line, word)] = (
                 f"{display}:{line}: $({word} …) — {word} reaches exit via {route}. "
                 f"A function whose value is taken with $(...) answers; its caller aborts."
