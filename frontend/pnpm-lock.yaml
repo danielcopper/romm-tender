@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@decky/ui':
         specifier: ^4.11.6
-        version: 4.12.0
+        version: 4.12.1
       tslib:
         specifier: ^2.7.0
         version: 2.8.1
@@ -195,8 +195,8 @@ packages:
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
 
-  '@decky/ui@4.12.0':
-    resolution: {integrity: sha512-OwO1XEi+tNI5jRyCs6w2526o+u9URjh1A1gtfUld7HUpAcxNVthgcCySaeLtvQqTPTj7IeiDCEy7rRS88Fd+wQ==}
+  '@decky/ui@4.12.1':
+    resolution: {integrity: sha512-kJOZ+PRJK15jR0N9/5s3NrMUjjgQSQ+UT4Fb+p18cdh08Ujzi617+0FJZc/x9RPIWj8s7aqkx3WvKa7YWUm72g==}
 
   '@emnapi/core@1.10.0':
     resolution: {integrity: sha512-yq6OkJ4p82CAfPl0u9mQebQHKPJkY7WrIuk205cTYnYe+k2Z8YBh11FrbRG/H6ihirqcacOgl2BIO8oyMQLeXw==}
@@ -2668,7 +2668,7 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
-  '@decky/ui@4.12.0': {}
+  '@decky/ui@4.12.1': {}
 
   '@emnapi/core@1.10.0':
     dependencies:
