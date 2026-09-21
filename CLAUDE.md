@@ -170,16 +170,18 @@ locally with `mise run docs`.
   measured. The sync writes the name in place too (`rewriteShortcutIdentity`), and nothing has established what that
   does to the appId; do not read the exe measurement as covering it.
 - **Frontend API**: `@decky/ui` for Steam's components, and `frontend/src/api/host.ts` for everything `@decky/api` used
-  to give us — same six export names, so a call site reads the same. Four of the six go over the backend's WebSocket.
-  `toaster` pushes into Steam's own notification store and draws its entries itself, chained behind whatever already
-  patches Steam's toast renderer (`docs/architecture/frontend-bundles.md`, "Talking to the backend"). **`routerHook` is
-  a declared placeholder that does nothing** until #1944, so Steam's game page carries no Tender section. Neither
-  reaches Decky's loader API when one is present, and what decides that is not purity: those two were the loader's own,
-  and one that borrowed the loader's wherever it found it would behave differently on a machine with Decky from one
-  without — which is the difference this program exists not to depend on. **The reference machine runs the loader**
-  (measured: `plugin_loader.service` active and enabled, `127.0.0.1:1337` listening), so that borrowing would show up
-  there rather than hide. `definePlugin` is no longer inert beside them: `index.tsx` hands the factory it answers with
-  to `qam/quickAccessEntry.tsx`, which calls it once and mounts the panel behind Tender's own Quick Access entry.
+  to give us — five of the same export names, so a call site reads the same. Four of the five go over the backend's
+  WebSocket. `toaster` pushes into Steam's own notification store and draws its entries itself, chained behind whatever
+  already patches Steam's toast renderer (`docs/architecture/frontend-bundles.md`, "Talking to the backend"). The sixth
+  name `@decky/api` forwarded was `routerHook`, Decky Loader's route installer; it is gone, and Tender's section reaches
+  Steam's game page through a seam of its own — `frontend/src/bigpicture/patches/installGamePagePatch.ts`, documented at
+  `docs/architecture/frontend-bundles.md`, "Tender's section on Steam's game page". The toaster does not reach Decky's
+  loader API when one is present, and what decides that is not purity: it was the loader's own, and one that borrowed
+  the loader's wherever it found it would behave differently on a machine with Decky from one without — which is the
+  difference this program exists not to depend on. **The reference machine runs the loader** (measured:
+  `plugin_loader.service` active and enabled, `127.0.0.1:1337` listening), so that borrowing would show up there rather
+  than hide. `definePlugin` is no longer inert beside them: `index.tsx` hands the factory it answers with to
+  `qam/quickAccessEntry.tsx`, which calls it once and mounts the panel behind Tender's own Quick Access entry.
 - **A callable must be `async def`**: even where the body is synchronous. The set a caller can reach is exactly the
   public `async def` on `Plugin` — `host.dispatch.reachable_methods` resolves it off the loaded class,
   `scripts/check_callable_manifest.py` derives the same set from the source, and `tests/host/test_dispatch.py` asserts
@@ -662,6 +664,28 @@ Format: **invariant** — tier — enforced by.
   at all — it is static and reads no state. (`utils/styleInjector.ts` writes into `findSP()`'s document, which is the
   game page's and not the menu's.) One added at module scope would work perfectly until the first Gaming-Mode-to-Desktop
   switch and then do nothing, silently. Detail: `docs/architecture/qam-panel.md` → The entry
+- **Tender's section reaches Steam's game page through the ROUTE component's `renderFunc`, and never through the page
+  component's own `type`** — test + prompt-only — `frontend/src/bigpicture/patches/gamePageSeam.test.ts` pins the half
+  that is decidable without Steam: the factory predicate in both directions, that two matching factories answer as no
+  match, the memo selection (including an export whose getter throws), and the per-render decision — wrapped once per
+  PROPS object, never per component and never per `renderFunc`. Each case mutation-checked. **Everything the install
+  does with those answers is device-only**: obtaining Steam's webpack `require`, reading the factory sources, patching
+  the memo and adopting a mounted page are `installGamePagePatch.ts`, which is coverage-exempt because a suite that
+  faked any of it would assert against a registry and a fiber tree it wrote itself. The rule spans that file, the seam
+  module, the patch it installs (`gameDetailPatch.tsx`) and the start-up check, and nothing joins them. **Why the page
+  component is the wrong seam is the half a reader will re-derive wrongly**: `@decky/ui`'s tree patcher caches the
+  wrapped component per ORIGINAL type (`dist/utils/react/treepatcher.js`, `handleStep`), so once any plugin has wrapped
+  the page component every later render goes through that cached copy and a patch installed on the original is never
+  entered again. That is the ordinary case rather than a corner: this backend starts after Steam has been running, so
+  Decky's plugins have already wrapped the page. The failure is silent and machine-dependent — green suite, green gate,
+  and the section simply never appears on a machine that runs Decky Loader while appearing on one that does not, which
+  is the difference this program exists not to depend on. Two further halves nothing checks: the install patches EVERY
+  memo export of that module whose `type` is a function rather than picking the route out (nothing on an export says
+  which one it is, and a handler on the other finds no `renderFunc` to wrap), and the start-up check's `AppDetailsRoute`
+  entry costs a `feature` beside `appDetailsClasses`, which costs one for the same reason — every read of it is in that
+  same patch. Moving either to `panel` takes the whole interface off the air for a section outside it; moving a panel
+  name to `feature` beside them renders a hole. Detail: `docs/architecture/frontend-bundles.md` → Tender's section on
+  Steam's game page
 - **Aggregate state mutated only via verb-named methods (no field assignment)** — check —
   `scripts/check_aggregate_field_assignment.py`
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, uow_factory) is called while a UoW is open on the
@@ -801,7 +825,8 @@ Format: **invariant** — tier — enforced by.
   panel never takes the interface off the air** — check + test + prompt-only — the type carries the first half:
   `SteamLookup.absenceCost` is required, so a new entry does not compile until it states which of the four its absence
   costs — the `panel`; a whole `feature` outside it (`ToastRenderer`, `NotificationStore` and `ErrorBoundary`, without
-  any one of which no toast appears at all and every page, sync and download is untouched); only its `appearance`
+  any one of which no toast appears at all and every page, sync and download is untouched, plus `AppDetailsRoute` and
+  `appDetailsClasses`, without either of which Steam's game page carries no Tender section); only its `appearance`
   (`ControllerGlyph`, whose only consumer `layout/WidePage.tsx` already draws `‹ Back` in its place, and `toastClasses`,
   whose every read is optional so the toast says what it says in an unstyled box); or only a `diagnostic`
   (`playSectionClasses`, read nowhere but `gameDetailPatch.tsx`'s one-shot `dumpTree`, which already prints `UNDEFINED`
@@ -814,20 +839,21 @@ Format: **invariant** — tier — enforced by.
   repair of its own — it used to say "a newer Tender" unconditionally, which held only while nothing reaching it was a
   name the package exports, and `playSectionClasses` is one. What `frontend/src/boot/steamModules.test.ts` locks is the
   property the line's remaining own answer rests on — a non-blocking name `@decky/ui` does NOT export must be one Tender
-  resolves for itself, swept from the source in the two shapes one is written in (a `find(?:Module|ClassModule)\w*`
-  call, and a direct cast of `window` whose exported name equals the property read) — so the three `SP_*` globals, which
-  the frontend cannot attribute to a program from inside the page, fail there the moment one is made non-blocking,
-  instead of shipping a repair aimed at whichever program did not install them. **`!== "panel"` is the only reading of
-  `absenceCost` there is**, so `feature`, `appearance` and `diagnostic` record why a name is off blocking and decide
-  nothing. The two things that DO answer for the toasts are prompt-only and read NAMES: `notificationsMissing` over
-  `NOTIFICATION_LOOKUPS` puts the notice on Main, and `describeSurvivedMiss` puts the same fact in the log as a sentence
-  stating the loss and naming NO repair of its own — the verdict sentence beside it names one that is right under every
-  answer, which it has to be, since `ErrorBoundary` is a `@decky/ui` export and a miss of it alone in the coexistence
-  bundle is `decky`. So a `feature` entry added for something else cannot make either claim the notifications are what
-  went missing, and a second spelling of any of the three cannot leave them answering for a lookup nobody asked about.
-  Both directions fail quietly: call a real dependency cosmetic and the panel mounts and renders a hole, which is the
-  fault the whole check exists to tell apart from a backend that is not running; call a decoration blocking and one
-  missing glyph costs the user their entire interface, which is what this entry removed
+  resolves for itself, swept from the source in the three shapes one is written in (a `find(?:Module|ClassModule)\w*`
+  call, a direct cast of `window` whose exported name equals the property read, and a `searchSteamFactories` scan over
+  Steam's module factories) — so the three `SP_*` globals, which the frontend cannot attribute to a program from inside
+  the page, fail there the moment one is made non-blocking, instead of shipping a repair aimed at whichever program did
+  not install them. **`!== "panel"` is the only reading of `absenceCost` there is**, so `feature`, `appearance` and
+  `diagnostic` record why a name is off blocking and decide nothing. The two things that DO answer for the toasts are
+  prompt-only and read NAMES: `notificationsMissing` over `NOTIFICATION_LOOKUPS` puts the notice on Main, and
+  `describeSurvivedMiss` puts the same fact in the log as a sentence stating the loss and naming NO repair of its own —
+  the verdict sentence beside it names one that is right under every answer, which it has to be, since `ErrorBoundary`
+  is a `@decky/ui` export and a miss of it alone in the coexistence bundle is `decky`. So a `feature` entry added for
+  something else cannot make either claim the notifications are what went missing, and a second spelling of any of the
+  three cannot leave them answering for a lookup nobody asked about. Both directions fail quietly: call a real
+  dependency cosmetic and the panel mounts and renders a hole, which is the fault the whole check exists to tell apart
+  from a backend that is not running; call a decoration blocking and one missing glyph costs the user their entire
+  interface, which is what this entry removed
 - **The start-up failure page names the copy of `@decky/ui` that actually ran the search that missed, and the repair
   that follows from it** — check + test + prompt-only — the artefact's stamp is checked
   (`frontend/scripts/check-bundle-shape.mjs`, per bundle and on `globals.js`, which must carry none), and the sentence
