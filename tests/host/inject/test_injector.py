@@ -442,14 +442,32 @@ class TestDidTheInterfaceSurviveIt:
         assert running.watchdog_record().get("open") is False
         assert running.watchdog_record()["failures"] == 0
 
-    async def test_a_debugger_that_stopped_answering_is_not_judged(self, injecting, caplog):
+    async def test_a_debugger_that_stopped_answering_is_not_judged(self, injecting, monkeypatch, caplog):
+        """The debugger goes after there is a check to ask, and before it asks.
+
+        Two orderings have to hold, and the record shows neither of them. It is
+        armed BEFORE the evaluate, so a stop that lands while the evaluate is
+        still in flight ends the injection instead: no check is ever created and
+        nothing ever says "stopped answering". So what this waits for is the
+        line the injector logs once the evaluate has RETURNED — the check is
+        created in the same step, with nothing awaited in between. The stop then
+        has to land inside the check's own window, which is widened here because
+        the stop is the subject of this test rather than something to race it.
+        Nothing re-arms meanwhile: every reattach needs the debugger this test
+        has just taken away.
+        """
+        monkeypatch.setattr(injector_module, "ALIVE_AFTER_SECONDS", 2.0)
         running = await injecting(
             targets=[FakeTarget(id=RENDERER, title="SharedJSContext"), FakeTarget(id="bpm", title="Big Picture")]
         )
         with caplog.at_level(logging.INFO, logger="test_injector"):
-            await wait_until(lambda: running.watchdog_record().get("open") is True)
+            await wait_until(lambda: any("the panel is loaded" in r.message for r in caplog.records))
+            assert running.watchdog_record().get("open") is True
             await running.debugger.stop()
-            await wait_until(lambda: any("stopped answering" in r.message for r in caplog.records))
+            await wait_until(
+                lambda: any("stopped answering" in r.message for r in caplog.records),
+                timeout=10.0,
+            )
         assert running.watchdog_record().get("open") is False
 
     async def test_a_rebuild_inside_the_check_window_is_not_a_crash(self, injecting, monkeypatch):
