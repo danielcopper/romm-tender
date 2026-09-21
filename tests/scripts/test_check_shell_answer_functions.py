@@ -43,6 +43,11 @@ def check() -> ModuleType:
     return _load()
 
 
+# Asked of the check rather than listed: a file added to the scope has to reach
+# the per-file cases below without anyone remembering to name it twice.
+_SCOPE_NAMES = tuple(display for _path, display in _load().files_in_scope())
+
+
 def _findings(check: ModuleType, tmp_path: Path, body: str) -> list[str]:
     """Write *body* as a script and answer what the real scan says about it."""
     path = tmp_path / "subject.sh"
@@ -798,6 +803,36 @@ y="$(reader)"
         assert len(findings) == 1
         assert "reader -> abort -> exit" in findings[0]
 
+    def test_a_brace_group_after_a_bang_is_still_a_block(self, check, tmp_path):
+        """`!` stands in front of a command, so what follows it opens one.
+
+        It is the one word of its kind that is punctuation, so a backwards read
+        looking for an identifier cannot find it. Miss it and the `{` is not a
+        block's while its `}` is, which ends the enclosing function at the inner
+        brace and takes every call below it out of the graph.
+        """
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+abort() {
+    exit 1
+}
+
+reader() {
+    if ! { exec 3< /dev/tty; } 2> /dev/null; then
+        abort "no terminal"
+    fi
+    echo v
+}
+
+y="$(reader)"
+""",
+        )
+
+        assert len(findings) == 1
+        assert "reader -> abort -> exit" in findings[0]
+
     def test_a_nested_block_still_balances(self, check, tmp_path):
         """A `}` ends a command, so the next `}` is still a block's: `{ { …; } }`.
 
@@ -1073,3 +1108,48 @@ class TestTheRealScripts:
 
         assert {"value_of", "check_native_steam", "resolve_tag"} <= valued
         assert "abort" in functions
+
+    def test_the_installers_acknowledgement_still_reaches_abort(self, check):
+        """One real function's body, held whole by an edge that runs near its end.
+
+        A span that ends early is silent: the function is still collected, the
+        count is unchanged, and only the calls below the truncation disappear.
+        `acknowledge` is the file's longest reader of `/dev/tty` and its `abort`
+        sits past a brace group written `! { …; }`, so this edge is what says
+        the body was read to its end rather than to the first brace that looked
+        like the last one.
+        """
+        path = _REPO_ROOT / "install.sh"
+        masked = check.Masked(path.read_text(encoding="utf-8"))
+        functions = check._find_functions(masked)
+        graph, exits = {}, set()
+        for name, (_line, body_start, body_end) in functions.items():
+            body = check._without_substitutions(masked.text[body_start:body_end])
+            words = [word for word, _at in check._command_words(body, body_start)]
+            graph[name] = {word for word in words if word in functions}
+            if "exit" in words:
+                exits.add(name)
+
+        assert check._exit_chain("acknowledge", graph, exits) == ["acknowledge", "abort"]
+
+    @pytest.mark.parametrize("display", _SCOPE_NAMES)
+    def test_every_scripts_block_braces_balance(self, check, display):
+        """The whole-file reading of a truncated span, asked directly.
+
+        Every shape `_is_block_brace` gets wrong costs a `{` or a `}` and
+        nothing else, so the depth over a real file either ends away from zero
+        or dips below it. That is one number per file rather than a span per
+        function, and it fails on the file the mistake is in — where a test over
+        a hand-written fixture only fails on the shape someone thought to write.
+        """
+        path = next(p for p, name in check.files_in_scope() if name == display)
+        masked = check.Masked(path.read_text(encoding="utf-8"))
+        text = masked.text
+        depth = 0
+        for index, char in enumerate(text):
+            if char not in "{}" or not check._is_block_brace(text, index):
+                continue
+            depth += 1 if char == "{" else -1
+            assert depth >= 0, f"{display}:{masked.line_of(index)} closes a block that was never opened"
+
+        assert depth == 0, f"{display} ends inside {depth} unclosed block(s)"

@@ -24,13 +24,16 @@ shell file that exists. The scan is surface syntax over a hand-written lexer
 
 **The reading is hand-written, so a construct it gets wrong drops real code in
 silence** — the failure is a function that is never collected or a body that
-ends early, and either way the ``exit`` below it is simply not there. Ten such
-shapes are read for by name:
+ends early, and either way the ``exit`` below it is simply not there. Eleven
+such shapes are read for by name:
 
 * a closing ``}`` judged by what FOLLOWS it — an unquoted ``${x}`` or a
   ``find … -exec rm {} \\;`` ended the enclosing function — and a ``}`` written
   as an ARGUMENT (``echo }``), which is why a block brace is decided by what
   stands before it;
+* a brace group opened after ``!`` — ``if ! { exec 3< /dev/tty; }`` — where the
+  word before is punctuation rather than an identifier, so the ``{`` was not a
+  block's while its ``}`` was;
 * ``$(( 1 << 3 ))`` read as a heredoc, which blanked the rest of the file, and a
   ``$(( … ))`` span that ended one parenthesis short of the pair it opened;
 * a parameter expansion naming a function read as a call to it;
@@ -127,15 +130,21 @@ COMMAND_OPENERS = ";&|(){}\n"
 class _CaseState:
     """Where one nesting level of a scan sits inside a ``case``.
 
-    Two walks need this and have to AGREE about it — the masker, which decides
-    where a substitution ends, and the matcher, which decides where it closes.
-    So the rules live here once: written out in each of them they are two copies
-    that get edited one at a time, and a disagreement between the two is a
-    substitution that one walk has ended and the other has not.
-
     What it has to know is small: a ``case`` arm's pattern may open with a
     ``(`` and always ends with a ``)``, and neither groups anything. An arm ends
     at ``;;``, ``;&`` or ``;;&``, and the next pattern follows.
+
+    Two walks need those RULES — the masker, which decides where a substitution
+    ends, and the matcher, which decides where it closes — so they live here
+    once rather than as two copies that get edited one at a time.
+
+    **What is shared is the rules, not the granularity.** The masker keeps one
+    of these per frame, so a ``case`` inside a subshell inside an arm is its own
+    question; the matcher keeps ONE for the whole span it walks, so the same
+    nesting leaves it answering the outer ``case``'s question with the inner
+    one's state. Reaching that needs a ``case`` (or a ``for … in``) nested
+    inside a group inside an arm, all within one substitution; giving the
+    matcher a stack would close it.
     """
 
     __slots__ = ("depth", "expecting_pattern")
@@ -506,7 +515,11 @@ def _in_command_position(text: str, index: int, *, after_brace: bool) -> bool:
     if cursor < 0:
         return True
     char = text[cursor]
-    if char in _COMMAND_ENDERS or (after_brace and char == "{"):
+    # `!` is the one entry in TRANSPARENT that is not word-shaped, so the word
+    # read below can never reach it — and `if ! { exec 3< /dev/tty; }` opens a
+    # block right after one. Without it that `{` is not a block brace while its
+    # `}` is, and the enclosing function ends at the inner brace.
+    if char in _COMMAND_ENDERS or char == "!" or (after_brace and char == "{"):
         return True
     end = cursor + 1
     start = end
