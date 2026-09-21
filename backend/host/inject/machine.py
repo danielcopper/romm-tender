@@ -48,7 +48,8 @@ _DEBUGGER_MARKER = ".cef-enable-remote-debugging"
 # the absolute path of the marker that was created: the installer's
 # ``--uninstall`` removes exactly the path the note names, so the note has to
 # name the one file rather than a name to go looking for. ``install.sh`` writes
-# the same two lines under the same filename and names this constant;
+# the same two-line shape under the same filename — the marker's path, then
+# which program wrote it and when — and names this constant;
 # ``tests/scripts/test_install_sh.py`` holds the two spellings equal.
 DEBUGGER_MARKER_NOTE = "debugger-marker"
 _PACKAGE_DIR = "package"

@@ -64,10 +64,11 @@ UNIT_NAME="romm-tender"
 # The note recording that Steam's debugger marker is ours. Its FIRST LINE is the
 # absolute path of the marker that was created, which is what `--uninstall`
 # removes — the note is the whole of the authority, so it has to name the one
-# file rather than a name to go looking for. The backend writes the same two
-# lines under the same filename (DEBUGGER_MARKER_NOTE in
-# backend/host/inject/machine.py), and tests/scripts/test_install_sh.py holds the
-# two spellings equal; the uninstaller reads whichever of the two wrote it.
+# file rather than a name to go looking for. The
+# backend writes the same two-line SHAPE under the same filename — the marker's
+# path, then which program wrote it and when (DEBUGGER_MARKER_NOTE in
+# backend/host/inject/machine.py) — and tests/scripts/test_install_sh.py holds
+# the two spellings equal; the uninstaller reads whichever of the two wrote it.
 MARKER_NOTE="debugger-marker"
 MARKER_FILE=".cef-enable-remote-debugging"
 
@@ -78,6 +79,11 @@ DEBUGGER_PROBE="http://127.0.0.1:8080/json/version"
 # Where Steam is. Answered by the pre-flight, which every path that reads it
 # runs first.
 STEAM_ROOT=""
+
+# What obtain_tarball answers with, and resolve_tag's one refusal that is not
+# "the answer named no Tender release".
+TARBALL=""
+TAG_UNREACHABLE=2
 
 MODE="install"
 VERSION=""
@@ -108,14 +114,19 @@ Usage: install.sh [options]
 TEXT
 }
 
+# Ends the run. **A function whose VALUE is taken with `$(...)` never calls this**
+# — it answers instead, returning non-zero and leaving the message to its
+# caller, because `exit` inside a command substitution ends only that subshell
+# and the caller carries on with an empty answer.
 abort() {
     echo "install.sh: $1" >&2
     [ $# -lt 2 ] || echo "  $2" >&2
     exit 1
 }
 
+# The value after an option, or non-zero where the option has none.
 value_of() {
-    [ $# -ge 2 ] || abort "$1 needs a value"
+    [ $# -ge 2 ] || return 1
     echo "$2"
 }
 
@@ -123,11 +134,11 @@ parse_arguments() {
     while [ $# -gt 0 ]; do
         case "$1" in
             --version)
-                VERSION="$(value_of "$@")"
+                VERSION="$(value_of "$@")" || abort "$1 needs a value" "run install.sh --help to see what it takes"
                 shift 2
                 ;;
             --from)
-                LOCAL_FILE="$(value_of "$@")"
+                LOCAL_FILE="$(value_of "$@")" || abort "$1 needs a value" "run install.sh --help to see what it takes"
                 shift 2
                 ;;
             --uninstall)
@@ -153,15 +164,16 @@ parse_arguments() {
 
 # ---------------------------------------------------------------- pre-flight
 
-# Each of the five below aborts with exit 1 and names both the reason and the
-# fix. They run cheapest first, and because refusing over a missing Steam before
-# knowing there is a Python to run anything with would be the wrong answer
-# first.
+# Every refusal below is exit 1 and names both the reason and the fix. The order
+# is the order in which the answers become useful: a Python to run anything
+# with, a manager to run it under, then Steam for it to load a panel into, then
+# the plugin that would otherwise share the database with it.
 preflight() {
     check_python
     check_user_manager
     refuse_flatpak_steam
-    STEAM_ROOT="$(check_native_steam)"
+    STEAM_ROOT="$(check_native_steam)" ||
+        abort "no native Steam installation found" "install Steam and run it once, then run this again"
     refuse_decky_plugin
 }
 
@@ -195,7 +207,7 @@ check_native_steam() {
             return 0
         fi
     done
-    abort "no native Steam installation found" "install Steam and run it once, then run this again"
+    return 1
 }
 
 # Two backends working on one database is the failure this refuses. Parsed with
@@ -251,22 +263,33 @@ TEXT
 
 # ------------------------------------------------------------------- fetch
 
-# Answers with the path of a tarball, verified wherever a checksum exists to
+# Puts the tarball's path in TARBALL, verified wherever a checksum exists to
 # verify it against — always for a release, and for a local file only where one
 # sits beside it. Everything downloaded goes into a directory of its own that
 # the caller removes.
+#
+# It sets a variable rather than printing its answer, so that it runs in THIS
+# shell: each refusal below is the end of the run, and every one of them would
+# end a subshell instead if the caller took its value with `$(...)`.
 obtain_tarball() {
     local work="$1"
 
     if [ -n "$LOCAL_FILE" ]; then
         [ -f "$LOCAL_FILE" ] || abort "no such file: $LOCAL_FILE"
-        verify_local "$LOCAL_FILE" >&2
-        echo "$LOCAL_FILE"
+        verify_local "$LOCAL_FILE"
+        TARBALL="$LOCAL_FILE"
         return 0
     fi
 
-    local tag version archive
-    tag="$(resolve_tag)"
+    local tag="" status=0
+    tag="$(resolve_tag)" || status=$?
+    case "$status" in
+        0) ;;
+        "$TAG_UNREACHABLE") abort "could not ask GitHub for the newest release" "check the network" ;;
+        *) abort "the newest release is not a Tender release ($tag)" "name one with --version instead" ;;
+    esac
+
+    local version archive
     version="${tag#tender-v}"
     archive="romm-tender-$version.tar.gz"
     echo "downloading $tag" >&2
@@ -278,27 +301,26 @@ obtain_tarball() {
 
     (cd "$work" && sha256sum -c "$archive.sha256" > /dev/null) ||
         abort "the downloaded tarball does not match its checksum" "nothing was changed; try again"
-    echo "$work/$archive"
+    TARBALL="$work/$archive"
 }
 
+# Prints the tag the release names and answers whether it is one of ours: 0 it
+# is, TAG_UNREACHABLE the release could not be asked for at all, anything else
+# the answer named no Tender release — and what it DID name is on stdout, so the
+# caller's message can quote it.
 resolve_tag() {
     if [ -n "$VERSION" ]; then
         echo "tender-v${VERSION#v}"
         return 0
     fi
     local body tag
-    body="$(curl -fsSL "$RELEASE_API")" || abort "could not ask GitHub for the newest release" "check the network"
-    # `|| true` so the empty answer is a value this function decides about
-    # rather than a pipeline status something else might act on. Measured on
-    # bash 5.3.3: errexit does NOT fire on this assignment as the script calls
-    # it — the function runs inside a command substitution, where a failing
-    # assignment does not end anything — so without the guard the refusal below
-    # is reached by a rule that is not written down at either end.
+    body="$(curl -fsSL "$RELEASE_API")" || return "$TAG_UNREACHABLE"
     tag="$(printf '%s' "$body" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 |
-        cut -d'"' -f4 || true)"
+        cut -d'"' -f4)"
+    echo "$tag"
     case "$tag" in
-        tender-v[0-9]*) echo "$tag" ;;
-        *) abort "the newest release is not a Tender release ($tag)" "name one with --version instead" ;;
+        tender-v[0-9]*) return 0 ;;
+        *) return 1 ;;
     esac
 }
 
@@ -314,9 +336,9 @@ verify_local() {
     if [ -f "$file.sha256" ]; then
         (cd "$(dirname "$file")" && sha256sum -c "$(basename "$file").sha256" > /dev/null) ||
             abort "$file does not match $file.sha256"
-        echo "verified $file against its checksum"
+        echo "verified $file against its checksum" >&2
     else
-        echo "local file, not verified: $file"
+        echo "local file, not verified: $file" >&2
     fi
 }
 
@@ -450,13 +472,13 @@ do_install() {
     preflight
     acknowledge
 
-    local work tarball
+    local work
     work="$(mktemp -d)"
     # shellcheck disable=SC2064 # expand $work now: it is what this trap exists for
     trap "rm -rf '$work'" EXIT
-    tarball="$(obtain_tarball "$work")"
+    obtain_tarball "$work"
 
-    install_tree "$tarball"
+    install_tree "$TARBALL"
     move_covers
     write_unit
     start_unit

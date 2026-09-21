@@ -76,11 +76,13 @@ class AppDirectories:
     bin_dir: str
     """Where a user's own executables go — the launcher is installed here.
 
-    The one field NOT named after this program: it is a directory shared with
-    every other program the user installed for themselves, so a name of ours in
-    it would be wrong. XDG names no variable for it either — the basedir spec
-    names the path itself — so the ladder here is :data:`ENV_BIN_DIR` and then
-    the built-in default, with no XDG rung between them.
+    One of the TWO roots not named after this program — the other is
+    :attr:`code_dir`, which is wherever the program was installed. This one is a
+    directory shared with every other program the user installed for themselves,
+    so a name of ours in it would be wrong. XDG names no variable for it either
+    — the basedir spec names the path itself — so the ladder here is
+    :data:`ENV_BIN_DIR` and then the built-in default, with no XDG rung between
+    them.
     """
 
 

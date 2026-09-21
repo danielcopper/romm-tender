@@ -2,8 +2,10 @@
 
 Every case runs the real script, and none of them touches the machine running
 them: ``HOME`` is a ``tmp_path``, the six ``TENDER_*`` directory variables put
-every root under it, the environment is built from nothing rather than inherited, and a stub
-directory at the front of ``PATH`` stands in for ``systemctl`` and ``curl``. The
+every root under it, the environment is built from a fixed set rather than
+inherited — ``PATH`` is the one value taken from this process, and a stub
+directory is prepended to it so that ``systemctl`` and ``curl`` resolve to
+stand-ins. The
 stubs record what they were asked for, which is what lets a test assert the URL
 that was built and the unit that was enabled rather than only the files left
 behind.
@@ -12,7 +14,7 @@ The tarball under test is built by ``scripts/package.sh`` from a synthetic
 checkout, so what ``--from`` installs is the layout the packager actually
 produces rather than one this file invented.
 
-**One tier runs the script on a real terminal** (``_on_a_terminal``), because the
+**One tier runs the script on a real terminal** (``Install.on_a_terminal``), because the
 rest of the file cannot: every other case starts the script in a session of its
 own, so ``/dev/tty`` cannot be opened and the acknowledgement's prompt is never
 reached. Everything on the far side of that check — the prompt, the answer, and
@@ -213,9 +215,10 @@ def _drain(pid: int, master: int, timeout: float = 30.0) -> tuple[int, str]:
     """Read the terminal until the child is gone, then reap it.
 
     A pty's master reports ``EIO`` rather than end-of-file once the last slave
-    is closed, so that is the read this loop ends on. The deadline is a backstop:
-    a script that sat waiting for an answer would otherwise hang the suite
-    instead of failing it.
+    is closed, so that is the read this loop ends on. *timeout* is an IDLE
+    timeout rather than a deadline — it bounds one silent wait, not the run — and
+    it is a backstop: a script that sat waiting for an answer would otherwise
+    hang the suite instead of failing it.
     """
     selector = selectors.DefaultSelector()
     selector.register(master, selectors.EVENT_READ)
@@ -237,6 +240,17 @@ def _drain(pid: int, master: int, timeout: float = 30.0) -> tuple[int, str]:
     _, status = os.waitpid(pid, 0)
     code = os.waitstatus_to_exitcode(status)
     return code, b"".join(chunks).decode(errors="replace")
+
+
+def _refusals(stderr: str) -> list[str]:
+    """Every line on which this script refused — one per abort, by its prefix.
+
+    A run that refuses TWICE is the shape a `$(...)`-swallowed `exit` leaves
+    behind: the first refusal ends a subshell, the caller carries on with an
+    empty answer, and refuses again further down about the emptiness. Counting
+    the lines is what tells that apart from refusing once, because both exit 1.
+    """
+    return [line for line in stderr.splitlines() if line.startswith("install.sh: ")]
 
 
 def _write_executable(path: Path, body: str) -> None:
@@ -266,6 +280,37 @@ def _build_tarball(tmp_path: Path) -> Path:
 @pytest.fixture
 def machine(tmp_path) -> Install:
     return Install(tmp_path)
+
+
+class TestTheArguments:
+    """What the script does with an option it cannot read.
+
+    Every refusal here is counted rather than merely found, because a refusal
+    that ends a subshell instead of the run prints one message and then another
+    about the emptiness it left behind — and both spellings exit 1.
+    """
+
+    @pytest.mark.parametrize("flag", ["--version", "--from"])
+    def test_an_option_with_no_value_is_refused_once_by_name(self, machine, flag):
+        result = machine.run(flag)
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [f"install.sh: {flag} needs a value"]
+        assert not machine.code.exists()
+
+    def test_an_unknown_argument_is_refused(self, machine):
+        result = machine.run("--sideways")
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == ["install.sh: unknown argument: --sideways"]
+
+    def test_help_asks_for_nothing_and_writes_nothing(self, machine):
+        result = machine.run("--help")
+
+        assert result.returncode == 0
+        assert "Usage: install.sh" in result.stdout
+        assert machine.systemctl_calls() == []
+        assert not machine.code.exists()
 
 
 class TestAFreshInstall:
@@ -393,12 +438,13 @@ class TestThePreflight:
         assert "Flatpak Steam is not supported" in result.stderr
 
     def test_a_machine_with_no_native_steam_is_refused(self, machine):
+        """Refused once: ``check_native_steam`` answers, and the pre-flight is what aborts."""
         machine.steam_root.rmdir()
 
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
 
         assert result.returncode == 1
-        assert "no native Steam installation" in result.stderr
+        assert _refusals(result.stderr) == ["install.sh: no native Steam installation found"]
 
     def test_the_other_spelling_of_the_steam_root_is_accepted(self, machine):
         machine.steam_root.rmdir()
@@ -596,23 +642,30 @@ class TestWhatItDownloads:
         assert machine.curl_calls()[1] == f"{_DOWNLOAD_BASE}/{_TAG}/{_ARCHIVE}"
 
     def test_a_newest_release_that_is_not_a_tender_release_is_refused(self, machine):
-        """The repository may publish another program's tag; it is not a thing to install."""
+        """The repository may publish another program's tag; it is not a thing to install.
+
+        Refused once, and nothing is fetched afterwards. A refusal that ended a
+        subshell would leave the caller holding an empty tag: a second refusal
+        about the emptiness, and a download asked for at a URL with no tag in
+        it.
+        """
         machine.publish_release()
         (machine.serve / "latest").write_text('{"tag_name": "gavel-v2.0.0"}\n', encoding="utf-8")
 
         result = machine.run("--yes")
 
         assert result.returncode == 1
-        assert "not a Tender release" in result.stderr
+        assert _refusals(result.stderr) == ["install.sh: the newest release is not a Tender release (gavel-v2.0.0)"]
+        assert machine.curl_calls() == [_RELEASE_API]
         assert not machine.code.exists()
 
-    def test_a_release_body_with_no_tag_at_all_is_refused_out_loud(self, machine):
-        """An answer that names nothing is a thing to report, not a reason to stop mid-script.
+    def test_a_release_body_with_no_tag_at_all_is_refused_by_name_and_only_once(self, machine):
+        """A body naming no tag is refused where it is read, and nothing is fetched after it.
 
-        Under ``pipefail`` the grep that finds no tag exits 1, and an unguarded
-        substitution would fail the assignment and end the run under ``errexit``
-        — before the refusal below could be printed. Exit 1 either way; the
-        difference is whether the user is told anything.
+        The refusal is a value ``resolve_tag`` answers with, which is what lets
+        the caller act on it. The same run under a refusal that ended a subshell
+        printed two messages and then asked curl for
+        ``.../download//romm-tender-.tar.gz``.
         """
         machine.publish_release()
         (machine.serve / "latest").write_text('{"message": "Not Found"}\n', encoding="utf-8")
@@ -620,7 +673,8 @@ class TestWhatItDownloads:
         result = machine.run("--yes")
 
         assert result.returncode == 1
-        assert "not a Tender release" in result.stderr
+        assert _refusals(result.stderr) == ["install.sh: the newest release is not a Tender release ()"]
+        assert machine.curl_calls() == [_RELEASE_API]
         assert not machine.code.exists()
 
     def test_a_release_with_no_tarball_says_so(self, machine):
@@ -630,7 +684,7 @@ class TestWhatItDownloads:
         result = machine.run("--version", _VERSION, "--yes")
 
         assert result.returncode == 1
-        assert f"release {_TAG} carries no tarball" in result.stderr
+        assert _refusals(result.stderr) == [f"install.sh: release {_TAG} carries no tarball"]
 
     def test_a_release_with_no_checksum_is_refused_rather_than_trusted(self, machine):
         machine.publish_release(checksum=False)

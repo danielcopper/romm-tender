@@ -25,8 +25,9 @@ executable other programs invoke belongs, and it is a directory an uninstaller h
 
 **1. The launcher is installed at `~/.local/bin/tender-rom-launcher`.** The bin root is a seventh field on
 `AppDirectories` (`TENDER_BIN_DIR`, then the built-in default), so the installer resolves it once and writes it into the
-unit like the others. It is the one root not named after this program, because it is shared — so the directory is
-created at whatever the umask says rather than owner-only, and nothing under it is ever treated as ours to remove.
+unit like the others. It is one of the two roots not named after this program — the other is the code root, which is
+wherever the program was installed — and this one because it is shared, so the directory is created at whatever the
+umask says rather than owner-only, and nothing under it is ever treated as ours to remove.
 
 **2. The file is renamed with the move.** `bin/rom-launcher` becomes `bin/tender-rom-launcher`. A bare `rom-launcher` in
 a directory shared with every other program the user installed is a name with no owner on it.
