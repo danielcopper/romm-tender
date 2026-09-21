@@ -41,12 +41,13 @@ def config_root(user_home: str) -> str:
 
 
 def data_root(user_home: str) -> str:
-    """The root holding the database and the legacy state file.
+    """The root holding what cannot be fetched again — CONTEXT.md names what that is.
 
-    Covers and artwork are NOT here — they are re-derivable from the server and
-    live under the cache root (``domain/app_directories.py``). Neither is the
-    launcher: it is an executable, and it lives in the directory a user's own
-    executables go in, which is not named after this program at all.
+    Two things are NOT here, and both were once. Covers and artwork are
+    re-derivable from the server and live under the cache root
+    (``domain/app_directories.py``); the launcher is an executable and lives in
+    the directory a user's own executables go in, which is not named after this
+    program at all.
     """
     return os.path.join(user_home, ".local", "share", APP_DIR_NAME)
 

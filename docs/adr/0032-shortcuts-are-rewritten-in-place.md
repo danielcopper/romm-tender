@@ -2,6 +2,9 @@
 
 ## Status
 
+**Decision 1 superseded by [ADR-0038](0038-the-launcher-lives-in-local-bin.md)**, which moves the launcher's home out of
+the data root and into `~/.local/bin`; decisions 2-4 below still stand.
+
 Accepted. **Answers the half of [#1536](https://github.com/danielcopper/romm-tender/issues/1536) that
 [ADR-0031](0031-user-data-lives-outside-the-plugin-directory.md) left open** — the launcher path baked into every Steam
 shortcut's `exe`, which ADR-0031 named as "the shortcut cut's problem" and did not touch.

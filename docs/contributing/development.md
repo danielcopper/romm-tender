@@ -6,9 +6,10 @@ Guide for setting up a development environment and contributing to Tender.
 
 - [mise](https://mise.jdx.dev/) — manages Node, pnpm, and Python versions
 - Git
-- A Steam Deck or Linux PC running Steam, with CEF remote debugging enabled
-  (`~/.steam/steam/.cef-enable-remote-debugging`, then restart Steam) — that is what the backend loads the panel
-  through. [Decky Loader](https://decky.xyz/) is no longer needed, and the panel coexists with one that is installed.
+- A Steam Deck or Linux PC running Steam, with CEF remote debugging enabled — that is what the backend loads the panel
+  through, and it creates the marker itself when one is missing
+  ([How the panel gets into Steam](../architecture/loading-the-panel.md#steams-remote-debugging-marker)).
+  [Decky Loader](https://decky.xyz/) is no longer needed, and the panel coexists with one that is installed.
 
 > **On Windows, develop inside [WSL2](https://learn.microsoft.com/windows/wsl/install).** The plugin targets Linux —
 > some adapters import Unix-only modules (e.g. `fcntl`), a few dev dependencies have no Windows wheel, and CI runs on
@@ -195,8 +196,9 @@ reload, so a rebuilt bundle reaches Steam only in a fresh JS context, and a new 
 old one loaded. Steam comes back into the window and display a `dev:bpm*` / `dev:desktop*` task last chose — the desktop
 client, placed nowhere, if none has. A Steam that is not running is simply started.
 
-It needs `~/.steam/steam/.cef-enable-remote-debugging` to exist, which Steam reads when it starts — so the task's own
-restart is what picks the file up.
+Steam's remote-debugging marker has to exist, and the backend creates it when it does not. Steam reads it at start-up,
+so the task's own restart is what picks up a marker that has just been created
+([the marker](../architecture/loading-the-panel.md#steams-remote-debugging-marker)).
 
 The whole loop, the Big Picture window, and how to judge layout at the Deck's real metrics are in
 [Frontend dev loop](frontend-dev-loop.md); what the injector does and how it protects the Steam UI from itself is in
@@ -218,11 +220,14 @@ journalctl --user -u romm-tender        # what it wrote to stderr
 ```
 
 Its own log is `~/.local/state/romm-tender/backend.log`, and the journal carries the same lines plus the one start-up
-address with the token in it.
+address with the token UNREDACTED. The log file has that line too, with the token replaced — the redaction is the file
+handler's own formatter, so the two differ deliberately rather than by accident.
 
-**Tender runs as a service, and its Quick Access entry is there only while it does.** The entry is not a file Steam
-reads at start-up — it is code this backend loads into Steam's renderer — so a stopped unit means a Steam with no Tender
-entry in it, and starting the unit puts the entry back without restarting Steam.
+**Tender runs as a service, and the Quick Access entry is something it PUTS there.** The entry is not a file Steam reads
+at start-up — it is code this backend loads into Steam's renderer — so a unit that is not running when Steam starts
+means a Steam with no Tender entry in it, and starting the unit puts one there without restarting Steam. A backend that
+stops after it has loaded the panel leaves the entry where it is: the code is already in Steam, and what it loses is the
+backend to talk to.
 
 To install a build of your own rather than a release:
 

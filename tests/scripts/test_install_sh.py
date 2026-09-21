@@ -1,8 +1,8 @@
 """Tests for ``install.sh`` — the one command that puts Tender on a machine.
 
 Every case runs the real script, and none of them touches the machine running
-them: ``HOME`` is a ``tmp_path``, the seven ``TENDER_*`` variables put every root
-under it, the environment is built from nothing rather than inherited, and a stub
+them: ``HOME`` is a ``tmp_path``, the six ``TENDER_*`` directory variables put
+every root under it, the environment is built from nothing rather than inherited, and a stub
 directory at the front of ``PATH`` stands in for ``systemctl`` and ``curl``. The
 stubs record what they were asked for, which is what lets a test assert the URL
 that was built and the unit that was enabled rather than only the files left
@@ -749,6 +749,9 @@ class TestUninstall:
         assert (machine.bin / "tender-rom-launcher").is_file()
         assert "your settings" in result.stdout
         assert "every Steam shortcut starts through it" in result.stdout
+        # The recovery root is the user's home, not one of RetroDECK's folders,
+        # so it gets a line of its own rather than riding along with them.
+        assert f"{machine.home}/romm-tender-recovery" in result.stdout
 
     def test_it_removes_the_marker_it_created_where_no_decky_loader_is_installed(self, machine):
         self._installed(machine)

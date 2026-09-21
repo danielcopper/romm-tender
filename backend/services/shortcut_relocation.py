@@ -40,10 +40,10 @@ class ShortcutRelocationServiceConfig:
     """Frozen wiring bundle handed to ``ShortcutRelocationService.__init__``.
 
     ``launcher_exe`` is where the launcher belongs and ``launcher_at_home``
-    whether this start actually got it there — two answers the composition root
-    settles, threaded in rather than re-derived, because the second one also
-    carries the data-migration ordering: a start whose data half has not landed
-    installs no launcher at all.
+    whether this start's install actually got it there — two answers the
+    composition root settles, threaded in rather than re-derived. The second is
+    what makes a blocked answer possible: repointing a shortcut at a launcher
+    this start did not manage to write would stop its game from starting.
     """
 
     launcher_exe: str

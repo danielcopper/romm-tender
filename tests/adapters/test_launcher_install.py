@@ -51,8 +51,9 @@ class TestInstallingIt:
     def test_the_installed_launcher_is_executable_by_its_owner_and_nobody_else(self, tmp_path):
         """Steam runs it as the shortcut's exe, and no other account has any business with it.
 
-        Under the user's own data root, executed by the account that owns that
-        root — so group and other are granted nothing (python:S2612).
+        In the user's own bin directory, executed by the account that owns it —
+        so group and other are granted nothing (python:S2612). The DIRECTORY is
+        the opposite question and gets the opposite answer, one test below.
         """
         _ship(tmp_path)
 

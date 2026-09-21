@@ -84,8 +84,9 @@ abort() {
     exit 1
 }
 
-# The value after an option, refusing the option that has none. `shift 2` past
-# the end aborts on its own, with a message about a shift count.
+# The value after an option, refusing the option that has none by name. Without
+# it the run still ends, on the `shift 2` past the end — measured: silently, so
+# the user is told nothing at all.
 value_of() {
     [ $# -ge 2 ] || abort "$1 needs a value"
     echo "$2"

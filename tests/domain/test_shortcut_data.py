@@ -12,8 +12,8 @@ from domain.shortcut_data import (
     select_shortcuts_to_relocate,
 )
 
-# The launcher's home under the user's data root: what the composition root
-# hands the builder now that the launcher no longer lives in the plugin folder.
+# The launcher's home in the user's bin root: what the composition root hands
+# the builder.
 _LAUNCHER = "/home/deck/.local/bin/tender-rom-launcher"
 
 

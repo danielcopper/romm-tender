@@ -100,7 +100,9 @@ an installer resolved and wrote into the service unit — then the XDG variables
 rungs are for a start by hand.
 
 - **config root** — user-intent configuration: the settings file and its siblings.
-- **data root** — what cannot be fetched again: the database and the single-instance lock.
+- **data root** — what cannot be fetched again: the database, the single-instance lock beside it, and the legacy
+  `save_sync_state.json` the settings fold still reads. This list is the one inventory of that root; everywhere else
+  names it rather than repeating it.
 - **cache root** — what can: the cover and artwork caches.
 - **state root** — the log file.
 - **runtime root** — the port file, in a directory the session clears at logout.

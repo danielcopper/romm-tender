@@ -31,10 +31,10 @@ created at whatever the umask says rather than owner-only, and nothing under it 
 **2. The file is renamed with the move.** `bin/rom-launcher` becomes `bin/tender-rom-launcher`. A bare `rom-launcher` in
 a directory shared with every other program the user installed is a name with no owner on it.
 
-**3. A shortcut is ours by one ending, and the ending is the new one.** `/bin/tender-rom-launcher`, matched by
-`frontend/src/utils/steamShortcuts.ts` and `backend/services/prune/requests.py` against the suffix
-`domain/user_data_location.py` derives. A shortcut naming any launcher an earlier version wrote is foreign: not
-recognised, not repointed, not counted, not pruned.
+**3. A shortcut is ours by one ending, and the ending is the new one.** `/bin/tender-rom-launcher`, which
+`frontend/src/utils/steamShortcuts.ts` and `backend/services/prune/requests.py` each match as their own literal, and
+which `domain/user_data_location.py` derives for the backend's own use. A shortcut naming any launcher an earlier
+version wrote is foreign: not recognised, not repointed, not counted, not pruned.
 
 **4. `ShortcutRelocationService` stays, unchanged.** It answers which of OUR shortcuts are not at the launcher's home
 and stamps its completion when none are. What it can still find is a shortcut written against a different
@@ -47,8 +47,9 @@ and stamps its completion when none are. What it can still find is a shortcut wr
   remove all non-Steam shortcuts and sync again. That costs the artwork Steam holds for them and any per-shortcut
   setting the user made in Steam itself; the library, the installs, the saves and the settings are untouched, because
   none of them is keyed on a shortcut.
-- **The data root holds nothing executable.** The database and the single-instance lock, and that is all. A backup of it
-  is data, and restoring it puts no program on the machine.
+- **The data root holds nothing executable.** What is in it is CONTEXT.md's "The program's directories" entry; the point
+  here is only that none of it is a program. A backup of that root is data, and restoring it puts nothing on the machine
+  that can run.
 - **The uninstaller leaves the launcher.** Every shortcut names it, and removing the sync tool is no reason to stop a
   user's games from starting. The cost is one file left behind, named after this program so it can be found.
 - **A `TENDER_BIN_DIR` whose last component is not `bin` breaks ownership silently.** The suffix is two components, so a
@@ -63,9 +64,9 @@ and stamps its completion when none are. What it can still find is a shortcut wr
 wired, and the measurement behind it holds: rewriting every one of 826 shortcuts' `exe` left every appId in place, none
 lost and none new. It was rejected for what it costs afterwards rather than for risk. Recognising two endings means the
 ownership question has two answers for as long as anyone runs a build that wrote the old one, and every place that asks
-it — two frontend modules, the prune request validator, the relocation selector — carries both. The move to a
-self-hosted install is the one moment where a clean break costs a single release's users a documented step instead of
-costing every later reader a transition state that nothing ever removes.
+it — the frontend's `steamShortcuts.ts`, the prune request validator, the relocation selector — carries both. The move
+to a self-hosted install is the one moment where a clean break costs a single release's users a documented step instead
+of costing every later reader a transition state that nothing ever removes.
 
 **Keep the launcher in the data root and only rename it.** Rejected: it leaves an executable in the directory that holds
 the only copy of the user's library, and it spends the same shortcut break on a smaller gain.

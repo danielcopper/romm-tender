@@ -41,8 +41,9 @@ cannot move them again.
 
 The folders above are the defaults. Tender asks its environment first, so an installer that sets `TENDER_CONFIG_DIR`,
 `TENDER_DATA_DIR`, `TENDER_CACHE_DIR`, `TENDER_STATE_DIR`, `TENDER_CODE_DIR` or `TENDER_BIN_DIR` decides where they go;
-failing that it follows the standard `XDG_*` variables — there is none for the launcher's folder, so that one is either
-`TENDER_BIN_DIR` or the default — and only then falls back to the paths in the tables above.
+failing that it follows the standard `XDG_*` variables — there is none for the launcher's folder and none for Tender's
+own, so those two are either their `TENDER_*` variable or the default — and only then falls back to the paths in the
+tables above.
 
 The installer settles all of them once and writes them into Tender's service file, so
 

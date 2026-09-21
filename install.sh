@@ -7,9 +7,11 @@
 # No sudo, nothing outside this user's home, and no daemon but one systemd user
 # unit. Run it again to update; `--uninstall` takes it back out.
 #
-# TEST SEAMS. Every one of these is read here and nowhere else, and each has a
+# TEST SEAMS. Each is read once, at the top of this script, and each has a
 # working default, so a test — or a hand install into another tree — can move
-# the whole thing without touching this file:
+# the whole thing without touching this file. The six directory names are the
+# backend's own ladder rather than this script's: it reads them too, which is
+# why the unit below carries them:
 #
 #   TENDER_PYTHON         the interpreter, checked here AND written into the
 #                         unit. One value with two uses, so what was verified is
@@ -20,8 +22,8 @@
 #   TENDER_CACHE_DIR      covers and artwork
 #   TENDER_STATE_DIR      the log
 #   TENDER_BIN_DIR        the launcher every Steam shortcut starts through
-#                         — the same ladder the backend itself reads, which is
-#                         why the six above are written into the unit verbatim.
+#                         — the five above and this one are written into the
+#                         unit verbatim.
 #   TENDER_ACK_UNTIL      the acknowledgement's expiry date
 #   TENDER_RELEASE_API    where the newest release is looked up
 #   TENDER_DOWNLOAD_BASE  where a release's assets are downloaded from
@@ -33,7 +35,7 @@ set -euo pipefail
 
 # The acknowledgement below is for the 0.33 → 1.0 transition: shortcuts written
 # by a Decky-era Tender are not recognised by this one. It stops being shown
-# after this date, and this constant is the only thing to touch when it has
+# from this date on, and this constant is the only thing to touch when it has
 # outlived its reason.
 ACK_UNTIL="${TENDER_ACK_UNTIL:-2027-03-31}"
 
@@ -152,9 +154,9 @@ parse_arguments() {
 # ---------------------------------------------------------------- pre-flight
 
 # Each of the five below aborts with exit 1 and names both the reason and the
-# fix. They run in this order because each is cheaper and more likely than the
-# one after it, and because refusing over a missing Steam before knowing there
-# is a Python to run anything with would be the wrong answer first.
+# fix. They run cheapest first, and because refusing over a missing Steam before
+# knowing there is a Python to run anything with would be the wrong answer
+# first.
 preflight() {
     check_python
     check_user_manager
@@ -183,9 +185,8 @@ refuse_flatpak_steam() {
 }
 
 # The one place that answers where Steam is, and it answers by printing the
-# root. Same two spellings in the same order as backend/host/inject/machine.py;
-# on a Steam Deck the second is a symlink to the first and neither is
-# guaranteed to be.
+# root. Same two spellings in the same order as backend/host/inject/machine.py,
+# which states why there are two.
 check_native_steam() {
     local candidate
     for candidate in "$HOME/.local/share/Steam" "$HOME/.steam/steam"; do
@@ -250,8 +251,10 @@ TEXT
 
 # ------------------------------------------------------------------- fetch
 
-# Answers with the path of a verified tarball. Everything downloaded goes into a
-# directory of its own that the caller removes.
+# Answers with the path of a tarball, verified wherever a checksum exists to
+# verify it against — always for a release, and for a local file only where one
+# sits beside it. Everything downloaded goes into a directory of its own that
+# the caller removes.
 obtain_tarball() {
     local work="$1"
 
@@ -350,9 +353,8 @@ install_tree() {
 # ------------------------------------------------------------ covers once
 
 # An earlier install wrote covers and artwork under the data root; this version
-# reads them from the cache root. They are re-fetchable, but not cheaply enough
-# to throw away, so they are moved once and never over a file the cache side
-# already holds.
+# reads them from the cache root. They are moved once, and never over a file the
+# cache side already holds.
 #
 # The two reasons a file stays are kept apart, because one of them is fine and
 # the other is a fault: a name the cache already holds is the rule working, and
@@ -422,8 +424,9 @@ start_unit() {
 # ----------------------------------------------------------------- marker
 
 # Steam opens its CEF debugger only where this file exists, and reads it at
-# start-up. The backend creates it too; doing it here as well is what lets the
-# restart Steam needs happen once, now, rather than after a first confusing run.
+# start-up (docs/architecture/loading-the-panel.md). The backend creates it too;
+# doing it here as well is what lets the restart Steam needs happen once, now,
+# rather than after a first confusing run.
 ensure_marker() {
     local marker="$STEAM_ROOT/$MARKER_FILE"
     if [ ! -e "$marker" ]; then
@@ -431,8 +434,11 @@ ensure_marker() {
         mkdir -p "$STATE"
         printf '%s\ncreated by install.sh %s\n' "$marker" "$(date -u +%Y-%m-%d)" > "$STATE/$MARKER_NOTE"
     fi
+    # What was probed is Steam's debugger port, and that is all this can say:
+    # whether Steam will accept the panel, not whether the backend has put one
+    # there yet.
     if curl -fs --max-time 2 "$DEBUGGER_PROBE" > /dev/null 2>&1; then
-        echo "Tender is running. Its entry is in Steam's Quick Access menu."
+        echo "Steam's debugger is answering; Tender's entry appears in the Quick Access menu once the backend has loaded it."
     else
         echo "Restart Steam once (or start it); Tender's entry appears in the Quick Access menu after that."
     fi
@@ -482,12 +488,13 @@ do_uninstall() {
     echo "  $DATA              your library database"
     echo "  $CACHE             cached covers and artwork"
     echo "  $BIN/tender-rom-launcher   every Steam shortcut starts through it"
-    echo "  RetroDECK's own folders    your games, saves and BIOS files, and any recovery bundles"
+    echo "  $HOME/romm-tender-recovery  recovery bundles, if you made any"
+    echo "  RetroDECK's own folders    your games, saves and BIOS files"
 }
 
 # The marker is removed only where a note says this side created it AND nothing
-# else needs it — why Decky Loader counts as something else is
-# docs/architecture/loading-the-panel.md.
+# else needs it. Why Decky Loader counts as something else, and what it does to
+# this file, is docs/architecture/loading-the-panel.md.
 #
 # Exactly the path the note names, and no search: the note is the authority, so
 # removing anything it does not name would be removing a file on a hunch. The
@@ -511,6 +518,10 @@ remove_marker_if_ours() {
 # Installed, not running: an uninstaller may not take away a file the program
 # next started would need. Decky's unit is a SYSTEM unit, so no --user; reading
 # the unit-file list needs no privileges.
+#
+# Two questions rather than one, because a machine can answer either way: the
+# directory is there on a machine that installed Decky by hand, and the unit is
+# known to systemd on one whose directory has moved.
 decky_loader_installed() {
     [ ! -e "$HOME/homebrew/services/PluginLoader" ] || return 0
     local listed

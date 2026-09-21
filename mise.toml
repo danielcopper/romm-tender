@@ -145,8 +145,8 @@ description = "Build the frontend and assemble the release tarball under build/ 
 # The production build, not build:dev: a release carries no source maps. The
 # packager drops any it finds, so this is what keeps them out of the tarball
 # rather than what would notice them. Two steps rather than one because the
-# packager takes a directory and builds nothing itself — the release workflow
-# runs the same script, so there is one layout with one producer.
+# packager takes a directory and builds nothing itself, so the release workflow
+# can run the same script and leave one layout with one producer (#1904).
 run = ["pnpm -C frontend build", "bash scripts/package.sh --source . --out build"]
 
 [tasks.docs]

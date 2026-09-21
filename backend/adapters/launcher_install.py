@@ -3,9 +3,9 @@
 Everything the launcher's installation touches on the filesystem lives here:
 reading the copy this release ships, deciding whether the one already at the
 destination is it, and writing a replacement through a staging file that is
-renamed into place. Where the destination IS is not decided here —
-``domain.user_data_location.launcher_path`` owns that, and the composition root
-hands the answer in.
+renamed into place. Where the source and the destination ARE is not decided here
+— ``domain/user_data_location.py`` composes both, and the composition root hands
+the two answers in.
 """
 
 from __future__ import annotations

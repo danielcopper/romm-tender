@@ -1,4 +1,4 @@
-"""The two readings taken from the machine rather than from the page."""
+"""What this module asks the machine rather than the page, and the one thing it puts back."""
 
 from __future__ import annotations
 
@@ -126,9 +126,9 @@ class TestAskingWhetherDeckyIsServing:
 class TestEnsuringSteamsDebuggerMarker:
     """The one thing this module puts back rather than reads.
 
-    Without the marker Steam opens no debugger, so no panel can ever be loaded —
-    and Decky Loader's uninstaller removes it unconditionally, which is how a
-    working install loses one.
+    Without the marker Steam opens no debugger, so no panel can ever be loaded.
+    Why it has to be re-created on every start rather than once is
+    ``docs/architecture/loading-the-panel.md``.
     """
 
     @staticmethod
