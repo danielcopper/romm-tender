@@ -213,11 +213,14 @@ belongs to no copy and has no update to name, so the page names Decky's and asks
 party for it: that rest can be `ControllerGlyph`, whose predicate is ours, or a global, which in the coexistence bundle
 — the only one `mixed` arises in — Decky Loader has installed.
 
-The `none` row is asked first and is about neither copy. Four of the names checked are not `@decky/ui` lookups at all —
-the three `SP_*` globals, which a React bootstrap installs, and `ControllerGlyph`, which `utils/deckyUiInternals.ts`
-reaches with a `findModule` predicate of its own — so a miss confined to those belongs to no copy of the package, and
-the row names none. For the globals that is also what stops a sentence sending the user after a program that did
-nothing: in the coexistence bundle the copy it would name is Decky's, and Decky's copy ran none of these searches.
+The `none` row is asked first and is about neither copy. Several of the names checked are not `@decky/ui` lookups at
+all, and they come in three kinds: the three `SP_*` globals, which a React bootstrap installs; a global Steam installs
+itself (`NotificationStore`); and the searches Tender runs for itself — `utils/deckyUiInternals.ts`'s `findModule`,
+`findModuleExport` and `findClassModule` probes, and the scan over Steam's module factories behind the game page's
+route. Which names those are is not a list kept here: they are `STEAM_LOOKUPS`'s `truthyUnexported` entries, and the
+flag on each is what the row reads. A miss confined to them belongs to no copy of the package, and the row names none.
+For the globals that is also what stops a sentence sending the user after a program that did nothing: in the coexistence
+bundle the copy it would name is Decky's, and Decky's copy ran none of these searches.
 
 **The row names no update either, and the two kinds of name behind that are not in the same position.** For the globals
 there is no repair to offer. Which program installed them on a machine running both now HAS an answer — the injector
@@ -412,8 +415,18 @@ and this answer is wanted before the panel mounts — the start-up check asks fo
 values already in `modules`, it collects the modules whose exports are ALL patchable memos and number more than one,
 which is what the route's module looks like, and only those factories' sources are read. The full scan over `require.m`
 stands behind it and runs only when the cheap pass names nothing — for the day Steam gives that module an export of
-another kind, or splits it. It asks the same question over a superset of the same set, so the two cannot disagree about
-which module matches; being wrong about the shape costs work and never an answer.
+another kind, or splits it.
+
+**The two passes can disagree, and where they do the shape pass is the one to believe.** The refusal a second match
+earns is taken per pass, and the shape pass reads a subset, so where two modules carry all three property names and only
+one of them has the shape, the shape pass answers and the full scan alone would refuse. That refusal exists because the
+names no longer name one module; a shape only one of the two has settles exactly that, and the module it answers with
+has satisfied both predicates where the others satisfied one. So the answer rests on more evidence than the refusal it
+replaces, not less. What it costs is the case where the shape is the misleading half — a second module carrying those
+names while the real one has lost the shape, which one split of that module could produce on its own. Then a module that
+draws no route is patched: its memos are never rendered with a `renderFunc`, so nothing is wrapped and the game page
+carries no Tender section, exactly as a refusal would leave it — and the start-up check reports the route as found
+rather than missing, which is the one thing a refusal would have said out loud.
 
 **The desktop client needs no gate.** Its library router renders the same route component with no `renderFunc` at all,
 so the handler wraps nothing there — the same parity the old route patch had, since that one only ever ran on the

@@ -5,12 +5,14 @@
  * Putting Tender's section on Steam's game page.
  *
  * **Nothing here is reachable from a test.** The module the page is drawn from
- * is found by reading the source text of every factory Steam ships, its exports
- * are patched through `@decky/ui`, and a page that is already open is adopted
- * by walking React's live fiber tree. happy-dom has none of that, so a test
- * here would assert against a registry and a tree written for it and would pass
- * whatever Steam does. What IS decidable — which factory, which exports, and
- * what one render is owed — is `gamePageSeam.ts`, and that half is covered.
+ * is found by reading the source text of the factories a pass over the loaded
+ * exports names by their shape — and of the whole registry only where that pass
+ * names none; its exports are patched through `@decky/ui`, and a page that is
+ * already open is adopted by walking React's live fiber tree. happy-dom has
+ * none of that, so a test here would assert against a registry and a tree
+ * written for it and would pass whatever Steam does. What IS decidable — which
+ * factory, which exports, and what one render is owed — is `gamePageSeam.ts`,
+ * and that half is covered.
  * `qam/installEntry.tsx` is exempt for the same reason and is the Quick Access
  * strip's half of the same job.
  *
@@ -120,8 +122,14 @@ function searchSteamFactories(matches: (source: string) => boolean): FactorySear
  * source of every module Steam ships is not free at start-up — the check asks
  * for this answer before the panel mounts. So the shape pass goes first and
  * only its handful of sources are read; the full scan stands behind it for the
- * day Steam gives that module an export of another kind, and answers the same
- * question over a superset of the same set.
+ * day Steam gives that module an export of another kind, and reads a superset
+ * of the same sources.
+ *
+ * **The refusal a second match earns is taken per pass, so the two can
+ * disagree**: where two modules carry the three property names and one of them
+ * has the shape, this answers with that one where the full scan alone would
+ * refuse. Why that answer is the one to keep, and what it costs where the shape
+ * is the misleading half, is on `docs/architecture/frontend-bundles.md`.
  */
 function routeModuleId(webpackRequire: SteamWebpackRequire, matches: (source: string) => boolean): string | undefined {
   return (

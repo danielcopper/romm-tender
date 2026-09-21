@@ -79,9 +79,13 @@ function readExport(exports: object, name: string): unknown {
  * text of a module. What it is FOR is at `soleMatchingFactory`'s caller: this
  * narrows the set whose sources are read, and it decides nothing on its own.
  *
- * Being wrong either way costs only work. A module that should have passed and
- * did not is still reached by the full scan behind it; one that passes and is
- * not the module costs one source read and fails the predicate that matters.
+ * Being wrong about it usually costs only work: a module that should have
+ * passed and did not is still reached by the full scan behind it, and one that
+ * passes without carrying the three property names costs a source read and
+ * fails the predicate that matters. The exception is where those names name
+ * more than one module — there this predicate decides rather than narrows,
+ * because the refusal an ambiguity earns is taken per pass. What that is worth
+ * is on `docs/architecture/frontend-bundles.md`.
  */
 export function hasRouteModuleShape(exports: unknown): boolean {
   if (typeof exports !== "object" || exports === null) return false;
