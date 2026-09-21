@@ -618,6 +618,53 @@ x="$(dirname "$(reader)")"
         assert len(findings) == 1
         assert "$(reader …)" in findings[0]
 
+    def test_a_case_pattern_does_not_end_the_substitution_it_is_in(self, check, tmp_path):
+        """`$(case "$1" in a) … esac)` — the `a)` closes a pattern, not the substitution.
+
+        Counting parentheses alone ends the substitution at the first arm, so
+        every command in the arms below it is read as the text around a
+        substitution rather than as code, and the call among them is unseen.
+        """
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+abort() {
+    exit 1
+}
+
+reader() {
+    abort "always"
+}
+
+y="$(case "$1" in a) echo a ;; *) reader ;; esac)"
+""",
+        )
+
+        assert len(findings) == 1
+        assert "$(reader …)" in findings[0]
+
+    def test_a_backtick_inside_double_quotes_is_code(self, check, tmp_path):
+        """`x="`f`"` runs f exactly as `x="$(f)"` does; only the spelling differs."""
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+abort() {
+    exit 1
+}
+
+reader() {
+    abort "always"
+}
+
+y="`reader`"
+""",
+        )
+
+        assert len(findings) == 1
+        assert "$(reader …)" in findings[0]
+
     def test_a_function_after_a_pipe_inside_a_substitution_is_seen(self, check, tmp_path):
         findings = _findings(
             check,

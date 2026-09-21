@@ -24,11 +24,13 @@ shell file that exists. The scan is surface syntax over a hand-written lexer
 
 **The reading is hand-written, so a construct it gets wrong drops real code in
 silence** — the failure is a function that is never collected or a body that
-ends early, and either way the ``exit`` below it is simply not there. Three such
+ends early, and either way the ``exit`` below it is simply not there. Five such
 shapes were found by review and are fixed: a closing ``}`` judged by what
 follows it (an unquoted ``${x}`` or a ``find … -exec rm {} \\;`` ended the
 enclosing function), ``$(( 1 << 3 ))`` read as a heredoc (which blanked the rest
-of the file), and a parameter expansion naming a function read as a call to it.
+of the file), a parameter expansion naming a function read as a call to it, a
+``case`` arm's ``)`` ending the substitution it sits in, and a backtick
+substitution inside double quotes read as string text.
 
 **The blind spots named here** are the ones left, deliberately or for want of a
 reason to close them:
@@ -40,10 +42,6 @@ reason to close them:
   same way a substitution does, and neither is checked here. This gate is about
   the shape that has actually gone wrong in this repository; the other two are a
   wider rule nobody has needed yet;
-* a **``)`` inside a substitution** — ``$(case "$1" in a) … esac)`` ends the
-  substitution early for this scan, so a call after that ``)`` is unseen;
-* a **backtick substitution inside double quotes** — ``x="`f`"`` is read as
-  string text, where ``x="$(f)"`` is read as code;
 * ``exit`` written inside a **heredoc or a string** — masked with the rest of
   the text, so a heredoc that emits a script containing ``exit`` is not a
   finding, which is right, and a function whose ``exit`` is somehow produced by
@@ -113,6 +111,25 @@ TRANSPARENT: frozenset[str] = frozenset(
 COMMAND_OPENERS = ";&|(){}\n"
 
 
+class _Frame:
+    """One nesting level of the scan, and the ``case`` state that level is in.
+
+    Each level keeps its own, because a substitution written inside a ``case``
+    arm is not itself inside that arm's pattern.
+
+    A plain class rather than a dataclass: this module is loaded by path as
+    often as it is imported, and ``dataclass`` resolves its annotations through
+    ``sys.modules``, which a loader that did not register it has not filled in.
+    """
+
+    __slots__ = ("case_depth", "expecting_pattern", "kind")
+
+    def __init__(self, kind: str) -> None:
+        self.kind = kind
+        self.case_depth = 0
+        self.expecting_pattern = False
+
+
 class Masked:
     """A script with everything that is not shell CODE blanked out.
 
@@ -141,7 +158,7 @@ def _mask(source: str) -> str:
     length = len(source)
     # Each entry is a context this scan is inside: "code", "dq" (double quotes),
     # "sq" (single quotes), "bt" (backticks — code, and ended by a backtick).
-    stack: list[str] = ["code"]
+    stack: list[_Frame] = [_Frame("code")]
     pending_heredocs: list[tuple[str, bool]] = []
 
     def blank(position: int) -> None:
@@ -150,7 +167,8 @@ def _mask(source: str) -> str:
 
     while index < length:
         char = source[index]
-        context = stack[-1]
+        frame = stack[-1]
+        context = frame.kind
 
         if char == "\n":
             index += 1
@@ -186,8 +204,14 @@ def _mask(source: str) -> str:
                 index = _skip_expansion(source, index, blank)
                 continue
             if char == "$" and source.startswith("$(", index):
-                stack.append("code")
+                stack.append(_Frame("code"))
                 index += 2
+                continue
+            if char == "`":
+                # The older spelling of the same thing, and just as live inside
+                # double quotes: `x="`f`"` runs f exactly as `x="$(f)"` does.
+                stack.append(_Frame("bt"))
+                index += 1
                 continue
             blank(index)
             index += 1
@@ -200,12 +224,12 @@ def _mask(source: str) -> str:
                 index += 1
             continue
         if char == "'":
-            stack.append("sq")
+            stack.append(_Frame("sq"))
             blank(index)
             index += 1
             continue
         if char == '"':
-            stack.append("dq")
+            stack.append(_Frame("dq"))
             blank(index)
             index += 1
             continue
@@ -213,8 +237,12 @@ def _mask(source: str) -> str:
             if context == "bt":
                 stack.pop()
             else:
-                stack.append("bt")
+                stack.append(_Frame("bt"))
             index += 1
+            continue
+        if source.startswith(";;", index):
+            frame.expecting_pattern = frame.case_depth > 0
+            index += 2
             continue
         # Before ``$(``, which it starts with, and before the heredoc test,
         # whose ``<<`` it can contain: ``$(( 1 << 3 ))`` used to open a heredoc
@@ -228,15 +256,34 @@ def _mask(source: str) -> str:
             index = _skip_expansion(source, index, blank)
             continue
         if source.startswith("$(", index):
-            stack.append("code")
+            stack.append(_Frame("code"))
             index += 2
             continue
-        if char == ")" and len(stack) > 1 and stack[-1] == "code":
-            stack.pop()
+        if char == ")" and len(stack) > 1 and context == "code":
+            # A `case` arm's pattern ends in a `)` that closes nothing. Popping
+            # on it ends the substitution at the first arm, and every command
+            # after that is read as the text around a substitution, not as code.
+            if frame.expecting_pattern and frame.case_depth:
+                frame.expecting_pattern = False
+            else:
+                stack.pop()
             index += 1
             continue
         if _opens_a_heredoc(source, index):
             index = _note_heredoc(source, index, pending_heredocs)
+            continue
+        if _starts_a_word(source, index):
+            start = index
+            while index < length and (source[index].isalnum() or source[index] in "_-"):
+                index += 1
+            word = source[start:index]
+            if word == "case":
+                frame.case_depth += 1
+            elif word == "esac":
+                frame.case_depth = max(0, frame.case_depth - 1)
+                frame.expecting_pattern = False
+            elif word == "in" and frame.case_depth:
+                frame.expecting_pattern = True
             continue
         index += 1
 
@@ -485,16 +532,67 @@ def _substitutions(text: str) -> list[tuple[int, int, int]]:
 
 
 def _matching_paren(text: str, opening: int) -> int | None:
-    """Index of the ``)`` closing the ``(`` at *opening*, or ``None``."""
+    """Index of the ``)`` closing the ``(`` at *opening*, or ``None``.
+
+    A ``case`` arm's pattern ends in a ``)`` that closes nothing, so counting
+    parentheses alone ends a substitution at the first arm of any ``case``
+    inside it and everything after that goes unread. What tells the two apart is
+    position: a pattern's ``)`` follows ``in`` or ``;;`` within a ``case``, and
+    the scan tracks exactly that much.
+    """
     depth = 0
-    for index in range(opening, len(text)):
-        if text[index] == "(":
+    case_depth = 0
+    expecting_pattern = False
+    index = opening
+    length = len(text)
+    while index < length:
+        char = text[index]
+        if char == "(":
             depth += 1
-        elif text[index] == ")":
+            index += 1
+            continue
+        if char == ")":
+            if expecting_pattern and case_depth:
+                expecting_pattern = False
+                index += 1
+                continue
             depth -= 1
             if depth == 0:
                 return index
+            index += 1
+            continue
+        if text.startswith(";;", index):
+            expecting_pattern = case_depth > 0
+            index += 2
+            continue
+        if _starts_a_word(text, index):
+            start = index
+            while index < length and (text[index].isalnum() or text[index] in "_-"):
+                index += 1
+            word = text[start:index]
+            if word == "case":
+                case_depth += 1
+            elif word == "esac":
+                case_depth = max(0, case_depth - 1)
+                expecting_pattern = False
+            elif word == "in" and case_depth:
+                expecting_pattern = True
+            continue
+        index += 1
     return None
+
+
+def _starts_a_word(text: str, index: int) -> bool:
+    """Whether an identifier begins at *index* rather than continuing one.
+
+    ``$`` counts as continuing, so a variable named ``$in`` is not read as the
+    keyword it spells.
+    """
+    char = text[index]
+    if not (char.isalpha() or char == "_"):
+        return False
+    before = text[index - 1] if index else " "
+    return not (before.isalnum() or before in "_-$")
 
 
 def _without_substitutions(text: str) -> str:
