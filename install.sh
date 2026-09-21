@@ -142,7 +142,8 @@ on_a_terminal() {
 }
 
 # Whether this run may use colour at all. NO_COLOR is the convention
-# (https://no-color.org): set to anything, it means no.
+# (https://no-color.org): present and NOT EMPTY means no, whatever its value.
+# An empty NO_COLOR says nothing, which is why the test is -z and not -n.
 may_colour() {
     on_a_terminal && [ -z "${NO_COLOR:-}" ]
 }
@@ -560,7 +561,7 @@ move_covers() {
         source="$DATA/$name"
         [ -d "$source" ] || continue
         target="$CACHE/$name"
-        total="$(find "$source" -maxdepth 1 -type f | wc -l)"
+        total="$(count_movable "$source")"
         # Counted before the loop so the phase can say how much work it is, and
         # so a folder with nothing in it costs no line at all.
         if [ "$total" -eq 0 ]; then
@@ -570,6 +571,19 @@ move_covers() {
         step "moving $total $(folder_noun "$name" "$total") to the cache" move_folder "$source" "$target" || true
         report_move "$name"
     done
+}
+
+# How many files the move will see, counted with the SAME glob the move walks.
+# `find` answers for a dotfile too, and `"$source"/*` never yields one, so a
+# folder holding nothing else announced a phase that then moved nothing and had
+# nothing to report.
+count_movable() {
+    local file count=0
+    for file in "$1"/*; do
+        [ -f "$file" ] || continue
+        count=$((count + 1))
+    done
+    printf '%s\n' "$count"
 }
 
 # What a folder's files are called in a sentence, for a count: `1 cover` and

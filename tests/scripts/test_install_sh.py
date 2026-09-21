@@ -66,6 +66,7 @@ case "$*" in
         [ -z "${STUB_DECKY_UNIT:-}" ] || printf '%s\\n' "$STUB_DECKY_UNIT"
         exit 0
         ;;
+    *"enable"*) [ -z "${STUB_ENABLE_DELAY:-}" ] || sleep "$STUB_ENABLE_DELAY" ;;
 esac
 exit 0
 """
@@ -171,6 +172,22 @@ class Install:
             ["bash", str(_INSTALL), *args],
             capture_output=True,
             text=True,
+            check=False,
+            env=self.env(**extra),
+            start_new_session=True,
+        )
+
+    def run_raw(self, *args: str, **extra: str) -> subprocess.CompletedProcess[bytes]:
+        """The same run, captured as BYTES.
+
+        ``text=True`` decodes with universal newlines, which rewrites every
+        ``\r`` to ``\n`` before a test can look — so an assertion about carriage
+        returns made on a decoded run cannot fail, whatever the script wrote.
+        Anything asking what bytes reached the pipe has to ask here.
+        """
+        return subprocess.run(
+            ["bash", str(_INSTALL), *args],
+            capture_output=True,
             check=False,
             env=self.env(**extra),
             start_new_session=True,
@@ -371,11 +388,18 @@ class TestAFreshInstall:
         assert at == sorted(at), "the phases are announced in the order they run"
 
     def test_a_piped_run_carries_no_carriage_returns(self, machine):
-        """No terminal, no spinner: every phase's line is written once, forwards."""
-        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+        """No terminal, no spinner: every phase's line is written once, forwards.
 
-        assert "\r" not in result.stdout
-        assert f"unpacking {_ARCHIVE} … done" in result.stdout
+        Asked of the raw bytes. Universal newlines turn every ``\r`` into
+        ``\n`` while decoding, so the same assertion over ``run`` holds no
+        matter what the script wrote.
+        """
+        result = machine.run_raw("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert result.returncode == 0, result.stderr
+        assert b"\r" not in result.stdout
+        assert b"\x1b" not in result.stdout
+        assert f"unpacking {_ARCHIVE} … done".encode() in result.stdout
 
     def test_the_closing_summary_is_one_aligned_block(self, machine):
         """A blank line, then two labelled rows on one column, then what to do next.
@@ -568,11 +592,17 @@ class TestTheAcknowledgement:
         assert "\033[0m" in output
 
     def test_no_color_is_honoured(self, machine):
-        """https://no-color.org: set to anything, it means no."""
+        """https://no-color.org: present and not empty means no, whatever the value."""
         _code, output = machine.on_a_terminal("--from", str(machine.tmp_path / "gone.tar.gz"), answer="y", NO_COLOR="1")
 
         assert "\033[" not in output
         assert "Did you run Tender as a Decky plugin before?" in output
+
+    def test_an_empty_no_color_says_nothing(self, machine):
+        """The other half of the convention, and the one a `-n` test gets wrong."""
+        _code, output = machine.on_a_terminal("--from", str(machine.tmp_path / "gone.tar.gz"), answer="y", NO_COLOR="")
+
+        assert "\033[1;33m" in output
 
     def test_a_piped_run_is_never_coloured(self, machine):
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
@@ -657,13 +687,35 @@ class TestTheAcknowledgement:
         assert output.index("… failed") < output.index("install.sh: the tarball could not be unpacked")
 
     def test_the_spinner_finishes_every_line_it_opened(self, machine):
-        """Only a terminal gets one, so only this tier can see it end."""
-        code, output = machine.on_a_terminal("--from", str(_build_tarball(machine.tmp_path)), answer="y")
+        """Only a terminal gets one, so only this tier can see it end.
+
+        A spinner is a process of its own, forked while its phase's message was
+        set, so one that outlives its phase goes on drawing THAT message over
+        whatever came after it. Seeing that needs a later phase long enough for
+        a second frame, which is what the delay buys: a run with none is over
+        faster than one frame, and then the transcript of a spinner that was
+        never stopped is identical to the transcript of one that was.
+        """
+        code, output = machine.on_a_terminal(
+            "--from",
+            str(_build_tarball(machine.tmp_path)),
+            answer="y",
+            STUB_ENABLE_DELAY="0.4",
+        )
 
         assert code == 0, output
-        assert f"unpacking {_ARCHIVE} … done" in output
-        assert "writing the service … done" in output
-        assert "starting romm-tender … done" in output
+        for phase in (
+            f"unpacking {_ARCHIVE}",
+            "writing the service",
+            "starting romm-tender",
+            "checking Steam's debugger",
+        ):
+            finished = f"{phase} … done"
+            assert output.count(finished) == 1, phase
+            assert phase not in output.split(finished, 1)[1], f"{phase} was still being drawn after it ended"
+        tail = output[output.index("Tender is installed.") :]
+        assert "…" not in tail, "nothing is still drawing after the summary"
+        assert tail.rstrip().endswith("Quick Access menu.")
 
     def test_it_is_not_shown_once_its_expiry_has_passed(self, machine):
         """The warning carries an expiry in the code so it does not outlive its reason."""
@@ -741,6 +793,22 @@ class TestTheCoversMoveOnce:
         assert "3 covers moved to the cache; 2 were already there and were left in place." in result.stdout
         assert "moving 3 artwork files to the cache" in result.stdout
         assert "3 artwork files moved to the cache." in result.stdout
+
+    def test_a_folder_holding_only_a_dotfile_costs_no_line(self, machine):
+        """The count and the move have to see the same files.
+
+        ``"$source"/*`` never yields a dotfile, so counting with ``find``
+        announced a phase that then moved nothing and had nothing to report —
+        a line saying work was done over a folder still sitting where it was.
+        """
+        self._seed(machine, "covers", {".keep": "x"})
+
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert result.returncode == 0, result.stderr
+        assert "moving" not in result.stdout
+        assert "to the cache" not in result.stdout
+        assert (machine.data / "covers" / ".keep").is_file()
 
     def test_nothing_else_under_the_data_root_is_touched(self, machine):
         (machine.data).mkdir(parents=True, exist_ok=True)
