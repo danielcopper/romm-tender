@@ -400,7 +400,12 @@ and a props object dies with the element it was made for. What the teardown take
 `@decky/ui` obtains it — pushing a chunk keyed by a fresh Symbol, whose factory is handed it — and a module factory's
 source text is read from `require.m`. The factory carrying all three of `renderFunc`, `AppDetailsOverviewPanel` and
 `InnerContainer` is the one; its exports come from `@decky/ui`'s `modules` map, which is Decky's copy of the registry in
-the coexistence bundle and ours in the standalone one.
+the coexistence bundle and ours in the standalone one. Property names survive Steam's minification and local identifiers
+and module ids do not, which is why the predicate reads names and never a number — matching a number also matches SVG
+path coordinates. Every memo export of that module whose `type` is a function is patched, rather than the route picked
+out of them: nothing on an export says which one it is, and on any other export the handler finds no `renderFunc` and
+does nothing. Two matching factories are treated as no match at all, because a second match means the predicate no
+longer names one module.
 
 **Whose sources are read is decided first, by shape.** Reading the source text of every module Steam ships is not free,
 and this answer is wanted before the panel mounts — the start-up check asks for it. So a cheap pass goes first: over the
@@ -408,12 +413,7 @@ values already in `modules`, it collects the modules whose exports are ALL patch
 which is what the route's module looks like, and only those factories' sources are read. The full scan over `require.m`
 stands behind it and runs only when the cheap pass names nothing — for the day Steam gives that module an export of
 another kind, or splits it. It asks the same question over a superset of the same set, so the two cannot disagree about
-which module matches; being wrong about the shape costs work and never an answer. Property names survive Steam's
-minification and local identifiers and module ids do not, which is why the predicate reads names and never a number —
-matching a number also matches SVG path coordinates. Every memo export of that module whose `type` is a function is
-patched, rather than the route picked out of them: nothing on an export says which one it is, and on any other export
-the handler finds no `renderFunc` and does nothing. Two matching factories are treated as no match at all, because a
-second match means the predicate no longer names one module.
+which module matches; being wrong about the shape costs work and never an answer.
 
 **The desktop client needs no gate.** Its library router renders the same route component with no `renderFunc` at all,
 so the handler wraps nothing there — the same parity the old route patch had, since that one only ever ran on the
