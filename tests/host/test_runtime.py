@@ -316,3 +316,84 @@ class TestLoadingThePanelIntoSteam:
             assert recorder.steps == ["build", "after_bind", "shutdown"]
         finally:
             await debugger.stop()
+
+
+class TestSteamsDebuggerMarker:
+    """The run makes sure Steam will open a debugger at all before it tries to attach.
+
+    ``ensure_debugger_marker`` is held to its own contract in
+    ``tests/host/inject/test_machine.py``; what these two pin is that the run
+    reaches it exactly where the panel is being loaded and nowhere else.
+    """
+
+    @staticmethod
+    def _steam_home(tmp_path) -> None:
+        (tmp_path / "home" / ".local" / "share" / "Steam").mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _marker(tmp_path):
+        return tmp_path / "home" / ".local" / "share" / "Steam" / ".cef-enable-remote-debugging"
+
+    async def test_a_run_that_loads_the_panel_creates_it(self, tmp_path, recorder, default_sigterm):
+        self._steam_home(tmp_path)
+        page = FakePage(
+            marker_expression=marker_present_expression(MARKER),
+            ready_expression=choose_bundles(decky_is_serving=False).ready_when,
+        )
+        debugger = FakeDebugger(page)
+        await debugger.start()
+        try:
+            await asyncio.wait_for(
+                _run(
+                    tmp_path,
+                    recorder,
+                    HostStatus(),
+                    free_port(),
+                    injection=InjectionSetup(
+                        static_root=str(tmp_path / "dist"),
+                        state_dir=str(tmp_path / "state"),
+                        user_home=str(tmp_path / "home"),
+                        version="0.0.0-test",
+                        debugger_port=debugger.port,
+                        decky_port=free_port(),
+                    ),
+                ),
+                20,
+            )
+        finally:
+            await debugger.stop()
+
+        assert self._marker(tmp_path).is_file()
+
+    async def test_the_switch_that_leaves_steam_alone_writes_nothing_into_it(self, tmp_path, recorder, default_sigterm):
+        """``off`` means this process touches Steam's directory not at all."""
+        self._steam_home(tmp_path)
+        page = FakePage(
+            marker_expression=marker_present_expression(MARKER),
+            ready_expression=choose_bundles(decky_is_serving=False).ready_when,
+        )
+        debugger = FakeDebugger(page)
+        await debugger.start()
+        try:
+            await asyncio.wait_for(
+                _run(
+                    tmp_path,
+                    recorder,
+                    HostStatus(),
+                    free_port(),
+                    injection=InjectionSetup(
+                        static_root=str(tmp_path / "dist"),
+                        state_dir=str(tmp_path / "state"),
+                        user_home=str(tmp_path / "home"),
+                        version="0.0.0-test",
+                        override="off",
+                        debugger_port=debugger.port,
+                        decky_port=free_port(),
+                    ),
+                ),
+                20,
+            )
+        finally:
+            await debugger.stop()
+
+        assert not self._marker(tmp_path).exists()

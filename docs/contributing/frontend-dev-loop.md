@@ -60,8 +60,9 @@ second later is not stopped by it, and a lock that cannot be read at all is repo
 
 The backend serves `dist/` on a loopback port and loads the panel into Steam's renderer over the CEF debugger — see
 [How the panel gets into Steam](../architecture/loading-the-panel.md). Ctrl-C stops it and lets it unload. It needs
-`~/.steam/steam/.cef-enable-remote-debugging` to exist: create the empty file once, and the next task's restart makes
-Steam read it.
+`~/.steam/steam/.cef-enable-remote-debugging` to exist, and creates the empty file itself when it is missing — a start
+by hand does too. Steam reads that file only when it starts, so the restart that follows is what picks it up; the
+backend says so at WARNING when it has just created one.
 
 Keyboard shortcuts in the Big Picture window: **Ctrl+2** opens the Quick Access Menu, **Ctrl+1** the main menu.
 

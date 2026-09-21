@@ -41,6 +41,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from host.inject import PanelInjector
+from host.inject.machine import ensure_debugger_marker
+from host.inject.watchdog import INJECT_OFF
 from host.server import DEFAULT_PORT, HostServer
 from host.single_instance import PortFile, SingleInstanceLock, someone_listening
 
@@ -153,6 +155,16 @@ async def run_backend(
         # RomM being reachable, and holding it behind a timing-out credential
         # fetch would leave Steam without a panel for the length of it.
         if injection is not None:
+            if injection.override != INJECT_OFF:
+                # Before the injector rather than inside it: without this file
+                # Steam opens no debugger at all, so there is nothing for the
+                # attach loop to find and no amount of retrying would produce
+                # one. Decky Loader's uninstaller removes the marker
+                # unconditionally, which is how a working install loses one, so
+                # it is re-created on every start rather than once. Not where
+                # the panel is not being loaded: a switch that says "leave Steam
+                # alone" may not write a file into Steam's directory.
+                ensure_debugger_marker(injection.user_home, injection.state_dir, logger)
             injector = asyncio.create_task(
                 PanelInjector(setup=injection, asset_url=server.asset_url, token=token, logger=logger).run()
             )

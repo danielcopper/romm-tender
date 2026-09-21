@@ -7,6 +7,24 @@ finds the renderer, and evaluates one expression into it.
 [Frontend bundles](frontend-bundles.md) owns what the files ARE. This page owns how one of them reaches Steam, which of
 them is chosen, and what happens when that goes wrong.
 
+## Steam's remote-debugging marker
+
+There is no debugger to open unless `<steam root>/.cef-enable-remote-debugging` exists — Steam reads it at start-up and
+opens the port only for it. So the backend creates it when it is missing, on every start that is loading the panel
+(`ensure_debugger_marker`, `backend/host/inject/machine.py`), logs at WARNING that Steam has to be restarted once, and
+writes a note named `debugger-marker` under the state root recording that the file is ours. `TENDER_INJECT=off` writes
+nothing: a switch that says to leave Steam alone may not put a file in Steam's directory.
+
+It is re-created on every start rather than once because something else takes it away. Decky Loader's installer creates
+the marker unconditionally and its uninstaller removes it unconditionally, and the loader itself never touches it — so a
+user who removes Decky from a machine that also runs Tender removes Tender's only way into Steam with it, and the
+symptom is a panel that stops appearing with nothing said. Nothing on that side can be changed.
+
+The note is what `install.sh --uninstall` reads to decide whether the marker is its to remove: it takes the marker away
+only where the note says this program created it AND no Decky Loader is installed, so a marker somebody else needs is
+left where it is. Both sides spell the note's filename as a literal and `tests/scripts/test_install_sh.py` holds the two
+equal.
+
 ## The sequence
 
 From the debugger port answering to the panel being there:
