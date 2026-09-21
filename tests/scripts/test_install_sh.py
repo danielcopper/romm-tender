@@ -665,8 +665,10 @@ class TestTheAcknowledgement:
         assert code == 0
         archive = [line for line in machine.curl_argv() if line.endswith(_ARCHIVE)]
         sidecar = [line for line in machine.curl_argv() if ".sha256" in line]
-        assert archive and all("--progress-bar" in line for line in archive)
-        assert sidecar and not any("--progress-bar" in line for line in sidecar)
+        assert archive, "the tarball was never fetched"
+        assert all("--progress-bar" in line for line in archive)
+        assert sidecar, "the checksum was never fetched"
+        assert not any("--progress-bar" in line for line in sidecar)
 
     def test_a_piped_download_stays_silent(self, machine):
         machine.publish_release()

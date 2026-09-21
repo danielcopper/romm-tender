@@ -50,6 +50,12 @@ XDG_CACHE_HOME = "XDG_CACHE_HOME"
 XDG_STATE_HOME = "XDG_STATE_HOME"
 XDG_RUNTIME_DIR = "XDG_RUNTIME_DIR"
 
+# Third rung, and the one directory more than one default sits under: the XDG
+# basedir spec puts two of its four built-in defaults here (`share` and
+# `state`, while config and cache are their own dotted names), and `~/.local/bin`
+# — which has no variable at all — is the third use of it.
+_LOCAL = ".local"
+
 
 @dataclass(frozen=True)
 class AppDirectories:
@@ -100,9 +106,9 @@ def resolve_directories(environ: Mapping[str, str], user_home: str, code_fallbac
     nobody who checks.
     """
     config_home = _first(environ, XDG_CONFIG_HOME, os.path.join(user_home, ".config"))
-    data_home = _first(environ, XDG_DATA_HOME, os.path.join(user_home, ".local", "share"))
+    data_home = _first(environ, XDG_DATA_HOME, os.path.join(user_home, _LOCAL, "share"))
     cache_home = _first(environ, XDG_CACHE_HOME, os.path.join(user_home, ".cache"))
-    state_home = _first(environ, XDG_STATE_HOME, os.path.join(user_home, ".local", "state"))
+    state_home = _first(environ, XDG_STATE_HOME, os.path.join(user_home, _LOCAL, "state"))
 
     state_dir = _first(environ, ENV_STATE_DIR, os.path.join(state_home, APP_DIR_NAME))
     runtime_home = environ.get(XDG_RUNTIME_DIR, "").strip()
@@ -114,7 +120,7 @@ def resolve_directories(environ: Mapping[str, str], user_home: str, code_fallbac
         state_dir=state_dir,
         runtime_dir=os.path.join(runtime_home, APP_DIR_NAME) if runtime_home else state_dir,
         code_dir=_first(environ, ENV_CODE_DIR, code_fallback),
-        bin_dir=_first(environ, ENV_BIN_DIR, os.path.join(user_home, ".local", "bin")),
+        bin_dir=_first(environ, ENV_BIN_DIR, os.path.join(user_home, _LOCAL, "bin")),
     )
 
 

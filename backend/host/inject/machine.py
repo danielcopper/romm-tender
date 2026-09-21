@@ -188,8 +188,10 @@ def ensure_debugger_marker(user_home: str, state_dir: str, logger: logging.Logge
     if os.path.exists(marker):
         return True
     try:
-        with open(marker, "x", encoding="utf-8"):
-            pass
+        # Exclusive: a create that loses the race against the check above has to
+        # fail rather than succeed, or the note below would claim a marker some
+        # other program had just put there.
+        os.close(os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644))
     except OSError as e:
         logger.warning(f"inject: could not create Steam's remote-debugging marker at {marker}: {e}")
         return False
