@@ -249,9 +249,10 @@ export function registerGameDetailPatch() {
 
   gamePatch = installGamePagePatch(patchHandler);
   if (!gamePatch.installed) {
-    // The start-up check asks the same question before anything mounts and is
-    // what a user is told; this line is for whoever has the log open and is
-    // looking at the game page rather than at the panel.
+    // The start-up check asks the same question before the panel is built and
+    // records the miss in the line it logs there — nothing reaches the screen,
+    // since the answer costs a feature rather than the panel. This line names
+    // the game page, for whoever reads the log with the game page in mind.
     console.warn(`[${PLUGIN_NAME}] Steam's game-page route was not found, so no Tender section will appear on it.`);
   }
 }

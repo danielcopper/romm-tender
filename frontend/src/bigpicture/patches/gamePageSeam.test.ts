@@ -78,9 +78,9 @@ describe("picking the one factory out of the registry", () => {
   });
 
   it("stops reading the registry at the second match", () => {
-    // The scan reads the source text of every module Steam ships, so the answer
-    // is settled where it is settled rather than after another two thousand
-    // reads.
+    // Reading a factory's source is the expensive half of the search, so the
+    // answer is settled where it is settled rather than after every remaining
+    // module has been read.
     const read = vi.fn();
     function* watched(): Generator<readonly [string, string]> {
       for (const id of ["1", "2", "3"]) {
@@ -154,9 +154,9 @@ describe("recognising the shape the route module has", () => {
 
 describe("picking the exports a patch can be installed on", () => {
   it("takes every memo whose type is a function", () => {
-    // Both, rather than the route component picked out: nothing on an export
-    // says which one it is, and the handler on the other one finds nothing to
-    // do.
+    // Every one of them, rather than the route component picked out: nothing on
+    // an export says which one it is, and on any other export the handler finds
+    // nothing to do.
     const route = memo(() => null);
     const page = memo(() => null);
     expect(patchableMemos({ xA: route, kg: page })).toEqual([route, page]);

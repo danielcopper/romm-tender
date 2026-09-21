@@ -300,10 +300,10 @@ as before. `@decky/api` itself is gone from the package, and so is the sixth nam
 Loader's route installer, and Tender's section reaches Steam's game page through a seam of its own instead
 ([below](#tenders-section-on-steams-game-page)).
 
-**Four of the five are the wire.** They go through `frontend/src/api/hostSocket.ts`, one WebSocket per bundle instance,
-on the protocol defined once on the other side in `backend/host/protocol.py`. The port and the token are read off the
-URL this bundle was loaded from: the host mints exactly that address, so they arrive with the code that needs them and
-cannot be stale.
+**Three of the five are the wire.** `callable`, `addEventListener` and `removeEventListener` go through
+`frontend/src/api/hostSocket.ts`, one WebSocket per bundle instance, on the protocol defined once on the other side in
+`backend/host/protocol.py`. The port and the token are read off the URL this bundle was loaded from: the host mints
+exactly that address, so they arrive with the code that needs them and cannot be stale.
 
 Three properties are worth knowing before changing anything there:
 
@@ -318,15 +318,15 @@ Three properties are worth knowing before changing anything there:
 - **A dropped connection fails the calls that were already sent, and only those.** A frame still queued never left, so
   re-sending it is safe; one already on the wire may have run, and retrying it would repeat whatever it did.
 
-**One of the four is not a backend route and is the one the panel reaches the screen through.** `definePlugin` answers
-with the factory unchanged; `index.tsx` hands that factory to `frontend/src/qam/quickAccessEntry.tsx`, which calls it
-exactly once and mounts what it answers with behind Tender's own Quick Access entry ([qam-panel.md](qam-panel.md) → The
-entry). The seam is arranged that way so this module stays the wire and reaches no view — the name is upstream's
-contract and the declaration is all of it that belongs here. Under Decky Loader the call was Decky's; nothing else in
-the tree makes it, so without that line the panel is built for nobody.
+**A fourth opens no socket and is the one the panel reaches the screen through.** `definePlugin` answers with the
+factory unchanged; `index.tsx` hands that factory to `frontend/src/qam/installEntry.tsx`, which calls it exactly once
+and mounts what it answers with behind Tender's own Quick Access entry ([qam-panel.md](qam-panel.md) → The entry). The
+seam is arranged that way so this module stays the wire and reaches no view — the name is upstream's contract and the
+declaration is all of it that belongs here. Under Decky Loader the call was Decky's; nothing else in the tree makes it,
+so without that line the panel is built for nobody.
 
-**The fifth is not the wire at all.** `toaster` was Decky Loader's own, and `@decky/api` only forwarded it, so it needs
-a replacement of Tender's rather than a backend route: `utils/steamToaster.tsx` pushes a notification into Steam's own
+**The fifth reaches Steam instead.** `toaster` was Decky Loader's own, and `@decky/api` only forwarded it, so it needs a
+replacement of Tender's rather than a backend route: `utils/steamToaster.tsx` pushes a notification into Steam's own
 `NotificationStore`, which then owns the popup window and its animation, the queue behind it, the sound, and the entry
 left in the Quick Access notifications tab.
 
@@ -411,8 +411,8 @@ another kind, or splits it. It asks the same question over a superset of the sam
 which module matches; being wrong about the shape costs work and never an answer. Property names survive Steam's
 minification and local identifiers and module ids do not, which is why the predicate reads names and never a number —
 matching a number also matches SVG path coordinates. Every memo export of that module whose `type` is a function is
-patched, rather than the route picked out of them: nothing on an export says which one it is, and the handler on the
-other one finds no `renderFunc` and does nothing. Two matching factories are treated as no match at all, because a
+patched, rather than the route picked out of them: nothing on an export says which one it is, and on any other export
+the handler finds no `renderFunc` and does nothing. Two matching factories are treated as no match at all, because a
 second match means the predicate no longer names one module.
 
 **The desktop client needs no gate.** Its library router renders the same route component with no `renderFunc` at all,
@@ -429,8 +429,8 @@ navigation.
 **A miss costs a feature, not the panel.** The start-up check asks this search under the name `AppDetailsRoute` and it
 is one of Tender's own in both bundles, since `@decky/ui` has no reader of factory sources. With it missing every page
 of the panel renders and works and Steam's game page carries no Tender section; `appDetailsClasses` costs the same
-thing, because every read of it is in that same patch. The install logs its own line for whoever has the log open and is
-looking at the game page rather than at the panel.
+thing, because every read of it is in that same patch. The registration in `gameDetailPatch.tsx` logs a line of its own
+naming the game page, for whoever reads the log with the game page in mind.
 
 ## What the tests here can and cannot see
 

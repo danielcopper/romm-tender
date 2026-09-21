@@ -11,8 +11,9 @@
  * tree written for it and would pass whatever Steam does. What IS decidable
  * without Steam — which entry to put there, and what a render pass does to the
  * array it lands in — is `quickAccessEntry.tsx`, and that half is covered.
- * `bigpicture/patches/gameDetailPatch.tsx` is exempt for the same reason and is
- * the game page's half of the same job.
+ * `bigpicture/patches/installGamePagePatch.ts` is exempt for the same reason
+ * and is the game page's half of the same job, with the patch it installs
+ * (`bigpicture/patches/gameDetailPatch.tsx`) exempt beside it.
  *
  * The rules this obeys, and why there is no unpatch, are stated on the module it
  * imports from.

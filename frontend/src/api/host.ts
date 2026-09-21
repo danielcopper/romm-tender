@@ -2,13 +2,17 @@
  * What the panel used to get from `@decky/api`, from Tender's own host instead.
  *
  * Five names, so no call site changes meaning: `callable`, `addEventListener`,
- * `removeEventListener`, `toaster` and `definePlugin`. Four of them are the
- * wire — they go over the WebSocket in `hostSocket.ts`. **One of them is not
- * the wire at all**, and it lives here anyway because this module replaces one
+ * `removeEventListener`, `toaster` and `definePlugin`. Three of them are the
+ * wire — they go over the WebSocket in `hostSocket.ts`. **Two of them reach no
+ * socket at all**, and they live here anyway because this module replaces one
  * import specifier with another: making the reader distinguish would put two
  * imports at every call site for a distinction the call sites do not have.
  *
- * ## The one that is not the wire
+ * ## The two that are not the wire
+ *
+ * `definePlugin` answers with the factory unchanged and calls nothing, so it
+ * opens no socket; it sits beside the three because a call site importing it
+ * asks for the same thing the others answer.
  *
  * `toaster` was Decky Loader's own — `@decky/api` only forwarded it
  * (`api.toaster`). There is no host answer for it, so it gets a replacement of
@@ -114,7 +118,7 @@ function socket(): HostSocket {
   return connection;
 }
 
-// -- the four that are the wire -----------------------------------------------
+// -- the three that are the wire, and the one that sits with them --------------
 
 /**
  * Declare one backend method, and answer with a function that calls it.
@@ -165,7 +169,7 @@ export const removeEventListener = <Args extends unknown[] = []>(
  */
 export const definePlugin = (fn: () => Plugin): (() => Plugin) => fn;
 
-// -- the one that is not -------------------------------------------------------
+// -- the one that reaches Steam instead ---------------------------------------
 
 /**
  * Raises toasts through Steam's own notification store — the popup window, the

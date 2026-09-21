@@ -24,8 +24,8 @@ afterEach(() => {
 
 describe("definePlugin", () => {
   it("answers with the factory it was given", () => {
-    // Whoever mounts the panel calls it — which today is nobody in this tree,
-    // since the Quick Access entry that will is #1901.
+    // Whoever mounts the panel calls it, which is `qam/installEntry.tsx`:
+    // exactly once, behind Tender's own Quick Access entry.
     const factory = (): Plugin => ({ name: "Tender", icon: null });
     expect(definePlugin(factory)).toBe(factory);
   });

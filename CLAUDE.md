@@ -170,18 +170,19 @@ locally with `mise run docs`.
   measured. The sync writes the name in place too (`rewriteShortcutIdentity`), and nothing has established what that
   does to the appId; do not read the exe measurement as covering it.
 - **Frontend API**: `@decky/ui` for Steam's components, and `frontend/src/api/host.ts` for everything `@decky/api` used
-  to give us — five of the same export names, so a call site reads the same. Four of the five go over the backend's
-  WebSocket. `toaster` pushes into Steam's own notification store and draws its entries itself, chained behind whatever
-  already patches Steam's toast renderer (`docs/architecture/frontend-bundles.md`, "Talking to the backend"). The sixth
-  name `@decky/api` forwarded was `routerHook`, Decky Loader's route installer; it is gone, and Tender's section reaches
-  Steam's game page through a seam of its own — `frontend/src/bigpicture/patches/installGamePagePatch.ts`, documented at
+  to give us — five of the same export names, so a call site reads the same. Three of the five go over the backend's
+  WebSocket (`callable` and the event pair); `definePlugin` sits beside them and opens no socket. `toaster` pushes into
+  Steam's own notification store and draws its entries itself, chained behind whatever already patches Steam's toast
+  renderer (`docs/architecture/frontend-bundles.md`, "Talking to the backend"). The sixth name `@decky/api` forwarded
+  was `routerHook`, Decky Loader's route installer; it is gone, and Tender's section reaches Steam's game page through a
+  seam of its own — `frontend/src/bigpicture/patches/installGamePagePatch.ts`, documented at
   `docs/architecture/frontend-bundles.md`, "Tender's section on Steam's game page". The toaster does not reach Decky's
   loader API when one is present, and what decides that is not purity: it was the loader's own, and one that borrowed
   the loader's wherever it found it would behave differently on a machine with Decky from one without — which is the
   difference this program exists not to depend on. **The reference machine runs the loader** (measured:
   `plugin_loader.service` active and enabled, `127.0.0.1:1337` listening), so that borrowing would show up there rather
   than hide. `definePlugin` is no longer inert beside them: `index.tsx` hands the factory it answers with to
-  `qam/quickAccessEntry.tsx`, which calls it once and mounts the panel behind Tender's own Quick Access entry.
+  `qam/installEntry.tsx`, which calls it once and mounts the panel behind Tender's own Quick Access entry.
 - **A callable must be `async def`**: even where the body is synchronous. The set a caller can reach is exactly the
   public `async def` on `Plugin` — `host.dispatch.reachable_methods` resolves it off the loaded class,
   `scripts/check_callable_manifest.py` derives the same set from the source, and `tests/host/test_dispatch.py` asserts
@@ -681,11 +682,11 @@ Format: **invariant** — tier — enforced by.
   wrapped the page. The failure is silent and machine-dependent — green suite, green gate, and the section simply never
   appears on a machine that runs Decky Loader while appearing on one that does not, which is the difference this program
   exists not to depend on. Two further halves nothing checks: the install patches EVERY memo export of that module whose
-  `type` is a function rather than picking the route out (nothing on an export says which one it is, and a handler on
-  the other finds no `renderFunc` to wrap), and the start-up check's `AppDetailsRoute` entry costs a `feature` beside
-  `appDetailsClasses`, which costs one for the same reason — every read of it is in that same patch. Moving either to
-  `panel` takes the whole interface off the air for a section outside it; moving a panel name to `feature` beside them
-  renders a hole. Detail: `docs/architecture/frontend-bundles.md` → Tender's section on Steam's game page
+  `type` is a function rather than picking the route out (nothing on an export says which one it is, and on any other
+  export the handler finds no `renderFunc` to wrap), and the start-up check's `AppDetailsRoute` entry costs a `feature`
+  beside `appDetailsClasses`, which costs one for the same reason — every read of it is in that same patch. Moving
+  either to `panel` takes the whole interface off the air for a section outside it; moving a panel name to `feature`
+  beside them renders a hole. Detail: `docs/architecture/frontend-bundles.md` → Tender's section on Steam's game page
 - **Aggregate state mutated only via verb-named methods (no field assignment)** — check —
   `scripts/check_aggregate_field_assignment.py`
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, uow_factory) is called while a UoW is open on the
