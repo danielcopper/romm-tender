@@ -62,7 +62,7 @@ const everythingResolved = (): StartupReport => ({
   panelMayMount: true,
   missing: [],
   missingPackageNames: [],
-  checked: 27,
+  checked: 33,
 });
 let startupAnswer: StartupReport = everythingResolved();
 vi.mock("./boot/steamModules", async () => {
@@ -231,7 +231,7 @@ describe("index.tsx — what the factory does when a Steam search found nothing"
     panelMayMount: false,
     missing: ["Focusable", "PanelSection"],
     missingPackageNames: ["Focusable", "PanelSection"],
-    checked: 27,
+    checked: 33,
   };
   // The refusal is logged on purpose, and the suite fails a test that emits an
   // unexpected `console.error` — so the spy both permits it and makes the line
@@ -292,7 +292,7 @@ describe("index.tsx — what the factory does when only a decoration was not fou
     panelMayMount: true,
     missing: ["ControllerGlyph"],
     missingPackageNames: [],
-    checked: 27,
+    checked: 33,
   };
   let consoleWarn: ReturnType<typeof vi.spyOn>;
 
@@ -343,7 +343,7 @@ describe("index.tsx — what the factory records about the toasts", () => {
       panelMayMount: true,
       missing: ["ToastRenderer"],
       missingPackageNames: [],
-      checked: 27,
+      checked: 33,
     };
     const plugin = pluginFactory();
     expect(notificationsUnavailable()).toBe(true);
