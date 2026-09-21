@@ -839,7 +839,7 @@ describe("MainPage", () => {
         // The row lands on the explicit failure — not an eternal "Checking…"
         // spinner (the #1045 bug), and not the false "Not connected".
         expect(container.textContent).toContain("Backend error");
-        expect(container.textContent).toContain("Plugin backend failed to start — check Decky logs.");
+        expect(container.textContent).toContain("Tender's backend failed to start — check its log.");
         expect(container.textContent).not.toContain("Checking...");
         expect(container.textContent).not.toContain("Not connected");
         // Non-vacuous catch coverage: the dead-backend branch logs the liveness

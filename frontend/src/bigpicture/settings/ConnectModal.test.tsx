@@ -605,7 +605,7 @@ describe("ConnectModal", () => {
         });
         expect(closeModal).not.toHaveBeenCalled();
         expect(getByTestId("signin-error").textContent).toBe(
-          "The plugin backend never answered. Reload Decky or restart Steam, then try again.",
+          "Tender's backend never answered. Restart it, or restart Steam, then try again.",
         );
         // Back out of the in-flight state so the deadline is an exit, not a
         // second dead end.

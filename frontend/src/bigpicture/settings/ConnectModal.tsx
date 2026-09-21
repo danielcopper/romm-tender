@@ -65,7 +65,7 @@ const GENERIC_SIGN_IN_ERROR = "Sign-in failed. Check your connection and try aga
 // would report failure for a sign-in that then succeeds and persists its token,
 // with the single-use pairing code already burned.
 const SIGN_IN_TIMEOUT_MS = 60_000;
-const SIGN_IN_TIMEOUT_ERROR = "The plugin backend never answered. Reload Decky or restart Steam, then try again.";
+const SIGN_IN_TIMEOUT_ERROR = "Tender's backend never answered. Restart it, or restart Steam, then try again.";
 
 const helperTextStyle = { fontSize: "12px", marginBottom: "12px", color: "rgba(255,255,255,0.6)" } as const;
 const codeLabelStyle = {

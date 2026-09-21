@@ -608,7 +608,7 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
             focusable={true}
             bottomSeparator="none"
             description={
-              connected === "backend_failed" ? "Plugin backend failed to start — check Decky logs." : undefined
+              connected === "backend_failed" ? "Tender's backend failed to start — check its log." : undefined
             }
           >
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>

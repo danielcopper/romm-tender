@@ -2,34 +2,45 @@
 
 Common issues and how to fix them.
 
-## Plugin Backend Won't Start
+## Tender's Backend Won't Start
 
 ### Connection shows "Backend error"
 
-**Symptom**: The Tender QAM panel's **Connection** row shows a "Backend error" badge with the note "Plugin backend
-failed to start — check Decky logs", and the Sync buttons are disabled. This state means the plugin's own Python backend
-process never started — it is **not** the same as an unreachable RomM server, which shows **Not connected** instead.
+**Symptom**: The Tender QAM panel's **Connection** row shows a "Backend error" badge with the note "Tender's backend
+failed to start — check its log", and the Sync buttons are disabled. This state means Tender's own backend process never
+started — it is **not** the same as an unreachable RomM server, which shows **Not connected** instead.
 
-**Fix**: The backend aborted during startup, so the UI can't reach it. Open the Decky plugin log to find the underlying
-error, then reload Tender from the Decky plugin list. If it still fails after a reload, restart Steam (or the Steam
-Deck); if the error persists, include the log output when you report it.
+**Fix**: The backend aborted during startup, so the panel can't reach it. Its log says why:
+
+```bash
+tail -n 50 ~/.local/state/romm-tender/backend.log
+journalctl --user -u romm-tender -n 50
+```
+
+Then start it again:
+
+```bash
+systemctl --user restart romm-tender
+```
+
+If it still fails, restart Steam (or the Steam Deck); if the error persists, include the log output when you report it.
 
 Reaching that verdict takes up to about a minute and a half, because the check keeps retrying to ride out a backend that
 is merely slow to start rather than calling it dead too early. It runs to its conclusion whether or not the panel is
 open, so you do not have to sit and watch it — close the QAM and reopen it later, and the row shows the answer. While a
 check is running, the row keeps showing the previous result rather than resetting to **Checking…**.
 
-### Sign-in reports "The plugin backend never answered"
+### Sign-in reports "Tender's backend never answered"
 
-**Symptom**: The **Sign in to RomM** dialog sits on **Signing in…** for a minute and then shows "The plugin backend
-never answered. Reload Decky or restart Steam, then try again."
+**Symptom**: The **Sign in to RomM** dialog sits on **Signing in…** for a minute and then shows "Tender's backend never
+answered. Restart it, or restart Steam, then try again."
 
-**Fix**: The dialog reached the plugin's backend process and got no reply at all, which normally means the backend is no
-longer running — the panel itself keeps working because its code is already loaded in Steam. Reload Tender from the
-Decky plugin list, or restart Steam, then sign in again. A pairing code is single-use and expires after 60 seconds, so
-generate a fresh one for the retry.
+**Fix**: The dialog reached Tender's backend process and got no reply at all, which normally means the backend is no
+longer running — the panel itself keeps working because its code is already loaded in Steam. Start it again with
+`systemctl --user restart romm-tender`, or restart Steam, then sign in again. A pairing code is single-use and expires
+after 60 seconds, so generate a fresh one for the retry.
 
-This message is specific to the plugin backend being unreachable. A RomM server that is merely down or misconfigured
+This message is specific to Tender's backend being unreachable. A RomM server that is merely down or misconfigured
 answers with its own message instead — "Server unreachable", "Sign-in rejected", or the RomM version notice.
 
 ## Games Won't Launch
