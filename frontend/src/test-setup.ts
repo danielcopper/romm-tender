@@ -210,6 +210,10 @@ vi.mock("@decky/ui", () => {
     // Focusable spreads what it does not destructure onto the element it
     // renders, so a caller that styles itself through Steam's own class names
     // (`utils/steamToast.tsx`) has nothing else a test could look at.
+    // focusableIfEmpty is the nav option Steam reads for a row that holds no child
+    // nav node at all — focusable or not (`docs/architecture/qam-panel.md`). It gets
+    // an attribute of its own, so a test pins the DECLARATION rather than the
+    // tabindex Steam would write for it.
     Focusable: ({
       children,
       className,
@@ -220,6 +224,7 @@ vi.mock("@decky/ui", () => {
       onFocus,
       role,
       tabIndex,
+      focusableIfEmpty,
       "aria-label": ariaLabel,
     }: AnyProps & {
       className?: string;
@@ -228,12 +233,14 @@ vi.mock("@decky/ui", () => {
       onCancelButton?: (evt: unknown) => void;
       onActivate?: (evt: unknown) => void;
       onFocus?: (evt: unknown) => void;
+      focusableIfEmpty?: boolean;
     }) =>
       createElement(
         "div",
         {
           "data-testid": "focusable",
           "data-activate": onActivate ? "true" : undefined,
+          "data-focusable-if-empty": focusableIfEmpty ? "true" : undefined,
           className,
           style,
           role,

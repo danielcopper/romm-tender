@@ -1341,22 +1341,29 @@ Format: **invariant** — tier — enforced by.
   written for. The reasons behind the two writer mechanisms live at `writerForRom` and `RomBinding` — do not restate
   them here
 - **Every row a reader must be able to reach on a QAM page is a row Steam can focus — a toggle, a button, or a
-  `Focusable` carrying an activate handler, including a table row with no action of its own, so the reader can walk the
+  `Focusable` declaring a stop of its own, including a table row with no action of its own, so the reader can walk the
   table** — check + prompt-only — `tender/qam-focusable-row` checks the narrow syntactic slice where an `@decky/ui`
-  `Focusable` in the QAM module map has no self-focus prop, static focusable descendant, opaque child, or unknown
-  spread; focus order, runtime reachability, edge revelation, scrolling geometry, and controller behaviour remain
-  prompt-only. The frontend suite cannot see those runtime properties: happy-dom has no nav tree, so a page whose rows
-  are unreachable renders exactly like one whose rows are not, and a mouse-driven dev loop never meets the problem
-  either. A region scrolls only by moving focus — Steam's plain `ScrollPanel` binds no gamepad direction — so an
-  unreachable row is also an unscrollable one, and everything below the fold is simply out of reach with a controller.
-  The trap is that a bare `Focusable` is a container rather than a focus stop: the base panel sets `focusable` only from
-  a caller prop or an `onActivate`/`onOKButton`, and `GetFocusable()` answers `"none"` for a node with neither and no
-  focusable children. The rule spans every page the wide frame will host, and the frame cannot carry it: it holds a
-  page's content as opaque nodes, never as rows it could check. **What the frame DOES carry is the content outside a
-  region's focusable rows, at both ends** — a heading, a counts line or a column header above the first, a legend or a
-  total below the last, each unreachable for the same reason and with no neighbour to ride along with — so
-  `ScrollRegion` scrolls itself to the top when focus reaches the first stop in it and to its end when focus reaches the
-  last (`revealEdge`, over `revealTop` and `revealBottom`). Both halves are pinned by
+  `Focusable` in the QAM module map has no nav-stop prop, static focusable descendant, opaque child, or unknown spread;
+  focus order, runtime reachability, edge revelation, scrolling geometry, and controller behaviour remain prompt-only.
+  The frontend suite cannot see those runtime properties: happy-dom has no nav tree, so a page whose rows are
+  unreachable renders exactly like one whose rows are not, and a mouse-driven dev loop never meets the problem either. A
+  region scrolls only by moving focus — Steam's plain `ScrollPanel` binds no gamepad direction — so an unreachable row
+  is also an unscrollable one, and everything below the fold is simply out of reach with a controller. The trap is that
+  a bare `Focusable` is a container rather than a focus stop: Steam's navigation asks the nav node the panel renders
+  (`GetFocusable()`), which finds no stop on a row declaring none of the four options it reads — nor on one whose
+  `onActivate`/`onOKButton` would have promoted it, since that promotion is skipped where an option was supplied — all
+  stated in full at `docs/architecture/qam-panel.md`, which owns that mechanism. **What the check cannot see it says
+  nothing about**, and three shapes matter. One opaque child anywhere among a row's children passes the whole row, which
+  is how the removed-games cleanup's details region stood unreachable in the one release that has shipped with this gate
+  green — a `Focusable` of plain text, fixed by declaring a nav option on it and not by the rule. A descendant the
+  BROWSER can focus — a `tabIndex`, a `button` — is taken as an escape, so a row reachable with a mouse and not with a
+  stick passes. And a row whose own `tabIndex` is its only affordance is reported rather than accepted, because that
+  attribute reaches the rendered element and not the node. The rule spans every page the wide frame will host, and the
+  frame cannot carry it: it holds a page's content as opaque nodes, never as rows it could check. **What the frame DOES
+  carry is the content outside a region's focusable rows, at both ends** — a heading, a counts line or a column header
+  above the first, a legend or a total below the last, each unreachable for the same reason and with no neighbour to
+  ride along with — so `ScrollRegion` scrolls itself to the top when focus reaches the first stop in it and to its end
+  when focus reaches the last (`revealEdge`, over `revealTop` and `revealBottom`). Both halves are pinned by
   `frontend/src/bigpicture/layout/ScrollRegion.test.tsx` over mocked geometry, so what is tested is the DECISION and not
   the scroll: whether the panel and the reader agree about which element is topmost or last stays device-only, like the
   rest of this entry. **Reachable is not near, and the same mechanism decides where a page puts its controls**: focus

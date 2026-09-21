@@ -23,9 +23,11 @@ import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 
 /**
  * Every shape Steam gives a focus stop, measured in the running QAM rather than
- * assumed: its own components render `div[tabindex="0"]` (`Focusable`, a toggle
- * row, a table row carrying an activate handler) and a `DialogButton` is a
- * native `button` with no tabindex attribute at all.
+ * assumed: its own components render `div[tabindex="0"]` for a row that declares a
+ * stop or is promoted to one (`Focusable`, a toggle row, a table row carrying an
+ * activate handler), and a `DialogButton` is a native `button` with no tabindex
+ * attribute at all. Who writes that attribute and when it is absent is
+ * `docs/architecture/qam-panel.md`.
  *
  * The two selectors below are joined from this one list rather than written out
  * twice, so a shape added here reaches both.
@@ -62,9 +64,10 @@ const ENTRY_STOPS = FOCUS_STOP_SHAPES.map((shape) => `${shape}:not([disabled])`)
  * on which condition was showing. A page wanting somewhere other than its first
  * row says so ({@link ENTRY_STOP_ATTR}) rather than being guessed at.
  *
- * Innermost, because a container `Focusable` carries `tabindex="0"` of its own
- * and precedes in document order every row it wraps: taking the first match
- * lands focus on the container and leaves the reader a step away from the row.
+ * Innermost, because a container `Focusable` that declares a stop — or carries an
+ * activate handler, which promotes it to one — has a `tabindex="0"` of its own and
+ * precedes in document order every row it wraps: taking the first match lands
+ * focus on the container and leaves the reader a step away from the row.
  *
  * **The two halves read different selectors on purpose.** A candidate must be
  * enabled, but a container is skipped for holding a stop of ANY kind: a button

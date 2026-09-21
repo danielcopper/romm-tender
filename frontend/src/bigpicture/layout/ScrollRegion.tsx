@@ -116,10 +116,11 @@ function revealBottom(region: HTMLElement, focused: HTMLElement): boolean {
  * Reveal whichever end of the region focus has just reached, if either.
  *
  * Both rules are stated against what else can hold focus, never against a
- * position in the match list: a container `Focusable` renders `tabindex="0"` of
- * its own and precedes in document order every row it wraps, so it is never the
- * last match and a wrapped row is never the first — an equality test against
- * either end would silently never fire wherever a page wraps its rows. So
+ * position in the match list: a container `Focusable` that declares a stop, or is
+ * promoted to one by an activate handler, renders `tabindex="0"` of its own and
+ * precedes in document order every row it wraps, so it is never the last match and
+ * a wrapped row is never the first — an equality test against either end would
+ * silently never fire wherever a page wraps its rows. So
  * "nothing focusable is above me" discounts the focused element's own ancestors,
  * and "nothing focusable is below me" discounts its own descendants.
  *

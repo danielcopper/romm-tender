@@ -575,7 +575,10 @@ describe("RemovedGamesCleanup", () => {
     expect(modal.container.textContent).toContain("One or more displayed warnings were shortened.");
     expect(modal.container.textContent).toContain("Detail was shortened");
     const details = modal.getByRole("region", { name: "Cleanup details" });
-    expect(details.getAttribute("tabindex")).toBe("0");
+    // The nav option is what makes the region a stop; the tabindex is Steam's to
+    // write (`docs/architecture/qam-panel.md`). Asserting that attribute instead
+    // stayed green throughout the period the region was unreachable on the device.
+    expect(details.getAttribute("data-focusable-if-empty")).toBe("true");
     expect(modal.getByRole("status").textContent).not.toContain("Shared save was retained");
   });
 

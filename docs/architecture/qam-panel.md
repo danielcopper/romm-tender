@@ -320,17 +320,48 @@ the rows inside it take focus directly and Steam scrolls the focused row into vi
 
 **Every row a reader must be able to reach is a focusable row.** A toggle, a button, or — where a table row carries no
 action of its own, so the reader can still walk the table — a `Focusable` with an `onActivate` handler. The handler is
-what makes the current action-less rows stops; a bare `Focusable` is a container that passes focus on to its children
+what makes an action-less ROW a stop, and a region of nothing but text declares `focusableIfEmpty` instead — the cleanup
+modal's details region is the one that does; a bare `Focusable` is a container that passes focus on to its children
 rather than taking it. Plain text that only accompanies a row, a hint under a group, scrolls with its neighbours and
 need not be reachable itself. This is what focus-driven scrolling costs: content nobody can focus cannot be scrolled to.
 
 The repository ESLint rule `tender/qam-focusable-row` checks one syntactic slice of that rule in the QAM modules listed
-above. A `Focusable` imported from `@decky/ui` must declare `onActivate` or `onOKButton`, contain a static focus stop,
-or contain a child/spread whose focusability cannot be established statically. The matcher also recognises the
-underlying control's `focusable` prop, but `@decky/ui` does not expose that prop in `FocusableProps`, so authored
-TypeScript rows use an activate handler. This catches an action-less row written as a static wrapper while leaving
-structural containers and opaque children alone. It does not check focus order, runtime reachability, edge revelation,
-scrolling geometry, or controller behaviour; those parts remain a device and review invariant.
+above. A `Focusable` imported from `@decky/ui` must declare a stop of its own, contain a static focus stop, or contain a
+child/spread whose focusability cannot be established statically.
+
+**What declares a stop is what Steam's nav node reads.** The base panel forwards `focusable` and `focusableIfEmpty` into
+that node's options, and promotes a node carrying `onActivate` or `onOKButton` to `focusable` — but only where neither
+option was supplied; `onCancelButton` it wires up while promoting nothing. The node's own answer is `GetFocusable()`,
+which reads four options — `focusable`, `focusableIfEmpty`, `childFocusDisabled`, `fnCanTakeFocus` — and answers
+`"self"` for a truthy `focusable` whatever the node holds, and for `focusableIfEmpty` only while `childFocusDisabled` is
+set or the node holds **no child nav node at all**. Child nav nodes are what other `Focusable`s and Steam's own nav
+components mount, focusable or not, so a node holding a non-focusable one answers `"children"` and is no stop even with
+`focusableIfEmpty`. That is what makes it the right declaration for a region of nothing but text — it steps aside by
+itself the day a control is added inside — and what the cleanup modal's details region uses. `FocusableProps` declares
+neither option, so both arrive through a spread or a cast. The panel's other text-only stops — `SessionBudgetBanner` and
+its peers — carry a no-op activate handler instead, which is the cheaper spelling and keeps the stop even once a control
+lands inside them.
+
+**The matcher asks two questions, and only one of them of a plain `div`.** Those props, of the row and of a `Focusable`
+among its descendants, since a host element renders no nav node and they are inert on one. And DOM focusability, of a
+DESCENDANT only: a `tabIndex`, a `button`, `input`, `select` or `textarea`, an `a` with an `href`. So a row whose own
+`tabIndex` is its only affordance is reported — that attribute reaches the rendered element rather than the nav node,
+and no D-pad move from a neighbour reaches it — while the same attribute on something inside a row leaves the row alone,
+because a container holding what the browser can focus is not one this rule can call empty. An explicit `{false}`
+declares nothing; every other value is taken at its word.
+
+**That attribute is Steam's to write, and this is its one statement here.** The base panel writes it wherever a nav
+option is set — including where `onActivate` or `onOKButton` promoted the node to `focusable` — and never where the tree
+navigates virtually, so a container that declares nothing carries none. Everything below that reads `div[tabindex="0"]`
+as a focus stop is reading that symptom rather than what caused it, and says so by pointing here instead of restating
+the condition.
+
+This catches an action-less row written as a static wrapper while leaving structural containers and opaque children
+alone. **What it cannot read, it passes**: one opaque child anywhere among a row's children — a `&&`, a call, a bare
+identifier — passes the whole row, which is how the cleanup modal's details region stood unreachable with the gate
+green, and why a row's reachability is a review question and not a gate one. It does not check focus order, runtime
+reachability, edge revelation, scrolling geometry, or controller behaviour; those parts remain a device and review
+invariant.
 
 **The one place a page cannot buy its way out of that is the content OUTSIDE its focusable rows**, and the frame handles
 it rather than each page: a heading, a counts line or a column header sitting over the topmost row, and a legend, a
@@ -341,16 +372,18 @@ reaches the last. Every region **built with `ScrollRegion`** gets that, which is
 wide page: a tabbed page's own tab content sits in Steam's `ScrollingTab`, so a tab that does not build its own regions
 — Collections today — is not covered. Two properties make it safe rather than a fight with Steam's own scrolling. The
 triggers are **"nothing focusable is above me"** and **"nothing focusable is below me"**, never "I am the first match"
-or "the last" — a container `Focusable` renders `tabindex="0"` of its own and precedes in document order every row it
-wraps, so it is never the last match and a wrapped row is never the first, and an equality test against either end would
-silently never fire wherever a page wraps its rows, which `ListDetail` does for every row. So the first rule discounts
-the focused element's own ancestors and the second its own descendants. And each acts only where the focused element
-still fits in the region at the offset it would move to: where the content beyond it is taller than the region there is
-no offset showing both, Steam would scroll the element straight back, so nothing is done at all. A stop at both ends at
-once reveals the top where the top fits, and otherwise the end where that fits.
+or "the last" — a container `Focusable` that declares a stop, or is promoted to one by an activate handler, renders
+`tabindex="0"` of its own and precedes in document order every row it wraps, so it is never the last match and a wrapped
+row is never the first, and an equality test against either end would silently never fire wherever a page wraps its
+rows, which `ListDetail` does for every row. So the first rule discounts the focused element's own ancestors and the
+second its own descendants. And each acts only where the focused element still fits in the region at the offset it would
+move to: where the content beyond it is taller than the region there is no offset showing both, Steam would scroll the
+element straight back, so nothing is done at all. A stop at both ends at once reveals the top where the top fits, and
+otherwise the end where that fits.
 
 The set of shapes it counts as a focus stop is measured in the running QAM, not assumed: Steam's own components render
-`div[tabindex="0"]` and a `DialogButton` is a native `button` carrying no tabindex attribute at all.
+`div[tabindex="0"]` — the symptom Steam writes for a declared stop, never what makes one (above) — and a `DialogButton`
+is a native `button` carrying no tabindex attribute at all.
 
 **A region also keeps the wheel to itself.** Its `overscroll-behavior` is `contain`, because all three nested scrollers
 here — the region, Steam's `ScrollingTab` above it, the QAM panel above that — compute `auto` by default, so a mouse
@@ -443,10 +476,11 @@ rule and under a condition of its own — the Sync page's left column is the one
 both widths. Document order rather than "the first button", because a page's first button is not its first row, and it
 is not that on either width: on a wide list-and-detail page whose list rows carry no control, the first button in the
 body is in the DETAIL pane, so a button-first rule would open the page inside the detail and move as the detail's
-content changed. Innermost, because a container `Focusable` carries `tabindex="0"` of its own and precedes every row it
-wraps, so the first match would be the container and the reader would start a step away from the row. Enabled, because a
-page opening on a dead control says nothing about where the reader is — the reveal rules in `ScrollRegion` read the same
-shapes and do NOT skip a disabled control, since focus still lands on one.
+content changed. Innermost, because a container `Focusable` that declares a stop — or carries an activate handler, which
+promotes it to one — has a `tabindex="0"` of its own and precedes every row it wraps, so the first match would be the
+container and the reader would start a step away from the row. Enabled, because a page opening on a dead control says
+nothing about where the reader is — the reveal rules in `ScrollRegion` read the same shapes and do NOT skip a disabled
+control, since focus still lands on one.
 
 **The two halves read different selectors, and the difference is load-bearing.** A candidate has to be enabled, but a
 container is skipped for holding a stop of ANY kind: a button row whose every button is disabled is still a container

@@ -48,6 +48,30 @@ const CANCEL_HINT = "Stops before the next game. The one being processed now fin
 const CANCELLING_HINT = "Stopping — finishing the current safe step, then reporting what changed.";
 
 /**
+ * What makes the finished run's details region a focus stop.
+ *
+ * Everything inside it is plain text, and a region here scrolls only by focus
+ * moving into it, so without a stop of its own everything past its 180 px is out
+ * of reach with a controller. `focusableIfEmpty` rather than an activate handler:
+ * it makes the node a stop only while the node holds no child nav node, so it
+ * steps aside by itself the day a control is added in there, where a plain
+ * `focusable` would keep the stop and swallow it — and an activate handler would
+ * promise an action this region has not got. `FocusableProps` declares neither
+ * option, so it arrives through a spread of this — the ESLint rule's paragraphs
+ * under "Two widths" in `docs/architecture/qam-panel.md` state both halves.
+ *
+ * This diverges from the idiom its peers use: `SessionBudgetBanner` and the other
+ * text-only notices became stops by carrying a no-op `onActivate`. The difference
+ * is not style — that promotes the node to `focusable`, which keeps the stop and
+ * swallows whatever control is added inside it later.
+ *
+ * The region asks for no `tabIndex` of its own: that attribute is Steam's to write
+ * (`docs/architecture/qam-panel.md`), and where it writes none it means it, so a
+ * hand-written one would override a deliberate omission.
+ */
+const DETAILS_REGION_STOP: { focusableIfEmpty: boolean } = { focusableIfEmpty: true };
+
+/**
  * Ask the backend to stop `runId`. Returns the message to surface, or null when
  * the request was accepted — the run's own terminal frame reports the outcome,
  * so a success here must not overwrite it with chatter.
@@ -672,7 +696,7 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
             <Focusable
               role="region"
               aria-label="Cleanup details"
-              tabIndex={0}
+              {...DETAILS_REGION_STOP}
               style={{ maxHeight: "180px", overflowY: "auto", marginTop: "6px" }}
             >
               {complete.message && (
