@@ -2030,8 +2030,8 @@ own held/offered ratio — and it is a value rather than a count.** A libretro `
 optional and can say nothing else: there is no way to say "one of these", and no way to say the console does not start
 without one. An author who knows a PlayStation needs a BIOS image has two lossy moves and the deployed catalogue takes
 both — SwanStation marks all five of its images **optional**, Beetle PSX marks three of its own **required** — so the
-file counts alone report a green "marks none of its BIOS files as required (0/20 files held)" under the one core and
-three separate prerequisites under the other, over one PlayStation on which no game starts. The resolver answers the
+file counts alone report a green "marks none of its BIOS files as required (0/20 RomM library files)" under the one core
+and three separate prerequisites under the other, over one PlayStation on which no game starts. The resolver answers the
 missing half from a packaged, source-cited table about the **system** (`CoreFirmware.system_firmware`), carried through
 the adapter per emulator as `FirmwareCatalogue.emulator_verdicts` and turned into `domain/bios_status.py`'s
 `classify_system_image`. The narrower half of that per-emulator answer is read over every one of them at once
@@ -2052,10 +2052,10 @@ the flag for the launching core.
 - **It is not folded into `required_count`.** The console asks for _one_ of the images the core declares, so it is one
   requirement over the whole list rather than one requirement per file; put into that count it would read
   `0 of 5 files SwanStation requires are in place` under the SwanStation this was observed on, five being what that core
-  declares. The twenty in the page's own `0/20 files held` is a different set again — the RomM library's inventory for
-  the platform, which this axis neither counts nor is scoped to. Every surface words it "at least one" and none states
-  it as a ratio, and none of them points at the file list either — only the images the launching core declares can
-  answer the demand, and the rows beside them cannot.
+  declares. The twenty in the page's own `0/20 RomM library files` is a different set again — the RomM library's
+  inventory for the platform, which this axis neither counts nor is scoped to. Every surface words it "at least one" and
+  none states it as a ratio, and none of them points at the file list either — only the images the launching core
+  declares can answer the demand, and the rows beside them cannot.
 - **Whether an image is held is read off the rows, and `requirements_met` is not consulted at all.** The demand comes
   from the system table, the presence from the file rows, and nothing weighs one against the other — which is the shape
   upstream intends for a consumer here. Reading that field as a second opinion would be the misreading it exists to

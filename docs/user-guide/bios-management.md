@@ -27,8 +27,8 @@ When you open a game whose platform has BIOS files — on your RomM server, or a
 unknown/ok/partial/missing verdict used everywhere in the plugin:
 
 - **Green** — nothing required is missing: "All 2 files mGBA requires are in place", or "mGBA marks none of its BIOS
-  files as required (3/5 files held)" when the emulator you launch with lists no file it needs. An emulator that asks
-  for exactly one file — DuckStation, on a stock RetroDECK — reads "The one file DuckStation requires is in place"
+  files as required (3/5 RomM library files)" when the emulator you launch with lists no file it needs. An emulator that
+  asks for exactly one file — DuckStation, on a stock RetroDECK — reads "The one file DuckStation requires is in place"
 - **Orange** — some required files present: "1 of 2 files mGBA requires are in place"
 - **Red** — no required files present yet ("The one file DuckStation requires is not in place" where there is only the
   one), or "mGBA cannot start this system without a BIOS image" where the console itself will not start without one of
@@ -251,10 +251,10 @@ and the row you focus is the one the right-hand pane describes.
    RetroDECK not found — a line under the header says so as well, since a tooltip needs a mouse
 7. **BIOS files** states how many required files are ready (e.g. "1 / 2 required") when the system needs any, and
    otherwise names the emulator and says it marks none of its BIOS files as required. Under that heading is the same
-   sentence the game page shows, with the inventory of your library's files behind it (e.g. "(3/5 files held)"). Where
-   no emulator can be pinned for the platform there is no name to print, and the line says "The launching emulator"
-   instead. A console that will not start without one of the listed images, with none of them in place, reads **"Needs
-   at least one BIOS file"**, and the line under it names the emulator whose images are missing — see
+   sentence the game page shows, with your RomM library's own inventory behind it (e.g. "(3/5 RomM library files)").
+   Where no emulator can be pinned for the platform there is no name to print, and the line says "The launching
+   emulator" instead. A console that will not start without one of the listed images, with none of them in place, reads
+   **"Needs at least one BIOS file"**, and the line under it names the emulator whose images are missing — see
    [When the console needs a BIOS image](#when-the-console-needs-a-bios-image). A system with a required row the plugin
    could not judge — a declared folder it could not read, say — reads "Readiness unknown" instead — see
    [When readiness cannot be stated](#when-readiness-cannot-be-stated). Everything here is about the emulator named on
@@ -467,11 +467,11 @@ no way to say that. Its description file marks each file it wants **required** o
 core like SwanStation marks every PlayStation BIOS image _optional_ — which is true of each file on its own, because any
 one of them will do, and misleading about the console, which needs one of them.
 
-Read off the file list alone that came out as a green **"Nothing required (0/20 files held)"** on a Steam Deck with no
-PlayStation BIOS at all, while not one PS1 game would launch. The plugin now carries the console's own answer beside the
-file list, and the page says:
+Read off the file list alone, that comes out as a green **"Nothing required"** over twenty library files on a Steam Deck
+with no PlayStation BIOS at all, while not one PS1 game would launch. The plugin carries the console's own answer beside
+the file list, so the page says:
 
-**SwanStation cannot start this system without a BIOS image (0/20 files held)** — red.
+**SwanStation cannot start this system without a BIOS image (0/20 RomM library files)** — red.
 
 Four things about that line:
 

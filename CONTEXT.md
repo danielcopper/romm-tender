@@ -551,7 +551,7 @@ declares, not for each of them, so it is a single requirement over the whole lis
 Folded into **required by active core** it would report every image the core declares as required —
 `0 / 5 required files ready` under SwanStation, which declares five; carried as its own axis it is worded "at least one"
 and never as a ratio, nor as a pointer at the file list, most of whose rows cannot answer it. The twenty in the same
-page's `0 / 20 files held` is a different set again: the library's own inventory for the platform.
+page's `(0/20 RomM library files)` is a different set again: the **library inventory** below.
 
 - **held** — one of the images is at its destination. Which one is not asked: any of them answers the whole requirement.
 - **absent** — the console needs one and every row the launching core declares was established to be absent. The **BIOS
@@ -604,6 +604,20 @@ the first of them — and never a property of the file, the row or the emulator 
 further words (`absent`, `unreadable`, `unsupported`), none of which can reach a row: an entry in one of those states
 carries no requirement, so it declares no file. A row nothing declared states no register at all, and its description is
 its own file name.
+
+### Library inventory (firmware): offered / held
+
+What the RomM library has for a platform, and how much of it is on this machine — the third counted set beside the
+launching emulator's **required by active core** files and the console's own **system image** demand. **offered**
+(`server_count`) is every firmware file the library holds for the platform; **held** (`local_count`) is how many of
+those the plugin found at their destination. Both are counted over the library's files alone, so a row the library does
+not have — **not on server** — is in neither, however required it is. The code calls the pair the **held/offered
+ratio**.
+
+It is a progress bar over a set the user can finish, not a readiness claim, which is why nothing about it keys off a
+**row verdict**: `held` answers whether something is at the destination, and for a **folder declaration** that is
+precisely what a verdict is not. Both surfaces render it behind the readiness sentence as `(1/20 RomM library files)`,
+naming its set because the sentence in front counts another (`docs/architecture/qam-panel.md`, BIOS files).
 
 ### Safely-bakeable
 

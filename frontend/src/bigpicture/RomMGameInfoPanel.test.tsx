@@ -1025,7 +1025,7 @@ describe("RomMGameInfoPanel", () => {
       });
       await flushAsync();
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (1/2 files held)",
+        "The launching emulator marks none of its BIOS files as required (1/2 RomM library files)",
       );
 
       await act(async () => {
@@ -1039,7 +1039,7 @@ describe("RomMGameInfoPanel", () => {
 
       expect(container.textContent).not.toContain("SAVES");
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (1/2 files held)",
+        "The launching emulator marks none of its BIOS files as required (1/2 RomM library files)",
       );
     });
 
@@ -3202,7 +3202,7 @@ describe("RomMGameInfoPanel", () => {
         const { container } = await renderWithBios(null, null, 1, true);
         expect(container.innerHTML).toContain("#5ba32b");
         expect(container.textContent).toContain(
-          "The launching emulator marks none of its BIOS files as required (1/1 files held)",
+          "The launching emulator marks none of its BIOS files as required (1/1 RomM library files)",
         );
       }
     });
@@ -3259,7 +3259,7 @@ describe("RomMGameInfoPanel", () => {
 
       expect(container.textContent).not.toContain("requires are in place");
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (0/20 files held)",
+        "The launching emulator marks none of its BIOS files as required (0/20 RomM library files)",
       );
     });
 
@@ -3612,7 +3612,7 @@ describe("RomMGameInfoPanel", () => {
       expect(container.textContent).toContain("BIOS");
       await openBiosTab();
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
       );
     });
 
@@ -3626,10 +3626,10 @@ describe("RomMGameInfoPanel", () => {
       await openBiosTab();
 
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (3/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (3/3 RomM library files)",
       );
       expect(container.textContent).not.toContain(
-        "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
       );
     });
 
@@ -3641,7 +3641,7 @@ describe("RomMGameInfoPanel", () => {
 
       expect(vi.mocked(backend.getBiosStatus)).not.toHaveBeenCalled();
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
       );
     });
 
@@ -3655,7 +3655,7 @@ describe("RomMGameInfoPanel", () => {
       await openBiosTab();
 
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
       );
     });
 
@@ -3699,7 +3699,7 @@ describe("RomMGameInfoPanel", () => {
 
       expect(container.textContent).toContain("Nothing could be established about what the launching emulator needs");
       expect(container.textContent).not.toContain(
-        "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
       );
     });
 
@@ -3711,7 +3711,7 @@ describe("RomMGameInfoPanel", () => {
       await openBiosTab();
 
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
       );
       expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(expect.stringContaining("BIOS status refresh error"));
     });
@@ -3735,7 +3735,7 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
       await openBiosTab();
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
       );
 
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(staleDetail({ bios_status_unknown: true }));
@@ -3749,7 +3749,7 @@ describe("RomMGameInfoPanel", () => {
 
       expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledWith(60);
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (3/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (3/3 RomM library files)",
       );
     });
 
@@ -3761,7 +3761,7 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
       await openBiosTab();
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
       );
 
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(
@@ -3779,7 +3779,7 @@ describe("RomMGameInfoPanel", () => {
 
       expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledWith(61);
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (3/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (3/3 RomM library files)",
       );
     });
 
@@ -3805,7 +3805,7 @@ describe("RomMGameInfoPanel", () => {
       // Non-vacuous in the other direction: the JOINED answer is the one folded,
       // so this is sharing rather than the panel having skipped the read.
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (3/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (3/3 RomM library files)",
       );
     });
 
@@ -3820,7 +3820,7 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
       await openBiosTab();
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
       );
 
       // Left open across the switch: a join lands on this and never answers.
@@ -3842,7 +3842,7 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
 
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (3/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (3/3 RomM library files)",
       );
 
       // Settle the seeded request rather than carrying it out of the test.
@@ -3863,7 +3863,7 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
       await openBiosTab();
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
       );
 
       // The core change's cache read stays open...
@@ -3904,7 +3904,7 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
 
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (3/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (3/3 RomM library files)",
       );
       // The re-keyed core change reads nothing for the version the panel left.
       expect(vi.mocked(backend.getBiosStatus)).not.toHaveBeenCalledWith(60);
@@ -4670,7 +4670,7 @@ describe("RomMGameInfoPanel", () => {
         await flushAsync();
         await openBiosTab();
         expect(container.textContent).toContain(
-          "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+          "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
         );
 
         // The switch lands inside the window a BIOS download or delete opens:
@@ -4687,7 +4687,7 @@ describe("RomMGameInfoPanel", () => {
         await switchVersion();
 
         expect(container.textContent).toContain(
-          "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+          "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
         );
       });
 
@@ -4724,7 +4724,7 @@ describe("RomMGameInfoPanel", () => {
         await flushAsync();
         await openBiosTab();
         expect(container.textContent).toContain(
-          "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+          "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
         );
         expect(container.textContent).toContain("Snes9x");
 
@@ -4735,7 +4735,7 @@ describe("RomMGameInfoPanel", () => {
 
         expect(vi.mocked(backend.getPlatformCoreInfo)).toHaveBeenCalledWith(2);
         expect(container.textContent).toContain(
-          "The launching emulator marks none of its BIOS files as required (3/3 files held)",
+          "The launching emulator marks none of its BIOS files as required (3/3 RomM library files)",
         );
         expect(container.textContent).toContain("bsnes");
         expect(container.textContent).not.toContain("Snes9x");
@@ -4749,7 +4749,7 @@ describe("RomMGameInfoPanel", () => {
         await flushAsync();
         await openBiosTab();
         expect(container.textContent).toContain(
-          "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+          "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
         );
 
         vi.mocked(cachedStore.getCachedGameDetail).mockRejectedValue(new Error("offline"));
@@ -4757,7 +4757,7 @@ describe("RomMGameInfoPanel", () => {
         await switchVersion();
 
         expect(container.textContent).toContain(
-          "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+          "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
         );
         expect(vi.mocked(backend.debugLog)).toHaveBeenCalledWith(expect.stringContaining("onDataChanged error"));
       });
@@ -4977,7 +4977,7 @@ describe("RomMGameInfoPanel", () => {
         await switchToRom2({ ...biosNeed, stale_fields: ["bios"] });
         await openBiosTab();
         expect(container.textContent).toContain(
-          "The launching emulator marks none of its BIOS files as required (3/3 files held)",
+          "The launching emulator marks none of its BIOS files as required (3/3 RomM library files)",
         );
 
         await act(async () => {
@@ -4989,7 +4989,7 @@ describe("RomMGameInfoPanel", () => {
         await flushAsync();
 
         expect(container.textContent).toContain(
-          "The launching emulator marks none of its BIOS files as required (3/3 files held)",
+          "The launching emulator marks none of its BIOS files as required (3/3 RomM library files)",
         );
         expect(container.textContent).not.toContain("0/3");
       });
@@ -5415,7 +5415,7 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
       await openBiosTab();
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (3/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (3/3 RomM library files)",
       );
 
       await act(async () => {
@@ -5424,10 +5424,10 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
 
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (3/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (3/3 RomM library files)",
       );
       expect(container.textContent).not.toContain(
-        "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
       );
     });
 
@@ -5451,7 +5451,7 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
       await openBiosTab();
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (3/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (3/3 RomM library files)",
       );
       // The fold answered from the cache — no second read was issued.
       expect(vi.mocked(backend.getBiosStatus)).toHaveBeenCalledTimes(1);
@@ -5462,10 +5462,10 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
 
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (3/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (3/3 RomM library files)",
       );
       expect(container.textContent).not.toContain(
-        "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+        "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
       );
     });
 

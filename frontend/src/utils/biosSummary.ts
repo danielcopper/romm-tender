@@ -47,15 +47,12 @@
  * on `missing` rather than on `unknown`; the order is a guard rather than a rule
  * about a live case, and it is now a guard in one place rather than three.
  *
- * What this module does NOT hold is the library's own ratio — `(d/t files held)`.
- * That counts what the RomM library holds for the platform, a third set again,
- * so it is written next door (`utils/biosHeldRatio.ts`) and appended to every
- * one of the seven sentences by the two surfaces that state it at all — the game
- * page and the platform pane, not the list's row tooltip, which has never
- * carried the library's ratio. Two true statements about two sets, where one
- * number built out of both would be true of neither. Sharing its form between
- * those two is a different move from folding it into a sentence — what stays
- * apart is what each of them counts.
+ * What this module does NOT hold is the library's own ratio —
+ * `(d/t RomM library files)`, which counts a third set and is written next door
+ * (`utils/biosHeldRatio.ts`, where why the two are stated side by side rather
+ * than folded together lives). Two of the three surfaces append it to every one
+ * of the seven sentences — the game page and the platform pane — and the list's
+ * row tooltip has never carried it.
  */
 
 import type { BiosLevel, FirmwareWanted, SystemImage } from "../types/firmware";

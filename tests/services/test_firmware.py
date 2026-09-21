@@ -2499,8 +2499,8 @@ class TestTheConsolesOwnFirmwareDemand:
     A libretro declaration marks each file required or optional, and nothing
     else. So SwanStation, whose console will not boot without a BIOS image,
     marks all of its images optional — and a PlayStation page read a green
-    "Nothing required (0/20 files held)" while not one game on it would start.
-    The demand is disjunctive: one of these, not each of these.
+    "Nothing required" over twenty library files while not one game on it would
+    start. The demand is disjunctive: one of these, not each of these.
     """
 
     @pytest.mark.asyncio

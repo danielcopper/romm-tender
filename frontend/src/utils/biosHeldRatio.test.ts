@@ -4,8 +4,8 @@ import { componentSources } from "../test-utils/componentSources";
 import type { BiosStatus, FirmwarePlatformExt } from "../types";
 
 describe("biosHeldRatio", () => {
-  it("states how much of what the library holds is on disk", () => {
-    expect(biosHeldRatio({ server_count: 3, local_count: 1 })).toBe(" (1/3 files held)");
+  it("names the set beside the numbers — how much of what the library holds is at its destination", () => {
+    expect(biosHeldRatio({ server_count: 3, local_count: 1 })).toBe(" (1/3 RomM library files)");
   });
 
   it("gives the game page's payload and the platform pane's the same answer", () => {
@@ -22,7 +22,7 @@ describe("biosHeldRatio", () => {
     };
 
     expect(biosHeldRatio(gamePage)).toBe(biosHeldRatio(platformPane));
-    expect(biosHeldRatio(gamePage)).toBe(" (1/20 files held)");
+    expect(biosHeldRatio(gamePage)).toBe(" (1/20 RomM library files)");
   });
 
   it("says nothing where the payload carries neither count", () => {
@@ -38,7 +38,7 @@ describe("biosHeldRatio", () => {
   });
 
   it("gives a library holding nothing for the platform no ratio at all", () => {
-    // `(0/0 files held)` is a ratio over a set that does not exist.
+    // `(0/0 RomM library files)` is a ratio over a set that does not exist.
     expect(biosHeldRatio({ server_count: 0, local_count: 0 })).toBe("");
   });
 });
@@ -70,7 +70,11 @@ describe("no surface writes the ratio itself", () => {
     expect(source).not.toContain(HELD_RATIO_PHRASE);
   });
 
-  it("searches for something — an empty phrase would pass over anything", () => {
-    expect(HELD_RATIO_PHRASE.length).toBeGreaterThan(8);
+  it("searches for a run that names the set and holds no part of the numbers", () => {
+    // The two properties the phrase needs: that it names the set, which is what
+    // makes the run searchable at all, and that neither the numbers nor the
+    // brackets they sit in are part of it. Why each one, at `HELD_RATIO_PHRASE`.
+    expect(HELD_RATIO_PHRASE).toContain("RomM library");
+    expect(HELD_RATIO_PHRASE).not.toMatch(/[\d()]/);
   });
 });

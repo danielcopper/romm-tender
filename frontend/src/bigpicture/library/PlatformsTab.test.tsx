@@ -1099,7 +1099,7 @@ describe("Library › Platforms", () => {
       const { container } = render(<LibraryPage onBack={vi.fn()} />);
       await flushAsync();
 
-      expect(container.textContent).toContain("The one file mGBA requires is not in place (1/3 files held)");
+      expect(container.textContent).toContain("The one file mGBA requires is not in place (1/3 RomM library files)");
     });
 
     it("states the same ratio on the pane and on the game page from one pair of counts", async () => {
@@ -1111,7 +1111,7 @@ describe("Library › Platforms", () => {
       // pair. It lives in this file because the pane needs the whole page around
       // it and the game page's tab needs three props.
       const counts = { server_count: 3, local_count: 1 };
-      const heldRun = (text: string) => text.match(/\(\d+\/\d+ files held\)/)?.[0] ?? null;
+      const heldRun = (text: string) => text.match(/\(\d+\/\d+ RomM library files\)/)?.[0] ?? null;
 
       mockFirmware([firmwarePlatform({ active_core_label: "mGBA", ...counts })]);
       const pane = render(<LibraryPage onBack={vi.fn()} />).container;
@@ -1125,7 +1125,7 @@ describe("Library › Platforms", () => {
         />,
       ).container;
 
-      expect(heldRun(pane.textContent)).toBe("(1/3 files held)");
+      expect(heldRun(pane.textContent)).toBe("(1/3 RomM library files)");
       expect(heldRun(gamePage.textContent)).toBe(heldRun(pane.textContent));
     });
 

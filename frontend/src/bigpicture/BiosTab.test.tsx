@@ -48,7 +48,7 @@ describe("BiosTab", () => {
       <BiosTab biosStatus={biosStatus} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
     );
     expect(container.textContent).toContain(
-      "The one file the launching emulator requires is not in place (0/1 files held)",
+      "The one file the launching emulator requires is not in place (0/1 RomM library files)",
     );
     expect(container.textContent).toContain("Snes9x");
   });
@@ -84,7 +84,7 @@ describe("BiosTab", () => {
   });
 
   it("drops the ratio when the library holds none of the platform's files", () => {
-    // A "(0/0 files held)" beside the sentence counts a set that does not exist.
+    // A "(0/0 RomM library files)" beside the sentence counts a set that does not exist.
     const { container } = render(
       <BiosTab
         biosStatus={{ needs_bios: true, server_count: 0, local_count: 0, all_downloaded: false, required_count: 0 }}
@@ -94,18 +94,18 @@ describe("BiosTab", () => {
       />,
     );
     expect(container.textContent).toContain("The launching emulator marks none of its BIOS files as required");
-    expect(container.textContent).not.toContain("files held");
+    expect(container.textContent).not.toContain("RomM library files");
   });
 
   it("says the console needs at least one file where the counts would say nothing is required", () => {
     // The PlayStation state, and the whole reason the axis exists: SwanStation
     // marks every image it declares optional — a libretro `.info` cannot say the
-    // console needs one of them — so `required_count` is 0 and the pane read a
-    // green "Nothing required (0/20 files held)" while no game on the platform
-    // would start. The sentence has to say the requirement is ONE file, and to
-    // point at no set while doing it: only the images the launching core
-    // declares can answer it, and the twenty in the ratio is the library's
-    // inventory rather than that set.
+    // console needs one of them — so `required_count` is 0 and a count-only
+    // reading gives a green "Nothing required" over twenty library files while no
+    // game on the platform would start. The sentence has to say the requirement
+    // is ONE file, and to point at no set while doing it: only the images the
+    // launching core declares can answer it, and the twenty in the ratio is the
+    // library's inventory rather than that set.
     const { container } = render(
       <BiosTab
         biosStatus={{
@@ -123,7 +123,7 @@ describe("BiosTab", () => {
       />,
     );
     expect(container.textContent).toContain(
-      "The launching emulator cannot start this system without a BIOS image (0/20 files held)",
+      "The launching emulator cannot start this system without a BIOS image (0/20 RomM library files)",
     );
     expect(container.textContent).not.toContain("marks none of its BIOS files as required");
     expect(container.textContent).not.toContain("requires are in place");
@@ -155,7 +155,7 @@ describe("BiosTab", () => {
       />,
     );
     expect(container.textContent).toContain(
-      "The launching emulator cannot start this system without a BIOS image (0/20 files held)",
+      "The launching emulator cannot start this system without a BIOS image (0/20 RomM library files)",
     );
     // The two sentences the decline would have printed instead — named as
     // sentences, because the page shows the sentence and a status never reaches
@@ -215,7 +215,7 @@ describe("BiosTab", () => {
         />,
       );
       expect(container.textContent).toContain(
-        "The launching emulator marks none of its BIOS files as required (1/20 files held)",
+        "The launching emulator marks none of its BIOS files as required (1/20 RomM library files)",
       );
       expect(container.textContent).not.toContain("cannot start this system");
     }
@@ -245,7 +245,7 @@ describe("BiosTab", () => {
       />,
     );
     expect(container.textContent).toContain(
-      "The launching emulator marks none of its BIOS files as required (1/3 files held)",
+      "The launching emulator marks none of its BIOS files as required (1/3 RomM library files)",
     );
     // The subject, spelled out: the sentence may not stand without it. "Nothing
     // required" is the state's short form, which this surface never shows —
@@ -276,7 +276,7 @@ describe("BiosTab", () => {
       />,
     );
 
-    expect(container.textContent).toContain("mGBA marks none of its BIOS files as required (1/20 files held)");
+    expect(container.textContent).toContain("mGBA marks none of its BIOS files as required (1/20 RomM library files)");
     expect(container.textContent).not.toContain("The launching emulator");
   });
 
@@ -302,7 +302,7 @@ describe("BiosTab", () => {
     );
 
     expect(container.textContent).toContain(
-      "The launching emulator marks none of its BIOS files as required (1/20 files held)",
+      "The launching emulator marks none of its BIOS files as required (1/20 RomM library files)",
     );
   });
 
@@ -1016,7 +1016,7 @@ describe("BiosTab", () => {
       const withoutThem = headerOf([kept]);
 
       expect(withLeftOut.label).toBe(
-        "The launching emulator marks none of its BIOS files as required (1/20 files held)",
+        "The launching emulator marks none of its BIOS files as required (1/20 RomM library files)",
       );
       expect(withLeftOut.label).toBe(withoutThem.label);
       // Non-vacuous: the first render really did leave rows out, so the equality

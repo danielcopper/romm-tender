@@ -1000,16 +1000,16 @@ Format: **invariant** — tier — enforced by.
   own **required**. Which is why no count can be relied on to carry this: it is ONE requirement over the whole list, and
   putting it in `required_count` reports every image the core declares as required —
   `0 of 5 files SwanStation requires are in place` under the SwanStation this was observed on. The twenty in that page's
-  own `0/20 files held` is the library's inventory for the platform, a different set again, and reading the two as one
-  is how the wrong ratio gets written. Each fold fails its own way and all of them silently. Fold it into the counts and
-  the page states a ratio over the wrong set. Read `system_firmware: null` as "this console needs nothing" — a
-  truthiness test, a `!= "runs-without-firmware"` bucket, a default — and the plugin claims an all-clear over a console
-  nobody has looked at, which is the collapse the `unknown`/`not_needed` entry above is about, one axis over. **The
-  demand comes from the table and the presence from our rows, and `requirements_met` is not consulted at all** — weigh
-  the two against each other and you have made the misreading that field exists to prevent, because ignorance there is
-  always `None` and a `False` is therefore a demonstrated statement rather than a disagreement. Its two causes (a
-  DIFFERENT required file absent, or one present with the wrong bytes) each leave one of our own required rows unmet, so
-  the counts already report them by name; the second needs a content check to arise, and the inventory is asked
+  own `0/20 RomM library files` is the library's inventory for the platform, a different set again, and reading the two
+  as one is how the wrong ratio gets written. Each fold fails its own way and all of them silently. Fold it into the
+  counts and the page states a ratio over the wrong set. Read `system_firmware: null` as "this console needs nothing" —
+  a truthiness test, a `!= "runs-without-firmware"` bucket, a default — and the plugin claims an all-clear over a
+  console nobody has looked at, which is the collapse the `unknown`/`not_needed` entry above is about, one axis over.
+  **The demand comes from the table and the presence from our rows, and `requirements_met` is not consulted at all** —
+  weigh the two against each other and you have made the misreading that field exists to prevent, because ignorance
+  there is always `None` and a `False` is therefore a demonstrated statement rather than a disagreement. Its two causes
+  (a DIFFERENT required file absent, or one present with the wrong bytes) each leave one of our own required rows unmet,
+  so the counts already report them by name; the second needs a content check to arise, and the inventory is asked
   **unverified** (the entry below), so it cannot occur here. What the presence half actually resolves to — a row's
   `satisfied` is presence, `null` in two shapes, and both read as not held — is written once, at
   `classify_system_image`, because an outside reader took that field for the resolver's usability answer and drew a

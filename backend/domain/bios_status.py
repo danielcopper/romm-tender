@@ -499,9 +499,9 @@ def classify_system_image(
     this is a value and not a pair of counts: put into ``required_count`` it would
     read ``0/N required files ready`` over a console that needs one image, with
     ``N`` every row the emulator declares — five, for the SwanStation this was
-    observed on. The twenty in that page's ``0/20 files held`` is a different set
-    again: the RomM library's inventory for the platform, which this answer
-    neither counts nor is scoped to.
+    observed on. The twenty in that page's ``0/20 RomM library files`` is
+    a different set again: the RomM library's inventory for the platform, which
+    this answer neither counts nor is scoped to.
 
     **The demand comes from the table, the presence comes from the rows, and
     nothing here weighs one against the other.** ``requirements_met`` is not
