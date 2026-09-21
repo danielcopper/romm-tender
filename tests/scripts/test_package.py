@@ -17,6 +17,8 @@ import subprocess
 import tarfile
 from pathlib import Path
 
+import pytest
+
 _SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "package.sh"
 
 # Every path the tarball must carry. The three vendored/compiled ones are here
@@ -78,6 +80,17 @@ def _package(source: Path, out: Path, *extra: str) -> subprocess.CompletedProces
     )
 
 
+def _refusals(stderr: str) -> list[str]:
+    """Every line on which this script refused — one per abort, by its prefix.
+
+    Counted rather than found: a refusal that ends a subshell instead of the run
+    prints its message and lets the caller carry on with an empty answer, which
+    refuses again further down. Both spellings exit 1, so only the count tells
+    them apart.
+    """
+    return [line for line in stderr.splitlines() if line.startswith("package.sh: ")]
+
+
 def _names(archive: Path) -> list[str]:
     with tarfile.open(archive) as tar:
         return tar.getnames()
@@ -95,6 +108,13 @@ class TestWhatItProduces:
         _package(_checkout(tmp_path), tmp_path / "out", "--version", "9.9.9")
 
         assert (tmp_path / "out" / "romm-tender-9.9.9.tar.gz").is_file()
+
+    def test_a_version_that_looks_like_a_flag_still_reaches_the_option(self, tmp_path):
+        """Edge: ``echo`` would have swallowed ``-n``, and version.txt would have answered instead."""
+        _package(_checkout(tmp_path), tmp_path / "out", "--version", "-n")
+
+        assert (tmp_path / "out" / "romm-tender--n.tar.gz").is_file()
+        assert not (tmp_path / "out" / "romm-tender-1.2.3.tar.gz").exists()
 
     def test_there_is_exactly_one_top_level_directory_and_it_is_romm_tender(self, tmp_path):
         """The installer unpacks with ``--strip-components=1``, so this is its whole contract."""
@@ -187,11 +207,48 @@ class TestWhatItRefusesToDo:
         assert result.returncode == 1
         assert "no such source directory" in result.stderr
 
-    def test_it_refuses_when_no_version_can_be_read(self, tmp_path):
+    def test_it_refuses_when_the_version_file_says_nothing(self, tmp_path):
         source = _checkout(tmp_path)
         (source / "version.txt").write_text("\n", encoding="utf-8")
 
         result = _package(source, tmp_path / "out")
 
         assert result.returncode == 1
-        assert "is empty" in result.stderr
+        assert _refusals(result.stderr) == [f"package.sh: {source}/version.txt is empty"]
+
+    def test_it_refuses_when_there_is_no_version_file_at_all(self, tmp_path):
+        """A different answer from an empty one, so the two are two messages."""
+        source = _checkout(tmp_path)
+        (source / "version.txt").unlink()
+
+        result = _package(source, tmp_path / "out")
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [
+            f"package.sh: no --version given and no {source}/version.txt to read one from"
+        ]
+
+    @pytest.mark.parametrize("flag", ["--source", "--out", "--version"])
+    def test_an_option_with_no_value_is_refused_once_by_name(self, tmp_path, flag):
+        """Refused by name, once, before anything is read."""
+        result = subprocess.run(
+            ["bash", str(_SCRIPT), flag],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [f"package.sh: {flag} needs a value"]
+
+    @pytest.mark.parametrize("flag", ["--source", "--out", "--version"])
+    def test_an_empty_value_is_not_a_value(self, tmp_path, flag):
+        result = subprocess.run(
+            ["bash", str(_SCRIPT), flag, "", "--source", str(_checkout(tmp_path))],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [f"package.sh: {flag} needs a value"]

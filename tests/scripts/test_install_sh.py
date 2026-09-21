@@ -283,12 +283,7 @@ def machine(tmp_path) -> Install:
 
 
 class TestTheArguments:
-    """What the script does with an option it cannot read.
-
-    Every refusal here is counted rather than merely found, because a refusal
-    that ends a subshell instead of the run prints one message and then another
-    about the emptiness it left behind — and both spellings exit 1.
-    """
+    """What the script does with an option it cannot read: refuses it by name, once."""
 
     @pytest.mark.parametrize("flag", ["--version", "--from"])
     def test_an_option_with_no_value_is_refused_once_by_name(self, machine, flag):
@@ -297,6 +292,28 @@ class TestTheArguments:
         assert result.returncode == 1
         assert _refusals(result.stderr) == [f"install.sh: {flag} needs a value"]
         assert not machine.code.exists()
+
+    @pytest.mark.parametrize("flag", ["--version", "--from"])
+    def test_an_empty_value_is_not_a_value(self, machine, flag):
+        """``--version ""`` used to read as no version at all and install the newest release."""
+        result = machine.run(flag, "", "--yes")
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [f"install.sh: {flag} needs a value"]
+        assert machine.curl_calls() == []
+        assert not machine.code.exists()
+
+    def test_a_value_that_looks_like_a_flag_still_reaches_the_option(self, machine):
+        """Edge: ``echo`` would have swallowed ``-n`` as a flag of its own.
+
+        The cost is the same as an empty value's — a version silently unasked
+        for — so the test is that the newest release is never looked up.
+        """
+        result = machine.run("--version", "-n", "--yes")
+
+        assert result.returncode == 1
+        assert machine.curl_calls() == [f"{_DOWNLOAD_BASE}/tender-v-n/romm-tender--n.tar.gz"]
+        assert _RELEASE_API not in machine.curl_calls()
 
     def test_an_unknown_argument_is_refused(self, machine):
         result = machine.run("--sideways")
@@ -642,13 +659,7 @@ class TestWhatItDownloads:
         assert machine.curl_calls()[1] == f"{_DOWNLOAD_BASE}/{_TAG}/{_ARCHIVE}"
 
     def test_a_newest_release_that_is_not_a_tender_release_is_refused(self, machine):
-        """The repository may publish another program's tag; it is not a thing to install.
-
-        Refused once, and nothing is fetched afterwards. A refusal that ended a
-        subshell would leave the caller holding an empty tag: a second refusal
-        about the emptiness, and a download asked for at a URL with no tag in
-        it.
-        """
+        """A release that exists and is another program's: named in the message, refused once."""
         machine.publish_release()
         (machine.serve / "latest").write_text('{"tag_name": "gavel-v2.0.0"}\n', encoding="utf-8")
 
@@ -659,13 +670,11 @@ class TestWhatItDownloads:
         assert machine.curl_calls() == [_RELEASE_API]
         assert not machine.code.exists()
 
-    def test_a_release_body_with_no_tag_at_all_is_refused_by_name_and_only_once(self, machine):
-        """A body naming no tag is refused where it is read, and nothing is fetched after it.
+    def test_an_answer_that_names_no_release_is_told_apart_from_a_foreign_one(self, machine):
+        """An answer carrying no tag gets its own message, and never the foreign-tag one.
 
-        The refusal is a value ``resolve_tag`` answers with, which is what lets
-        the caller act on it. The same run under a refusal that ended a subshell
-        printed two messages and then asked curl for
-        ``.../download//romm-tender-.tar.gz``.
+        Why the two are told apart is at ``resolve_tag``. What this pins is the
+        message, its fix line, and that no empty parentheses reach the reader.
         """
         machine.publish_release()
         (machine.serve / "latest").write_text('{"message": "Not Found"}\n', encoding="utf-8")
@@ -673,7 +682,29 @@ class TestWhatItDownloads:
         result = machine.run("--yes")
 
         assert result.returncode == 1
-        assert _refusals(result.stderr) == ["install.sh: the newest release is not a Tender release ()"]
+        assert _refusals(result.stderr) == ["install.sh: GitHub's answer named no release"]
+        assert "()" not in result.stderr
+        assert "check the network, or name one with --version" in result.stderr
+        assert machine.curl_calls() == [_RELEASE_API]
+        assert not machine.code.exists()
+
+    def test_a_tag_key_with_an_empty_value_is_the_same_answer(self, machine):
+        """Edge: the key is there and says nothing, which is the other route to the same state."""
+        machine.publish_release()
+        (machine.serve / "latest").write_text('{"tag_name": ""}\n', encoding="utf-8")
+
+        result = machine.run("--yes")
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == ["install.sh: GitHub's answer named no release"]
+
+    def test_a_release_that_cannot_be_asked_for_at_all_says_so(self, machine):
+        """Nothing is published, so the stubbed curl fails the API call itself."""
+        result = machine.run("--yes")
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == ["install.sh: could not ask GitHub for the newest release"]
+        assert "check the network" in result.stderr
         assert machine.curl_calls() == [_RELEASE_API]
         assert not machine.code.exists()
 
@@ -714,7 +745,7 @@ class TestWhatItDownloads:
         result = machine.run("--from", str(tarball), "--yes")
 
         assert result.returncode == 0, result.stderr
-        assert f"verified {tarball} against its checksum" in result.stderr
+        assert f"verified {tarball} against its checksum" in result.stdout
 
     def test_a_local_file_that_does_not_match_its_checksum_is_refused(self, machine):
         tarball = _build_tarball(machine.tmp_path)
@@ -734,7 +765,7 @@ class TestWhatItDownloads:
         result = machine.run("--from", str(tarball), "--yes")
 
         assert result.returncode == 0, result.stderr
-        assert "local file, not verified" in result.stderr
+        assert "local file, not verified" in result.stdout
 
     def test_a_tarball_missing_what_a_release_must_carry_is_refused(self, machine):
         """Nothing is renamed into place until the staged tree has been looked at."""

@@ -30,21 +30,24 @@ PRUNE_FILES=('*.pyc' '*.pyo' '*.map' '*.lock' 'settings.json' 'requirements-dev.
 # archive carries this, so two runs over one tree produce identical bytes.
 readonly EPOCH='2000-01-01 00:00Z'
 
+# read_version's one refusal that is not "there is no version.txt".
+readonly VERSION_UNREADABLE=2
+
 main() {
     local source="" out="" version=""
 
     while [ $# -gt 0 ]; do
         case "$1" in
             --source)
-                source="$(value_of "$@")"
+                source="$(value_of "$@")" || abort "$1 needs a value"
                 shift 2
                 ;;
             --out)
-                out="$(value_of "$@")"
+                out="$(value_of "$@")" || abort "$1 needs a value"
                 shift 2
                 ;;
             --version)
-                version="$(value_of "$@")"
+                version="$(value_of "$@")" || abort "$1 needs a value"
                 shift 2
                 ;;
             -h | --help)
@@ -60,7 +63,18 @@ main() {
     [ -d "$source" ] || abort "no such source directory: $source"
 
     source="$(cd "$source" && pwd)"
-    [ -n "$version" ] || version="$(read_version "$source")"
+    # In main's own shell rather than behind a helper, because these two aborts
+    # have to end the RUN: a helper whose value was taken with `$(...)` would
+    # print the message and exit only its subshell.
+    if [ -z "$version" ]; then
+        local status=0
+        version="$(read_version "$source")" || status=$?
+        case "$status" in
+            0) ;;
+            "$VERSION_UNREADABLE") abort "$source/version.txt is empty" ;;
+            *) abort "no --version given and no $source/version.txt to read one from" ;;
+        esac
+    fi
     [ -f "$source/dist/index.js" ] || abort "$source/dist has no index.js — build the frontend first (pnpm -C frontend build)"
 
     mkdir -p "$out"
@@ -79,24 +93,36 @@ usage() {
     echo "Usage: scripts/package.sh --source <dir> --out <dir> [--version X]"
 }
 
+# Ends the run. **A function whose VALUE is taken with `$(...)` never calls this**
+# — it answers instead, and its caller aborts — because `exit` inside a command
+# substitution ends only that subshell. Same rule as install.sh, stated there
+# too.
 abort() {
     echo "package.sh: $1" >&2
     exit 1
 }
 
-# The value after an option, refusing the option that has none by name. Without
-# it the run still ends, on the `shift 2` past the end, and says nothing at all.
+# The value after an option, or non-zero where the option has none or an empty
+# one. Empty is refused rather than carried because it is not ignored where it
+# lands: `--version ""` used to fall through to version.txt, so a caller that
+# asked for one version was handed another without being told.
+#
+# `printf` rather than `echo`, which would swallow a value of `-n` as a flag of
+# its own.
 value_of() {
-    [ $# -ge 2 ] || abort "$1 needs a value"
-    echo "$2"
+    [ $# -ge 2 ] && [ -n "$2" ] || return 1
+    printf '%s\n' "$2"
 }
 
+# The version the source states, or non-zero: 1 there is no version.txt to read,
+# VERSION_UNREADABLE there is one and it says nothing. Two answers rather than
+# one because they are two different things for a caller to say.
 read_version() {
     local file="$1/version.txt"
-    [ -f "$file" ] || abort "no --version given and no $file to read one from"
+    [ -f "$file" ] || return 1
     local version
     version="$(tr -d '[:space:]' < "$file")"
-    [ -n "$version" ] || abort "$file is empty"
+    [ -n "$version" ] || return "$VERSION_UNREADABLE"
     echo "$version"
 }
 

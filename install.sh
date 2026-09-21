@@ -80,10 +80,11 @@ DEBUGGER_PROBE="http://127.0.0.1:8080/json/version"
 # runs first.
 STEAM_ROOT=""
 
-# What obtain_tarball answers with, and resolve_tag's one refusal that is not
-# "the answer named no Tender release".
+# What obtain_tarball answers with, and resolve_tag's two refusals that are not
+# "the release named is not one of ours".
 TARBALL=""
 TAG_UNREACHABLE=2
+TAG_ABSENT=3
 
 MODE="install"
 VERSION=""
@@ -124,10 +125,15 @@ abort() {
     exit 1
 }
 
-# The value after an option, or non-zero where the option has none.
+# The value after an option, or non-zero where the option has none or an empty
+# one. Empty is refused rather than carried: `--version ""` would otherwise read
+# as no version at all and install the newest release without saying so.
+#
+# `printf` rather than `echo`, which would swallow a value of `-n` as a flag of
+# its own.
 value_of() {
-    [ $# -ge 2 ] || return 1
-    echo "$2"
+    [ $# -ge 2 ] && [ -n "$2" ] || return 1
+    printf '%s\n' "$2"
 }
 
 parse_arguments() {
@@ -286,13 +292,14 @@ obtain_tarball() {
     case "$status" in
         0) ;;
         "$TAG_UNREACHABLE") abort "could not ask GitHub for the newest release" "check the network" ;;
+        "$TAG_ABSENT") abort "GitHub's answer named no release" "check the network, or name one with --version" ;;
         *) abort "the newest release is not a Tender release ($tag)" "name one with --version instead" ;;
     esac
 
     local version archive
     version="${tag#tender-v}"
     archive="romm-tender-$version.tar.gz"
-    echo "downloading $tag" >&2
+    echo "downloading $tag"
 
     fetch "$DOWNLOAD_BASE/$tag/$archive" "$work/$archive" ||
         abort "release $tag carries no tarball" "try --version with a release that does, or --from a local build"
@@ -304,10 +311,15 @@ obtain_tarball() {
     TARBALL="$work/$archive"
 }
 
-# Prints the tag the release names and answers whether it is one of ours: 0 it
-# is, TAG_UNREACHABLE the release could not be asked for at all, anything else
-# the answer named no Tender release — and what it DID name is on stdout, so the
-# caller's message can quote it.
+# Prints the tag the release names and answers what it is: 0 one of ours,
+# TAG_UNREACHABLE the release could not be asked for at all, TAG_ABSENT the
+# answer carried no tag, anything else a tag that is not ours — and that one is
+# on stdout, so the caller's message can quote it.
+#
+# Absent and not-ours are two answers rather than one because they send the user
+# somewhere different: an answer with no tag in it is a server or a network that
+# did not say what we asked, and a tag that does not match is a release that
+# exists and is not Tender's.
 resolve_tag() {
     if [ -n "$VERSION" ]; then
         echo "tender-v${VERSION#v}"
@@ -315,8 +327,13 @@ resolve_tag() {
     fi
     local body tag
     body="$(curl -fsSL "$RELEASE_API")" || return "$TAG_UNREACHABLE"
-    tag="$(printf '%s' "$body" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 |
-        cut -d'"' -f4)"
+    # Two routes to "no tag", both of which answer it: the pipeline finds
+    # nothing and fails under pipefail, or it finds a key whose value is empty.
+    if ! tag="$(printf '%s' "$body" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 |
+        cut -d'"' -f4)"; then
+        return "$TAG_ABSENT"
+    fi
+    [ -n "$tag" ] || return "$TAG_ABSENT"
     echo "$tag"
     case "$tag" in
         tender-v[0-9]*) return 0 ;;
@@ -336,9 +353,9 @@ verify_local() {
     if [ -f "$file.sha256" ]; then
         (cd "$(dirname "$file")" && sha256sum -c "$(basename "$file").sha256" > /dev/null) ||
             abort "$file does not match $file.sha256"
-        echo "verified $file against its checksum" >&2
+        echo "verified $file against its checksum"
     else
-        echo "local file, not verified: $file" >&2
+        echo "local file, not verified: $file"
     fi
 }
 
