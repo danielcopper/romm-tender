@@ -567,18 +567,30 @@ move_covers() {
             rmdir "$source" 2> /dev/null || true
             continue
         fi
-        step "moving $total $(folder_noun "$name") to the cache" move_folder "$source" "$target" || true
-        report_move "$(folder_noun "$name")"
+        step "moving $total $(folder_noun "$name" "$total") to the cache" move_folder "$source" "$target" || true
+        report_move "$name"
     done
 }
 
-# What a folder's files are called in a sentence. `covers` is already plural;
-# anything else is `<name> files`.
+# What a folder's files are called in a sentence, for a count: `1 cover` and
+# `41 covers`, `1 artwork file` and `111 artwork files`. `covers` is the one
+# folder whose name is already the plural noun.
 folder_noun() {
-    case "$1" in
-        covers) printf 'covers\n' ;;
+    case "$1:$2" in
+        covers:1) printf 'cover\n' ;;
+        covers:*) printf 'covers\n' ;;
+        *:1) printf '%s file\n' "$1" ;;
         *) printf '%s files\n' "$1" ;;
     esac
+}
+
+# The verb that goes with a count, used twice in one sentence.
+was_or_were() {
+    if [ "$1" -eq 1 ]; then
+        printf 'was\n'
+    else
+        printf 'were\n'
+    fi
 }
 
 # Answers non-zero when anything could not be moved, so the phase says so rather
@@ -604,13 +616,15 @@ move_folder() {
 }
 
 report_move() {
-    local noun="$1"
+    local name="$1" moved_noun verb
+    moved_noun="$(folder_noun "$name" "$MOVED")"
     if [ "$STAYED" -gt 0 ]; then
-        echo "  $MOVED $noun moved to the cache; $STAYED were already there and were left in place."
+        verb="$(was_or_were "$STAYED")"
+        echo "  $MOVED $moved_noun moved to the cache; $STAYED $verb already there and $verb left in place."
     elif [ "$MOVED" -gt 0 ]; then
-        echo "  $MOVED $noun moved to the cache."
+        echo "  $MOVED $moved_noun moved to the cache."
     fi
-    [ "$FAILED" -eq 0 ] || echo "could not move $FAILED $noun; see above" >&2
+    [ "$FAILED" -eq 0 ] || echo "could not move $FAILED $(folder_noun "$name" "$FAILED"); see above" >&2
 }
 
 # ------------------------------------------------------------------- unit

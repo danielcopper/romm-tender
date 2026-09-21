@@ -361,7 +361,7 @@ class TestAFreshInstall:
         assert result.returncode == 0, result.stderr
         announced = [
             f"unpacking {_ARCHIVE}",
-            "moving 1 covers to the cache",
+            "moving 1 cover to the cache",
             "writing the service",
             "starting romm-tender",
             "checking Steam's debugger",
@@ -689,9 +689,9 @@ class TestTheCoversMoveOnce:
         assert (machine.cache / "covers" / "a.png").read_text(encoding="utf-8") == "a"
         assert (machine.cache / "artwork" / "b.png").read_text(encoding="utf-8") == "b"
         assert not (machine.data / "covers").exists()
-        assert "moving 1 covers to the cache" in result.stdout
-        assert "1 covers moved to the cache." in result.stdout
-        assert "1 artwork files moved to the cache." in result.stdout
+        assert "moving 1 cover to the cache" in result.stdout
+        assert "1 cover moved to the cache." in result.stdout
+        assert "1 artwork file moved to the cache." in result.stdout
 
     def test_a_file_the_cache_already_holds_is_never_overwritten(self, machine):
         self._seed(machine, "covers", {"a.png": "old"})
@@ -702,7 +702,7 @@ class TestTheCoversMoveOnce:
 
         assert (machine.cache / "covers" / "a.png").read_text(encoding="utf-8") == "new"
         assert (machine.data / "covers" / "a.png").read_text(encoding="utf-8") == "old"
-        assert "0 covers moved to the cache; 1 were already there and were left in place." in result.stdout
+        assert "0 covers moved to the cache; 1 was already there and was left in place." in result.stdout
 
     def test_a_move_that_fails_is_reported_as_a_failure_not_as_a_duplicate(self, machine):
         """The two reasons a file stays are not the same news.
@@ -722,10 +722,25 @@ class TestTheCoversMoveOnce:
             target.chmod(0o700)
 
         assert result.returncode == 0, result.stderr
-        assert "could not move 1 covers" in result.stderr
-        assert "were already there" not in result.stdout
-        assert "moving 1 covers to the cache … failed" in result.stdout
+        assert "could not move 1 cover;" in result.stderr
+        assert "already there" not in result.stdout
+        assert "moving 1 cover to the cache … failed" in result.stdout
         assert (machine.data / "covers" / "a.png").is_file()
+
+    def test_the_sentences_are_plural_above_one(self, machine):
+        """The counts decide the nouns and the verbs, both of them, in both sentences."""
+        self._seed(machine, "covers", {f"c{n}.png": "x" for n in range(5)})
+        self._seed(machine, "artwork", {f"a{n}.png": "x" for n in range(3)})
+        (machine.cache / "covers").mkdir(parents=True)
+        (machine.cache / "covers" / "c0.png").write_text("held", encoding="utf-8")
+        (machine.cache / "covers" / "c1.png").write_text("held", encoding="utf-8")
+
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert "moving 5 covers to the cache" in result.stdout
+        assert "3 covers moved to the cache; 2 were already there and were left in place." in result.stdout
+        assert "moving 3 artwork files to the cache" in result.stdout
+        assert "3 artwork files moved to the cache." in result.stdout
 
     def test_nothing_else_under_the_data_root_is_touched(self, machine):
         (machine.data).mkdir(parents=True, exist_ok=True)
