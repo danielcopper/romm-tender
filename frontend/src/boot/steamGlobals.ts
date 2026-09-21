@@ -190,8 +190,8 @@ export async function installGlobals(): Promise<GlobalsReport> {
     // when nothing was found.
     //
     // **That report is the whole of what this buys**: the injector's bootstrap
-    // reads it out of THIS bundle and imports the panel only where all three
-    // are installed. The panel itself gets no chance to notice: a
+    // reads it out of THIS bundle and imports the panel only where every global
+    // the report names is installed. The panel itself gets no chance to notice: a
     // module-scope `SP_JSX.jsx` sits in its import graph (`dist/index.js:4892`,
     // from `PlatformDetail.tsx`), so with `SP_JSX` unset it throws while being
     // evaluated — before `definePlugin`'s factory exists, and long before any
@@ -227,8 +227,8 @@ export async function installGlobals(): Promise<GlobalsReport> {
 
 // The injector's bootstrap calls this by name after importing the bundle and
 // before importing the panel, and imports the panel only where the report says
-// all three are installed. The same name is what drives this bundle by hand
-// from the CEF debugger.
+// every global it names is installed. The same name is what drives this bundle
+// by hand from the CEF debugger.
 w.__TENDER_INSTALL_GLOBALS = installGlobals;
 
 export default installGlobals;

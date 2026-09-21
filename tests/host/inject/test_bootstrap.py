@@ -115,11 +115,12 @@ class TestInstallingTheGlobals:
         assert folded_facts(source)["globals_at"] == 0
         assert len(folded_facts(source)["urls"]) == 2
 
-    def test_nothing_is_called_where_no_bundle_in_the_list_installs_anything(self):
-        """Beside Decky the loader installed them, so this may install nothing.
+    def test_the_choice_that_installs_nothing_carries_no_index(self):
+        """Beside Decky the loader installed them, so this names no bundle.
 
-        ``i`` counts from 0 and is never null, so the gate the loop is written
-        around never opens for this choice.
+        That nothing is then CALLED is what
+        ``TestItRunsUnderNode.test_beside_decky_the_panel_is_imported_and_nothing_is_installed``
+        answers, by running it; this pins only what the facts carry.
         """
         source = build_bootstrap(facts(globals_at=None, urls=URLS[1:]))
         assert folded_facts(source)["globals_at"] is None

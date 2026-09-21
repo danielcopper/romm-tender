@@ -198,10 +198,10 @@ JavaScript, so `Runtime.evaluate` is answered by a stand-in that recognises the 
 
 So the suite holds the framing, the reconnection, the discovery rule, the watchdog's state machine, the bundle choice
 and what the evaluated source carries. It also RUNS that source: node parses it, and a harness evaluates it against a
-stub `window` — a document with just enough of one for the card — with the bundle addresses as `data:` modules that
-record having been imported and that leave the installer on the window where the real bundle leaves one. So the order
-(import, install, import), the refusals that keep the panel out, and the sentence each refusal carries are exercised
-rather than read off the text.
+stub `window` with just enough of a document for the card, and with the bundle addresses as `data:` modules that record
+having been imported and that leave the installer on the window where the real bundle leaves one. So the order (import,
+install, import), the refusals that keep the panel out, and the sentence each refusal carries are exercised rather than
+read off the text.
 
 What that harness cannot see is Steam. It stands in for the page, so nothing in it says whether `@decky/ui`'s searches
 find anything, what the real installer answers against a real module registry, or whether the card is legible on a
