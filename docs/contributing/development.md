@@ -205,8 +205,34 @@ The whole loop, the Big Picture window, and how to judge layout at the Deck's re
 Two switches exist, both read from the environment at start-up: `TENDER_INJECT=off` serves the panel and loads it
 nowhere, and `TENDER_INJECT=force` loads it even where the crash watchdog has stopped.
 
-Installing this as a service, with its own unit and XDG paths, is separate work
-([#1902](https://github.com/danielcopper/romm-tender/issues/1902)).
+### Running an installed one
+
+`mise run dev` is the development loop. What a user gets instead is a systemd **user** unit,
+`~/.config/systemd/user/romm-tender.service`, written by `install.sh`:
+
+```bash
+systemctl --user status romm-tender     # what it is doing
+systemctl --user restart romm-tender    # after replacing the code by hand
+systemctl --user cat romm-tender        # the roots this install resolved
+journalctl --user -u romm-tender        # what it wrote to stderr
+```
+
+Its own log is `~/.local/state/romm-tender/backend.log`, and the journal carries the same lines plus the one start-up
+address with the token in it.
+
+**Tender runs as a service, and its Quick Access entry is there only while it does.** The entry is not a file Steam
+reads at start-up — it is code this backend loads into Steam's renderer — so a stopped unit means a Steam with no Tender
+entry in it, and starting the unit puts the entry back without restarting Steam.
+
+To install a build of your own rather than a release:
+
+```bash
+mise run package                              # builds the frontend, writes build/romm-tender-<V>.tar.gz
+bash install.sh --from build/romm-tender-<V>.tar.gz
+```
+
+That is the same path a release takes, with the download skipped — `install.sh --uninstall` takes it back out, and
+leaves the database, the settings and the launcher where they are.
 
 ## Linting
 

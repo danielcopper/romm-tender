@@ -83,9 +83,10 @@ run = [
     "cd backend/native && sha256sum -c libgavel-x86_64-linux.so.sha256",
     "python scripts/check_vendored_trees.py",
     "python scripts/check_generated_tab_icon.py",
-    # The scripts a user runs outside this repository. The rest are developer
-    # tooling and stay out of scope.
-    "shellcheck scripts/package.sh",
+    # The two scripts a user runs outside this repository — the installer and
+    # the packager whose tarball it takes. The rest are developer tooling and
+    # stay out of scope.
+    "shellcheck install.sh scripts/package.sh",
 ]
 
 [tasks.gate]
