@@ -766,23 +766,27 @@ Format: **invariant** — tier — enforced by.
   both families — it suppresses the line, and no seam is in both lists, so where a line does name two seams it silences
   both
 - **A shell function whose value is taken with `$(...)` never reaches `exit` — it answers, and its caller aborts** —
-  check — `scripts/check_shell_answer_functions.py` over `install.sh`, `scripts/package.sh` and every `*.sh` under
-  `scripts/` and `bin/`. `exit` inside a command substitution ends that subshell and nothing else, so such a function
-  prints its message and the CALLER runs on with an empty answer — a second complaint about the emptiness, or a request
-  built out of it, and non-zero either way, which is why the shape survives a test that reads only the status. Which
-  helper ends the run is DERIVED (a function reaches `exit` if it runs one or calls a same-file function that does), so
-  a second abort helper is covered the day it is written; the check follows the chain and names it. Its reading is a
-  hand-written lexer — quotes, comments, heredocs, arithmetic, expansions, `$( )` and backtick nesting — rather than a
-  bash parser, **so a construct it misreads drops real code in silence**: the failure is a function never collected or a
-  body that ends early, and the `exit` below it is then simply not there. Five such shapes were found by review and
-  fixed — a closing `}` judged by what FOLLOWS it (an unquoted `${x}` or a `find … -exec rm {} \;` ended the enclosing
-  function), `$(( 1 << 3 ))` read as a heredoc (which blanked the rest of the file), a parameter expansion naming a
-  function read as a call to it, a `case` arm's `)` ending the substitution it sits in, and a backtick substitution
-  inside double quotes read as string text. **The blind spots left are the list in the script's own docstring**, which
-  is their one home; it names, among others, a function reached through a variable (`install.sh`'s own `step` is the
-  live example), `( f )` and `f | cmd`, and a function defined twice at the top level. A call written inside `$( )` is
-  deliberately NOT an edge in the graph — an `exit` there ends the subshell — so a nested pair is reported once, at the
-  inner site
+  check — `scripts/check_shell_answer_functions.py` over `install.sh`, `scripts/package.sh`, `bin/tender-rom-launcher`
+  and every `*.sh` under `scripts/` and `bin/` (the launcher is named because it carries no extension for the glob to
+  find). `exit` inside a command substitution ends that subshell and nothing else, so such a function prints its message
+  and the CALLER runs on with an empty answer — a second complaint about the emptiness, or a request built out of it,
+  and non-zero either way, which is why the shape survives a test that reads only the status. Which helper ends the run
+  is DERIVED (a function reaches `exit` if it runs one or calls a same-file function that does), so a second abort
+  helper is covered the day it is written; the check follows the chain and names it. Its reading is a hand-written lexer
+  — quotes, comments, heredocs, arithmetic, expansions, `$( )` and backtick nesting — rather than a bash parser, **so a
+  construct it misreads drops real code in silence**: the failure is a function never collected or a body that ends
+  early, and the `exit` below it is then simply not there. Ten such shapes are read for by name — a closing `}` judged
+  by what FOLLOWS it (an unquoted `${x}` or a `find … -exec rm {} \;` ended the enclosing function) and a `}` written as
+  an ARGUMENT (`echo }`), `$(( 1 << 3 ))` read as a heredoc (which blanked the rest of the file) and a `$(( … ))` span
+  ending one parenthesis short, a parameter expansion naming a function read as a call to it, a `case` arm's `)` ending
+  the substitution it sits in, the POSIX arm written `(a)` whose leading parenthesis groups nothing, the fallthrough
+  terminators `;&` and `;;&`, a `( … )` subshell inside a substitution whose closing parenthesis would otherwise end it,
+  and a backtick substitution inside double quotes read as string text. The enumeration is the script's docstring; this
+  is its summary, and the two are re-derived together. **The blind spots left are the list in the script's own
+  docstring**, which is their one home; it names, among others, a function reached through a variable (`install.sh`'s
+  own `step` is the live example), `( f )` and `f | cmd`, and a function defined twice at the top level. A call written
+  inside `$( )` is deliberately NOT an edge in the graph — an `exit` there ends the subshell — so a nested pair is
+  reported once, at the inner site
 - **Services never call clocks / sleep / uuid / random directly (inject the Protocol)** — check —
   `scripts/check_cosmic_call_bans.sh`
 - **No module in `services/`, `bootstrap/`, `adapters/`, `domain/`, `lib/` or `models/` crosses the ~1000-LOC

@@ -312,12 +312,13 @@ The answer is that such a function RETURNS non-zero and its caller aborts.
 
 Which helper ends the run is derived rather than listed: a function "reaches exit" if it runs `exit` itself or calls one
 of the same file's functions that does, so a second abort helper is covered the day it is written. What the gate scans
-is `install.sh`, `scripts/package.sh` and every `*.sh` under `scripts/` and `bin/`, through a hand-written lexer that
-knows quotes, comments, heredocs and nesting — not a bash parser. Its blind spots are listed in the script's docstring,
-which is their one home; the two worth knowing at this distance are that a function reached through a variable is
-invisible to it — `install.sh`'s own `step` is the live example — and that `( f )` and `f | cmd` swallow an `exit` the
-same way without being checked. Because the lexer is hand-written rather than bash, a construct it misreads drops real
-code in silence, so the shapes it gets right are pinned one by one in its test file.
+is `install.sh`, `scripts/package.sh`, `bin/tender-rom-launcher` — named because it carries no extension the glob would
+find — and every `*.sh` under `scripts/` and `bin/`, through a hand-written lexer that knows quotes, comments, heredocs
+and nesting — not a bash parser. Its blind spots are listed in the script's docstring, which is their one home; the two
+worth knowing at this distance are that a function reached through a variable is invisible to it — `install.sh`'s own
+`step` is the live example — and that `( f )` and `f | cmd` swallow an `exit` the same way without being checked.
+Because the lexer is hand-written rather than bash, a construct it misreads drops real code in silence, so the shapes it
+gets right are pinned one by one in its test file.
 
 The frontend has no size gate — deliberately, because a threshold only works when something else forbids the cheap way
 of getting under it, and `frontend/src/` has no equivalent of `service-independence`. What it has instead is direction

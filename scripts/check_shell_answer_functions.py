@@ -24,13 +24,22 @@ shell file that exists. The scan is surface syntax over a hand-written lexer
 
 **The reading is hand-written, so a construct it gets wrong drops real code in
 silence** — the failure is a function that is never collected or a body that
-ends early, and either way the ``exit`` below it is simply not there. Five such
-shapes were found by review and are fixed: a closing ``}`` judged by what
-follows it (an unquoted ``${x}`` or a ``find … -exec rm {} \\;`` ended the
-enclosing function), ``$(( 1 << 3 ))`` read as a heredoc (which blanked the rest
-of the file), a parameter expansion naming a function read as a call to it, a
-``case`` arm's ``)`` ending the substitution it sits in, and a backtick
-substitution inside double quotes read as string text.
+ends early, and either way the ``exit`` below it is simply not there. Ten such
+shapes are read for by name:
+
+* a closing ``}`` judged by what FOLLOWS it — an unquoted ``${x}`` or a
+  ``find … -exec rm {} \\;`` ended the enclosing function — and a ``}`` written
+  as an ARGUMENT (``echo }``), which is why a block brace is decided by what
+  stands before it;
+* ``$(( 1 << 3 ))`` read as a heredoc, which blanked the rest of the file, and a
+  ``$(( … ))`` span that ended one parenthesis short of the pair it opened;
+* a parameter expansion naming a function read as a call to it;
+* a ``case`` arm's ``)`` ending the substitution it sits in; the POSIX arm
+  written ``(a)``, whose leading parenthesis groups nothing; and ``;&`` and
+  ``;;&``, which end an arm as ``;;`` does, so a pattern follows them too;
+* a ``( … )`` subshell inside a substitution, whose closing parenthesis would
+  otherwise be read as the substitution's own;
+* a backtick substitution inside double quotes read as string text.
 
 **The blind spots named here** are the ones left, deliberately or for want of a
 reason to close them:
@@ -53,6 +62,10 @@ reason to close them:
 * a function **defined twice at the top level** — the last body wins, so a
   definition guarded by an ``if`` is judged by whichever branch is written last
   rather than by both;
+* two ``}`` **arguments in a row** — ``echo } }`` — where the second is read as
+  a block's, because a ``}`` is also how a block ends with no separator after
+  another (``{ { echo one; } }``). One of the two readings has to give, and the
+  block is the one that occurs here;
 * ``exit`` reached through an **external command or a sourced file** — the graph
   spans one file, and nothing here follows ``source``.
 
@@ -111,8 +124,64 @@ TRANSPARENT: frozenset[str] = frozenset(
 COMMAND_OPENERS = ";&|(){}\n"
 
 
+class _CaseState:
+    """Where one nesting level of a scan sits inside a ``case``.
+
+    Two walks need this and have to AGREE about it — the masker, which decides
+    where a substitution ends, and the matcher, which decides where it closes.
+    So the rules live here once: written out in each of them they are two copies
+    that get edited one at a time, and a disagreement between the two is a
+    substitution that one walk has ended and the other has not.
+
+    What it has to know is small: a ``case`` arm's pattern may open with a
+    ``(`` and always ends with a ``)``, and neither groups anything. An arm ends
+    at ``;;``, ``;&`` or ``;;&``, and the next pattern follows.
+    """
+
+    __slots__ = ("depth", "expecting_pattern")
+
+    def __init__(self) -> None:
+        self.depth = 0
+        self.expecting_pattern = False
+
+    def step(self, text: str, index: int) -> int | None:
+        """Read an arm terminator or a keyword at *index*, answering the index past it.
+
+        ``None`` when there is neither, which leaves the caller to advance.
+        """
+        for terminator in (";;&", ";;", ";&"):
+            if text.startswith(terminator, index):
+                self.expecting_pattern = self.depth > 0
+                return index + len(terminator)
+        if not _starts_a_word(text, index):
+            return None
+        end = index
+        while end < len(text) and (text[end].isalnum() or text[end] in "_-"):
+            end += 1
+        word = text[index:end]
+        if word == "case":
+            self.depth += 1
+        elif word == "esac":
+            self.depth = max(0, self.depth - 1)
+            self.expecting_pattern = False
+        elif word == "in" and self.depth:
+            self.expecting_pattern = True
+        return end
+
+    def opens_a_pattern(self) -> bool:
+        """Whether a ``(`` here is a pattern's leading paren rather than a subshell."""
+        return self.expecting_pattern and self.depth > 0
+
+    def closes_a_pattern(self) -> bool:
+        """Whether a ``)`` here ends a pattern rather than a group. Consumes the expectation."""
+        if self.expecting_pattern and self.depth > 0:
+            self.expecting_pattern = False
+            return True
+        return False
+
+
 class _Frame:
-    """One nesting level of the scan, and the ``case`` state that level is in.
+    """One nesting level of the masker, and the ``case`` state that level is in.
 
     Each level keeps its own, because a substitution written inside a ``case``
     arm is not itself inside that arm's pattern.
@@ -122,12 +191,11 @@ class _Frame:
     ``sys.modules``, which a loader that did not register it has not filled in.
     """
 
-    __slots__ = ("case_depth", "expecting_pattern", "kind")
+    __slots__ = ("case", "kind")
 
     def __init__(self, kind: str) -> None:
         self.kind = kind
-        self.case_depth = 0
-        self.expecting_pattern = False
+        self.case = _CaseState()
 
 
 class Masked:
@@ -240,9 +308,17 @@ def _mask(source: str) -> str:
                 stack.append(_Frame("bt"))
             index += 1
             continue
-        if source.startswith(";;", index):
-            frame.expecting_pattern = frame.case_depth > 0
-            index += 2
+        if char == "(":
+            # A `( … )` subshell is a level of its own. Without pushing one, its
+            # closing paren pops the substitution around it and everything after
+            # is read as the text beside a substitution rather than as code. It
+            # is pushed as "code", because that is what it holds — a kind of its
+            # own would lose the escape and comment rules that kind carries. A
+            # pattern's leading paren in `in (a)` opens nothing, so it is left
+            # for the `)` below to consume.
+            if not frame.case.opens_a_pattern():
+                stack.append(_Frame("code"))
+            index += 1
             continue
         # Before ``$(``, which it starts with, and before the heredoc test,
         # whose ``<<`` it can contain: ``$(( 1 << 3 ))`` used to open a heredoc
@@ -259,31 +335,23 @@ def _mask(source: str) -> str:
             stack.append(_Frame("code"))
             index += 2
             continue
-        if char == ")" and len(stack) > 1 and context == "code":
+        if char == ")":
             # A `case` arm's pattern ends in a `)` that closes nothing. Popping
             # on it ends the substitution at the first arm, and every command
             # after that is read as the text around a substitution, not as code.
-            if frame.expecting_pattern and frame.case_depth:
-                frame.expecting_pattern = False
-            else:
+            # Asked before the kind is, so a pattern's `)` inside backticks —
+            # where nothing would be popped anyway — still ends that pattern.
+            ends_a_pattern = frame.case.closes_a_pattern()
+            if not ends_a_pattern and context == "code" and len(stack) > 1:
                 stack.pop()
             index += 1
             continue
         if _opens_a_heredoc(source, index):
             index = _note_heredoc(source, index, pending_heredocs)
             continue
-        if _starts_a_word(source, index):
-            start = index
-            while index < length and (source[index].isalnum() or source[index] in "_-"):
-                index += 1
-            word = source[start:index]
-            if word == "case":
-                frame.case_depth += 1
-            elif word == "esac":
-                frame.case_depth = max(0, frame.case_depth - 1)
-                frame.expecting_pattern = False
-            elif word == "in" and frame.case_depth:
-                frame.expecting_pattern = True
+        stepped = frame.case.step(source, index)
+        if stepped is not None:
+            index = stepped
             continue
         index += 1
 
@@ -313,9 +381,14 @@ def _skip_arithmetic(source: str, index: int, blank: Callable[[int], None]) -> i
     Blanked whole rather than read: what is inside is arithmetic, and the one
     thing it could carry that this gate wants — a ``$(f)`` in a default — is
     rare enough to name as a blind spot rather than to parse for.
+
+    The walk starts at the FIRST of the two parens, not the second. Starting one
+    later leaves the closing pair one short, and the stray ``)`` then pops the
+    substitution the arithmetic sits in (a silent miss) or opens a command
+    position beside it (a false alarm).
     """
     depth = 0
-    position = index + 2
+    position = index + 1
     while position < len(source):
         if source[position] == "(":
             depth += 1
@@ -393,21 +466,53 @@ def _skip_heredoc(source: str, index: int, delimiter: str, strip_tabs: bool, bla
 def _is_block_brace(text: str, index: int) -> bool:
     """Whether the brace at *index* opens or closes a block rather than something else.
 
-    Both are decided by what comes BEFORE, because both are words in command
-    position — bash requires that of a block brace, and it is what a `}` in
-    ``${var}`` or in ``find … -exec rm {} \\;`` can never be. An opening brace
+    A block brace is a word in COMMAND position: bash requires it, and it is
+    what none of the others can be — the `}` of ``find … -exec rm {} \\;`` is
+    inside a word, and the `}` of ``echo }`` is an argument. An opening brace
     additionally has to be followed by a separator, which is what keeps the
-    ``{`` of ``{}`` out.
+    ``{`` of ``{}`` out. (``${var}`` never reaches here: the masker blanks a
+    parameter expansion whole.)
 
-    Reading what comes AFTER a closing brace instead is the shape this replaced:
-    a `}` followed by a space matched, so an unquoted ``${x}`` at the end of a
-    word ended the enclosing function and every ``exit`` below it went unseen.
+    The two admit different neighbours, and the difference is exactly ``{}``: an
+    opening brace may follow an OPENING one — ``{ { echo; }; }`` — and a closing
+    one may not, or the `}` of ``rm {}`` would close whatever was open.
     """
-    before = text[index - 1] if index else "\n"
     if text[index] == "{":
         after = text[index + 1] if index + 1 < len(text) else "\n"
-        return before in " \t\n;&|()" and after in " \t\n"
-    return before in " \t\n;&|"
+        if after not in " \t\n":
+            return False
+        # A function header's brace follows a NAME rather than a separator —
+        # `function reader {` — so the header is asked about directly.
+        return _in_command_position(text, index, after_brace=True) or _definition_name(text, index) is not None
+    return _in_command_position(text, index, after_brace=False)
+
+
+# What a command can end with, so the next word begins one. `}` is among them:
+# `{ { echo one; } }` closes two blocks with no separator between them.
+_COMMAND_ENDERS = ";&|()\n}"
+
+
+def _in_command_position(text: str, index: int, *, after_brace: bool) -> bool:
+    """Whether the token at *index* begins a command rather than continuing one.
+
+    Read BACKWARDS, over the spaces in between: what stands before decides,
+    because a word that continues a command — ``echo }`` — reads the same
+    forwards as one that opens a block. :data:`TRANSPARENT` answers the rest,
+    being the words this module already keeps for "a command follows".
+    """
+    cursor = index - 1
+    while cursor >= 0 and text[cursor] in " \t":
+        cursor -= 1
+    if cursor < 0:
+        return True
+    char = text[cursor]
+    if char in _COMMAND_ENDERS or (after_brace and char == "{"):
+        return True
+    end = cursor + 1
+    start = end
+    while start and (text[start - 1].isalnum() or text[start - 1] == "_"):
+        start -= 1
+    return text[start:end] in TRANSPARENT
 
 
 def _find_functions(masked: Masked) -> dict[str, tuple[int, int, int]]:
@@ -541,19 +646,20 @@ def _matching_paren(text: str, opening: int) -> int | None:
     the scan tracks exactly that much.
     """
     depth = 0
-    case_depth = 0
-    expecting_pattern = False
+    case = _CaseState()
     index = opening
     length = len(text)
     while index < length:
         char = text[index]
         if char == "(":
-            depth += 1
+            # A pattern's leading paren in `in (a)` groups nothing, so counting
+            # it leaves the depth one high and the substitution never closes.
+            if not case.opens_a_pattern():
+                depth += 1
             index += 1
             continue
         if char == ")":
-            if expecting_pattern and case_depth:
-                expecting_pattern = False
+            if case.closes_a_pattern():
                 index += 1
                 continue
             depth -= 1
@@ -561,22 +667,9 @@ def _matching_paren(text: str, opening: int) -> int | None:
                 return index
             index += 1
             continue
-        if text.startswith(";;", index):
-            expecting_pattern = case_depth > 0
-            index += 2
-            continue
-        if _starts_a_word(text, index):
-            start = index
-            while index < length and (text[index].isalnum() or text[index] in "_-"):
-                index += 1
-            word = text[start:index]
-            if word == "case":
-                case_depth += 1
-            elif word == "esac":
-                case_depth = max(0, case_depth - 1)
-                expecting_pattern = False
-            elif word == "in" and case_depth:
-                expecting_pattern = True
+        stepped = case.step(text, index)
+        if stepped is not None:
+            index = stepped
             continue
         index += 1
     return None

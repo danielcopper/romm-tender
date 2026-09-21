@@ -665,6 +665,160 @@ y="`reader`"
         assert len(findings) == 1
         assert "$(reader …)" in findings[0]
 
+    def test_arithmetic_inside_a_substitution_does_not_end_it(self, check, tmp_path):
+        """The span must start at the FIRST of `$((`'s two parens.
+
+        One later leaves the closing pair a paren short, and the stray `)` pops
+        the substitution the arithmetic sits in — so the call after it is unseen.
+        """
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+abort() {
+    exit 1
+}
+
+reader() {
+    abort "boom"
+}
+
+y="$(printf '%d' $((1 + 1)); reader)"
+""",
+        )
+
+        assert len(findings) == 1
+        assert "$(reader …)" in findings[0]
+
+    def test_arithmetic_does_not_open_a_command_position_beside_it(self, check, tmp_path):
+        """The same paren, the other way round: a stray `)` makes the next word a command."""
+        assert (
+            _findings(
+                check,
+                tmp_path,
+                """#!/usr/bin/env bash
+abort() {
+    exit 1
+}
+
+reader() {
+    echo $((1 + 1)) abort
+    printf 'done\\n'
+}
+
+y="$(reader)"
+""",
+            )
+            == []
+        )
+
+    def test_a_subshell_inside_a_substitution_does_not_end_it(self, check, tmp_path):
+        """`( … )` is a level of its own; without one its `)` pops the substitution."""
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+abort() {
+    exit 1
+}
+
+reader() {
+    abort "boom"
+    echo v
+}
+
+y="$( (echo pre) ; reader )"
+""",
+        )
+
+        assert len(findings) == 1
+        assert "$(reader …)" in findings[0]
+
+    def test_a_pattern_with_a_leading_paren_does_not_end_the_substitution(self, check, tmp_path):
+        """POSIX writes an arm as `(a)`. That paren groups nothing, so it must not be counted."""
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+abort() {
+    exit 1
+}
+
+reader() {
+    abort "boom"
+}
+
+y="$(case "$1" in (a) echo a ;; (*) echo o ;; esac; reader)"
+""",
+        )
+
+        assert len(findings) == 1
+        assert "$(reader …)" in findings[0]
+
+    def test_a_fallthrough_arm_still_ends_an_arm(self, check, tmp_path):
+        """`;&` and `;;&` end an arm as `;;` does, so a pattern follows each of them."""
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+abort() {
+    exit 1
+}
+
+reader() {
+    abort "boom"
+}
+
+y="$(case "$1" in a) echo a ;& b) echo b ;; esac; reader)"
+""",
+        )
+
+        assert len(findings) == 1
+        assert "$(reader …)" in findings[0]
+
+    def test_a_brace_as_an_argument_does_not_end_the_function(self, check, tmp_path):
+        """`echo }` is an argument. A block brace is a word in COMMAND position."""
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+abort() {
+    exit 1
+}
+
+reader() {
+    echo }
+    abort "boom"
+}
+
+y="$(reader)"
+""",
+        )
+
+        assert len(findings) == 1
+        assert "reader -> abort -> exit" in findings[0]
+
+    def test_a_nested_block_still_balances(self, check, tmp_path):
+        """A `}` ends a command, so the next `}` is still a block's: `{ { …; } }`.
+
+        The opening brace admits a neighbour the closing one may not — the `{`
+        of `find … -exec rm {} \\;` would otherwise close whatever was open.
+        """
+        findings = _findings(
+            check,
+            tmp_path,
+            """#!/usr/bin/env bash
+reader() {
+    { { echo one; } }
+    exit 1
+}
+
+y="$(reader)"
+""",
+        )
+
+        assert len(findings) == 1
+
     def test_a_function_after_a_pipe_inside_a_substitution_is_seen(self, check, tmp_path):
         findings = _findings(
             check,
