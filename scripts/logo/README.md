@@ -32,6 +32,7 @@ Without `--install` it writes to `out/` instead, which is the way to look at a c
 | `lockup-animated.gif`, `lockup-animated-dark.gif` (600px) | `assets/` — the README banner                        |
 | `store_image.png` (1024px)                                | `assets/` — the square mark, for previews and links  |
 | `tab-icon-art.ts`                                         | `frontend/src/qam/tabIconArt.ts` — the QAM tab glyph |
+| `installer-logo.sh`                                       | `install.sh` — the mark as terminal text             |
 
 The tab glyph is the one output that is not an image. Steam's Quick Access tab strip takes a React node rather than a
 file, so the glyph ships as generated TypeScript the panel draws from — which is what lets it ask for `currentColor` at
@@ -39,6 +40,14 @@ all. Unlike the mark, **it does not animate**: the motion it shipped with cost r
 the menu was open, measured on the device. `tab-icon.svg` is written beside it and installed nowhere: it is the same
 glyph as a file, for looking at a change without opening Steam. What the glyph is, and the reading behind its being
 static, is `docs/architecture/qam-panel.md`; what it departs from, and why, is at `tabicon.STRIP_GEOMETRY`.
+
+The terminal mark is the other output that is not an image, and the only one installed into the middle of a file rather
+than over one: `install.sh` prints it before it does anything, and it carries the drawing as text between two markers
+that `build.py --terminal --install` replaces. There are two renderings of it — Braille cells at 24x10, and an ASCII
+weight drawing at 26x13 for a terminal with no UTF-8 — and each is cropped to what IT draws, which is why the Braille
+one is the ink alone and the ASCII one has the disc's rim around it. Each row is emitted as `class:text` runs so the
+installer splits rather than parses, and the two tones are read from the shipped palette rather than written down.
+`scripts/check_generated_installer_logo.py` regenerates the block and fails on any difference.
 
 Everything else ships twice except the lockup and `store_image.png`, which land once. The lockup is the README's banner,
 and the docs site draws its own header from the bare mark; nothing renders `store_image.png` at all, so `assets/` is the

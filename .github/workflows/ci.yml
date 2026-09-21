@@ -234,6 +234,12 @@ jobs:
       # bad input does neither, and the caller runs on with an empty answer.
       - name: Check that no $()-valued shell function reaches exit
         run: python scripts/check_shell_answer_functions.py
+      # The installer's greeter draws the mark as text, generated from the same
+      # PNG the mark ships as. A hand-kept copy is the one that drifts, and
+      # unlike the tab glyph this needs no formatter, so it belongs here rather
+      # than in `build`.
+      - name: Check the installer's terminal mark against its generator
+        run: python scripts/check_generated_installer_logo.py
 
   # Skipped when SONAR_TOKEN is structurally unavailable: Dependabot PRs and
   # PRs from forks (GitHub withholds secrets from `pull_request` runs whose head

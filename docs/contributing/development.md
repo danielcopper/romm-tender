@@ -303,6 +303,14 @@ a large file under `tests/` is the one-file-per-source-module rule working, `scr
 needs a per-scope glob before it can be added. There is deliberately no `--update` flag — re-baselining should be a
 reviewable diff, never a command someone runs to get back to green.
 
+`mise run lint` (and CI) also runs `scripts/check_generated_installer_logo.py`, which holds `install.sh`'s greeter to
+the mark. The installer draws the logo before it does anything, and it cannot render an image, so the art is text
+embedded in the script between two markers — generated from `assets/logo.png` by `scripts/logo/terminal.py`, in Braille
+cells where the terminal is in a UTF-8 locale and in ASCII where it is not. A block kept by hand is the one that drifts
+away from the mark it is a picture of, so the check regenerates it and fails on any difference; re-run
+`python3 scripts/logo/build.py --install --terminal` and commit the result. What the two renderings are and how they are
+cropped is `scripts/logo/README.md`.
+
 `mise run lint` (and CI) also runs `scripts/check_shell_answer_functions.py`, which holds the repository's shell to one
 rule: **a function whose value is taken with `$(...)` never reaches `exit`.** `exit` inside a command substitution ends
 that subshell and nothing else, so a function that answers with a value and aborts on a bad input does neither — it

@@ -88,6 +88,7 @@ run = [
     # stay out of scope.
     "shellcheck install.sh scripts/package.sh",
     "python scripts/check_shell_answer_functions.py",
+    "python scripts/check_generated_installer_logo.py",
 ]
 
 [tasks.gate]
