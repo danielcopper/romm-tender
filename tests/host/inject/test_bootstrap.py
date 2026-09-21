@@ -8,6 +8,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import pytest
 
@@ -285,14 +286,176 @@ class TestTheMarker:
         assert marker_present_expression().startswith("typeof window[")
 
 
+def node_or_skip() -> str:
+    """Where node is, or skip — it is a mise-managed tool, not a dependency."""
+    found = shutil.which("node")
+    if found is None:  # pragma: no cover - node is a mise-managed tool
+        pytest.skip("node is not on PATH")
+    return found
+
+
 class TestItIsValidJavaScript:
     def test_node_accepts_the_source_it_would_evaluate(self, tmp_path):
         """The one mechanical check available for a language this repo does not
         compile here: the expression is handed to a parser rather than read."""
-        node = shutil.which("node")
-        if node is None:  # pragma: no cover - node is a mise-managed tool
-            pytest.skip("node is not on PATH")
         written = tmp_path / "bootstrap.js"
         written.write_text(build_bootstrap(facts()), encoding="utf-8")
-        finished = subprocess.run([node, "--check", str(written)], capture_output=True, text=True, check=False)
+        asked = [node_or_skip(), "--check", str(written)]
+        finished = subprocess.run(asked, capture_output=True, text=True, check=False)
         assert finished.returncode == 0, finished.stderr
+
+
+# The page the expression is evaluated against: a window with just enough
+# document for the card, and two arrays the stub bundles below write their
+# record into. ``__TENDER_EXPRESSION__`` is where the built source is spliced,
+# which is the shape it arrives in on a device too — a string handed to an
+# evaluator rather than a module anybody imports.
+_STUB_PAGE = """
+globalThis.__ran = [];
+globalThis.__installs = [];
+
+const element = () => ({
+  style: {},
+  textContent: "",
+  children: [],
+  appendChild(child) {
+    this.children.push(child);
+    return child;
+  },
+  addEventListener() {},
+  remove() {},
+});
+
+globalThis.window = {
+  document: {
+    createElement: element,
+    body: {
+      appended: [],
+      appendChild(child) {
+        this.appended.push(child);
+        return child;
+      },
+    },
+  },
+};
+
+const answer = await __TENDER_EXPRESSION__;
+console.log(
+  JSON.stringify({
+    answer,
+    ran: globalThis.__ran,
+    installs: globalThis.__installs.length,
+    cards: globalThis.window.document.body.appended.length,
+  })
+);
+"""
+
+
+def _module(js: str) -> str:
+    """*js* as an address node will import — a whole module in one URL."""
+    return "data:text/javascript," + quote(js, safe="")
+
+
+def _globals_bundle(report: dict[str, Any] | None) -> str:
+    """A stub of the globals bundle, recording that it ran.
+
+    Where there is a *report* to give it leaves an installer answering it on the
+    window, which is where the real bundle leaves one — so an install moved
+    above the import that defines it finds nothing to call, exactly as it would
+    on a device.
+    """
+    js = ['globalThis.__ran.push("globals");']
+    if report is not None:
+        js.append("globalThis.window." + GLOBALS_INSTALLER + " = async () => {")
+        js.append("globalThis.__installs.push(1);")
+        js.append("return " + json.dumps(report) + ";")
+        js.append("};")
+    return _module("".join(js))
+
+
+_PANEL = _module('globalThis.__ran.push("panel");')
+
+# The panel with a tripwire on it: an installer that must never be reached, so
+# "nothing was installed" is a negative over something there was to call.
+_PANEL_WITH_A_TRIPWIRE = _module(
+    'globalThis.__ran.push("panel");'
+    + "globalThis.window."
+    + GLOBALS_INSTALLER
+    + " = async () => { globalThis.__installs.push(1); return {}; };"
+)
+
+
+def installer_report(*, steam_ready: bool = True, **installed: bool) -> dict[str, Any]:
+    """A ``GlobalsReport`` — the shape the globals bundle's installer answers with."""
+    return {
+        "alreadyPresent": False,
+        "source": "tender",
+        "steamReady": steam_ready,
+        "installed": dict(installed),
+        "reactVersion": "18.3.1",
+    }
+
+
+def run_under_node(tmp_path, built: str) -> dict[str, Any]:
+    """Evaluate *built* against the stub page; answer what came back and what ran."""
+    harness = tmp_path / "run-bootstrap.mjs"
+    harness.write_text(_STUB_PAGE.replace("__TENDER_EXPRESSION__", built), encoding="utf-8")
+    finished = subprocess.run([node_or_skip(), str(harness)], capture_output=True, text=True, check=False)
+    assert finished.returncode == 0, finished.stderr
+    return json.loads(finished.stdout)
+
+
+class TestItRunsUnderNode:
+    """The expression evaluated for real, against a stub page and stub bundles.
+
+    There is no Steam here and no ``@decky/ui``: the stubs stand in for a page
+    with a document and for bundles that record having been imported. What that
+    buys over reading the text is the ORDER — import, install, import — and the
+    refusals, which are exercised rather than asserted about. The installer
+    arrives on the window from the bundle that defines it, so every claim about
+    when it is called rests on a module having run first.
+    """
+
+    def test_it_installs_the_globals_and_then_imports_the_panel(self, tmp_path):
+        report = installer_report(SP_REACT=True, SP_REACTDOM=True, SP_JSX=True)
+        answered = run_under_node(tmp_path, build_bootstrap(facts(urls=(_globals_bundle(report), _PANEL))))
+        assert answered["answer"] == {"ok": True}
+        assert answered["ran"] == ["globals", "panel"]
+        assert answered["installs"] == 1
+        assert answered["cards"] == 0
+
+    def test_a_missing_global_keeps_the_panel_out_and_names_it(self, tmp_path):
+        report = installer_report(SP_REACT=True, SP_REACTDOM=True, SP_JSX=False, steam_ready=False)
+        answered = run_under_node(tmp_path, build_bootstrap(facts(urls=(_globals_bundle(report), _PANEL))))
+        assert answered["ran"] == ["globals"]
+        assert answered["answer"]["ok"] is False
+        reason = answered["answer"]["reason"]
+        assert GLOBALS_MISSING in reason
+        assert "SP_JSX" in reason
+        assert "SP_REACT" not in reason
+        assert STEAM_NOT_READY in reason
+        assert TOKEN not in reason
+        assert answered["cards"] == 1
+
+    def test_a_bundle_that_left_no_installer_keeps_the_panel_out(self, tmp_path):
+        answered = run_under_node(tmp_path, build_bootstrap(facts(urls=(_globals_bundle(None), _PANEL))))
+        assert answered["ran"] == ["globals"]
+        assert answered["answer"]["ok"] is False
+        assert NO_INSTALLER in answered["answer"]["reason"]
+        assert GLOBALS_INSTALLER in answered["answer"]["reason"]
+        assert answered["installs"] == 0
+
+    def test_a_report_naming_nothing_keeps_the_panel_out_and_claims_no_reading(self, tmp_path):
+        answered = run_under_node(tmp_path, build_bootstrap(facts(urls=(_globals_bundle(installer_report()), _PANEL))))
+        assert answered["ran"] == ["globals"]
+        reason = answered["answer"]["reason"]
+        assert GLOBALS_UNREPORTED in reason
+        assert STEAM_READY not in reason
+        assert STEAM_NOT_READY not in reason
+
+    def test_beside_decky_the_panel_is_imported_and_nothing_is_installed(self, tmp_path):
+        """One address, no index naming it, and a tripwire nobody trips."""
+        answered = run_under_node(tmp_path, build_bootstrap(facts(urls=(_PANEL_WITH_A_TRIPWIRE,), globals_at=None)))
+        assert answered["answer"] == {"ok": True}
+        assert answered["ran"] == ["panel"]
+        assert answered["installs"] == 0

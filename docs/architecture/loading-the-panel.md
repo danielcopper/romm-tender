@@ -193,14 +193,20 @@ when it starts — so the task's own restart is what picks the file up. See
 ## What the tests here can and cannot see
 
 `tests/host/inject/` drives the real client against a fake debugger on a real loopback port: real HTTP, real RFC 6455
-frames through `lib/websocket_frames.py` in both directions. What is faked is the page — there is no JavaScript engine
-in the suite, so `Runtime.evaluate` is answered by a stand-in that recognises the three expressions the injector sends.
+frames through `lib/websocket_frames.py` in both directions. What is faked there is the page — that tier runs no
+JavaScript, so `Runtime.evaluate` is answered by a stand-in that recognises the three expressions the injector sends.
 
 So the suite holds the framing, the reconnection, the discovery rule, the watchdog's state machine, the bundle choice
-and what the evaluated source carries — and it can say nothing at all about whether that source RUNS. `node --check`
-parses it, which is the one mechanical check available for a language this repo does not compile here. Everything else
-is a device test: whether the panel appears, whether a forced context rebuild brings it back, and whether the card draws
-where a broken bundle is served.
+and what the evaluated source carries. It also RUNS that source: node parses it, and a harness evaluates it against a
+stub `window` — a document with just enough of one for the card — with the bundle addresses as `data:` modules that
+record having been imported and that leave the installer on the window where the real bundle leaves one. So the order
+(import, install, import), the refusals that keep the panel out, and the sentence each refusal carries are exercised
+rather than read off the text.
+
+What that harness cannot see is Steam. It stands in for the page, so nothing in it says whether `@decky/ui`'s searches
+find anything, what the real installer answers against a real module registry, or whether the card is legible on a
+handheld. Those stay device tests: whether the panel appears, whether a forced context rebuild brings it back, and
+whether the card draws where a broken bundle is served.
 
 ## Related
 
