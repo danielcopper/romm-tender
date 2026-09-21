@@ -86,12 +86,29 @@ TARBALL=""
 TAG_UNREACHABLE=2
 TAG_ABSENT=3
 
+# Whether Steam's debugger answered the probe, which decides the closing line.
+DEBUGGER_ANSWERED="no"
+
+# What the EXIT trap has to clean up: a download directory, a spinner that is
+# still drawing, and a step whose line was never finished.
+WORK_DIR=""
+SPINNER_PID=""
+STEP_MESSAGE=""
+
+# What one folder's move did, set by move_folder and read by the sentence after
+# it. Three counts rather than a return value: they are three different things
+# to say.
+MOVED=0
+STAYED=0
+FAILED=0
+
 MODE="install"
 VERSION=""
 LOCAL_FILE=""
 ASSUME_YES="no"
 
 main() {
+    trap cleanup EXIT
     parse_arguments "$@"
 
     case "$MODE" in
@@ -115,10 +132,127 @@ Usage: install.sh [options]
 TEXT
 }
 
+# --------------------------------------------------------- how this looks
+
+# Whether stdout is a terminal. Every decision about colour, a spinner or a
+# progress bar is this question and nothing else, so a run whose output is piped
+# or redirected is plain text throughout.
+on_a_terminal() {
+    [ -t 1 ]
+}
+
+# Whether this run may use colour at all. NO_COLOR is the convention
+# (https://no-color.org): set to anything, it means no.
+may_colour() {
+    on_a_terminal && [ -z "${NO_COLOR:-}" ]
+}
+
+# The acknowledgement is the one warning this script prints, and these two are
+# the only place escape codes are written. Everything else is plain, which is
+# what makes the warning read as one.
+warn_style() {
+    ! may_colour || printf '\033[1;33m'
+}
+
+warn_reset() {
+    ! may_colour || printf '\033[0m'
+}
+
+# A path with the user's home written as `~`. For printing only — nothing is
+# ever opened through the result.
+tilde() {
+    case "$1" in
+        "$HOME"/*) printf '~%s\n' "${1#"$HOME"}" ;;
+        *) printf '%s\n' "$1" ;;
+    esac
+}
+
+# One phase: say what is about to happen, do it, and say how it went.
+#
+# `step <message> <command> [args...]`, always as a plain command and never as
+# `$(step …)`. The commands it runs abort on failure, and an abort inside a
+# substitution would end the subshell rather than the run. **The gate does not
+# cover this one**: `step` reaches its command through `"$@"`, which
+# `scripts/check_shell_answer_functions.py` cannot resolve, so the discipline
+# here is the comment and nothing else.
+step() {
+    local message="$1"
+    shift
+    STEP_MESSAGE="$message"
+    printf '%s …' "$message"
+    spinner_start
+    local status=0
+    "$@" || status=$?
+    spinner_stop
+    if [ "$status" -eq 0 ]; then
+        end_step "done"
+    else
+        end_step "failed"
+    fi
+    STEP_MESSAGE=""
+    return "$status"
+}
+
+# Finish the line a step opened. On a terminal the spinner has been overwriting
+# it, so the whole line is rewritten; without one nothing has moved and only the
+# ending is needed — which is why a piped run carries no carriage returns at all.
+end_step() {
+    if on_a_terminal; then
+        printf '\r%s … %s\n' "$STEP_MESSAGE" "$1"
+    else
+        printf ' %s\n' "$1"
+    fi
+}
+
+# A spinner for the phases that take seconds with nothing to show: unpacking,
+# a thousand cover moves, a service starting. A background loop rather than
+# progress, because none of those can say how far along they are.
+spinner_start() {
+    on_a_terminal || return 0
+    spin &
+    SPINNER_PID=$!
+}
+
+spin() {
+    local frames="|/-\\" index=0
+    while true; do
+        index=$(((index + 1) % 4))
+        printf '\r%s … %s' "$STEP_MESSAGE" "${frames:index:1}"
+        sleep 0.1
+    done
+}
+
+# Every path out of a step comes through here, including the abort one, so no
+# spinner outlives the phase it belongs to.
+spinner_stop() {
+    [ -n "$SPINNER_PID" ] || return 0
+    kill "$SPINNER_PID" 2> /dev/null || true
+    wait "$SPINNER_PID" 2> /dev/null || true
+    SPINNER_PID=""
+}
+
+# Close a step nobody closed. A step is still in flight here only when the
+# command it ran ended the script from inside, so the outcome is known.
+fail_open_step() {
+    spinner_stop
+    [ -n "$STEP_MESSAGE" ] || return 0
+    end_step "failed"
+    STEP_MESSAGE=""
+}
+
+# The one EXIT trap. `abort` closes the step itself so its message comes after
+# the line it belongs to rather than before; this is the backstop for every
+# other way out.
+cleanup() {
+    fail_open_step
+    [ -z "$WORK_DIR" ] || rm -rf "$WORK_DIR"
+}
+
 # Ends the run. **A function whose VALUE is taken with `$(...)` never calls this**
 # — it answers instead, and its caller aborts. Why, and what the gate can and
 # cannot see: scripts/check_shell_answer_functions.py.
 abort() {
+    fail_open_step
     echo "install.sh: $1" >&2
     [ $# -lt 2 ] || echo "  $2" >&2
     exit 1
@@ -239,13 +373,15 @@ acknowledge() {
     [ "$ASSUME_YES" = "yes" ] && return 0
     [ "$(date -u +%Y-%m-%d)" \< "$ACK_UNTIL" ] || return 0
 
+    echo
+    warn_style
     cat <<TEXT
-
 Did you run Tender as a Decky plugin before?
 Then read the migration notes first — your Steam shortcuts from that install are not recognised by this
 version, and the notes say what to do about it:
   $MIGRATION_NOTES
 TEXT
+    warn_reset
     # Opened rather than tested for: /dev/tty is readable by its permissions
     # whether or not this process has a controlling terminal, so `[ -r ... ]`
     # answers yes under `curl | bash` in a session that has none, and only the
@@ -260,10 +396,16 @@ TEXT
         abort "there is no terminal to ask on" "run with --yes once you have read the migration notes"
     fi
     local answer=""
-    printf 'Type "yes" to continue: '
+    printf 'Continue? [y/N] '
     read -r answer <&3 || true
     exec 3<&-
-    [ "$answer" = "yes" ] || abort "not confirmed" "run with --yes once you have read the migration notes"
+    echo
+    # The conventional shape: the capital N is the answer a bare Enter gives,
+    # and it is the safe one. Anything that is not a yes refuses.
+    case "$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]')" in
+        y | yes) ;;
+        *) abort "not confirmed" "run with --yes once you have read the migration notes" ;;
+    esac
 }
 
 # ------------------------------------------------------------------- fetch
@@ -300,7 +442,7 @@ obtain_tarball() {
     archive="romm-tender-$version.tar.gz"
     echo "downloading $tag"
 
-    fetch "$DOWNLOAD_BASE/$tag/$archive" "$work/$archive" ||
+    fetch_visibly "$DOWNLOAD_BASE/$tag/$archive" "$work/$archive" ||
         abort "release $tag carries no tarball" "try --version with a release that does, or --from a local build"
     fetch "$DOWNLOAD_BASE/$tag/$archive.sha256" "$work/$archive.sha256" ||
         abort "release $tag carries no checksum for its tarball" "this release cannot be verified, so it is refused"
@@ -342,6 +484,18 @@ resolve_tag() {
 
 fetch() {
     curl -fsSL "$1" -o "$2"
+}
+
+# The tarball is the one download worth watching — tens of megabytes over
+# whatever the user's connection is — so it draws curl's progress bar where
+# there is a terminal to draw it on. The checksum beside it is a hundred bytes
+# and stays silent either way.
+fetch_visibly() {
+    if on_a_terminal; then
+        curl -fL --progress-bar "$1" -o "$2"
+    else
+        curl -fsSL "$1" -o "$2"
+    fi
 }
 
 # A local build has no release to be checked against, so a sidecar beside it is
@@ -401,30 +555,62 @@ install_tree() {
 # answers 0 whether it moved the file or declined to, so a refusal and a write
 # error are the same answer to it.
 move_covers() {
-    local name source target moved stayed failed file
+    local name source target total
     for name in covers artwork; do
         source="$DATA/$name"
         [ -d "$source" ] || continue
         target="$CACHE/$name"
-        mkdir -p "$target"
-        moved=0
-        stayed=0
-        failed=0
-        for file in "$source"/*; do
-            [ -f "$file" ] || continue
-            if [ -e "$target/$(basename "$file")" ]; then
-                stayed=$((stayed + 1))
-            elif mv "$file" "$target/"; then
-                moved=$((moved + 1))
-            else
-                failed=$((failed + 1))
-            fi
-        done
-        [ "$moved" -eq 0 ] || echo "moved $moved $name file(s) to $target"
-        [ "$stayed" -eq 0 ] || echo "left $stayed $name file(s) in $source: the cache already holds a file of that name"
-        [ "$failed" -eq 0 ] || echo "could not move $failed $name file(s); see above" >&2
-        rmdir "$source" 2> /dev/null || true
+        total="$(find "$source" -maxdepth 1 -type f | wc -l)"
+        # Counted before the loop so the phase can say how much work it is, and
+        # so a folder with nothing in it costs no line at all.
+        if [ "$total" -eq 0 ]; then
+            rmdir "$source" 2> /dev/null || true
+            continue
+        fi
+        step "moving $total $(folder_noun "$name") to the cache" move_folder "$source" "$target" || true
+        report_move "$(folder_noun "$name")"
     done
+}
+
+# What a folder's files are called in a sentence. `covers` is already plural;
+# anything else is `<name> files`.
+folder_noun() {
+    case "$1" in
+        covers) printf 'covers\n' ;;
+        *) printf '%s files\n' "$1" ;;
+    esac
+}
+
+# Answers non-zero when anything could not be moved, so the phase says so rather
+# than reporting a clean finish over a file still sitting where nothing reads it.
+move_folder() {
+    local source="$1" target="$2" file
+    MOVED=0
+    STAYED=0
+    FAILED=0
+    mkdir -p "$target"
+    for file in "$source"/*; do
+        [ -f "$file" ] || continue
+        if [ -e "$target/$(basename "$file")" ]; then
+            STAYED=$((STAYED + 1))
+        elif mv "$file" "$target/"; then
+            MOVED=$((MOVED + 1))
+        else
+            FAILED=$((FAILED + 1))
+        fi
+    done
+    rmdir "$source" 2> /dev/null || true
+    [ "$FAILED" -eq 0 ]
+}
+
+report_move() {
+    local noun="$1"
+    if [ "$STAYED" -gt 0 ]; then
+        echo "  $MOVED $noun moved to the cache; $STAYED were already there and were left in place."
+    elif [ "$MOVED" -gt 0 ]; then
+        echo "  $MOVED $noun moved to the cache."
+    fi
+    [ "$FAILED" -eq 0 ] || echo "could not move $FAILED $noun; see above" >&2
 }
 
 # ------------------------------------------------------------------- unit
@@ -453,7 +639,10 @@ TEXT
 
 start_unit() {
     systemctl --user daemon-reload
-    systemctl --user enable --now "$UNIT_NAME"
+    # --quiet: `enable` otherwise announces the symlink it made, which is the
+    # one line of third-party noise in an otherwise plain run. Nothing here
+    # swallows stderr — a systemctl that fails is exactly what the user needs.
+    systemctl --user enable --now --quiet "$UNIT_NAME"
     # An update over a running unit: `enable --now` starts a stopped one and
     # leaves a running one on the tree that has just been replaced under it.
     systemctl --user restart "$UNIT_NAME"
@@ -472,13 +661,16 @@ ensure_marker() {
         mkdir -p "$STATE"
         printf '%s\ncreated by install.sh %s\n' "$marker" "$(date -u +%Y-%m-%d)" > "$STATE/$MARKER_NOTE"
     fi
-    # What was probed is Steam's debugger port, and that is all this can say:
-    # whether Steam will accept the panel, not whether the backend has put one
-    # there yet.
+}
+
+# What was probed is Steam's debugger port, and that is all it can say: whether
+# Steam will accept the panel, not whether the backend has put one there yet.
+# The answer decides the closing line rather than printing one of its own, so
+# the run ends with one summary instead of two statements.
+probe_debugger() {
+    DEBUGGER_ANSWERED="no"
     if curl -fs --max-time 2 "$DEBUGGER_PROBE" > /dev/null 2>&1; then
-        echo "Steam's debugger is answering; Tender's entry appears in the Quick Access menu once the backend has loaded it."
-    else
-        echo "Restart Steam once (or start it); Tender's entry appears in the Quick Access menu after that."
+        DEBUGGER_ANSWERED="yes"
     fi
 }
 
@@ -488,21 +680,31 @@ do_install() {
     preflight
     acknowledge
 
-    local work
-    work="$(mktemp -d)"
-    # shellcheck disable=SC2064 # expand $work now: it is what this trap exists for
-    trap "rm -rf '$work'" EXIT
-    obtain_tarball "$work"
+    WORK_DIR="$(mktemp -d)"
+    obtain_tarball "$WORK_DIR"
 
-    install_tree "$TARBALL"
+    step "unpacking $(basename "$TARBALL")" install_tree "$TARBALL"
     move_covers
-    write_unit
-    start_unit
-    ensure_marker
+    step "writing the service" write_unit
+    step "starting $UNIT_NAME" start_unit
+    step "checking Steam's debugger" ensure_and_probe
 
-    echo "Tender is installed at $CODE."
-    echo "  systemctl --user status $UNIT_NAME    what it is doing"
-    echo "  $STATE/backend.log                    its log"
+    echo
+    echo "Tender is installed."
+    printf '  %-9s %s\n' "Status:" "systemctl --user status $UNIT_NAME"
+    printf '  %-9s %s\n' "Log:" "$(tilde "$STATE/backend.log")"
+    if [ "$DEBUGGER_ANSWERED" = "yes" ]; then
+        echo "  Tender's entry appears in the Quick Access menu once the backend has loaded it."
+    else
+        echo "  Restart Steam once (or start it) to see Tender's entry in the Quick Access menu."
+    fi
+}
+
+# One phase, two questions: make sure Steam will open a debugger at all, then
+# ask whether it already has.
+ensure_and_probe() {
+    ensure_marker
+    probe_debugger
 }
 
 do_disable() {
@@ -521,13 +723,14 @@ do_uninstall() {
     rm -rf "$STATE"
     [ -z "${XDG_RUNTIME_DIR:-}" ] || rm -rf "$XDG_RUNTIME_DIR/romm-tender"
 
+    echo
     echo "Tender is removed. Left in place on purpose:"
-    echo "  $CONFIG            your settings"
-    echo "  $DATA              your library database"
-    echo "  $CACHE             cached covers and artwork"
-    echo "  $BIN/tender-rom-launcher   every Steam shortcut starts through it"
-    echo "  $HOME/romm-tender-recovery  recovery bundles, if you made any"
-    echo "  RetroDECK's own folders    your games, saves and BIOS files"
+    printf '  %-34s %s\n' "$(tilde "$CONFIG")" "your settings"
+    printf '  %-34s %s\n' "$(tilde "$DATA")" "your library database"
+    printf '  %-34s %s\n' "$(tilde "$CACHE")" "cached covers and artwork"
+    printf '  %-34s %s\n' "$(tilde "$BIN/tender-rom-launcher")" "every Steam shortcut starts through it"
+    printf '  %-34s %s\n' "$(tilde "$HOME/romm-tender-recovery")" "recovery bundles, if you made any"
+    printf '  %-34s %s\n' "RetroDECK's own folders" "your games, saves and BIOS files"
 }
 
 # The marker is removed only where a note says this side created it AND nothing

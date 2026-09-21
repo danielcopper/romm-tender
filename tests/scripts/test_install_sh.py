@@ -71,6 +71,7 @@ exit 0
 """
 
 _CURL_STUB = """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$STUB_CURL_ARGV_LOG"
 out=""
 url=""
 while [ $# -gt 0 ]; do
@@ -114,12 +115,14 @@ class Install:
         self.runtime = tmp_path / "run"
         self.systemctl_log = tmp_path / "systemctl.log"
         self.curl_log = tmp_path / "curl.log"
+        self.curl_argv_log = tmp_path / "curl-argv.log"
         self.python = self.stubs / "stub-python3"
 
         for directory in (self.home, self.stubs, self.serve, self.runtime):
             directory.mkdir(parents=True, exist_ok=True)
         self.systemctl_log.touch()
         self.curl_log.touch()
+        self.curl_argv_log.touch()
         _write_executable(self.stubs / "systemctl", _SYSTEMCTL_STUB)
         _write_executable(self.stubs / "curl", _CURL_STUB)
         _write_executable(self.python, _PYTHON_STUB)
@@ -155,6 +158,7 @@ class Install:
             "TENDER_DOWNLOAD_BASE": _DOWNLOAD_BASE,
             "STUB_SYSTEMCTL_LOG": str(self.systemctl_log),
             "STUB_CURL_LOG": str(self.curl_log),
+            "STUB_CURL_ARGV_LOG": str(self.curl_argv_log),
             "STUB_SERVE": str(self.serve),
             "STUB_DEBUGGER_URL": _DEBUGGER_PROBE,
         }
@@ -198,6 +202,10 @@ class Install:
 
     def curl_calls(self) -> list[str]:
         return self.curl_log.read_text(encoding="utf-8").split("\n")[:-1]
+
+    def curl_argv(self) -> list[str]:
+        """Every curl invocation's whole argument line, for the flags the URL does not show."""
+        return self.curl_argv_log.read_text(encoding="utf-8").split("\n")[:-1]
 
     def publish_release(self, *, tag: str = _TAG, archive: str | None = None, checksum: bool = True) -> Path:
         """Put a real tarball where the stubbed curl will serve it from."""
@@ -342,6 +350,47 @@ class TestAFreshInstall:
         assert (machine.code / "bin" / "tender-rom-launcher").is_file()
         assert not (machine.code / "romm-tender").exists()
 
+    def test_every_phase_says_what_it_is_doing_before_it_does_it(self, machine):
+        """Several seconds pass with nothing to show, and silence there reads as a hang."""
+        machine.data.mkdir(parents=True, exist_ok=True)
+        (machine.data / "covers").mkdir()
+        (machine.data / "covers" / "a.png").write_text("a", encoding="utf-8")
+
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert result.returncode == 0, result.stderr
+        announced = [
+            f"unpacking {_ARCHIVE}",
+            "moving 1 covers to the cache",
+            "writing the service",
+            "starting romm-tender",
+            "checking Steam's debugger",
+        ]
+        at = [result.stdout.index(line) for line in announced]
+        assert all(line in result.stdout for line in announced)
+        assert at == sorted(at), "the phases are announced in the order they run"
+
+    def test_a_piped_run_carries_no_carriage_returns(self, machine):
+        """No terminal, no spinner: every phase's line is written once, forwards."""
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert "\r" not in result.stdout
+        assert f"unpacking {_ARCHIVE} … done" in result.stdout
+
+    def test_the_closing_summary_is_one_aligned_block(self, machine):
+        """A blank line, then two labelled rows on one column, then what to do next.
+
+        The log's path is NOT shortened here and that is correct: these tests
+        put the state root outside the fake home, so there is no `$HOME` to
+        replace. `~` is exercised where a path really is under it — the
+        uninstall list.
+        """
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert "\nTender is installed.\n" in result.stdout
+        assert "  Status:   systemctl --user status romm-tender" in result.stdout
+        assert f"  Log:      {machine.state}/backend.log" in result.stdout
+
     def test_the_unit_names_every_root_as_an_absolute_path(self, machine):
         """The installer and the service share no environment, so nothing may be derived at runtime."""
         machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
@@ -376,8 +425,9 @@ class TestAFreshInstall:
 
         calls = machine.systemctl_calls()
         assert "--user daemon-reload" in calls
-        assert "--user enable --now romm-tender" in calls
-        assert calls.index("--user daemon-reload") < calls.index("--user enable --now romm-tender")
+        # --quiet, so `enable` does not announce the symlink it made.
+        assert "--user enable --now --quiet romm-tender" in calls
+        assert calls.index("--user daemon-reload") < calls.index("--user enable --now --quiet romm-tender")
 
     def test_steams_debugger_marker_and_our_note_are_written(self, machine):
         machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
@@ -420,7 +470,7 @@ class TestAFreshInstall:
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_DEBUGGER="answer")
 
         assert "Restart Steam once" not in result.stdout
-        assert "Quick Access menu" in result.stdout
+        assert "Quick Access menu once the backend has loaded it" in result.stdout
 
 
 class TestThePreflight:
@@ -510,6 +560,42 @@ class TestTheAcknowledgement:
 
         assert result.returncode == 0, result.stderr
 
+    def test_the_warning_is_bold_yellow_on_a_terminal(self, machine):
+        """It is the one warning this script prints, and the only colour it uses."""
+        _code, output = machine.on_a_terminal("--from", str(machine.tmp_path / "gone.tar.gz"), answer="y")
+
+        assert "\033[1;33m" in output
+        assert "\033[0m" in output
+
+    def test_no_color_is_honoured(self, machine):
+        """https://no-color.org: set to anything, it means no."""
+        _code, output = machine.on_a_terminal("--from", str(machine.tmp_path / "gone.tar.gz"), answer="y", NO_COLOR="1")
+
+        assert "\033[" not in output
+        assert "Did you run Tender as a Decky plugin before?" in output
+
+    def test_a_piped_run_is_never_coloured(self, machine):
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert "\033[" not in result.stdout
+
+    @pytest.mark.parametrize("answer", ["y", "Y", "yes", "YES"])
+    def test_a_yes_in_any_of_its_spellings_is_accepted(self, machine, answer):
+        code, output = machine.on_a_terminal("--from", str(machine.tmp_path / "not-here.tar.gz"), answer=answer)
+
+        assert code == 1
+        assert "no such file" in output
+        assert "not confirmed" not in output
+
+    @pytest.mark.parametrize("answer", ["", "n", "no", "maybe"])
+    def test_everything_else_including_a_bare_enter_refuses(self, machine, answer):
+        """The capital N in `[y/N]` is the answer Enter gives, and it is the safe one."""
+        code, output = machine.on_a_terminal("--from", str(_build_tarball(machine.tmp_path)), answer=answer)
+
+        assert code == 1
+        assert "not confirmed" in output
+        assert not machine.code.exists()
+
     def test_a_refused_acknowledgement_says_so_on_the_terminal(self, machine):
         """The case every other test in this file is structurally blind to.
 
@@ -532,9 +618,52 @@ class TestTheAcknowledgement:
         code, output = machine.on_a_terminal("--from", str(machine.tmp_path / "not-here.tar.gz"), answer="yes")
 
         assert code == 1
-        assert 'Type "yes" to continue' in output
+        assert "Continue? [y/N]" in output
         assert "no such file" in output
         assert "not confirmed" not in output
+
+    def test_the_download_draws_a_progress_bar_only_on_a_terminal(self, machine):
+        """Tens of megabytes over an unknown connection is the one wait worth showing.
+
+        The checksum beside it is a hundred bytes and stays silent either way,
+        which is what keeps the two apart in the recorded arguments.
+        """
+        machine.publish_release()
+
+        code, _output = machine.on_a_terminal("--version", _VERSION, answer="y")
+
+        assert code == 0
+        archive = [line for line in machine.curl_argv() if line.endswith(_ARCHIVE)]
+        sidecar = [line for line in machine.curl_argv() if ".sha256" in line]
+        assert archive and all("--progress-bar" in line for line in archive)
+        assert sidecar and not any("--progress-bar" in line for line in sidecar)
+
+    def test_a_piped_download_stays_silent(self, machine):
+        machine.publish_release()
+
+        machine.run("--version", _VERSION, "--yes")
+
+        assert not any("--progress-bar" in line for line in machine.curl_argv())
+
+    def test_a_phase_that_aborts_closes_its_line_before_the_message(self, machine):
+        """`failed` belongs to the line it is about, so it comes before the reason."""
+        corrupt = machine.tmp_path / "corrupt.tar.gz"
+        corrupt.write_bytes(b"this is not a gzip stream")
+
+        code, output = machine.on_a_terminal("--from", str(corrupt), answer="y")
+
+        assert code == 1
+        assert "unpacking corrupt.tar.gz … failed" in output
+        assert output.index("… failed") < output.index("install.sh: the tarball could not be unpacked")
+
+    def test_the_spinner_finishes_every_line_it_opened(self, machine):
+        """Only a terminal gets one, so only this tier can see it end."""
+        code, output = machine.on_a_terminal("--from", str(_build_tarball(machine.tmp_path)), answer="y")
+
+        assert code == 0, output
+        assert f"unpacking {_ARCHIVE} … done" in output
+        assert "writing the service … done" in output
+        assert "starting romm-tender … done" in output
 
     def test_it_is_not_shown_once_its_expiry_has_passed(self, machine):
         """The warning carries an expiry in the code so it does not outlive its reason."""
@@ -560,7 +689,9 @@ class TestTheCoversMoveOnce:
         assert (machine.cache / "covers" / "a.png").read_text(encoding="utf-8") == "a"
         assert (machine.cache / "artwork" / "b.png").read_text(encoding="utf-8") == "b"
         assert not (machine.data / "covers").exists()
-        assert "moved 1 covers file(s)" in result.stdout
+        assert "moving 1 covers to the cache" in result.stdout
+        assert "1 covers moved to the cache." in result.stdout
+        assert "1 artwork files moved to the cache." in result.stdout
 
     def test_a_file_the_cache_already_holds_is_never_overwritten(self, machine):
         self._seed(machine, "covers", {"a.png": "old"})
@@ -571,7 +702,7 @@ class TestTheCoversMoveOnce:
 
         assert (machine.cache / "covers" / "a.png").read_text(encoding="utf-8") == "new"
         assert (machine.data / "covers" / "a.png").read_text(encoding="utf-8") == "old"
-        assert "left 1 covers file(s)" in result.stdout
+        assert "0 covers moved to the cache; 1 were already there and were left in place." in result.stdout
 
     def test_a_move_that_fails_is_reported_as_a_failure_not_as_a_duplicate(self, machine):
         """The two reasons a file stays are not the same news.
@@ -591,8 +722,9 @@ class TestTheCoversMoveOnce:
             target.chmod(0o700)
 
         assert result.returncode == 0, result.stderr
-        assert "could not move 1 covers file(s)" in result.stderr
-        assert "the cache already holds a file of that name" not in result.stdout
+        assert "could not move 1 covers" in result.stderr
+        assert "were already there" not in result.stdout
+        assert "moving 1 covers to the cache … failed" in result.stdout
         assert (machine.data / "covers" / "a.png").is_file()
 
     def test_nothing_else_under_the_data_root_is_touched(self, machine):
@@ -835,8 +967,10 @@ class TestUninstall:
         assert "your settings" in result.stdout
         assert "every Steam shortcut starts through it" in result.stdout
         # The recovery root is the user's home, not one of RetroDECK's folders,
-        # so it gets a line of its own rather than riding along with them.
-        assert f"{machine.home}/romm-tender-recovery" in result.stdout
+        # so it gets a line of its own rather than riding along with them —
+        # and every path in the list is printed with `~` for the home.
+        assert "~/romm-tender-recovery" in result.stdout
+        assert str(machine.home) not in result.stdout
 
     def test_it_removes_the_marker_it_created_where_no_decky_loader_is_installed(self, machine):
         self._installed(machine)
