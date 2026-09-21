@@ -16,9 +16,10 @@ writes a note named `debugger-marker` under the state root recording that the fi
 nothing: a switch that says to leave Steam alone may not put a file in Steam's directory.
 
 It is re-created on every start rather than once because something else takes it away. Decky Loader's installer creates
-the marker unconditionally and its uninstaller removes it unconditionally, and the loader itself never touches it — so a
-user who removes Decky from a machine that also runs Tender removes Tender's only way into Steam with it, and the
-symptom is a panel that stops appearing with nothing said. Nothing on that side can be changed.
+the marker unconditionally and its uninstaller removes it unconditionally (`SteamDeckHomebrew/decky-installer`,
+`cli/install_release.sh` and `cli/uninstall.sh`), and the loader itself never touches it — so a user who removes Decky
+from a machine that also runs Tender removes Tender's only way into Steam with it, and the symptom is a panel that stops
+appearing with nothing said. Nothing on that side can be changed, which is why this side re-creates it.
 
 The note is what `install.sh --uninstall` reads to decide whether the marker is its to remove: it takes the marker away
 only where the note says this program created it AND no Decky Loader is installed, so a marker somebody else needs is

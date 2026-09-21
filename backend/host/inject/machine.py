@@ -167,12 +167,11 @@ def ensure_debugger_marker(user_home: str, state_dir: str, logger: logging.Logge
     Answers ``True`` where the marker is there — already, or because this call
     created it — and ``False`` where it could not be. Never raises.
 
-    The marker is created rather than only reported because nothing else will:
-    Decky Loader's installer creates it unconditionally and its uninstaller
-    removes it unconditionally, so a user who removes Decky takes this program's
-    only way into Steam with them, and the symptom is a panel that stops
-    appearing with nothing said. Creating it is not enough on its own — Steam
-    reads it at start-up — so the line this writes says a restart is due.
+    It is created rather than only reported, and on every start rather than
+    once, because another program on the same machine takes it away — which
+    program and why is ``docs/architecture/loading-the-panel.md``. Creating it
+    is not enough on its own, since Steam reads it at start-up, so the line this
+    writes says a restart is due.
 
     The note beside it records that the marker is ours, which is the only
     evidence ``install.sh --uninstall`` has for whether it may take the marker

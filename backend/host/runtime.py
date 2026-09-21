@@ -159,11 +159,9 @@ async def run_backend(
                 # Before the injector rather than inside it: without this file
                 # Steam opens no debugger at all, so there is nothing for the
                 # attach loop to find and no amount of retrying would produce
-                # one. Decky Loader's uninstaller removes the marker
-                # unconditionally, which is how a working install loses one, so
-                # it is re-created on every start rather than once. Not where
-                # the panel is not being loaded: a switch that says "leave Steam
-                # alone" may not write a file into Steam's directory.
+                # one. Not where the panel is not being loaded: a switch that
+                # says "leave Steam alone" may not write a file into Steam's
+                # directory.
                 ensure_debugger_marker(injection.user_home, injection.state_dir, logger)
             injector = asyncio.create_task(
                 PanelInjector(setup=injection, asset_url=server.asset_url, token=token, logger=logger).run()
