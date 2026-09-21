@@ -148,13 +148,46 @@ class TestEnsuringSteamsDebuggerMarker:
         assert "Steam has to be restarted once" in caplog.text
 
     def test_it_writes_the_note_the_uninstaller_reads(self, tmp_path):
-        self._steam_root(tmp_path, (".local", "share", "Steam"))
+        root = self._steam_root(tmp_path, (".local", "share", "Steam"))
 
         machine.ensure_debugger_marker(str(tmp_path), str(tmp_path / "state"), logging.getLogger("test"))
 
         note = tmp_path / "state" / machine.DEBUGGER_MARKER_NOTE
-        assert note.is_file()
-        assert note.read_text(encoding="utf-8").startswith("created by the backend ")
+        first, second = note.read_text(encoding="utf-8").splitlines()
+        assert first == str(root / ".cef-enable-remote-debugging")
+        assert second.startswith("created by the backend ")
+
+    def test_the_note_names_the_marker_that_was_created(self, tmp_path):
+        """``install.sh --uninstall`` unlinks that line, so it names one file rather than a name."""
+        root = self._steam_root(tmp_path, (".steam", "steam"))
+
+        machine.ensure_debugger_marker(str(tmp_path), str(tmp_path / "state"), logging.getLogger("test"))
+
+        note = tmp_path / "state" / machine.DEBUGGER_MARKER_NOTE
+        assert note.read_text(encoding="utf-8").splitlines()[0] == str(root / ".cef-enable-remote-debugging")
+
+    def test_a_note_that_could_not_be_written_does_not_unmake_the_marker(self, tmp_path, caplog):
+        """The marker is what Steam reads; the note is only what the uninstaller reads.
+
+        A state directory that cannot be written costs the uninstaller its
+        authority over one file. Reporting the created marker as a failure
+        because of it would be a worse answer than the one thing that went
+        wrong — and it is the answer a single try block gives.
+        """
+        root = self._steam_root(tmp_path, (".local", "share", "Steam"))
+        blocked = tmp_path / "state"
+        blocked.mkdir()
+        blocked.chmod(0o500)
+        try:
+            with caplog.at_level(logging.WARNING):
+                answer = machine.ensure_debugger_marker(str(tmp_path), str(blocked), logging.getLogger("test"))
+        finally:
+            blocked.chmod(0o700)
+
+        assert answer is True
+        assert (root / ".cef-enable-remote-debugging").is_file()
+        assert "could not record it at" in caplog.text
+        assert "Steam has to be restarted once" in caplog.text
 
     def test_the_first_existing_steam_root_wins(self, tmp_path):
         """Same order as every other reading here; on this machine one is a symlink to the other."""

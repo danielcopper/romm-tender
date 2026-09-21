@@ -27,6 +27,9 @@ _REQUIRED = (
     "backend/native/libgavel-x86_64-linux.so",
     "backend/_vendor/atlas/__init__.py",
     "backend/_vendor/atlas/data/systems.json",
+    # Ships despite ending in the name of a file that never ships. The prune is
+    # by exact name, and widening it to a glob would take this with it.
+    "backend/_vendor/atlas/data/emulator_settings.json",
     "backend/db/migrations/001_initial.sql",
     "dist/index.js",
     "dist/globals.js",
@@ -136,11 +139,18 @@ class TestWhatItProduces:
 
 class TestWhatItRefusesToShip:
     def test_no_decoy_reaches_the_archive(self, tmp_path):
+        """Each decoy by its exact archive path, never by a suffix.
+
+        A suffix test cannot tell ``settings.json`` from the vendored
+        ``emulator_settings.json`` that has to ship, so it would fail on a
+        correct archive while a prune widened to ``*settings.json`` — which
+        takes the vendored file with it — is what the required set catches.
+        """
         _package(_checkout(tmp_path), tmp_path / "out")
 
-        names = _names(tmp_path / "out" / "romm-tender-1.2.3.tar.gz")
+        names = set(_names(tmp_path / "out" / "romm-tender-1.2.3.tar.gz"))
         for decoy in _DECOYS:
-            assert not any(name.endswith(decoy) for name in names), decoy
+            assert f"romm-tender/{decoy}" not in names, decoy
 
     def test_nothing_under_a_pruned_directory_survives(self, tmp_path):
         """The prune is by shape, so it has to reach a nested directory, not just a top-level one."""

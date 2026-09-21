@@ -59,10 +59,13 @@ UNIT_DIR="$CONFIG_HOME/systemd/user"
 UNIT="$UNIT_DIR/romm-tender.service"
 UNIT_NAME="romm-tender"
 
-# The note recording that this install created Steam's debugger marker. The
-# backend spells the same filename as DEBUGGER_MARKER_NOTE in
-# backend/host/inject/machine.py, and tests/scripts/test_install_sh.py holds the
-# two equal — the uninstaller reads whichever of the two wrote it.
+# The note recording that Steam's debugger marker is ours. Its FIRST LINE is the
+# absolute path of the marker that was created, which is what `--uninstall`
+# removes — the note is the whole of the authority, so it has to name the one
+# file rather than a name to go looking for. The backend writes the same two
+# lines under the same filename (DEBUGGER_MARKER_NOTE in
+# backend/host/inject/machine.py), and tests/scripts/test_install_sh.py holds the
+# two spellings equal; the uninstaller reads whichever of the two wrote it.
 MARKER_NOTE="debugger-marker"
 MARKER_FILE=".cef-enable-remote-debugging"
 
@@ -229,7 +232,13 @@ TEXT
     # whether or not this process has a controlling terminal, so `[ -r ... ]`
     # answers yes under `curl | bash` in a session that has none, and only the
     # open itself tells the two apart.
-    if ! exec 3< /dev/tty 2> /dev/null; then
+    #
+    # The braces are load-bearing. `exec` with no command applies its
+    # redirections to the SHELL, so an unbraced `2> /dev/null` here would send
+    # this script's stderr to /dev/null for the rest of the run — every later
+    # abort, and every message from curl, tar and systemctl, lost on exactly the
+    # machines that have a terminal to read them.
+    if ! { exec 3< /dev/tty; } 2> /dev/null; then
         abort "there is no terminal to ask on" "run with --yes once you have read the migration notes"
     fi
     local answer=""
@@ -276,8 +285,14 @@ resolve_tag() {
     fi
     local body tag
     body="$(curl -fsSL "$RELEASE_API")" || abort "could not ask GitHub for the newest release" "check the network"
+    # `|| true` so the empty answer is a value this function decides about
+    # rather than a pipeline status something else might act on. Measured on
+    # bash 5.3.3: errexit does NOT fire on this assignment as the script calls
+    # it — the function runs inside a command substitution, where a failing
+    # assignment does not end anything — so without the guard the refusal below
+    # is reached by a rule that is not written down at either end.
     tag="$(printf '%s' "$body" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 |
-        cut -d'"' -f4)"
+        cut -d'"' -f4 || true)"
     case "$tag" in
         tender-v[0-9]*) echo "$tag" ;;
         *) abort "the newest release is not a Tender release ($tag)" "name one with --version instead" ;;
@@ -313,8 +328,10 @@ install_tree() {
 
     rm -rf "$CODE.new"
     mkdir -p "$CODE.new"
-    tar -xzf "$tarball" --strip-components=1 -C "$CODE.new" ||
+    if ! tar -xzf "$tarball" --strip-components=1 -C "$CODE.new"; then
+        rm -rf "$CODE.new"
         abort "the tarball could not be unpacked" "nothing was changed"
+    fi
 
     local required
     for required in backend/main.py dist/index.js bin/tender-rom-launcher; do
@@ -332,12 +349,19 @@ install_tree() {
 
 # ------------------------------------------------------------ covers once
 
-# A 0.33 install wrote covers and artwork under the data root; this version
-# reads them from the cache root. They are re-fetchable but not cheaply — a real
-# library runs to hundreds of megabytes and hours of requests — so they are
-# moved once, and never over a file the cache side already holds.
+# An earlier install wrote covers and artwork under the data root; this version
+# reads them from the cache root. They are re-fetchable, but not cheaply enough
+# to throw away, so they are moved once and never over a file the cache side
+# already holds.
+#
+# The two reasons a file stays are kept apart, because one of them is fine and
+# the other is a fault: a name the cache already holds is the rule working, and
+# a move that FAILED is a problem the user has to see. Asking `-e` before the
+# move rather than reading `mv -n`'s exit status is what separates them — `mv -n`
+# answers 0 whether it moved the file or declined to, so a refusal and a write
+# error are the same answer to it.
 move_covers() {
-    local name source target moved stayed file
+    local name source target moved stayed failed file
     for name in covers artwork; do
         source="$DATA/$name"
         [ -d "$source" ] || continue
@@ -345,16 +369,20 @@ move_covers() {
         mkdir -p "$target"
         moved=0
         stayed=0
+        failed=0
         for file in "$source"/*; do
             [ -f "$file" ] || continue
-            if mv -n "$file" "$target/" 2> /dev/null && [ ! -e "$file" ]; then
+            if [ -e "$target/$(basename "$file")" ]; then
+                stayed=$((stayed + 1))
+            elif mv "$file" "$target/"; then
                 moved=$((moved + 1))
             else
-                stayed=$((stayed + 1))
+                failed=$((failed + 1))
             fi
         done
         [ "$moved" -eq 0 ] || echo "moved $moved $name file(s) to $target"
         [ "$stayed" -eq 0 ] || echo "left $stayed $name file(s) in $source: the cache already holds a file of that name"
+        [ "$failed" -eq 0 ] || echo "could not move $failed $name file(s); see above" >&2
         rmdir "$source" 2> /dev/null || true
     done
 }
@@ -401,7 +429,7 @@ ensure_marker() {
     if [ ! -e "$marker" ]; then
         : > "$marker"
         mkdir -p "$STATE"
-        echo "created by install.sh $(date -u +%Y-%m-%d)" > "$STATE/$MARKER_NOTE"
+        printf '%s\ncreated by install.sh %s\n' "$marker" "$(date -u +%Y-%m-%d)" > "$STATE/$MARKER_NOTE"
     fi
     if curl -fs --max-time 2 "$DEBUGGER_PROBE" > /dev/null 2>&1; then
         echo "Tender is running. Its entry is in Steam's Quick Access menu."
@@ -457,20 +485,27 @@ do_uninstall() {
     echo "  RetroDECK's own folders    your games, saves and BIOS files, and any recovery bundles"
 }
 
-# The marker is removed only where this install created it AND nothing else
-# needs it. Decky Loader's installer creates the same file unconditionally and
-# its uninstaller removes it unconditionally, so a machine that has Decky has
-# something else depending on it, and taking it away would break that instead.
+# The marker is removed only where a note says this side created it AND nothing
+# else needs it — why Decky Loader counts as something else is
+# docs/architecture/loading-the-panel.md.
+#
+# Exactly the path the note names, and no search: the note is the authority, so
+# removing anything it does not name would be removing a file on a hunch. The
+# name check is the one thing asked of that path, because a note that has been
+# truncated, half-written or hand-edited must not turn `--uninstall` into an
+# unlink of whatever it happens to spell.
 remove_marker_if_ours() {
     [ -f "$STATE/$MARKER_NOTE" ] || return 0
     if decky_loader_installed; then
         echo "Steam's remote-debugging marker is left in place: Decky Loader is installed and reads it too."
         return 0
     fi
-    local root
-    for root in "$HOME/.local/share/Steam" "$HOME/.steam/steam"; do
-        rm -f "$root/$MARKER_FILE"
-    done
+    local marker
+    marker="$(head -n 1 "$STATE/$MARKER_NOTE")"
+    case "$marker" in
+        /*"/$MARKER_FILE") rm -f "$marker" ;;
+        *) echo "Steam's remote-debugging marker is left in place: $STATE/$MARKER_NOTE does not name one." >&2 ;;
+    esac
 }
 
 # Installed, not running: an uninstaller may not take away a file the program

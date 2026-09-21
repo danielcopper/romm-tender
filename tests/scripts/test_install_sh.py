@@ -11,12 +11,20 @@ behind.
 The tarball under test is built by ``scripts/package.sh`` from a synthetic
 checkout, so what ``--from`` installs is the layout the packager actually
 produces rather than one this file invented.
+
+**One tier runs the script on a real terminal** (``_on_a_terminal``), because the
+rest of the file cannot: every other case starts the script in a session of its
+own, so ``/dev/tty`` cannot be opened and the acknowledgement's prompt is never
+reached. Everything on the far side of that check — the prompt, the answer, and
+whether this script still has a stderr afterwards — is invisible without one.
 """
 
 from __future__ import annotations
 
 import hashlib
 import os
+import pty
+import selectors
 import subprocess
 import tarfile
 from pathlib import Path
@@ -162,6 +170,27 @@ class Install:
             start_new_session=True,
         )
 
+    def on_a_terminal(self, *args: str, answer: str = "yes", **extra: str) -> tuple[int, str]:
+        """Run the installer with a controlling terminal, and type *answer* at its prompt.
+
+        ``pty.fork`` rather than a pipe: the acknowledgement opens ``/dev/tty``,
+        which resolves only for a process that HAS a controlling terminal, and a
+        pipe on stdin does not give it one. The child becomes a session leader
+        with the pty attached, which is what a user running this in a shell has.
+
+        Answers with the exit status and everything that reached the terminal —
+        one stream, because a terminal is one stream.
+        """
+        env = self.env(**extra)
+        pid, master = pty.fork()
+        if pid == 0:  # pragma: no cover - the child execs before it can be measured
+            try:
+                os.execve("/bin/bash", ["bash", str(_INSTALL), *args], env)
+            finally:
+                os._exit(127)
+        os.write(master, f"{answer}\n".encode())
+        return _drain(pid, master)
+
     def systemctl_calls(self) -> list[str]:
         return self.systemctl_log.read_text(encoding="utf-8").split("\n")[:-1]
 
@@ -178,6 +207,36 @@ class Install:
             (self.serve / f"{name}.sha256").write_text(f"{digest}  {name}\n", encoding="utf-8")
         (self.serve / "latest").write_text(f'{{"tag_name": "{tag}"}}\n', encoding="utf-8")
         return self.serve / name
+
+
+def _drain(pid: int, master: int, timeout: float = 30.0) -> tuple[int, str]:
+    """Read the terminal until the child is gone, then reap it.
+
+    A pty's master reports ``EIO`` rather than end-of-file once the last slave
+    is closed, so that is the read this loop ends on. The deadline is a backstop:
+    a script that sat waiting for an answer would otherwise hang the suite
+    instead of failing it.
+    """
+    selector = selectors.DefaultSelector()
+    selector.register(master, selectors.EVENT_READ)
+    chunks: list[bytes] = []
+    try:
+        while True:
+            if not selector.select(timeout):
+                break
+            try:
+                data = os.read(master, 4096)
+            except OSError:
+                break
+            if not data:
+                break
+            chunks.append(data)
+    finally:
+        selector.close()
+        os.close(master)
+    _, status = os.waitpid(pid, 0)
+    code = os.waitstatus_to_exitcode(status)
+    return code, b"".join(chunks).decode(errors="replace")
 
 
 def _write_executable(path: Path, body: str) -> None:
@@ -262,7 +321,24 @@ class TestAFreshInstall:
         machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
 
         assert machine.marker.is_file()
-        assert machine.note.read_text(encoding="utf-8").startswith("created by install.sh ")
+        first, second = machine.note.read_text(encoding="utf-8").splitlines()
+        assert first == str(machine.marker)
+        assert second.startswith("created by install.sh ")
+
+    def test_the_note_names_the_marker_that_was_actually_created(self, machine):
+        """The uninstaller acts on that line, so it has to name the file this run wrote.
+
+        The other Steam spelling is the case that tells the two apart: a note
+        recording a name rather than a path would send the uninstaller looking,
+        and looking is what it must not do.
+        """
+        machine.steam_root.rmdir()
+        other = machine.home / ".steam" / "steam"
+        other.mkdir(parents=True)
+
+        machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert machine.note.read_text(encoding="utf-8").splitlines()[0] == str(other / ".cef-enable-remote-debugging")
 
     def test_a_marker_that_was_already_there_leaves_no_note(self, machine):
         """The note is the claim that the marker is ours, so it may not be written over someone else's."""
@@ -371,6 +447,32 @@ class TestTheAcknowledgement:
 
         assert result.returncode == 0, result.stderr
 
+    def test_a_refused_acknowledgement_says_so_on_the_terminal(self, machine):
+        """The case every other test in this file is structurally blind to.
+
+        It needs a real terminal twice over: to reach the prompt at all, and to
+        show that this script still HAS a stderr on the far side of the check
+        that opened one. An `exec` redirection applied to the shell rather than
+        to a group silences every later message, and it silences them only where
+        a terminal exists — so a suite without this tier reports a green run for
+        an installer whose every abort has gone missing.
+        """
+        code, output = machine.on_a_terminal("--from", str(_build_tarball(machine.tmp_path)), answer="no")
+
+        assert code == 1
+        assert "not confirmed" in output
+        assert "run with --yes" in output
+        assert not machine.code.exists()
+
+    def test_an_answered_acknowledgement_gets_on_with_it_and_keeps_its_stderr(self, machine):
+        """ "yes" passes the check, and the next failure still reaches the terminal."""
+        code, output = machine.on_a_terminal("--from", str(machine.tmp_path / "not-here.tar.gz"), answer="yes")
+
+        assert code == 1
+        assert 'Type "yes" to continue' in output
+        assert "no such file" in output
+        assert "not confirmed" not in output
+
     def test_it_is_not_shown_once_its_expiry_has_passed(self, machine):
         """The warning carries an expiry in the code so it does not outlive its reason."""
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), TENDER_ACK_UNTIL="2000-01-01")
@@ -407,6 +509,28 @@ class TestTheCoversMoveOnce:
         assert (machine.cache / "covers" / "a.png").read_text(encoding="utf-8") == "new"
         assert (machine.data / "covers" / "a.png").read_text(encoding="utf-8") == "old"
         assert "left 1 covers file(s)" in result.stdout
+
+    def test_a_move_that_fails_is_reported_as_a_failure_not_as_a_duplicate(self, machine):
+        """The two reasons a file stays are not the same news.
+
+        "the cache already holds it" is the rule working; a write that failed is
+        the user's covers still sitting where nothing reads them. Reading the
+        exit status of ``mv -n`` cannot tell them apart, because it answers 0
+        for both.
+        """
+        self._seed(machine, "covers", {"a.png": "a"})
+        target = machine.cache / "covers"
+        target.mkdir(parents=True)
+        target.chmod(0o500)
+        try:
+            result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+        finally:
+            target.chmod(0o700)
+
+        assert result.returncode == 0, result.stderr
+        assert "could not move 1 covers file(s)" in result.stderr
+        assert "the cache already holds a file of that name" not in result.stdout
+        assert (machine.data / "covers" / "a.png").is_file()
 
     def test_nothing_else_under_the_data_root_is_touched(self, machine):
         (machine.data).mkdir(parents=True, exist_ok=True)
@@ -475,6 +599,23 @@ class TestWhatItDownloads:
         """The repository may publish another program's tag; it is not a thing to install."""
         machine.publish_release()
         (machine.serve / "latest").write_text('{"tag_name": "gavel-v2.0.0"}\n', encoding="utf-8")
+
+        result = machine.run("--yes")
+
+        assert result.returncode == 1
+        assert "not a Tender release" in result.stderr
+        assert not machine.code.exists()
+
+    def test_a_release_body_with_no_tag_at_all_is_refused_out_loud(self, machine):
+        """An answer that names nothing is a thing to report, not a reason to stop mid-script.
+
+        Under ``pipefail`` the grep that finds no tag exits 1, and an unguarded
+        substitution would fail the assignment and end the run under ``errexit``
+        — before the refusal below could be printed. Exit 1 either way; the
+        difference is whether the user is told anything.
+        """
+        machine.publish_release()
+        (machine.serve / "latest").write_text('{"message": "Not Found"}\n', encoding="utf-8")
 
         result = machine.run("--yes")
 
@@ -552,6 +693,18 @@ class TestWhatItDownloads:
         assert result.returncode == 1
         assert "has no dist/index.js" in result.stderr
         assert not machine.code.exists()
+        assert not Path(f"{machine.code}.new").exists()
+
+    def test_a_tarball_that_cannot_be_unpacked_leaves_nothing_staged(self, machine):
+        """The staging directory is this run's, so a run that failed takes it with it."""
+        corrupt = machine.tmp_path / "corrupt.tar.gz"
+        corrupt.write_bytes(b"this is not a gzip stream")
+
+        result = machine.run("--from", str(corrupt), "--yes")
+
+        assert result.returncode == 1
+        assert "could not be unpacked" in result.stderr
+        assert not Path(f"{machine.code}.new").exists()
 
 
 class TestDisable:
@@ -604,6 +757,29 @@ class TestUninstall:
         machine.run("--uninstall")
 
         assert not machine.marker.exists()
+
+    def test_it_removes_exactly_the_path_the_note_names_and_nothing_else(self, machine):
+        """Authority over one file. A second Steam root is the file it may not touch."""
+        self._installed(machine)
+        other = machine.home / ".steam" / "steam"
+        other.mkdir(parents=True)
+        someone_elses = other / ".cef-enable-remote-debugging"
+        someone_elses.write_text("", encoding="utf-8")
+
+        machine.run("--uninstall")
+
+        assert not machine.marker.exists()
+        assert someone_elses.is_file()
+
+    def test_a_note_that_names_no_marker_removes_nothing(self, machine):
+        """Truncated, half-written or hand-edited: the uninstaller unlinks nothing on a hunch."""
+        self._installed(machine)
+        machine.note.write_text("/etc/passwd\n", encoding="utf-8")
+
+        result = machine.run("--uninstall")
+
+        assert machine.marker.is_file()
+        assert "does not name one" in result.stderr
 
     def test_a_marker_this_install_did_not_create_is_left_alone(self, machine):
         machine.marker.write_text("", encoding="utf-8")

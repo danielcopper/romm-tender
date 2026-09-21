@@ -44,10 +44,12 @@ _STEAM_ROOTS = ((".local", "share", "Steam"), (".steam", "steam"))
 # debugger. Without it there is no port to attach to and no panel can be loaded.
 _DEBUGGER_MARKER = ".cef-enable-remote-debugging"
 
-# Our note that this program created the marker, written beside the log. The
-# installer's ``--uninstall`` reads this file by the same name to decide whether
-# the marker is its to remove, so the two spellings are held equal by
-# ``tests/scripts/test_install_sh.py``; ``install.sh`` names this constant.
+# Our note that the marker is ours, written beside the log. Its FIRST LINE is
+# the absolute path of the marker that was created: the installer's
+# ``--uninstall`` removes exactly the path the note names, so the note has to
+# name the one file rather than a name to go looking for. ``install.sh`` writes
+# the same two lines under the same filename and names this constant;
+# ``tests/scripts/test_install_sh.py`` holds the two spellings equal.
 DEBUGGER_MARKER_NOTE = "debugger-marker"
 _PACKAGE_DIR = "package"
 _BRANCH_FILE = "beta"
@@ -187,7 +189,6 @@ def ensure_debugger_marker(user_home: str, state_dir: str, logger: logging.Logge
     try:
         with open(marker, "x", encoding="utf-8"):
             pass
-        _write_marker_note(state_dir)
     except OSError as e:
         logger.warning(f"inject: could not create Steam's remote-debugging marker at {marker}: {e}")
         return False
@@ -195,6 +196,12 @@ def ensure_debugger_marker(user_home: str, state_dir: str, logger: logging.Logge
         f"inject: created Steam's remote-debugging marker at {marker}; "
         "Steam has to be restarted once before the panel can load"
     )
+    # After the answer is settled, and never able to unsettle it: the marker is
+    # what Steam reads, and a note that could not be written costs the
+    # uninstaller its authority over one file rather than costing this start its
+    # debugger. Reporting the created marker as a failure would be a worse
+    # answer than the one thing that actually went wrong.
+    _write_marker_note(state_dir, marker, logger)
     return True
 
 
@@ -207,8 +214,17 @@ def _find_steam_root(user_home: str) -> str | None:
     return None
 
 
-def _write_marker_note(state_dir: str) -> None:
-    """Record that this program created the marker, for the uninstaller to read."""
-    os.makedirs(state_dir, exist_ok=True)
-    with open(os.path.join(state_dir, DEBUGGER_MARKER_NOTE), "w", encoding="utf-8") as handle:
-        handle.write(f"created by the backend {datetime.now(UTC).date().isoformat()}\n")
+def _write_marker_note(state_dir: str, marker: str, logger: logging.Logger) -> None:
+    """Record which marker this program created, for the uninstaller to read.
+
+    The path comes first because that is the line the uninstaller acts on.
+    Never raises: a note that could not be written is its own failure and not
+    the caller's.
+    """
+    note = os.path.join(state_dir, DEBUGGER_MARKER_NOTE)
+    try:
+        os.makedirs(state_dir, exist_ok=True)
+        with open(note, "w", encoding="utf-8") as handle:
+            handle.write(f"{marker}\ncreated by the backend {datetime.now(UTC).date().isoformat()}\n")
+    except OSError as e:
+        logger.warning(f"inject: created the marker but could not record it at {note}: {e}")
