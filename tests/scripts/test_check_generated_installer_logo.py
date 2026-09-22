@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import functools
 import importlib.util
-import math
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -24,6 +24,11 @@ if TYPE_CHECKING:
     from types import ModuleType
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# What one half-block cell is: its character, and the colour of each half — None
+# where that half is left to the terminal's own background.
+_Colour = tuple[int, int, int] | None
+_Cell = tuple[str, _Colour, _Colour]
 _CHECK_PATH = _REPO_ROOT / "scripts" / "check_generated_installer_logo.py"
 _INSTALL = _REPO_ROOT / "install.sh"
 
@@ -44,30 +49,6 @@ def generator() -> ModuleType:
     return _load(_REPO_ROOT / "scripts" / "logo" / "terminal.py", "terminal")
 
 
-@functools.lru_cache(maxsize=1)
-def _rendered(module: ModuleType) -> object:
-    """The rasterised mark, drawn once for the whole file.
-
-    Cached because every case below wants the same raster and drawing it is a
-    rsvg-convert run plus a megapixel of classification.
-    """
-    return module.render_source()
-
-
-def _source(generator: ModuleType) -> object:
-    return _rendered(generator)
-
-
-def _braille(generator: ModuleType) -> list[list[tuple[str, str]]]:
-    source = generator.Classified(_source(generator), generator.INK_ONLY)
-    return generator.braille_cells(source, generator.Buttons(source))
-
-
-def _ascii(generator: ModuleType) -> list[list[tuple[str, str]]]:
-    source = generator.Classified(_source(generator), generator.EVERYTHING_DRAWN)
-    return generator.ascii_cells(source, generator.Buttons(source))
-
-
 def _run_check() -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(_CHECK_PATH)],
@@ -76,6 +57,22 @@ def _run_check() -> subprocess.CompletedProcess[str]:
         check=False,
         cwd=_REPO_ROOT,
     )
+
+
+@functools.lru_cache(maxsize=1)
+def _icon(module: ModuleType) -> tuple[tuple[_Cell, ...], ...]:
+    """The icon's cells, drawn once for the whole file.
+
+    Cached because every case below wants the same drawing and making it is an
+    rsvg-convert run plus a megapixel of box filtering.
+    """
+    return tuple(tuple(row) for row in module.icon_cells())
+
+
+@functools.lru_cache(maxsize=1)
+def _drawing(module: ModuleType) -> tuple[tuple[tuple[str, str], ...], ...]:
+    """The ASCII drawing's cells, drawn once for the whole file."""
+    return tuple(tuple(row) for row in module.ascii_cells())
 
 
 class TestTheCheck:
@@ -89,7 +86,7 @@ class TestTheCheck:
         """The failure this exists for: a drawing tidied by hand, one cell at a time."""
         original = _INSTALL.read_bytes()
         text = original.decode("utf-8")
-        edited = text.replace("LOGO_BRAILLE=(\n    '", "LOGO_BRAILLE=(\n    'r", 1)
+        edited = text.replace("LOGO_ASCII=(\n    '", "LOGO_ASCII=(\n    'r:", 1)
         assert edited != text
         _INSTALL.write_bytes(edited.encode("utf-8"))
         try:
@@ -98,124 +95,130 @@ class TestTheCheck:
             _INSTALL.write_bytes(original)
 
         assert result.returncode == 1
-        assert "not what `scripts/logo/terminal.py` emits today" in result.stdout
+        assert "install.sh" in result.stdout
         assert "--terminal" in result.stdout
 
+    def test_an_edited_wordmark_is_reported(self):
+        """It ships two files nothing reads yet, and the check still holds them."""
+        module = _load(_REPO_ROOT / "scripts" / "logo" / "terminal.py", "terminal")
+        target = module.WORDMARK_FILES[1][0]
+        original = target.read_bytes()
+        target.write_bytes(original + b"tidied by hand\n")
+        try:
+            result = _run_check()
+        finally:
+            target.write_bytes(original)
 
-class TestTheDrawing:
-    def test_both_renderings_are_the_size_they_say_they_are(self, generator):
-        braille = _braille(generator)
-        drawn = _ascii(generator)
+        assert result.returncode == 1
+        assert target.name in result.stdout
 
-        assert len(braille) == generator.BRAILLE_ROWS
-        assert all(len(row) == generator.BRAILLE_COLUMNS for row in braille)
-        assert len(drawn) == generator.ASCII_ROWS
-        assert all(len(row) == generator.ASCII_COLUMNS for row in drawn)
 
-    def test_every_braille_row_carries_ink(self, generator):
-        """The crop is to what the cells DRAW, so none of the ten is blank.
+class TestTheIcon:
+    """Half-blocks, where the two colours of a cell ARE the picture."""
 
-        Cropping to the whole mark instead spends the last row on the disc's
-        bottom rim, which carries no ink and so no dots.
-        """
-        for index, row in enumerate(_braille(generator)):
-            assert any(character != " " for character, _colour in row), f"row {index} is blank"
+    def test_it_is_the_size_it_says_it_is(self, generator):
+        icon = _icon(generator)
 
-    def test_the_two_tones_come_from_the_palette_the_build_ships(self, generator):
-        """Written down nowhere: a drawing in colours the mark is not in is a different mark."""
-        gen = _load(_REPO_ROOT / "scripts" / "logo" / "gen.py", "gen")
-        shipped = gen.BY_NAME[gen.CHOSEN]
+        assert len(icon) == generator.icon_rows()
+        assert all(len(row) == generator.ICON_COLUMNS for row in icon)
 
-        ring, button = generator.tones()
+    def test_every_cell_is_a_half_block_or_a_space(self, generator):
+        """Nothing is drawn in glyph shapes, so there are only three characters."""
+        drawn = {character for row in _icon(generator) for character, _fg, _bg in row}
 
-        assert (ring, button) == (shipped.disc[0], shipped.dot_peach)
+        assert drawn <= {generator.UPPER_HALF, generator.LOWER_HALF, " "}
+
+    def test_a_space_is_left_to_the_terminal(self, generator):
+        """Painting a box the colour of a GUESS at the background is the one thing
+        that looks wrong on the terminal the guess was wrong about."""
+        for row in _icon(generator):
+            for character, foreground, background in row:
+                if character == " ":
+                    assert foreground is None
+                    assert background is None
+
+    def test_it_carries_the_marks_own_colours(self, generator):
+        """The real mark, not a silhouette: the warm buttons and the navy ink are in it."""
+        colours = [
+            colour
+            for row in _icon(generator)
+            for _character, upper, lower in row
+            for colour in (upper, lower)
+            if colour
+        ]
+
+        assert any(red > 180 and blue < 170 for red, _green, blue in colours), "no warm button tone"
+        assert any(sum(colour) < 210 for colour in colours), "no dark ink tone"
+        assert any(blue > 200 and red < 190 for red, _green, blue in colours), "no light disc tone"
+
+    def test_the_rows_it_emits_are_padded_to_one_width(self, generator):
+        """A caller puts a text block beside it, and cannot measure a string with escapes in it."""
+        for row in _icon(generator):
+            printable = generator.block_row(row, "truecolor", generator.ICON_COLUMNS)
+            stripped = re.sub(r"\\033\[[0-9;]*m", "", printable)
+
+            assert len(stripped) == generator.ICON_COLUMNS
+
+    def test_the_256_colour_form_writes_no_24_bit_escape(self, generator):
+        """A terminal that did not say it takes 24-bit colour is not given any."""
+        for row in _icon(generator):
+            assert "38;2;" not in generator.block_row(row, "256", generator.ICON_COLUMNS)
+
+
+class TestTheAsciiDrawing:
+    """The other technique, for the terminal that cannot show the first one."""
+
+    def test_it_is_the_size_it_says_it_is(self, generator):
+        drawing = _drawing(generator)
+
+        assert len(drawing) == generator.ASCII_COLUMNS // 2
+        assert all(len(row) == generator.ASCII_COLUMNS for row in drawing)
+
+    def test_it_is_drawn_in_weights_not_in_blocks(self, generator):
+        """Without colour the only thing left to carry the mark is glyph weight."""
+        drawn = {character for row in _drawing(generator) for character, _colour in row}
+
+        assert drawn <= set("O#+:. ")
+        assert "O" in drawn, "the buttons are not drawn"
+        assert "#" in drawn, "the ring is not drawn"
 
     def test_a_run_is_one_colour_and_the_runs_cover_the_row(self, generator):
         """The installer splits runs and prints them; it never counts columns."""
-        for row in _braille(generator):
-            encoded = generator.runs(row)
+        for row in _drawing(generator):
+            encoded = generator.runs(list(row), generator.ASCII_COLUMNS)
             runs = encoded.split(generator.RUN_SEPARATOR)
             rebuilt = "".join(run.split(":", 1)[1] for run in runs)
 
             assert rebuilt == "".join(character for character, _colour in row)
-            assert len(rebuilt) == generator.BRAILLE_COLUMNS
+            assert len(rebuilt) == generator.ASCII_COLUMNS
 
+    def test_the_two_tones_come_from_the_palette_the_build_ships(self, generator):
+        """A drawing in colours the mark is not in is a different mark."""
+        gen = _load(_REPO_ROOT / "scripts" / "logo" / "gen.py", "gen")
+
+        _ring, button = generator.tones()
+
+        assert button == gen.BY_NAME[gen.CHOSEN].dot_peach
+
+
+class TestTheWordmark:
+    def test_it_is_the_size_it_was_approved_at(self, generator):
+        rows = generator.wordmark_cells()
+
+        assert len(rows) == generator.WORDMARK_ROWS
+        assert all(len(row) == generator.WORDMARK_COLUMNS for row in rows)
+
+    def test_its_plain_form_still_spells_the_word(self, generator):
+        """A diff can read it; that is the whole reason the second file exists."""
+        plain = generator.wordmark_plain()
+
+        assert plain.count("\n") == generator.WORDMARK_ROWS
+        assert any(line.strip() for line in plain.splitlines())
+
+
+class TestTheColourMapping:
     def test_the_nearest_256_index_is_the_nearest_one(self, generator):
         """Exact cube corners, and a grey that is not in the cube at all."""
-        assert generator.nearest_256("#000000") == 16
-        assert generator.nearest_256("#ffffff") == 231
-        assert generator.nearest_256("#080808") == 232
-
-
-class TestTheButtons:
-    """The four dots are DRAWN, because sampling them frays a circle's edge."""
-
-    def test_the_mark_has_exactly_four_of_them(self, generator):
-        """Fewer or more means the classifier changed, not that the mark did."""
-        source = generator.Classified(_source(generator), generator.INK_ONLY)
-
-        assert len(generator.Buttons(source).centres) == 4
-
-    @pytest.mark.parametrize(
-        ("keep", "across", "down", "squash"),
-        [("INK_ONLY", 48, 40, 1.0), ("EVERYTHING_DRAWN", 26, 13, 0.5)],
-    )
-    def test_all_four_are_stamped_as_the_same_shape(self, generator, keep, across, down, squash):
-        """Symmetric by construction, and identical because the radius is shared.
-
-        Checked one button at a time: two of them sit close enough on a bar that
-        their discs touch, so a single grid cannot say which sub-cell came from
-        which.
-        """
-        source = generator.Classified(_source(generator), getattr(generator, keep))
-        buttons = generator.Buttons(source)
-
-        shapes = set()
-        for centre in buttons.centres:
-            alone = generator.Buttons.__new__(generator.Buttons)
-            alone.centres = [centre]
-            alone.radius = buttons.radius
-            grid = generator._stamped(source, alone, across, down, squash)
-            origin_x = math.floor(centre[0] / source.width * across)
-            origin_y = math.floor(centre[1] / source.height * down)
-            shapes.add(
-                frozenset(
-                    (column - origin_x, row - origin_y)
-                    for row in range(down)
-                    for column in range(across)
-                    if grid[row][column]
-                )
-            )
-
-        assert len(shapes) == 1, "the four buttons are not the same shape"
-        assert next(iter(shapes)), "nothing was stamped at all"
-
-    def test_a_stamped_cell_is_the_buttons_colour_and_never_the_rings(self, generator):
-        """The defect this replaced: the dots' dark rim read as ink, so each
-
-        button wore a ring of the ring's blue. A cell holding any stamped
-        sub-cell is the button's, whatever else is under it.
-        """
-        source = generator.Classified(_source(generator), generator.INK_ONLY)
-        buttons = generator.Buttons(source)
-        stamp = generator._stamped(source, buttons, generator.BRAILLE_COLUMNS * 2, generator.BRAILLE_ROWS * 4, 1.0)
-        cells = generator.braille_cells(source, buttons)
-
-        for row, line in enumerate(cells):
-            for column, (_character, colour) in enumerate(line):
-                stamped = any(stamp[row * 4 + dy][column * 2 + dx] for dx, dy, _bit in generator._DOT_BITS)
-                if stamped:
-                    assert colour == generator.BUTTON, f"cell {column},{row} holds a button and is not one"
-
-    def test_the_radius_is_the_one_the_area_implies_plus_the_outline(self, generator):
-        """The widest span would grow with a single misread rim pixel; the area does not.
-
-        The outline is a fraction of the radius rather than a count of pixels,
-        so the button is the same part of the mark at any render resolution.
-        """
-        source = generator.Classified(_source(generator), generator.INK_ONLY)
-        buttons = generator.Buttons(source)
-        areas = [len(cells) for cells in generator._components(source, generator.BUTTON_PIXEL)]
-        implied = sum(math.sqrt(area / math.pi) for area in areas) / len(areas)
-
-        assert buttons.radius == pytest.approx(implied * (1 + generator.BUTTON_OUTLINE))
+        assert generator.nearest_256((0, 0, 0)) == 16
+        assert generator.nearest_256((255, 255, 255)) == 231
+        assert generator.nearest_256((8, 8, 8)) == 232

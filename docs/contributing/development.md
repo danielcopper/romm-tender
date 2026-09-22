@@ -306,10 +306,12 @@ reviewable diff, never a command someone runs to get back to green.
 `mise run lint` (and CI) also runs `scripts/check_generated_installer_logo.py`, which holds `install.sh`'s greeter to
 the mark. The installer draws the logo before it does anything, and it cannot render an image, so the art is text
 embedded in the script between two markers — drawn and rasterised by `scripts/logo/terminal.py` (so it needs librsvg,
-which CI installs for the check), in Braille cells where the terminal is in a UTF-8 locale and in ASCII where it is not.
-A block kept by hand is the one that drifts away from the mark it is a picture of, so the check regenerates it and fails
-on any difference; re-run `python3 scripts/logo/build.py --install --terminal` and commit the result. What the two
-renderings are and how they are cropped is `scripts/logo/README.md`.
+which CI installs for the check). There are two drawings: a half-block icon, where each cell's two colours ARE the
+picture, for a terminal in a UTF-8 locale that takes colour, and a class-drawn ASCII one for a terminal that is not. A
+run that may write no colour gets no icon at all, because half-blocks in one tone are a slab rather than a mark. A
+drawing kept by hand is the one that drifts away from the mark it is a picture of, so the check regenerates both, and
+the wordmark beside them, and fails on any difference; re-run `python3 scripts/logo/build.py --install --terminal` and
+commit the result. What the two drawings are and why they differ is `scripts/logo/README.md`.
 
 `mise run lint` (and CI) also runs `scripts/check_shell_answer_functions.py`, which holds the repository's shell to one
 rule: **a function whose value is taken with `$(...)` never reaches `exit`.** `exit` inside a command substitution ends

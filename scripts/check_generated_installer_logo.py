@@ -48,15 +48,22 @@ def main() -> int:
 
     import terminal  # noqa: PLC0415 — the generator only resolves once sys.path is set above
 
+    stale = []
     current = GENERATED.read_text(encoding="utf-8")
-    if terminal.replace_in(current) == current:
-        print("OK: the installer's terminal mark matches what its generator emits.")
+    if terminal.replace_in(current) != current:
+        stale.append(f"the generated block in {GENERATED.relative_to(REPO)}")
+    for destination, render in terminal.WORDMARK_FILES:
+        if not destination.exists() or destination.read_text(encoding="utf-8") != render():
+            stale.append(str(destination.relative_to(REPO)))
+
+    if not stale:
+        print("OK: the installer's terminal mark and the wordmark match what their generator emits.")
         return 0
 
     print(
-        f"FAIL: the generated block in {GENERATED.relative_to(REPO)} is not what "
-        "`scripts/logo/terminal.py` emits today.\n"
-        "      Either it was edited by hand, or the mark changed and the build was not re-run.\n"
+        "FAIL: not what `scripts/logo/terminal.py` emits today:\n"
+        + "".join(f"      - {name}\n" for name in stale)
+        + "      Either it was edited by hand, or the mark changed and the build was not re-run.\n"
         "      Re-run `python3 scripts/logo/build.py --install --terminal` and commit the result."
     )
     return 1

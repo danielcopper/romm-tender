@@ -33,6 +33,7 @@ Without `--install` it writes to `out/` instead, which is the way to look at a c
 | `store_image.png` (1024px)                                | `assets/` — the square mark, for previews and links  |
 | `tab-icon-art.ts`                                         | `frontend/src/qam/tabIconArt.ts` — the QAM tab glyph |
 | `installer-logo.sh`                                       | `install.sh` — the mark as terminal text             |
+| `wordmark-terminal.ans`, `wordmark-terminal.txt`          | `assets/` — TENDER in half-blocks                    |
 
 The tab glyph is the one output that is not an image. Steam's Quick Access tab strip takes a React node rather than a
 file, so the glyph ships as generated TypeScript the panel draws from — which is what lets it ask for `currentColor` at
@@ -45,26 +46,31 @@ The terminal mark is the other output that is not an image, and the only one ins
 than over one: `install.sh` prints it before it does anything, and it carries the drawing as text between two markers
 that `build.py --terminal --install` replaces. **It shares the tab glyph's pose**: both zero `arc_rot`, which in the
 shipped mark turns the sync ring to follow the disc's facet and at this size lands the ring's two gaps off the
-horizontal. So the source is not `assets/logo.png` — `terminal.py` draws `gen.standalone` in that pose and rasterises it
-with `rsvg-convert`, which is the only way to change the pose without turning a raster: rotating the shipped PNG would
-smear the four dots into ellipses and soften every edge the classifier reads. There are two renderings of it — Braille
-cells at 24x10, and an ASCII weight drawing at 26x13 for a terminal with no UTF-8 — and each is cropped to what IT
-draws, which is why the Braille one is the ink alone and the ASCII one has the disc's rim around it. Each row is emitted
-as `class:text` runs so the installer splits rather than parses, and the two tones are read from the shipped palette
-rather than written down. `scripts/check_generated_installer_logo.py` regenerates the block and fails on any difference.
+horizontal, and both thicken the ring stroke by the same amount, because at 28 columns the mark's own stroke is the
+thinnest thing on screen. `terminal.py` draws `gen.standalone` in that pose and rasterises it with `rsvg-convert`;
+nothing rotates a raster, which would smear the four dots into ellipses.
 
-**The four buttons are drawn rather than sampled.** A cell that takes its value from a majority of the pixels under it
-frays a circle's edge — the cells on the rim flip on a fraction of a pixel, so the four dots come out four different
-shapes — and the thin band of dark bar around each dot classifies as ink, which put a ring of the ring's blue around
-every button. So the generator finds them as connected components, grows each by `BUTTON_OUTLINE` to take that band with
-it, removes those regions from the ink it samples, and stamps a filled disc back in their place: one shared radius (the
-one the AREA implies, not the widest span) and a centre snapped to a whole sub-cell, which is what makes all four the
-same set of offsets. The radius is deliberately not rounded to a half sub-cell — it has to match the radius the removal
-used, or the disc either leaves a rim of the ink it replaced or grows single sub-cells off its four compass points.
+**There are two drawings, because they answer two questions.** The icon is HALF-BLOCKS: every cell is one `▀` whose
+foreground is the pixel above it and whose background is the pixel below, so a text row carries two rows of pixels and a
+cell carries two colours. That is the whole technique — nothing is drawn in glyph shapes — which is why there is no icon
+at all where colour is off, and why it is the real mark rather than a silhouette: the disc with its facet, the navy
+ring, the tan and peach buttons. It is 28 columns, which at a cell 0.45 as wide as it is tall makes 13 rows.
 
-Everything else ships twice except the lockup and `store_image.png`, which land once. The lockup is the README's banner,
-and the docs site draws its own header from the bare mark; nothing renders `store_image.png` at all, so `assets/` is the
-only place it needs to be.
+The ASCII drawing behind it is CLASS-drawn at 28 by 14: the ring, the body and the buttons are rendered as separate
+layers and each cell takes the character its heaviest layer earns (`#` and `+` for the ring, `:` for the body, `O` for a
+button, `.` for a rim). Without colour the only thing left to carry the mark is glyph weight, and a cell sampled from
+the finished mark would average ring and disc together and answer with the weight of neither.
+
+**One assumption, stated where it is made:** the terminal's background is dark. A half-transparent pixel has to be given
+some colour, so the mark's antialiased edge is blended onto `TERMINAL_BG`; a pixel still under `ALPHA_FLOOR` after that
+is left to the terminal's own background instead, so the fringe does not paint near-black boxes on a terminal whose dark
+is a different dark.
+
+`scripts/check_generated_installer_logo.py` regenerates the block and both wordmark files and fails on any difference.
+
+Everything else ships twice except the lockupEverything else ships twice except the lockup and `store_image.png`, which
+land once. The lockup is the README's banner, and the docs site draws its own header from the bare mark; nothing renders
+`store_image.png` at all, so `assets/` is the only place it needs to be.
 
 Each lockup ships in two variants because one cannot serve both grounds: the mark's ink falls to roughly 1.3:1 against
 GitHub's dark canvas, so the dark variant sets the wordmark in the disc's blue instead. The README chooses between them

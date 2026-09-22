@@ -243,17 +243,25 @@ def build_terminal(out: pathlib.Path) -> None:
     block = out / "installer-logo.sh"
     block.write_text(terminal.bash_block())
     print(f"  {block.name}  ({block.stat().st_size:,}b)")
+    for destination, render in terminal.WORDMARK_FILES:
+        copy = out / destination.name
+        copy.write_text(render())
+        print(f"  {copy.name}  ({copy.stat().st_size:,}b)")
 
 
 def install_terminal() -> None:
-    """Splice today's terminal mark into `install.sh`, between its markers.
+    """Splice today's terminal mark into `install.sh`, and write the wordmark beside it.
 
-    The one installed thing that is not a copy: the art lives inside a script
-    that is otherwise hand-written, so it replaces a block rather than a file.
+    The mark is the one installed thing that is not a copy: the art lives inside
+    a script that is otherwise hand-written, so it replaces a block rather than
+    a file. The wordmark is two ordinary files, and nothing reads them yet.
     """
     script = REPO / "install.sh"
     script.write_text(terminal.replace_in(script.read_text()))
     print(f"  {script.relative_to(REPO)}  (the mark's block)")
+    for destination, render in terminal.WORDMARK_FILES:
+        destination.write_text(render())
+        print(f"  {destination.relative_to(REPO)}  ({destination.stat().st_size:,}b)")
 
 
 def install(out: pathlib.Path, names: set[str]) -> None:
