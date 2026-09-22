@@ -157,29 +157,29 @@ LOGO_BUTTON_256=174
 LOGO_BRAILLE_WIDTH=24
 LOGO_ASCII_WIDTH=26
 LOGO_BRAILLE=(
-    '_:     |r:⢀⣠⣴⣶⣾⣿⣿⣿⣿⣷⣶⣤⣄⡀|_:     '
-    '_:   |r:⣠⣶⣿⠿⠛⠉⠁|_:    |r:⠈⠉⠛⠿⣿⣶⣄|_:   '
-    '_:  |r:⣼⣿⠟⠁|_:    |r:⣀|b:⣤⣤|r:⣄|_:    |r:⠈⠻⣿⣧⡀|_: '
-    '_:  |r:⠛⠋|_:   |r:⣀⣴⣾|b:⣿⣿⣿⣿|r:⠂|_:     |r:⣹⣿⣷⣴'
-    '_:     |r:⣰|b:⣾⣿⣿|r:⣿⣿⡿⠋⢁⣤|b:⣾⣿⣿|r:⣦|_: |r:⠙⠻⣿⠇'
-    'r:⢰⣿⣦⣀|_: |r:⠻|b:⣿⣿⡿|r:⠛⢁⣠⣾⣿⣿|b:⣿⣿⡿|r:⠏|_:   |r:⠈|_: '
-    'r:⠿⢿⣿⣏|_:     |r:⠠|b:⣿⣿⣿⣿|r:⣿⠟⠉|_:   |r:⣠⣤⡀|_: '
-    '_: |r:⠈⢻⣿⣦⡀|_:    |r:⠙|b:⠛⠛|r:⠋|_:    |r:⢀⣴⣿⡟⠁|_: '
-    '_:   |r:⠙⠿⣿⣶⣤⣀|_:      |r:⣀⣤⣶⣿⠿⠋|_:   '
-    '_:     |r:⠈⠙⠻⠿⣿⣿⣿⣿⣿⣿⠿⠟⠋⠁|_:     '
+    '_:     |r:⢀⣠⣴⣶⣾⣿⣿⣿⣿⣷⣶⣦⣄⡀|_:     '
+    '_:   |r:⣠⣾⣿⠟⠋⠉|_:      |r:⠉⠙⠻⣿⣷⣄⡀|_:  '
+    '_: |r:⢠⣾⣿⠋|_:     |b:⣀⣤⣤⣄|_:     |r:⠙⣿⣷⣄⣀'
+    '_: |r:⢿⡿⠁|_:   |r:⣠⣴⣿|b:⣸⣿⣿⣿|_:      |r:⢾⣿⣿⡿'
+    '_:     |b:⢠⣾⣿⣿|r:⣿⣿|b:⡿⠛⢁|r:⣠|b:⣾⣿⣿⡆|_:  |r:⠈⠙⠃'
+    'r:⢠⣄⡀|_:  |b:⠸⣿⣿⡿|r:⠛|b:⢁⣠⣶|r:⣿⣿|b:⣿⣿⡿⠃|_:     '
+    'r:⣼⣿⣿⡷|_:      |b:⣿⣿⣿⡏|r:⣿⠟⠋|_:   |r:⢀⣾⣷|_: '
+    'r:⠉⠙⢿⣿⣄|_:     |b:⠙⠛⠛⠉|_:     |r:⣠⣿⡿⠃|_: '
+    '_:   |r:⠙⢿⣿⣦⣄⣀|_:      |r:⣀⣠⣴⣿⡿⠛⠁|_:  '
+    '_:     |r:⠈⠙⠻⠿⢿⣿⣿⣿⣿⡿⠿⠟⠋⠁|_:     '
 )
 LOGO_ASCII=(
     '_:      |r:....|_:      |r:....|_:      '
-    '_:   |r:...|_:  |r:++######++|_:  |r:...|_:   '
+    '_:   |r:...|_:  |r:+########+|_:  |r:...|_:   '
     '_:  |r:.|_:  |r:-####++--++####+|_:  |r:.|_:  '
-    '_: |r:.|_:  |r:###-|_:    |r:--|_:    |r:-###|_:  |r:.|_: '
-    'r:.|_:  |r:+#+|_:    |r:+|b:O@@O|_:     |r:+##-|_: |r:.'
-    'r:.|_:      |r:-+###|b:OO|r:---|b:O|r:-|_: |r:+###|_:  '
-    '_:  |r:++|_:  |r:-|b:@@@|r:##++##|b:@@@|r:+|_:  |r:++|_:  '
-    'r:.|_: |r:###+|_: |r:-|b:O|r:---|b:OO|r:###+-|_:       '
-    'r:.|_: |r:-##+|_:     |b:O@@O|r:#-|_:   |r:+#+|_:  |r:.'
-    '_: |r:.|_:  |r:###-|_:    |r:--|_:    |r:-###|_:  |r:..'
-    '_:  |r:.|_:  |r:+####++---+####+|_:  |r:.|_:  '
+    '_: |r:.|_:  |r:###-|_:   |b:OOOOO|_:  |r:-###|_:  |r:..'
+    'r:.|_:  |r:##+|_:   |r:-+|b:O@@@O|_:    |r:####|_: |r:.'
+    'r:.|_:  |r:+-|_: |b:OOOOOOOOOOOOOO|r:-##+|_: |r:.'
+    '_:      |b:O@@@O|r:#++#|b:O@@@O|_:      '
+    'r:.|_: |r:+##-|b:OOOOOOOOOOOOOO|_: |r:-+|_:  |r:.'
+    'r:.|_: |r:####|_:    |b:O@@@O|r:#-|_:   |r:+##|_:  |r:.'
+    '_: |r:.|_:  |r:###-|_:  |b:OOOOO|_:   |r:-###|_:  |r:..'
+    '_:  |r:.|_:  |r:+####++--++####+|_:  |r:.|_:  '
     '_:   |r:...|_:  |r:+########+|_:  |r:...|_:   '
     '_:      |r:....|_:      |r:....|_:      '
 )
@@ -297,24 +297,32 @@ print_logo_row() {
     done
 }
 
-# What the greeter says beside the mark. The paths are this run's own rather
-# than literals, so a hand install into another tree describes that tree.
+# What the greeter says beside the mark: what this run will do, in the order a
+# reader asks it. The paths are this run's own rather than literals, so a hand
+# install into another tree describes that tree.
+#
+# The name is the one bold thing in the greeter, so the bold means something.
+# Written here rather than by the caller because it is one WORD of the line,
+# not the line.
 greeting_lines() {
-    printf '%s\n' "TENDER"
-    printf '%s\n' "RomM library in Steam"
-    printf '%s\n' ""
-    printf '%s\n' "Installs for your user, no sudo:"
-    printf '  %-13s %s\n' "the program" "$(tilde "$CODE")"
-    printf '  %-13s %s\n' "a service" "systemd --user, starts with your session"
-    printf '  %-13s %s\n' "Steam" "its debug marker, one restart"
-    printf '%s\n' ""
-    printf '%s\n' "Settings, library and shortcuts stay where they are."
+    style 1
+    printf 'TENDER'
+    reset_style
+    printf '%sRomM library in Steam\n' "$TITLE_SEPARATOR"
+    printf '\n'
+    printf '%-12s %s\n' "Install to" "$(tilde "$CODE")"
+    printf '%-12s %s\n' "Runs as" "a systemd user service, starts with your session"
+    printf '%-12s %s\n' "Needs" "one Steam restart, no sudo"
+    printf '%-12s %s\n' "Keeps" "your settings, library and shortcuts"
 }
 
 # What the other two modes say instead. Neither installs anything, so neither
 # lists what an install would put where.
 mode_lines() {
-    printf '%s\n' "TENDER"
+    style 1
+    printf 'TENDER'
+    reset_style
+    printf '\n'
     printf '%s\n' "$1"
 }
 
@@ -349,7 +357,7 @@ greeter() {
             echo
         done
         echo
-        print_greeting_text "${text[@]}"
+        printf '%s\n' "${text[@]}"
     else
         local index=0
         while [ "$index" -lt "${#art[@]}" ] || [ "$index" -lt "${#text[@]}" ]; do
@@ -360,34 +368,13 @@ greeter() {
             fi
             printf '%s' "$LOGO_GAP"
             if [ "$index" -lt "${#text[@]}" ]; then
-                print_greeting_line "$index" "${text[index]}"
+                printf '%s' "${text[index]}"
             fi
             echo
             index=$((index + 1))
         done
     fi
     echo
-}
-
-print_greeting_text() {
-    local index=0 line
-    for line in "$@"; do
-        print_greeting_line "$index" "$line"
-        echo
-        index=$((index + 1))
-    done
-}
-
-# The name is the one bold thing in the greeter; everything under it is the
-# ordinary weight, so the bold means something.
-print_greeting_line() {
-    if [ "$1" -eq 0 ]; then
-        style 1
-        printf '%s' "$2"
-        reset_style
-    else
-        printf '%s' "$2"
-    fi
 }
 
 # --------------------------------------------------------------- the run
@@ -422,6 +409,7 @@ STEAM=3
 # What the drawing is made of, resolved once from the two questions above —
 # whether the terminal can draw the glyphs, and whether it may use colour.
 DOT_SEPARATOR=" - "
+TITLE_SEPARATOR="  -  "
 ARROW="->"
 ROW_INDENT="     "
 SPINNER_FRAMES=("|" "/" "-" "\\")
@@ -444,6 +432,7 @@ resolve_look() {
     fi
     if [ "$USE_UTF8" = "yes" ]; then
         DOT_SEPARATOR=" · "
+        TITLE_SEPARATOR="  ·  "
         ARROW="→"
         SPINNER_FRAMES=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
     fi
@@ -874,7 +863,10 @@ acknowledge() {
     # and it is the safe one. Anything that is not a yes refuses.
     case "$(printf '%s' "$answer" | tr '[:upper:]' '[:lower:]')" in
         y | yes) ;;
-        *) abort "not confirmed" "run with --yes once you have read the migration notes" ;;
+        # No `--yes` hint here: the answer was no, and a hint would read as a
+        # way around the question rather than an answer to it. The hint belongs
+        # to the refusal above, where there was no way to ask at all.
+        *) abort "stopped — nothing was changed." ;;
     esac
 }
 

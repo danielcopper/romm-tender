@@ -2,8 +2,8 @@
 """The installer's terminal mark is what its generator emits today.
 
 The block between the markers in `install.sh` is written by
-`scripts/logo/build.py --terminal` from `scripts/logo/terminal.py`, which reads
-the mark's own shipped PNG. It says "do not edit" — and the whole reason it is
+`scripts/logo/build.py --terminal` from `scripts/logo/terminal.py`, which draws
+the mark and rasterises it. It says "do not edit" — and the whole reason it is
 generated is that a hand-kept copy is the one that drifts away from the mark, so
 the sentence saying it must not be edited is worth no more than a check that
 notices when it was.
@@ -15,15 +15,18 @@ Two ways to fail, and both matter:
 * someone changed the mark or the palette and did not re-run the build, so the
   committed art is a render of colours that no longer ship.
 
-Unlike its sibling `check_generated_tab_icon.py` this needs no formatter and no
-`node_modules` — the block is bash, emitted in its final form — so it runs in
-CI's `lint` job with the rest of the `scripts/check_*` family rather than in
-`build`.
+It needs `rsvg-convert`, because the mark is drawn in the terminal's own pose
+rather than read from a shipped raster. It runs in CI's `lint` job, which
+installs it, rather than in `build` where its sibling
+`check_generated_tab_icon.py` lives for prettier's sake. A contributor who has
+not got it is told the block was not compared rather than that it is wrong —
+the same answer that sibling gives without prettier, and for the same reason.
 """
 
 from __future__ import annotations
 
 import pathlib
+import shutil
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
@@ -36,6 +39,12 @@ def main() -> int:
     if not GENERATED.exists():
         print(f"FAIL: {GENERATED.relative_to(REPO)} does not exist")
         return 1
+    if shutil.which("rsvg-convert") is None:
+        print(
+            "NOT CHECKED: rsvg-convert is missing, so the installer's mark was not compared\n"
+            "             against its generator. Install librsvg to check it here."
+        )
+        return 0
 
     import terminal  # noqa: PLC0415 — the generator only resolves once sys.path is set above
 

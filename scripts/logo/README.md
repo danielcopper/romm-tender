@@ -43,11 +43,24 @@ static, is `docs/architecture/qam-panel.md`; what it departs from, and why, is a
 
 The terminal mark is the other output that is not an image, and the only one installed into the middle of a file rather
 than over one: `install.sh` prints it before it does anything, and it carries the drawing as text between two markers
-that `build.py --terminal --install` replaces. There are two renderings of it — Braille cells at 24x10, and an ASCII
-weight drawing at 26x13 for a terminal with no UTF-8 — and each is cropped to what IT draws, which is why the Braille
-one is the ink alone and the ASCII one has the disc's rim around it. Each row is emitted as `class:text` runs so the
-installer splits rather than parses, and the two tones are read from the shipped palette rather than written down.
-`scripts/check_generated_installer_logo.py` regenerates the block and fails on any difference.
+that `build.py --terminal --install` replaces. **It shares the tab glyph's pose**: both zero `arc_rot`, which in the
+shipped mark turns the sync ring to follow the disc's facet and at this size lands the ring's two gaps off the
+horizontal. So the source is not `assets/logo.png` — `terminal.py` draws `gen.standalone` in that pose and rasterises it
+with `rsvg-convert`, which is the only way to change the pose without turning a raster: rotating the shipped PNG would
+smear the four dots into ellipses and soften every edge the classifier reads. There are two renderings of it — Braille
+cells at 24x10, and an ASCII weight drawing at 26x13 for a terminal with no UTF-8 — and each is cropped to what IT
+draws, which is why the Braille one is the ink alone and the ASCII one has the disc's rim around it. Each row is emitted
+as `class:text` runs so the installer splits rather than parses, and the two tones are read from the shipped palette
+rather than written down. `scripts/check_generated_installer_logo.py` regenerates the block and fails on any difference.
+
+**The four buttons are drawn rather than sampled.** A cell that takes its value from a majority of the pixels under it
+frays a circle's edge — the cells on the rim flip on a fraction of a pixel, so the four dots come out four different
+shapes — and the thin band of dark bar around each dot classifies as ink, which put a ring of the ring's blue around
+every button. So the generator finds them as connected components, grows each by `BUTTON_OUTLINE` to take that band with
+it, removes those regions from the ink it samples, and stamps a filled disc back in their place: one shared radius (the
+one the AREA implies, not the widest span) and a centre snapped to a whole sub-cell, which is what makes all four the
+same set of offsets. The radius is deliberately not rounded to a half sub-cell — it has to match the radius the removal
+used, or the disc either leaves a rim of the ink it replaced or grows single sub-cells off its four compass points.
 
 Everything else ships twice except the lockup and `store_image.png`, which land once. The lockup is the README's banner,
 and the docs site draws its own header from the bare mark; nothing renders `store_image.png` at all, so `assets/` is the

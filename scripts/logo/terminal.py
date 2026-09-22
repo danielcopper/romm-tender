@@ -5,8 +5,18 @@
 mark before it does anything. It cannot render an image and it must not grow a
 dependency to do it, so the art is TEXT embedded in the script — and text
 embedded in a script is the kind of thing that gets hand-tidied until it no
-longer resembles what it is a picture of. It is generated from `assets/logo.png`
-and checked against this module by `scripts/check_generated_installer_logo.py`.
+longer resembles what it is a picture of. It is checked against this module by
+`scripts/check_generated_installer_logo.py`.
+
+**The terminal mark shares the tab icon's pose, and is rendered rather than
+read.** The shipped mark turns its sync ring by `arc_rot` so the ring follows
+the disc's facet; at this size that lands the ring's two gaps off the
+horizontal, where a gap half a cell high reads as a lopsided ring rather than as
+a turn. `tabicon.STRIP_GEOMETRY` zeroes the same field for the same reason. So
+the source here is not `assets/logo.png` — it is `gen.standalone` drawn with
+that pose and rasterised by `rsvg-convert`, which is the only way to change the
+pose without turning a raster: rotating the shipped PNG would smear the four
+dots into ellipses and soften every edge the classifier reads.
 
 Two renderings, because one of them cannot always be shown:
 
@@ -22,6 +32,10 @@ result would invent colours on every edge — a blend of navy ink and light disc
 is neither, and the hue test would then answer for a pixel that is not in the
 image.
 
+**The four buttons are the exception: they are DRAWN, not sampled.** Counting
+over a circle's rim frays it, and the four dots came out four different shapes;
+see :class:`Buttons`.
+
 The PNG is decoded here rather than with an imaging library: this module and its
 check have to run wherever the repository's lint runs, which is a Python and
 nothing else.
@@ -30,13 +44,22 @@ nothing else.
 from __future__ import annotations
 
 import colorsys
+import dataclasses
+import functools
+import math
 import pathlib
 import struct
+import subprocess
 import zlib
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent.parent
-SOURCE = REPO / "assets" / "logo.png"
+
+# What the mark is rasterised at before it is sampled. The drawing is a
+# 200-unit square, so this is about ten source pixels per Braille dot — enough
+# that a dot's coverage is a count rather than a coin toss, and small enough
+# that classifying every pixel stays a second's work.
+RENDER_SIZE = 1024
 
 BRAILLE_COLUMNS = 24
 BRAILLE_ROWS = 10
@@ -80,16 +103,41 @@ class Image:
         return r, g, b, a
 
 
-def read_png(path: pathlib.Path) -> Image:
+def render_source(size: int = RENDER_SIZE) -> Image:
+    """Draw the mark in the terminal's pose and rasterise it.
+
+    The pose is the tab icon's: the sync ring unrotated, so its two gaps sit on
+    one horizontal line. The disc's facet goes with it — the seam is a tone
+    difference this classifier does not see, and one less thing in the raster is
+    one less thing to explain.
+
+    Needs `rsvg-convert`, which every other rasterising step of
+    `scripts/logo/build.py` needs too.
+    """
+    import gen  # noqa: PLC0415 — a sibling module, resolved through the path build.py sets
+
+    palette = gen.BY_NAME[gen.CHOSEN]
+    flat = dataclasses.replace(palette, disc=(palette.disc[0], palette.disc[0]))
+    pose = dataclasses.replace(gen.DEFAULT_GEOMETRY, arc_rot=0.0)
+    svg = gen.standalone(flat, pose, size=size)
+    rendered = subprocess.run(
+        ["rsvg-convert", "-w", str(size), "-h", str(size)],
+        input=svg.encode("utf-8"),
+        capture_output=True,
+        check=True,
+    ).stdout
+    return decode_png(rendered)
+
+
+def decode_png(data: bytes) -> Image:
     """Decode a non-interlaced 8-bit RGBA PNG.
 
-    Refuses anything else rather than guessing: the one file this reads is a
-    build output of `scripts/logo/build.py`, so a different shape means the
-    build changed and the reader has to be looked at rather than coaxed.
+    Refuses anything else rather than guessing: what this reads is what
+    `rsvg-convert` emits, so a different shape means that changed and the reader
+    has to be looked at rather than coaxed.
     """
-    data = path.read_bytes()
     if data[:8] != b"\x89PNG\r\n\x1a\n":
-        raise ValueError(f"{path} is not a PNG")
+        raise ValueError("not a PNG")
     width = height = 0
     body = bytearray()
     position = 8
@@ -100,7 +148,7 @@ def read_png(path: pathlib.Path) -> Image:
         if kind == b"IHDR":
             width, height, depth, colour, compression, filtering, interlace = struct.unpack(">IIBBBBB", chunk)
             if (depth, colour, compression, filtering, interlace) != (8, 6, 0, 0, 0):
-                raise ValueError(f"{path}: expected 8-bit RGBA, non-interlaced, got {chunk[8:]!r}")
+                raise ValueError(f"expected 8-bit RGBA, non-interlaced, got {chunk[8:]!r}")
         elif kind == b"IDAT":
             body += chunk
         elif kind == b"IEND":
@@ -162,6 +210,10 @@ INK_ONLY = frozenset({ARROW, BUTTON_PIXEL})
 EVERYTHING_DRAWN = frozenset({DISC, ARROW, BUTTON_PIXEL})
 
 
+# The raster is flat fills and the edges between them, so a million pixels carry
+# a few thousand distinct colours. Cached, the hue arithmetic runs once per
+# colour instead of once per pixel.
+@functools.lru_cache(maxsize=None)
 def classify(r: int, g: int, b: int, a: int) -> str:
     """Which part of the mark a pixel belongs to.
 
@@ -216,6 +268,89 @@ class Classified:
 
 
 # --------------------------------------------------------------------------- #
+# The buttons, which are drawn rather than sampled                            #
+# --------------------------------------------------------------------------- #
+# How far past its own colour a button reaches, as a FRACTION of its radius.
+# The four dots sit ON the dark bars, so each one is ringed by a thin band of
+# bar that classifies as ink — and ink is drawn in the ring's blue, which put a
+# blue outline around every button. Growing the button by this much takes that
+# band with it.
+#
+# A fraction rather than a count of pixels: the band is part of the drawing and
+# scales with it, so a count would mean something different at every
+# :data:`RENDER_SIZE`.
+BUTTON_OUTLINE = 0.09
+
+
+class Buttons:
+    """The mark's four round buttons: where their centres are, and how big.
+
+    **They are stamped, not sampled.** A cell that takes its value from a
+    majority of the pixels under it frays a circle's edge — the cells on the rim
+    flip one way or the other on a fraction of a pixel, and the four buttons end
+    up four different shapes. A disc drawn from a centre and a radius is
+    symmetric because the test is, and all four come out identical because the
+    radius is shared and the centre is snapped to a whole sub-cell.
+
+    The radius is the one the AREA implies rather than the widest span, so a
+    button whose rim the classifier read a pixel too far does not grow.
+    """
+
+    def __init__(self, source: Classified) -> None:
+        found = [_component_shape(cells) for cells in _components(source, BUTTON_PIXEL)]
+        if len(found) != 4:
+            raise ValueError(f"expected four buttons in the mark, found {len(found)}")
+        self.centres = [(x, y) for x, y, _radius in found]
+        self.radius = sum(radius for _x, _y, radius in found) / len(found) * (1 + BUTTON_OUTLINE)
+
+    def covers(self, x: float, y: float) -> bool:
+        """Whether a source pixel belongs to a button, rim included."""
+        return any((x - cx) ** 2 + (y - cy) ** 2 <= self.radius**2 for cx, cy in self.centres)
+
+
+# Below this a run of button-coloured pixels is an artefact of the edge between
+# two other colours rather than a button.
+_SPECK = 50
+
+
+def _components(source: Classified, wanted: str) -> list[list[tuple[int, int]]]:
+    """Every connected run of *wanted* pixels, largest first, specks dropped.
+
+    Four-connected, and iterative rather than recursive: a component here is
+    several thousand pixels, which is deeper than Python will recurse.
+    """
+    seen = [[False] * source.width for _ in range(source.height)]
+    found = []
+    for top in range(source.height):
+        for left in range(source.width):
+            if seen[top][left] or source.rows[top][left] != wanted:
+                continue
+            stack, cells = [(left, top)], []
+            seen[top][left] = True
+            while stack:
+                x, y = stack.pop()
+                cells.append((x, y))
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < source.width and 0 <= ny < source.height and not seen[ny][nx]:
+                        if source.rows[ny][nx] == wanted:
+                            seen[ny][nx] = True
+                            stack.append((nx, ny))
+            if len(cells) > _SPECK:
+                found.append(cells)
+    return sorted(found, key=len, reverse=True)
+
+
+def _component_shape(cells: list[tuple[int, int]]) -> tuple[float, float, float]:
+    """A component's centre and the radius its area implies."""
+    return (
+        sum(x for x, _y in cells) / len(cells),
+        sum(y for _x, y in cells) / len(cells),
+        math.sqrt(len(cells) / math.pi),
+    )
+
+
+# --------------------------------------------------------------------------- #
 # The two renderings                                                          #
 # --------------------------------------------------------------------------- #
 # Which bit each dot of a Braille cell carries. The first six are the historic
@@ -224,60 +359,115 @@ class Classified:
 _DOT_BITS = ((0, 0, 0x01), (0, 1, 0x02), (0, 2, 0x04), (1, 0, 0x08), (1, 1, 0x10), (1, 2, 0x20), (0, 3, 0x40), (1, 3, 0x80))
 
 
-def braille_cells(source: Classified) -> list[list[tuple[str, str]]]:
+def _stamped(source: Classified, buttons: Buttons, across: int, down: int, squash: float) -> list[list[bool]]:
+    """A sub-cell grid with a button's disc drawn into it, ``[row][column]``.
+
+    *squash* is what a step sideways is worth against a step down. A Braille dot
+    is square, so it is 1; an ASCII character is about twice as tall as it is
+    wide, so it is 0.5 and the disc comes out twice as wide as it is tall — which
+    is round on screen.
+
+    The centre is snapped to a whole sub-cell so that all four stamps are the
+    same set of offsets. Without that, four centres at four sub-cell fractions
+    round four different ways and the buttons stop matching each other.
+
+    The radius is NOT rounded to a half sub-cell. It is the radius the removal
+    used, so the disc covers exactly what was taken out; rounding it up leaves
+    single sub-cells standing off the disc's four compass points, and rounding it
+    down leaves a rim of the ink it replaced.
+    """
+    radius = buttons.radius * (across / source.width + down / source.height) / 2
+    grid = [[False] * across for _ in range(down)]
+    for centre_x, centre_y in buttons.centres:
+        snapped_x = math.floor(centre_x / source.width * across) + 0.5
+        snapped_y = math.floor(centre_y / source.height * down) + 0.5
+        for row in range(down):
+            for column in range(across):
+                dx = (column + 0.5 - snapped_x) * squash
+                dy = row + 0.5 - snapped_y
+                if dx * dx + dy * dy <= radius * radius:
+                    grid[row][column] = True
+    return grid
+
+
+def braille_cells(source: Classified, buttons: Buttons) -> list[list[tuple[str, str]]]:
     """The Braille rendering as rows of ``(character, colour class)``."""
     dots_across, dots_down = BRAILLE_COLUMNS * 2, BRAILLE_ROWS * 4
     dot_w, dot_h = source.width / dots_across, source.height / dots_down
+    stamp = _stamped(source, buttons, dots_across, dots_down, 1.0)
     rows = []
     for row in range(BRAILLE_ROWS):
         cells = []
         for column in range(BRAILLE_COLUMNS):
             bits = 0
+            stamped = False
             for dx, dy, bit in _DOT_BITS:
-                x = (column * 2 + dx) * dot_w
-                y = (row * 4 + dy) * dot_h
-                share = source.share(x, y, x + dot_w, y + dot_h)
-                if share[ARROW] + share[BUTTON_PIXEL] >= 0.5:
+                across, down = column * 2 + dx, row * 4 + dy
+                if stamp[down][across]:
                     bits |= bit
-            colour = EMPTY
-            if bits:
-                cell_x, cell_y = column * dot_w * 2, row * dot_h * 4
-                share = source.share(cell_x, cell_y, cell_x + dot_w * 2, cell_y + dot_h * 4)
-                colour = BUTTON if share[BUTTON_PIXEL] >= BUTTON_SHARE else RING
+                    stamped = True
+                    continue
+                x, y = across * dot_w, down * dot_h
+                if _ink_share(source, buttons, x, y, x + dot_w, y + dot_h) >= 0.5:
+                    bits |= bit
+            colour = EMPTY if not bits else (BUTTON if stamped else RING)
             cells.append((chr(0x2800 + bits) if bits else " ", colour))
         rows.append(cells)
     return rows
 
 
-def ascii_cells(source: Classified) -> list[list[tuple[str, str]]]:
+def _ink_share(source: Classified, buttons: Buttons, x0: float, y0: float, x1: float, y1: float) -> float:
+    """How much of a box is ink that no button has claimed."""
+    total = ink = 0
+    for y in range(max(0, int(y0)), min(source.height, max(int(y0) + 1, int(y1)))):
+        for x in range(max(0, int(x0)), min(source.width, max(int(x0) + 1, int(x1)))):
+            total += 1
+            if source.rows[y][x] in (ARROW, BUTTON_PIXEL) and not buttons.covers(x, y):
+                ink += 1
+    return ink / total if total else 0.0
+
+
+def ascii_cells(source: Classified, buttons: Buttons) -> list[list[tuple[str, str]]]:
     """The ASCII rendering as rows of ``(character, colour class)``.
 
     Drawn in weights rather than dots: three for the arrows by how much of the
-    cell they cover, two for the button, and a single ``.`` for the disc's rim,
-    which is the only thing that gives the mark its outline when there are no
-    dots to draw it with.
+    cell they cover, two for the buttons — the solid middle and the rim of the
+    stamped disc — and a single ``.`` for the disc's rim, which is the only thing
+    that gives the mark its outline when there are no dots to draw it with.
     """
     cell_w, cell_h = source.width / ASCII_COLUMNS, source.height / ASCII_ROWS
+    stamp = _stamped(source, buttons, ASCII_COLUMNS, ASCII_ROWS, 0.5)
     rows = []
     for row in range(ASCII_ROWS):
         cells = []
         for column in range(ASCII_COLUMNS):
+            if stamp[row][column]:
+                cells.append(("@" if _all_neighbours_stamped(stamp, row, column) else "O", BUTTON))
+                continue
             share = source.share(column * cell_w, row * cell_h, (column + 1) * cell_w, (row + 1) * cell_h)
-            arrow, button, disc, background = share[ARROW], share[BUTTON_PIXEL], share[DISC], share[BG]
-            if button >= BUTTON_SHARE:
-                cells.append(("@" if button >= 0.8 else "O", BUTTON))
-            elif arrow >= 0.5:
+            arrow = _ink_share(source, buttons, column * cell_w, row * cell_h, (column + 1) * cell_w, (row + 1) * cell_h)
+            if arrow >= 0.5:
                 cells.append(("#", RING))
             elif arrow >= 0.25:
                 cells.append(("+", RING))
             elif arrow >= 0.1:
                 cells.append(("-", RING))
-            elif disc > 0 and background > 0.15:
+            elif share[DISC] > 0 and share[BG] > 0.15:
                 cells.append((".", RING))
             else:
                 cells.append((" ", EMPTY))
         rows.append(cells)
     return rows
+
+
+def _all_neighbours_stamped(stamp: list[list[bool]], row: int, column: int) -> bool:
+    """Whether a stamped cell is in the disc's middle rather than on its edge."""
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            y, x = row + dy, column + dx
+            if not (0 <= y < len(stamp) and 0 <= x < len(stamp[0])) or not stamp[y][x]:
+                return False
+    return True
 
 
 # --------------------------------------------------------------------------- #
@@ -357,9 +547,11 @@ def tones() -> tuple[str, str]:
 
 def bash_block() -> str:
     """The generated block `install.sh` carries, markers included."""
-    image = read_png(SOURCE)
-    braille = braille_cells(Classified(image, INK_ONLY))
-    ascii_art = ascii_cells(Classified(image, EVERYTHING_DRAWN))
+    image = render_source()
+    ink = Classified(image, INK_ONLY)
+    whole = Classified(image, EVERYTHING_DRAWN)
+    braille = braille_cells(ink, Buttons(ink))
+    ascii_art = ascii_cells(whole, Buttons(whole))
     ring, button = tones()
     lines = [
         _MARKERS[0],
@@ -399,11 +591,13 @@ if __name__ == "__main__":
     import sys
 
     if "--preview" in sys.argv:
-        loaded = read_png(SOURCE)
-        for row in braille_cells(Classified(loaded, INK_ONLY)):
+        loaded = render_source()
+        ink = Classified(loaded, INK_ONLY)
+        whole = Classified(loaded, EVERYTHING_DRAWN)
+        for row in braille_cells(ink, Buttons(ink)):
             print("".join(character for character, _colour in row))
         print()
-        for row in ascii_cells(Classified(loaded, EVERYTHING_DRAWN)):
+        for row in ascii_cells(whole, Buttons(whole)):
             print("".join(character for character, _colour in row))
     else:
         print(bash_block(), end="")

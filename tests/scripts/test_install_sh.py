@@ -716,7 +716,7 @@ class TestTheAcknowledgement:
 
         assert code == 1
         assert "no such file" in output
-        assert "not confirmed" not in output
+        assert "stopped" not in output
 
     @pytest.mark.parametrize("answer", ["", "n", "no", "maybe"])
     def test_everything_else_including_a_bare_enter_refuses(self, machine, answer):
@@ -724,7 +724,8 @@ class TestTheAcknowledgement:
         code, output = machine.on_a_terminal("--from", str(_build_tarball(machine.tmp_path)), answer=answer)
 
         assert code == 1
-        assert "not confirmed" in output
+        assert "install.sh: stopped — nothing was changed." in output
+        assert "--yes" not in output, "a no is an answer, not a question to route around"
         assert not machine.code.exists()
 
     def test_a_refused_acknowledgement_says_so_on_the_terminal(self, machine):
@@ -740,8 +741,7 @@ class TestTheAcknowledgement:
         code, output = machine.on_a_terminal("--from", str(_build_tarball(machine.tmp_path)), answer="no")
 
         assert code == 1
-        assert "not confirmed" in output
-        assert "run with --yes" in output
+        assert "install.sh: stopped — nothing was changed." in output
         assert not machine.code.exists()
 
     def test_an_answered_acknowledgement_gets_on_with_it_and_keeps_its_stderr(self, machine):
@@ -1246,7 +1246,20 @@ class TestHowTheRunLooks:
             assert row.strip() in screen
         beside = [line for line in screen.splitlines() if drawn[0].strip() in line]
         assert beside, "the mark's first row is not on screen"
-        assert beside[0].rstrip().endswith("TENDER"), "the text block is not beside the mark"
+        assert beside[0].rstrip().endswith("RomM library in Steam"), "the text block is not beside the mark"
+
+    def test_the_greeter_says_what_the_run_will_do(self, machine):
+        """Four keys in one column, and the program's real root rather than a literal."""
+        _code, output = machine.on_a_terminal(
+            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="100"
+        )
+
+        screen = _screen(output)
+        assert "TENDER  ·  RomM library in Steam" in screen
+        assert f"Install to   {machine.code}" in screen
+        assert "Runs as      a systemd user service, starts with your session" in screen
+        assert "Needs        one Steam restart, no sudo" in screen
+        assert "Keeps        your settings, library and shortcuts" in screen
 
     def test_a_narrow_terminal_puts_the_mark_above_the_text(self, machine):
         _code, output = machine.on_a_terminal("--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="70")
@@ -1254,9 +1267,9 @@ class TestHowTheRunLooks:
         screen = _screen(output).splitlines()
         drawn = [row for row in _logo_rows("LOGO_BRAILLE") if row.strip()]
         mark_at = next(index for index, line in enumerate(screen) if drawn[0].strip() in line)
-        name_at = next(index for index, line in enumerate(screen) if line.strip() == "TENDER")
+        name_at = next(index for index, line in enumerate(screen) if line.startswith("TENDER"))
         assert mark_at < name_at
-        assert not screen[mark_at].rstrip().endswith("TENDER")
+        assert not screen[mark_at].rstrip().endswith("RomM library in Steam")
 
     def test_a_terminal_with_no_utf8_gets_the_ascii_mark(self, machine):
         """The Braille cells would be replacement characters, which is worse than no art."""
@@ -1296,7 +1309,7 @@ class TestHowTheRunLooks:
 
         for row in _logo_rows("LOGO_BRAILLE") + _logo_rows("LOGO_ASCII"):
             assert row.strip() not in result.stdout or not row.strip()
-        assert result.stdout.startswith("TENDER\n")
+        assert result.stdout.startswith("TENDER  -  RomM library in Steam\n")
 
     def test_no_color_on_a_terminal_still_draws_the_mark(self, machine):
         """NO_COLOR asks for a plain transcript, not for a run that says less."""
