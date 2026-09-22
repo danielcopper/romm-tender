@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.iso_time import parse_iso_to_epoch
 from domain.rom_save_sync_state import RomSaveSyncState
+from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON, save_shape_message
 from domain.save_path import sanitize_save_filename
 from domain.save_slot import filter_saves_to_slot
 from lib.errors import DeviceNotRegisteredError, classify_error
@@ -127,11 +128,20 @@ class RollbackOrchestrator:
         if validation_error:
             return validation_error
 
-        info = self._rom_info.get_rom_save_info(rom_id)
+        info = await loop.run_in_executor(None, self._rom_info.get_rom_save_info, rom_id)
         if not info:
             return {"success": False, "reason": "not_installed", "message": "ROM not installed"}
         system = info["system"]
         saves_dir = info["saves_dir"]
+        # No save directory could be resolved: there is nowhere to write either
+        # side of the resolution, and a guessed one is where the emulator never
+        # looks. The refusal the sync entry points give for the same answer.
+        if saves_dir is None:
+            return {
+                "success": False,
+                "reason": SAVE_SHAPE_UNSUPPORTED_REASON,
+                "message": save_shape_message(info["save_answer"]),
+            }
 
         save_state, device_id = await loop.run_in_executor(None, self._read_inputs, rom_id)
 
@@ -172,7 +182,7 @@ class RollbackOrchestrator:
             }
 
         core_so = await loop.run_in_executor(None, self._resolve_core, rom_id)
-        save_names = await loop.run_in_executor(None, lambda: self._rom_info.save_answer(rom_id).synced_names)
+        save_names = info["save_answer"].synced_names
 
         try:
             if action == "use_server":

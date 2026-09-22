@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.iso_time import parse_iso_to_epoch
 from domain.rom_save_sync_state import RomSaveSyncState
-from domain.save_answer import SAVE_SYNC_CONTENT_DIR_REASON
+from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON, SAVE_SYNC_CONTENT_DIR_REASON
 from domain.save_slot import save_in_slot, slot_query_param
 from domain.save_status import compute_multi_file_slot
 from lib.errors import RommNotFoundError
@@ -245,9 +245,7 @@ class VersionsService:
         system = info["system"]
         rom_name = info["rom_name"]
         default_slot = resolve_default_slot(self._settings)
-        target_filename = local_save_target(
-            target_save, rom_name, known_names=self._rom_info.save_answer(rom_id).synced_names
-        )
+        target_filename = local_save_target(target_save, rom_name, known_names=info["save_answer"].synced_names)
         local_path = os.path.join(saves_dir, target_filename)
 
         self._sync_engine.do_download_save(
@@ -352,7 +350,7 @@ class VersionsService:
         save_id = int(save_id)
 
         async with self._sync_engine.rom_lock(rom_id):
-            info = self._rom_info.get_rom_save_info(rom_id)
+            info = await self._loop.run_in_executor(None, self._rom_info.get_rom_save_info, rom_id)
             if not info:
                 return {"status": "rom_not_installed"}
 
@@ -367,15 +365,19 @@ class VersionsService:
                 self._log_debug(f"rollback_to_version: multi-file slot for rom {rom_id} ({component_files}); refusing")
                 return {"status": "unsupported"}
 
-            # #239: RetroArch writes saves to the content dir — the rollback's
-            # download/PUT target is ``saves_dir``, which RetroArch ignores, so
-            # the switch could not take effect. Refuse before any preflight or
-            # destructive I/O. Reuse the existing ``unsupported`` status (the
-            # frontend already routes it to a benign refusal toast) and add the
-            # ``reason`` slug so a direct caller can distinguish the cause.
-            if await self._sync_engine.content_dir_blocked("rollback_to_version"):
-                self._log_debug(f"rollback_to_version: content-dir layout for rom {rom_id}; refusing")
+            # The emulator writes this game's save beside its content, which the
+            # sync leaves alone, so the rollback's download/PUT could not take
+            # effect. Refuse before any preflight or destructive I/O. Reuse the
+            # existing ``unsupported`` status (the frontend already routes it to a
+            # benign refusal toast) and add the ``reason`` slug so a direct
+            # caller can distinguish the cause — as it can where no save
+            # directory could be resolved at all.
+            if info["save_answer"].in_content_directory:
+                self._log_debug(f"rollback_to_version: rom {rom_id} saves beside its content; refusing")
                 return {"status": "unsupported", "reason": SAVE_SYNC_CONTENT_DIR_REASON}
+            if info["saves_dir"] is None:
+                self._log_debug(f"rollback_to_version: no save directory for rom {rom_id}; refusing")
+                return {"status": "unsupported", "reason": SAVE_SHAPE_UNSUPPORTED_REASON}
 
             save_state, device_id = await self._loop.run_in_executor(None, self._read_inputs, rom_id)
             core_so = await self._loop.run_in_executor(None, self._resolve_core, rom_id)

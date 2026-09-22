@@ -39,8 +39,9 @@ class FakeSaveLocationReader:
     The directory is the content file's own unless *saves_root* is given, in
     which case it is ``<saves_root>/<the content's parent folder>`` — RetroArch's
     content-sorted layout, the stock RetroDECK one. Either way the answer's root
-    kind is the save root: a test about saves written beside the game seeds that
-    answer on purpose.
+    kind is the save root, unless *beside_content* states the other thing: the
+    emulator writes the save next to the game, in the content's own directory,
+    which is what RetroArch's ``savefiles_in_content_dir`` produces.
 
     Savestates answer ``<states_root>/<the content's parent folder>`` when
     *states_root* is given and nothing could be established otherwise, unless
@@ -61,10 +62,12 @@ class FakeSaveLocationReader:
         extensions: tuple[str, ...] = _DEFAULT_EXTENSIONS,
         saves_root: str | None = None,
         states_root: str | None = None,
+        beside_content: bool = False,
     ) -> None:
         self._extensions = extensions
         self._saves_root = saves_root
         self._states_root = states_root
+        self._beside_content = beside_content
         self._by_system: dict[str, SaveAnswer] = {}
         self._states_by_system: dict[str, SavestateLocation | NoSavestates | None] = {}
         self.calls: list[tuple[str, str, str | None]] = []
@@ -99,7 +102,9 @@ class FakeSaveLocationReader:
             # verbatim would make the field untestable alongside a seeded state.
             return replace(seeded, content_installed=content_installed)
         stem = os.path.splitext(os.path.basename(content_path))[0]
-        directory = self._sorted_by_content(self._saves_root, content_path) or os.path.dirname(content_path)
+        directory = (
+            None if self._beside_content else self._sorted_by_content(self._saves_root, content_path)
+        ) or os.path.dirname(content_path)
         parts = _BY_SYSTEM.get(system) or tuple((ext, "battery") for ext in self._extensions)
         return SaveAnswer(
             state="per_game_files",
@@ -115,7 +120,7 @@ class FakeSaveLocationReader:
             ),
             caveats=(),
             content_installed=content_installed,
-            root_kind="savefile_directory",
+            root_kind="content_directory" if self._beside_content else "savefile_directory",
         )
 
     def resolve_savestate_location(

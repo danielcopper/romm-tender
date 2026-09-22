@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from domain.rom_save_sync_state import RomSaveSyncState
-from domain.save_answer import SAVE_SYNC_CONTENT_DIR_REASON
+from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON, SAVE_SYNC_CONTENT_DIR_REASON, save_shape_message
 from domain.save_slot import save_in_slot
 from lib.errors import classify_error
 from services.saves._helpers import newest_server_saves_by_target
@@ -155,9 +155,11 @@ class SlotSwitcher:
            / ``None`` name is rejected with ``reason="invalid_slot_name"`` before
            any lock acquisition or I/O.
         3. ROM must be installed.
-        4. RetroArch must not write saves to the content dir — otherwise the
-           switch's ``saves_dir`` writes are ignored by RetroArch (#239). The
-           refusal carries ``reason="savefiles_in_content_dir"``.
+        4. The emulator must not write this game's save beside its content —
+           the switch's writes would land where the sync leaves alone. The
+           refusal carries ``reason="savefiles_in_content_dir"``. Where no save
+           directory could be resolved at all it carries
+           ``reason="save_shape_unsupported"``.
         5. No local files with pending changes (changed since last sync to current slot).
         6. Server must be reachable.
 
@@ -185,20 +187,28 @@ class SlotSwitcher:
         resolved_slot = slot_str
 
         # 3. ROM must be installed
-        info = self._rom_info.get_rom_save_info(rom_id)
+        info = await self._loop.run_in_executor(None, self._rom_info.get_rom_save_info, rom_id)
         if not info:
             return {"success": False, "reason": "not_installed", "message": "ROM is not installed"}
 
-        # #239: RetroArch writes saves to the content dir — switching slots
-        # would download/delete files under ``saves_dir``, which RetroArch
-        # ignores, so the switch could not take effect. Refuse before any
-        # file write or server fetch.
-        if await self._sync_engine.content_dir_blocked("switch_slot"):
-            self._log_debug(f"switch_slot: content-dir layout for rom {rom_id}; refusing")
+        # The emulator writes this game's save beside its content, which the
+        # sync leaves alone — switching slots would download/delete files there,
+        # so the switch could not take effect. Refuse before any file write or
+        # server fetch; likewise where no save directory could be resolved.
+        save_answer = info["save_answer"]
+        if save_answer.in_content_directory:
+            self._log_debug(f"switch_slot: rom {rom_id} saves beside its content; refusing")
             return {
                 "success": False,
                 "reason": SAVE_SYNC_CONTENT_DIR_REASON,
                 "message": SAVE_SYNC_IN_CONTENT_DIR,
+            }
+        if info["saves_dir"] is None:
+            self._log_debug(f"switch_slot: no save directory for rom {rom_id}; refusing")
+            return {
+                "success": False,
+                "reason": SAVE_SHAPE_UNSUPPORTED_REASON,
+                "message": save_shape_message(save_answer),
             }
 
         saves_dir = info["saves_dir"]
@@ -262,9 +272,7 @@ class SlotSwitcher:
 
             # 7. Make the saves dir + tracking coherent with the new slot:
             default_slot = resolve_default_slot(self._settings)
-            targets = newest_server_saves_by_target(
-                slot_saves, info["rom_name"], known_names=self._rom_info.save_answer(rom_id).synced_names
-            )
+            targets = newest_server_saves_by_target(slot_saves, info["rom_name"], known_names=save_answer.synced_names)
             switch_errors = await self._loop.run_in_executor(
                 None, self._apply_slot_switch, rom_id, saves_dir, system, save_state, device_id, targets, default_slot
             )

@@ -1,13 +1,14 @@
-"""The save-shape refusal a per-ROM sync entry point performs before it does anything else.
+"""The refusal a per-ROM sync entry point performs before it does anything else.
 
-Four of the five save states refuse the sync (:mod:`domain.save_answer`), and
-the three per-ROM entry points all handle that refusal identically: take one
-live reading of the machine, and if the emulator keeps no per-game save file set
-this plugin can carry, return the benign-skip shape instead of syncing.
+Two things refuse a sync outright, and both are read off one live answer: four
+of the five save states (:mod:`domain.save_answer`), and a save the emulator
+writes beside the game's content. The three per-ROM entry points all handle
+them identically: take one live reading of the machine, and where either holds,
+return the benign-skip shape instead of syncing.
 
 It lives beside the engine rather than inside it because the engine is already at
-its decomposition ceiling, and because these two are the whole refusal: one
-reading and one result shape, with no engine state between them.
+its decomposition ceiling, and because these are the whole refusal: one reading
+and its result shapes, with no engine state between them.
 
 **The reading happens before the heartbeat, deliberately.** A PS2 game needs no
 server to establish that its saves live on a shared card, and a device that is
@@ -19,7 +20,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from domain.save_answer import save_shape_message
-from services.saves._messages import SAVE_SHAPE_UNSUPPORTED
+from services.saves._messages import (
+    SAVE_SHAPE_UNSUPPORTED,
+    SAVE_SYNC_IN_CONTENT_DIR,
+    SAVE_SYNC_IN_CONTENT_DIR_REASON,
+)
 
 if TYPE_CHECKING:
     from domain.save_answer import SaveAnswer
@@ -44,9 +49,42 @@ def live_save_answer(rom_info: RomInfoService, rom_id: int) -> SaveAnswer | None
     inventory on a confirmed ROM — rather than taking a second: live is a
     property of operations, not of layers.
     """
-    if rom_info.get_rom_save_info(rom_id) is None:
+    if not rom_info.is_content_installed(rom_id):
         return None
     return rom_info.save_answer(rom_id)
+
+
+def sync_refusal(answer: SaveAnswer | None) -> dict[str, Any] | None:
+    """The benign-skip result *answer* refuses a single-ROM sync with, or ``None`` to sync.
+
+    A save beside the content is checked first: its files may be a perfectly
+    syncable per-game set, so the shape would let it through. ``None`` for no
+    answer at all — an uninstalled ROM is the runner's own case.
+    """
+    if answer is None:
+        return None
+    if answer.in_content_directory:
+        return content_dir_skip()
+    if not answer.syncable:
+        return save_shape_skip(answer)
+    return None
+
+
+def content_dir_skip() -> dict[str, Any]:
+    """The benign-skip result for a save the emulator writes beside the game's content.
+
+    Carries ``success: False`` + the ``savefiles_in_content_dir`` reason slug the
+    frontend routes on (treat as skip, no error, launch proceeds) alongside
+    zero/empty counts.
+    """
+    return {
+        "success": False,
+        "reason": SAVE_SYNC_IN_CONTENT_DIR_REASON,
+        "message": SAVE_SYNC_IN_CONTENT_DIR,
+        "synced": 0,
+        "errors": [],
+        "conflicts": [],
+    }
 
 
 def save_shape_skip(answer: SaveAnswer) -> dict[str, Any]:

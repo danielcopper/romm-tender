@@ -96,7 +96,6 @@ class SaveService:
                 active_core=config.active_core,
                 save_locations=config.save_locations,
                 resolve_system=config.resolve_system,
-                get_core_name=config.get_core_name,
                 logger=config.logger,
             ),
         )
@@ -139,7 +138,6 @@ class SaveService:
                 log_debug=config.log_debug,
                 active_core=config.active_core,
                 emit=config.emit,
-                get_save_layout=config.get_save_layout,
             ),
         )
 

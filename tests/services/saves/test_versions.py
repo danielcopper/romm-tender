@@ -3,14 +3,15 @@
 from typing import Any
 
 import pytest
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 
-from domain.save_layout import ContentDir
 from lib.errors import RommNotFoundError
 from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
     _file_md5,
     _install_rom,
+    _no_save_directory,
     _require_save_state,
     _seed_save_state_dict,
     _server_save,
@@ -974,7 +975,7 @@ class TestRollbackToVersionContentDirGate:
 
     @pytest.mark.asyncio
     async def test_refuses_and_writes_nothing_on_content_dir(self, tmp_path):
-        svc, fake = make_service(tmp_path, detect_sort_change=lambda: ContentDir())
+        svc, fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
         _install_rom(svc, tmp_path)
         _enable_sync_with_device(svc)
         _create_save(tmp_path)
@@ -995,6 +996,22 @@ class TestRollbackToVersionContentDirGate:
         # Reuses the existing ``unsupported`` status + additive reason slug.
         assert result == {"status": "unsupported", "reason": "savefiles_in_content_dir"}
         # No preflight sync, no download, no PUT — gate fired before any I/O.
+        assert not any(c[0] in ("upload_save", "download_save_content", "list_saves") for c in fake.call_log), (
+            fake.call_log
+        )
+
+    @pytest.mark.asyncio
+    async def test_refuses_and_writes_nothing_with_no_save_directory(self, tmp_path):
+        svc, fake = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _enable_sync_with_device(svc)
+        _no_save_directory(svc)
+        _seed_save_state_dict(svc, 42, {"system": "gba", "active_slot": "default"})
+        fake.saves[50] = _server_save(save_id=50, rom_id=42, slot="default", updated_at="2026-02-01T10:00:00Z")
+
+        result = await svc.rollback_to_version(42, "default", 50)
+
+        assert result == {"status": "unsupported", "reason": "save_shape_unsupported"}
         assert not any(c[0] in ("upload_save", "download_save_content", "list_saves") for c in fake.call_log), (
             fake.call_log
         )

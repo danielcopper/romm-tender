@@ -10,14 +10,15 @@ is used throughout so the tests prove the target value actually flows.
 from typing import Any
 
 import pytest
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 
-from domain.save_layout import ContentDir
 from lib.errors import RommNotFoundError
 from tests.services.saves._helpers import (
     _create_save,
     _enable_sync_with_device,
     _file_md5,
     _install_rom,
+    _no_save_directory,
     _require_save_state,
     _seed_save_state_dict,
     _server_save,
@@ -334,7 +335,7 @@ class TestCopySaveToSlotRefusals:
     @pytest.mark.asyncio
     async def test_content_dir_unsupported(self, tmp_path):
         """RetroArch content-dir layout (#239) refuses the copy with the reason slug."""
-        svc, fake = make_service(tmp_path, detect_sort_change=lambda: ContentDir())
+        svc, fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
         _install_rom(svc, tmp_path)
         _enable_sync_with_device(svc)
         _create_save(tmp_path)
@@ -345,6 +346,21 @@ class TestCopySaveToSlotRefusals:
 
         assert result == {"status": "unsupported", "reason": "savefiles_in_content_dir"}
         # Gate fired before any I/O.
+        assert not any(c[0] in ("upload_save", "download_save_content", "list_saves") for c in fake.call_log)
+
+    @pytest.mark.asyncio
+    async def test_no_save_directory_is_unsupported_and_writes_nothing(self, tmp_path):
+        """No placement resolved: nowhere to write the copy, and never a guessed directory."""
+        svc, fake = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _enable_sync_with_device(svc)
+        _no_save_directory(svc)
+        _seed_save_state_dict(svc, 42, {"system": "gba", "active_slot": "autosave", "slot_confirmed": True})
+        fake.saves[50] = _server_save(save_id=50, rom_id=42, slot="backup", updated_at="2026-02-01T10:00:00Z")
+
+        result = await svc.copy_save_to_slot(42, 50, TARGET)
+
+        assert result == {"status": "unsupported", "reason": "save_shape_unsupported"}
         assert not any(c[0] in ("upload_save", "download_save_content", "list_saves") for c in fake.call_log)
 
     @pytest.mark.asyncio

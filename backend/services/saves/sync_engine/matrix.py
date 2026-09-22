@@ -933,27 +933,27 @@ class MatrixExecutor:
         t_total = self._clock.time()
         rom_id = int(rom_id)
 
-        info = self._rom_info.get_rom_save_info(rom_id)
+        # One live reading of the machine for the whole run: it says where the
+        # save lives, the names group the server's saves onto their canonical
+        # targets, AND they say which files to probe for. A whole-library sweep
+        # already pays a second one for the device-wide negotiate inventory.
+        info = self._rom_info.get_rom_save_info(rom_id, save_answer=save_answer)
         if not info:
             self._log_debug(f"do_sync_rom_saves({rom_id}): no save info, skipping")
             return 0, 0, [], []
         system = info["system"]
-        # One live reading of the machine for the whole run: the names group the
-        # server's saves onto their canonical targets AND say which files to
-        # probe for. Asking here as well as above would add a third reading to
-        # every ROM in a whole-library sweep, which already pays two — one for
-        # the device-wide negotiate inventory and one here.
-        answer = save_answer if save_answer is not None else self._rom_info.save_answer(rom_id)
+        answer = info["save_answer"]
         save_names = answer.synced_names
-        answer_dir = info["saves_dir"] if answer.syncable else None
-        # The backstop every sync path crosses. A refusing answer pairs its names
-        # with a ``None`` directory, so nothing is probed and no state is written
-        # — the sweep has no room in its one result to say which ROM was passed
-        # over, and the per-ROM entry points have already named the skip.
+        answer_dir = answer.sync_directory
+        # The backstop every sync path crosses. A refusing answer, and a save
+        # beside the content, pair their names with a ``None`` directory, so
+        # nothing is probed and no state is written — the sweep has no room in
+        # its one result to say which ROM was passed over, and the per-ROM entry
+        # points have already named the skip.
         if answer_dir is None:
-            self._log_debug(f"do_sync_rom_saves({rom_id}): no per-game save set for this emulator, skipping")
+            self._log_debug(f"do_sync_rom_saves({rom_id}): no per-game save set this plugin syncs, skipping")
             return 0, 0, [], []
-        saves_dir = info["saves_dir"]
+        saves_dir = answer_dir
 
         t0 = self._clock.time()
         try:

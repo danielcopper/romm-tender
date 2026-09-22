@@ -79,7 +79,7 @@ class SlotDeleter:
         """
         if not save_sync_enabled(self._settings):
             return {"success": False, "reason": "disabled", "message": "Save sync is disabled"}
-        if not self._rom_info.get_rom_save_info(rom_id):
+        if not self._rom_info.is_content_installed(rom_id):
             return {"success": False, "reason": "not_installed", "message": "ROM is not installed"}
         save_state = self._read_save_state(rom_id)
         if save_state is None:

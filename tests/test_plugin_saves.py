@@ -116,7 +116,7 @@ def plugin(tmp_path, logger, home, project_root):
                 saves=saves_path,
                 roms=str(tmp_path / "retrodeck" / "roms"),
             ),
-            save_locations=FakeSaveLocationReader(),
+            save_locations=FakeSaveLocationReader(saves_root=saves_path),
             resolve_system=lambda platform_slug, platform_fs_slug=None: platform_slug,
             active_core=FakeActiveCoreResolver(default=(None, None)),
             hostname_provider=FakeHostnameReader(),

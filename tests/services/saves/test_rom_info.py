@@ -2,24 +2,22 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
-from fakes.fake_active_core_resolver import FakeActiveCoreResolver
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.save_answer import SaveAnswer
-
-if TYPE_CHECKING:
-    from fakes.fake_save_location_reader import FakeSaveLocationReader
-
 from tests.services.saves._helpers import (
     _create_save,
     _install_rom,
     _seed_install,
     _seed_rom,
-    _set_sort_settings,
-    _set_sort_settings_previous,
     make_service,
 )
+
+
+def _fake(svc) -> FakeSaveLocationReader:
+    return cast("FakeSaveLocationReader", svc._rom_info._save_locations)
 
 
 def _asked(svc) -> list[tuple[str, str, str | None]]:
@@ -236,266 +234,69 @@ class TestGetRomSaveInfo:
 
         assert result is None
 
-    # ------------------------------------------------------------------
-    # Regression tests for issue #238 — Rule 1: when a save-sort migration
-    # is pending, prefer save_sort_settings_previous so sync reads the
-    # layout RetroArch actually wrote to during the session that just
-    # ended.
-    # ------------------------------------------------------------------
-
-    def test_get_rom_save_info_prefers_previous_sort_settings_when_migration_pending(self, tmp_path):
-        """Pending migration: previous (OLD) sort settings override current (NEW) (#238)."""
-        svc, _ = make_service(
-            tmp_path,
-            active_core=FakeActiveCoreResolver(default=("mgba_libretro", "mGBA")),
-            get_core_name=lambda core_so: "mGBA",
-        )
+    def test_the_directory_is_the_resolvers_answer(self, tmp_path):
+        # Nothing is joined onto it and nothing is computed beside it: a core
+        # that keeps its saves in a subfolder of its own is answered so.
+        svc, _ = make_service(tmp_path)
         _install_rom(svc, tmp_path)
-        # NEW layout (what settings currently say):
-        _set_sort_settings(svc, {"sort_by_content": True, "sort_by_core": True})
-        # OLD layout (what the session actually wrote to):
-        _set_sort_settings_previous(svc, {"sort_by_content": True, "sort_by_core": False})
+        answer = SaveAnswer(
+            state="per_game_files",
+            unestablished=None,
+            emulator="Opera",
+            directory="/saves/3do/opera/per_game",
+            backing_directory=None,
+            granularity="per-game-file",
+            needs=(),
+            components=(),
+            caveats=(),
+            content_installed=True,
+            root_kind="savefile_directory",
+        )
+        _fake(svc).answer_with("gba", answer)
 
         result = svc._rom_info.get_rom_save_info(42)
 
         assert result is not None
-        # OLD layout: no /mGBA subdir.
-        assert result["saves_dir"].endswith("saves/gba")
-        assert "/mGBA" not in result["saves_dir"]
+        assert result["saves_dir"] == "/saves/3do/opera/per_game"
+        assert result["save_answer"].emulator == "Opera"
 
-    def test_get_rom_save_info_uses_current_sort_settings_when_no_pending_migration(self, tmp_path):
-        """No pending migration: use current sort settings (#238)."""
-        svc, _ = make_service(
-            tmp_path,
-            active_core=FakeActiveCoreResolver(default=("mgba_libretro", "mGBA")),
-            get_core_name=lambda core_so: "mGBA",
-        )
+    def test_no_resolved_placement_is_no_directory_and_never_a_guess(self, tmp_path):
+        svc, _ = make_service(tmp_path)
         _install_rom(svc, tmp_path)
-        # Only save_sort_settings is present — no pending migration marker at all.
-        _set_sort_settings(svc, {"sort_by_content": True, "sort_by_core": True})
-        assert svc._rom_info.pending_sort_settings() is None
+        _fake(svc).refuse("gba")
 
         result = svc._rom_info.get_rom_save_info(42)
 
         assert result is not None
-        # CURRENT layout: /mGBA subdir is appended because sort_by_core=True.
-        assert result["saves_dir"].endswith("saves/gba/mGBA")
+        assert result["saves_dir"] is None
+        assert svc._rom_info.synced_save_names(42) == ([], None)
 
-    def test_pending_sort_settings_rejects_empty_dict_half_state(self, tmp_path):
-        """Empty-dict ``save_sort_settings_previous`` must NOT count as pending (#238 review).
-
-        Freezes the contract: ``get_rom_save_info`` and ``is_save_sort_changed``
-        must agree on what counts as pending. Before ``pending_sort_settings``
-        was introduced, a literal empty dict at ``save_sort_settings_previous``
-        would put the service in a half-state — ``get_rom_save_info`` would
-        fall back to current settings (``{} or current``), but
-        ``is_save_sort_changed`` would treat the same ``{}`` as pending
-        (``is not None``). This test locks in the agreement.
-        """
-        svc, _ = make_service(
-            tmp_path,
-            active_core=FakeActiveCoreResolver(default=("mgba_libretro", "mGBA")),
-            get_core_name=lambda core_so: "mGBA",
-        )
+    def test_a_reading_the_caller_holds_is_used_rather_than_a_second(self, tmp_path):
+        svc, _ = make_service(tmp_path)
         _install_rom(svc, tmp_path)
-        # Half-state input: empty previous, populated current (NEW).
-        _set_sort_settings_previous(svc, {})
-        _set_sort_settings(svc, {"sort_by_content": True, "sort_by_core": True})
+        held = svc._rom_info.save_answer(42)
+        asked_before = len(_asked(svc))
 
-        # Both call sites must agree there is NO pending migration.
-        assert svc._rom_info.is_save_sort_changed() is False
-        assert svc._rom_info.pending_sort_settings() is None
+        result = svc._rom_info.get_rom_save_info(42, save_answer=held)
 
-        result = svc._rom_info.get_rom_save_info(42)
         assert result is not None
-        # Reads CURRENT settings (NEW layout), not the empty previous —
-        # mGBA subdir is appended because sort_by_core=True.
-        assert result["saves_dir"].endswith("saves/gba/mGBA")
+        assert result["save_answer"] is held
+        assert len(_asked(svc)) == asked_before
 
-    # ------------------------------------------------------------------
-    # Regression tests for issue #232 — RomInfoService must resolve the
-    # RetroArch ``corename`` via the .info parser when sort_by_core is
-    # active, and must fall back with a warning when it cannot.
-    # ------------------------------------------------------------------
-
-    def test_default_sort_only_by_content_no_core_subdir(self, tmp_path):
-        """sort_by_core=False (RetroDECK default) → no core subdir."""
-        svc, _ = make_service(
-            tmp_path,
-            active_core=FakeActiveCoreResolver(default=("mgba_libretro", "mGBA")),
-            get_core_name=lambda core_so: "mGBA",
-        )
+    def test_a_save_beside_the_content_is_located_and_never_synced(self, tmp_path):
+        svc, _ = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
         _install_rom(svc, tmp_path)
-        _set_sort_settings(svc, {"sort_by_content": True, "sort_by_core": False})
 
         result = svc._rom_info.get_rom_save_info(42)
 
         assert result is not None
-        assert result["saves_dir"].endswith("saves/gba")
-        assert "/mGBA" not in result["saves_dir"]
+        assert result["saves_dir"] == str(tmp_path / "retrodeck" / "roms" / "gba")
+        assert svc._rom_info.synced_save_names(42) == ([], None)
 
-    def test_sort_by_core_appends_retroarch_corename(self, tmp_path):
-        """sort_by_core=True with resolvable corename → saves_dir ends in /{system}/{corename}."""
-        svc, _ = make_service(
-            tmp_path,
-            active_core=FakeActiveCoreResolver(default=("mgba_libretro", "mGBA")),
-            get_core_name=lambda core_so: "mGBA",
-        )
+    def test_is_content_installed_asks_the_resolver_nothing(self, tmp_path):
+        svc, _ = make_service(tmp_path)
         _install_rom(svc, tmp_path)
-        _set_sort_settings(svc, {"sort_by_content": True, "sort_by_core": True})
 
-        result = svc._rom_info.get_rom_save_info(42)
-
-        assert result is not None
-        assert result["saves_dir"].endswith("saves/gba/mGBA")
-
-    def test_save_dir_differs_by_per_game_override(self, tmp_path):
-        """RESULT-FLIP: two gba ROMs, one pinned to gpSP + one default, get different save dirs.
-
-        With sort_by_core active, the per-core save subdir is named after the
-        resolved core's ``.info`` corename. The override ROM resolves to gpSP →
-        ``/gpSP`` subdir; the NULL ROM resolves to the default mGBA → ``/mGBA``.
-        The save dir flips on the per-game override alone — proving the per-core
-        layout keys off the same core the ROM launches with, not a platform default.
-        """
-        active_core = FakeActiveCoreResolver(
-            default=("mgba_libretro", "mGBA"),
-            per_rom={42: ("gpsp_libretro", "gpSP")},
-        )
-        svc, _ = make_service(
-            tmp_path,
-            active_core=active_core,
-            # The .info corename mirrors the ES-DE label here for test simplicity.
-            get_core_name=lambda core_so: "gpSP" if core_so == "gpsp_libretro" else "mGBA",
-        )
-        _install_rom(svc, tmp_path, rom_id=42, system="gba", file_name="pinned.gba")
-        _install_rom(svc, tmp_path, rom_id=43, system="gba", file_name="default.gba")
-        _set_sort_settings(svc, {"sort_by_content": True, "sort_by_core": True})
-
-        pinned = svc._rom_info.get_rom_save_info(42)
-        plain = svc._rom_info.get_rom_save_info(43)
-
-        assert pinned is not None
-        assert plain is not None
-        assert pinned["saves_dir"].endswith("saves/gba/gpSP")
-        assert plain["saves_dir"].endswith("saves/gba/mGBA")
-        # Each ROM's save dir was resolved by its own rom_id.
-        assert active_core.calls == [42, 43]
-
-    def test_sort_by_core_uses_corename_not_es_de_label(self, tmp_path):
-        """The RetroArch .info corename (``Snes9x``) must be used, not the ES-DE label (``Snes9x - Current``)."""
-        svc, _ = make_service(
-            tmp_path,
-            active_core=FakeActiveCoreResolver(default=("snes9x_libretro", "Snes9x - Current")),
-            get_core_name=lambda core_so: "Snes9x",
-        )
-        _install_rom(svc, tmp_path, system="snes", file_name="mario.sfc")
-        _set_sort_settings(svc, {"sort_by_content": True, "sort_by_core": True})
-
-        result = svc._rom_info.get_rom_save_info(42)
-
-        assert result is not None
-        assert result["saves_dir"].endswith("saves/snes/Snes9x")
-        assert "Snes9x - Current" not in result["saves_dir"]
-
-    def test_sort_by_core_falls_back_when_corename_none(self, tmp_path, caplog):
-        """sort_by_core=True but corename unresolvable → warn + fall back to parent dir.
-
-        The warning must include ``core_so=mgba_libretro`` so a user can identify
-        which ``.info`` file the parser failed on.
-        """
-        svc, _ = make_service(
-            tmp_path,
-            active_core=FakeActiveCoreResolver(default=("mgba_libretro", "mGBA")),
-            get_core_name=lambda core_so: None,  # .info unreadable / field missing
-        )
-        _install_rom(svc, tmp_path)
-        _set_sort_settings(svc, {"sort_by_content": True, "sort_by_core": True})
-
-        with caplog.at_level("WARNING"):
-            result = svc._rom_info.get_rom_save_info(42)
-
-        assert result is not None
-        assert result["saves_dir"].endswith("saves/gba")
-        assert "/mGBA" not in result["saves_dir"]
-        warnings = [rec.message for rec in caplog.records if "unable to resolve RetroArch corename" in rec.message]
-        assert warnings, "expected fallback warning"
-        assert "core_so=mgba_libretro" in warnings[0]
-
-    def test_sort_by_core_falls_back_when_get_core_name_returns_none(self, tmp_path, caplog):
-        """``get_core_name`` returns ``None`` (.info unreadable) → warns and falls back.
-
-        the resolver succeeded so ``core_so`` is identified in the
-        diagnostic log to help the user locate the unreadable .info file.
-        """
-        svc, _ = make_service(
-            tmp_path,
-            active_core=FakeActiveCoreResolver(default=("mgba_libretro", "mGBA")),
-            get_core_name=lambda core_so: None,
-        )
-        _install_rom(svc, tmp_path)
-        _set_sort_settings(svc, {"sort_by_content": True, "sort_by_core": True})
-
-        with caplog.at_level("WARNING"):
-            result = svc._rom_info.get_rom_save_info(42)
-
-        assert result is not None
-        assert result["saves_dir"].endswith("saves/gba")
-        warnings = [rec.message for rec in caplog.records if "unable to resolve RetroArch corename" in rec.message]
-        assert warnings, "expected fallback warning"
-        assert "core_so=mgba_libretro" in warnings[0]
-
-    def test_sort_by_core_falls_back_when_active_core_unresolved(self, tmp_path, caplog):
-        """sort_by_core=True but the resolver returns (None, None) → warn + fall back.
-
-        When ES-DE cannot determine the active core, ``core_so`` is ``None`` and
-        the log records ``core_so=unresolved``.
-        """
-        svc, _ = make_service(
-            tmp_path,
-            active_core=FakeActiveCoreResolver(default=(None, None)),
-            get_core_name=lambda core_so: "mGBA",
-        )
-        _install_rom(svc, tmp_path)
-        _set_sort_settings(svc, {"sort_by_content": True, "sort_by_core": True})
-
-        with caplog.at_level("WARNING"):
-            result = svc._rom_info.get_rom_save_info(42)
-
-        assert result is not None
-        assert result["saves_dir"].endswith("saves/gba")
-        warnings = [rec.message for rec in caplog.records if "unable to resolve RetroArch corename" in rec.message]
-        assert warnings, "expected fallback warning"
-        assert "core_so=unresolved" in warnings[0]
-
-    def test_resolve_retroarch_corename_happy_path(self, tmp_path):
-        """Direct test of the helper: both seams resolve → (corename, core_so) tuple returned."""
-        svc, _ = make_service(
-            tmp_path,
-            active_core=FakeActiveCoreResolver(default=("snes9x_libretro", "Snes9x - Current")),
-            get_core_name=lambda core_so: "Snes9x",
-        )
-        assert svc._rom_info.resolve_retroarch_corename(42) == ("Snes9x", "snes9x_libretro")
-
-    def test_resolve_retroarch_corename_returns_none_tuple_when_core_so_empty(self, tmp_path):
-        """The resolver returns (None, None) → helper returns (None, None)."""
-        svc, _ = make_service(
-            tmp_path,
-            active_core=FakeActiveCoreResolver(default=(None, None)),
-            get_core_name=lambda core_so: "Snes9x",
-        )
-        assert svc._rom_info.resolve_retroarch_corename(42) == (None, None)
-
-    def test_resolve_retroarch_corename_preserves_core_so_when_corename_empty(self, tmp_path):
-        """Empty corename with resolved core_so → (None, core_so).
-
-        The core_so is preserved in the second element so the caller can log
-        which ``.info`` file failed diagnostically. The first element is None
-        because the empty-string corename is treated as "no usable value".
-        """
-        svc, _ = make_service(
-            tmp_path,
-            active_core=FakeActiveCoreResolver(default=("snes9x_libretro", "Snes9x")),
-            get_core_name=lambda core_so: "",
-        )
-        assert svc._rom_info.resolve_retroarch_corename(42) == (None, "snes9x_libretro")
+        assert svc._rom_info.is_content_installed(42) is True
+        assert svc._rom_info.is_content_installed(999) is False
+        assert _asked(svc) == []

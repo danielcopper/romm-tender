@@ -9,9 +9,9 @@ tested under tests/services/saves/test_versions.py.
 import os
 
 import pytest
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
-from domain.save_layout import ContentDir
 from lib.errors import RommApiError, RommNotFoundError
 from tests.services.saves._helpers import (
     _create_save,
@@ -19,6 +19,7 @@ from tests.services.saves._helpers import (
     _file_md5,
     _get_save_state,
     _install_rom,
+    _no_save_directory,
     _require_save_state,
     _seed_save_state,
     _server_save_with_syncs,
@@ -670,7 +671,7 @@ class TestResolveSyncConflictContentDirGate:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("action", ["keep_local", "use_server"])
     async def test_refuses_and_writes_nothing_on_content_dir(self, tmp_path, action):
-        svc, fake = make_service(tmp_path, detect_sort_change=lambda: ContentDir())
+        svc, fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
         save_path = self._seed_conflict(svc, tmp_path)
         original = save_path.read_bytes()
         fake.saves[100] = _server_save_with_syncs(
@@ -692,6 +693,31 @@ class TestResolveSyncConflictContentDirGate:
             fake.call_log
         )
         # Local file untouched.
+        assert save_path.read_bytes() == original
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("action", ["keep_local", "use_server"])
+    async def test_refuses_and_writes_nothing_with_no_save_directory(self, tmp_path, action):
+        svc, fake = make_service(tmp_path)
+        save_path = self._seed_conflict(svc, tmp_path)
+        original = save_path.read_bytes()
+        _no_save_directory(svc)
+        fake.saves[100] = _server_save_with_syncs(
+            device_syncs=[{"device_id": "device-1", "is_current": False}],
+        )
+
+        result = await svc.resolve_sync_conflict(
+            rom_id=42,
+            filename="pokemon.srm",
+            server_save_id=100,
+            action=action,
+        )
+
+        assert result["success"] is False
+        assert result["reason"] == "save_shape_unsupported"
+        assert not any(c[0] in ("list_saves", "download_save_content", "upload_save") for c in fake.call_log), (
+            fake.call_log
+        )
         assert save_path.read_bytes() == original
 
     @pytest.mark.asyncio

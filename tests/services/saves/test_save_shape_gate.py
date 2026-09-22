@@ -52,16 +52,17 @@ def _refusing(state: str, **overrides: Any) -> SaveAnswer:
     return SaveAnswer(**kwargs)
 
 
-def _syncable() -> SaveAnswer:
+def _syncable(directory: str = "/saves/gba") -> SaveAnswer:
+    """The one syncable answer; *directory* is where a test that probes put the save."""
     return SaveAnswer(
         state="per_game_files",
         unestablished=None,
         emulator="mGBA",
-        directory="/saves/gba",
+        directory=directory,
         backing_directory=None,
         granularity="per-game-file",
         needs=(),
-        components=(SaveComponent(name="pokemon.srm", directory="/saves/gba", role="battery", granularity=None),),
+        components=(SaveComponent(name="pokemon.srm", directory=directory, role="battery", granularity=None),),
         caveats=(),
         content_installed=True,
     )
@@ -120,7 +121,7 @@ class TestARefusalProbesNothing:
     def test_the_control_probes(self, tmp_path):
         # Without this the assertion above would pass over a service that had
         # stopped probing for every save, refused or not.
-        svc, store, _fake = _service(tmp_path, _syncable())
+        svc, store, _fake = _service(tmp_path, _syncable(str(tmp_path / "saves" / "gba")))
 
         assert [entry["filename"] for entry in svc._rom_info.find_save_files(42)] == ["pokemon.srm"]
         assert store.probes > 0
@@ -437,7 +438,7 @@ class TestTheRefusalIsASkipAndNotAFailure:
 
     @pytest.mark.asyncio
     async def test_the_sweep_control_syncs_a_rom_whose_answer_carries_files(self, tmp_path):
-        svc, _store, fake = _service(tmp_path, _syncable())
+        svc, _store, fake = _service(tmp_path, _syncable(str(tmp_path / "saves" / "gba")))
         _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True})
 
         await svc.sync_all_saves()

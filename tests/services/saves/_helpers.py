@@ -64,7 +64,8 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
             roms=str(tmp_path / "retrodeck" / "roms"),
         ),
         "active_core": FakeActiveCoreResolver(default=(None, None)),
-        "save_locations": FakeSaveLocationReader(),
+        # The stock RetroDECK layout: content-sorted under the saves root.
+        "save_locations": FakeSaveLocationReader(saves_root=str(tmp_path / "saves")),
         # A slug that DIFFERS from its system for the two the tests use, so a
         # site that leaks the raw RomM slug is caught rather than hidden behind
         # an identity map. The real mapping is the RomM adapter's own.
@@ -84,6 +85,13 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
     config_kwargs.update(overrides)
     svc = SaveService(config=SaveServiceConfig(**config_kwargs))
     return svc, fake
+
+
+def _no_save_directory(svc, system: str = "gba") -> None:
+    """Make *system*'s emulator answer with no resolved placement — no save directory at all."""
+    save_locations = svc._rom_info._save_locations
+    assert isinstance(save_locations, FakeSaveLocationReader)
+    save_locations.refuse(system)
 
 
 def _uow(svc) -> FakeUnitOfWork:
