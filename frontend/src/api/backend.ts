@@ -143,13 +143,13 @@ export function isRenameCollisions(value: object): value is RenameCollisionsResu
  * same keys, inside a cached game detail — so one projection
  * (`utils/playSection.extractBiosInfo`) reads both.
  *
- * An absent `bios_status` means the active core needs no BIOS and clears a shown
- * requirement (#1690). `bios_status_unknown` marks the payload that carries no
- * answer at all — a cached game detail, which never carries one whatever the
- * caches hold; a live check that raised; or one that ran and could not ask the
- * platform's emulators — and it ships the identical absent `bios_status`, so the
- * flag is the only thing keeping a failed check from taking a missing-BIOS
- * warning off the page (#1693).
+ * An absent `bios_status` means the launching emulator needs no BIOS and clears
+ * a shown requirement (#1690). `bios_status_unknown` marks the payload that
+ * carries no answer at all — a cached game detail, which never carries one
+ * whatever the caches hold; a live check that raised; or one that ran and could
+ * not ask the platform's emulators — and it ships the identical absent
+ * `bios_status`, so the flag is the only thing keeping a failed check from
+ * taking a missing-BIOS warning off the page (#1693).
  *
  * The last of those three IS an answer, and `bios_level` is what says so: a
  * check that ran and could not establish the requirement ships `"unknown"`,

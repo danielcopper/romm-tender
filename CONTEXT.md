@@ -562,8 +562,8 @@ and never as a ratio, nor as a pointer at the file list, most of whose rows cann
 page's `(0/20 RomM library files)` is a different set again: the **library inventory** below.
 
 - **held** — one of the images is at its destination. Which one is not asked: any of them answers the whole requirement.
-- **absent** — the console needs one and every row the launching core declares was established to be absent. The **BIOS
-  level** goes to `missing`, tested ahead of the declines so a demonstration outranks a platform nothing could be
+- **absent** — the console needs one and every row the launching emulator declares was established to be absent. The
+  **BIOS level** goes to `missing`, tested ahead of the declines so a demonstration outranks a platform nothing could be
   established for. A withheld required row cannot hold with it: that row is one of the rows the disjunction is read
   over, so it leaves the answer **unsettled** instead.
 - **unsettled** — the console needs one and whether it is there could not be established. It can turn a green verdict
@@ -585,10 +585,11 @@ A core states the demand as a disjunction only where it marks **nothing** requir
 of these" is the whole of what the core says. A core whose console needs an image and that does mark files required —
 Beetle PSX marks three of the same five — says what it has to say through those rows being **required by the launching
 emulator**, so its entries carry no count and its rows are not marked. The **system image candidate** flag is the same
-answer read for the launching core onto the row: this row is one of the images that would start the console on its own.
+answer read for the launching emulator onto the row: this row is one of the images that would start the console on its
+own.
 
 That candidate set is deliberately **narrower** than the set the **system image** value is read over, which is every
-image the launching core declares whatever the core called it. The two answer different questions — one is the console's
+image the launching emulator declares whatever it called it. The two answer different questions — one is the console's
 verdict, the other is which rows a surface may mark as ways to reach it — so widening the flag to every image-demanding
 core would put a second mark on a requirement already stated, and narrowing the verdict to the marked rows would stop
 answering for the cores that state required files.
@@ -616,11 +617,10 @@ its own file name.
 ### Library inventory (firmware): offered / held
 
 What the RomM library has for a platform, and how much of it is on this machine — the third counted set beside the
-launching emulator's **required by active core** files and the console's own **system image** demand. **offered**
-(`server_count`) is every firmware file the library holds for the platform; **held** (`local_count`) is how many of
-those the plugin found at their destination. Both are counted over the library's files alone, so a row the library does
-not have — **not on server** — is in neither, however required it is. The code calls the pair the **held/offered
-ratio**.
+**required by the launching emulator** files and the console's own **system image** demand. **offered** (`server_count`)
+is every firmware file the library holds for the platform; **held** (`local_count`) is how many of those the plugin
+found at their destination. Both are counted over the library's files alone, so a row the library does not have — **not
+on server** — is in neither, however required it is. The code calls the pair the **held/offered ratio**.
 
 It is a progress bar over a set the user can finish, not a readiness claim, which is why nothing about it keys off a
 **row verdict**: `held` answers whether something is at the destination, and for a **folder declaration** that is

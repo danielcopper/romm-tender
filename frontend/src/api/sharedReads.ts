@@ -30,11 +30,11 @@
  * What the rule admits, for the three reads below: both load lanes read them at
  * page open, and the only other paths that re-issue them are the store's three
  * re-derive triggers — `download_complete`, `rom_adopted` and
- * `romm_rom_uninstalled`. None can change a ROM's metadata, its active core, or
- * which firmware files are on disk, so the answer they would join is the answer
- * they would get. A version switch re-keys to a different rom_id, which is a
- * different key here — it shares with the other lane's load for that same new
- * rom_id, and with nothing else.
+ * `romm_rom_uninstalled`. None can change a ROM's metadata, its launching
+ * emulator, or which firmware files are on disk, so the answer they would join
+ * is the answer they would get. A version switch re-keys to a different rom_id,
+ * which is a different key here — it shares with the other lane's load for that
+ * same new rom_id, and with nothing else.
  *
  * `get_bios_status` needs that argument made twice over, because a BIOS answer
  * is the one of the three that a user action moves within a single page's
@@ -96,8 +96,8 @@ export const getPlatformCoreInfoShared = shareInFlight(getPlatformCoreInfo);
 /** `get_bios_status` for one ROM, shared across the page's two load lanes. Both
  *  issue it off the same `bios` stale mark on the same cached detail, and the
  *  backend sets that mark whenever the detail carries no BIOS answer — which
- *  includes every platform whose active core needs none, so the pair of them
- *  made this read on nearly every page open. */
+ *  includes every platform whose launching emulator needs none, so the pair of
+ *  them made this read on nearly every page open. */
 export const getBiosStatusShared = shareInFlight(getBiosStatus);
 
 /** Test-only: forget every open request. A request only ever releases itself by

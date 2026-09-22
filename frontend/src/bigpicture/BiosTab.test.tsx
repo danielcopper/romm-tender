@@ -662,8 +662,8 @@ describe("BiosTab", () => {
   it("states the launching emulator under the Emulator heading and gives it no label of its own", () => {
     // A standalone emulator is not a core, and the column's own heading already
     // names the subject — so the value stands alone under it, the way the BIOS
-    // column's sentence stands under `BIOS`. A label here would be a second
-    // name for the same thing on a column 120px wide.
+    // column's sentence stands under `BIOS`. A label here would be a second name
+    // for the same thing, in a narrow column.
     const { container } = render(
       <BiosTab
         biosStatus={biosStatus}
@@ -679,8 +679,12 @@ describe("BiosTab", () => {
     );
     const titles = [...container.querySelectorAll(".romm-panel-section-title")].map((el) => el.textContent);
     expect(titles).toEqual(["BIOS", "Emulator"]);
-    const values = [...container.querySelectorAll(".romm-panel-value")].map((el) => el.textContent);
-    expect(values).toContain("DuckStation (Legacy) (Standalone)");
+    const emulatorHeading = [...container.querySelectorAll(".romm-panel-section-title")].find(
+      (el) => el.textContent === "Emulator",
+    );
+    const underTheHeading = emulatorHeading?.nextElementSibling;
+    expect(underTheHeading?.className).toBe("romm-panel-value");
+    expect(underTheHeading?.textContent).toBe("DuckStation (Legacy) (Standalone)");
     expect(container.querySelector(".romm-panel-label")).toBeNull();
     expect(container.textContent).not.toContain("Active Core");
   });

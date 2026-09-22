@@ -53,9 +53,11 @@ interface BiosTabProps {
   /** Backend-computed readiness verdict driving the status-dot color;
    *  null whenever there is no requirement. */
   biosLevel: BiosLevel | null;
-  /** The launching emulator (`active_core_label`, whatever kind it is) plus the
-   *  platform's emulator list, from the dedicated `get_platform_core_info`
-   *  path (#923) — never derived from `biosStatus`. */
+  /** The launching emulator in both its projections — the name this pane shows
+   *  (`active_core_label`) and the identity its per-file lines are highlighted
+   *  against (`active_core`, which stands for a standalone pick as readily as a
+   *  libretro one) — plus the platform's emulator list. From the dedicated
+   *  `get_platform_core_info` path (#923), never derived from `biosStatus`. */
   coreInfo: CoreInfo | null;
   isActive: boolean;
 }

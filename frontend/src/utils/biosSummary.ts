@@ -33,10 +33,10 @@
  * about ONE emulator's declaration and nothing else — the pick the whole answer
  * was scoped to, carried on the payload as `active_core_label`. On the game
  * page the same emulator is named two inches away, under the pane's Emulator
- * heading, so a sentence about "the launching emulator" says less than
- * everything around it. Where the payload carries no label the
- * pick could not be made or has no name of its own, and the sentences fall back
- * to naming the role rather than inventing one.
+ * heading, so a sentence about "the launching emulator" says less than everything
+ * around it. Where the payload carries no label the pick could not be made or has
+ * no name of its own, and the sentences fall back to naming the role rather than
+ * inventing one.
  *
  * **The order of the conditions is load-bearing and is the order the three
  * surfaces already read in.** The console's own demand (`system_image`) is
