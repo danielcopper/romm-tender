@@ -117,7 +117,7 @@ class TestWhatItProduces:
         assert not (tmp_path / "out" / "romm-tender-1.2.3.tar.gz").exists()
 
     def test_there_is_exactly_one_top_level_directory_and_it_is_romm_tender(self, tmp_path):
-        """The installer unpacks with ``--strip-components=1``, so this is its whole contract."""
+        """One entry, because the installer strips one component; this name, because the packager stages it."""
         _package(_checkout(tmp_path), tmp_path / "out")
 
         tops = {name.split("/")[0] for name in _names(tmp_path / "out" / "romm-tender-1.2.3.tar.gz")}

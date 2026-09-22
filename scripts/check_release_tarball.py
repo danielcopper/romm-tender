@@ -111,7 +111,9 @@ EXECUTABLE_FILES = frozenset({"bin/tender-rom-launcher"})
 # carrying its own ``docs/`` or ``tests/`` would therefore be refused here
 # rather than shipped — deliberately, so that whether such a tree should be
 # pruned or kept is a question asked out loud once instead of answered by
-# whichever list it happened to fall through.
+# whichever list it happened to fall through. The same strictness applies to
+# the KIND of member: the packager prunes the names as files and the segments
+# as directories, and this gate refuses either shape under either list.
 BANNED_SEGMENTS = frozenset({"tests", "frontend", "node_modules", "__pycache__", ".venv", "docs", "scripts"})
 BANNED_NAMES = ("*.map", "*.lock", "*.pyc", "*.pyo", "settings.json", "requirements-dev.*", ".git*")
 
