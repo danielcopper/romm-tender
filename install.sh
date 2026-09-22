@@ -280,7 +280,7 @@ LOGO_GAP="    "
 
 # How many columns a line takes up, with the escape sequences left out. The text
 # block is styled, so its strings are longer than they look — measured raw, a
-# nine-character bold marker reads as nine columns of text that is not there.
+# bold marker and its reset read as eight columns of text that is not there.
 visible_width() {
     local rest="$1" seen=""
     while :; do
@@ -1368,7 +1368,7 @@ steam_is_running() {
 }
 
 # Whether the service was already running before this run touched it. Asked
-# BEFORE the unit is written, because afterwards every answer is yes.
+# BEFORE this run starts the unit, because afterwards every answer is yes.
 unit_is_active() {
     systemctl --user is-active --quiet "$UNIT_NAME" 2> /dev/null
 }

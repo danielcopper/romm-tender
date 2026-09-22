@@ -1296,6 +1296,25 @@ class TestHowTheRunLooks:
         assert icon_at < title_at
         assert "TENDER" not in screen[icon_at]
 
+    def test_the_threshold_is_measured_not_written_down(self, machine):
+        """Why 100: past a threshold of 94 columns, short of what this block measures.
+
+        The cases above run at 160 and 70, which sit on the same side of both
+        numbers, so either passes against a threshold that never reads the
+        lines. This one stacks only where the width comes off the block that
+        came out.
+        """
+        _code, output = machine.on_a_terminal(
+            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="100", COLORTERM="truecolor"
+        )
+
+        screen = _screen(output).splitlines()
+        drawn = _icon_rows()
+        icon_at = next(index for index, line in enumerate(screen) if line.startswith(drawn[0]))
+        title_at = next(index for index, line in enumerate(screen) if "TENDER" in line)
+
+        assert title_at > icon_at + len(drawn) - 1, "the text block is beside the drawing, not under it"
+
     def test_a_truecolor_terminal_gets_the_24_bit_icon(self, machine):
         """The two arrays draw the same glyphs, so only the escapes tell them apart."""
         _code, output = machine.on_a_terminal(

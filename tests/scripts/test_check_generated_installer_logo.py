@@ -247,7 +247,7 @@ class TestEveryToneIsThePalettes:
     def test_the_source_writes_no_colour_down(self, generator):
         """The one way a tone gets left behind is a literal, so there are none."""
         source = (_REPO_ROOT / "scripts" / "logo" / "terminal.py").read_text(encoding="utf-8")
-        literals = re.findall(r'"#[0-9a-fA-F]{6}"', source)
+        literals = re.findall(r'["\']#[0-9a-fA-F]{6}["\']', source)
 
         assert literals == [], f"a colour is written down rather than read: {literals}"
 
