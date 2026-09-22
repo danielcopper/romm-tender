@@ -82,10 +82,12 @@ _CURL_STUB = """#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$STUB_CURL_ARGV_LOG"
 out=""
 url=""
+bar="no"
 while [ $# -gt 0 ]; do
     case "$1" in
         -o) out="$2"; shift 2 ;;
         --max-time) shift 2 ;;
+        --progress-bar) bar="yes"; shift ;;
         -*) shift ;;
         *) url="$1"; shift ;;
     esac
@@ -96,8 +98,18 @@ if [ "$url" = "$STUB_DEBUGGER_URL" ]; then
     echo '{"Browser":"stub"}'
     exit 0
 fi
+if [ "$bar" = "yes" ] && [ -n "${STUB_CURL_DIES_MIDWAY:-}" ]; then
+    # A transfer the server cut short, in the shape curl leaves behind: the bar
+    # stops where it stopped, the reason is written onto that same line, and a
+    # blank line follows it.
+    printf '\\r############ 15.0%%curl: (18) end of response with 340000 bytes missing\\n\\n' >&2
+    exit 18
+fi
 source="$STUB_SERVE/${url##*/}"
 [ -f "$source" ] || exit 22
+# A transfer that reached the end, drawn the way curl draws one: rewritten in
+# place from the start of the line, and ended with a newline of its own.
+[ "$bar" = "no" ] || printf '\\r######################## 100.0%%\\n' >&2
 if [ -n "$out" ]; then cp "$source" "$out"; else cat "$source"; fi
 """
 
@@ -1467,6 +1479,52 @@ class TestHowTheRunLooks:
         assert "\x1b[" in output, "a terminal run writes escapes"
         for mark, label in (("✓", "Checking"), ("✓", "Installing"), ("✓", "Service"), ("✗", "Steam")):
             assert len([line for line in screen.splitlines() if line.startswith(f"{mark} {label}")]) == 1
+
+    def test_a_run_that_downloads_still_ends_in_one_row_each(self, machine):
+        """The progress bar takes a line of its own, and the block has to count it.
+
+        curl ends a bar that reached the end with a newline, so the cursor is a
+        line lower than the block's own drawing left it. A redraw that did not
+        know about that line aimed the whole block one line short: the Checking
+        row stood three times and a spinner frame was left above the finished
+        rows.
+        """
+        machine.publish_release()
+
+        _code, output = machine.on_a_terminal("--version", _VERSION, answer="y", width=160, COLORTERM="truecolor")
+
+        screen = _screen(output)
+        lines = screen.splitlines()
+        for mark, label in (("✓", "Checking"), ("✓", "Installing"), ("✓", "Service"), ("✗", "Steam")):
+            assert len([line for line in lines if line.startswith(f"{mark} {label}")]) == 1, screen
+        for frame in ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"):
+            assert not [line for line in lines if line.startswith(frame)], f"a spinner frame is still there: {screen}"
+        assert "100.0%" not in screen, "the progress bar is still on screen"
+
+    def test_a_download_that_dies_midway_keeps_curls_reason_and_says_its_own(self, machine):
+        """Two reasons, both readable: the transport's and the run's.
+
+        How many lines curl's own message took is not knowable from here, so the
+        block is not a known distance above the cursor any more and the refusal
+        draws a fresh one under that message rather than over it.
+        """
+        machine.publish_release()
+
+        code, output = machine.on_a_terminal(
+            "--version",
+            _VERSION,
+            answer="y",
+            width=160,
+            COLORTERM="truecolor",
+            STUB_CURL_DIES_MIDWAY="yes",
+        )
+
+        assert code == 1
+        screen = _screen(output)
+        assert "curl: (18) end of response" in screen, "curl's own reason was drawn over"
+        failed = [line for line in screen.splitlines() if line.startswith("✗ Installing")]
+        assert failed == ["✗ Installing   release tender-v1.2.3 carries no tarball"], screen
+        assert not machine.code.exists()
 
     def test_the_warning_is_four_lines_and_asks_once(self, machine):
         code, output = machine.on_a_terminal("--from", str(machine.tmp_path / "gone.tar.gz"), answer="y")

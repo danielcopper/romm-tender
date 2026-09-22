@@ -662,10 +662,8 @@ draw_block() {
 }
 
 render_block() {
-    local frame="$1" index=0 drawn=0 state detail sub sub_state on_screen=0
-    if [ -s "$ROW_FILE.height" ]; then
-        on_screen="$(cat "$ROW_FILE.height")"
-    fi
+    local frame="$1" index=0 drawn=0 state detail sub sub_state on_screen
+    on_screen="$(block_height)"
     if [ "$on_screen" -gt 0 ]; then
         printf '\033[%dA' "$on_screen"
     fi
@@ -677,7 +675,24 @@ render_block() {
         fi
         index=$((index + 1))
     done < "$ROW_FILE"
-    printf '%s\n' "$drawn" > "$ROW_FILE.height"
+    set_block_height "$drawn"
+}
+
+# How far above the cursor the block begins, and how far the next redraw has to
+# move up to reach it. Zero says the block is not a known distance above the
+# cursor at all, which is what a fresh run and an interrupted download both
+# leave behind: the next draw then writes a new block where the cursor is
+# instead of aiming at a line it cannot find.
+block_height() {
+    if [ -s "$ROW_FILE.height" ]; then
+        cat "$ROW_FILE.height"
+    else
+        printf '0\n'
+    fi
+}
+
+set_block_height() {
+    printf '%s\n' "$1" > "$ROW_FILE.height"
 }
 
 print_row() {
@@ -1097,14 +1112,32 @@ fetch_visibly() {
     fi
     # The bar draws on the line under the block, and so does the spinner's idea
     # of where the block ends — both write there and one of them moves the
-    # cursor relative to it, so the spinner stops for the length of the download
-    # and the bar's line is cleared before it starts again.
-    local status=0
+    # cursor relative to it, so the spinner stops for the length of the
+    # download. That line is the block's own while the bar is on it: curl ends a
+    # bar that reached the end with a newline, which puts the cursor one line
+    # lower than it was, and a redraw that did not count the bar's line would
+    # aim the whole block one line short of where it is.
+    local status=0 height=0
     spinner_stop
-    curl -fL --progress-bar "$1" -o "$2" || status=$?
     if may_animate; then
-        printf '\r\033[K'
+        height="$(block_height)"
+        set_block_height "$((height + 1))"
+    fi
+    curl -fL --progress-bar "$1" -o "$2" || status=$?
+    if ! may_animate; then
+        return "$status"
+    fi
+    if [ "$status" -eq 0 ]; then
+        printf '\033[1A\r\033[K'
+        set_block_height "$height"
         spinner_start
+    else
+        # curl wrote its reason where the bar was, over however many lines that
+        # took — so the block is no longer a known distance above the cursor,
+        # and the refusal on its way draws a fresh one under that reason rather
+        # than over it. The spinner stays stopped: at an unknown height each
+        # frame would be a new block rather than the same one again.
+        set_block_height 0
     fi
     return "$status"
 }
