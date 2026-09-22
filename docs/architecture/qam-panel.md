@@ -1439,7 +1439,7 @@ reason Settings needs none: six rows that each name a thing are their own order.
 | Row                   | What it says on arrival                                          | What the pane offers                            |
 | --------------------- | ---------------------------------------------------------------- | ----------------------------------------------- |
 | Tender's shortcuts    | `total_shortcuts` — the bound shortcuts Main counts every visit  | Remove all shortcuts                            |
-| Downloaded ROM files  | a count, one per install; the `≈` size is the pane's             | Uninstall all ROM files                         |
+| Downloaded ROM files  | one count per install — two kept versions count twice            | Uninstall all ROM files                         |
 | Grid images           | `scan` until asked — then how many are orphaned                  | Remove the orphaned images                      |
 | Other non-Steam games | Steam's own store less this plugin's entries — a dash until read | the whitelist, the removal, the RetroDECK guard |
 | Gone from RomM        | `scan` until asked — the server round trip                       | Review, which opens the dialog below            |
@@ -1469,9 +1469,8 @@ that under-reports; an unproven entry offered is a library deleted.
 written with a `≈` for two reasons: an unpacked archive, a patch beside the original or extras in the same folder are
 not the size the server named — a multi-file game is, which is why it is not on that list — and the field is NULL for a
 row that predates its migration or belongs to a wholesale-skipped platform nobody has re-applied, so the sum understates
-rather than fails. The count beside it is one per INSTALL, so a multi-disc game counts once. The cleanup goes on
-measuring the disk for itself, because its free-space line has to hold for a bundle it is about to write rather than for
-a figure a server once reported.
+rather than fails. The cleanup goes on measuring the disk for itself, because its free-space line has to hold for a
+bundle it is about to write rather than for a figure a server once reported.
 
 **The removed-games review stays a dialog, and the reason is geometry rather than inertia.** A dialog may take up to 720
 × 406 on the Deck — `maxWidth: 720` against `maxHeight: 76vh` of the 534 px viewport, which is the right denominator
