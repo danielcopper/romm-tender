@@ -30,8 +30,11 @@ import { useDataPage, type DataPageState } from "./data/useDataPage";
  *
  * A figure that costs a round trip or a backend scan reads `scan` until the
  * reader asks for it, because focus selects on this layout: a figure fetched on
- * selection would put that round trip under every row the stick passes. The two
- * that read `scan` here are the ones whose pane has a button to ask with.
+ * selection would put that round trip under every row the stick passes. Both
+ * such rows keep what their scan found for the rest of the visit.
+ *
+ * An em dash is a figure that has not arrived — a read still in flight, or one
+ * that failed. It is not a zero, and no row prints one for an emptiness.
  */
 function rowCount(id: DataRowId, state: DataPageState): string {
   switch (id) {
@@ -42,9 +45,9 @@ function rowCount(id: DataRowId, state: DataPageState): string {
     case "grid-images":
       return state.orphanedGridImages === null ? "scan" : `${state.orphanedGridImages}`;
     case "non-steam":
-      return `${state.nonSteamApps.length}`;
+      return state.foreignApps === null ? "—" : `${state.foreignApps.length}`;
     case "removed-games":
-      return "scan";
+      return state.removedGames === null ? "scan" : `${state.removedGames}`;
     case "recovery-bundles":
       return state.inventory === null ? "—" : `${state.inventory.recovery_bundles}`;
   }

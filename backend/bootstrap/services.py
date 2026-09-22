@@ -566,7 +566,6 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
     data_inventory_service = DataInventoryService(
         config=DataInventoryServiceConfig(
             loop=cfg.runtime.loop,
-            logger=cfg.runtime.logger,
             uow_factory=cfg.callbacks.uow_factory,
             recovery_inventory=cfg.adapters.recovery_inventory,
         ),

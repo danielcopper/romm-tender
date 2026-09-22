@@ -277,13 +277,15 @@ page.
 
 The **Data Management** page is an inventory of what this device holds. Each row on the left names a population — a set
 of things that is on your device — and carries its count; picking a row shows what that population is, the numbers about
-it, and the one thing you can do with it. The six rows are **Steam shortcuts**, **Downloaded ROM files**, **Grid
-images**, **Other non-Steam games**, **Gone from RomM** and **Recovery bundles**.
+it, and whatever can be done with it. Most rows offer one action, Other non-Steam games offers a removal and a
+whitelist, and Recovery bundles offers none at all. The six rows are **Tender's shortcuts**, **Downloaded ROM files**,
+**Grid images**, **Other non-Steam games**, **Gone from RomM** and **Recovery bundles**.
 
 Two counts cost a server round trip or a backend scan, so they read **scan** until you press for them: Grid images and
-Gone from RomM. Every destructive action asks first — press once to see the prompt, press again to confirm. The
-per-platform actions — removing one platform's shortcuts, deleting its save files, deleting its BIOS files — live in
-**[Library › Platforms](bios-management.md#library-platforms)**, on the platform's own pane.
+Gone from RomM. Each keeps what its scan found for the rest of the visit. Every destructive action asks first — press
+once to see the prompt, press again to confirm. The per-platform actions — removing one platform's shortcuts, deleting
+its save files, deleting its BIOS files — live in **[Library › Platforms](bios-management.md#library-platforms)**, on
+the platform's own pane.
 
 While a library sync is running (or cancelling), the shortcut and ROM removals and the grid-image cleanup are
 unavailable — the buttons are disabled with a short hint, and the backend refuses the request too. Wait for the sync to
@@ -338,44 +340,50 @@ While one is running, every removal button on every pane is disabled and a spinn
 counter shows the progress above the list; the buttons re-enable and the final count appears once it finishes. You can't
 start a second removal (or a new one from another button) until the current one completes.
 
-### Steam shortcuts
+### Tender's shortcuts
 
 The row counts the shortcuts this plugin created. **Remove all shortcuts** removes every one of them, across all
-platforms; collections are cleaned up with them. Downloaded ROM files and save files are left where they are, and the
-next sync puts the shortcuts back.
+platforms; collections are cleaned up with them. It also sweeps up any shortcut of ours that Steam still holds without a
+record on our side — what a run interrupted mid-apply leaves behind — so the button stays useful when the count reads
+zero. Downloaded ROM files and save files are left where they are, and the next sync puts the shortcuts back.
 
 ### Downloaded ROM files
 
-The row counts the game files this plugin downloaded, and the pane states their total size with a `≈`. That size is what
-your RomM server reported for those games rather than a measurement of your disk, so it is close rather than exact — an
-unpacked archive, a patch beside the original or extras in the same folder are not what the server named, and a game
-whose size the server never reported adds nothing to it.
+The row counts the games this plugin downloaded — one per game, a multi-disc game included — and the pane states their
+total size with a `≈`. That size is what your RomM server reported for those games rather than a measurement of your
+disk, so it is close rather than exact — an unpacked archive, a patch beside the original or extras in the same folder
+are not what the server named, and a game whose size the server never reported adds nothing to it.
 
 **Uninstall all ROM files** deletes them from disk. Shortcuts remain in your library so you can download the games
 again. Use this to reclaim disk space.
 
 ### Grid images
 
-Deletes leftover Steam grid artwork (`grid/` cover, hero, logo, icon, and wide images) whose shortcut no longer exists.
+Deletes leftover Steam grid images (the `grid/` cover, hero, logo, icon and wide files) whose shortcut no longer exists.
 Removing or re-creating shortcuts leaves these image files behind, and they accumulate over time.
 
 An image counts as orphaned only when **all** of these hold:
 
-- its filename is a Steam grid-image name for a **non-Steam shortcut** appId — custom artwork you saved for regular
-  Steam games is never touched,
-- that appId belongs to **no live shortcut** — the plugin scans your full shortcut list first, so artwork of shortcuts
-  from other tools (Heroic, Lutris, manually added games, …) is protected too, not just RomM's.
+- its filename is a Steam grid-image name for a **non-Steam shortcut** appId — custom images you saved for regular Steam
+  games are never touched,
+- that appId belongs to **no live shortcut** — the plugin scans your full shortcut list first, so images of shortcuts
+  from other tools (Heroic, Lutris, manually added games, …) are protected too, not just RomM's.
 
-The row reads **scan** until you press **Scan for orphaned artwork**, which counts them without deleting anything and
+The row reads **scan** until you press **Scan for orphaned images**, which counts them without deleting anything and
 puts the number on the row. The button then offers to remove that many, and asks once before it does. Deletion is
 permanent — there is no backup. If the shortcut scan can't run, or any synced RomM shortcut is missing from it, the
 cleanup refuses and deletes nothing.
 
 ### Other non-Steam games
 
-Removes ALL non-Steam shortcuts visible to Steam — including games not managed by this plugin. Use with extreme caution.
+Everything in your Steam library that neither Steam nor this plugin installed — emulators, launchers, browsers, games
+you added by hand. **Your RomM games are not in this row**, and the removal here cannot touch them: this plugin's own
+shortcuts are told apart by what they launch, not by their names, and removing them is the Tender's shortcuts row's job.
 
-A **whitelist** system lets you protect specific shortcuts from removal:
+If Steam's shortcut list cannot be read, that ownership cannot be established — the count reads as unavailable and the
+removal is refused rather than guessed at.
+
+A **whitelist** system lets you protect the rest from removal:
 
 1. Press **Configure whitelist**
 2. Toggle on any games you want to protect (RetroDECK is auto-protected by default)
@@ -386,9 +394,12 @@ The plugin shows extra warnings if RetroDECK is not whitelisted, since removing 
 
 ### Recovery bundles
 
-The row counts the snapshots the cleanup sealed before it deleted anything, and states the disk they take. **Nothing on
-this page removes one** — they are yours to keep, move or delete in a file manager. Where they live, and what a bundle
-holds, is under [Gone from RomM](#gone-from-romm) above.
+The row counts the snapshots the cleanup sealed under `~/romm-tender-recovery/bundles/`, and states the disk they take.
+**Nothing on this page removes one** — they are yours to keep, move or delete in a file manager. What a bundle holds is
+under [Gone from RomM](#gone-from-romm) above.
+
+The count covers that folder only. Bundles an older version sealed under `~/decky-romm-sync-recovery/bundles/` are still
+on your disk and are **not** counted here, so a device carrying those has more than this row reports.
 
 ### Per-platform removals moved
 

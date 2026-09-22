@@ -21,7 +21,7 @@ export interface DataRow {
 // A tuple rather than an array: the page opens on the first row, and a tuple
 // is what makes that first element typed as present.
 export const DATA_ROWS = [
-  { id: "shortcuts", label: "Steam shortcuts" },
+  { id: "shortcuts", label: "Tender's shortcuts" },
   { id: "rom-files", label: "Downloaded ROM files" },
   { id: "grid-images", label: "Grid images" },
   { id: "non-steam", label: "Other non-Steam games" },

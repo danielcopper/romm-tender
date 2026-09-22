@@ -1,8 +1,8 @@
 """DataInventoryService — what this device holds, counted for the Data Management page.
 
-The home for the population figures no other read answers: how many ROM files
-are installed and what they take, and how many recovery bundles are sealed and
-what they take. Every other row on that page is already answered elsewhere —
+The home for the population figures no other read answers: how many games are
+installed and what they take, and how many recovery bundles are sealed and what
+they take. Every other row on that page is already answered elsewhere —
 the shortcut count by ``get_sync_stats``, the non-Steam entries by the
 frontend's own scan of Steam's shortcut store — and none of those moves here.
 
@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import asyncio
-    import logging
 
     from services.protocols import RecoveryBundleInventoryReader, UnitOfWorkFactory
 
@@ -28,13 +27,13 @@ if TYPE_CHECKING:
 class DataInventoryServiceConfig:
     """Frozen wiring bundle handed to ``DataInventoryService.__init__``.
 
-    Holds runtime infrastructure, the SQLite Unit-of-Work factory the installed
-    figures are read through, and the recovery-root reader — narrowed to the
-    inventory question, so this service cannot seal or validate a bundle.
+    Holds the loop the two readings are offloaded to, the SQLite Unit-of-Work
+    factory the installed figures are read through, and the recovery-root
+    reader — narrowed to the inventory question, so this service cannot seal or
+    validate a bundle.
     """
 
     loop: asyncio.AbstractEventLoop
-    logger: logging.Logger
     uow_factory: UnitOfWorkFactory
     recovery_inventory: RecoveryBundleInventoryReader
 
@@ -44,7 +43,6 @@ class DataInventoryService:
 
     def __init__(self, *, config: DataInventoryServiceConfig) -> None:
         self._loop = config.loop
-        self._logger = config.logger
         self._uow_factory = config.uow_factory
         self._recovery_inventory = config.recovery_inventory
 
@@ -52,7 +50,8 @@ class DataInventoryService:
         """Report the installed-ROM and recovery-bundle populations with their sizes.
 
         Returns ``installed_roms`` / ``installed_bytes`` and
-        ``recovery_bundles`` / ``recovery_bytes``. Both byte figures are
+        ``recovery_bundles`` / ``recovery_bytes``. ``installed_roms`` counts
+        installs — one per game, a multi-disc game included — never files. Both byte figures are
         totals, and ``installed_bytes`` is an approximation the caller must
         present as one (see :meth:`_read_installed_io`).
 
@@ -72,12 +71,12 @@ class DataInventoryService:
         }
 
     def _read_installed_io(self) -> tuple[int, int]:
-        """Count the installed ROMs and sum the size RomM reported for them.
+        """Count the installed games and sum the size RomM reported for them.
 
         The size is the SERVER's figure (``Rom.fs_size_bytes``) and never a
         walk of the disk, so the page opens with a number instead of measuring
         for one. That makes it an approximation in two ways the caller has to
-        keep: a row whose size RomM never reported contributes nothing, and
+        keep: a game whose size RomM never reported contributes nothing, and
         what a game takes locally differs from what the server named whenever
         an archive was unpacked, a patch was written beside the original, or
         extras share the folder.

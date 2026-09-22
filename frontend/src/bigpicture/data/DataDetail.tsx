@@ -51,9 +51,8 @@ const Status: FC<{ text: string; testId: string }> = ({ text, testId }) =>
 /**
  * A button that asks once before it acts.
  *
- * The confirm is the label rather than a modal because that is what these
- * actions have always asked with, and because the second press lands on the
- * button focus is already standing on.
+ * The confirm is the label rather than a modal because the second press then
+ * lands on the button focus is already standing on.
  */
 const ConfirmButton: FC<{
   label: string;
@@ -97,7 +96,7 @@ const ShortcutsPane: FC<{ state: DataPageState }> = ({ state }) => {
         <ConfirmButton
           label="Remove all shortcuts"
           confirmLabel="Remove every RomM shortcut?"
-          disabled={state.busy || syncRunning || state.shortcutCount === 0}
+          disabled={state.busy || syncRunning}
           onConfirm={() => detach(state.removeAllShortcuts())}
         />
       </ButtonRow>
@@ -119,7 +118,7 @@ const RomFilesPane: FC<{ state: DataPageState }> = ({ state }) => {
       <Figures>
         {inventory === null
           ? "Reading…"
-          : `${pluralize(inventory.installed_roms, "ROM file")} · ≈ ${formatBytes(inventory.installed_bytes)}`}
+          : `${pluralize(inventory.installed_roms, "game")} · ≈ ${formatBytes(inventory.installed_bytes)}`}
       </Figures>
       <Muted>The size is what your RomM server reported for these games, not a measurement of your disk.</Muted>
       <ButtonRow padding="2px 16px 6px">
@@ -142,8 +141,8 @@ const GridImagesPane: FC<{ state: DataPageState }> = ({ state }) => {
   return (
     <>
       <Muted>
-        Steam keeps the artwork of a shortcut after the shortcut is gone. These are the leftovers: artwork whose
-        shortcut no longer exists. Artwork of games still in your library — including games this plugin did not add — is
+        Steam keeps the images it shows for a shortcut after the shortcut is gone. These are the leftovers: images whose
+        shortcut no longer exists. Images of games still in your library — including games this plugin did not add — are
         kept.
       </Muted>
       <Figures>{scanned === null ? "Not scanned yet" : `${pluralize(scanned, "orphaned image")} found`}</Figures>
@@ -151,16 +150,16 @@ const GridImagesPane: FC<{ state: DataPageState }> = ({ state }) => {
         {scanned === null || scanned === 0 ? (
           <DialogButton
             style={FLAT_BUTTON}
-            disabled={syncRunning}
+            disabled={state.busy || syncRunning}
             onClick={() => detach(state.cleanupGridImages(false))}
           >
-            Scan for orphaned artwork
+            Scan for orphaned images
           </DialogButton>
         ) : (
           <ConfirmButton
             label={`Remove ${pluralize(scanned, "orphaned image")}`}
             confirmLabel={`Remove ${pluralize(scanned, "image")}?`}
-            disabled={syncRunning}
+            disabled={state.busy || syncRunning}
             onConfirm={() => detach(state.cleanupGridImages(true))}
           />
         )}
@@ -174,9 +173,8 @@ const GridImagesPane: FC<{ state: DataPageState }> = ({ state }) => {
 /**
  * The whitelist, kept as the expandable list it has always been.
  *
- * Its search box is the one text input left on a pane; the panel's rule puts
- * text input in a modal, and moving it is this page's next cut rather than this
- * one's.
+ * Its search box is the one text input left on a pane, where the panel's rule
+ * puts text input in a modal.
  */
 const WhitelistSection: FC<{ state: DataPageState; onWhitelistChange: () => void }> = ({
   state,
@@ -184,9 +182,11 @@ const WhitelistSection: FC<{ state: DataPageState; onWhitelistChange: () => void
 }) => {
   const [showWhitelist, setShowWhitelist] = useState(false);
   const [whitelistSearch, setWhitelistSearch] = useState("");
-  const filteredApps = whitelistSearch
-    ? state.nonSteamApps.filter((app) => fuzzyMatch(whitelistSearch, app.name))
-    : state.nonSteamApps;
+  // The list is what the removal would take, so it lists the foreign entries
+  // and never this plugin's own — protecting one of ours from a removal that
+  // cannot reach it would say the two were ever in the same set.
+  const listed = state.foreignApps ?? [];
+  const filteredApps = whitelistSearch ? listed.filter((app) => fuzzyMatch(whitelistSearch, app.name)) : listed;
 
   const handleToggle = (app: NonSteamApp, checked: boolean) => {
     const matchingPattern = DEFAULT_WHITELIST_PATTERNS.find((p) => app.name.toLowerCase().includes(p));
@@ -235,7 +235,7 @@ const WhitelistSection: FC<{ state: DataPageState; onWhitelistChange: () => void
             />
           </PanelSectionRow>
           <PanelSectionRow>
-            <Field label={`Toggle ON to protect (${filteredApps.length}/${state.nonSteamApps.length}):`} />
+            <Field label={`Toggle ON to protect (${filteredApps.length}/${listed.length}):`} />
           </PanelSectionRow>
           {filteredApps.map((app) => (
             <PanelSectionRow key={app.appId}>
@@ -257,9 +257,15 @@ const WhitelistSection: FC<{ state: DataPageState; onWhitelistChange: () => void
 };
 
 /**
- * Every non-Steam entry Steam holds, this plugin's shortcuts included — which
- * is what the scan behind the figure can see. The whitelist is what keeps
- * RetroDECK, browsers and launchers out of the removal.
+ * What is in the Steam library that neither Steam nor this plugin put there.
+ *
+ * Tender's own shortcuts are excluded by OWNERSHIP rather than by name: the
+ * default whitelist matches launcher names, and a synced library's entries
+ * carry game names, so a name-based rule would sweep the whole library away.
+ * Removing what this plugin created is the Tender's-shortcuts row's job.
+ *
+ * Where ownership could not be established the pane offers nothing at all —
+ * the same abort the grid cleanup takes when its own scan cannot run.
  */
 const NonSteamPane: FC<{ state: DataPageState }> = ({ state }) => {
   const [armed, setArmed] = useState(false);
@@ -268,7 +274,8 @@ const NonSteamPane: FC<{ state: DataPageState }> = ({ state }) => {
     setArmed(false);
     setRetrodeckArmed(false);
   };
-  const toRemove = state.nonSteamApps.filter((a) => !state.whitelistedIds.has(a.appId));
+  const foreign = state.foreignApps;
+  const toRemove = (foreign ?? []).filter((a) => !state.whitelistedIds.has(a.appId));
   const retrodeckAtRisk = toRemove.some((a) => a.name.toLowerCase().includes("retrodeck"));
 
   const press = () => {
@@ -291,18 +298,27 @@ const NonSteamPane: FC<{ state: DataPageState }> = ({ state }) => {
     return `Remove ${pluralize(toRemove.length, "non-Steam game")}`;
   };
 
+  const figures = () => {
+    if (foreign === null) return "Could not be read";
+    if (foreign.length === 0) return "No other non-Steam games found";
+    return `${foreign.length} ${foreign.length === 1 ? "entry" : "entries"} · ${state.whitelistedIds.size} protected · ${toRemove.length} would be removed`;
+  };
+
   return (
     <>
       <Muted>
-        Everything in your Steam library that Steam did not install — this plugin&apos;s shortcuts, emulators,
-        launchers, browsers. The whitelist below protects what you keep; everything else is what the button removes.
+        Everything in your Steam library that neither Steam nor this plugin installed — emulators, launchers, browsers,
+        games you added by hand. Your RomM games are not counted here; they are the Tender&apos;s shortcuts row. The
+        whitelist below protects what you keep; everything else is what the button removes.
       </Muted>
-      <Figures>
-        {state.nonSteamApps.length === 0
-          ? "No non-Steam games found"
-          : `${state.nonSteamApps.length} ${state.nonSteamApps.length === 1 ? "entry" : "entries"} · ${state.whitelistedIds.size} protected · ${toRemove.length} would be removed`}
-      </Figures>
-      {state.nonSteamApps.length > 0 && (
+      <Figures>{figures()}</Figures>
+      {foreign === null && (
+        <Muted>
+          Steam&apos;s shortcut list could not be read, so nothing here can be told apart from your RomM games. Nothing
+          is removed while that is true — open the page again to retry.
+        </Muted>
+      )}
+      {foreign !== null && foreign.length > 0 && (
         <>
           <ButtonRow padding="2px 16px 6px">
             <DialogButton style={FLAT_BUTTON} disabled={state.busy} onClick={press}>
@@ -325,17 +341,17 @@ const NonSteamPane: FC<{ state: DataPageState }> = ({ state }) => {
 /**
  * The games this device still keeps that RomM no longer has.
  *
- * The review is a dialog, and the section below is the one that opens it. It is
- * unchanged here: what the dialog looks like, and the numbers this pane should
- * carry beside it, are this page's next cut.
+ * The count costs a server round trip, so it is the scan's answer rather than
+ * something the page opens with, and the section that runs the scan is what
+ * reports it.
  */
-const RemovedGamesPane: FC = () => (
+const RemovedGamesPane: FC<{ state: DataPageState }> = ({ state }) => (
   <>
     <Muted>
       Games whose entry is gone from your RomM server while this device still holds their shortcut, downloaded files and
       saves. The review below scans for them and shows what removing each one would take with it.
     </Muted>
-    <RemovedGamesCleanupSection />
+    <RemovedGamesCleanupSection onScanned={state.recordRemovedGamesScan} />
   </>
 );
 
@@ -349,8 +365,9 @@ const RecoveryBundlesPane: FC<{ state: DataPageState }> = ({ state }) => {
   return (
     <>
       <Muted>
-        Before the cleanup deletes a game&apos;s local data it seals a snapshot of it. Nothing is ever read back
-        automatically and nothing here removes one — they are yours to keep, move or delete in a file manager.
+        Before the cleanup deletes a game&apos;s local data it seals a snapshot of it, in{" "}
+        <code>~/romm-tender-recovery/</code>. Nothing is ever read back automatically and nothing here removes one —
+        they are yours to keep, move or delete in a file manager.
       </Muted>
       <Figures>
         {inventory === null
@@ -359,8 +376,8 @@ const RecoveryBundlesPane: FC<{ state: DataPageState }> = ({ state }) => {
       </Figures>
       <Muted>
         {inventory === null || inventory.recovery_bundles === 0
-          ? "Nothing has been sealed on this device."
-          : "They sit in a folder beside your home directory; each carries a README explaining what it holds."}
+          ? "Nothing has been sealed under that folder. Bundles an older version wrote elsewhere are not counted here."
+          : "Each carries a README explaining what it holds. Bundles an older version sealed under a different folder are not counted here."}
       </Muted>
     </>
   );
@@ -377,7 +394,7 @@ export const DataDetail: FC<{ rowId: DataRowId; state: DataPageState }> = ({ row
     case "non-steam":
       return <NonSteamPane state={state} />;
     case "removed-games":
-      return <RemovedGamesPane />;
+      return <RemovedGamesPane state={state} />;
     case "recovery-bundles":
       return <RecoveryBundlesPane state={state} />;
   }

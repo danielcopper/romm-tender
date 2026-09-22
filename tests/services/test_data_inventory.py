@@ -1,7 +1,5 @@
 """Tests for DataInventoryService."""
 
-import logging
-
 # conftest.py patches decky before this import
 import decky  # noqa: F401
 import pytest
@@ -69,7 +67,6 @@ def service(uow: FakeUnitOfWork, recovery: FakeRecoveryInventory) -> DataInvento
     return DataInventoryService(
         config=DataInventoryServiceConfig(
             loop=running_loop(),
-            logger=logging.getLogger("test"),
             uow_factory=FakeUnitOfWorkFactory(uow),
             recovery_inventory=recovery,
         )
