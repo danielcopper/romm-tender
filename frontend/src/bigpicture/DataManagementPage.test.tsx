@@ -23,9 +23,11 @@ import {
   setLaunchOptionsConfirmed,
   getAllNonSteamShortcutAppIds,
   getLiveRomMShortcutAppIds,
+  scanShortcutOwnership,
 } from "../utils/steamShortcuts";
 import { clearAllRomMCollections } from "../utils/collections";
 import { setSyncProgress } from "../utils/syncProgress";
+import { beginPruneRun, resetPruneState, setPruneComplete, setPruneProgress } from "../utils/pruneStore";
 import { stubCollectionStore, stubAppStore } from "../test-utils/steamStubs";
 import type { DataInventory, SyncStats } from "../types";
 
@@ -42,6 +44,7 @@ vi.mock("../utils/steamShortcuts", () => ({
   setLaunchOptionsConfirmed: vi.fn(),
   getAllNonSteamShortcutAppIds: vi.fn(),
   getLiveRomMShortcutAppIds: vi.fn(),
+  scanShortcutOwnership: vi.fn(),
 }));
 vi.mock("../utils/collections", () => ({
   clearAllRomMCollections: vi.fn(),
@@ -68,7 +71,14 @@ function stats(overrides: Partial<SyncStats> = {}): SyncStats {
 }
 
 function inventory(overrides: Partial<DataInventory> = {}): DataInventory {
-  return { installed_roms: 0, installed_bytes: 0, recovery_bundles: 0, recovery_bytes: 0, ...overrides };
+  return {
+    installed_roms: 0,
+    installed_bytes: 0,
+    recovery_bundles: 0,
+    recovery_bytes: 0,
+    recovery_root: "/home/deck/romm-tender-recovery",
+    ...overrides,
+  };
 }
 
 /** Render the page and settle its mount reads. */
@@ -108,6 +118,7 @@ async function press(el: Element): Promise<void> {
 describe("DataManagementPage", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    resetPruneState();
     setSyncProgress({ running: false, stage: "", current: 0, total: 0, message: "", runId: "" });
     vi.mocked(backend.getWhitelistSettings).mockResolvedValue({ disabled_defaults: [], custom_names: [] });
     vi.mocked(backend.updateWhitelistSettings).mockResolvedValue({ success: true });
@@ -129,10 +140,11 @@ describe("DataManagementPage", () => {
     vi.mocked(backend.cleanupOrphanedGridImages).mockResolvedValue({ success: true, candidate_count: 0 });
     vi.mocked(setLaunchOptionsConfirmed).mockResolvedValue(true);
     vi.mocked(getAllNonSteamShortcutAppIds).mockReturnValue([]);
-    // Default: the live exe-ownership scan answers "none of these are ours",
+    // Default: the sweep identifies every entry and finds none of them ours,
     // so the union removal is a no-op and every non-Steam entry is foreign
     // unless a test says otherwise.
     vi.mocked(getLiveRomMShortcutAppIds).mockResolvedValue([]);
+    vi.mocked(scanShortcutOwnership).mockResolvedValue({ owned: [], unresolved: [] });
     vi.mocked(clearAllRomMCollections).mockResolvedValue(undefined);
     stubCollectionStore([]);
     stubAppStore({});
@@ -274,12 +286,25 @@ describe("DataManagementPage", () => {
       expect(view.container.textContent).not.toContain("Nothing has been sealed on this device");
     });
 
-    it("names where a bundle lives rather than placing it beside the home directory", async () => {
-      vi.mocked(backend.getDataInventory).mockResolvedValue(inventory({ recovery_bundles: 1, recovery_bytes: 10 }));
+    it("names the root the backend counted under rather than spelling one itself", async () => {
+      // The folder is derived from the package name, which this side cannot
+      // see — and a literal would be wrong under a non-default home too.
+      vi.mocked(backend.getDataInventory).mockResolvedValue(
+        inventory({ recovery_bundles: 1, recovery_bytes: 10, recovery_root: "/var/home/deck/tender-recovery" }),
+      );
       const view = await pageOn("recovery-bundles");
 
-      expect(view.container.textContent).toContain("~/romm-tender-recovery/");
+      expect(view.container.textContent).toContain("/var/home/deck/tender-recovery");
+      expect(view.container.textContent).not.toContain("~/romm-tender-recovery");
       expect(view.container.textContent).not.toContain("beside your home directory");
+    });
+
+    it("says nothing about where they live until the read has landed", async () => {
+      vi.mocked(backend.getDataInventory).mockReturnValue(new Promise(() => {}));
+      const view = await pageOn("recovery-bundles");
+
+      expect(view.container.textContent).toContain("seals a snapshot of it.");
+      expect(view.container.textContent).not.toContain("undefined");
     });
   });
 
@@ -392,7 +417,7 @@ describe("DataManagementPage", () => {
     });
   });
 
-  describe("the Steam shortcuts pane", () => {
+  describe("the Tender's shortcuts pane", () => {
     it("first press arms the confirm; the second removes every shortcut", async () => {
       vi.mocked(backend.getSyncStats).mockResolvedValue(stats({ total_shortcuts: 2 }));
       vi.mocked(backend.removeAllShortcuts).mockResolvedValue({
@@ -563,7 +588,7 @@ describe("DataManagementPage", () => {
         2: { strDisplayName: "Another RomM Game" },
         3: { strDisplayName: "Moonlight" },
       });
-      vi.mocked(getLiveRomMShortcutAppIds).mockResolvedValue([1, 2]);
+      vi.mocked(scanShortcutOwnership).mockResolvedValue({ owned: [1, 2], unresolved: [] });
       const view = await pageOn("non-steam");
 
       expect(view.getByTestId("data-row-non-steam").textContent).toContain("1");
@@ -573,7 +598,7 @@ describe("DataManagementPage", () => {
     it("removes only the foreign entries, never one of ours", async () => {
       stubCollectionStore([1, 2]);
       stubAppStore({ 1: { strDisplayName: "Some RomM Game" }, 2: { strDisplayName: "Handmade Shortcut" } });
-      vi.mocked(getLiveRomMShortcutAppIds).mockResolvedValue([1]);
+      vi.mocked(scanShortcutOwnership).mockResolvedValue({ owned: [1], unresolved: [] });
       const view = await pageOn("non-steam");
 
       fireEvent.click(button(view, /Remove \d+ /));
@@ -587,7 +612,7 @@ describe("DataManagementPage", () => {
     it("lists only the foreign entries in the whitelist", async () => {
       stubCollectionStore([1, 2]);
       stubAppStore({ 1: { strDisplayName: "Some RomM Game" }, 2: { strDisplayName: "Handmade Shortcut" } });
-      vi.mocked(getLiveRomMShortcutAppIds).mockResolvedValue([1]);
+      vi.mocked(scanShortcutOwnership).mockResolvedValue({ owned: [1], unresolved: [] });
       const view = await pageOn("non-steam");
 
       fireEvent.click(view.getByText("Configure whitelist (0 protected)"));
@@ -598,7 +623,7 @@ describe("DataManagementPage", () => {
     it("refuses the removal and says why when ownership cannot be established", async () => {
       stubCollectionStore([1, 2]);
       stubAppStore({ 1: { strDisplayName: "A" }, 2: { strDisplayName: "B" } });
-      vi.mocked(getLiveRomMShortcutAppIds).mockResolvedValue(null);
+      vi.mocked(scanShortcutOwnership).mockResolvedValue(null);
       const view = await pageOn("non-steam");
 
       expect(view.getByTestId("data-row-non-steam").textContent).toContain("—");
@@ -610,13 +635,73 @@ describe("DataManagementPage", () => {
     it("refuses the removal when the scan rejects rather than guessing", async () => {
       stubCollectionStore([1]);
       stubAppStore({ 1: { strDisplayName: "A" } });
-      vi.mocked(getLiveRomMShortcutAppIds).mockRejectedValue(new Error("offline"));
+      vi.mocked(scanShortcutOwnership).mockRejectedValue(new Error("offline"));
       const warnSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
       const view = await pageOn("non-steam");
 
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Live RomM shortcut scan failed"));
       expect(view.queryByText(/Remove \d+ non-Steam game/)).toBeNull();
       warnSpy.mockRestore();
+    });
+  });
+
+  describe("an entry Steam did not answer for is never offered for removal", () => {
+    it("keeps an unidentified entry out of the count and out of the set", async () => {
+      // `getAppDetails` resolves null after its timeout, which on a large
+      // library is ordinary — reading that as "not ours" would offer one of
+      // ours for removal, which is the whole-store refusal one entry wide.
+      stubCollectionStore([1, 2, 3]);
+      stubAppStore({
+        1: { strDisplayName: "A RomM Game" },
+        2: { strDisplayName: "Timed Out" },
+        3: { strDisplayName: "Moonlight" },
+      });
+      vi.mocked(scanShortcutOwnership).mockResolvedValue({ owned: [1], unresolved: [2] });
+      const view = await pageOn("non-steam");
+
+      expect(view.getByTestId("data-row-non-steam").textContent).toContain("1");
+      expect(view.container.textContent).toContain("1 entry could not be identified and is left alone");
+    });
+
+    it("removes the proven-foreign entries and leaves the unidentified one", async () => {
+      stubCollectionStore([1, 2, 3]);
+      stubAppStore({
+        1: { strDisplayName: "A RomM Game" },
+        2: { strDisplayName: "Timed Out" },
+        3: { strDisplayName: "Handmade Shortcut" },
+      });
+      vi.mocked(scanShortcutOwnership).mockResolvedValue({ owned: [1], unresolved: [2] });
+      const view = await pageOn("non-steam");
+
+      fireEvent.click(button(view, /Remove \d+ /));
+      await press(button(view, /Remove \d+ /));
+
+      expect(vi.mocked(removeShortcut)).toHaveBeenCalledWith(3);
+      expect(vi.mocked(removeShortcut)).not.toHaveBeenCalledWith(2);
+      expect(vi.mocked(removeShortcut)).not.toHaveBeenCalledWith(1);
+      expect(vi.mocked(removeShortcut)).toHaveBeenCalledTimes(1);
+    });
+
+    it("says nothing about unidentified entries when the sweep answered for all of them", async () => {
+      stubCollectionStore([1, 2]);
+      stubAppStore({ 1: { strDisplayName: "Moonlight" }, 2: { strDisplayName: "Chiaki" } });
+      vi.mocked(scanShortcutOwnership).mockResolvedValue({ owned: [], unresolved: [] });
+      const view = await pageOn("non-steam");
+
+      expect(view.container.textContent).toContain("2 entries");
+      expect(view.container.textContent).not.toContain("could not be identified");
+    });
+
+    it("counts only the unidentified entries Steam still lists", async () => {
+      // A shortcut a removal has since taken out is no longer in the
+      // enumeration, so it is not something the pane is leaving alone.
+      stubCollectionStore([1]);
+      stubAppStore({ 1: { strDisplayName: "Moonlight" } });
+      vi.mocked(scanShortcutOwnership).mockResolvedValue({ owned: [], unresolved: [99] });
+      const view = await pageOn("non-steam");
+
+      expect(view.container.textContent).not.toContain("could not be identified");
+      expect(view.container.textContent).toContain("1 entry");
     });
   });
 
@@ -647,6 +732,62 @@ describe("DataManagementPage", () => {
       await press(button(view, "Clean Up Removed RomM Games"));
 
       expect(view.getByTestId("data-row-removed-games").textContent).toContain("0");
+    });
+
+    it("drops back to unscanned once a cleanup run completes", async () => {
+      // Scan, review, run is the common path, and the number the scan found is
+      // what the run has just changed — so the row asks to be scanned again
+      // rather than reporting a figure the run made wrong.
+      vi.mocked(backend.getPrunePreview).mockResolvedValue({
+        success: true,
+        total: 3,
+        preview_id: "preview-1",
+        items: [],
+      } as never);
+      const view = await pageOn("removed-games");
+      await press(button(view, "Clean Up Removed RomM Games"));
+      expect(view.getByTestId("data-row-removed-games").textContent).toContain("3");
+
+      await act(async () => {
+        beginPruneRun("run-1", "preview-1");
+        setPruneComplete({
+          preview_id: "preview-1",
+          run_id: "run-1",
+          success: true,
+          removed_rom_ids: [1],
+          results: [],
+          message: "",
+        } as never);
+        await Promise.resolve();
+      });
+
+      expect(view.getByTestId("data-row-removed-games").textContent).toContain("scan");
+    });
+
+    it("keeps the number while a run is only in progress", async () => {
+      vi.mocked(backend.getPrunePreview).mockResolvedValue({
+        success: true,
+        total: 3,
+        preview_id: "preview-1",
+        items: [],
+      } as never);
+      const view = await pageOn("removed-games");
+      await press(button(view, "Clean Up Removed RomM Games"));
+
+      await act(async () => {
+        beginPruneRun("run-1", "preview-1");
+        setPruneProgress({
+          preview_id: "preview-1",
+          run_id: "run-1",
+          stage: "checking",
+          current: 1,
+          total: 3,
+          name: "A Game",
+        } as never);
+        await Promise.resolve();
+      });
+
+      expect(view.getByTestId("data-row-removed-games").textContent).toContain("3");
     });
 
     it("leaves the row unscanned when the scan fails", async () => {
@@ -1119,7 +1260,7 @@ describe("DataManagementPage", () => {
         await Promise.resolve();
       });
 
-      expect(view.container.textContent).toContain("Removing");
+      expect(view.container.textContent).toContain("Removing shortcuts");
       expect(button(view, "Remove all shortcuts")).toHaveProperty("disabled", true);
 
       await act(async () => {
@@ -1149,8 +1290,8 @@ describe("DataManagementPage", () => {
         await Promise.resolve();
       });
 
-      // The page's own busy line, which the uninstall used to run without.
-      expect(view.container.textContent).toContain("Removing");
+      // The page's own busy line, naming the operation in its own verb.
+      expect(view.container.textContent).toContain("Uninstalling ROM files");
       expect(button(view, "Uninstall all ROM files")).toHaveProperty("disabled", true);
       // And a button on a pane the reader is not standing on.
       selectRow(view, "grid-images");

@@ -100,11 +100,44 @@ export function setLaunchOptionsConfirmed(appId: number, value: string, timeoutM
  * (callers must NOT reconcile against it, or they'd unbind every binding on a
  * transiently-broken store).
  *
+ * The sweep itself is {@link scanShortcutOwnership}; this drops the entries it
+ * could not identify, which is right for a caller asking only which shortcuts
+ * are OURS and wrong for one deciding which are NOT.
+ */
+export async function getLiveRomMShortcutAppIds(): Promise<number[] | null> {
+  const scan = await scanShortcutOwnership();
+  return scan === null ? null : scan.owned;
+}
+
+/**
+ * What one sweep of Steam's shortcut store established about each entry.
+ *
+ * `owned` is proven ours; `unresolved` is the entries Steam did not answer for
+ * before `getAppDetails` gave up. Everything else — the entries this sweep saw
+ * and proved are not ours — is neither, and is the only set a caller may treat
+ * as foreign.
+ */
+export interface ShortcutOwnership {
+  owned: number[];
+  unresolved: number[];
+}
+
+/**
+ * The same sweep as {@link getLiveRomMShortcutAppIds}, keeping the entries it
+ * could not identify apart from the ones it identified as not ours.
+ *
+ * `getAppDetails` resolves `null` when Steam does not answer within its
+ * timeout, which on a large library is ordinary rather than exotic. Reading
+ * that absence as an exe of `""` classifies a shortcut of OURS as not-ours, so
+ * a caller deciding what is foreign needs the third answer: nothing was
+ * established about this entry. Whether the whole store could be read is the
+ * `null` return, exactly as above.
+ *
  * Detection runs in parallel batches (RegisterForAppDetails is ~2s serial per
  * shortcut); a heartbeat every 10s keeps the backend's per-unit timeout from
  * cancelling a long scan over a large library.
  */
-export async function getLiveRomMShortcutAppIds(): Promise<number[] | null> {
+export async function scanShortcutOwnership(): Promise<ShortcutOwnership | null> {
   if (typeof collectionStore === "undefined") return null;
 
   const deckApps = collectionStore.deckDesktopApps?.apps;
@@ -112,16 +145,18 @@ export async function getLiveRomMShortcutAppIds(): Promise<number[] | null> {
 
   const appIds = Array.from(deckApps.keys());
 
-  const ourAppIds: number[] = [];
+  const owned: number[] = [];
+  const unresolved: number[] = [];
   const CONCURRENCY = 10;
   let lastHeartbeat = Date.now();
   for (let i = 0; i < appIds.length; i += CONCURRENCY) {
     const batch = appIds.slice(i, i + CONCURRENCY);
     const entries = await Promise.all(
-      batch.map((appId) => getAppDetails(appId).then((details) => ({ appId, exe: details?.strShortcutExe ?? "" }))),
+      batch.map((appId) => getAppDetails(appId).then((details) => ({ appId, details }))),
     );
-    for (const { appId, exe } of entries) {
-      if (exe.endsWith(ROM_LAUNCHER_SUFFIX)) ourAppIds.push(appId);
+    for (const { appId, details } of entries) {
+      if (!details) unresolved.push(appId);
+      else if ((details.strShortcutExe ?? "").endsWith(ROM_LAUNCHER_SUFFIX)) owned.push(appId);
     }
     if (Date.now() - lastHeartbeat > HEARTBEAT_INTERVAL_MS) {
       syncHeartbeat().catch(() => {});
@@ -129,7 +164,7 @@ export async function getLiveRomMShortcutAppIds(): Promise<number[] | null> {
     }
   }
 
-  return ourAppIds;
+  return { owned, unresolved };
 }
 
 /**

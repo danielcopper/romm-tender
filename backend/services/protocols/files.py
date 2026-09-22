@@ -746,11 +746,15 @@ class RecoveryBundleStore(Protocol):
 
 
 class RecoveryBundleInventoryReader(Protocol):
-    """Report how many recovery bundles exist and what they take on disk.
+    """Report where the recovery bundles are, how many there are and what they take.
 
     Narrower than :class:`RecoveryBundleStore` on purpose: a reader that only
     describes the bundles must not be able to seal or validate one.
     """
+
+    def root(self) -> str:
+        """Return the recovery root's absolute path."""
+        ...
 
     def bundle_inventory(self) -> RecoveryBundleInventory:
         """Return the bundle count and their summed bytes, empty where no root exists."""

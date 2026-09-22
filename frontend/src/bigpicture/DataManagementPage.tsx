@@ -30,8 +30,10 @@ import { useDataPage, type DataPageState } from "./data/useDataPage";
  *
  * A figure that costs a round trip or a backend scan reads `scan` until the
  * reader asks for it, because focus selects on this layout: a figure fetched on
- * selection would put that round trip under every row the stick passes. Both
- * such rows keep what their scan found for the rest of the visit.
+ * selection would put that round trip under every row the stick passes. Grid
+ * images keeps what its scan found for the rest of the visit; Gone from RomM
+ * keeps it until a cleanup run finishes, which is what makes the number wrong,
+ * and then reads `scan` again.
  *
  * An em dash is a figure that has not arrived — a read still in flight, or one
  * that failed. It is not a zero, and no row prints one for an emptiness.
@@ -94,15 +96,17 @@ export const DataManagementPage: FC<{ onBack: () => void }> = ({ onBack }) => {
   }));
 
   // One line for the whole list rather than one per pane: a bulk removal
-  // disables every button on every pane, and the reader who walked away from
-  // the pane that started it would otherwise see a page of dead buttons with
-  // nothing said.
+  // disables every removal button on every pane, and the reader who walked away
+  // from the pane that started it would otherwise see a page of dead buttons
+  // with nothing said. It names the running operation in that operation's own
+  // verb, so the line, the pane's status and its button say one word for one
+  // thing.
   const listHeader = state.busy ? (
     <LoadingRow
       label={
         state.removalProgress
-          ? `Removing ${state.removalProgress.removed} of ${state.removalProgress.total}...`
-          : "Removing..."
+          ? `${state.busyLabel}: ${state.removalProgress.removed} of ${state.removalProgress.total}...`
+          : `${state.busyLabel}...`
       }
     />
   ) : undefined;

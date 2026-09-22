@@ -16,9 +16,13 @@ from services.data_inventory import DataInventoryService, DataInventoryServiceCo
 class FakeRecoveryInventory:
     """In-memory ``RecoveryBundleInventoryReader`` recording every reading asked for."""
 
-    def __init__(self, count: int = 0, total_bytes: int = 0) -> None:
+    def __init__(self, count: int = 0, total_bytes: int = 0, root: str = "/home/deck/tender-recovery") -> None:
         self._answer: RecoveryBundleInventory = {"count": count, "total_bytes": total_bytes}
+        self._root = root
         self.calls = 0
+
+    def root(self) -> str:
+        return self._root
 
     def bundle_inventory(self) -> RecoveryBundleInventory:
         self.calls += 1
@@ -136,13 +140,28 @@ class TestTheRecoveryBundlePopulation:
 
 
 class TestTheAnswerShape:
-    """The four keys the page reads, and nothing else."""
+    """The five keys the page reads, and nothing else."""
 
     @pytest.mark.asyncio
-    async def test_it_answers_exactly_the_four_population_figures(self, service):
+    async def test_it_answers_exactly_the_population_figures_and_the_root(self, service):
         answer = await service.get_data_inventory()
 
-        assert set(answer) == {"installed_roms", "installed_bytes", "recovery_bundles", "recovery_bytes"}
+        assert set(answer) == {
+            "installed_roms",
+            "installed_bytes",
+            "recovery_bundles",
+            "recovery_bytes",
+            "recovery_root",
+        }
+
+    @pytest.mark.asyncio
+    async def test_it_names_the_root_the_bundles_were_counted_under(self, uow, service, recovery):
+        """The folder is derived from the package name, so the panel is told rather than spelling it."""
+        recovery._root = "/home/deck/somewhere-else-recovery"
+
+        answer = await service.get_data_inventory()
+
+        assert answer["recovery_root"] == "/home/deck/somewhere-else-recovery"
 
     @pytest.mark.asyncio
     async def test_the_bundle_reading_happens_outside_the_unit_of_work(self, uow, service, recovery):

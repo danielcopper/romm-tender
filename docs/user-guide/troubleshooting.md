@@ -282,10 +282,11 @@ whitelist, and Recovery bundles offers none at all. The six rows are **Tender's 
 **Grid images**, **Other non-Steam games**, **Gone from RomM** and **Recovery bundles**.
 
 Two counts cost a server round trip or a backend scan, so they read **scan** until you press for them: Grid images and
-Gone from RomM. Each keeps what its scan found for the rest of the visit. Every destructive action asks first — press
-once to see the prompt, press again to confirm. The per-platform actions — removing one platform's shortcuts, deleting
-its save files, deleting its BIOS files — live in **[Library › Platforms](bios-management.md#library-platforms)**, on
-the platform's own pane.
+Gone from RomM. Grid images keeps what its scan found for the rest of the visit; Gone from RomM keeps it until a cleanup
+run finishes — which is what changes the number — and then asks to be scanned again. Every destructive action asks first
+— press once to see the prompt, press again to confirm. The per-platform actions — removing one platform's shortcuts,
+deleting its save files, deleting its BIOS files — live in
+**[Library › Platforms](bios-management.md#library-platforms)**, on the platform's own pane.
 
 While a library sync is running (or cancelling), the shortcut and ROM removals and the grid-image cleanup are
 unavailable — the buttons are disabled with a short hint, and the backend refuses the request too. Wait for the sync to
@@ -349,10 +350,11 @@ zero. Downloaded ROM files and save files are left where they are, and the next 
 
 ### Downloaded ROM files
 
-The row counts the games this plugin downloaded — one per game, a multi-disc game included — and the pane states their
-total size with a `≈`. That size is what your RomM server reported for those games rather than a measurement of your
-disk, so it is close rather than exact — an unpacked archive, a patch beside the original or extras in the same folder
-are not what the server named, and a game whose size the server never reported adds nothing to it.
+The row counts the installs this plugin downloaded — one per install, so a multi-disc game counts once and two installed
+versions of one game count twice — and the pane states their total size with a `≈`. That size is what your RomM server
+reported for those games rather than a measurement of your disk, so it is close rather than exact — an unpacked archive,
+a patch beside the original or extras in the same folder are not what the server named, and a game whose size the server
+never reported adds nothing to it.
 
 **Uninstall all ROM files** deletes them from disk. Shortcuts remain in your library so you can download the games
 again. Use this to reclaim disk space.
@@ -381,7 +383,8 @@ you added by hand. **Your RomM games are not in this row**, and the removal here
 shortcuts are told apart by what they launch, not by their names, and removing them is the Tender's shortcuts row's job.
 
 If Steam's shortcut list cannot be read, that ownership cannot be established — the count reads as unavailable and the
-removal is refused rather than guessed at.
+removal is refused rather than guessed at. Steam also does not always answer for an individual shortcut in time; those
+entries are counted neither way, are never offered for removal, and the pane says how many it is leaving alone.
 
 A **whitelist** system lets you protect the rest from removal:
 

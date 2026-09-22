@@ -45,7 +45,12 @@ import {
 import { pluralize } from "../../utils/pluralize";
 import { getPruneState, onPruneStateChange } from "../../utils/pruneStore";
 import { removeShortcutsPaced } from "../../utils/shortcutRemoval";
-import { getAllNonSteamShortcutAppIds, getLiveRomMShortcutAppIds } from "../../utils/steamShortcuts";
+import {
+  getAllNonSteamShortcutAppIds,
+  getLiveRomMShortcutAppIds,
+  scanShortcutOwnership,
+  type ShortcutOwnership,
+} from "../../utils/steamShortcuts";
 import { withTimeout } from "../../utils/withTimeout";
 
 const REMOVAL_REPORT_TIMEOUT_MS = 15000;
@@ -134,9 +139,19 @@ export interface DataPageState {
    * nothing here can be proven foreign. The row reads as unavailable and the
    * removal is refused — the same abort the grid cleanup takes when its scan
    * cannot run, and for the same reason: without the ownership answer a removal
-   * would take this plugin's whole library with it.
+   * would take this plugin's whole library with it. An entry the sweep could
+   * not identify is the same refusal one entry wide: see `unidentifiedCount`.
    */
   foreignApps: NonSteamApp[] | null;
+  /**
+   * How many of Steam's non-Steam entries the sweep could not identify.
+   *
+   * Steam does not always answer for a shortcut before the read gives up, and
+   * an unanswered entry is not evidence that it is foreign — so it is in
+   * neither `foreignApps` nor the removal, and the pane says how many are
+   * being left alone.
+   */
+  unidentifiedCount: number;
   whitelistedIds: Set<number>;
   disabledDefaults: string[];
   customNames: string[];
@@ -146,6 +161,8 @@ export interface DataPageState {
   removedGames: ScannedCount;
   /** A bulk removal is in flight — every removal button is dead while it is. */
   busy: boolean;
+  /** What the running removal is called, for the one busy line the list shows. */
+  busyLabel: string;
   removalProgress: RemovalProgress | null;
   shortcutStatus: string;
   uninstallStatus: string;
@@ -170,12 +187,15 @@ export function useDataPage(): DataPageState {
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [orphanedGridImages, setOrphanedGridImages] = useState<ScannedCount>(null);
   const [removedGames, setRemovedGames] = useState<ScannedCount>(null);
-  // The appIds this plugin owns, read from Steam by exe rather than from the
-  // database: a crashed run can leave one of ours in Steam with no binding, and
-  // a removal that took it for a foreign entry would delete a game the next
-  // sync expects to find. `null` is "could not be established".
-  const [ownedAppIds, setOwnedAppIds] = useState<number[] | null>(null);
+  // What Steam could be made to say about each of its non-Steam entries, read
+  // by exe rather than from the database: a crashed run can leave one of ours
+  // in Steam with no binding, and a removal that took it for a foreign entry
+  // would delete a game the next sync expects to find. `null` is "the store
+  // could not be read at all"; the reading's own `unresolved` is the entries
+  // within it that Steam did not answer for.
+  const [ownership, setOwnership] = useState<ShortcutOwnership | null>(null);
   const [busy, setBusy] = useState(false);
+  const [busyLabel, setBusyLabel] = useState("");
   const [removalProgress, setRemovalProgress] = useState<RemovalProgress | null>(null);
   const [shortcutStatus, setShortcutStatus] = useState("");
   const [uninstallStatus, setUninstallStatus] = useState("");
@@ -222,11 +242,16 @@ export function useDataPage(): DataPageState {
    * moment: a removal that shrinks one must not leave the other standing.
    */
   const loadOwnership = useCallback(() => {
-    getLiveRomMShortcutAppIds()
-      .then(setOwnedAppIds)
+    // No ordering guard: two sweeps in flight can land out of order, and the
+    // older one's owned set is the LARGER one (it saw shortcuts a removal has
+    // since taken out), so accepting it offers fewer entries for removal and
+    // never one of ours. The direction that matters cannot be made wrong by
+    // losing this race.
+    scanShortcutOwnership()
+      .then(setOwnership)
       .catch((e) => {
         logWarn(`Live RomM shortcut scan failed: ${e}`);
-        setOwnedAppIds(null);
+        setOwnership(null);
       });
   }, []);
 
@@ -278,10 +303,17 @@ export function useDataPage(): DataPageState {
    * be formed at all, which is what `null` says.
    */
   const foreignApps = useMemo(() => {
-    if (ownedAppIds === null) return null;
-    const owned = new Set(ownedAppIds);
-    return nonSteamApps.filter((app) => !owned.has(app.appId));
-  }, [nonSteamApps, ownedAppIds]);
+    if (ownership === null) return null;
+    const accountedFor = new Set([...ownership.owned, ...ownership.unresolved]);
+    return nonSteamApps.filter((app) => !accountedFor.has(app.appId));
+  }, [nonSteamApps, ownership]);
+
+  /** Entries Steam did not answer for, which are therefore offered to nothing. */
+  const unidentifiedCount = useMemo(() => {
+    if (ownership === null) return 0;
+    const listed = new Set(nonSteamApps.map((app) => app.appId));
+    return ownership.unresolved.filter((appId) => listed.has(appId)).length;
+  }, [nonSteamApps, ownership]);
 
   const whitelistedIds = useMemo(() => {
     const set = new Set<number>();
@@ -302,19 +334,22 @@ export function useDataPage(): DataPageState {
    * `removeShortcutsPaced`; busy + progress are always cleared when it settles.
    */
   const runRemoval = async (
+    label: string,
     work: (onProgress: (removed: number, total: number) => void) => Promise<void>,
   ): Promise<void> => {
     setBusy(true);
+    setBusyLabel(label);
     try {
       await work((removed, total) => setRemovalProgress({ removed, total }));
     } finally {
       setBusy(false);
+      setBusyLabel("");
       setRemovalProgress(null);
     }
   };
 
   const handleRemoveAllShortcuts = async () => {
-    await runRemoval(async (onProgress) => {
+    await runRemoval("Removing shortcuts", async (onProgress) => {
       setShortcutStatus("Removing all shortcuts...");
       let removedCount = 0;
       const admission = capturePruneLeaseAdmission(DATA_PAGE_LEASE_OWNER);
@@ -391,7 +426,7 @@ export function useDataPage(): DataPageState {
   const handleUninstallAllRoms = async () => {
     // No per-item progress to report: this is one backend call over the whole
     // library, so the page shows the busy line without a counter.
-    await runRemoval(async () => {
+    await runRemoval("Uninstalling ROM files", async () => {
       try {
         setUninstallStatus("Uninstalling...");
         const admission = capturePruneLeaseAdmission(DATA_PAGE_LEASE_OWNER);
@@ -485,7 +520,7 @@ export function useDataPage(): DataPageState {
       setNonSteamStatus("Could not read Steam's shortcut list — nothing was removed.");
       return;
     }
-    await runRemoval(async (onProgress) => {
+    await runRemoval("Removing non-Steam games", async (onProgress) => {
       setNonSteamStatus(`Removing ${apps.length} non-Steam games...`);
       await removeShortcutsPaced(
         apps.map((a) => a.appId),
@@ -506,6 +541,7 @@ export function useDataPage(): DataPageState {
     shortcutCount,
     inventory,
     foreignApps,
+    unidentifiedCount,
     whitelistedIds,
     disabledDefaults,
     customNames,
@@ -513,6 +549,7 @@ export function useDataPage(): DataPageState {
     orphanedGridImages,
     removedGames,
     busy,
+    busyLabel,
     removalProgress,
     shortcutStatus,
     uninstallStatus,

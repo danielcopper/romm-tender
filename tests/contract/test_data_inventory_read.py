@@ -23,7 +23,11 @@ async def test_an_untouched_install_reports_every_population_as_empty(harness):
         "installed_bytes": 0,
         "recovery_bundles": 0,
         "recovery_bytes": 0,
+        "recovery_root": harness.plugin._data_inventory_service._recovery_inventory.root(),
     }
+    # The real adapter's root, derived from the package name rather than spelled
+    # by either side of the wire.
+    assert result["recovery_root"].endswith("-recovery")
 
 
 async def test_it_counts_the_installed_rows_and_sums_the_size_romm_reported(harness):

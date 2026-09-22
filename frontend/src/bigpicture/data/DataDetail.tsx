@@ -264,8 +264,10 @@ const WhitelistSection: FC<{ state: DataPageState; onWhitelistChange: () => void
  * carry game names, so a name-based rule would sweep the whole library away.
  * Removing what this plugin created is the Tender's-shortcuts row's job.
  *
- * Where ownership could not be established the pane offers nothing at all —
- * the same abort the grid cleanup takes when its own scan cannot run.
+ * Where the store could not be read at all the pane offers nothing — the same
+ * abort the grid cleanup takes when its own scan cannot run. Where the sweep
+ * merely could not identify some entries, those are left out of the set and
+ * counted on screen, and the rest are still offered.
  */
 const NonSteamPane: FC<{ state: DataPageState }> = ({ state }) => {
   const [armed, setArmed] = useState(false);
@@ -312,6 +314,13 @@ const NonSteamPane: FC<{ state: DataPageState }> = ({ state }) => {
         whitelist below protects what you keep; everything else is what the button removes.
       </Muted>
       <Figures>{figures()}</Figures>
+      {state.unidentifiedCount > 0 && (
+        <Muted>
+          {state.unidentifiedCount === 1
+            ? "1 entry could not be identified and is left alone — Steam did not answer for it in time."
+            : `${state.unidentifiedCount} entries could not be identified and are left alone — Steam did not answer for them in time.`}
+        </Muted>
+      )}
       {foreign === null && (
         <Muted>
           Steam&apos;s shortcut list could not be read, so nothing here can be told apart from your RomM games. Nothing
@@ -365,9 +374,9 @@ const RecoveryBundlesPane: FC<{ state: DataPageState }> = ({ state }) => {
   return (
     <>
       <Muted>
-        Before the cleanup deletes a game&apos;s local data it seals a snapshot of it, in{" "}
-        <code>~/romm-tender-recovery/</code>. Nothing is ever read back automatically and nothing here removes one —
-        they are yours to keep, move or delete in a file manager.
+        Before the cleanup deletes a game&apos;s local data it seals a snapshot of it
+        {inventory === null ? "" : `, in ${inventory.recovery_root}`}. Nothing is ever read back automatically and
+        nothing here removes one — they are yours to keep, move or delete in a file manager.
       </Muted>
       <Figures>
         {inventory === null

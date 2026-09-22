@@ -49,9 +49,16 @@ class DataInventoryService:
     async def get_data_inventory(self) -> dict[str, Any]:
         """Report the installed-ROM and recovery-bundle populations with their sizes.
 
-        Returns ``installed_roms`` / ``installed_bytes`` and
-        ``recovery_bundles`` / ``recovery_bytes``. ``installed_roms`` counts
-        installs — one per game, a multi-disc game included — never files. Both byte figures are
+        Returns ``installed_roms`` / ``installed_bytes``,
+        ``recovery_bundles`` / ``recovery_bytes`` and ``recovery_root``.
+        ``installed_roms`` counts INSTALLS — one per install, so a multi-disc
+        game counts once and two installed versions of one game count twice —
+        never files.
+
+        ``recovery_root`` is where the bundles that were counted live. It
+        crosses the wire because the folder is derived from this program's
+        package name, so a panel spelling it for itself would be spelling a
+        constant it cannot see, and wrong under a non-default home. Both byte figures are
         totals, and ``installed_bytes`` is an approximation the caller must
         present as one (see :meth:`_read_installed_io`).
 
@@ -68,10 +75,11 @@ class DataInventoryService:
             "installed_bytes": installed_bytes,
             "recovery_bundles": bundles["count"],
             "recovery_bytes": bundles["total_bytes"],
+            "recovery_root": self._recovery_inventory.root(),
         }
 
     def _read_installed_io(self) -> tuple[int, int]:
-        """Count the installed games and sum the size RomM reported for them.
+        """Count the installs and sum the size RomM reported for their games.
 
         The size is the SERVER's figure (``Rom.fs_size_bytes``) and never a
         walk of the disk, so the page opens with a number instead of measuring

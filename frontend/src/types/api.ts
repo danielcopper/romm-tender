@@ -128,8 +128,9 @@ export interface LaunchVerdict {
 /**
  * What this device holds, for the Data Management page's inventory rows.
  *
- * `installed_roms` counts INSTALLS — one per game, a multi-disc game included —
- * so a surface rendering it says games rather than files.
+ * `installed_roms` counts INSTALLS — one per install, so a multi-disc game
+ * counts once and two installed versions of one game count twice — so a
+ * surface rendering it says games rather than files.
  *
  * `installed_bytes` is the size RomM reported for those games
  * (`Rom.fs_size_bytes`), summed — never a walk of the disk — so it is written
@@ -145,4 +146,6 @@ export interface DataInventory {
   installed_bytes: number;
   recovery_bundles: number;
   recovery_bytes: number;
+  /** Where the counted bundles live — derived from the package name, so never spelled here. */
+  recovery_root: string;
 }

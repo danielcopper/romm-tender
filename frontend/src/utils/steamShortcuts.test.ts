@@ -4,6 +4,7 @@ import {
   addShortcut,
   getExistingRomMShortcuts,
   getLiveRomMShortcutAppIds,
+  scanShortcutOwnership,
   removeShortcutConfirmedOutcome,
   setLaunchOptionsConfirmed,
 } from "./steamShortcuts";
@@ -158,6 +159,69 @@ describe("removeShortcutConfirmedOutcome", () => {
       status: "attempted_unconfirmed",
     });
     expect(remove).toHaveBeenCalledWith(77);
+  });
+});
+
+describe("scanShortcutOwnership", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  /** Drive the 2 s `getAppDetails` timeout without waiting it out. */
+  async function scanWithTimeouts() {
+    vi.useFakeTimers();
+    const scan = scanShortcutOwnership();
+    // Let the microtask callbacks land, then expire the readings that got none.
+    await vi.advanceTimersByTimeAsync(2500);
+    return scan;
+  }
+
+  it("keeps an entry Steam never answered for apart from one proved not ours", async () => {
+    // Reading a silent entry as an exe of "" classifies a shortcut of OURS as
+    // foreign, which is what a caller deciding what to remove must not be told.
+    const detailsByAppId: Record<number, { strShortcutExe: string } | undefined> = {
+      10: { strShortcutExe: ROM_LAUNCHER },
+      20: undefined,
+      30: { strShortcutExe: "/usr/bin/some-other-game" },
+    };
+    const { fn } = makeRegisterForAppDetails((appId) => detailsByAppId[appId]);
+    vi.stubGlobal("SteamClient", { Apps: { RegisterForAppDetails: fn } });
+    vi.stubGlobal("collectionStore", {
+      deckDesktopApps: {
+        apps: new Map([
+          [10, {}],
+          [20, {}],
+          [30, {}],
+        ]),
+      },
+    });
+
+    await expect(scanWithTimeouts()).resolves.toEqual({ owned: [10], unresolved: [20] });
+  });
+
+  it("reports no unresolved entries when every reading answered", async () => {
+    const { fn } = makeRegisterForAppDetails((appId) => ({
+      strShortcutExe: appId === 10 ? ROM_LAUNCHER : "/usr/bin/other",
+    }));
+    vi.stubGlobal("SteamClient", { Apps: { RegisterForAppDetails: fn } });
+    vi.stubGlobal("collectionStore", {
+      deckDesktopApps: {
+        apps: new Map([
+          [10, {}],
+          [20, {}],
+        ]),
+      },
+    });
+
+    await expect(scanShortcutOwnership()).resolves.toEqual({ owned: [10], unresolved: [] });
+  });
+
+  it("returns null when the store could not be read at all", async () => {
+    vi.stubGlobal("SteamClient", { Apps: { RegisterForAppDetails: vi.fn() } });
+    vi.stubGlobal("collectionStore", undefined);
+
+    await expect(scanShortcutOwnership()).resolves.toBeNull();
   });
 });
 
