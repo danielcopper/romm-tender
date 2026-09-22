@@ -270,9 +270,20 @@ may_animate() {
 
 # How wide the terminal is. COLUMNS is not set for a non-interactive shell, so
 # `tput` answers for a real run and the variable is what a test sets.
+#
+# The question goes to /dev/tty rather than to this process's own streams:
+# `tput` reads the width off stdin, which inside a command substitution under
+# `curl | bash` is a pipe like the other two, and with no terminal among them it
+# answers terminfo's default of 80 instead of the width of the terminal the run
+# is being watched on. Where there is no /dev/tty the open fails and the default
+# stands, which is the answer that machine would have given anyway.
+#
+# The order of the two redirections is load-bearing: `2> /dev/null` first means
+# a failed open loses bash's complaint about it, and it is the COMMAND's stderr
+# that goes there rather than this shell's, which `acknowledge` says more about.
 terminal_width() {
     local width="${COLUMNS:-}"
-    [ -n "$width" ] || width="$(tput cols 2> /dev/null || echo 80)"
+    [ -n "$width" ] || width="$(tput cols 2> /dev/null < /dev/tty || echo 80)"
     printf '%s\n' "$width"
 }
 

@@ -23,14 +23,17 @@ whether this script still has a stderr afterwards — is invisible without one.
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import os
 import pty
 import re
 import selectors
 import shutil
+import struct
 import subprocess
 import tarfile
+import termios
 from pathlib import Path
 
 import pytest
@@ -163,6 +166,10 @@ class Install:
             # whether the mark and the row marks are drawn as glyphs. The cases
             # that test the other answer override it.
             "LANG": "C.UTF-8",
+            # A real terminal says which one it is, and `tput` answers nothing
+            # at all without it — so a run that asks how wide the terminal is
+            # would be answered by the fallback rather than by the terminal.
+            "TERM": "xterm-256color",
             "XDG_RUNTIME_DIR": str(self.runtime),
             "TENDER_PYTHON": str(self.python),
             "TENDER_CODE_DIR": str(self.code),
@@ -209,7 +216,14 @@ class Install:
             start_new_session=True,
         )
 
-    def on_a_terminal(self, *args: str, answer: str = "yes", **extra: str) -> tuple[int, str]:
+    def on_a_terminal(
+        self,
+        *args: str,
+        answer: str = "yes",
+        stdin_pipe: bool = False,
+        width: int | None = None,
+        **extra: str,
+    ) -> tuple[int, str]:
         """Run the installer with a controlling terminal, and type *answer* at its prompt.
 
         ``pty.fork`` rather than a pipe: the acknowledgement opens ``/dev/tty``,
@@ -217,16 +231,35 @@ class Install:
         pipe on stdin does not give it one. The child becomes a session leader
         with the pty attached, which is what a user running this in a shell has.
 
+        *stdin_pipe* puts a pipe on the child's fd 0 and leaves the pty on the
+        other two, which is the shape ``curl … | bash`` has: a terminal to draw
+        on, a terminal to ask on, and the script itself on stdin. The answer
+        still goes through the pty, because that is where ``/dev/tty`` reads.
+
+        *width* is the terminal's own width, in columns. It is set from the
+        CHILD on the pty's slave end before the script is exec'd, so there is no
+        window in which the script could ask and be answered by the default.
+
         Answers with the exit status and everything that reached the terminal —
         one stream, because a terminal is one stream.
         """
         env = self.env(**extra)
+        feed = os.pipe() if stdin_pipe else None
         pid, master = pty.fork()
         if pid == 0:  # pragma: no cover - the child execs before it can be measured
             try:
+                if width is not None:
+                    fcntl.ioctl(1, termios.TIOCSWINSZ, struct.pack("HHHH", 40, width, 0, 0))
+                if feed is not None:
+                    os.dup2(feed[0], 0)
+                    os.close(feed[0])
+                    os.close(feed[1])
                 os.execve("/bin/bash", ["bash", str(_INSTALL), *args], env)
             finally:
                 os._exit(127)
+        if feed is not None:
+            os.close(feed[0])
+            os.close(feed[1])
         os.write(master, f"{answer}\n".encode())
         return _drain(pid, master)
 
@@ -1301,6 +1334,41 @@ class TestHowTheRunLooks:
     def test_a_narrow_terminal_puts_the_icon_above_the_text(self, machine):
         _code, output = machine.on_a_terminal(
             "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="70", COLORTERM="truecolor"
+        )
+
+        assert _stacked(output), "the text block is beside the drawing, not under it"
+
+    @pytest.mark.parametrize("stdin_pipe", [False, True])
+    def test_the_width_comes_from_the_terminal_whatever_is_on_stdin(self, machine, stdin_pipe):
+        """``COLUMNS`` unset, so the run has to ask — and under a pipe it asked wrong.
+
+        ``tput`` reads the width off stdin, and inside a command substitution
+        stdout is a pipe already; under ``curl … | bash`` stdin is one too, and
+        with no terminal among them the answer is terminfo's 80. That is
+        narrower than the greeter needs, so a 160-column terminal laid the text
+        under the mark for every user who ran the command the README gives.
+        """
+        _code, output = machine.on_a_terminal(
+            "--from",
+            str(_build_tarball(machine.tmp_path)),
+            answer="y",
+            width=160,
+            stdin_pipe=stdin_pipe,
+            COLORTERM="truecolor",
+        )
+
+        assert not _stacked(output), "the text block is under the drawing, not beside it"
+
+    @pytest.mark.parametrize("stdin_pipe", [False, True])
+    def test_a_terminal_too_narrow_for_both_still_stacks_them(self, machine, stdin_pipe):
+        """The other direction: a width read off the terminal is a real width, not a floor."""
+        _code, output = machine.on_a_terminal(
+            "--from",
+            str(_build_tarball(machine.tmp_path)),
+            answer="y",
+            width=70,
+            stdin_pipe=stdin_pipe,
+            COLORTERM="truecolor",
         )
 
         assert _stacked(output), "the text block is beside the drawing, not under it"
