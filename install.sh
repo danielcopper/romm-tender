@@ -96,6 +96,15 @@ DEBUGGER_ANSWERED="no"
 # Said on the Installing row where a local tarball had no checksum beside it.
 UNVERIFIED=""
 
+# Whether this run replaced something that was already here — a tree at $CODE,
+# or a unit that was running. What it changes is the answer about Steam: a
+# backend that starts while an EARLIER one's panel is still loaded into Steam
+# cannot replace it. The panel holds the old backend's token, so it talks to
+# nobody, and the new backend finds the injection marker already set and loads
+# nothing over it. Only Steam restarting clears that, so only a FIRST install
+# into a running Steam can promise the entry appears on its own.
+REPLACED_AN_INSTALL="no"
+
 # What the EXIT trap has to clean up: a download directory, a spinner that is
 # still drawing, and a row whose outcome was never written.
 WORK_DIR=""
@@ -1316,6 +1325,7 @@ do_install() {
     row_start "$INSTALLING"
     WORK_DIR="$(mktemp -d)"
     obtain_tarball "$WORK_DIR"
+    [ ! -d "$CODE" ] || REPLACED_AN_INSTALL="yes"
     row_detail "$INSTALLING" "unpacking $(basename "$TARBALL")"
     install_tree "$TARBALL"
     move_covers
@@ -1323,6 +1333,7 @@ do_install() {
     row_end "$INSTALLING" ok
 
     row_start "$SERVICE"
+    ! unit_is_active || REPLACED_AN_INSTALL="yes"
     row_detail "$SERVICE" "writing $UNIT_NAME.service"
     write_unit
     row_detail "$SERVICE" "starting $UNIT_NAME"
@@ -1333,7 +1344,10 @@ do_install() {
     row_start "$STEAM"
     ensure_marker
     probe_debugger
-    if [ "$DEBUGGER_ANSWERED" = "yes" ]; then
+    if [ "$DEBUGGER_ANSWERED" = "yes" ] && [ "$REPLACED_AN_INSTALL" = "yes" ]; then
+        row_detail "$STEAM" "running, an earlier Tender's panel is still loaded"
+        row_end "$STEAM" warn
+    elif [ "$DEBUGGER_ANSWERED" = "yes" ]; then
         row_detail "$STEAM" "debugger answering"
         row_end "$STEAM" ok
     elif steam_is_running; then
@@ -1351,6 +1365,12 @@ do_install() {
 # a window title or a launcher script holding the word does not answer for it.
 steam_is_running() {
     pgrep -x steam > /dev/null 2>&1
+}
+
+# Whether the service was already running before this run touched it. Asked
+# BEFORE the unit is written, because afterwards every answer is yes.
+unit_is_active() {
+    systemctl --user is-active --quiet "$UNIT_NAME" 2> /dev/null
 }
 
 # What to say the service is doing. The port file is the backend's own note of
@@ -1378,9 +1398,9 @@ closing_block() {
     # the probe cannot tell a Steam that is not running from one running without
     # the marker Steam only reads at start-up.
     local next
-    if [ "$DEBUGGER_ANSWERED" = "yes" ]; then
+    if [ "$DEBUGGER_ANSWERED" = "yes" ] && [ "$REPLACED_AN_INSTALL" != "yes" ]; then
         next="open the Quick Access menu — Tender's entry appears once the backend has loaded it"
-    elif steam_is_running; then
+    elif [ "$DEBUGGER_ANSWERED" = "yes" ] || steam_is_running; then
         next="restart Steam, then open the Quick Access menu"
     else
         next="start Steam, then open the Quick Access menu"
@@ -1430,6 +1450,12 @@ do_uninstall() {
     printf '  %-34s %s' "RetroDECK's own folders" "your games, saves and BIOS files"
     reset_style
     printf '\n'
+    # The entry is code a backend loaded into Steam, and removing the backend
+    # does not take it back out again — only Steam restarting does.
+    if steam_is_running; then
+        echo
+        echo "Steam still shows Tender's entry until it restarts."
+    fi
 }
 
 # The marker is removed only where a note says this side created it AND nothing

@@ -69,6 +69,7 @@ case "$*" in
         [ -z "${STUB_DECKY_UNIT:-}" ] || printf '%s\\n' "$STUB_DECKY_UNIT"
         exit 0
         ;;
+    *"is-active"*) exit "${STUB_UNIT_ACTIVE:-3}" ;;
     *"enable"*) [ -z "${STUB_ENABLE_DELAY:-}" ] || sleep "$STUB_ENABLE_DELAY" ;;
 esac
 exit 0
@@ -1490,17 +1491,67 @@ class TestWhatTheUninstallLeavesBehind:
         assert _blank_lines_before(screen, "Tender is removed.") == 1
         assert machine.marker.exists(), "Decky Loader reads it too"
 
+    def test_a_running_steam_is_told_the_entry_outlives_the_uninstall(self, machine):
+        """Removing the backend does not take its panel back out of Steam."""
+        machine.state.mkdir(parents=True, exist_ok=True)
+
+        result = machine.run("--uninstall", STUB_STEAM_RUNNING="yes")
+
+        assert "Steam still shows Tender's entry until it restarts." in result.stdout
+
+    def test_a_steam_that_is_not_running_is_told_nothing_of_the_sort(self, machine):
+        """There is no entry to outlive anything, so the sentence would be noise."""
+        machine.state.mkdir(parents=True, exist_ok=True)
+
+        result = machine.run("--uninstall")
+
+        assert "still shows" not in result.stdout
+
 
 class TestWhatTheRunSaysAboutSteam:
     """Three machines, three answers — and the probe alone cannot tell them apart."""
 
-    def test_a_debugger_that_answers_needs_no_restart(self, machine):
+    def test_a_first_install_into_a_running_steam_needs_no_restart(self, machine):
+        """Nothing of Tender's is in Steam yet, so the backend's own panel is the first."""
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_DEBUGGER="answer")
 
         assert "[ok] Steam        debugger answering" in result.stdout
         assert (
             "Next: open the Quick Access menu — Tender's entry appears once the backend has loaded it." in result.stdout
         )
+
+    def test_a_reinstall_into_a_running_steam_asks_for_a_restart(self, machine):
+        """The panel the previous backend loaded is still in Steam, holding its token.
+
+        A backend that starts under it cannot replace it: the injection marker
+        is already set, so the new one loads nothing, and the panel that IS
+        there talks to a backend that has gone. Only Steam restarting clears
+        that, so a run which replaced an install may not promise the entry
+        appears on its own — which is what it did.
+        """
+        tarball = str(_build_tarball(machine.tmp_path))
+        machine.run("--from", tarball, "--yes")
+
+        result = machine.run("--from", tarball, "--yes", STUB_DEBUGGER="answer")
+
+        assert "[--] Steam        running, an earlier Tender's panel is still loaded" in result.stdout
+        assert "Next: restart Steam, then open the Quick Access menu." in result.stdout
+
+    def test_a_running_unit_counts_as_something_to_replace(self, machine):
+        """The other way an install is already here: no tree yet, but a unit up.
+
+        Asked before the unit is written, because afterwards every answer is yes.
+        """
+        result = machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path)),
+            "--yes",
+            STUB_DEBUGGER="answer",
+            STUB_UNIT_ACTIVE="0",
+        )
+
+        assert "[--] Steam        running, an earlier Tender's panel is still loaded" in result.stdout
+        assert "Next: restart Steam, then open the Quick Access menu." in result.stdout
 
     def test_a_silent_debugger_with_steam_up_asks_for_a_restart(self, machine):
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_STEAM_RUNNING="yes")
