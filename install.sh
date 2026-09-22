@@ -1420,7 +1420,6 @@ do_uninstall() {
     rm -rf "$STATE"
     [ -z "${XDG_RUNTIME_DIR:-}" ] || rm -rf "$XDG_RUNTIME_DIR/romm-tender"
 
-    echo
     echo "Tender is removed. Left in place on purpose:"
     style 2
     printf '  %-34s %s\n' "$(tilde "$CONFIG")" "your settings"
@@ -1445,7 +1444,11 @@ do_uninstall() {
 remove_marker_if_ours() {
     [ -f "$STATE/$MARKER_NOTE" ] || return 0
     if decky_loader_installed; then
+        # The blank line belongs to the message rather than to what follows it:
+        # the greeter already leaves one, so a second printed unconditionally
+        # opens a gap on every run that has nothing to say here.
         echo "Steam's remote-debugging marker is left in place: Decky Loader is installed and reads it too."
+        echo
         return 0
     fi
     local marker

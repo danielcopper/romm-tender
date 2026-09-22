@@ -1434,6 +1434,15 @@ class TestTheClosingLine:
         assert status.startswith("\033[2m")
 
 
+def _blank_lines_before(screen: list[str], sentence: str) -> int:
+    """How many empty lines sit between *sentence* and whatever precedes it."""
+    at = next(index for index, line in enumerate(screen) if line.startswith(sentence))
+    count = 0
+    while at - 1 - count >= 0 and not screen[at - 1 - count].strip():
+        count += 1
+    return count
+
+
 class TestTheOtherTwoModes:
     """Neither installs anything, so neither lists what an install would put where."""
 
@@ -1446,6 +1455,7 @@ class TestTheOtherTwoModes:
         assert "TENDER" in screen
         assert "Removing the service and the program, and keeping your data." in screen
         assert "Install to" not in screen, "an uninstall lists what an install would do"
+        assert _blank_lines_before(screen.splitlines(), "Tender is removed.") == 1
 
     def test_disable_says_what_it_is_about_to_do(self, machine):
         _code, output = machine.on_a_terminal("--disable", COLUMNS="160", COLORTERM="truecolor")
@@ -1455,6 +1465,30 @@ class TestTheOtherTwoModes:
         assert "TENDER" in screen
         assert "Stopping the service and leaving everything installed." in screen
         assert "Install to" not in screen
+        assert _blank_lines_before(screen.splitlines(), "Tender is stopped") == 1
+
+
+class TestWhatTheUninstallLeavesBehind:
+    """The marker is left where something else still reads it, and it says so."""
+
+    def test_a_kept_marker_is_reported_between_one_blank_line_and_another(self, machine):
+        """The blank belongs to the message: the greeter already left one, so a
+
+        second printed unconditionally opens a gap on every run with nothing to
+        say here — which is what it did.
+        """
+        machine.state.mkdir(parents=True, exist_ok=True)
+        machine.marker.touch()
+        machine.note.write_text(f"{machine.marker}\ncreated by install.sh 2026-09-22\n", encoding="utf-8")
+
+        _code, output = machine.on_a_terminal(
+            "--uninstall", COLUMNS="160", COLORTERM="truecolor", STUB_DECKY_UNIT="plugin_loader.service enabled"
+        )
+
+        screen = _screen(output).splitlines()
+        assert _blank_lines_before(screen, "Steam's remote-debugging marker is left in place") == 1
+        assert _blank_lines_before(screen, "Tender is removed.") == 1
+        assert machine.marker.exists(), "Decky Loader reads it too"
 
 
 class TestWhatTheRunSaysAboutSteam:
