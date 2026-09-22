@@ -29,6 +29,11 @@ jobs:
       - name: Install Python test dependencies
         run: pip install -r requirements-dev.lock
 
+      # The generator tests draw the mark, which means librsvg — the same
+      # reason the lint job installs it for the drift check.
+      - name: Install librsvg for the mark's renderer
+        run: sudo apt-get update && sudo apt-get install -y librsvg2-bin
+
       - name: Run tests with coverage
         run: python -m pytest tests/ -q --cov=backend --cov-report=xml --cov-branch
 
