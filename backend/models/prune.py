@@ -75,3 +75,17 @@ class SteamRecoverySnapshot(TypedDict):
     steam_root: str
     controller_setting: str | None
     artifacts: list[RecoveryArtifact]
+
+
+class RecoveryBundleInventory(TypedDict):
+    """How many bundles the recovery root holds and what they take on disk.
+
+    An inventory, not a validation: it counts every directory under
+    ``bundles/`` and never opens a seal. A bundle marked
+    ``.durability-uncertain`` is counted like any other, because it holds the
+    same recovered data and takes the same disk — and disk this page cannot see
+    is the one thing the row exists to make visible.
+    """
+
+    count: int
+    total_bytes: int

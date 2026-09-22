@@ -38,7 +38,7 @@ library into Steam as Non-Steam shortcuts. Games launch through [RetroDECK](http
    doesn't fit the per-game model
 9. **[RetroDECK Path Migration](user-guide/retrodeck-path-migration.md)** — Moving your RetroDECK installation between
    storage locations
-10. **[Troubleshooting](user-guide/troubleshooting.md)** — Common issues, fixes, Danger Zone explained
+10. **[Troubleshooting](user-guide/troubleshooting.md)** — Common issues, fixes, Data Management explained
 
 ## Technical Reference
 

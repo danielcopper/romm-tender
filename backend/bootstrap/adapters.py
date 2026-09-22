@@ -93,6 +93,7 @@ if TYPE_CHECKING:
         PathExistsReader,
         PlatformCoreReader,
         PruneArtifactStore,
+        RecoveryBundleInventoryReader,
         RecoveryBundleStore,
         RendererGcFn,
         RendererRssFn,
@@ -153,6 +154,10 @@ class AdapterBundle:
     resolve_upload_conflict: ResolveUploadConflictFn
     compute_sync_action: ComputeSyncActionFn
     recovery_store: RecoveryBundleStore
+    # The same object as ``recovery_store``, offered under the narrower
+    # question: a consumer that only describes the bundles must not be able
+    # to seal or validate one.
+    recovery_inventory: RecoveryBundleInventoryReader
     prune_artifacts: PruneArtifactStore
     steam_recovery: SteamRecoveryStore
 
@@ -490,6 +495,7 @@ def bootstrap(
         resolve_upload_conflict=gavel,
         compute_sync_action=gavel.compute_sync_action,
         recovery_store=recovery_store,
+        recovery_inventory=recovery_store,
         prune_artifacts=prune_artifacts,
         steam_recovery=steam_recovery,
     )

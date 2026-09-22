@@ -225,6 +225,7 @@ class Plugin:
         self._disc_service = services["disc_service"]
         self._version_switch_service = services["version_switch_service"]
         self._prune_service = services["prune_service"]
+        self._data_inventory_service = services["data_inventory_service"]
         self._connection_service = services["connection_service"]
         self._startup_healing_service = services["startup_healing_service"]
         self._shortcut_relocation_service = services["shortcut_relocation_service"]
@@ -660,6 +661,9 @@ class Plugin:
 
     async def get_sync_stats(self):
         return self._sync_service.get_sync_stats()
+
+    async def get_data_inventory(self):
+        return await self._data_inventory_service.get_data_inventory()
 
     async def get_sync_runs(self):
         return self._sync_service.get_sync_runs()

@@ -50,6 +50,7 @@ from domain.identity import PACKAGE_NAME, VERSION
 from domain.save_layout import InSaveDir
 from services.achievements import AchievementsService
 from services.cores import CoreService
+from services.data_inventory import DataInventoryService
 from services.disc import DiscService
 from services.downloads import DownloadService
 from services.firmware import FirmwareService
@@ -485,6 +486,7 @@ class TestWireServices:
                 resolve_upload_conflict=deps["resolve_upload_conflict"],
                 compute_sync_action=deps["compute_sync_action"],
                 recovery_store=deps["recovery_store"],
+                recovery_inventory=deps["recovery_store"],
                 prune_artifacts=deps["prune_artifacts"],
                 steam_recovery=deps["steam_recovery"],
             ),
@@ -572,7 +574,7 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(result) == 26
+        assert len(result) == 27
         assert "migration_service" in result
         assert "game_detail_service" in result
         assert "rom_removal_service" in result
@@ -584,6 +586,7 @@ class TestWireServices:
         assert "version_switch_service" in result
         assert isinstance(result["version_switch_service"], VersionSwitchService)
         assert isinstance(result["prune_service"], PruneService)
+        assert isinstance(result["data_inventory_service"], DataInventoryService)
         assert "connection_service" in result
         assert "startup_healing_service" in result
         assert "launch_gate_service" in result

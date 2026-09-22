@@ -154,6 +154,7 @@ modules =
     services.artwork
     services.connection
     services.cores
+    services.data_inventory
     services.disc
     services.disc_launch_resolver
     services.downloads

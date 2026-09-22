@@ -9,7 +9,7 @@ import { MainPage } from "./bigpicture/MainPage";
 import { SettingsPage } from "./bigpicture/SettingsPage";
 import { LibraryPage } from "./bigpicture/LibraryPage";
 import { SyncPage } from "./bigpicture/SyncPage";
-import { DangerZone } from "./bigpicture/DangerZone";
+import { DataManagementPage } from "./bigpicture/DataManagementPage";
 import { DownloadQueue } from "./bigpicture/DownloadQueue";
 import { OWNS_ENTRY_FOCUS_ATTR } from "./bigpicture/layout/WidePage";
 import { installQuickAccessEntry } from "./qam/installEntry";
@@ -181,7 +181,7 @@ const QAMPanel: FC = () => {
       content = <LibraryPage onBack={() => setPage("main")} />;
       break;
     case "data":
-      content = <DangerZone onBack={() => setPage("main")} />;
+      content = <DataManagementPage onBack={() => setPage("main")} />;
       break;
     case "downloads":
       content = <DownloadQueue onBack={() => setPage("main")} />;

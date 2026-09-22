@@ -1,6 +1,7 @@
 import { callable } from "./host";
 import { detach } from "../utils/detach";
 import type {
+  DataInventory,
   PluginSettings,
   SyncStats,
   SyncRunsAnswer,
@@ -282,6 +283,12 @@ export const getSyncStatus = callable<[], SyncStatusAnswer>("get_sync_status");
 export const getSessionBudgetStatus = callable<[], SessionBudgetStatus>("get_session_budget_status");
 export const clearSyncCache = callable<[], BackendResult>("clear_sync_cache");
 export const getSyncStats = callable<[], SyncStats>("get_sync_stats");
+/**
+ * What this device holds — the Data Management page's inventory figures, read
+ * once when the page opens. The shortcut count is NOT here: it is
+ * `getSyncStats`' `total_shortcuts`, which Main already reads every visit.
+ */
+export const getDataInventory = callable<[], DataInventory>("get_data_inventory");
 // The newest recorded sync runs, newest first — the Sync page's run list.
 export const getSyncRuns = callable<[], SyncRunsAnswer>("get_sync_runs");
 /**

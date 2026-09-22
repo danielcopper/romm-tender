@@ -281,6 +281,10 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # component by component even when the 30-second config cache hits.
         # These were excluded while they were string algebra over a cached dict;
         # the docstring records why that no longer holds.
+        # RecoveryBundleInventoryReader (services/protocols/files.py) — lists the
+        # recovery root and measures every bundle under it, one descriptor walk
+        # per bundle. Object-shaped, so the method name is the whole entry.
+        "bundle_inventory",
         "bios_path",
         "roms_path",
         "saves_path",

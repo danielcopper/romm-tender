@@ -919,6 +919,11 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     "fetch_cover_base64",
     "get_sync_status",
     "get_sync_stats",
+    # Read-only population figures for the Data Management page — one SQLite
+    # scan plus a listing of the recovery root, which is outside every
+    # RetroDECK path a migration moves, so a pending migration has nothing to
+    # protect from it.
+    "get_data_inventory",
     # Read-only run-history listing — reads the sync_runs table and nothing
     # else, so a pending migration has nothing to protect from it.
     "get_sync_runs",
@@ -1134,6 +1139,7 @@ class TestMainStartupOrdering:
             "disc_service": MagicMock(),
             "version_switch_service": MagicMock(),
             "prune_service": MagicMock(shutdown=AsyncMock()),
+            "data_inventory_service": MagicMock(),
             "connection_service": connection_service,
             "startup_healing_service": startup_healing_service,
             "shortcut_relocation_service": MagicMock(),
@@ -1169,6 +1175,7 @@ class TestMainStartupOrdering:
                 resolve_upload_conflict=MagicMock(),
                 compute_sync_action=MagicMock(),
                 recovery_store=MagicMock(),
+                recovery_inventory=MagicMock(),
                 prune_artifacts=MagicMock(),
                 steam_recovery=MagicMock(),
             ),

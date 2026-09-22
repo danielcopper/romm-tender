@@ -87,6 +87,7 @@ _BOUND_SERVICE_ATTRS = {
     "_disc_service": "disc_service",
     "_version_switch_service": "version_switch_service",
     "_prune_service": "prune_service",
+    "_data_inventory_service": "data_inventory_service",
     "_connection_service": "connection_service",
     "_startup_healing_service": "startup_healing_service",
     "_shortcut_relocation_service": "shortcut_relocation_service",

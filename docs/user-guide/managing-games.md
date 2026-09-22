@@ -106,8 +106,8 @@ switching straight back before the list has caught up).
 ### Cleaning up versions removed from RomM
 
 Normal library sync never deletes retained local rows, installed files, saves, or playtime just because a game
-disappears from RomM. To remove that state explicitly, open **Danger Zone → Clean Up Removed RomM Games**. The first
-scan is local and finds groups containing rows absent from a completed platform fetch.
+disappears from RomM. To remove that state explicitly, open **Data Management → Gone from RomM**. The first scan is
+local and finds groups containing rows absent from a completed platform fetch.
 
 The dialog opens on the count that matters — how many locally kept versions are no longer on your RomM server — and
 lists those versions first, under **Versions no longer on RomM**. Other versions of the same games follow under **Other
@@ -160,18 +160,18 @@ single button, without opening an otherwise empty picker. The vanished version i
 — selecting it can only ever start the cleanup, never rebind the shortcut to it. A vanished version with no local data
 to remove stays listed and disabled, with no trash icon.
 
-While a cleanup runs, the Danger Zone shows a progress bar under the entry point — the game being worked on, the phase
-in words (checking with RomM, backing up, backup complete, updating or removing the Steam shortcut, removing local data,
-done) and which game of how many it is on — and the scan button stays unavailable, so you can close the dialog and still
-see what is happening. The bar itself fills with the games already finished, not the one in progress, so it reaches the
-end only when the run does: backing up a large game takes a while and reports nothing while it copies, and a full bar
-sitting over it would say the run was done when it was not. Both the dialog and the Danger Zone offer **Stop Cleanup**.
-It stops at the next safe moment: a backup still being written is abandoned and that game is left completely untouched,
-while a game whose removal has already begun finishes and reports what it changed. Backing up a large game can take
-minutes, so being able to walk away from one is the difference between stopping now and waiting it out. While the run
-winds down the button says **Stopping** so a second press is never needed. Nothing already done is undone — stopping is
-not an undo, and the report afterwards lists exactly what was committed. If a game's backup finished before the run
-stopped, the report says so and names the folder, so a recovery bundle that removed nothing is never a mystery.
+While a cleanup runs, the Gone from RomM pane shows a progress bar under the entry point — the game being worked on, the
+phase in words (checking with RomM, backing up, backup complete, updating or removing the Steam shortcut, removing local
+data, done) and which game of how many it is on — and the scan button stays unavailable, so you can close the dialog and
+still see what is happening. The bar itself fills with the games already finished, not the one in progress, so it
+reaches the end only when the run does: backing up a large game takes a while and reports nothing while it copies, and a
+full bar sitting over it would say the run was done when it was not. Both the dialog and that pane offer **Stop
+Cleanup**. It stops at the next safe moment: a backup still being written is abandoned and that game is left completely
+untouched, while a game whose removal has already begun finishes and reports what it changed. Backing up a large game
+can take minutes, so being able to walk away from one is the difference between stopping now and waiting it out. While
+the run winds down the button says **Stopping** so a second press is never needed. Nothing already done is undone —
+stopping is not an undo, and the report afterwards lists exactly what was committed. If a game's backup finished before
+the run stopped, the report says so and names the folder, so a recovery bundle that removed nothing is never a mystery.
 
 If Steam changes before local cleanup can finish, the report can show a **partial** group with the concrete committed
 action and failure message. A confirmed shortcut removal is reconciled to an unbound retained row; a committed repoint
@@ -488,10 +488,10 @@ you make it, not afterwards.
 The button switches to **Uninstalling…** as soon as you tap it, and a game made of many files counts them down as they
 go. Pressing it again while that is on screen does nothing — the removal already running is the one that finishes, and
 the plugin refuses a second one for the same game rather than letting two run against the same folder. That holds across
-both entry points: **Uninstall All ROMs** in the Danger Zone claims every game it is about to remove, so it is refused
-while a single uninstall is running, and a single uninstall is refused while the bulk run holds that game. If the plugin
-is reloaded or the Deck shuts down mid-removal, the next uninstall of that game picks up where the interrupted one
-stopped.
+both entry points: **Uninstall all ROM files** on Data Management claims every game it is about to remove, so it is
+refused while a single uninstall is running, and a single uninstall is refused while the bulk run holds that game. If
+the plugin is reloaded or the Deck shuts down mid-removal, the next uninstall of that game picks up where the
+interrupted one stopped.
 
 ## Removing a Platform from Steam
 

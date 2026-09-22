@@ -469,10 +469,10 @@ Grid artwork is stored at `userdata/<user_id>/config/grid/`, keyed by the shortc
 
 Each form also occurs with a `.jpg` / `.jpeg` extension. On shortcut removal the plugin deletes the **full** suffix ×
 extension set for the removed appId (`ArtworkService.remove_artwork_files`), so companion art (hero/logo/icon/wide)
-never outlives its shortcut. Files a removal missed historically are reclaimed by the Danger Zone's **Remove Orphaned
-Grid Images** cleanup (`cleanup_orphaned_grid_images`): candidates are only grid-image-named files whose appId sits in
-the non-Steam-shortcut range (`[0x80000000, 0xFFFFFFFF]` — see the errata above; store-game custom art is out of range
-and never touched) and whose appId belongs to no live shortcut in the frontend's full scan; if any bound
+never outlives its shortcut. Files a removal missed historically are reclaimed by Data Management's **Grid images**
+cleanup (`cleanup_orphaned_grid_images`): candidates are only grid-image-named files whose appId sits in the
+non-Steam-shortcut range (`[0x80000000, 0xFFFFFFFF]` — see the errata above; store-game custom art is out of range and
+never touched) and whose appId belongs to no live shortcut in the frontend's full scan; if any bound
 `roms.shortcut_app_id` is missing from that scan the cleanup refuses and deletes nothing.
 
 `ArtworkService` (cover staging/finalisation, renaming the staged cover to `{app_id}p.png`) and `SteamGridService` (SGDB

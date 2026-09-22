@@ -215,7 +215,7 @@ describe("QAM Focusable row rule", () => {
       "SyncPage.tsx",
       "LibraryPage.tsx",
       "SettingsPage.tsx",
-      "DangerZone.tsx",
+      "DataManagementPage.tsx",
       "RemovedGamesCleanup.tsx",
       "DownloadQueue.tsx",
       "SessionBudgetBanner.tsx",

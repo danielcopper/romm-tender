@@ -124,3 +124,22 @@ export interface LaunchVerdict {
   toast_title: string | null;
   toast_body: string | null;
 }
+
+/**
+ * What this device holds, for the Data Management page's inventory rows.
+ *
+ * `installed_bytes` is the size RomM reported for the installed ROMs
+ * (`Rom.fs_size_bytes`), summed — never a walk of the disk — so it is written
+ * with a `≈`: a multi-file game, an unpacked archive, a patch beside the
+ * original or extras in the same folder are not the size the server named, and
+ * a row whose size the server never reported adds nothing to it.
+ *
+ * `recovery_bytes` is measured on disk, because nothing else knows what a
+ * sealed bundle takes.
+ */
+export interface DataInventory {
+  installed_roms: number;
+  installed_bytes: number;
+  recovery_bundles: number;
+  recovery_bytes: number;
+}

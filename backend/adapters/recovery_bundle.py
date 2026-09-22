@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
     from models.prune import (
         RecoveryArtifact,
+        RecoveryBundleInventory,
         SealedSourceClaims,
         SourceClaim,
         SourceEntry,
@@ -99,6 +100,46 @@ class RecoveryBundleAdapter:
     def measure_path(self, path: str, safe_root: str) -> int:
         """Sum the recursive byte size of one source without reading its content."""
         return measure_tree(path, safe_root)
+
+    def bundle_inventory(self) -> RecoveryBundleInventory:
+        """Count the bundles under the recovery root and sum the bytes they hold.
+
+        A root that was never created is an empty inventory rather than an
+        error: sealing is what creates the layout, so "no bundles" and "no
+        recovery folder" are the same answer to the same question.
+
+        Every directory under ``bundles/`` counts, and no seal is opened. A
+        bundle whose durability could not be confirmed is marked by a rename
+        and still holds its data, so excluding it would hide disk from the one
+        reader who asked what the bundles take. An entry that cannot be
+        measured is counted and contributes nothing, because its presence is
+        the more reliable of the two facts.
+        """
+        bundles_dir = os.path.join(self._root, "bundles")
+        try:
+            names = os.listdir(bundles_dir)
+        except OSError:
+            return {"count": 0, "total_bytes": 0}
+        count = 0
+        total = 0
+        for name in names:
+            path = os.path.join(bundles_dir, name)
+            entry = self._lstat_or_none(path)
+            if entry is None or not stat.S_ISDIR(entry.st_mode):
+                continue
+            count += 1
+            try:
+                total += measure_tree(path, bundles_dir)
+            except (OSError, ValueError):
+                continue
+        return {"count": count, "total_bytes": total}
+
+    @staticmethod
+    def _lstat_or_none(path: str) -> os.stat_result | None:
+        try:
+            return os.lstat(path)
+        except OSError:
+            return None
 
     def validate_sources(self, bundle_path: str, bundle_digest: str | None = None) -> bool:
         """Verify that every sealed source set and source byte stream is unchanged."""

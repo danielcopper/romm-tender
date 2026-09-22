@@ -66,7 +66,7 @@ class RomRepository(Protocol):
         ...
 
     def iter_all(self) -> Iterator[Rom]:
-        """Iterate every ROM in the registry. (library/reporter.py full scan, startup_healing.py)"""
+        """Iterate every ROM in the registry. (library/reporter.py full scan, startup_healing.py, data_inventory.py)"""
         ...
 
     def iter_by_platform(self, platform_slug: str) -> Iterator[Rom]:
@@ -153,7 +153,7 @@ class RomInstallRepository(Protocol):
         ...
 
     def iter_all(self) -> Iterator[RomInstall]:
-        """Iterate every install record. (migration/, saves/sync_engine/engine.py)"""
+        """Iterate every install record. (migration/, saves/sync_engine/engine.py, data_inventory.py)"""
         ...
 
 

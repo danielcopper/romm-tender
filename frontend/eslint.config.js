@@ -109,9 +109,9 @@ export default tseslint.config(
   {
     files: [
       "src/index.tsx",
-      "src/bigpicture/{MainPage,SyncPage,LibraryPage,SettingsPage,DangerZone,RemovedGamesCleanup,DownloadQueue}.tsx",
+      "src/bigpicture/{MainPage,SyncPage,LibraryPage,SettingsPage,DataManagementPage,RemovedGamesCleanup,DownloadQueue}.tsx",
       "src/bigpicture/{SessionBudgetBanner,MigrationBlockedPage,SettingsResetBanner,PlaytimeScopeBanner,DownloadProgressRow,LoadingRow}.tsx",
-      "src/bigpicture/{layout,sync,library,settings}/**/*.tsx",
+      "src/bigpicture/{layout,sync,library,settings,data}/**/*.tsx",
     ],
     // A test renders no row a reader walks, and a modal is not a panel row at all —
     // it mounts in Steam's `ModalRoot`, outside the region that scrolls by focus.

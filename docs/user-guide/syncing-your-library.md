@@ -422,7 +422,8 @@ returning that id. Removing that state requires the separate confirmed
 
 To remove one platform's games, use that platform's pane in **Library › Platforms** — see
 [Removing a platform from Steam](managing-games.md#removing-a-platform-from-steam). For the library-wide removals, use
-the **Danger Zone** page; see [Troubleshooting — Danger Zone](troubleshooting.md#danger-zone) for the options it offers.
+the **Data Management** page; see [Troubleshooting — Data Management](troubleshooting.md#data-management) for the
+populations it lists and what each one offers.
 
 If you delete a synced game directly from **Steam's own library**, the next sync brings it back. The plugin notices the
 shortcut is gone at sync start and re-creates it, so deleting through Steam is not a permanent way to remove a RomM game

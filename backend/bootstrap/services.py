@@ -21,6 +21,7 @@ from services.active_core_resolver import ActiveCoreResolver, ActiveCoreResolver
 from services.artwork import ArtworkService, ArtworkServiceConfig
 from services.connection import ConnectionService, ConnectionServiceConfig
 from services.cores import CoreService, CoreServiceConfig
+from services.data_inventory import DataInventoryService, DataInventoryServiceConfig
 from services.disc import DiscService, DiscServiceConfig
 from services.disc_launch_resolver import DiscLaunchResolver, DiscLaunchResolverConfig
 from services.downloads import DownloadService, DownloadServiceConfig
@@ -562,6 +563,15 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         ),
     )
 
+    data_inventory_service = DataInventoryService(
+        config=DataInventoryServiceConfig(
+            loop=cfg.runtime.loop,
+            logger=cfg.runtime.logger,
+            uow_factory=cfg.callbacks.uow_factory,
+            recovery_inventory=cfg.adapters.recovery_inventory,
+        ),
+    )
+
     prune_service = PruneService(
         config=PruneServiceConfig(
             loop=cfg.runtime.loop,
@@ -592,6 +602,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         "rom_adoption_service": rom_adoption_service,
         "rom_removal_service": rom_removal_service,
         "prune_service": prune_service,
+        "data_inventory_service": data_inventory_service,
         "firmware_service": firmware_service,
         "sgdb_service": sgdb_service,
         "metadata_service": metadata_service,
