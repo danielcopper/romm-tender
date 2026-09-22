@@ -284,11 +284,16 @@ Latest release and shipped features: see `git tag --sort=-v:refname` and GitHub 
 - **Package**: `mise run package` (production frontend build, then `scripts/package.sh` → `build/romm-tender-<V>.tar.gz`
   plus its `.sha256`). `bash install.sh --from build/romm-tender-<V>.tar.gz` installs that build the way a release is
   installed; `install.sh --uninstall` takes it back out. **Neither is ever run against your own machine from a test** —
-  every execution in `tests/scripts/` happens under a `tmp_path` HOME with a stub `PATH`.
-- **Release**: release-please, configured as `release-type: simple` (`release-please-config.json`). What it proposes is
-  normally computed from `.release-please-manifest.json` plus the commits since — but **not today**:
-  `release-as: "1.0.0"` overrides that computation on every run, so every release PR proposes 1.0.0 until the key is
-  removed. **Take it out once 1.0.0 has shipped**, or the version stops moving and nothing says so.
+  every execution in `tests/scripts/` happens under a `tmp_path` HOME with a stub `PATH`. CI's build job runs the same
+  two steps on every PR and checks what they produce (`scripts/check_release_tarball.py`), so the packager is exercised
+  continuously rather than first at a tag.
+- **Release**: release-please, configured as `release-type: simple` (`release-please-config.json`). A second job in
+  `.github/workflows/release.yml` builds the tagged tree, packs it with the same `scripts/package.sh`, checks the result
+  and attaches `romm-tender-<V>.tar.gz` plus its `.sha256` to the release — it builds from the tag rather than carrying
+  an artifact over from CI. What it proposes is normally computed from `.release-please-manifest.json` plus the commits
+  since — but **not today**: `release-as: "1.0.0"` overrides that computation on every run, so every release PR proposes
+  1.0.0 until the key is removed. **Take it out once 1.0.0 has shipped**, or the version stops moving and nothing says
+  so.
 
   Two files carry the version and each is written by a different mechanism: `version.txt` at the repository root is the
   `simple` strategy's own version file, and `backend/domain/identity.py`'s `VERSION` line is an extra file, found by the
@@ -974,6 +979,11 @@ Format: **invariant** — tier — enforced by.
   property of package DIRECTORIES alone. And `rglob` does not descend into a symlinked directory, so every file below
   one is invisible to the set comparison whatever the per-file symlink guard does; git records the link itself as mode
   120000, which is what makes it a review question rather than a silent one
+- **The release tarball is what the installer expects — one top-level `romm-tender/`, the files the unit and the
+  shortcuts start from, nothing the packager prunes, a sidecar `sha256sum -c` accepts** — check —
+  `scripts/check_release_tarball.py`, in CI's build job over a tarball packed from that build and in the release job
+  over the one uploaded. It reads names, modes and digests; it starts nothing, so a bundle that is present and broken
+  passes it
 - **Server-supplied path components pass `safe_join` (`lib/path_safety.py`)** — test + prompt-only — traversal tests per
   path builder; new call sites are prompt-only
 - **A firmware row's presence comes from the resolver wherever the resolver declared it; the plugin's own filesystem
