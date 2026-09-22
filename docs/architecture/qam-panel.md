@@ -1453,9 +1453,10 @@ inputs rather than by convention: the on-screen keyboard needs the room, and a d
 
 **The size is the server's figure and never a walk of the disk.** `Rom.fs_size_bytes` is what RomM reported for a ROM
 (#1395), summed over the installed rows, so the page opens with a number instead of measuring for one — and it is
-written with a `≈` for two reasons: a multi-file game, an unpacked archive, a patch beside the original or extras in the
-same folder are not the size the server named — and the field is NULL for a row that predates its migration or belongs
-to a wholesale-skipped platform nobody has re-applied, so the sum understates rather than fails. The cleanup goes on
+written with a `≈` for two reasons: an unpacked archive, a patch beside the original or extras in the same folder are
+not the size the server named — a multi-file game is, which is why it is not on that list — and the field is NULL for a
+row that predates its migration or belongs to a wholesale-skipped platform nobody has re-applied, so the sum understates
+rather than fails. The count beside it is one per INSTALL, so a multi-disc game counts once. The cleanup goes on
 measuring the disk for itself, because its free-space line has to hold for a bundle it is about to write rather than for
 a figure a server once reported.
 
