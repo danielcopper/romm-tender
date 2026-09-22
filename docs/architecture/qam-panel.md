@@ -1459,12 +1459,12 @@ review, in the cut that redraws both.
 shortcuts are themselves non-Steam shortcuts, so a row counting Steam's store whole would report this plugin's own
 library a second time, under a heading saying _Other_ — and its removal would take that library with it, since the
 whitelist protects by NAME and a synced library carries game names. So the foreign row is Steam's store **less what this
-plugin created**, told apart by what a shortcut launches rather than by what it is called, and on this page row 1 stays
-the one place ours are removed from (a platform's own removal, in Library, is the other). That reading is a per-shortcut
-sweep rather than a field: it takes time, so the row shows a dash until it lands, and **what it cannot establish it
-never offers** — neither a store it could not read at all, nor an entry whose own reading did not arrive. The pane says
-which of the two happened. An unproven entry left alone is a row that under-reports; an unproven entry offered is a
-library deleted.
+plugin created**, told apart by what a shortcut launches rather than by what it is called, and the foreign row never
+removes ours: row 1 is where they go wholesale, the Gone-from-RomM cleanup takes the individual vanished ones, and a
+platform's own removal in Library takes a platform's. That reading is a per-shortcut sweep rather than a field: it takes
+time, so the row shows a dash until it lands, and **what it cannot establish it never offers** — neither a store it
+could not read at all, nor an entry whose own reading did not arrive. The pane says which of the two happened. An
+unproven entry left alone is a row that under-reports; an unproven entry offered is a library deleted.
 
 **The size is the server's figure and never a walk of the disk.** `Rom.fs_size_bytes` is what RomM reported for a ROM
 (#1395), summed over the installed rows, so the page opens with a number instead of measuring for one — and it is
