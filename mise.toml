@@ -100,7 +100,9 @@ description = "Run the full CI battery locally — every PR check in ci.yml, in 
 # packed and checked), the `frontend-test` job (`pnpm test`
 # stands in for CI's `pnpm test:coverage` — pass/fail parity), and `markdown-format`
 # (`deno fmt --check`). `pnpm build` precedes `pnpm check:bundle`, `pnpm size` and
-# the packager because all three measure what the build produced. Not reproducible locally, so omitted: the SonarCloud scan +
+# the packager because all three depend on what the build produced. `build/` is emptied
+# first: nothing else ever clears it, so after a version change it would hold two
+# archives and the glob below would match both. Not reproducible locally, so omitted: the SonarCloud scan +
 # sonar-gate (need SONAR_TOKEN and CI coverage artifacts).
 depends = ["test", "lint"]
 run = [
@@ -111,7 +113,7 @@ run = [
     "pnpm -C frontend format:check",
     "pnpm -C frontend build",
     "pnpm -C frontend check:bundle",
-    "bash scripts/package.sh --source . --out build",
+    "rm -rf build && bash scripts/package.sh --source . --out build",
     "python scripts/check_release_tarball.py build/romm-tender-*.tar.gz",
     "pnpm -C frontend typecheck",
     "pnpm -C frontend size",
