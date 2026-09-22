@@ -3,13 +3,18 @@
 The check is loaded via ``importlib`` because ``scripts/`` is not on
 ``sys.path`` (and is excluded from ruff/basedpyright).
 
-Every case starts from a REAL tarball, produced by the real ``scripts/package.sh``
-from a synthetic checkout under ``tmp_path`` — the same way ``test_package.py``
-builds one — and then rewrites it into the archive the case is about. A fixture
-that assembled a tar of its own would be asserting against a layout this file
-invented, and the layout is precisely what is under test: the whole point of the
-gate is that the packager and the installer agree about a file neither of them
-can see from the other side.
+Every case about an archive's CONTENTS starts from a REAL tarball, produced by
+the real ``scripts/package.sh`` from a synthetic checkout under ``tmp_path`` —
+the same way ``test_package.py`` builds one — and then rewrites it into the
+archive the case is about. A fixture that assembled a tar of its own would be
+asserting against a layout this file invented, and the layout is precisely what
+is under test: the whole point of the gate is that the packager and the
+installer agree about a file neither of them can see from the other side.
+
+The exception is the three cases in :class:`TestWhatTheRunAnswersWith` that ask
+what the run does when there is no archive to read — a path nothing matched, an
+archive with no members, bytes that are not a tar. A packed tarball is the one
+thing those may not start from, so they write what they need themselves.
 
 The checkout is laid out from the gate's own ``REQUIRED_FILES``, so a path added
 there is a path the fixture ships, and the parametrized missing-file case covers
@@ -112,6 +117,8 @@ def _repack(
     rename: Mapping[str, str] | None = None,
     modes: Mapping[str, int] | None = None,
     symlinks: Mapping[str, str] | None = None,
+    hardlinks: Mapping[str, str] | None = None,
+    directories: Iterable[str] = (),
     name: str | None = None,
     sidecar: str = "rewrite",
 ) -> Path:
@@ -127,6 +134,7 @@ def _repack(
     rename = rename or {}
     modes = modes or {}
     symlinks = symlinks or {}
+    hardlinks = hardlinks or {}
 
     out_dir.mkdir(parents=True, exist_ok=True)
     target = out_dir / (name or archive.name)
@@ -148,6 +156,16 @@ def _repack(
             info = tarfile.TarInfo(path)
             info.type = tarfile.SYMTYPE
             info.linkname = link
+            out.addfile(info)
+        for path, link in hardlinks.items():
+            info = tarfile.TarInfo(path)
+            info.type = tarfile.LNKTYPE
+            info.linkname = link
+            out.addfile(info)
+        for path in directories:
+            info = tarfile.TarInfo(path)
+            info.type = tarfile.DIRTYPE
+            info.mode = 0o755
             out.addfile(info)
 
     if sidecar == "rewrite":
@@ -212,7 +230,7 @@ class TestTheTopLevelDirectory:
         assert f"no {_ROOT}/ directory" in _one(findings, "directory")
 
     def test_the_top_level_directory_itself_has_to_be_in_it(self, good, tmp_path):
-        """``--strip-components=1`` strips a component; it does not invent one."""
+        """The packager's ``tar`` writes that directory as a member of its own; an archive lacking it is not its."""
         archive = _repack(good, tmp_path / "out", drop=[_ROOT])
 
         assert f"no {_ROOT}/ directory" in _one(_findings(archive), "directory")
@@ -231,7 +249,7 @@ class TestTheFilesAnInstallStartsFrom:
         assert f"{_ROOT}/{relative}: missing" in _findings(archive)
 
     def test_the_launcher_without_its_mode_is_a_finding(self, good, tmp_path):
-        """Steam runs it as a shortcut's ``exe``; a mode lost in packaging is a dead library."""
+        """Why the shipped mode is asserted at all — the fallback path runs this copy — is at ``EXECUTABLE_FILES``."""
         launcher = f"{_ROOT}/bin/tender-rom-launcher"
         archive = _repack(good, tmp_path / "out", modes={launcher: 0o644})
 
@@ -246,7 +264,7 @@ class TestTheFilesAnInstallStartsFrom:
 
 class TestWhatMayNotBeInIt:
     @pytest.mark.parametrize("segment", sorted(check.BANNED_SEGMENTS))
-    def test_each_pruned_directory_is_caught_by_its_segment(self, good, tmp_path, segment):
+    def test_each_banned_directory_is_caught_by_its_segment(self, good, tmp_path, segment):
         member = f"{_ROOT}/{segment}/carried.txt"
         archive = _repack(good, tmp_path / "out", add={member: b"x\n"})
 
@@ -259,6 +277,15 @@ class TestWhatMayNotBeInIt:
 
         assert _one(_findings(archive), "the packager prunes").startswith(f"{member}: a name the packager prunes")
 
+    def test_a_banned_name_standing_as_a_directory_is_caught_too(self, good, tmp_path):
+        """The rule is about the last segment of a member's path, whatever the member is."""
+        member = f"{_ROOT}/backend/settings.json"
+        archive = _repack(good, tmp_path / "out", directories=[member])
+
+        assert _one(_findings(archive), "the packager prunes") == (
+            f"{member}: a name the packager prunes (settings.json)"
+        )
+
     def test_a_symbolic_link_is_not_a_file(self, good, tmp_path):
         """The installer unpacks this archive, so a link in it is a write it did not choose."""
         archive = _repack(good, tmp_path / "out", symlinks={f"{_ROOT}/backend/main.cfg": "/etc/passwd"})
@@ -267,6 +294,13 @@ class TestWhatMayNotBeInIt:
             _one(_findings(archive), "symbolic link")
             == f"{_ROOT}/backend/main.cfg: a symbolic link, not a file or a directory"
         )
+
+    def test_a_hard_link_is_not_a_file_either(self, good, tmp_path):
+        """Named as what it is: a member that carries no bytes of its own answers differently to a reader."""
+        member = f"{_ROOT}/backend/second-main.py"
+        archive = _repack(good, tmp_path / "out", hardlinks={member: f"{_ROOT}/backend/main.py"})
+
+        assert _one(_findings(archive), "hard link") == f"{member}: a hard link, not a file or a directory"
 
     def test_an_absolute_path_is_a_finding(self, good, tmp_path):
         archive = _repack(good, tmp_path / "out", add={"/etc/passwd": b"x\n"})
@@ -323,6 +357,12 @@ class TestTheSidecar:
 
         assert _one(_findings(archive), "missing").startswith(f"{archive.name}{check.SIDECAR_SUFFIX}: missing")
 
+    def test_the_binary_mode_spelling_is_accepted(self, good, tmp_path):
+        """``sha256sum -b`` writes ``<digest> *<name>``, and ``-c`` reads both spellings."""
+        archive = _place(good, tmp_path / "out", line=f"{_digest(good)} *{good.name}\n")
+
+        assert _findings(archive) == []
+
     def test_a_digest_that_does_not_match_is_a_finding(self, good, tmp_path):
         archive = _place(good, tmp_path / "out", line=f"{'0' * 64}  {good.name}\n")
 
@@ -366,7 +406,12 @@ class TestWhatTheRunAnswersWith:
         assert check.main([str(missing)]) == 1
 
     def test_an_archive_with_nothing_in_it_is_refused(self, tmp_path):
-        """Every other rule answers vacuously about an empty archive, so this one answers first."""
+        """The one fact behind every other finding an empty archive draws.
+
+        A rule that walks members has nothing to walk, and the required list
+        answers by naming every path in it one at a time — which reads as a
+        packaging fault rather than as an archive carrying nothing at all.
+        """
         archive = tmp_path / f"{_ROOT}-{_VERSION}.tar.gz"
         with tarfile.open(archive, "w:gz"):
             pass
