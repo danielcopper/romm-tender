@@ -365,6 +365,20 @@ def _icon_rows() -> list[str]:
     return rows
 
 
+def _stacked(transcript: str) -> bool:
+    """Whether the run put the text block UNDER the drawing rather than beside it.
+
+    Beside the drawing the block hangs from partway DOWN it, so a title below
+    the icon's first row is what both layouts look like — only a title below
+    its LAST row tells them apart.
+    """
+    screen = _screen(transcript).splitlines()
+    drawn = _icon_rows()
+    icon_at = next(index for index, line in enumerate(screen) if line.startswith(drawn[0]))
+    title_at = next(index for index, line in enumerate(screen) if "TENDER" in line)
+    return title_at > icon_at + len(drawn) - 1
+
+
 def _ascii_rows() -> list[str]:
     """The ASCII drawing's rows, colour runs removed."""
     rows = []
@@ -1289,31 +1303,25 @@ class TestHowTheRunLooks:
             "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="70", COLORTERM="truecolor"
         )
 
-        screen = _screen(output).splitlines()
-        drawn = _icon_rows()
-        icon_at = next(index for index, line in enumerate(screen) if line.startswith(drawn[0]))
-        title_at = next(index for index, line in enumerate(screen) if "TENDER" in line)
-        assert icon_at < title_at
-        assert "TENDER" not in screen[icon_at]
+        assert _stacked(output), "the text block is beside the drawing, not under it"
 
     def test_the_threshold_is_measured_not_written_down(self, machine):
-        """Why 100: past a threshold of 94 columns, short of what this block measures.
+        """The width the text needs is read off the block, so a longer $CODE moves it.
 
-        The cases above run at 160 and 70, which sit on the same side of both
-        numbers, so either passes against a threshold that never reads the
-        lines. This one stacks only where the width comes off the block that
-        came out.
+        One terminal width, two install roots: a threshold carried as a number
+        lays the same greeter out the same way twice, whatever the number is,
+        so only a run that answers differently at one width says the lines were
+        read.
         """
-        _code, output = machine.on_a_terminal(
-            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="100", COLORTERM="truecolor"
+        tarball = str(_build_tarball(machine.tmp_path))
+        common = {"answer": "y", "COLUMNS": "160", "COLORTERM": "truecolor"}
+        _code, beside = machine.on_a_terminal("--from", tarball, **common)
+        _code, under = machine.on_a_terminal(
+            "--from", tarball, TENDER_CODE_DIR=str(machine.tmp_path / ("deep" * 50)), **common
         )
 
-        screen = _screen(output).splitlines()
-        drawn = _icon_rows()
-        icon_at = next(index for index, line in enumerate(screen) if line.startswith(drawn[0]))
-        title_at = next(index for index, line in enumerate(screen) if "TENDER" in line)
-
-        assert title_at > icon_at + len(drawn) - 1, "the text block is beside the drawing, not under it"
+        assert not _stacked(beside), "a real install root already pushes the text under the drawing"
+        assert _stacked(under), "a deeper install root did not move the text under the drawing"
 
     def test_a_truecolor_terminal_gets_the_24_bit_icon(self, machine):
         """The two arrays draw the same glyphs, so only the escapes tell them apart."""
