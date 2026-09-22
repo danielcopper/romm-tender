@@ -1,0 +1,32 @@
+-- =============================================================================
+-- 024_add_answered_save_dir.sql — record the save directory the resolver answered
+-- #1660 (the save directory is the resolver's answer; the save-sort markers go)
+-- =============================================================================
+--
+-- The directory a game's save lives in is the resolver's answer, read live. When
+-- that answer moves — the user flipped one of RetroArch's sort flags, or anything
+-- else changed it — the files already on disk stay where the old answer put them,
+-- and the plugin follows them per game by comparing today's answer with the one
+-- it recorded last time.
+--
+--   * rom_save_sync_states.answered_save_dir — the directory the resolver last
+--     answered for this ROM's save. It is compared with today's answer and never
+--     used as where a save is read or written.
+--
+-- NULL = nothing recorded yet. No value can be derived here: the answer is a live
+-- reading of the machine, so a one-time background pass on the next start records
+-- every installed game, and a sync records any game it meets first.
+--
+-- The save-sort markers are deleted with the code that read them:
+-- ``save_sort_settings`` held the last-seen RetroArch sort flags and
+-- ``save_sort_settings_previous`` the flags before a change nobody had migrated
+-- yet. A migration pending at this update cannot be followed — the recorded
+-- answer starts from today's — and its games recover their saves from the server
+-- on their next sync.
+--
+-- Transaction-safe DDL only — the runner (adapters/sqlite_migrations.py) wraps
+-- BEGIN/COMMIT and stamps PRAGMA user_version = 24.
+-- -----------------------------------------------------------------------------
+ALTER TABLE rom_save_sync_states ADD COLUMN answered_save_dir TEXT;  -- last answered save directory; NULL = none recorded
+
+DELETE FROM kv_config WHERE key IN ('save_sort_settings', 'save_sort_settings_previous');

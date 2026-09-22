@@ -52,6 +52,7 @@ class TestRoundTrip:
                 ),
             },
             last_sync_check_at="2026-04-04T02:00:00Z",
+            answered_save_dir="/saves/snes",
         )
         uow.rom_save_sync_states.save(5, state)
 
@@ -76,6 +77,19 @@ class TestRoundTrip:
         assert loaded is not None
         assert loaded.files["with.srm"].last_sync_server_hash == "srv-h1"
         assert loaded.files["without.srm"].last_sync_server_hash is None
+
+    def test_answered_save_dir_round_trips_value_and_none(self, uow: SqliteUnitOfWork):
+        _seed_rom(uow, 5)
+        _seed_rom(uow, 6)
+        uow.rom_save_sync_states.save(5, RomSaveSyncState(answered_save_dir="/saves/snes/Snes9x"))
+        uow.rom_save_sync_states.save(6, RomSaveSyncState())
+
+        recorded = uow.rom_save_sync_states.get(5)
+        unrecorded = uow.rom_save_sync_states.get(6)
+        assert recorded is not None
+        assert unrecorded is not None
+        assert recorded.answered_save_dir == "/saves/snes/Snes9x"
+        assert unrecorded.answered_save_dir is None
 
     def test_slot_confirmed_bool_round_trips(self, uow: SqliteUnitOfWork):
         _seed_rom(uow, 5)

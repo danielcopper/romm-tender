@@ -80,6 +80,10 @@ class RomSaveSyncState:
     slots: dict[str, dict[str, Any]] = field(default_factory=dict)
     files: dict[str, FileSyncState] = field(default_factory=dict)
     last_sync_check_at: str | None = None
+    # The directory the resolver last answered for this ROM's save. Compared
+    # with today's answer to notice that the save directory moved, and never
+    # read as where a save is — ``None`` until the first answer is recorded.
+    answered_save_dir: str | None = None
 
     def adopt_baseline(
         self,
@@ -210,6 +214,17 @@ class RomSaveSyncState:
     def mark_sync_evaluated(self, at: str) -> None:
         """Record that the sync matrix was last evaluated at ISO timestamp ``at``."""
         self.last_sync_check_at = at
+
+    def record_answered_save_dir(self, directory: str) -> None:
+        """Record *directory* as the save directory the resolver answered for this ROM.
+
+        Called when an answer is first seen and once a moved directory's files
+        have been followed into the new one. Raises ``ValueError`` on an empty
+        directory — an answer with no directory is never recorded.
+        """
+        if not directory:
+            raise ValueError("directory is required")
+        self.answered_save_dir = directory
 
     def adopt_system(self, system: str) -> None:
         """Record the emulator system this ROM runs under.
