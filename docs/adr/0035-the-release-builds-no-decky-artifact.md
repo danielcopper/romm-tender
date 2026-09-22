@@ -2,8 +2,9 @@
 
 ## Status
 
-**Consequences 1 and 4 lapsed with [ADR-0039](0039-the-release-ships-the-packagers-tarball.md)**, which attaches the
-packager's tarball and its checksum to every tag and checks the result on every pull request.
+**Consequence 1 lapsed with [ADR-0039](0039-the-release-ships-the-packagers-tarball.md)**, which attaches the packager's
+tarball and its checksum to every tag and checks the result on every pull request — and consequence 4 in part:
+`release.yml` is still read by no gate, so what is now guarded mechanically is the artifact, not the workflow.
 
 Accepted. **Supersedes [ADR-0033](0033-the-shipped-folder-name-is-chosen-here.md)** — not its reasoning, which was
 sound, but its mechanism: the build directory that fed the Decky CLI's `FilenameSource::Directory` no longer exists,

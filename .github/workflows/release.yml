@@ -73,11 +73,8 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
-      # `package_json_file` defaults to `package.json` at the repository root,
-      # which is where this action reads `packageManager` from — and there is no
-      # manifest there any more. Without it the step fails with "No pnpm version
-      # is specified". Spelled out rather than left to the default, because a
-      # default that is merely CORRECT today is invisible to a grep for the path.
+      # Why `package_json_file` is set rather than left to the default: the same
+      # step in ci.yml.
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           package_json_file: frontend/package.json

@@ -8,14 +8,14 @@ about the archive's shape, and none of them is visible from inside this
 repository: the tarball is assembled by ``scripts/package.sh`` from a directory,
 and a change on either side — a shipped path dropped, a prune rule widened, a
 file the installer newly depends on — leaves both halves green and the download
-broken on a user's machine. A published tag cannot be withdrawn, which is why
-this runs over a tarball packed from every PR's build and not only over the one
-a release uploads.
+broken on a user's machine.
 
 It asserts:
 
-  * one top-level entry, a directory, ``romm-tender/``, and nothing beside it —
-    that is the whole of what ``--strip-components=1`` means;
+  * one top-level entry and nothing beside it, which is what unpacking with
+    ``--strip-components=1`` relies on, and that the entry is the directory
+    ``romm-tender/`` — the name the packager stages the tree under, so an
+    archive rooted in anything else did not come from it;
   * :data:`REQUIRED_FILES` are files inside it, and the launcher among them is
     executable;
   * nothing the packager prunes is in it, and no member is anything but a plain
@@ -26,13 +26,14 @@ It asserts:
     bare name, with a digest that matches.
 
 :data:`REQUIRED_FILES` is NOT a copy of the packager's ``SHIPPED``. That list
-says what goes into the archive — whole directories — and this one says what the
-installed program starts FROM: the module the unit executes, the bundles the
-panel is loaded from, the executable every Steam shortcut names as its ``exe``,
-the catalogue and the compiled core the backend reads, and the licence texts a
-distributed copy carries. The two are allowed to differ in length, and folding
-either into the other would make this gate agree with the packager by
-construction instead of holding it to the installer.
+says what goes into the archive — whole directories — and this one names the
+single paths that have to come out of it: the module the unit executes, the
+bundles the panel is loaded from, the executable every Steam shortcut names as
+its ``exe``, the catalogue and the compiled core the backend reads, the version
+file the archive's own name is taken from, and the licence texts a distributed
+copy carries. The two are allowed to differ in length, and folding either into
+the other would make this gate agree with the packager by construction instead
+of holding it to the installer.
 
 **Blind spot, and it is a wide one: this reads names, modes and digests, and
 starts nothing.** No bundle is evaluated, no module imported, no unit started.
@@ -85,15 +86,32 @@ REQUIRED_FILES = (
     VERSION_FILE,
 )
 
-# Steam runs this as a shortcut's ``exe``, and the backend copies it to the bin
-# root as it finds it — a mode lost in packaging is a library that will not
-# start, which nothing else here would notice.
+# Steam runs this as a shortcut's ``exe``. The copy a shortcut usually reaches
+# is not this one: ``adapters/launcher_install.py`` writes it into the user's
+# bin root at a mode of its own, so the mode shipped here decides nothing on
+# that path. It decides on the other one — where that install fails,
+# ``bootstrap/adapters.py`` points the shortcut at this copy in the unpacked
+# tree instead, and it is then run as it arrived. That is the case with no other
+# defence, which is why the mode is asserted here.
 EXECUTABLE_FILES = frozenset({"bin/tender-rom-launcher"})
 
 # A path segment that may not appear anywhere in the archive, and a name that
-# may not stand as a member's last segment. Both are the packager's prune rules
-# read from the other side: it drops these, so finding one means the archive was
-# not produced by the packager, or the packager stopped dropping it.
+# may not stand as a member's last segment — both read from the other side of
+# the packager, so finding one means the archive was not produced by it, or the
+# packager stopped keeping it out.
+#
+# The segments come from two different mechanisms there. ``node_modules``,
+# ``__pycache__`` and ``.venv`` are pruned out of the staged copy wherever they
+# turn up (``PRUNE_DIRS``); ``tests``, ``frontend``, ``docs`` and ``scripts``
+# are never copied into it at all, because ``SHIPPED`` does not name them. The
+# names below are that script's ``PRUNE_FILES`` plus ``.git*``.
+#
+# All seven segments are refused at EVERY depth, while the four uncopied ones
+# are only absent from the TOP of the packager's tree. A vendored dependency
+# carrying its own ``docs/`` or ``tests/`` would therefore be refused here
+# rather than shipped — deliberately, so that whether such a tree should be
+# pruned or kept is a question asked out loud once instead of answered by
+# whichever list it happened to fall through.
 BANNED_SEGMENTS = frozenset({"tests", "frontend", "node_modules", "__pycache__", ".venv", "docs", "scripts"})
 BANNED_NAMES = ("*.map", "*.lock", "*.pyc", "*.pyo", "settings.json", "requirements-dev.*", ".git*")
 
@@ -129,15 +147,19 @@ def layout_findings(members: list[tarfile.TarInfo]) -> list[str]:
     """Any way the archive is not one ``romm-tender/`` directory and nothing else.
 
     The installer unpacks with ``--strip-components=1``, so a second top-level
-    entry lands beside the code root's contents rather than beside the code
-    root, and a top level under another name lands as that name's contents.
+    entry lands beside the code root's CONTENTS rather than beside the code
+    root. The name is a separate question, and stripping does not answer it:
+    it removes whatever first component it finds, so an archive rooted in
+    ``tender/`` would unpack exactly as well. What pins the name is the
+    packager, which stages the tree under ``romm-tender/`` whatever the
+    checkout is called — so another root is an archive it did not write.
     """
     if not members:
         return ["the archive is empty"]
     findings = [f"{member.name}: outside {TOP_LEVEL}/" for member in members if relative_name(member.name) is None]
     root = next((member for member in members if member.name == TOP_LEVEL), None)
     if root is None:
-        findings.append(f"no {TOP_LEVEL}/ directory — the installer unpacks with --strip-components=1")
+        findings.append(f"no {TOP_LEVEL}/ directory — scripts/package.sh stages the tree under that name")
     elif not root.isdir():
         findings.append(f"{TOP_LEVEL}: not a directory")
     return findings

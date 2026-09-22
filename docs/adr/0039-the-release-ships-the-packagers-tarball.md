@@ -3,7 +3,7 @@
 ## Status
 
 Accepted. **Closes the gap [ADR-0035](0035-the-release-builds-no-decky-artifact.md) left open deliberately** — its first
-and fourth consequences lapse with this decision.
+consequence lapses with this decision, and its fourth in part.
 
 ## Context
 
@@ -32,11 +32,12 @@ of its own. There is one layout because there is one script that writes it.
 **2. The check runs on every pull request, over a tarball packed from that PR's own build.** CI's `build` job is the
 only one holding a built `dist/`, which is what the packager requires, so the pack and the check live there.
 `scripts/check_release_tarball.py` opens the archive and asserts the shape the installer relies on: one top-level
-`romm-tender/` directory and nothing beside it, the files the unit and the shortcuts start from, an executable launcher,
-nothing the packager prunes, no link and no path that escapes the root, a `version.txt` agreeing with the archive's name
-and with the tag, and a sidecar carrying one `sha256sum` line that names the archive by its bare name. The reason it is
-not left to the tag is that a published tag cannot be withdrawn: at that point the only way out of a bad tarball is
-another release.
+`romm-tender/` directory and nothing beside it, the files an install starts from together with the version file and the
+licence texts a distributed copy carries, an executable launcher, nothing the packager prunes, no link and no path that
+escapes the root, a `version.txt` agreeing with the archive's name and — where a tag is given, which on a pull request
+it is not — with the tag, and a sidecar carrying one `sha256sum` line that names the archive by its bare name. The
+reason it is not left to the tag is that a published tag cannot be withdrawn: at that point the only way out of a bad
+tarball is another release.
 
 **3. The release job builds from the tag.** It checks out `tag_name`, installs, builds, packs, runs the same check with
 `--tag`, and uploads the archive and its `.sha256` with `gh release upload`. It carries no artifact over from CI. A tag
@@ -44,9 +45,8 @@ is the one thing about a release that is fixed, so a release that is reproducibl
 anyone, and a CI artifact handed between two workflows would make the published bytes depend on a run rather than on a
 commit.
 
-**4. The packager is given no `--version` there.** The archive is named from the `version.txt` release-please stamped on
-the tag, and the check holds that name against the tag it is published under. Passing the tag's version into the
-packager would make the two agree by construction and check nothing.
+**4. The packager is given no `--version` there**, for the reason stated at that step in
+`.github/workflows/release.yml`.
 
 ## Consequences
 
@@ -57,13 +57,11 @@ packager would make the two agree by construction and check nothing.
   uploads is asserted continuously rather than reviewed.
 - **Every pull request costs one pack step.** A `cp -a` of the shipped tree, a prune, a `tar` and a `gzip`, in a job
   that has already built the frontend.
-- **The check starts nothing, and that is a wide blind spot.** It reads names, modes and digests. An archive whose
-  `dist/index.js` is present and corrupt passes it and fails on a device. What would close it is a run, which needs a
-  Steam and a machine this repository's CI does not have.
-- **`REQUIRED_FILES` is a second list beside the packager's `SHIPPED`, and they can disagree.** That is the point: one
-  says what is packed, the other what an install starts from, and folding either into the other would make the gate
-  agree with the packager by construction. The cost is that a path the installer needs and nobody listed is missing from
-  both sides with nothing failing.
+- **The check starts nothing, and that is a wide blind spot.** What it does read, and what that leaves unseen, is stated
+  in `scripts/check_release_tarball.py`'s own docstring. What would close it is a run, which needs a Steam and a machine
+  this repository's CI does not have.
+- **`REQUIRED_FILES` is a second list beside the packager's `SHIPPED`, and they can disagree.** That is deliberate, and
+  `scripts/check_release_tarball.py` states why at that list.
 
 ## Alternatives considered
 
@@ -76,7 +74,8 @@ depend on which run produced them rather than on the commit, and the wiring — 
 workflow — is more machinery than a checkout and a build. A tag that builds reproducibly from itself needs none of it.
 
 **Let `release.yml` do its own packaging.** Rejected for the reason decision 1 exists: a second place that decides the
-layout is a second layout, which is precisely what ADR-0033 and ADR-0035 were both about.
+layout is a second layout — the thing ADR-0033 pinned to one place, and a step of exactly the kind ADR-0035 removed from
+this workflow outright.
 
 ## Related
 
