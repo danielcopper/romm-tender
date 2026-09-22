@@ -152,10 +152,10 @@ TEXT
 LOGO_RUN_SEPARATOR='|'
 LOGO_ICON_WIDTH=28
 LOGO_ASCII_WIDTH=28
-LOGO_RING_RGB='174;198;218'
+LOGO_RING_RGB='146;183;227'
 LOGO_BUTTON_RGB='221;152;128'
 LOGO_DISC_RGB='146;183;227'
-LOGO_RING_256=152
+LOGO_RING_256=110
 LOGO_BUTTON_256=174
 LOGO_DISC_256=110
 LOGO_ICON_TRUECOLOR=(
@@ -267,10 +267,38 @@ terminal_width() {
     printf '%s\n' "$width"
 }
 
-# What the icon beside the text needs: the icon, the gap, and the longest line
-# of the block. Under this the icon goes above the text instead.
-WIDE_ENOUGH=94
 LOGO_GAP="    "
+
+# How many columns a line takes up, with the escape sequences left out. The text
+# block is styled, so its strings are longer than they look — measured raw, a
+# nine-character bold marker reads as nine columns of text that is not there.
+visible_width() {
+    local rest="$1" seen=""
+    while :; do
+        seen="$seen${rest%%$'\033'*}"
+        case "$rest" in
+            *$'\033'*) ;;
+            *) break ;;
+        esac
+        rest="${rest#*$'\033'}"
+        rest="${rest#*m}"
+    done
+    printf '%s\n' "${#seen}"
+}
+
+# How wide a terminal has to be for the text to sit BESIDE the art rather than
+# under it: the art, the gap, and the longest line the block actually came out
+# at. Measured rather than written down, because one of those lines carries
+# $CODE and a hand install into a deep tree makes it longer than any constant
+# would have guessed.
+wide_enough_for() {
+    local longest=0 line width
+    for line in "$@"; do
+        width="$(visible_width "$line")"
+        [ "$width" -le "$longest" ] || longest="$width"
+    done
+    printf '%s\n' "$(($(art_width) + ${#LOGO_GAP} + longest))"
+}
 
 # Every escape this script writes goes through these two, so a run that may not
 # use colour writes none at all rather than writing them where nobody looks.
@@ -433,7 +461,7 @@ greeter() {
 
     local width
     width="$(art_width)"
-    if [ "$(terminal_width)" -lt "$WIDE_ENOUGH" ]; then
+    if [ "$(terminal_width)" -lt "$(wide_enough_for "${text[@]}")" ]; then
         for line in "${art[@]}"; do
             print_art_row "$line"
             echo
@@ -1402,7 +1430,7 @@ do_uninstall() {
     printf '  %-34s %s\n' "$(tilde "$HOME/romm-tender-recovery")" "recovery bundles, if you made any"
     printf '  %-34s %s' "RetroDECK's own folders" "your games, saves and BIOS files"
     reset_style
-    printf '\n' 
+    printf '\n'
 }
 
 # The marker is removed only where a note says this side created it AND nothing

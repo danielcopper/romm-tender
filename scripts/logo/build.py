@@ -234,10 +234,11 @@ STORE_IMAGE = ("logo-1024.png", "assets/store_image.png")
 def build_terminal(out: pathlib.Path) -> None:
     """The mark as terminal text, which `install.sh` prints before it does anything.
 
-    Rasterises nothing itself — it reads the mark's own shipped PNG, so a run
-    that changed the mark has to build the static files before this one to see
-    the change. Written here as well as installed so the two renderings can be
-    looked at without opening the script that carries them.
+    Draws the mark itself — `gen.standalone` in the terminal's own pose, through
+    `rsvg-convert` — rather than reading a shipped raster, so it needs no other
+    build step to have run first and a change to the mark reaches it directly.
+    Written here as well as installed so the drawings can be looked at without
+    opening the script that carries them.
     """
     out.mkdir(parents=True, exist_ok=True)
     block = out / "installer-logo.sh"

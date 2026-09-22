@@ -333,6 +333,16 @@ def _screen(transcript: str) -> str:
     return "\n".join(line.rstrip() for line in rows)
 
 
+def _icon_escapes(transcript: str) -> str:
+    """Everything the run wrote before the warning, which is where the icon is.
+
+    The rows after it carry escapes of their own — the marks, the success line —
+    and those are coloured whatever the icon is, so a test that asked the whole
+    transcript would be answering about them.
+    """
+    return transcript.split("Coming from the Decky plugin?", 1)[0]
+
+
 def _block_rows(name: str) -> list[str]:
     """One generated array's rows, as install.sh carries them.
 
@@ -1242,9 +1252,15 @@ class TestHowTheRunLooks:
     """The greeter and the four rows, which only a terminal ever sees whole."""
 
     def test_a_wide_terminal_puts_the_icon_beside_the_text(self, machine):
-        """Half-blocks, and the text block on the same lines as the drawing."""
+        """Half-blocks, and the text block on the same lines as the drawing.
+
+        Wide on purpose: the block's longest line carries `$CODE`, and these
+        runs put it under a `tmp_path` whose name is longer than any real
+        install root. The script measures that line rather than assuming one,
+        so the terminal here has to be wider than a real one would need.
+        """
         _code, output = machine.on_a_terminal(
-            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="110", COLORTERM="truecolor"
+            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="160", COLORTERM="truecolor"
         )
 
         screen = _screen(output)
@@ -1258,7 +1274,7 @@ class TestHowTheRunLooks:
     def test_the_text_is_centred_against_the_icon(self, machine):
         """Six lines against thirteen: hung from the top they read as fallen off it."""
         _code, output = machine.on_a_terminal(
-            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="110", COLORTERM="truecolor"
+            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="160", COLORTERM="truecolor"
         )
 
         screen = _screen(output).splitlines()
@@ -1279,10 +1295,30 @@ class TestHowTheRunLooks:
         assert icon_at < title_at
         assert "TENDER" not in screen[icon_at]
 
+    def test_a_truecolor_terminal_gets_the_24_bit_icon(self, machine):
+        """The two arrays draw the same glyphs, so only the escapes tell them apart."""
+        _code, output = machine.on_a_terminal(
+            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="160", COLORTERM="truecolor"
+        )
+
+        icon = _icon_escapes(output)
+        assert "38;2;" in icon
+        assert "38;5;" not in icon
+
+    def test_a_terminal_that_did_not_say_so_gets_the_256_colour_icon(self, machine):
+        """`COLORTERM` is the only thing that says a terminal takes 24-bit colour."""
+        _code, output = machine.on_a_terminal(
+            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="160"
+        )
+
+        icon = _icon_escapes(output)
+        assert "38;5;" in icon
+        assert "38;2;" not in icon
+
     def test_a_terminal_with_no_utf8_gets_the_ascii_drawing(self, machine):
         """Half-blocks would be replacement characters, which is worse than no art."""
         _code, output = machine.on_a_terminal(
-            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="110", LANG="C"
+            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="160", LANG="C"
         )
 
         screen = _screen(output)
@@ -1294,7 +1330,7 @@ class TestHowTheRunLooks:
     def test_no_colour_leaves_the_icon_out_altogether(self, machine):
         """The half-blocks carry the mark in COLOUR; without it they are a grey slab."""
         _code, output = machine.on_a_terminal(
-            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="110", NO_COLOR="1"
+            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="160", NO_COLOR="1"
         )
 
         assert "\033[" not in output
@@ -1316,7 +1352,7 @@ class TestHowTheRunLooks:
     def test_the_greeter_says_what_the_run_will_do(self, machine):
         """Four keys in one column, and the program's real root rather than a literal."""
         _code, output = machine.on_a_terminal(
-            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="110", COLORTERM="truecolor"
+            "--from", str(_build_tarball(machine.tmp_path)), answer="y", COLUMNS="160", COLORTERM="truecolor"
         )
 
         screen = _screen(output)
@@ -1396,6 +1432,29 @@ class TestTheClosingLine:
 
         status = next(line for line in output.splitlines() if "Status" in line)
         assert status.startswith("\033[2m")
+
+
+class TestTheOtherTwoModes:
+    """Neither installs anything, so neither lists what an install would put where."""
+
+    def test_uninstall_says_what_it_is_about_to_do(self, machine):
+        machine.state.mkdir(parents=True, exist_ok=True)
+        _code, output = machine.on_a_terminal("--uninstall", COLUMNS="160", COLORTERM="truecolor")
+
+        screen = _screen(output)
+        assert _icon_rows()[3] in screen, "the mark is not drawn"
+        assert "TENDER" in screen
+        assert "Removing the service and the program, and keeping your data." in screen
+        assert "Install to" not in screen, "an uninstall lists what an install would do"
+
+    def test_disable_says_what_it_is_about_to_do(self, machine):
+        _code, output = machine.on_a_terminal("--disable", COLUMNS="160", COLORTERM="truecolor")
+
+        screen = _screen(output)
+        assert _icon_rows()[3] in screen, "the mark is not drawn"
+        assert "TENDER" in screen
+        assert "Stopping the service and leaving everything installed." in screen
+        assert "Install to" not in screen
 
 
 class TestWhatTheRunSaysAboutSteam:

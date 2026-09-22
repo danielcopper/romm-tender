@@ -50,7 +50,16 @@ def main() -> int:
 
     stale = []
     current = GENERATED.read_text(encoding="utf-8")
-    if terminal.replace_in(current) != current:
+    try:
+        rewritten = terminal.replace_in(current)
+    except terminal.MarkersMissing as missing:
+        print(
+            f"FAIL: {GENERATED.relative_to(REPO)} carries no block for the mark to go in.\n"
+            f"      Put the two markers back — the first is `{missing}` — and re-run\n"
+            "      `python3 scripts/logo/build.py --install --terminal`."
+        )
+        return 1
+    if rewritten != current:
         stale.append(f"the generated block in {GENERATED.relative_to(REPO)}")
     for destination, render in terminal.WORDMARK_FILES:
         if not destination.exists() or destination.read_text(encoding="utf-8") != render():

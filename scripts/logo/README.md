@@ -68,9 +68,9 @@ is a different dark.
 
 `scripts/check_generated_installer_logo.py` regenerates the block and both wordmark files and fails on any difference.
 
-Everything else ships twice except the lockupEverything else ships twice except the lockup and `store_image.png`, which
-land once. The lockup is the README's banner, and the docs site draws its own header from the bare mark; nothing renders
-`store_image.png` at all, so `assets/` is the only place it needs to be.
+Everything else ships twice except the lockup and `store_image.png`, which land once. The lockup is the README's banner,
+and the docs site draws its own header from the bare mark; nothing renders `store_image.png` at all, so `assets/` is the
+only place it needs to be.
 
 Each lockup ships in two variants because one cannot serve both grounds: the mark's ink falls to roughly 1.3:1 against
 GitHub's dark canvas, so the dark variant sets the wordmark in the disc's blue instead. The README chooses between them
