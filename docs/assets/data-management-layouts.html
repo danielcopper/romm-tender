@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tender Data Management Layouts</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --bg: #eef0f3; --surface: #ffffff; --ink: #1b2027; --muted: #5b6470; --line: #d5d9df;
+    --line-strong: #b9c0c9; --mark: #c4731a; --mark-ink: #ffffff; --chip: #e3e7ec;
+    --chip-on: #1b2027; --chip-on-ink: #ffffff; --rec: #2b6a3e; --rec-bg: #e6f2ea; --no: #b3401e;
+    --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    --font-mock: "Motiva Sans", "Noto Sans", "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151a; --surface: #1a1e25; --ink: #e4e8ee; --muted: #9aa3ae; --line: #2a3038;
+      --line-strong: #3a424c; --mark: #d98a2e; --mark-ink: #12151a; --chip: #262c35;
+      --chip-on: #e4e8ee; --chip-on-ink: #12151a; --rec: #8fd3a5; --rec-bg: #1c2f23; --no: #e0865f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151a; --surface: #1a1e25; --ink: #e4e8ee; --muted: #9aa3ae; --line: #2a3038;
+    --line-strong: #3a424c; --mark: #d98a2e; --mark-ink: #12151a; --chip: #262c35;
+    --chip-on: #e4e8ee; --chip-on-ink: #12151a; --rec: #8fd3a5; --rec-bg: #1c2f23; --no: #e0865f;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font-ui); }
+  button { font: inherit; color: inherit; }
+  button:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+
+  .top { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; padding: 18px 28px;
+         border-bottom: 1px solid var(--line); background: var(--surface); position: sticky; top: 0; z-index: 5; }
+  .top h1 { margin: 0; font-size: 17px; font-weight: 600; }
+  .top h1 small { font-family: var(--font-mono); font-weight: 400; color: var(--muted); margin-left: 10px; font-size: 12px; }
+  .switch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .switch .lab { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; }
+  .chip { border: 1px solid var(--line-strong); background: var(--chip); border-radius: 3px; padding: 4px 10px; font-size: 13px; cursor: pointer; }
+  .chip[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-ink); border-color: var(--chip-on); }
+  .chip .rec { font-family: var(--font-mono); font-size: 10px; margin-left: 6px; color: var(--rec); letter-spacing: .06em; }
+  .chip[aria-pressed="true"] .rec { color: inherit; opacity: .75; }
+
+  main { padding: 26px 28px 80px; max-width: 1180px; }
+  h2 { margin: 0 0 4px; font-size: 22px; font-weight: 600; text-wrap: balance; }
+  .sub { margin: 0 0 18px; color: var(--muted); max-width: 74ch; }
+  h3 { margin: 0 0 8px; font-size: 13px; font-family: var(--font-mono); letter-spacing: .06em;
+       text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  h4 { margin: 26px 0 6px; font-size: 15px; font-weight: 600; }
+
+  .stage { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 4px; background: #0e1116; }
+  .caption { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 8px 0 26px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .variant { display: none; }
+  .variant.on { display: block; }
+
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px 36px; margin-bottom: 26px; }
+  .notes ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .notes ol > li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; max-width: 62ch; }
+  .notes ol > li p { margin: 0; }
+  .notes ul { margin: 0; padding-left: 18px; max-width: 62ch; display: grid; gap: 6px; }
+  .mk { width: 20px; height: 20px; border-radius: 50%; background: var(--mark); color: var(--mark-ink);
+        font: 600 11px/20px var(--font-mono); text-align: center; margin-top: 2px; }
+  .recbox { border-left: 3px solid var(--rec); background: var(--rec-bg); padding: 10px 14px; border-radius: 0 3px 3px 0; max-width: 66ch; margin-bottom: 26px; }
+  .recbox b { color: var(--rec); font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em;
+              text-transform: uppercase; display: block; margin-bottom: 4px; font-weight: 500; }
+
+  .facts { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 16px 20px; margin-bottom: 26px; max-width: 900px; }
+  .facts dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 20px; }
+  .facts dt { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .facts dd { margin: 0; }
+
+  .cmpwrap { overflow-x: auto; margin-bottom: 26px; }
+  .cmp { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); font-size: 14px; min-width: 720px; }
+  .cmp th, .cmp td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .cmp th { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  .cmp td.y { color: var(--rec); } .cmp td.n { color: var(--no); }
+
+  /* ---------- the Steam mock ---------- */
+  .deck { position: absolute; top: 0; left: 0; transform-origin: 0 0; overflow: hidden;
+          background: radial-gradient(900px 520px at 24% 20%, #262c39, #0e1116 70%);
+          --p: #23262e; --p2: #1a1d23; --t: #dcdedf; --mu: #8b929a; --ln: rgba(255,255,255,.07);
+          --ln2: rgba(255,255,255,.14); --blue: #1a9fff; --ok: #59bf40; --warn: #f0a030; --dng: #e8686a;
+          --fill: rgba(255,255,255,.08); --fill2: rgba(255,255,255,.14);
+          font-family: var(--font-mock); color: var(--t); font-size: 14px; line-height: 1.35; }
+  .deck::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 80px; background: #0b0d11; }
+  .deck::after { content: "95 %   13:28"; position: absolute; top: 28px; right: 24px; font: 600 15px/1 var(--font-mock); color: #dcdedf; }
+  .bgtile { position: absolute; border-radius: 6px; background: rgba(255,255,255,.035); }
+  .qam { position: absolute; top: 80px; right: 0; bottom: 0; width: 854px; display: flex; box-shadow: -12px 0 40px rgba(0,0,0,.45); }
+  .rail { width: 48px; background: var(--p2); display: flex; flex-direction: column; align-items: center; padding-top: 14px; gap: 16px; flex: none; }
+  .rail i { width: 18px; height: 18px; border: 2px solid #5a6270; border-radius: 4px; display: block; }
+  .rail i.c { border-radius: 50%; }
+  .rail i.on { border-color: #fff; background: rgba(255,255,255,.15); }
+  .content { flex: 1; min-width: 0; background: var(--p); display: flex; flex-direction: column; overflow: hidden; }
+  .dtitle { height: 34px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 600; font-size: 15px; border-bottom: 1px solid var(--ln); color: #fff; }
+  .dtitle .ar { color: var(--mu); font-size: 18px; line-height: 1; }
+  .phead { display: flex; align-items: center; gap: 12px; padding: 7px 16px 3px; flex: none; }
+  .back { background: var(--fill); padding: 4px 10px; border-radius: 2px; font-size: 13px; color: #fff; }
+  .ptitle { font-size: 17px; font-weight: 600; color: #fff; }
+
+  .cols { display: grid; gap: 16px; padding: 8px 16px 10px; flex: 1; min-height: 0; }
+  .cols.ab { grid-template-columns: minmax(0, 1fr) 270px; }
+  .cols.one { grid-template-columns: minmax(0, 1fr); }
+  .cols.ld { grid-template-columns: 264px minmax(0, 1fr); }
+  .list, .pane { overflow: hidden; min-height: 0; position: relative; }
+  .fade { position: absolute; left: 0; right: 0; bottom: 0; height: 26px; background: linear-gradient(transparent, var(--p)); pointer-events: none; }
+  .grp { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--mu); padding: 6px 0 3px; }
+  .lrow { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-bottom: 1px solid var(--ln); }
+  .lrow .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lrow .ct { font-size: 11px; font-variant-numeric: tabular-nums; flex: none; color: var(--mu); }
+  .lrow.sel { background: var(--fill2); outline: 2px solid #fff; outline-offset: -2px; border-radius: 2px; }
+  .sec-t { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--mu); padding: 10px 0 3px; display: flex; align-items: center; gap: 8px; }
+  .sec-t:first-child { padding-top: 2px; }
+  .sec-t .sp { margin-left: auto; letter-spacing: 0; text-transform: none; font-size: 12px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--ln); }
+  .row .val { color: var(--mu); font-variant-numeric: tabular-nums; text-align: right; display: flex; align-items: center; gap: 8px; flex: none; }
+  .row .val.t { color: var(--t); }
+  .desc { font-size: 12px; color: var(--mu); margin-top: 1px; }
+  .tg { width: 34px; height: 18px; border-radius: 9px; background: rgba(255,255,255,.22); position: relative; flex: none; }
+  .tg::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+  .tg.on { background: var(--blue); }
+  .tg.on::after { left: 18px; }
+  .btn { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--fill); padding: 6px 10px; border-radius: 2px; font-weight: 500; margin-top: 6px; color: #fff; font-size: 13px; }
+  .btn.dng { color: var(--dng); }
+  .btn.dis { color: var(--mu); }
+  .btn.foc { outline: 2px solid #fff; outline-offset: -2px; background: var(--fill2); }
+  .btn .ar { color: var(--mu); }
+  .btns { display: flex; gap: 6px; margin-top: 6px; }
+  .btns .btn { flex: 1; justify-content: center; margin: 0; }
+  .btn.sm { padding: 3px 8px; font-size: 12px; margin: 0; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tbl th { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--mu); text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--ln2); font-weight: 500; }
+  .tbl td { padding: 5px 6px; border-bottom: 1px solid var(--ln); vertical-align: middle; font-variant-numeric: tabular-nums; }
+  .tbl td.n, .tbl th.n { text-align: right; }
+  .tbl tr.sel td { background: var(--fill2); }
+  .tbl tr.sel td:first-child { box-shadow: inset 3px 0 0 #fff; }
+  .tbl tr.tot td { border-top: 1px solid var(--ln2); border-bottom: 0; }
+  .tbl.compact td { padding: 2px 6px; font-size: 12px; line-height: 1.25; }
+  .tbl.compact th { padding: 3px 6px; }
+  .tbl.compact .bar { height: 4px; margin: 3px 0 0; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .mu { color: var(--mu); } .dngt { color: var(--dng); }
+  .m { display: inline-block; width: 17px; height: 17px; border-radius: 50%; background: #c4731a; color: #fff;
+      font: 600 10px/17px var(--font-mono); text-align: center; vertical-align: middle; margin-left: 6px; flex: none; }
+  .notice { background: rgba(240,160,48,.10); border-left: 2px solid var(--warn); padding: 6px 10px; border-radius: 0 2px 2px 0; }
+  .notice .t { font-weight: 600; color: #fff; }
+  .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); margin: 8px 0 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 38%; background: var(--blue); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+</style>
+<style>
+  /* the tab row — a wide page may carry one; Sync did not, Library does */
+  .tabs { display: flex; align-items: center; gap: 16px; padding: 4px 16px 0; border-bottom: 1px solid var(--ln2); flex: none; }
+  .tab { padding: 6px 2px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--mu); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.on { color: #fff; border-color: #fff; }
+  .bump { font-size: 10px; padding: 1px 7px; border: 1px solid rgba(255,255,255,.4); border-radius: 10px; color: #c7cbd1; }
+  .bump.r { margin-left: auto; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--ok); flex: none; }
+  .dot.w { background: var(--warn); } .dot.r { background: var(--dng); } .dot.g { background: #6b7280; }
+  .field { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,.25); border: 1px solid var(--ln2); border-radius: 2px; padding: 5px 8px; color: var(--mu); font-size: 12px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .chp { font-size: 12px; padding: 2px 8px; border-radius: 12px; background: var(--fill); color: var(--t); }
+  .chp.on { background: #fff; color: #1a1d23; font-weight: 600; }
+  .inl { background: rgba(255,255,255,.045); border-left: 2px solid var(--blue); padding: 6px 10px; border-radius: 0 2px 2px 0; }
+  .recbox { border-left: 3px solid var(--rec); background: var(--rec-bg); padding: 10px 14px; border-radius: 0 3px 3px 0; max-width: 66ch; margin-bottom: 26px; }
+  .recbox b { color: var(--rec); font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em;
+              text-transform: uppercase; display: block; margin-bottom: 4px; font-weight: 500; }
+  .tgrow { display: flex; align-items: flex-start; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--ln); }
+  .tgrow .lb { flex: 1; min-width: 0; }
+  .bottombar { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--ln2); padding: 6px 16px 8px; margin-top: 0; flex: none; }
+  .bottombar .sp { margin-left: auto; display: flex; gap: 6px; }
+
+  /* a Steam dialog over the whole screen — 720 px wide, 76 vh tall */
+  .dim { position: absolute; inset: 0; background: rgba(0,0,0,.55); }
+  .modal { position: absolute; left: 67px; top: 64px; width: 720px; height: 406px; background: var(--p);
+           border-radius: 4px; box-shadow: 0 24px 70px rgba(0,0,0,.65); display: flex; flex-direction: column; overflow: hidden; }
+  .modal .mbody { flex: 1; min-height: 0; overflow: hidden; padding: 14px 18px 0; position: relative; }
+  .mtitle { font-size: 19px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Tender Data Management Layouts <small>#1817 · panel 854 px wide, 454 px tall on the Deck</small></h1>
+  <div class="switch" role="group" aria-label="Layout">
+    <span class="lab">PAGE</span>
+    <button class="chip" data-v="a" aria-pressed="true">A · a menu of operations</button>
+    <button class="chip" data-v="b" aria-pressed="false">B · an inventory<span class="rec">RECOMMENDED</span></button>
+    <button class="chip" data-v="c" aria-pressed="false">C · one table, no menu</button>
+    <button class="chip" data-v="d" aria-pressed="false">D · no page at all</button>
+  </div>
+</header>
+
+<main>
+
+  <div class="facts">
+    <dl>
+      <dt>What is here</dt><dd>Five destructive or janitorial operations that the narrow panel kept in a "Danger Zone": remove Tender's shortcuts, uninstall downloaded ROM files, delete orphaned grid artwork, remove non-Steam games Tender never added, and clean up games RomM no longer has.</dd>
+      <dt>What went wrong in the first three drafts</dt><dd>They all asked <em>how do five operations sit in a menu</em>, and every grouping needed a name for a category that only existed on screen — <em>pick what goes</em>, <em>bulk actions</em>, <em>remove a whole kind</em>. A category nobody can name is not a category. The pages below ask a different question: <strong>what does this page SHOW, and what are its rows?</strong></dd>
+      <dt>Already settled</dt><dd>The review of the removed-games cleanup stays a <strong>dialog</strong> (up to 720 × 406 — bigger in both axes than a detail pane's 530 × ~364), redrawn with the options in two columns, a real table, and the run controls pinned at the bottom. That decision is independent of the four shapes below: each of them opens the same dialog.</dd>
+      <dt>Navigation</dt><dd>Focus selects in a list, so a scan is always a press and never a selection. B leaves the page. A row must be focusable to be reachable, and a region scrolls only by moving focus.</dd>
+    </dl>
+  </div>
+
+  <h3>What the page can say the moment it opens</h3>
+  <p class="sub" style="max-width:74ch">Three of the four shapes want numbers. This is what exists today, and it is the part that decides how honest a page can be on arrival rather than after a press.</p>
+  <div class="cmpwrap">
+  <table class="cmp">
+    <thead><tr><th>Number</th><th>Today</th><th>What it would take</th></tr></thead>
+    <tbody>
+      <tr><td>Shortcuts Tender created</td><td class="y">free</td><td><code>total_shortcuts</code> — Main already reads it every visit</td></tr>
+      <tr><td>Non-Steam games not added by Tender</td><td class="y">free</td><td>a scan of Steam's own shortcut store, in the frontend, as today</td></tr>
+      <tr><td>Downloaded ROM files — count</td><td class="n">does not exist</td><td>a row count over the installs table: cheap, but a new callable</td></tr>
+      <tr><td>Downloaded ROM files — size on disk</td><td class="n">does not exist</td><td>a walk of every install; the cleanup measures per ROM today and that is the slow part of its preview</td></tr>
+      <tr><td>Orphaned grid images</td><td>a press</td><td>the backend dry run that is the confirm's first tap today</td></tr>
+      <tr><td>Versions gone from RomM</td><td>a press</td><td>the server scan — a round trip per open would be wrong</td></tr>
+      <tr><td>Recovery bundles and their size</td><td class="n">partly</td><td>the recovery root and free space come with the preview; a bundle listing would be new</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h4>Settled first, because every shape below opens it</h4>
+  <div class="stage" data-w="854" data-h="534"><div class="deck">
+    <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
+    <div class="qam">
+      <div class="rail"><i></i><i class="c"></i><i></i><i class="c"></i><i></i><i class="on"></i></div>
+      <div class="content">
+        <div class="dtitle"><span class="ar">‹</span> Tender</div>
+        <div class="phead"><span class="back">‹ Back</span><span class="ptitle">Data Management</span></div>
+        <div class="cols ld"><div class="list"></div><div class="pane"></div></div>
+      </div>
+    </div>
+    <div class="dim"></div>
+    <div class="modal">
+      <div class="mbody">
+        <div class="mtitle">Review removed RomM games</div>
+        <div class="desc" style="margin-bottom:6px">12 kept versions are no longer on your RomM server. Nothing is removed until each one is checked against the server again — only entries RomM confirms as gone can be deleted.</div>
+        <div class="two" style="gap:24px">
+          <div>
+            <div class="tgrow"><span class="tg on"></span><span class="lb">Repoint vanished shortcuts to the live default</span></div>
+            <div class="tgrow"><span class="tg on"></span><span class="lb">Remove confirmed rows and installed content</span></div>
+          </div>
+          <div>
+            <div class="tgrow"><span class="tg"></span><span class="lb">Remove fully vanished games, with the shortcut</span></div>
+            <div class="tgrow"><span class="tg on"></span><span class="lb">Create recovery bundle</span></div>
+          </div>
+        </div>
+        <table class="tbl compact" style="margin-top:8px">
+          <thead><tr><th>Game</th><th>Platform</th><th>Verdict</th><th class="n">Installed</th><th class="n">Keep a copy</th></tr></thead>
+          <tbody>
+            <tr class="sel"><td>Chrono Cross (Disc 1)</td><td class="mu">psx</td><td class="dngt">Gone from RomM</td><td class="n">612 MB</td><td class="n"><span class="tg on" style="display:inline-block"></span></td></tr>
+            <tr><td>Chrono Cross (Disc 2)</td><td class="mu">psx</td><td class="dngt">Gone from RomM</td><td class="n">608 MB</td><td class="n"><span class="tg on" style="display:inline-block"></span></td></tr>
+            <tr><td>Densetsu no Stafy 3</td><td class="mu">gba</td><td class="dngt">Gone from RomM</td><td class="n">—</td><td class="n mu">—</td></tr>
+            <tr><td>Panzer Dragoon Saga (Disc 1)</td><td class="mu">saturn</td><td class="warn">One of 4 versions</td><td class="n">441 MB</td><td class="n"><span class="tg" style="display:inline-block"></span></td></tr>
+            <tr><td>Panzer Dragoon Saga (Disc 2)</td><td class="mu">saturn</td><td class="warn">One of 4 versions</td><td class="n">438 MB</td><td class="n"><span class="tg" style="display:inline-block"></span></td></tr>
+            <tr><td>Radiant Silvergun</td><td class="mu">saturn</td><td class="dngt">Gone from RomM</td><td class="n">—</td><td class="n mu">—</td></tr>
+            <tr><td>Tactics Ogre (rev 1)</td><td class="mu">psx</td><td class="warn">One of 2 versions</td><td class="n">318 MB</td><td class="n"><span class="tg" style="display:inline-block"></span></td></tr>
+          </tbody>
+        </table>
+        <div class="fade"></div>
+      </div>
+      <div class="bottombar">
+        <span class="desc" style="margin:0">Keeping 1.2 GB · 61.4 GB free at the target <span class="btn sm" style="display:inline-flex;margin-left:8px">Refresh</span></span>
+        <span class="sp"><span class="btn sm">Cancel</span><span class="btn sm dng foc">Start cleanup</span></span>
+      </div>
+    </div>
+  </div></div>
+  <div class="caption"><span>Dialog 720 × 406, seven candidate rows</span><span>Options two columns · table with a header · run controls pinned</span><span>B closes it, Steam's own cancel — no new rule</span></div>
+
+  <!-- ============ A ============ -->
+  <section class="variant on" id="v-a">
+    <h2>A · A menu of operations</h2>
+    <p class="sub">The shape of the last three drafts, with the grouping dropped: five rows, each naming what it does, in the order you asked for. It is the honest version of the menu idea — no headings, because no heading could be named.</p>
+
+    <div class="stage" data-w="854" data-h="534"><div class="deck">
+      <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
+      <div class="qam">
+        <div class="rail"><i></i><i class="c"></i><i></i><i class="c"></i><i></i><i class="on"></i></div>
+        <div class="content">
+          <div class="dtitle"><span class="ar">‹</span> Tender</div>
+          <div class="phead"><span class="back">‹ Back</span><span class="ptitle">Data Management</span></div>
+          <div class="cols ld">
+            <div class="list">
+              <div class="lrow"><span class="nm">Remove all shortcuts</span><span class="ct">1 284</span></div>
+              <div class="lrow"><span class="nm">Uninstall all ROM files</span><span class="ct">—</span></div>
+              <div class="lrow"><span class="nm">Remove orphaned grid images</span><span class="ct">scan</span></div>
+              <div class="lrow"><span class="nm">Remove non-Steam games</span><span class="ct">63</span></div>
+              <div class="lrow sel"><span class="nm">Clean up removed RomM games</span><span class="ct warn">12</span></div>
+            </div>
+            <div class="pane">
+              <div class="ptitle" style="font-size:16px">Clean up removed RomM games</div>
+              <div class="desc" style="margin:2px 0 0">Versions your RomM server no longer holds. Each one is checked against the server again before anything goes, and a recovery bundle is sealed first.</div>
+              <div class="sec-t">Waiting</div>
+              <div class="row"><span>Gone from RomM</span><span class="val t">12 of 1 284 versions</span></div>
+              <div class="row"><span>Scanned</span><span class="val">4 minutes ago</span></div>
+              <div class="btn foc"><span>Review 12 versions</span><span class="ar">›</span></div>
+              <div class="btn"><span>Scan again</span><span class="ar">›</span></div>
+              <div class="sec-t">Last run</div>
+              <div class="row"><span>18 Sep, 21:04</span><span class="val t">7 removed · 0 problems</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="caption"><span>Five verbs in a column · pane 530 px</span><span>Entry focus lands on the first ROW, so nothing is armed by opening the page</span></div>
+
+    <div class="notes">
+      <div><h3>Notes</h3>
+        <ol>
+          <li><span class="mk">1</span><p><strong>Every row starts with a verb</strong>, so no heading has to carry one and no category has to be invented. Repetition is a feature on a page that deletes things.</p></li>
+          <li><span class="mk">2</span><p><strong>The count is what the button label used to carry</strong> — today's <em>Remove 63 Non-Steam Games</em> becomes a row that says 63, and the full sentence sits on the button in the pane.</p></li>
+        </ol>
+      </div>
+      <div><h3>What it costs</h3>
+        <ul>
+          <li><strong>The page shows nothing.</strong> It is five doors; you learn what is behind one by walking onto it. What Tender has actually put on this device — how many shortcuts, how much disk, how many leftovers — is never on screen at once, and that is the question a user opens this page with.</li>
+          <li>Two of the five rows say <em>scan</em> rather than a number, and in a menu of verbs that reads as a missing feature rather than as "nobody has looked yet".</li>
+          <li>It is a list of buttons wearing a list-and-detail layout: the pane exists to hold one button and a sentence.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ B ============ -->
+  <section class="variant" id="v-b">
+    <h2>B · An inventory</h2>
+    <p class="sub">Turn the page around. The rows are not operations but <strong>the things Tender has put on this device</strong> — shortcuts, ROM files, artwork, foreign shortcuts, versions the server no longer has. Each row is a population with a number; the pane says what that population is and offers what you can do with it. No category needs a name, because every row is already a thing.</p>
+
+    <h4>A population, and what you can do with it</h4>
+    <div class="stage" data-w="854" data-h="534"><div class="deck">
+      <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
+      <div class="qam">
+        <div class="rail"><i></i><i class="c"></i><i></i><i class="c"></i><i></i><i class="on"></i></div>
+        <div class="content">
+          <div class="dtitle"><span class="ar">‹</span> Tender</div>
+          <div class="phead"><span class="back">‹ Back</span><span class="ptitle">Data Management</span></div>
+          <div class="cols ld">
+            <div class="list">
+              <div class="lrow sel"><span class="nm">Steam shortcuts</span><span class="ct">1 284</span></div>
+              <div class="lrow"><span class="nm">Downloaded ROM files</span><span class="ct">214</span></div>
+              <div class="lrow"><span class="nm">Grid images</span><span class="ct">scan</span></div>
+              <div class="lrow"><span class="nm">Other non-Steam games</span><span class="ct">63</span></div>
+              <div class="lrow"><span class="dot w"></span><span class="nm">Gone from RomM</span><span class="ct warn">12</span></div>
+              <div class="lrow"><span class="nm">Recovery bundles</span><span class="ct">3</span></div>
+            </div>
+            <div class="pane">
+              <div class="ptitle" style="font-size:16px">Steam shortcuts</div>
+              <div class="desc" style="margin:2px 0 0">Every shortcut Tender put in your Steam library. Removing them leaves ROM files and saves untouched, and the next sync puts them back.</div>
+              <div class="sec-t">On this device</div>
+              <div class="row"><span>Created by Tender</span><span class="val t">1 284</span></div>
+              <div class="row"><span>In collections</span><span class="val">6 collections</span></div>
+              <div class="row"><span>Last written</span><span class="val">18 Sep, 21:04</span></div>
+              <div class="sec-t">Remove</div>
+              <div class="btn dng foc"><span>Remove all 1 284 shortcuts</span><span class="ar">›</span></div>
+              <div class="desc" style="margin-top:4px">Unavailable while a library sync is running.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="caption"><span>Rows are things, not verbs · the verb is on the button</span><span>The dot marks the one row that wants attention</span><span>Six rows — recovery bundles become visible for the first time</span></div>
+
+    <h4>The one row that is a condition rather than a possession</h4>
+    <div class="stage" data-w="854" data-h="534"><div class="deck">
+      <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
+      <div class="qam">
+        <div class="rail"><i></i><i class="c"></i><i></i><i class="c"></i><i></i><i class="on"></i></div>
+        <div class="content">
+          <div class="dtitle"><span class="ar">‹</span> Tender</div>
+          <div class="phead"><span class="back">‹ Back</span><span class="ptitle">Data Management</span></div>
+          <div class="cols ld">
+            <div class="list">
+              <div class="lrow"><span class="nm">Steam shortcuts</span><span class="ct">1 284</span></div>
+              <div class="lrow"><span class="nm">Downloaded ROM files</span><span class="ct">214</span></div>
+              <div class="lrow"><span class="nm">Grid images</span><span class="ct">scan</span></div>
+              <div class="lrow"><span class="nm">Other non-Steam games</span><span class="ct">63</span></div>
+              <div class="lrow sel"><span class="dot w"></span><span class="nm">Gone from RomM</span><span class="ct warn">12</span></div>
+              <div class="lrow"><span class="nm">Recovery bundles</span><span class="ct">3</span></div>
+            </div>
+            <div class="pane">
+              <div class="ptitle" style="font-size:16px">Gone from RomM</div>
+              <div class="desc" style="margin:2px 0 0">Versions this device still keeps that your RomM server no longer has. Each is checked against the server again before anything goes, and a recovery bundle is sealed first.</div>
+              <div class="sec-t">On this device</div>
+              <div class="row"><span>Versions gone</span><span class="val t">12 of 1 284</span></div>
+              <div class="row"><span>Of those, installed</span><span class="val">5 · 2.4 GB</span></div>
+              <div class="row"><span>Scanned</span><span class="val">4 minutes ago</span></div>
+              <div class="sec-t">Remove</div>
+              <div class="btn foc"><span>Review 12 versions</span><span class="ar">›</span></div>
+              <div class="btn"><span>Scan again</span><span class="ar">›</span></div>
+              <div class="sec-t">Last cleanup</div>
+              <div class="row"><span>18 Sep, 21:04</span><span class="val t">7 removed · 0 problems</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="caption"><span>Same pane shape as every other row: what it is, the numbers, then what you can do</span><span>Review opens the dialog</span></div>
+
+    <div class="notes">
+      <div><h3>Notes</h3>
+        <ol>
+          <li><span class="mk">1</span><p><strong>No category has to be named</strong>, and that is the point. Every row is a population — a thing you have — so the list needs neither headings nor a taxonomy. The failure of three naming attempts was the evidence that the rows were wrong, not the names.</p></li>
+          <li><span class="mk">2</span><p><strong>The page answers a question people actually arrive with</strong> — "what has this thing put on my Deck, and how much space is it using?" Deleting is then a consequence of what you see, not a menu you pick from blind.</p></li>
+          <li><span class="mk">3</span><p><strong>Recovery bundles become a row</strong>, and the moment they do it is obvious they need one: they are sealed copies that take disk and nothing in the panel lists them today. That the shape reveals a missing feature is a good sign about the shape.</p></li>
+          <li><span class="mk">4</span><p><strong>Rows that need a scan say so in place</strong>, and a scan stays a press — <em>Grid images</em> reads "scan" until you ask, and then it reads "118 orphaned of 3 402" forever after.</p></li>
+          <li><span class="mk">5</span><p><strong>"Other non-Steam games" reads right here</strong> where it never did in a menu: the list is the things on this device, and these are the ones Tender did not put there. The odd operation becomes an ordinary row.</p></li>
+        </ol>
+      </div>
+      <div><h3>What it costs</h3>
+        <ul>
+          <li><strong>Numbers the backend does not have.</strong> The ROM-file count is a new callable (cheap); the size on disk is a walk of every install, which is the slow part of the cleanup's preview today. Either the page states counts and not sizes, or the sizes arrive with their own scan.</li>
+          <li>One row is not a possession but a condition — <em>Gone from RomM</em>. It fits (it <em>is</em> a set of things this device holds), but it is the row most likely to want the notice treatment on Main as well.</li>
+          <li>More surface than a menu: six panes to write and test rather than five sentences and five buttons.</li>
+          <li>A row whose count is unknown and whose scan you never press stays a row that shows nothing — the menu's flaw, confined to one line instead of the page.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ C ============ -->
+  <section class="variant" id="v-c">
+    <h2>C · One table, no menu</h2>
+    <p class="sub">The same inventory, but the page <em>is</em> the table: five rows, all of them on screen, each with its count, the space it takes and its action. Nothing is selected, nothing is behind a pane — and the reviews open the dialog straight from the row.</p>
+
+    <div class="stage" data-w="854" data-h="534"><div class="deck">
+      <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
+      <div class="qam">
+        <div class="rail"><i></i><i class="c"></i><i></i><i class="c"></i><i></i><i class="on"></i></div>
+        <div class="content">
+          <div class="dtitle"><span class="ar">‹</span> Tender</div>
+          <div class="phead"><span class="back">‹ Back</span><span class="ptitle">Data Management</span></div>
+          <div class="cols one">
+            <div class="pane">
+              <div class="desc" style="margin:2px 0 6px">What Tender has put on this device, and what you can take back.</div>
+              <table class="tbl">
+                <thead><tr><th>On this device</th><th class="n">How many</th><th class="n">Space</th><th></th></tr></thead>
+                <tbody>
+                  <tr class="sel"><td>Steam shortcuts <div class="desc">Created by Tender · the next sync puts them back</div></td><td class="n">1 284</td><td class="n mu">—</td><td class="n"><span class="btn sm dng">Remove all</span></td></tr>
+                  <tr><td>Downloaded ROM files <div class="desc">Re-downloadable from RomM</div></td><td class="n">214</td><td class="n">128 GB</td><td class="n"><span class="btn sm dng">Uninstall all</span></td></tr>
+                  <tr><td>Grid images <div class="desc">Artwork of shortcuts that no longer exist</div></td><td class="n mu">—</td><td class="n mu">—</td><td class="n"><span class="btn sm">Scan</span></td></tr>
+                  <tr><td>Other non-Steam games <div class="desc">Not added by Tender — RetroDECK lives here</div></td><td class="n">63</td><td class="n mu">—</td><td class="n"><span class="btn sm">Review</span></td></tr>
+                  <tr><td>Gone from RomM <div class="desc warn">12 versions the server no longer has</div></td><td class="n warn">12</td><td class="n">2.4 GB</td><td class="n"><span class="btn sm foc">Review</span></td></tr>
+                </tbody>
+              </table>
+              <div class="fade"></div>
+            </div>
+          </div>
+          <div class="bottombar">
+            <span class="desc" style="margin:0">Recovery bundles: 3 · 4.1 GB in ~/romm-tender-recovery · 61.4 GB free</span>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="caption"><span>806 px · five rows and a footer, all above the fold</span><span>The action is in the row; the two reviews open the dialog</span><span>A row's second line is what the pane would have said</span></div>
+
+    <div class="notes">
+      <div><h3>Notes</h3>
+        <ol>
+          <li><span class="mk">1</span><p><strong>The whole footprint in one screen.</strong> No selection, no pane, no walking — the page is an answer rather than a menu, and the footer adds the one number nothing else shows (free space and what the recovery bundles take).</p></li>
+          <li><span class="mk">2</span><p><strong>The action column is the confirmation surface too</strong> — two-tap turns <em>Remove all</em> into <em>Confirm</em>, in place, which is how the platform detail's BIOS table already works.</p></li>
+        </ol>
+      </div>
+      <div><h3>What it costs</h3>
+        <ul>
+          <li><strong>Every explanation shrinks to one line under the name.</strong> Today's sentences — what a removal leaves behind, why the whitelist matters, that RetroDECK can be taken — do not fit, and this is the page where that text is the safety rail.</li>
+          <li><strong>A row with a button is one focus stop</strong>, so the row cannot also be a stop that reveals more. The detail has nowhere to go but a dialog, and then three of the five rows open dialogs.</li>
+          <li>It grows badly: a sixth and seventh population (recovery bundles, save files?) push the table under the fold, where the whole argument for this shape was that everything is visible.</li>
+          <li>It is the one shape that no other page in the panel uses — Sync's preview is a table, but it is a table of <em>one</em> kind of thing, not a page built as a table.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ D ============ -->
+  <section class="variant" id="v-d">
+    <h2>D · No page at all</h2>
+    <p class="sub">The most radical reading of "maybe the page is wrong": there is no Data Management page. Each operation moves to the page that owns the thing it touches, and the menu entry disappears. Drawn as two sketches, because the point is where things land rather than how they look.</p>
+
+    <h4>The cleanup goes to Sync — it is the sync's other direction</h4>
+    <div class="stage" data-w="854" data-h="534"><div class="deck">
+      <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
+      <div class="qam">
+        <div class="rail"><i></i><i class="c"></i><i></i><i class="c"></i><i></i><i class="on"></i></div>
+        <div class="content">
+          <div class="dtitle"><span class="ar">‹</span> Tender</div>
+          <div class="phead"><span class="back">‹ Back</span><span class="ptitle">Sync</span></div>
+          <div class="cols one">
+            <div class="pane">
+              <div class="btns" style="margin:2px 0 4px"><div class="btn sm">Check for changes</div><div class="btn sm">Sync now</div><div class="btn sm">Force full sync</div></div>
+              <div class="sec-t">Last run <span class="sp">18 Sep, 21:04 · 34 added, 7 updated</span></div>
+              <table class="tbl compact">
+                <thead><tr><th>Platform</th><th class="n">New</th><th class="n">Updated</th><th class="n">Removed</th></tr></thead>
+                <tbody>
+                  <tr><td>PlayStation</td><td class="n">12</td><td class="n">3</td><td class="n">—</td></tr>
+                  <tr><td>Saturn</td><td class="n">—</td><td class="n">1</td><td class="n warn">4</td></tr>
+                </tbody>
+              </table>
+              <div class="sec-t">Gone from RomM <span class="m">!</span></div>
+              <div class="notice" style="margin-top:2px"><span class="t">12 versions are no longer on your server</span><div class="desc">Checked again before anything is removed; a recovery bundle is sealed first.</div></div>
+              <div class="btns"><div class="btn foc">Review 12 versions</div><div class="btn">Scan again</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="caption"><span>Sketch — the Sync page as it is today, with the cleanup as its last section</span></div>
+
+    <h4>The bulk removals go to Library, beside the per-platform ones</h4>
+    <div class="stage" data-w="854" data-h="534"><div class="deck">
+      <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
+      <div class="qam">
+        <div class="rail"><i></i><i class="c"></i><i></i><i class="c"></i><i></i><i class="on"></i></div>
+        <div class="content">
+          <div class="dtitle"><span class="ar">‹</span> Tender</div>
+          <div class="phead"><span class="back">‹ Back</span><span class="ptitle">Library</span></div>
+          <div class="tabs"><span class="bump">L1</span><span class="tab on">Platforms</span><span class="tab">Collections</span><span class="bump r">R1</span></div>
+          <div class="cols ld">
+            <div class="list">
+              <div class="btns" style="margin:2px 0 4px"><div class="btn sm">Enable all</div><div class="btn sm">Disable all</div></div>
+              <div class="btns" style="margin:0 0 4px"><div class="btn sm dng">Remove all shortcuts</div><div class="btn sm dng">Uninstall all</div></div>
+              <div class="grp">Synced</div>
+              <div class="lrow sel"><span class="dot"></span><span class="nm">PlayStation</span><span class="tg on"></span></div>
+              <div class="lrow"><span class="dot w"></span><span class="nm">Saturn</span><span class="tg on"></span></div>
+              <div class="lrow"><span class="dot g"></span><span class="nm">SNES</span><span class="tg on"></span></div>
+            </div>
+            <div class="pane">
+              <div style="display:flex;align-items:baseline;gap:10px"><span class="ptitle" style="font-size:16px">PlayStation</span><span class="desc">132 on RomM · 128 in Steam</span></div>
+              <div class="sec-t">Emulator core</div>
+              <div class="btn"><span>Beetle PSX HW</span><span class="ar">›</span></div>
+              <div class="sec-t">Remove</div>
+              <div class="btns"><div class="btn dng">Remove 128 shortcuts</div><div class="btn dng">Delete save files</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <div class="caption"><span>Sketch — the two library-wide removals as the list header's "all" counterpart</span><span>Orphaned grid images and Non-Steam games would land in Settings</span></div>
+
+    <div class="notes">
+      <div><h3>Notes</h3>
+        <ol>
+          <li><span class="mk">1</span><p><strong>Every action next to the thing it acts on.</strong> The cleanup is what to do after the server changed, which is what the Sync page is about; the library-wide removals are the "all platforms" version of buttons Library already has.</p></li>
+          <li><span class="mk">2</span><p><strong>One page fewer</strong>, and the panel's menu loses an entry whose name never said what was inside it.</p></li>
+        </ol>
+      </div>
+      <div><h3>What it costs</h3>
+        <ul>
+          <li><strong>Destructive actions get scattered</strong> across three pages, and two of them land on pages people visit for ordinary work. "Where do I go to clean up?" stops having an answer.</li>
+          <li><strong>Two of the five have no home.</strong> Orphaned grid images and non-Steam games belong to no page in the panel — they would sit in Settings › Advanced, which is where things go to be lost.</li>
+          <li>It is a much larger change than #1817: Sync, Library, Settings, Main's menu and the register's "one home per action" table all move at once.</li>
+          <li>The register's rule that a notice names a condition and jumps to its home still needs a home to jump to — here the home is a section of another page, which is what Settings sections already do, so the rule survives. That is the one thing this shape does not break.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <h3>Side by side</h3>
+  <div class="cmpwrap">
+  <table class="cmp">
+    <thead><tr><th>&nbsp;</th><th>A · menu</th><th>B · inventory</th><th>C · one table</th><th>D · no page</th></tr></thead>
+    <tbody>
+      <tr><td>What a row is</td><td class="n">a button</td><td class="y">a thing you have</td><td class="y">a thing you have</td><td>—</td></tr>
+      <tr><td>Needs a category name</td><td class="y">no</td><td class="y">no</td><td class="y">no</td><td class="y">no</td></tr>
+      <tr><td>Shows the footprint</td><td class="n">never</td><td>one row at a time</td><td class="y">all at once</td><td class="n">never</td></tr>
+      <tr><td>Room for the safety text</td><td class="y">a pane</td><td class="y">a pane</td><td class="n">one line</td><td class="y">a pane</td></tr>
+      <tr><td>New backend reads</td><td class="y">none</td><td class="n">install count, sizes, bundles</td><td class="n">the same, and more visibly missing</td><td class="y">none</td></tr>
+      <tr><td>Fits the panel's shipped patterns</td><td class="y">yes</td><td class="y">yes</td><td class="n">new shape</td><td>partly</td></tr>
+      <tr><td>Size of the change</td><td class="y">#1817 as scoped</td><td>#1817 plus backend reads</td><td>#1817 plus backend reads</td><td class="n">four pages and the menu</td></tr>
+      <tr><td>Grows to a sixth thing</td><td class="y">a row</td><td class="y">a row</td><td class="n">pushes the table under the fold</td><td class="n">needs another home</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Open questions, whichever shape wins</h3>
+  <ul style="max-width:74ch">
+    <li><strong>Sizes or only counts.</strong> An inventory is far better with "128 GB" than with "214 files", and that number costs a walk of every install. It could arrive per row on a press, like the scans.</li>
+    <li><strong>Where a run in flight is announced.</strong> A cleanup runs for minutes; Main has a conditional slot and notice rows. The same decision in every shape.</li>
+    <li><strong>Recovery bundles.</strong> Three shapes above make them visible. Nothing in the panel lists or deletes them today — that is a new capability, and it is out of #1817's scope unless you want it in.</li>
+    <li><strong>Whether non-Steam games belongs to Tender at all.</strong> In B and C it reads as an ordinary row ("things on this device Tender did not add"). In A and D it stays the odd one out.</li>
+  </ul>
+
+</main>
+
+<script>
+  (function () {
+    var KEY = "tender-data-management-layouts-v2";
+    var state = { v: "a" };
+    try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
+    if (!document.getElementById("v-" + state.v)) state.v = "a";
+
+    function fit() {
+      document.querySelectorAll(".stage").forEach(function (s) {
+        if (!s.closest(".variant") || s.closest(".variant").classList.contains("on")) {
+          var w = s.clientWidth; if (!w) return;
+          var dw = Number(s.dataset.w), dh = Number(s.dataset.h);
+          var sc = Math.min(1, w / dw);
+          var deck = s.querySelector(".deck");
+          deck.style.width = dw + "px";
+          deck.style.height = dh + "px";
+          deck.style.transform = "scale(" + sc + ")";
+          s.style.height = Math.round(dh * sc) + "px";
+        }
+      });
+    }
+    function apply() {
+      document.querySelectorAll(".variant").forEach(function (el) { el.classList.toggle("on", el.id === "v-" + state.v); });
+      document.querySelectorAll(".chip[data-v]").forEach(function (c) { c.setAttribute("aria-pressed", String(c.dataset.v === state.v)); });
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+      fit();
+    }
+    document.querySelectorAll(".chip[data-v]").forEach(function (c) {
+      c.addEventListener("click", function () { state.v = c.dataset.v; apply(); window.scrollTo({ top: 0 }); });
+    });
+    if ("ResizeObserver" in window) new ResizeObserver(fit).observe(document.body);
+    window.addEventListener("resize", fit);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+    apply();
+  })();
+</script>
+
+</body>
+</html>

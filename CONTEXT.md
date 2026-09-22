@@ -912,6 +912,19 @@ The layout of a wide page whose entries each carry a detail: the list on the lef
 right. **Focus selects** — moving through the list changes the detail at once; A operates the control in the row (a sync
 toggle), never the selection. The two regions scroll independently. _Avoid_: master/detail, sidebar.
 
+### Inventory row (Data Management)
+
+A row on the **Data Management** page. It names a **population** — a set of things this device holds — and never an
+operation; which populations the page carries is decided in `docs/architecture/qam-panel.md`, not here. The row states
+that population's numbers and no verb: the verb lives on the button in the detail pane, which is what lets a row exist
+that offers no action at all (recovery bundles are listed there and deleted nowhere). **Gone from RomM is a population
+too** — the versions this device still keeps that the server no longer has — which is what lets it sit beside the others
+instead of being an errand; removing them is still a **Prune** (→ Unbind / stale / prune), and that word names the
+operation, never the row. A count that costs a server round trip or a backend scan is not fetched on arrival: the row
+reads `scan` until the reader asks for it. _Avoid_, as a name for one of these rows: operation, action (an **action
+token** is a different thing entirely), and **danger zone** — the narrow panel's name for the page, which described the
+risk rather than the contents.
+
 ### Preview
 
 The answer to "what would a sync change" — the delta the backend computes without applying it, holds for **30 minutes**,

@@ -413,7 +413,7 @@ does not say it owns its regions. A tabbed body gets none from the frame, and ne
 | Sync            | 854   | preview as a table, the run as a plan, Skip preview, Force Full Sync, Steam memory, session budget, last runs | as described; the import choice (#1364) is the one thing still to come            |
 | Library         | 854   | Platforms as list and detail (sync, core, BIOS files, removal); Collections as filter and list                | Platforms is built; Collections still carries the narrow page's controls and list |
 | Settings        | 854   | five sections, list and detail                                                                                | as described; RetroAchievements has no sign-in to hold yet (#1627)                |
-| Data Management | 854   | five library-wide operations, list and detail                                                                 | narrow; opens the cleanup in a modal                                              |
+| Data Management | 854   | six populations as list and detail — what this device holds, and what can be taken back                       | narrow; a Danger Zone of five operations, the cleanup in a modal                  |
 | Downloads       | 348   | the queue with its controls                                                                                   | unchanged                                                                         |
 
 `Page` is `"main" | "sync" | "library" | "settings" | "data" | "downloads"`. **System is gone** — its core picker and
@@ -509,18 +509,19 @@ Controller landed on Connections. A list opened with no section named loses noth
 row, which is what the fallback would have picked, or selects nothing and so declares nothing (the Library page's
 platforms, which additionally are tabbed, so Steam places that focus and the frame places none).
 
-**Data Management and Downloads are unmoved**, and declare nothing: each leads with its Back button, which is both the
-first stop and the first button, so the router's default already opens them there. Whatever the rule, the root it
-searches is the plugin's own content and nothing above it — under Decky, its panel title and the back arrow beside it
-are rendered outside that box, 34 px above it (the same inset whose bottom `WidePage`'s `ancestorOverhang` measures);
-behind Tender's own entry there is no such chrome at all, because Steam's tab group renders the panel directly — so no
-rule here could reach anyone else's. The declaration, the finder, the shared set of shapes and the `.focus()` +
-`gpfocus` pair are `frontend/src/utils/entryFocus.ts`. It is a second attribute rather than a second use of the wide
-frame's `OWNS_ENTRY_FOCUS_ATTR` because the two answer different questions: that one says WHO places entry focus — it
-tells the router to place none, because the frame places its own — and this one says WHERE, for whichever of them places
-it. **So a wide page carries both**, Settings being one: the root says "I place my own" and the list's selected row says
-"here". The router never reaches the second, because it looks for `OWNS_ENTRY_FOCUS_ATTR` first and, finding it, sets no
-timer at all.
+**Downloads is unmoved** and declares nothing: it leads with its Back button, which is both the first stop and the first
+button, so the router's default already opens it there. **Data Management needs no declaration of its own** — it is a
+wide page, so the frame places entry focus in the body by the rule above, and on its list that is the first row.
+Whatever the rule, the root it searches is the plugin's own content and nothing above it — under Decky, its panel title
+and the back arrow beside it are rendered outside that box, 34 px above it (the same inset whose bottom `WidePage`'s
+`ancestorOverhang` measures); behind Tender's own entry there is no such chrome at all, because Steam's tab group
+renders the panel directly — so no rule here could reach anyone else's. The declaration, the finder, the shared set of
+shapes and the `.focus()` + `gpfocus` pair are `frontend/src/utils/entryFocus.ts`. It is a second attribute rather than
+a second use of the wide frame's `OWNS_ENTRY_FOCUS_ATTR` because the two answer different questions: that one says WHO
+places entry focus — it tells the router to place none, because the frame places its own — and this one says WHERE, for
+whichever of them places it. **So a wide page carries both**, Settings being one: the root says "I place my own" and the
+list's selected row says "here". The router never reaches the second, because it looks for `OWNS_ENTRY_FOCUS_ATTR` first
+and, finding it, sets no timer at all.
 
 **A tab's content is the page's business, not the frame's.** The frame wraps an untabbed body in a `ScrollRegion` and a
 tabbed one in nothing: Steam's tabbed page already wraps each tab's content in this same plain scroll panel, so a region
@@ -1421,14 +1422,61 @@ button, because a disabled control still reports a press on the device, and the 
 
 ## Data Management
 
-Wide, list and detail: the operations on the left with a count where one waits, the focused operation on the right with
-its explanation, its confirmation, and its progress or result. Five operations, all library-wide: Removed RomM games,
-Remove all shortcuts, Uninstall all ROMs, Orphaned grid images, Non-Steam games with the whitelist. The per-platform
-actions have left for Library › Platforms, and the platform modal with them.
+Wide, list and detail — and the rows are **not the operations**. A row names a population, something this device holds,
+and states its numbers; the pane says what that population is, gives its numbers in full, and offers what can be done
+with it. Six rows, flat and ungrouped: Tender's shortcuts, Downloaded ROM files, Grid images, Other non-Steam games,
+Gone from RomM, Recovery bundles. The per-platform actions have left for Library › Platforms, and the platform modal
+with them.
 
-The removed-games cleanup stops being a modal: the candidate table (game, platform, installed size, recovery-bundle
-toggle), the free-space line and Start cleanup are the operation's detail pane. Its rules do not change; they live in
-[removed-game-cleanup.md](removed-game-cleanup.md).
+**That the rows are populations is a finding, not a preference.** Arranging the five operations as a menu needs a name
+for the group they fall into, and every grouping of these five needs a category that exists only on screen. A category
+nobody can name is not a category: the rows were buttons, and a button says nothing about the device. The question a
+reader arrives with — what has this program put here, how much disk does it hold, what is left over — a menu of verbs
+cannot answer at all, while an inventory answers it before anything is pressed. The layout study the shape was chosen
+from is [data-management-layouts.html](../assets/data-management-layouts.html). The list needs no headings for the same
+reason Settings needs none: six rows that each name a thing are their own order.
+
+| Row                   | What it says on arrival                                         | What the pane offers                            |
+| --------------------- | --------------------------------------------------------------- | ----------------------------------------------- |
+| Tender's shortcuts    | `total_shortcuts` — the bound shortcuts Main counts every visit | Remove all shortcuts                            |
+| Downloaded ROM files  | a count and a `≈` size, from one read over the installed rows   | Uninstall all ROM files                         |
+| Grid images           | `scan` until asked — then how many are orphaned                 | Remove the orphaned images                      |
+| Other non-Steam games | a scan of Steam's own shortcut store, in the frontend           | the whitelist, the removal, the RetroDECK guard |
+| Gone from RomM        | `scan` until asked — the server round trip                      | Review, which opens the dialog below            |
+| Recovery bundles      | how many are sealed and what they take                          | nothing — this page does not delete them        |
+
+**A number that costs a round trip or a backend scan sits behind a press.** Focus selects on this layout, so a reading
+that rode on the selection would fire under every row the stick passes — a local scan of the grid directory for one row,
+a RomM round trip for the other. Grid images and Gone from RomM therefore read `scan` until they are asked, and keep the
+answer for the rest of the visit. The whitelist's search opens a modal, for the reason Settings gives for its four
+inputs rather than by convention: the on-screen keyboard needs the room, and a detail pane has none to give.
+
+**The size is the server's figure and never a walk of the disk.** `Rom.fs_size_bytes` is what RomM reported for a ROM
+(#1395), summed over the installed rows, so the page opens with a number instead of measuring for one — and it is
+written with a `≈` for two reasons: a multi-file game, an unpacked archive, a patch beside the original or extras in the
+same folder are not the size the server named — and the field is NULL for a row that predates its migration or belongs
+to a wholesale-skipped platform nobody has re-applied, so the sum understates rather than fails. The cleanup goes on
+measuring the disk for itself, because its free-space line has to hold for a bundle it is about to write rather than for
+a figure a server once reported.
+
+**The removed-games review stays a dialog, and the reason is geometry rather than inertia.** A dialog may take up to 720
+× 406 on the Deck — `maxWidth: 720` against `maxHeight: 76vh` of the 534 px viewport, which is the right denominator
+because the modal renders into `findSP()`'s document rather than inside the 454 px panel. A detail pane is **530 px**
+wide (806 px of content, less the 264 px list and the frame's 12 px gap — `layout/Columns.tsx`) and its height is what
+an **untabbed** page's body is left with after whatever chrome sits above the page and the frame's Back-and-title row —
+**about 350 to 365 px** on the Deck, depending on whether the 454 px container is taken as the scroller's own height or
+the dev window's numbers above are carried across, which put the scroller some 14 px below the top of its view. Both of
+the pane's numbers are derived from what is written here rather than measured on the device for this section, and the
+margin is wide enough that the derivation would have to be badly wrong to change the answer: moving the review into the
+pane would shrink it in both axes. It is redrawn rather than kept: the options in two columns, the candidates as a table
+with a header (Game, Platform, Verdict, Installed, Keep a copy), and the free-space line with Start cleanup **pinned at
+the bottom** instead of standing after every candidate row, which is what a stick had to walk through to reach them. Its
+rules do not change; they live in [removed-game-cleanup.md](removed-game-cleanup.md).
+
+**Recovery bundles are listed and nothing here removes them.** The row states how many are sealed and what they cost, so
+the disk they take stops being invisible; deleting one is the reader's own business in a file manager until a cut gives
+that action a home. A row that shows something and offers nothing is still a row this page owes, because the page's
+claim is what this device holds.
 
 ## Downloads
 
@@ -1438,22 +1486,22 @@ menu entry.
 
 ## One home per action
 
-| Action                             | Today                  | Target                                       |
-| ---------------------------------- | ---------------------- | -------------------------------------------- |
-| Start a sync                       | Sync                   | Sync; Main starts none, but keeps Cancel     |
-| Review and apply a preview         | Sync, as a table       | Sync, as a table                             |
-| Force Full Sync, Skip preview      | Sync                   | Sync                                         |
-| Restart Steam now (session budget) | Sync                   | Sync; Main shows the notice                  |
-| Sync a platform on or off          | Library                | Library › Platforms                          |
-| Choose the emulator core           | Library › Platforms    | Library › Platforms                          |
-| Download BIOS files                | Library › Platforms    | Library › Platforms                          |
-| Delete BIOS files                  | Library › Platforms    | Library › Platforms                          |
-| Remove one platform's shortcuts    | Library › Platforms    | Library › Platforms                          |
-| Delete one platform's save files   | Library › Platforms    | Library › Platforms                          |
-| Fix the RetroArch `input_driver`   | Settings › Controller  | Settings › Controller; Main shows the notice |
-| Migrate the save-file sorting      | Settings › Save Sync   | Settings › Save Sync; Main shows the notice  |
-| Pause or cancel a download         | Downloads              | Downloads                                    |
-| Clean up removed RomM games        | Data Management, modal | Data Management, as a page                   |
+| Action                             | Today                  | Target                                                 |
+| ---------------------------------- | ---------------------- | ------------------------------------------------------ |
+| Start a sync                       | Sync                   | Sync; Main starts none, but keeps Cancel               |
+| Review and apply a preview         | Sync, as a table       | Sync, as a table                                       |
+| Force Full Sync, Skip preview      | Sync                   | Sync                                                   |
+| Restart Steam now (session budget) | Sync                   | Sync; Main shows the notice                            |
+| Sync a platform on or off          | Library                | Library › Platforms                                    |
+| Choose the emulator core           | Library › Platforms    | Library › Platforms                                    |
+| Download BIOS files                | Library › Platforms    | Library › Platforms                                    |
+| Delete BIOS files                  | Library › Platforms    | Library › Platforms                                    |
+| Remove one platform's shortcuts    | Library › Platforms    | Library › Platforms                                    |
+| Delete one platform's save files   | Library › Platforms    | Library › Platforms                                    |
+| Fix the RetroArch `input_driver`   | Settings › Controller  | Settings › Controller; Main shows the notice           |
+| Migrate the save-file sorting      | Settings › Save Sync   | Settings › Save Sync; Main shows the notice            |
+| Pause or cancel a download         | Downloads              | Downloads                                              |
+| Clean up removed RomM games        | Data Management, modal | Data Management › Gone from RomM, reviewed in a dialog |
 
 ## Sequence
 
@@ -1474,8 +1522,9 @@ The pages land in this order under #1808, each with the open work that already s
 4. **Settings** ([#1816](https://github.com/danielcopper/romm-tender/issues/1816)) — the sections, Steam Library, the
    homes for the `input_driver` fix and the save-sort migration with their notices on Main. Carries #1020's URL and
    double-press fixes. **Landed**, in one PR; RetroAchievements has no sign-in for Connections to hold until #1627.
-5. **Data Management** ([#1817](https://github.com/danielcopper/romm-tender/issues/1817)) — the operations, the cleanup
-   as a pane. After Library, which removes the platform modal.
+5. **Data Management** ([#1817](https://github.com/danielcopper/romm-tender/issues/1817)) — the page becomes an
+   inventory of what this device holds, the removed-games review stays a dialog and is redrawn, and recovery bundles
+   become visible. After Library, which removes the platform modal.
 
 Main has no issue of its own: each change to Main lands with the page that gives it a home. Downloads has none either.
 i18n (#133, #1524) comes after the rebuild, and the pages avoid copy that breaks when German or French expands it; the
@@ -1490,6 +1539,13 @@ store screenshots (#830) are taken after.
   with what it costs. The second is what shipped. **Superseded on two points by the device rounds**: the list row's BIOS
   ratio (dropped — the row is dot, name, toggle) and the core picker's full-width button (now an icon in the header
   line). The study is a record of a choice, not a description of the page.
+- The layout study Data Management's shape was chosen from:
+  [data-management-layouts.html](../assets/data-management-layouts.html) — four **page shapes** rather than four
+  arrangements of the same one: a menu of the five operations, an inventory of populations, one table with no menu, and
+  no page at all (each operation moved to the page that owns its object). The second is what this page describes. It
+  also carries the settled part every shape shared — the review as a dialog — and a table of which numbers exist today,
+  which is what ruled the disk walk out; the study leaves the size as counts-or-a-scan, and the server's own figure
+  replaced it afterwards. Like the studies below it is a record of a choice, not a description of the page.
 - The layout study Main's navigation was chosen from: [main-layouts.html](../assets/main-layouts.html) — four layouts at
   the panel's real 348 px (status as the card, the menu as the card, menu first, and the chosen one), each drawn quiet
   and with a preview waiting; a closing **Heute** section shows Main as it stood when the study was drawn, and its own
