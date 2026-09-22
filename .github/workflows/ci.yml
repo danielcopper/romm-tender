@@ -86,6 +86,16 @@ jobs:
       - name: Check the tab glyph matches its generator
         run: python3 scripts/check_generated_tab_icon.py
 
+      # Here for the same reason: the packager refuses a tree with no built
+      # `dist/`, so this is the only job that can hand it one. On every PR
+      # rather than at the tag alone, because a published tag cannot be
+      # withdrawn — by the time the release job packs the same tarball from
+      # the same script, the only way out of a bad one is another release.
+      - name: Pack a release tarball and check it against what install.sh expects
+        run: |
+          bash scripts/package.sh --source . --out build
+          python3 scripts/check_release_tarball.py build/romm-tender-*.tar.gz
+
       - name: Type check
         run: pnpm -C frontend typecheck
 
