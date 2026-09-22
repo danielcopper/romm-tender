@@ -1436,20 +1436,33 @@ cannot answer at all, while an inventory answers it before anything is pressed. 
 from is [data-management-layouts.html](../assets/data-management-layouts.html). The list needs no headings for the same
 reason Settings needs none: six rows that each name a thing are their own order.
 
-| Row                   | What it says on arrival                                         | What the pane offers                            |
-| --------------------- | --------------------------------------------------------------- | ----------------------------------------------- |
-| Tender's shortcuts    | `total_shortcuts` — the bound shortcuts Main counts every visit | Remove all shortcuts                            |
-| Downloaded ROM files  | a count and a `≈` size, from one read over the installed rows   | Uninstall all ROM files                         |
-| Grid images           | `scan` until asked — then how many are orphaned                 | Remove the orphaned images                      |
-| Other non-Steam games | a scan of Steam's own shortcut store, in the frontend           | the whitelist, the removal, the RetroDECK guard |
-| Gone from RomM        | `scan` until asked — the server round trip                      | Review, which opens the dialog below            |
-| Recovery bundles      | how many are sealed and what they take                          | nothing — this page does not delete them        |
+| Row                   | What it says on arrival                                          | What the pane offers                            |
+| --------------------- | ---------------------------------------------------------------- | ----------------------------------------------- |
+| Tender's shortcuts    | `total_shortcuts` — the bound shortcuts Main counts every visit  | Remove all shortcuts                            |
+| Downloaded ROM files  | a count, one per install; the `≈` size is the pane's             | Uninstall all ROM files                         |
+| Grid images           | `scan` until asked — then how many are orphaned                  | Remove the orphaned images                      |
+| Other non-Steam games | Steam's own store less this plugin's entries — a dash until read | the whitelist, the removal, the RetroDECK guard |
+| Gone from RomM        | `scan` until asked — the server round trip                       | Review, which opens the dialog below            |
+| Recovery bundles      | how many are sealed and what they take                           | nothing — this page does not delete them        |
 
 **A number that costs a round trip or a backend scan sits behind a press.** Focus selects on this layout, so a reading
 that rode on the selection would fire under every row the stick passes — a local scan of the grid directory for one row,
 a RomM round trip for the other. Grid images and Gone from RomM therefore read `scan` until they are asked, and keep the
-answer for the rest of the visit. The whitelist's search opens a modal, for the reason Settings gives for its four
-inputs rather than by convention: the on-screen keyboard needs the room, and a detail pane has none to give.
+answer until something makes it wrong — a finished cleanup puts Gone from RomM back to `scan`, because a stale number
+about what the server no longer has is worse than no number. **The whitelist's search is the one text input left on a
+pane**, and it is a known exception rather than a decision: the panel's rule puts text input in a modal, for the reason
+Settings gives for its four inputs rather than by convention — the on-screen keyboard needs the room, and a detail pane
+has none to give. It moves with the review, in the cut that redraws both.
+
+**Two rows would overlap if either were read naively, and the one that gives way is the foreign one.** Tender's
+shortcuts are themselves non-Steam shortcuts, so a row counting Steam's store whole would report this plugin's own
+library a second time, under a heading saying _Other_ — and its removal would take that library with it, since the
+whitelist protects by NAME and a synced library carries game names. So the foreign row is Steam's store **less what this
+plugin created**, told apart by what a shortcut launches rather than by what it is called, and row 1 stays the one place
+ours are removed from. That reading is a per-shortcut sweep rather than a field: it takes time, so the row shows a dash
+until it lands, and **what it cannot establish it never offers** — neither a store it could not read at all, nor an
+entry whose own reading did not arrive. The pane says which of the two happened. An unproven entry left alone is a row
+that under-reports; an unproven entry offered is a library deleted.
 
 **The size is the server's figure and never a walk of the disk.** `Rom.fs_size_bytes` is what RomM reported for a ROM
 (#1395), summed over the installed rows, so the page opens with a number instead of measuring for one — and it is
