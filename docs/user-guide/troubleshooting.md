@@ -278,8 +278,8 @@ page.
 The **Data Management** page is an inventory of what this device holds. Each row on the left names a population — a set
 of things that is on your device — and carries its count; picking a row shows what that population is, the numbers about
 it, and whatever can be done with it. Most rows offer one action, Other non-Steam games offers a removal and a
-whitelist, and Recovery bundles offers none at all. The six rows are **Tender's shortcuts**, **Downloaded ROM files**,
-**Grid images**, **Other non-Steam games**, **Gone from RomM** and **Recovery bundles**.
+whitelist, and Recovery bundles offers none at all. The six rows are **Tender's shortcuts**, **Installed ROMs**, **Grid
+images**, **Other non-Steam games**, **Gone from RomM** and **Recovery bundles**.
 
 Two counts cost a server round trip or a backend scan, so they read **scan** until you press for them: Grid images and
 Gone from RomM. Grid images keeps what its scan found for the rest of the visit; Gone from RomM keeps it until a cleanup
@@ -348,7 +348,7 @@ platforms; collections are cleaned up with them. It also sweeps up any shortcut 
 record on our side — what a run interrupted mid-apply leaves behind — so the button stays useful when the count reads
 zero. Downloaded ROM files and save files are left where they are, and the next sync puts the shortcuts back.
 
-### Downloaded ROM files
+### Installed ROMs
 
 The row counts the installs this plugin downloaded — one per install, so a multi-disc game counts once and two installed
 versions of one game count twice — and the pane states their total size with a `≈`. That size is what your RomM server

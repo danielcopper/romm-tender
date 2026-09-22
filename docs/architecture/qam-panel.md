@@ -1424,9 +1424,8 @@ button, because a disabled control still reports a press on the device, and the 
 
 Wide, list and detail — and the rows are **not the operations**. A row names a population, something this device holds,
 and states its numbers; the pane says what that population is, gives its numbers in full, and offers what can be done
-with it. Six rows, flat and ungrouped: Tender's shortcuts, Downloaded ROM files, Grid images, Other non-Steam games,
-Gone from RomM, Recovery bundles. The per-platform actions have left for Library › Platforms, and the platform modal
-with them.
+with it. Six rows, flat and ungrouped: Tender's shortcuts, Installed ROMs, Grid images, Other non-Steam games, Gone from
+RomM, Recovery bundles. The per-platform actions have left for Library › Platforms, and the platform modal with them.
 
 **That the rows are populations is a finding, not a preference.** Arranging the five operations as a menu needs a name
 for the group they fall into, and every grouping of these five needs a category that exists only on screen. A category
@@ -1439,7 +1438,7 @@ reason Settings needs none: six rows that each name a thing are their own order.
 | Row                   | What it says on arrival                                          | What the pane offers                            |
 | --------------------- | ---------------------------------------------------------------- | ----------------------------------------------- |
 | Tender's shortcuts    | `total_shortcuts` — the bound shortcuts Main counts every visit  | Remove all shortcuts                            |
-| Downloaded ROM files  | one count per install — two kept versions count twice            | Uninstall all ROM files                         |
+| Installed ROMs        | one count per install — two kept versions count twice            | Uninstall all ROM files                         |
 | Grid images           | `scan` until asked — then how many are orphaned                  | Remove the orphaned images                      |
 | Other non-Steam games | Steam's own store less this plugin's entries — a dash until read | the whitelist, the removal, the RetroDECK guard |
 | Gone from RomM        | `scan` until asked — the server round trip                       | Review, which opens the dialog below            |

@@ -174,7 +174,7 @@ describe("DataManagementPage", () => {
       );
 
       expect(labels[0]).toContain("Tender's shortcuts");
-      expect(labels[1]).toContain("Downloaded ROM files");
+      expect(labels[1]).toContain("Installed ROMs");
       expect(labels[2]).toContain("Grid images");
       expect(labels[3]).toContain("Other non-Steam games");
       expect(labels[4]).toContain("Gone from RomM");
@@ -308,7 +308,7 @@ describe("DataManagementPage", () => {
     });
   });
 
-  describe("the ROM files pane", () => {
+  describe("the installed ROMs pane", () => {
     it("states the count and marks the size as an approximation", async () => {
       vi.mocked(backend.getDataInventory).mockResolvedValue(
         inventory({ installed_roms: 12, installed_bytes: 5_368_709_120 }),
@@ -322,7 +322,7 @@ describe("DataManagementPage", () => {
       // And nothing around it supplies a unit the figure has not got: a reader
       // reading top to bottom must not complete "12 installed" as "12 game
       // files" off the sentence above it.
-      expect(view.container.textContent).toContain("counted one per install");
+      expect(view.container.textContent).toContain("one per install");
       expect(view.container.textContent).not.toContain("game files");
       expect(view.container.textContent).not.toContain("these games");
       expect(view.container.textContent).toContain("≈ 5.00 GB");

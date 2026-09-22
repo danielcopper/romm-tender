@@ -22,7 +22,7 @@ export interface DataRow {
 // is what makes that first element typed as present.
 export const DATA_ROWS = [
   { id: "shortcuts", label: "Tender's shortcuts" },
-  { id: "rom-files", label: "Downloaded ROM files" },
+  { id: "rom-files", label: "Installed ROMs" },
   { id: "grid-images", label: "Grid images" },
   { id: "non-steam", label: "Other non-Steam games" },
   { id: "removed-games", label: "Gone from RomM" },

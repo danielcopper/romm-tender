@@ -112,8 +112,8 @@ const RomFilesPane: FC<{ state: DataPageState }> = ({ state }) => {
   return (
     <>
       <Muted>
-        The games this plugin downloaded to your device, counted one per install — a game you keep two versions of is
-        two of these. Removing them keeps every shortcut, so the games stay in your library and can be downloaded again.
+        The ROMs this plugin downloaded to your device, one per install — a game you keep two versions of is two of
+        these. Removing them keeps every shortcut, so the games stay in your library and can be downloaded again.
       </Muted>
       <Figures>
         {inventory === null
