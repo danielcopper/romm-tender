@@ -73,6 +73,7 @@ case "$*" in
         exit 0
         ;;
     *"is-active"*) exit "${STUB_UNIT_ACTIVE:-3}" ;;
+    *"MainPID"*) printf '%s\\n' "${STUB_UNIT_MAIN_PID:-0}" ;;
     *"enable"*) [ -z "${STUB_ENABLE_DELAY:-}" ] || sleep "$STUB_ENABLE_DELAY" ;;
 esac
 exit 0
@@ -114,9 +115,20 @@ if [ -n "$out" ]; then cp "$source" "$out"; else cat "$source"; fi
 """
 
 _PGREP_STUB = """#!/usr/bin/env bash
-# Answers for `steam` only, and only when the test says it is up.
-[ "${STUB_STEAM_RUNNING:-no}" = "yes" ] || exit 1
-printf '4242\\n'
+printf '%s\\n' "$*" >> "$STUB_PGREP_LOG"
+# Two questions, told apart by the flags each is asked with — so a run that
+# stopped asking one of them the way it does today answers nothing here.
+case "$1" in
+    -x)
+        [ "${STUB_STEAM_RUNNING:-no}" = "yes" ] || exit 1
+        printf '4242\\n'
+        ;;
+    -af)
+        [ -n "${STUB_FOREIGN_BACKEND:-}" ] || exit 1
+        printf '%s\\n' "$STUB_FOREIGN_BACKEND"
+        ;;
+    *) exit 1 ;;
+esac
 """
 
 _PYTHON_STUB = """#!/usr/bin/env bash
@@ -143,6 +155,7 @@ class Install:
         self.systemctl_log = tmp_path / "systemctl.log"
         self.curl_log = tmp_path / "curl.log"
         self.curl_argv_log = tmp_path / "curl-argv.log"
+        self.pgrep_log = tmp_path / "pgrep.log"
         self.python = self.stubs / "stub-python3"
 
         for directory in (self.home, self.stubs, self.serve, self.runtime):
@@ -150,6 +163,7 @@ class Install:
         self.systemctl_log.touch()
         self.curl_log.touch()
         self.curl_argv_log.touch()
+        self.pgrep_log.touch()
         _write_executable(self.stubs / "systemctl", _SYSTEMCTL_STUB)
         _write_executable(self.stubs / "curl", _CURL_STUB)
         _write_executable(self.python, _PYTHON_STUB)
@@ -195,6 +209,7 @@ class Install:
             "STUB_SYSTEMCTL_LOG": str(self.systemctl_log),
             "STUB_CURL_LOG": str(self.curl_log),
             "STUB_CURL_ARGV_LOG": str(self.curl_argv_log),
+            "STUB_PGREP_LOG": str(self.pgrep_log),
             "STUB_SERVE": str(self.serve),
             "STUB_DEBUGGER_URL": _DEBUGGER_PROBE,
         }
@@ -284,6 +299,10 @@ class Install:
     def curl_argv(self) -> list[str]:
         """Every curl invocation's whole argument line, for the flags the URL does not show."""
         return self.curl_argv_log.read_text(encoding="utf-8").split("\n")[:-1]
+
+    def pgrep_calls(self) -> list[str]:
+        """Every pgrep invocation's whole argument line, pattern included."""
+        return self.pgrep_log.read_text(encoding="utf-8").split("\n")[:-1]
 
     def publish_release(self, *, tag: str = _TAG, archive: str | None = None, checksum: bool = True) -> Path:
         """Put a real tarball where the stubbed curl will serve it from."""
@@ -1296,6 +1315,62 @@ class TestUninstall:
 
         assert machine.marker.is_file()
         assert "Decky Loader is installed" in result.stdout
+
+
+class TestABackendOutsideTheService:
+    """A backend started by hand holds the lock the service's own backend needs.
+
+    A second backend gives up on the lock after five seconds, so the unit never
+    comes up and systemd retries it for as long as the hand-started one lives —
+    while the run reports a started service, because ``is-active`` is asked
+    before the first attempt has had time to fail.
+    """
+
+    _FOREIGN = "4711 /usr/bin/python3 /home/someone/tender/backend/main.py"
+
+    def test_it_refuses_before_it_installs_anything_and_names_the_process(self, machine):
+        result = machine.run(
+            "--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_FOREIGN_BACKEND=self._FOREIGN
+        )
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == ["install.sh: another Tender backend is already running (pid 4711)"]
+        assert "/usr/bin/python3 /home/someone/tender/backend/main.py" in result.stderr
+        assert "[y/N]" not in result.stdout
+        assert not machine.code.exists()
+        assert not machine.unit.exists()
+
+    def test_the_service_running_its_own_backend_is_not_one(self, machine):
+        """The unit's own MainPID is the one process this refusal is not about."""
+        result = machine.run(
+            "--from",
+            str(_build_tarball(machine.tmp_path)),
+            "--yes",
+            STUB_FOREIGN_BACKEND=self._FOREIGN,
+            STUB_UNIT_MAIN_PID="4711",
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert (machine.code / "backend" / "main.py").is_file()
+
+    def test_the_run_does_not_answer_for_itself(self, machine):
+        """``pgrep -f`` matches command lines, and a shell's can carry the pattern.
+
+        pgrep leaves its own process out of its answer and nothing else's, so
+        the first letter is bracketed: the pattern then matches a backend and
+        does not match a process that is merely holding the pattern's own text.
+        """
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert result.returncode == 0, result.stderr
+        assert [call for call in machine.pgrep_calls() if "ackend/main" in call] == ["-af [b]ackend/main\\.py"]
+
+    @pytest.mark.parametrize("mode", ["--uninstall", "--disable"])
+    def test_the_modes_that_start_nothing_do_not_ask(self, machine, mode):
+        result = machine.run(mode, STUB_FOREIGN_BACKEND=self._FOREIGN)
+
+        assert result.returncode == 0, result.stderr
+        assert [call for call in machine.pgrep_calls() if "ackend/main" in call] == []
 
 
 class TestTheNoteIsSpelledOnceOnEachSide:

@@ -897,7 +897,8 @@ parse_arguments() {
 # Every refusal below is exit 1 and names both the reason and the fix. The order
 # is the order in which the answers become useful: a Python to run anything
 # with, a manager to run it under, then Steam for it to load a panel into, then
-# the plugin that would otherwise share the database with it.
+# the plugin that would otherwise share the database with it, and last the
+# backend that would already be holding what the service's own needs.
 preflight() {
     local found status=0
     found="$(check_python)" || status=$?
@@ -915,6 +916,7 @@ preflight() {
     row_add "$CHECKING" "Steam"
     refuse_decky_plugin
     row_add "$CHECKING" "no Tender plugin in Decky"
+    refuse_foreign_backend
 }
 
 # Prints the version it found, and ANSWERS rather than aborting: its value is
@@ -970,6 +972,40 @@ refuse_decky_plugin() {
                 "remove it in Decky first, then run this again"
         fi
     done
+}
+
+# A backend outside the unit holds the same exclusive lock the unit's own takes
+# (backend/host/single_instance.py), so the unit cannot come up while one is
+# running — and this run would report that it had, because `is-active` is asked
+# before the first attempt has had time to fail. Refused rather than reported,
+# and the process is named so the user knows which one to end.
+#
+# Only the modes that start the service ask: `--uninstall` and `--disable` start
+# nothing, and both stop the unit whatever else is running.
+refuse_foreign_backend() {
+    local own line pid
+    own="$(service_main_pid)"
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        pid="${line%% *}"
+        [ "$pid" != "$own" ] || continue
+        abort "another Tender backend is already running (pid $pid)" \
+            "$UNIT_NAME.service cannot start beside it — stop it first: ${line#* }"
+    done < <(running_backends)
+}
+
+# Every process running this program's backend, one `<pid> <command line>` to a
+# line. The pattern's first letter is bracketed so that a process carrying the
+# pattern ITSELF in its command line does not answer for one: pgrep leaves its
+# own process out of the answer and nothing else's.
+running_backends() {
+    pgrep -af '[b]ackend/main\.py' || true
+}
+
+# The backend the service is running, or 0 — which is what systemd answers for a
+# unit that is running none.
+service_main_pid() {
+    systemctl --user show -p MainPID --value "$UNIT_NAME" 2> /dev/null || true
 }
 
 # --------------------------------------------------------- acknowledgement

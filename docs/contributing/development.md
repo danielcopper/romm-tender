@@ -248,6 +248,13 @@ at the tag: CI's build job packs a tarball from every pull request's own build a
 [ADR-0039](../adr/0039-the-release-ships-the-packagers-tarball.md) gives. What no run of it can say is whether the code
 inside works — the script's own docstring states the blind spot.
 
+**The install refuses while a backend of your own is up.** `mise run dev` and `mise run dev:backend` start one outside
+the unit, and it holds the same exclusive lock the unit's backend takes — a second one gives up on it after five
+seconds, so the unit would never come up, systemd would retry it every five seconds for as long as your process lives,
+and the run would still report a started service. The refusal names the process and its command line: stop it where you
+started it with Ctrl-C, or `kill <pid>`, then install again. `--uninstall` and `--disable` do not ask, because neither
+starts a backend.
+
 ## Linting
 
 ```bash
