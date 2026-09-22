@@ -12,9 +12,10 @@ import type { CoreInfo, EmulatorOption, SaveStatus, SaveSyncDisplay } from "../t
 import { hasAnySaveConflict } from "./saveStatus";
 import { formatTimeAgo } from "./formatters";
 
-/** BIOS-only fields for the play-section row. Core data (active core, available
- *  cores) is sourced independently via `extractCoreInfo` from the dedicated
- *  `get_platform_core_info` path — it no longer rides the BIOS payload (#923). */
+/** BIOS-only fields for the play-section row. Emulator data (the launching
+ *  emulator, the platform's emulator list) is sourced independently via
+ *  `extractCoreInfo` from the dedicated `get_platform_core_info` path — it no
+ *  longer rides the BIOS payload (#923). */
 export interface BiosInfoFields {
   biosNeeded: boolean;
   biosLabel: string;
@@ -26,14 +27,15 @@ export interface BiosInfoFields {
    *  instead.
    *
    *  **Two absences raise it, and neither can state the other.** A file the
-   *  ACTIVE CORE requires is not on disk — a required row whose verdict was
-   *  withheld is out of both sides of that comparison, being neither on disk nor
-   *  shown to be missing. Or the CONSOLE cannot start without one of the images
-   *  the core declares and none of them is in place (`system_image: "absent"`),
-   *  which no count can express: a libretro declaration marks each of those
-   *  images optional, so `required_count` is 0 and the comparison above is
-   *  vacuously false while no game on the platform launches. The second is read
-   *  off the backend's own answer, never re-derived from the rows here.
+   *  LAUNCHING EMULATOR requires is not on disk — a required row whose verdict
+   *  was withheld is out of both sides of that comparison, being neither on
+   *  disk nor shown to be missing. Or the CONSOLE cannot start without one of
+   *  the images that emulator declares and none of them is in place
+   *  (`system_image: "absent"`), which no count can express: a libretro
+   *  declaration marks each of those images optional, so `required_count` is 0
+   *  and the comparison above is vacuously false while no game on the platform
+   *  launches. The second is read off the backend's own answer, never
+   *  re-derived from the rows here.
    *
    *  The four-valued `bios_level` is deliberately NOT projected. The badge has
    *  one appearance, so it needs no colour input, and the BIOS tab reads the
@@ -90,15 +92,16 @@ export function applySaveSyncDisplay(
  *  re-derived here.
  *
  *  Four payloads. `bios_status` present: the requirement, and whether this launch
- *  is missing firmware it cannot start without — a file the active core requires,
- *  or the image the console itself needs. `bios_status` absent: the backend answering
- *  "this core needs no BIOS", which clears the fields so a requirement can be
- *  taken back off the page (#1690). `bios_status_unknown` with an `"unknown"`
- *  level: a check that RAN and could not establish the requirement — an answer,
- *  and it clears too, because leaving a stale warning standing would assert what
- *  nothing can establish any more. `bios_status_unknown` with no level: a read
- *  that never happened, the one payload that must change nothing, so it projects
- *  to `null` and the caller writes nothing (#1693).
+ *  is missing firmware it cannot start without — a file the launching emulator
+ *  requires, or the image the console itself needs. `bios_status` absent: the
+ *  backend answering "this emulator needs no BIOS", which clears the fields so a
+ *  requirement can be taken back off the page (#1690). `bios_status_unknown`
+ *  with an `"unknown"` level: a check that RAN and could not establish the
+ *  requirement — an answer, and it clears too, because leaving a stale warning
+ *  standing would assert what nothing can establish any more.
+ *  `bios_status_unknown` with no level: a read that never happened, the one
+ *  payload that must change nothing, so it projects to `null` and the caller
+ *  writes nothing (#1693).
  *
  *  `bios_level` is read only to tell those last two apart, never projected —
  *  that is the same split `panelState.biosFieldsFromCache` draws off the same
@@ -142,8 +145,8 @@ export function extractBiosInfo(answer: BiosAnswer): BiosInfoFields | null {
 
 /** Project a CoreInfo response (from the dedicated `get_platform_core_info`
  *  path, #923) into the core-selection fields the play-section row needs. The
- *  active core is "default" when it equals the default emulator or no override
- *  is set. */
+ *  launching emulator counts as "default" when it equals the default emulator
+ *  or no override is set. */
 export function extractCoreInfo(coreInfo: CoreInfo): CoreInfoFields {
   const activeCoreLabel = coreInfo.active_core_label ?? null;
   const emulators = coreInfo.emulators;

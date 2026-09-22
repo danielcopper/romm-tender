@@ -434,7 +434,7 @@ display names resolve live from RomM; sync exclusion is the user-intent `enabled
 not per-platform local state. A `Platform` aggregate is reintroduced only when a concrete need lands (the
 standalone-emulator roadmap), not speculatively.
 
-### Emulator override vs default core vs active core
+### Emulator override vs default core vs launching emulator
 
 Three distinct notions in core selection, kept separate because they have different owners and lifetimes:
 
@@ -445,9 +445,15 @@ Three distinct notions in core selection, kept separate because they have differ
   scope. The plugin owns the override and stores **only the deviation**; the absence of an override means "follow the
   default." A core the user picks inside ES-DE's own UI is _not_ an emulator override in this sense — it is ES-DE's
   state, which the plugin does not own.
-- **Active core** — the core a ROM actually launches with: the override when one exists, the default otherwise. One
-  resolver answers it for both the launch and every read consumer (BIOS requirement, save path, game-detail badge), so
-  the launched core never diverges from what those reads assume.
+- **Launching emulator** — the one emulator a ROM actually launches with: the per-game **emulator override** when one
+  exists, else the **platform pick**, else the **default core** — and **whatever kind it is**, a RetroArch core or a
+  standalone emulator, which is why it is not named after either. One resolver answers it for both the launch and every
+  read consumer (BIOS requirement, save path, game-detail badge), so the launched emulator never diverges from what
+  those reads assume. On the wire the pair is still spelled `active_core` / `active_core_label`, and `active_core` there
+  is the **emulator identity** rather than a core file: `core_so` is absent for every standalone emulator, so a reader
+  reaching for it answers `None` for one and falls back to every declaring emulator — the degradation the identity work
+  removed. _Avoid_: **active core** for this — a standalone emulator is not a core. The older spelling survives in this
+  file only inside **required by active core**, which is the English of the wire field `required_by_active`.
 - **Platform pick** — the same resolution asked of a PLATFORM rather than a ROM, so with no per-game layer to apply: the
   per-platform override when its label still names a bakeable emulator, else the default emulator. It is one pick with
   two projections — the name a surface displays, and the **emulator identity** its BIOS answers key on — and resolving
@@ -585,9 +591,9 @@ verdict, the other is which rows a surface may mark as ways to reach it — so w
 core would put a second mark on a requirement already stated, and narrowing the verdict to the marked rows would stop
 answering for the cores that state required files.
 
-Scoped to the **active core**, like **required by active core** and unlike **wanted**: one unchanged PlayStation reads
-`absent` under SwanStation, whose five declared images the console needs one of, and `not demanded` under PCSX ReARMed,
-which carries its own substitute.
+Scoped to the **launching emulator**, like **required by active core** and unlike **wanted**: one unchanged PlayStation
+reads `absent` under SwanStation, whose five declared images the console needs one of, and `not demanded` under PCSX
+ReARMed, which carries its own substitute.
 
 ### Declaration register (firmware): read / packaged
 

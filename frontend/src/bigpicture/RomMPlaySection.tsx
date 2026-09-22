@@ -1006,12 +1006,12 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   }
 
   // BIOS warning. What decides it is one question with two established
-  // absences behind it (`extractBiosInfo`): a file the active core requires is
-  // not on disk, or the console cannot start without one of the images the core
-  // declares and none of them is there. Everything else the BIOS answer says —
-  // a platform whose emulators could not be asked, optional files nobody
-  // launching this game needs — is non-actionable here and lives in the BIOS
-  // tab.
+  // absences behind it (`extractBiosInfo`): a file the launching emulator
+  // requires is not on disk, or the console cannot start without one of the
+  // images that emulator declares and none of them is there. Everything else
+  // the BIOS answer says — a platform whose emulators could not be asked,
+  // optional files nobody launching this game needs — is non-actionable here
+  // and lives in the BIOS tab.
   //
   // One appearance, always red. This badge is not rendering the four-valued
   // verdict — the BIOS tab is, off `biosColorForLevel` — it is a warning that

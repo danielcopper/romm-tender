@@ -4587,10 +4587,10 @@ describe("RomMGameInfoPanel", () => {
 
     // #1681 — BIOS is the third per-rom tab. The requirement is core-dependent
     // and the core override is keyed on rom_id, so both the level and the
-    // "Active Core" row it is shown against must follow the new active version.
+    // Emulator column it is shown against must follow the new active version.
     describe("BIOS tab across a version switch (#1681)", () => {
-      /** A `get_platform_core_info` answer whose active core is `label` — the
-       *  BIOS tab's "Active Core" row reads it. */
+      /** A `get_platform_core_info` answer whose launching emulator is `label`
+       *  — the BIOS tab's Emulator column reads it. */
       const coreInfoFor = (label: string, coreSo: string): CoreInfo => ({
         active_core: coreSo,
         active_core_label: label,
@@ -4830,7 +4830,7 @@ describe("RomMGameInfoPanel", () => {
       const openSavesTab = () => openTab("saves");
 
       /** A BIOS requirement on both versions, so the BIOS tab (and with it the
-       *  "Active Core" row the core-info reads land in) stays visible across the
+       *  Emulator column the core-info reads land in) stays visible across the
        *  switch. */
       const biosNeed: Partial<CachedGameDetail> = {
         bios_status: { platform_slug: "snes", server_count: 3, local_count: 1, all_downloaded: false },

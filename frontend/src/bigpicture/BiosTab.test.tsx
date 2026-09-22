@@ -43,7 +43,7 @@ const biosStatus: BiosStatus = {
 };
 
 describe("BiosTab", () => {
-  it("renders the requirement and its active core when it is the active tab", () => {
+  it("renders the requirement and the emulator it is scoped to when it is the active tab", () => {
     const { container } = render(
       <BiosTab biosStatus={biosStatus} biosLevel="missing" coreInfo={coreInfo} isActive={true} />,
     );
@@ -223,11 +223,11 @@ describe("BiosTab", () => {
 
   it("says whose requirement the empty count is, and never that the console needs nothing", () => {
     // `required_count: 0` is one emulator's declaration and nothing else: the
-    // active core marks none of the files it names required. It says nothing
-    // about the CONSOLE, which is a separate axis (`system_image`) and answers
-    // `not_demanded` for a console nobody has asked about as readily as for one
-    // shown to start with nothing — so a headline that dropped the subject was
-    // read as an all-clear the reading never gave.
+    // launching emulator marks none of the files it names required. It says
+    // nothing about the CONSOLE, which is a separate axis (`system_image`) and
+    // answers `not_demanded` for a console nobody has asked about as readily as
+    // for one shown to start with nothing — so a headline that dropped the
+    // subject was read as an all-clear the reading never gave.
     const { container } = render(
       <BiosTab
         biosStatus={{
@@ -254,11 +254,11 @@ describe("BiosTab", () => {
   });
 
   it("names the emulator the answer was scoped to, where the answer names one", () => {
-    // The sentence sat two inches from an `Active Core` row and said less than
-    // everything around it. The name is the label half of the one pick the
-    // backend filtered these counts by, carried on the answer itself — reading
-    // it off the core payload beside it would be a second resolution of the
-    // same question.
+    // The pane names the same emulator two inches away, under its Emulator
+    // heading, so a subjectless sentence says less than everything around it.
+    // The name is the label half of the one pick the backend filtered these
+    // counts by, carried on the answer itself — reading it off the core payload
+    // beside it would be a second resolution of the same question.
     const { container } = render(
       <BiosTab
         biosStatus={{
@@ -659,7 +659,33 @@ describe("BiosTab", () => {
     expect(row?.innerHTML).not.toContain("#d4a72c");
   });
 
-  it("falls back to 'Default' when no active core is resolved", () => {
+  it("states the launching emulator under the Emulator heading and gives it no label of its own", () => {
+    // A standalone emulator is not a core, and the column's own heading already
+    // names the subject — so the value stands alone under it, the way the BIOS
+    // column's sentence stands under `BIOS`. A label here would be a second
+    // name for the same thing on a column 120px wide.
+    const { container } = render(
+      <BiosTab
+        biosStatus={biosStatus}
+        biosLevel="missing"
+        coreInfo={{
+          ...coreInfo,
+          active_core: "DUCKSTATION",
+          active_core_label: "DuckStation (Legacy) (Standalone)",
+          emulators: [standaloneEmu("DuckStation (Legacy) (Standalone)", true, { emulator: "DUCKSTATION" })],
+        }}
+        isActive={true}
+      />,
+    );
+    const titles = [...container.querySelectorAll(".romm-panel-section-title")].map((el) => el.textContent);
+    expect(titles).toEqual(["BIOS", "Emulator"]);
+    const values = [...container.querySelectorAll(".romm-panel-value")].map((el) => el.textContent);
+    expect(values).toContain("DuckStation (Legacy) (Standalone)");
+    expect(container.querySelector(".romm-panel-label")).toBeNull();
+    expect(container.textContent).not.toContain("Active Core");
+  });
+
+  it("falls back to 'Default' when no launching emulator is resolved", () => {
     const { container } = render(
       <BiosTab
         biosStatus={biosStatus}

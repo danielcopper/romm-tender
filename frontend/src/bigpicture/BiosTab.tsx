@@ -2,11 +2,11 @@
  * BiosTab — the BIOS & Emulator pane of the RomM game detail panel.
  *
  * Render only. Everything it shows arrives as props, because the requirement
- * (`biosStatus`) and the core it is shown against (`coreInfo`) have to reach a
- * render TOGETHER. On a core change the panel reads both in one `Promise.all`
+ * (`biosStatus`) and the emulator it is shown against (`coreInfo`) have to reach
+ * a render TOGETHER. On a core change the panel reads both in one `Promise.all`
  * and folds them into one update; split across two owners the change would land
  * as two renders, and in between the pane highlights the previous core's line
- * and names it in the "Active Core" row against a requirement set that has
+ * and names it in the Emulator column against a requirement set that has
  * already moved. The per-file LABELS are not part of that window —
  * `coreInfo.emulators` is the platform's core list, which a core switch does not
  * change.
@@ -42,7 +42,7 @@ import { isFetchable } from "../utils/biosFetchable";
 import { biosFileDescription, biosFileNote } from "../utils/biosFileNote";
 import { biosHeldRatio } from "../utils/biosHeldRatio";
 import { biosSummary } from "../utils/biosSummary";
-import { infoRow, section } from "./panelSection";
+import { section } from "./panelSection";
 
 interface BiosTabProps {
   /** The platform's BIOS requirement, or null when its core needs none — in
@@ -53,7 +53,8 @@ interface BiosTabProps {
   /** Backend-computed readiness verdict driving the status-dot color;
    *  null whenever there is no requirement. */
   biosLevel: BiosLevel | null;
-  /** Active core + available cores, from the dedicated `get_platform_core_info`
+  /** The launching emulator (`active_core_label`, whatever kind it is) plus the
+   *  platform's emulator list, from the dedicated `get_platform_core_info`
    *  path (#923) — never derived from `biosStatus`. */
   coreInfo: CoreInfo | null;
   isActive: boolean;
@@ -436,12 +437,18 @@ export const BiosTab: FC<BiosTabProps> = ({ biosStatus, biosLevel, coreInfo, isA
     );
   }
 
-  // Right column: Core info
+  // Right column: the emulator this game launches with, under its heading and
+  // unlabelled — the mirror of the BIOS column, whose sentence stands under
+  // `BIOS` the same way. A label here is the road not to take twice over: the
+  // heading already names the subject, so it would be a second name for the
+  // same thing, and the one it carried called a standalone emulator a core.
   const coreColumn = [
     <div key="core-title" className="romm-panel-section-title" style={{ marginBottom: "8px" }}>
       Emulator
     </div>,
-    infoRow("core", "Active Core", coreInfo?.active_core_label ? coreInfo.active_core_label : "Default"),
+    <div key="core" className="romm-panel-value">
+      {coreInfo?.active_core_label ? coreInfo.active_core_label : "Default"}
+    </div>,
   ];
 
   return section(

@@ -301,7 +301,7 @@ async function handleVersionSwitched(
       // the cheaper side of the same trade.
       refreshBiosIfStale(cached, binding, ctx.readSeqs, getBiosStatus),
       refreshCoverArtInBackground(binding),
-      // The BIOS tab's "Active Core" row and its per-file core lines come
+      // The BIOS tab's Emulator column and its per-file core lines come
       // from the dedicated core-info path (#923), keyed on rom_id so a
       // per-game override follows the switch. A failed read keeps the
       // previous reading rather than blanking it.

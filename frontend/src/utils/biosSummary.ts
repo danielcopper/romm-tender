@@ -31,9 +31,10 @@
  *
  * **Every sentence names the emulator**, because every one of these states is
  * about ONE emulator's declaration and nothing else — the pick the whole answer
- * was scoped to, carried on the payload as `active_core_label`. A sentence about
- * "the launching emulator" sat two inches from an `Active Core: mGBA` row and
- * said less than everything around it. Where the payload carries no label the
+ * was scoped to, carried on the payload as `active_core_label`. On the game
+ * page the same emulator is named two inches away, under the pane's Emulator
+ * heading, so a sentence about "the launching emulator" says less than
+ * everything around it. Where the payload carries no label the
  * pick could not be made or has no name of its own, and the sentences fall back
  * to naming the role rather than inventing one.
  *
