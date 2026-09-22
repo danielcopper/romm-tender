@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from domain.iso_time import epoch_to_iso, parse_iso_to_epoch
 from domain.rom_save_sync_state import RomSaveSyncState
-from domain.save_layout import SAVE_SYNC_CONTENT_DIR_REASON
+from domain.save_answer import SAVE_SYNC_CONTENT_DIR_REASON
 from domain.save_slot import save_in_slot
 from lib.errors import RommNotFoundError, classify_error
 from services.saves._helpers import newest_server_saves_by_target

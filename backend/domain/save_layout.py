@@ -32,10 +32,3 @@ class ContentDir:
 
 
 SaveLayout = InSaveDir | ContentDir
-
-# Canonical ``reason`` slug for the benign-skip outcome a ``ContentDir`` layout
-# produces. Lives here as the single source of truth so every service routes on
-# the SAME value without a service→service import: the saves sync-engine gate
-# stamps it on its skip result and the session-lifecycle post-exit branch reads
-# it to suppress the false-failure toast (#239).
-SAVE_SYNC_CONTENT_DIR_REASON = "savefiles_in_content_dir"

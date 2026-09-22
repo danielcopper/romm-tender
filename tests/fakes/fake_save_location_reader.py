@@ -10,6 +10,7 @@ from domain.save_answer import (
     SaveComponent,
     unestablished_answer,
 )
+from domain.savestate_location import NoSavestates, SavestateLocation
 
 # What the retired per-system extension table answered for a system it held no
 # override for. The default answer keeps that shape so a test written about save
@@ -35,6 +36,16 @@ class FakeSaveLocationReader:
     which is how a test asserts that a refusing state asked nothing further —
     and how it pins that a sync path asked at all.
 
+    The directory is the content file's own unless *saves_root* is given, in
+    which case it is ``<saves_root>/<the content's parent folder>`` — RetroArch's
+    content-sorted layout, the stock RetroDECK one. Either way the answer's root
+    kind is the save root: a test about saves written beside the game seeds that
+    answer on purpose.
+
+    Savestates answer ``<states_root>/<the content's parent folder>`` when
+    *states_root* is given and nothing could be established otherwise, unless
+    :meth:`savestates_with` seeded the system.
+
     Deliberately insensitive to *emulator_label*, including ``None``. What a
     machine answers and whether the plugin had an emulator to ask about are two
     questions, and only the first is this seam's; the real adapter refuses a
@@ -44,10 +55,20 @@ class FakeSaveLocationReader:
     core resolution instead of about saves.
     """
 
-    def __init__(self, *, extensions: tuple[str, ...] = _DEFAULT_EXTENSIONS) -> None:
+    def __init__(
+        self,
+        *,
+        extensions: tuple[str, ...] = _DEFAULT_EXTENSIONS,
+        saves_root: str | None = None,
+        states_root: str | None = None,
+    ) -> None:
         self._extensions = extensions
+        self._saves_root = saves_root
+        self._states_root = states_root
         self._by_system: dict[str, SaveAnswer] = {}
+        self._states_by_system: dict[str, SavestateLocation | NoSavestates | None] = {}
         self.calls: list[tuple[str, str, str | None]] = []
+        self.savestate_calls: list[tuple[str, str, str | None]] = []
 
     def answer_with(self, system: str, answer: SaveAnswer) -> None:
         """Seed the answer *system* gives, whatever the ROM or the emulator."""
@@ -62,6 +83,10 @@ class FakeSaveLocationReader:
         """
         self._by_system[system] = unestablished_answer()
 
+    def savestates_with(self, system: str, answer: SavestateLocation | NoSavestates | None) -> None:
+        """Seed the savestate answer *system* gives, whatever the ROM or the emulator."""
+        self._states_by_system[system] = answer
+
     def resolve_save_answer(
         self, *, system: str, content_path: str, emulator_label: str | None, content_installed: bool = True
     ) -> SaveAnswer:
@@ -74,7 +99,7 @@ class FakeSaveLocationReader:
             # verbatim would make the field untestable alongside a seeded state.
             return replace(seeded, content_installed=content_installed)
         stem = os.path.splitext(os.path.basename(content_path))[0]
-        directory = os.path.dirname(content_path)
+        directory = self._sorted_by_content(self._saves_root, content_path) or os.path.dirname(content_path)
         parts = _BY_SYSTEM.get(system) or tuple((ext, "battery") for ext in self._extensions)
         return SaveAnswer(
             state="per_game_files",
@@ -90,4 +115,23 @@ class FakeSaveLocationReader:
             ),
             caveats=(),
             content_installed=content_installed,
+            root_kind="savefile_directory",
         )
+
+    def resolve_savestate_location(
+        self, *, system: str, content_path: str, emulator_label: str | None
+    ) -> SavestateLocation | NoSavestates | None:
+        self.savestate_calls.append((system, content_path, emulator_label))
+        if system in self._states_by_system:
+            return self._states_by_system[system]
+        directory = self._sorted_by_content(self._states_root, content_path)
+        if directory is None:
+            return None
+        return SavestateLocation(directory=directory, root_kind="savestate_directory")
+
+    @staticmethod
+    def _sorted_by_content(root: str | None, content_path: str) -> str | None:
+        """``<root>/<the content's parent folder>``, or ``None`` with no root."""
+        if root is None:
+            return None
+        return os.path.join(root, os.path.basename(os.path.dirname(content_path)))

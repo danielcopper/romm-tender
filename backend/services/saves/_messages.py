@@ -6,8 +6,7 @@ consistent across modules. Add to this file rather than inlining new
 literals in service code.
 """
 
-from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON
-from domain.save_layout import SAVE_SYNC_CONTENT_DIR_REASON
+from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON, SAVE_SYNC_CONTENT_DIR_REASON
 
 SAVE_SYNC_DISABLED = "Save sync is disabled"
 DEVICE_NOT_REGISTERED = "Device not registered"
@@ -38,7 +37,7 @@ SAVE_SYNC_BUSY = "Another save sync is still running"
 SAVE_SYNC_IN_CONTENT_DIR = "Save sync is unavailable: RetroArch is set to write saves to the content directory."
 # ``reason`` slug on the sync-gate failure shape; the frontend routes on this to
 # treat the result as a skip (no error, launch proceeds), not a failure. Single
-# source of truth is ``domain.save_layout`` — re-exported here so the saves
+# source of truth is ``domain.save_answer`` — re-exported here so the saves
 # service code keeps importing it from its own message module.
 SAVE_SYNC_IN_CONTENT_DIR_REASON = SAVE_SYNC_CONTENT_DIR_REASON
 # The emulator's save is not a per-game file set this plugin can carry — a

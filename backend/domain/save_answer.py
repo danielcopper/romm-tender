@@ -31,8 +31,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
-from domain.save_layout import SAVE_SYNC_CONTENT_DIR_REASON
-
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -95,12 +93,28 @@ _INSIDE_CONTENT_CAVEATS = frozenset({"save-inside-content", "save-inside-image"}
 # The caveat for a directory that is known while the names inside it are not.
 _FILE_NAMES_UNESTABLISHED = "file-names-unestablished"
 
-# Canonical ``reason`` slug for the benign-skip outcome the four refusing states
-# produce. Lives here beside the states that cause it, for the same reason
-# ``SAVE_SYNC_CONTENT_DIR_REASON`` lives beside the layout that causes that one:
-# every service routes on the SAME value without a service-to-service import.
-# It says the SHAPE of this game's save is not one the plugin can carry per
-# game, which is a statement about the emulator and never about the server.
+# The caveat for a sorted directory RetroArch has not created yet. It creates it
+# on the first save and silently falls back to the unsorted root when it cannot,
+# so a caller about to move files into ``directory`` creates it first.
+SORTED_DIR_MISSING = "sorted-dir-missing"
+
+# The root kind of a save written next to the game's own content file, which
+# is what RetroArch's ``savefiles_in_content_dir`` produces.
+ROOT_CONTENT_DIRECTORY = "content_directory"
+
+# Canonical ``reason`` slugs for the two benign-skip outcomes a save answer
+# produces. Both live here, beside the answer that causes them, so every service
+# routes on the SAME value without a service-to-service import.
+#
+# ``SAVE_SYNC_CONTENT_DIR_REASON`` says the emulator writes this game's save
+# next to its content, outside what the plugin syncs; the saves sync-engine gate
+# stamps it on its skip result and the session-lifecycle post-exit branch reads
+# it to suppress the false-failure toast.
+#
+# ``SAVE_SHAPE_UNSUPPORTED_REASON`` says the SHAPE of this game's save is not one
+# the plugin can carry per game, which is a statement about the emulator and
+# never about the server.
+SAVE_SYNC_CONTENT_DIR_REASON = "savefiles_in_content_dir"
 SAVE_SHAPE_UNSUPPORTED_REASON = "save_shape_unsupported"
 
 # Every ``reason`` slug that means "the sync did not run, and that is fine".
@@ -180,6 +194,12 @@ class SaveAnswer:
     emulator groups save data, and ``caveats`` carries the resolver's stable
     codes verbatim for the log and for a later rendering.
 
+    ``root_kind`` is the anchor ``directory`` hangs off, in the resolver's own
+    vocabulary; :attr:`in_content_directory` is the one reading of it a sync
+    path acts on. ``fallback_directory`` is the unsorted root RetroArch falls
+    back to while ``directory`` does not exist yet. Both are ``None`` wherever
+    no placement was resolved.
+
     ``content_installed`` says whether this ROM's content is on disk. It is
     ``False`` for a ROM the library holds but has not installed — the question
     was then about the path the ROM WOULD occupy, so every name in the answer is
@@ -201,11 +221,32 @@ class SaveAnswer:
     components: tuple[SaveComponent, ...]
     caveats: tuple[str, ...]
     content_installed: bool
+    root_kind: str | None = None
+    fallback_directory: str | None = None
 
     @property
     def syncable(self) -> bool:
-        """Whether save sync may run at all for this ROM."""
+        """Whether this emulator's save is a per-game file set the plugin can carry."""
         return self.state == SAVE_STATE_PER_GAME_FILES
+
+    @property
+    def in_content_directory(self) -> bool:
+        """Whether the emulator writes this game's save next to its content file.
+
+        Save sync stays off there whatever the state says: the directory is the
+        ROM's own, outside what the plugin syncs, and syncing it is a decision
+        this answer does not make.
+        """
+        return self.root_kind == ROOT_CONTENT_DIRECTORY
+
+    @property
+    def sync_directory(self) -> str | None:
+        """The directory a sync reads and writes, or ``None`` where it may not sync at all.
+
+        ``None`` for every refusing state and for a save written next to the
+        content — the pairing that makes a refusal probe nothing.
+        """
+        return self.directory if self.syncable and not self.in_content_directory else None
 
     @property
     def owned_files(self) -> tuple[SaveComponent, ...]:
@@ -329,6 +370,8 @@ def build_save_answer(
     groups: tuple[SaveGroup, ...],
     caveats: tuple[str, ...],
     content_installed: bool,
+    root_kind: str | None = None,
+    fallback_directory: str | None = None,
 ) -> SaveAnswer:
     """Classify one resolved savefile placement into a :class:`SaveAnswer`.
 
@@ -357,6 +400,8 @@ def build_save_answer(
         components=components,
         caveats=caveats,
         content_installed=content_installed,
+        root_kind=root_kind,
+        fallback_directory=fallback_directory,
     )
 
 

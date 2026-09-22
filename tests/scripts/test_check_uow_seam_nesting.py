@@ -305,13 +305,13 @@ class TestIoSeamsViolations:
         assert "realpath" in findings[0]
         assert "file-I/O seam" in findings[0]
 
-    @pytest.mark.parametrize("method", ["resolve_save_answer", "save_answer"])
+    @pytest.mark.parametrize("method", ["resolve_save_answer", "resolve_savestate_location", "save_answer"])
     def test_the_save_answer_inside_uow_is_flagged(self, method: str):
-        # The seam and the saves package's own wrapper around it. Both are
-        # listed: the seam is reached directly from two modules (rom_info and
-        # migration) and the wrapper is what every peer in services/saves/
-        # calls, so listing only the seam would leave the rule green everywhere
-        # it is actually reached from.
+        # The seam's two questions and the saves package's own wrapper around
+        # the first. All are listed: the seam is reached directly from two
+        # modules (rom_info and the adoption renamer) and the wrapper is what
+        # every peer in services/saves/ calls, so listing only the seam would
+        # leave the rule green everywhere it is actually reached from.
         findings = check.scan_source(
             "class S:\n"
             "    def go(self, rom_id):\n"

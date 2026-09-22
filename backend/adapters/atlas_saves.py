@@ -1,8 +1,10 @@
-"""Atlas savefile adapter — the seam through which "where is this game's save" reaches the resolver.
+"""Atlas save adapter — the seam through which "where is this game's save" reaches the resolver.
 
 The single place the vendored `emu-atlas <https://github.com/danielcopper/emu-atlas>`_
 resolver is asked what one game's save consists of and where the emulator keeps
-it. Services see a :class:`domain.save_answer.SaveAnswer` and never an atlas
+it, and where it keeps that game's savestates. Services see a
+:class:`domain.save_answer.SaveAnswer` or a
+:class:`domain.savestate_location.SavestateLocation` and never an atlas
 type — ``domain/`` may not import ``_vendor`` at all (the ``domain-stdlib-only``
 contract), so the vocabulary and the resolver have to meet at an adapter, as
 they already do for the catalogue and the firmware seams.
@@ -43,7 +45,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from _vendor.atlas import Unresolved, core_probe_interpreter
+from _vendor.atlas import SavestateAbsence, SavestatePlacement, Unresolved, core_probe_interpreter
 
 from domain.save_answer import (
     UNESTABLISHED_NOT_ASKED,
@@ -52,13 +54,14 @@ from domain.save_answer import (
     build_save_answer,
     unestablished_answer,
 )
+from domain.savestate_location import NoSavestates, SavestateLocation
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
 
 class AtlasSaveLocationAdapter:
-    """Resolves one ROM's save location and file set, live, through the vendored resolver.
+    """Resolves one ROM's save and savestate locations, live, through the vendored resolver.
 
     Implements the ``SaveLocationReader`` Protocol structurally.
     """
@@ -118,6 +121,36 @@ class AtlasSaveLocationAdapter:
             f"caveats={sorted(set(answer.caveats))}"
         )
         return answer
+
+    def resolve_savestate_location(
+        self, *, system: str, content_path: str, emulator_label: str | None
+    ) -> SavestateLocation | NoSavestates | None:
+        """Where *emulator_label* keeps the savestates for the game at *content_path*.
+
+        *content_path* need not exist: the resolver places a game's states by
+        the path's own coordinates, so a rename can ask about the name the ROM
+        is about to take. ``None`` wherever nothing could be established — no
+        emulator, no installation, no entry under that label, a refusal, a
+        raise — because each leaves the states' whereabouts unknown, and a
+        caller must not read that as "there are none". :class:`NoSavestates` is
+        that statement, made by the resolver with its evidence.
+        """
+        if emulator_label is None:
+            return None
+        entry = self._entry(system, content_path, emulator_label)
+        if entry is None:
+            return None
+        subject = f"savestate_location({system!r}, {emulator_label!r})"
+        placement = self._ask(lambda: entry.savestate_location(content_path=content_path), subject)
+        if isinstance(placement, SavestateAbsence):
+            return NoSavestates()
+        if not isinstance(placement, SavestatePlacement):
+            if isinstance(placement, Unresolved):
+                self._log_debug(f"[saves] {subject}: declined with code={placement.code!r}")
+            return None
+        return SavestateLocation(
+            directory=placement.dir, root_kind=placement.root_kind, fallback_directory=placement.fallback_dir
+        )
 
     # -- helpers -------------------------------------------------------------
 
@@ -189,6 +222,8 @@ def _translate(placement: Any, emulator_label: str, content_installed: bool) -> 
         ),
         caveats=tuple(caveat.code for caveat in placement.caveats),
         content_installed=content_installed,
+        root_kind=placement.root_kind,
+        fallback_directory=placement.fallback_dir,
     )
 
 
