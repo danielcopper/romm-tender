@@ -1028,24 +1028,24 @@ Format: **invariant** — tier — enforced by.
   badge claims a file is NOT THERE, and nothing established that. **Where BOTH ignorances hold** — a console needing an
   image whose required folder row could not be judged, the LRPS2 shape and a reachable one — `biosSummary` names the
   withheld ROW rather than the console. They are not two gaps over two different file sets: a `required_by_active` row
-  always carries the active core, so it is always one of the rows the disjunction is read over. It is always one of the
-  unjudged rows that verdict is read over rather than a finding beside it — the decline needs at least one such row, and
-  this is one — and need not be the only one, since another image the core declares can be unjudged too; it is the only
-  half of the pair that can name a file, and naming it points at the file list, where its caveat explains itself.
-  **`"absent"` is tested BEFORE the level's decline**, and the pair never arrives at all today because the backend lands
-  `absent` on `missing`. Since #1863 that order lives ONCE, in `biosSummary`, which is what every wording surface reads
-  — `PlatformsTab.tsx`'s row tooltip last, since it kept a copy of the order and an older spelling of the states for a
-  cut longer and described one platform in two vocabularies a keypress apart. **The module's own drift lock is a test
-  that reads components as SOURCE** (`biosSummary.test.ts`, over the phrase list the module builds its answers from,
-  with the ratio's twin in `biosHeldRatio.test.ts`) — and since #1866 it SWEEPS the set it searches rather than naming
-  it (`frontend/src/test-utils/componentSources.ts`, every non-test `.tsx` under `frontend/src/bigpicture`), because the
-  naming is what failed: both locks listed two components while three rendered these states, and a surface missing from
-  such a list carries no lock at all and cannot be told from one that never drifted. Deriving the set from who IMPORTS
-  the module would be worse than the list — a surface wording a state for itself is exactly one that does not import it.
-  **What neither lock can catch is a component inventing a NEW wording for one of these states**: only a copied phrase
-  is searchable, so a green run there is evidence about copied sentences and about nothing else. Two limits of the
-  sweep, both deliberate: it is `.tsx` only, so a wording helper extracted into a `.ts` beside its component is
-  unsearched (`frontend/src/bigpicture/panelState.ts` is such a file and quotes BIOS prose today), and
+  always carries the launching emulator, so it is always one of the rows the disjunction is read over. It is always one
+  of the unjudged rows that verdict is read over rather than a finding beside it — the decline needs at least one such
+  row, and this is one — and need not be the only one, since another image the core declares can be unjudged too; it is
+  the only half of the pair that can name a file, and naming it points at the file list, where its caveat explains
+  itself. **`"absent"` is tested BEFORE the level's decline**, and the pair never arrives at all today because the
+  backend lands `absent` on `missing`. Since #1863 that order lives ONCE, in `biosSummary`, which is what every wording
+  surface reads — `PlatformsTab.tsx`'s row tooltip last, since it kept a copy of the order and an older spelling of the
+  states for a cut longer and described one platform in two vocabularies a keypress apart. **The module's own drift lock
+  is a test that reads components as SOURCE** (`biosSummary.test.ts`, over the phrase list the module builds its answers
+  from, with the ratio's twin in `biosHeldRatio.test.ts`) — and since #1866 it SWEEPS the set it searches rather than
+  naming it (`frontend/src/test-utils/componentSources.ts`, every non-test `.tsx` under `frontend/src/bigpicture`),
+  because the naming is what failed: both locks listed two components while three rendered these states, and a surface
+  missing from such a list carries no lock at all and cannot be told from one that never drifted. Deriving the set from
+  who IMPORTS the module would be worse than the list — a surface wording a state for itself is exactly one that does
+  not import it. **What neither lock can catch is a component inventing a NEW wording for one of these states**: only a
+  copied phrase is searchable, so a green run there is evidence about copied sentences and about nothing else. Two
+  limits of the sweep, both deliberate: it is `.tsx` only, so a wording helper extracted into a `.ts` beside its
+  component is unsearched (`frontend/src/bigpicture/panelState.ts` is such a file and quotes BIOS prose today), and
   `frontend/src/utils` is out of scope because that is where the phrases legitimately live **A narrower form of the same
   answer is read PER CORE onto every row** (`FirmwareCatalogue.emulators_needing_one_of_their_files` →
   `build_file_entry`'s `cores[<emulator>]["needs_one_of"]` and the row's own `system_image_candidate`, worded by

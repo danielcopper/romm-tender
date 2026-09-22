@@ -2081,14 +2081,15 @@ the flag for the launching core.
 - **`system_firmware: null` is an unasked question.** The table covers the systems somebody has looked at, so an absent
   entry is a system nobody has looked at. It reaches `not_demanded`, which makes no claim of its own — and it must never
   be spent as one, for the same reason `unknown` is not `not_needed` one axis over.
-- The answer is scoped to the **active core**, so one unchanged PlayStation page reads `absent` under SwanStation, whose
-  five declared images the table says the console cannot start without one of, and `not_demanded` under PCSX ReARMed,
-  which carries its own HLE BIOS. Both come off the one builder, so a platform and its games cannot disagree about it.
+- The answer is scoped to the **launching emulator**, so one unchanged PlayStation page reads `absent` under
+  SwanStation, whose five declared images the table says the console cannot start without one of, and `not_demanded`
+  under PCSX ReARMed, which carries its own HLE BIOS. Both come off the one builder, so a platform and its games cannot
+  disagree about it.
 - **Four frontend surfaces read it**: the game page's BIOS headline, the platform detail's summary, the platform list's
   row tooltip, and the play row's red BIOS badge — where `"absent"` is a second established absence beside the required
   count, and `"unsettled"` raises nothing, exactly as a withheld required row does not. Where a withheld required row
   and an unsettled console demand hold together, the platform detail names the ROW. The two are not gaps over two
-  different file sets: a `required_by_active` row always carries the active core, so it is always one of the rows the
+  different file sets: a `required_by_active` row always carries the launching emulator, so it is always one of the rows
   disjunction is read over. It is always one of the unjudged rows that verdict is read over rather than a finding beside
   it — the decline needs at least one such row, and this is one — and need not be the only one, since another image the
   core declares can be unjudged too; it is the only half of the pair that can name a file.
