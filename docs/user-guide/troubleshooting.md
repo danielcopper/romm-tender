@@ -337,9 +337,9 @@ Steam check aborted, keep the bundle; it is a valid pre-action snapshot even tho
 has no automatic import flow.
 
 A bulk shortcut removal is paced so it never freezes the interface, so on a large library it can take a few seconds.
-While one is running, every removal button on every pane is disabled and a spinner with a live **Removing x of y**
-counter shows the progress above the list; the buttons re-enable and the final count appears once it finishes. You can't
-start a second removal (or a new one from another button) until the current one completes.
+While one is running, every removal button on every pane is disabled and a spinner above the list names the operation
+and counts off the shortcuts it has removed; the buttons re-enable and the final count appears once it finishes. You
+can't start a second removal (or a new one from another button) until the current one completes.
 
 ### Tender's shortcuts
 

@@ -118,7 +118,7 @@ const RomFilesPane: FC<{ state: DataPageState }> = ({ state }) => {
       <Figures>
         {inventory === null
           ? "Reading…"
-          : `${pluralize(inventory.installed_roms, "game")} · ≈ ${formatBytes(inventory.installed_bytes)}`}
+          : `${inventory.installed_roms} installed · ≈ ${formatBytes(inventory.installed_bytes)}`}
       </Figures>
       <Muted>The size is what your RomM server reported for these games, not a measurement of your disk.</Muted>
       <ButtonRow padding="2px 16px 6px">
@@ -259,10 +259,10 @@ const WhitelistSection: FC<{ state: DataPageState; onWhitelistChange: () => void
 /**
  * What is in the Steam library that neither Steam nor this plugin put there.
  *
- * Tender's own shortcuts are excluded by OWNERSHIP rather than by name: the
- * default whitelist matches launcher names, and a synced library's entries
- * carry game names, so a name-based rule would sweep the whole library away.
- * Removing what this plugin created is the Tender's-shortcuts row's job.
+ * Tender's own shortcuts are excluded by OWNERSHIP rather than by name; why
+ * that is the only rule that holds is `docs/architecture/qam-panel.md`,
+ * section Data Management. Removing what this plugin created is the
+ * Tender's-shortcuts row's job.
  *
  * Where the store could not be read at all the pane offers nothing — the same
  * abort the grid cleanup takes when its own scan cannot run. Where the sweep
@@ -317,8 +317,8 @@ const NonSteamPane: FC<{ state: DataPageState }> = ({ state }) => {
       {state.unidentifiedCount > 0 && (
         <Muted>
           {state.unidentifiedCount === 1
-            ? "1 entry could not be identified and is left alone — Steam did not answer for it in time."
-            : `${state.unidentifiedCount} entries could not be identified and are left alone — Steam did not answer for them in time.`}
+            ? "1 entry could not be identified — Steam did not answer for it in time. It is not in the count above and nothing here will remove it; open the page again to retry."
+            : `${state.unidentifiedCount} entries could not be identified — Steam did not answer for them in time. They are not in the count above and nothing here will remove them; open the page again to retry.`}
         </Muted>
       )}
       {foreign === null && (

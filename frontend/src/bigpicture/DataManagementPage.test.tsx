@@ -315,7 +315,10 @@ describe("DataManagementPage", () => {
       );
       const view = await pageOn("rom-files");
 
-      expect(view.container.textContent).toContain("12 games");
+      // The figure names its own unit: two installed versions of one game are
+      // two installs, so "games" would be a miscount and "files" another.
+      expect(view.container.textContent).toContain("12 installed");
+      expect(view.container.textContent).not.toContain("12 games");
       expect(view.container.textContent).toContain("≈ 5.00 GB");
       // The `≈` is not decoration: the figure is the server's, not a disk walk.
       expect(view.container.textContent).toContain("what your RomM server reported");
@@ -660,7 +663,11 @@ describe("DataManagementPage", () => {
       const view = await pageOn("non-steam");
 
       expect(view.getByTestId("data-row-non-steam").textContent).toContain("1");
-      expect(view.container.textContent).toContain("1 entry could not be identified and is left alone");
+      expect(view.container.textContent).toContain("1 entry could not be identified");
+      // Actionable, not merely true: the reader can close the arithmetic and
+      // knows what to do about it.
+      expect(view.container.textContent).toContain("not in the count above");
+      expect(view.container.textContent).toContain("open the page again to retry");
     });
 
     it("removes the proven-foreign entries and leaves the unidentified one", async () => {

@@ -129,8 +129,9 @@ export interface LaunchVerdict {
  * What this device holds, for the Data Management page's inventory rows.
  *
  * `installed_roms` counts INSTALLS — one per install, so a multi-disc game
- * counts once and two installed versions of one game count twice — so a
- * surface rendering it says games rather than files.
+ * counts once and two installed versions of one game count twice. A surface
+ * rendering it says neither files nor games, both of which it would
+ * miscount: the number's own unit is the install.
  *
  * `installed_bytes` is the size RomM reported for those games
  * (`Rom.fs_size_bytes`), summed — never a walk of the disk — so it is written
