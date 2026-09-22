@@ -42,7 +42,7 @@ ACK_UNTIL="${TENDER_ACK_UNTIL:-2027-03-31}"
 RELEASE_API="${TENDER_RELEASE_API:-https://api.github.com/repos/danielcopper/romm-tender/releases/latest}"
 DOWNLOAD_BASE="${TENDER_DOWNLOAD_BASE:-https://github.com/danielcopper/romm-tender/releases/download}"
 
-MIGRATION_NOTES="https://danielcopper.github.io/romm-tender/user-guide/getting-started/"
+MIGRATION_NOTES="https://danielcopper.github.io/romm-tender/user-guide/getting-started/#coming-from-the-decky-plugin"
 
 PYTHON="${TENDER_PYTHON:-/usr/bin/python3}"
 
@@ -154,8 +154,10 @@ LOGO_ICON_WIDTH=28
 LOGO_ASCII_WIDTH=28
 LOGO_RING_RGB='174;198;218'
 LOGO_BUTTON_RGB='221;152;128'
+LOGO_DISC_RGB='146;183;227'
 LOGO_RING_256=152
 LOGO_BUTTON_256=174
+LOGO_DISC_256=110
 LOGO_ICON_TRUECOLOR=(
     $'\033[39;49m        \033[38;2;98;120;152;49m▄\033[38;2;137;171;212;49m▄\033[38;2;146;183;227;49m▄▄\033[38;2;91;111;141;48;2;146;183;227m▀\033[38;2;98;121;153;48;2;146;183;227m▀▀\033[38;2;91;111;141;48;2;146;183;227m▀\033[38;2;146;183;227;49m▄▄\033[38;2;137;171;213;49m▄\033[38;2;98;120;152;49m▄\033[39;49m        \033[0m'
     $'\033[39;49m     \033[38;2;136;170;212;49m▄\033[38;2;104;128;161;48;2;146;183;227m▀\033[38;2;145;182;226;48;2;144;181;225m▀\033[38;2;146;183;227;48;2;104;136;171m▀\033[38;2;146;183;227;48;2;55;83;107m▀\033[38;2;132;168;209;48;2;31;56;75m▀\033[38;2;105;138;173;48;2;31;56;75m▀\033[38;2;87;118;150;48;2;31;56;75m▀\033[38;2;79;109;138;48;2;31;56;75m▀▀\033[38;2;87;118;150;48;2;31;56;75m▀\033[38;2;105;138;173;48;2;31;56;75m▀\033[38;2;132;168;209;48;2;31;56;75m▀\033[38;2;146;183;227;48;2;55;83;107m▀\033[38;2;146;183;227;48;2;104;136;171m▀\033[38;2;145;182;226;48;2;144;181;225m▀\033[38;2;104;128;161;48;2;146;183;227m▀\033[38;2;136;170;212;49m▄\033[39;49m     \033[0m'
@@ -284,19 +286,23 @@ reset_style() {
     fi
 }
 
-# The two tones the ASCII drawing is written in, resolved once. Both values are
-# generated from the palette build.py ships, so the drawing cannot drift away
-# from the mark it is a picture of.
+# The two tones the ASCII drawing is written in, and the disc's tone the success
+# line is set in, resolved once. All three are generated from the palette
+# build.py ships, so neither the drawing nor that line can drift away from the
+# mark they sit beside.
 LOGO_RING_STYLE=""
 LOGO_BUTTON_STYLE=""
+LOGO_DISC_STYLE=""
 
 resolve_logo_colours() {
     if truecolor_terminal; then
         LOGO_RING_STYLE="38;2;$LOGO_RING_RGB"
         LOGO_BUTTON_STYLE="38;2;$LOGO_BUTTON_RGB"
+        LOGO_DISC_STYLE="38;2;$LOGO_DISC_RGB"
     else
         LOGO_RING_STYLE="38;5;$LOGO_RING_256"
         LOGO_BUTTON_STYLE="38;5;$LOGO_BUTTON_256"
+        LOGO_DISC_STYLE="38;5;$LOGO_DISC_256"
     fi
 }
 
@@ -845,7 +851,7 @@ preflight() {
         abort "no native Steam installation found" "install Steam and run it once, then run this again"
     row_add "$CHECKING" "Steam"
     refuse_decky_plugin
-    row_add "$CHECKING" "no Decky plugin"
+    row_add "$CHECKING" "no Tender plugin in Decky"
 }
 
 # Prints the version it found, and ANSWERS rather than aborting: its value is
@@ -919,7 +925,7 @@ acknowledge() {
     printf '%s  Coming from the Decky plugin?' "$sign"
     reset_style
     printf '\n'
-    printf '   Your old Steam shortcuts will not be recognised.\n'
+    printf '   The Steam shortcuts it created are not recognised by this version.\n'
     style 2
     printf '   Read first: %s' "$MIGRATION_NOTES"
     reset_style
@@ -1352,10 +1358,10 @@ closing_block() {
         next="start Steam, then open the Quick Access menu"
     fi
     echo
-    # The one line that says the run worked, in the mark's own blue — the two
+    # The one line that says the run worked, in the disc's own blue — the two
     # under it are where to look afterwards and stay dim. The bold is on the
     # action, because that is the only part of it a reader has to act on.
-    style "$LOGO_RING_STYLE"
+    style "$LOGO_DISC_STYLE"
     printf 'Done in %ss.  ' "$SECONDS"
     style 1
     printf 'Next: %s.' "$next"

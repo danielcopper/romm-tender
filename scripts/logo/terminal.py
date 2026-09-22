@@ -596,11 +596,27 @@ def tones() -> tuple[str, str]:
     return ASCII_RING_TONE, gen.BY_NAME[gen.CHOSEN].dot_peach
 
 
+def disc_tone() -> str:
+    """The disc's upper facet tone, as ``#rrggbb`` — what the installer's success line is set in.
+
+    Read from the palette `build.py` ships, so the one coloured sentence of a
+    run is the same blue as the disc drawn above it.
+    """
+    import gen  # noqa: PLC0415 — a sibling module, resolved through the path build.py sets
+
+    return gen.BY_NAME[gen.CHOSEN].disc[0]
+
+
+def _cube_index(hex_colour: str) -> int:
+    return nearest_256(tuple(int(hex_colour[i : i + 2], 16) for i in (1, 3, 5)))
+
+
 def bash_block() -> str:
     """The generated block `install.sh` carries, markers included."""
     icon = icon_cells()
     drawing = ascii_cells()
     ring, button = tones()
+    disc = disc_tone()
     lines = [
         _MARKERS[0],
         f"LOGO_RUN_SEPARATOR={_quote(RUN_SEPARATOR)}",
@@ -608,8 +624,10 @@ def bash_block() -> str:
         f"LOGO_ASCII_WIDTH={ASCII_COLUMNS}",
         f"LOGO_RING_RGB={_quote(_rgb(ring))}",
         f"LOGO_BUTTON_RGB={_quote(_rgb(button))}",
-        f"LOGO_RING_256={nearest_256(tuple(int(ring[i : i + 2], 16) for i in (1, 3, 5)))}",
-        f"LOGO_BUTTON_256={nearest_256(tuple(int(button[i : i + 2], 16) for i in (1, 3, 5)))}",
+        f"LOGO_DISC_RGB={_quote(_rgb(disc))}",
+        f"LOGO_RING_256={_cube_index(ring)}",
+        f"LOGO_BUTTON_256={_cube_index(button)}",
+        f"LOGO_DISC_256={_cube_index(disc)}",
         "LOGO_ICON_TRUECOLOR=(",
         *[f"    {_ansi_quote(block_row(row, 'truecolor', ICON_COLUMNS))}" for row in icon],
         ")",

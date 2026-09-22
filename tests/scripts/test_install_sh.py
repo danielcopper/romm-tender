@@ -45,7 +45,7 @@ _ARCHIVE = f"romm-tender-{_VERSION}.tar.gz"
 _DOWNLOAD_BASE = "https://example.invalid/releases/download"
 _RELEASE_API = "https://example.invalid/repos/releases/latest"
 _DEBUGGER_PROBE = "http://127.0.0.1:8080/json/version"
-_MIGRATION_NOTES = "https://danielcopper.github.io/romm-tender/user-guide/getting-started/"
+_MIGRATION_NOTES = "https://danielcopper.github.io/romm-tender/user-guide/getting-started/#coming-from-the-decky-plugin"
 
 # What the packager is handed. Only the three entries install.sh requires need
 # real content; the rest have to exist because the packager refuses a tree that
@@ -503,7 +503,7 @@ class TestAFreshInstall:
         """A row that only said "checking" would be four seconds of nothing."""
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
 
-        assert "python 3.13 - systemd - Steam - no Decky plugin" in result.stdout
+        assert "python 3.13 - systemd - Steam - no Tender plugin in Decky" in result.stdout
 
     def test_a_piped_run_carries_no_carriage_returns(self, machine):
         """No terminal, no spinner: every row is written once, forwards.
@@ -1343,7 +1343,7 @@ class TestHowTheRunLooks:
         screen = _screen(output).splitlines()
         first = next(index for index, line in enumerate(screen) if line.startswith("⚠"))
         assert screen[first] == "⚠  Coming from the Decky plugin?"
-        assert screen[first + 1] == "   Your old Steam shortcuts will not be recognised."
+        assert screen[first + 1] == "   The Steam shortcuts it created are not recognised by this version."
         assert screen[first + 2] == f"   Read first: {_MIGRATION_NOTES}"
         assert screen[first + 3].startswith("   Continue? [y/N]")
 
@@ -1377,7 +1377,7 @@ class TestTheClosingLine:
         )
 
         done = next(line for line in output.splitlines() if "Done in" in line)
-        assert done.startswith("\033[38;2;174;198;218m"), "the Done line is not in the disc's blue"
+        assert done.startswith("\033[38;2;146;183;227m"), "the Done line is not in the disc's blue"
         assert "\033[1mNext: " in done, "the action is not bold"
 
     def test_a_terminal_with_no_truecolor_gets_the_nearest_index(self, machine):
@@ -1385,7 +1385,7 @@ class TestTheClosingLine:
         _code, output = machine.on_a_terminal("--from", str(_build_tarball(machine.tmp_path)), answer="y")
 
         done = next(line for line in output.splitlines() if "Done in" in line)
-        assert done.startswith("\033[38;5;152m")
+        assert done.startswith("\033[38;5;110m")
         assert "38;2;" not in done
 
     def test_the_rows_under_it_stay_dim(self, machine):
