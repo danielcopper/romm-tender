@@ -319,6 +319,12 @@ describe("DataManagementPage", () => {
       // two installs, so "games" would be a miscount and "files" another.
       expect(view.container.textContent).toContain("12 installed");
       expect(view.container.textContent).not.toContain("12 games");
+      // And nothing around it supplies a unit the figure has not got: a reader
+      // reading top to bottom must not complete "12 installed" as "12 game
+      // files" off the sentence above it.
+      expect(view.container.textContent).toContain("counted one per install");
+      expect(view.container.textContent).not.toContain("game files");
+      expect(view.container.textContent).not.toContain("these games");
       expect(view.container.textContent).toContain("≈ 5.00 GB");
       // The `≈` is not decoration: the figure is the server's, not a disk walk.
       expect(view.container.textContent).toContain("what your RomM server reported");

@@ -112,15 +112,15 @@ const RomFilesPane: FC<{ state: DataPageState }> = ({ state }) => {
   return (
     <>
       <Muted>
-        The game files this plugin downloaded to your device. Removing them keeps every shortcut, so the games stay in
-        your library and can be downloaded again.
+        The games this plugin downloaded to your device, counted one per install — a game you keep two versions of is
+        two of these. Removing them keeps every shortcut, so the games stay in your library and can be downloaded again.
       </Muted>
       <Figures>
         {inventory === null
           ? "Reading…"
           : `${inventory.installed_roms} installed · ≈ ${formatBytes(inventory.installed_bytes)}`}
       </Figures>
-      <Muted>The size is what your RomM server reported for these games, not a measurement of your disk.</Muted>
+      <Muted>The size is what your RomM server reported for these installs, not a measurement of your disk.</Muted>
       <ButtonRow padding="2px 16px 6px">
         <ConfirmButton
           label="Uninstall all ROM files"
@@ -261,8 +261,9 @@ const WhitelistSection: FC<{ state: DataPageState; onWhitelistChange: () => void
  *
  * Tender's own shortcuts are excluded by OWNERSHIP rather than by name; why
  * that is the only rule that holds is `docs/architecture/qam-panel.md`,
- * section Data Management. Removing what this plugin created is the
- * Tender's-shortcuts row's job.
+ * section Data Management — "Two rows would overlap if either were read
+ * naively". Removing what this plugin created is the Tender's-shortcuts row's
+ * job.
  *
  * Where the store could not be read at all the pane offers nothing — the same
  * abort the grid cleanup takes when its own scan cannot run. Where the sweep
