@@ -69,7 +69,7 @@ def sanitize_package_name(name: object) -> str:
     """Return an ASCII path component suitable for the recovery-root name."""
     raw = name if isinstance(name, str) else ""
     cleaned = _UNSAFE_PACKAGE_RUN.sub("-", raw).strip("-._")
-    return cleaned or "decky-plugin"
+    return cleaned or "package"
 
 
 def sanitize_bundle_name(name: object) -> str:
