@@ -1435,14 +1435,19 @@ cannot answer at all, while an inventory answers it before anything is pressed. 
 from is [data-management-layouts.html](../assets/data-management-layouts.html). The list needs no headings for the same
 reason Settings needs none: six rows that each name a thing are their own order.
 
-| Row                   | What it says on arrival                                          | What the pane offers                            |
-| --------------------- | ---------------------------------------------------------------- | ----------------------------------------------- |
-| Tender's shortcuts    | `total_shortcuts` — the bound shortcuts Main counts every visit  | Remove all shortcuts                            |
-| Installed ROMs        | one count per install — two kept versions count twice            | Uninstall all ROM files                         |
-| Grid images           | `scan` until asked — then how many are orphaned                  | Remove the orphaned images                      |
-| Other non-Steam games | Steam's own store less this plugin's entries — a dash until read | the whitelist, the removal, the RetroDECK guard |
-| Gone from RomM        | `scan` until asked — the server round trip                       | Review, which opens the dialog below            |
-| Recovery bundles      | how many are sealed and what they take                           | nothing — this page does not delete them        |
+| Row                   | What it says on arrival                                         | What the pane offers                            |
+| --------------------- | --------------------------------------------------------------- | ----------------------------------------------- |
+| Tender's shortcuts    | `total_shortcuts` — the bound shortcuts Main counts every visit | Remove all shortcuts                            |
+| Installed ROMs        | one count per install — two kept versions count twice           | Uninstall all ROM files                         |
+| Grid images           | `scan` until asked — then how many are orphaned                 | Remove the orphaned images                      |
+| Other non-Steam games | Steam's own store less this plugin's entries                    | the whitelist, the removal, the RetroDECK guard |
+| Gone from RomM        | `scan` until asked — the server round trip                      | Review, which opens the dialog below            |
+| Recovery bundles      | how many are sealed and what they take                          | the bundles one by one, and nothing to press    |
+
+**A row's count slot has one face per state of its figure**: a spinner while the page is still reading it, a dash where
+the read failed, the figure once it is answered — and `scan` for a figure nobody has asked for yet. The pane under a
+failed read says what could not be read and to open the page again, where one still being read says `Reading…`; neither
+borrows the other's words.
 
 **A number that costs a round trip or a backend scan sits behind a press.** Focus selects on this layout, so a reading
 that rode on the selection would fire under every row the stick passes — a local scan of the grid directory for one row,
@@ -1461,7 +1466,7 @@ whitelist protects by NAME and a synced library carries game names. So the forei
 plugin created**, told apart by what a shortcut launches rather than by what it is called, and the foreign row never
 removes ours: row 1 is where they go wholesale, the Gone-from-RomM cleanup takes the individual vanished ones, and a
 platform's own removal in Library takes a platform's. That reading is a per-shortcut sweep rather than a field: it takes
-time, so the row shows a dash until it lands, and **what it cannot establish it never offers** — neither a store it
+time, so the row shows a spinner until it lands, and **what it cannot establish it never offers** — neither a store it
 could not read at all, nor an entry whose own reading did not arrive. The pane says which of the two happened. An
 unproven entry left alone is a row that under-reports; an unproven entry offered is a library deleted.
 
@@ -1488,9 +1493,13 @@ the bottom** instead of standing after every candidate row, which is what a stic
 rules do not change; they live in [removed-game-cleanup.md](removed-game-cleanup.md).
 
 **Recovery bundles are listed and nothing here removes them.** The row states how many are sealed and what they cost, so
-the disk they take stops being invisible; deleting one is the reader's own business in a file manager until a cut gives
-that action a home. A row that shows something and offers nothing is still a row this page owes, because the page's
-claim is what this device holds.
+the disk they take stops being invisible, and the pane lists them under that total as a table — Game, Sealed, Size —
+newest first. Game and day are read off the folder's name alone and no seal is opened for them, so the game is spelled
+the way the folder spells it (`Shenmue-II`), and a folder not in the shape Tender writes — an older version's, one
+renamed by hand, one marked `.durability-uncertain` — is listed under its own name with no day, after every dated one.
+Each row is a focus stop with nothing to press, because the pane scrolls only by focus. Deleting one is the reader's own
+business in a file manager until a cut gives that action a home. A row that shows something and offers nothing is still
+a row this page owes, because the page's claim is what this device holds.
 
 ## Downloads
 

@@ -7,6 +7,7 @@ import pytest
 from domain.identity import DISPLAY_NAME
 from domain.prune import (
     _READABLE_KINDS,
+    parse_recovery_bundle_id,
     recovery_bundle_id,
     render_bundle_readme,
     sanitize_package_name,
@@ -98,6 +99,41 @@ def test_bundle_name_cannot_escape_or_hide_its_directory():
     assert recovery_bundle_id("../../etc/passwd", "2026-07-24", "abcd").startswith("etc-passwd")
     assert recovery_bundle_id("...hidden", "2026-07-24", "abcd").startswith("hidden")
     assert len(recovery_bundle_id("N" * 500, "2026-07-24", "abcd")) < 100
+
+
+class TestParseRecoveryBundleId:
+    """A bundle folder's name read back into its game and its day."""
+
+    @pytest.mark.parametrize(
+        ("game_name", "expected_name"),
+        [
+            ("Shenmue", "Shenmue"),
+            ("Shenmue II", "Shenmue-II"),
+            ("Super_Mario_64", "Super_Mario_64"),
+            # A name that itself looks like a bundle suffix stays in the name:
+            # only the LAST day-and-id is the folder's own.
+            ("Game_2020-01-01_abcd", "Game_2020-01-01_abcd"),
+            (None, "game"),
+        ],
+    )
+    def test_it_reads_back_what_the_builder_wrote(self, game_name, expected_name):
+        folder = recovery_bundle_id(game_name, "2026-09-20", "4c4d62ac")
+
+        assert parse_recovery_bundle_id(folder) == (expected_name, "2026-09-20")
+
+    @pytest.mark.parametrize(
+        "folder",
+        [
+            "Shenmue_2026-09-20_25931669.durability-uncertain",
+            "Shenmue backup",
+            "Shenmue_20260920_25931669",
+            "Shenmue_2026-09-20_ab",
+            "_2026-09-20_abcd",
+            "",
+        ],
+    )
+    def test_a_folder_not_in_that_shape_answers_its_own_name_and_no_day(self, folder):
+        assert parse_recovery_bundle_id(folder) == (folder, None)
 
 
 def test_readable_kinds_match_the_kinds_the_producers_emit():

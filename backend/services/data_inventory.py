@@ -1,8 +1,8 @@
 """DataInventoryService — what this device holds, counted for the Data Management page.
 
 The home for the population figures no other read answers: how many installs
-this device holds and what they take, and how many recovery bundles are sealed
-and what they take. Every other row on that page is already answered elsewhere —
+this device holds and what they take, and which recovery bundles are sealed and
+what each takes. Every other row on that page is already answered elsewhere —
 the shortcut count by ``get_sync_stats``, the non-Steam entries by the
 frontend's own scan of Steam's shortcut store — and none of those moves here.
 
@@ -50,7 +50,9 @@ class DataInventoryService:
         """Report the installed-ROM and recovery-bundle populations with their sizes.
 
         Returns ``installed_roms`` / ``installed_bytes``,
-        ``recovery_bundles`` / ``recovery_bytes`` and ``recovery_root``.
+        ``recovery_bundles`` / ``recovery_bytes``, ``recovery_root`` and
+        ``recovery_bundle_list`` — one ``RecoveryBundleEntry`` per counted
+        bundle, in no particular order.
         ``installed_roms`` counts INSTALLS — one per install, so a multi-disc
         game counts once and two installed versions of one game count twice —
         never files.
@@ -76,6 +78,7 @@ class DataInventoryService:
             "recovery_bundles": bundles["count"],
             "recovery_bytes": bundles["total_bytes"],
             "recovery_root": self._recovery_inventory.root(),
+            "recovery_bundle_list": bundles["bundles"],
         }
 
     def _read_installed_io(self) -> tuple[int, int]:

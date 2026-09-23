@@ -149,4 +149,22 @@ export interface DataInventory {
   recovery_bytes: number;
   /** Where the counted bundles live — derived from the package name, so never spelled here. */
   recovery_root: string;
+  /** Every bundle `recovery_bundles` counts, one entry each, in no particular order. */
+  recovery_bundle_list: RecoveryBundleEntry[];
+}
+
+/**
+ * One sealed bundle, as its folder name spells it.
+ *
+ * `name` is the game as the folder spells it — sanitized for a path, so
+ * "Shenmue-II" where the game is "Shenmue II". A folder not in the shape
+ * Tender writes (an older version's, or one renamed by hand) answers its whole
+ * folder name here with `day` `null`. `bytes` is `null` where the bundle could
+ * not be measured, which is an unknown size rather than an empty bundle.
+ */
+export interface RecoveryBundleEntry {
+  name: string;
+  /** The day it was sealed, `YYYY-MM-DD`. */
+  day: string | null;
+  bytes: number | null;
 }

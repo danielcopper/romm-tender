@@ -77,6 +77,7 @@ function inventory(overrides: Partial<DataInventory> = {}): DataInventory {
     recovery_bundles: 0,
     recovery_bytes: 0,
     recovery_root: "/home/deck/romm-tender-recovery",
+    recovery_bundle_list: [],
     ...overrides,
   };
 }
@@ -103,6 +104,12 @@ async function pageOn(id: string): Promise<RenderResult> {
 /** A pane's button, found by what it currently says — its label IS its state. */
 function button(view: RenderResult, text: string | RegExp): HTMLButtonElement {
   return view.getByText(text).closest("button") as HTMLButtonElement;
+}
+
+/** The recovery pane's bundle rows, in the order they are drawn. The Focusable
+ *  stub stamps its own test id, so a row is found as a stop inside the table. */
+function bundleRows(view: RenderResult): HTMLElement[] {
+  return within(view.getByTestId("bundle-table")).getAllByTestId("focusable");
 }
 
 /** Press a button and let its awaited work settle. */
@@ -223,6 +230,119 @@ describe("DataManagementPage", () => {
     });
   });
 
+  describe("a figure the page reads is reading, failed or answered — never one for the other", () => {
+    it("shows a spinner, not a dash, in every row whose read is still in flight", async () => {
+      vi.mocked(backend.getSyncStats).mockReturnValue(new Promise(() => {}));
+      vi.mocked(backend.getDataInventory).mockReturnValue(new Promise(() => {}));
+      vi.mocked(scanShortcutOwnership).mockReturnValue(new Promise(() => {}));
+      const view = await renderPage();
+
+      for (const id of ["shortcuts", "rom-files", "non-steam", "recovery-bundles"]) {
+        const row = view.getByTestId(`data-row-${id}`);
+        expect(within(row).queryByTestId("spinner")).not.toBeNull();
+        expect(row.textContent).not.toContain("—");
+      }
+    });
+
+    it("says Reading… in a pane whose read is in flight", async () => {
+      vi.mocked(backend.getDataInventory).mockReturnValue(new Promise(() => {}));
+      const view = await pageOn("rom-files");
+
+      expect(view.container.textContent).toContain("Reading…");
+      expect(view.container.textContent).not.toContain("could not be read");
+    });
+
+    it("ends a rejected inventory read in failed, not in Reading…", async () => {
+      const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
+      vi.mocked(backend.getDataInventory).mockRejectedValue(new Error("backend_exception"));
+      const view = await pageOn("rom-files");
+
+      expect(within(view.getByTestId("data-row-rom-files")).queryByTestId("spinner")).toBeNull();
+      expect(view.getByTestId("data-row-rom-files").textContent).toContain("—");
+      expect(view.getByTestId("data-row-recovery-bundles").textContent).toContain("—");
+      expect(view.container.textContent).toContain(
+        "The installed ROMs could not be read — open the page again to retry.",
+      );
+      expect(view.container.textContent).not.toContain("Reading…");
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to read the data inventory"));
+      logSpy.mockRestore();
+
+      selectRow(view, "recovery-bundles");
+      expect(view.container.textContent).toContain(
+        "The recovery bundles could not be read — open the page again to retry.",
+      );
+      // A failed read says nothing about what the folder holds.
+      expect(view.container.textContent).not.toContain("Nothing has been sealed");
+    });
+
+    it("reads a resolved failure shape as failed, never as an inventory", async () => {
+      vi.mocked(backend.getDataInventory).mockResolvedValue({
+        success: false,
+        reason: "backend_exception",
+        message: "boom",
+      } as unknown as DataInventory);
+      const view = await pageOn("rom-files");
+
+      expect(view.getByTestId("data-row-rom-files").textContent).toContain("—");
+      expect(view.getByTestId("data-row-rom-files").textContent).not.toContain("undefined");
+      expect(view.container.textContent).toContain("The installed ROMs could not be read");
+    });
+
+    it("ends a rejected shortcut count in failed, not in Reading…", async () => {
+      vi.mocked(backend.getSyncStats).mockRejectedValue(new Error("offline"));
+      const view = await renderPage();
+
+      expect(view.getByTestId("data-row-shortcuts").textContent).toContain("—");
+      expect(view.container.textContent).toContain(
+        "The shortcut count could not be read — open the page again to retry.",
+      );
+    });
+
+    it("reads a resolved failure shape for the shortcut count as failed", async () => {
+      vi.mocked(backend.getSyncStats).mockResolvedValue({
+        success: false,
+        reason: "backend_exception",
+        message: "boom",
+      } as unknown as SyncStats);
+      const view = await renderPage();
+
+      expect(view.getByTestId("data-row-shortcuts").textContent).toContain("—");
+      expect(view.container.textContent).toContain("The shortcut count could not be read");
+    });
+
+    it("says Reading… on the non-Steam pane while the ownership scan runs, never the failure", async () => {
+      vi.mocked(scanShortcutOwnership).mockReturnValue(new Promise(() => {}));
+      stubCollectionStore([1]);
+      stubAppStore({ 1: { strDisplayName: "Firefox" } });
+      const view = await pageOn("non-steam");
+
+      expect(view.container.textContent).toContain("Reading…");
+      expect(view.container.textContent).not.toContain("could not be read");
+      expect(view.container.textContent).not.toContain("Could not be read");
+      // Nothing is offered while ownership is unanswered.
+      expect(view.queryByText(/Remove .*non-Steam game/)).toBeNull();
+    });
+
+    it("ends a failed re-read after an uninstall in failed, not in the stale figure", async () => {
+      vi.mocked(backend.getDataInventory)
+        .mockResolvedValueOnce(inventory({ installed_roms: 2, installed_bytes: 2048 }))
+        .mockRejectedValue(new Error("offline"));
+      vi.mocked(backend.uninstallAllRoms).mockResolvedValue({
+        success: true,
+        removed_count: 2,
+        errors: [],
+        app_ids: [],
+      });
+      const view = await pageOn("rom-files");
+
+      fireEvent.click(button(view, "Uninstall all ROM files"));
+      await press(button(view, "Delete every downloaded ROM file?"));
+
+      await waitFor(() => expect(view.getByTestId("data-row-rom-files").textContent).toContain("—"));
+      expect(view.container.textContent).not.toContain("2 installed");
+    });
+  });
+
   describe("a scan never rides on the selection", () => {
     it("selecting Grid images fires no backend scan", async () => {
       const view = await pageOn("grid-images");
@@ -297,6 +417,61 @@ describe("DataManagementPage", () => {
       expect(view.container.textContent).toContain("/var/home/deck/tender-recovery");
       expect(view.container.textContent).not.toContain("~/romm-tender-recovery");
       expect(view.container.textContent).not.toContain("beside your home directory");
+    });
+
+    it("lists each bundle newest first, with the ones naming no day last", async () => {
+      vi.mocked(backend.getDataInventory).mockResolvedValue(
+        inventory({
+          recovery_bundles: 4,
+          recovery_bytes: 3_000,
+          recovery_bundle_list: [
+            { name: "hand-renamed backup", day: null, bytes: 1_000 },
+            { name: "Shenmue", day: "2026-09-20", bytes: 2_048 },
+            { name: "Crazy-Taxi", day: "2026-10-02", bytes: null },
+            { name: "Shenmue-II", day: "2026-09-20", bytes: 500 },
+          ],
+        }),
+      );
+      const view = await pageOn("recovery-bundles");
+
+      expect(view.getByTestId("bundle-header").textContent).toBe("GameSealedSize");
+      const rows = bundleRows(view).map((row) => row.textContent);
+      expect(rows).toEqual([
+        "Crazy-Taxi2026-10-02—",
+        "Shenmue2026-09-202.0 KB",
+        "Shenmue-II2026-09-20500 B",
+        "hand-renamed backup—1000 B",
+      ]);
+      // The totals and the explanation stay above the list.
+      expect(view.container.textContent).toContain("4 bundles");
+      expect(view.container.textContent).toContain("Each carries a README");
+    });
+
+    it("makes every bundle row a focus stop, and offers nothing on any", async () => {
+      vi.mocked(backend.getDataInventory).mockResolvedValue(
+        inventory({
+          recovery_bundles: 2,
+          recovery_bytes: 20,
+          recovery_bundle_list: [
+            { name: "Shenmue", day: "2026-09-20", bytes: 10 },
+            { name: "Shenmue", day: "2026-09-20", bytes: 10 },
+          ],
+        }),
+      );
+      const view = await pageOn("recovery-bundles");
+
+      const rows = bundleRows(view);
+      expect(rows).toHaveLength(2);
+      for (const row of rows) {
+        expect(row.getAttribute("data-activate")).toBe("true");
+        expect(within(row).queryAllByRole("button")).toHaveLength(0);
+      }
+    });
+
+    it("draws no table where nothing has been sealed", async () => {
+      const view = await pageOn("recovery-bundles");
+
+      expect(view.queryByTestId("bundle-table")).toBeNull();
     });
 
     it("says nothing about where they live until the read has landed", async () => {

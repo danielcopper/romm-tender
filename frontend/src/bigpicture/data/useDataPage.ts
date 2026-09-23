@@ -21,6 +21,7 @@ import {
   getDataInventory,
   getSyncStats,
   getWhitelistSettings,
+  isCallableFailure,
   logError,
   logInfo,
   logWarn,
@@ -118,6 +119,23 @@ export interface RemovalProgress {
 }
 
 /**
+ * A figure the page reads as it opens: still being read, could not be read, or
+ * answered.
+ *
+ * Reading and failed are kept apart because they tell the reader opposite
+ * things — one is work that will finish on its own, the other asks them to open
+ * the page again — and a single "not here yet" value had each pane saying one of
+ * them for both.
+ */
+export type PageRead<T> = { state: "reading" } | { state: "failed" } | { state: "answered"; value: T };
+
+const READING = { state: "reading" } as const;
+// A resolved `{success: false}` is a failure too, not an answer: it carries none
+// of the figures the callable's declared type names, so each read below tests
+// for it before storing what came back.
+const FAILED = { state: "failed" } as const;
+
+/**
  * A population figure that costs a round trip: `null` until the reader asks for
  * it, a number once an answer has come back.
  *
@@ -128,21 +146,22 @@ export type ScannedCount = number | null;
 
 export interface DataPageState {
   /** Bound RomM shortcuts, from the same stats read Main makes. */
-  shortcutCount: number | null;
-  /** The installed-game and recovery-bundle figures, or `null` while unread. */
-  inventory: DataInventory | null;
+  shortcutCount: PageRead<number>;
+  /** The installed-game and recovery-bundle figures. */
+  inventory: PageRead<DataInventory>;
   /**
-   * The non-Steam entries this plugin did NOT create, or `null` where ownership
-   * could not be established.
+   * The non-Steam entries this plugin did NOT create — answered only once
+   * ownership has been established.
    *
-   * `null` is not "none": it means Steam's shortcut store could not be read, so
-   * nothing here can be proven foreign. The row reads as unavailable and the
+   * `failed` is not "none": it means Steam's shortcut store could not be read,
+   * so nothing here can be proven foreign. The row reads as unavailable and the
    * removal is refused — the same abort the grid cleanup takes when its scan
    * cannot run, and for the same reason: without the ownership answer a removal
-   * would take this plugin's whole library with it. An entry the sweep could
-   * not identify is the same refusal one entry wide: see `unidentifiedCount`.
+   * would take this plugin's whole library with it. `reading` refuses too, for
+   * the same want of an answer. An entry the sweep could not identify is the
+   * same refusal one entry wide: see `unidentifiedCount`.
    */
-  foreignApps: NonSteamApp[] | null;
+  foreignApps: PageRead<NonSteamApp[]>;
   /**
    * How many of Steam's non-Steam entries the sweep could not identify.
    *
@@ -179,8 +198,8 @@ export interface DataPageState {
 }
 
 export function useDataPage(): DataPageState {
-  const [shortcutCount, setShortcutCount] = useState<number | null>(null);
-  const [inventory, setInventory] = useState<DataInventory | null>(null);
+  const [shortcutCount, setShortcutCount] = useState<PageRead<number>>(READING);
+  const [inventory, setInventory] = useState<PageRead<DataInventory>>(READING);
   const [nonSteamApps, setNonSteamApps] = useState<NonSteamApp[]>([]);
   const [disabledDefaults, setDisabledDefaults] = useState<string[]>([]);
   const [customNames, setCustomNames] = useState<string[]>([]);
@@ -190,10 +209,10 @@ export function useDataPage(): DataPageState {
   // What Steam could be made to say about each of its non-Steam entries, read
   // by exe rather than from the database: a crashed run can leave one of ours
   // in Steam with no binding, and a removal that took it for a foreign entry
-  // would delete a game the next sync expects to find. `null` is "the store
+  // would delete a game the next sync expects to find. `failed` is "the store
   // could not be read at all"; the reading's own `unresolved` is the entries
   // within it that Steam did not answer for.
-  const [ownership, setOwnership] = useState<ShortcutOwnership | null>(null);
+  const [ownership, setOwnership] = useState<PageRead<ShortcutOwnership>>(READING);
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
   const [removalProgress, setRemovalProgress] = useState<RemovalProgress | null>(null);
@@ -248,10 +267,19 @@ export function useDataPage(): DataPageState {
     // never one of ours. The direction that matters cannot be made wrong by
     // losing this race.
     scanShortcutOwnership()
-      .then(setOwnership)
+      .then((scan) => setOwnership(scan === null ? FAILED : { state: "answered", value: scan }))
       .catch((e) => {
         logWarn(`Live RomM shortcut scan failed: ${e}`);
-        setOwnership(null);
+        setOwnership(FAILED);
+      });
+  }, []);
+
+  const readInventory = useCallback(() => {
+    getDataInventory()
+      .then((answer) => setInventory(isCallableFailure(answer) ? FAILED : { state: "answered", value: answer }))
+      .catch((e) => {
+        logError(`Failed to read the data inventory: ${e}`);
+        setInventory(FAILED);
       });
   }, []);
 
@@ -272,11 +300,14 @@ export function useDataPage(): DataPageState {
       })
       .catch((e) => logError(`Failed to load whitelist settings: ${e}`));
     getSyncStats()
-      .then((stats) => setShortcutCount(stats.total_shortcuts))
-      .catch((e) => logError(`Failed to read the shortcut count: ${e}`));
-    getDataInventory()
-      .then(setInventory)
-      .catch((e) => logError(`Failed to read the data inventory: ${e}`));
+      .then((stats) =>
+        setShortcutCount(isCallableFailure(stats) ? FAILED : { state: "answered", value: stats.total_shortcuts }),
+      )
+      .catch((e) => {
+        logError(`Failed to read the shortcut count: ${e}`);
+        setShortcutCount(FAILED);
+      });
+    readInventory();
     // A finished cleanup makes the scanned number wrong, and a wrong number is
     // worse than none: drop back to unscanned so the row asks to be scanned
     // again rather than reporting what the run has just removed.
@@ -287,7 +318,7 @@ export function useDataPage(): DataPageState {
       unsubscribePrune();
       detach(releasePruneLeasesByOwner(DATA_PAGE_LEASE_OWNER));
     };
-  }, [refreshNonSteam]);
+  }, [refreshNonSteam, readInventory]);
 
   const activeDefaults = useMemo(
     () => DEFAULT_WHITELIST_PATTERNS.filter((p) => !disabledDefaults.includes(p)),
@@ -302,22 +333,22 @@ export function useDataPage(): DataPageState {
    * ownership rather than by name. Without the ownership answer the set cannot
    * be formed at all, which is what `null` says.
    */
-  const foreignApps = useMemo(() => {
-    if (ownership === null) return null;
-    const accountedFor = new Set([...ownership.owned, ...ownership.unresolved]);
-    return nonSteamApps.filter((app) => !accountedFor.has(app.appId));
+  const foreignApps = useMemo((): PageRead<NonSteamApp[]> => {
+    if (ownership.state !== "answered") return ownership;
+    const accountedFor = new Set([...ownership.value.owned, ...ownership.value.unresolved]);
+    return { state: "answered", value: nonSteamApps.filter((app) => !accountedFor.has(app.appId)) };
   }, [nonSteamApps, ownership]);
 
   /** Entries Steam did not answer for, which are therefore offered to nothing. */
   const unidentifiedCount = useMemo(() => {
-    if (ownership === null) return 0;
+    if (ownership.state !== "answered") return 0;
     const listed = new Set(nonSteamApps.map((app) => app.appId));
-    return ownership.unresolved.filter((appId) => listed.has(appId)).length;
+    return ownership.value.unresolved.filter((appId) => listed.has(appId)).length;
   }, [nonSteamApps, ownership]);
 
   const whitelistedIds = useMemo(() => {
     const set = new Set<number>();
-    for (const app of foreignApps ?? []) {
+    for (const app of foreignApps.state === "answered" ? foreignApps.value : []) {
       const lower = app.name.toLowerCase();
       const matchesDefault = activeDefaults.some((p) => lower.includes(p));
       if (matchesDefault || customNames.includes(app.name)) {
@@ -408,7 +439,7 @@ export function useDataPage(): DataPageState {
             admission,
           );
           setShortcutStatus(result.message ?? "All shortcuts removed");
-          setShortcutCount(0);
+          setShortcutCount({ state: "answered", value: 0 });
         }
       } catch (e) {
         // Teardown cancellation, not a failed removal — the backend work already
@@ -458,9 +489,7 @@ export function useDataPage(): DataPageState {
           setUninstallStatus(formatUninstallStatus(result.removed_count ?? 0, (result.errors ?? []).length));
           // The files are gone, so the figures the row carried are stale. Re-read
           // rather than subtract: a partial failure left some of them behind.
-          getDataInventory()
-            .then(setInventory)
-            .catch((e) => logError(`Failed to re-read the data inventory: ${e}`));
+          readInventory();
         }
       } catch {
         setUninstallStatus("Failed to uninstall ROMs");
@@ -514,8 +543,8 @@ export function useDataPage(): DataPageState {
   };
 
   const handleRemoveNonSteamApps = async (apps: NonSteamApp[]) => {
-    if (foreignApps === null) {
-      // Ownership could not be established, so nothing here can be proven
+    if (foreignApps.state !== "answered") {
+      // Ownership has not been established, so nothing here can be proven
       // foreign — refuse rather than remove a set this plugin may be in.
       setNonSteamStatus("Could not read Steam's shortcut list — nothing was removed.");
       return;

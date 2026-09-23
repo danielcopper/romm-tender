@@ -16,17 +16,18 @@
  */
 
 import { useState, type FC } from "react";
-import { Field } from "@decky/ui";
+import { Field, Spinner } from "@decky/ui";
 import { WidePage } from "./layout/WidePage";
 import { ListDetail, type ListDetailItem } from "./layout/ListDetail";
 import { LoadingRow } from "./LoadingRow";
 import { MUTED, ROW_MARKER_GAP, ROW_MARKER_WIDTH, SECONDARY_FONT, SELECTION_ACCENT } from "./layout/pane";
 import { DataDetail } from "./data/DataDetail";
 import { DATA_ROWS, asDataRowId, type DataRowId } from "./data/rows";
-import { useDataPage, type DataPageState } from "./data/useDataPage";
+import { useDataPage, type DataPageState, type PageRead } from "./data/useDataPage";
 
 /**
- * What a row says on arrival.
+ * What a row's count slot says: a figure, `—` for a read that failed, or `null`
+ * while the read is still in flight, which the slot draws as a spinner.
  *
  * A figure that costs a round trip or a backend scan reads `scan` until the
  * reader asks for it, because focus selects on this layout: a figure fetched on
@@ -35,27 +36,32 @@ import { useDataPage, type DataPageState } from "./data/useDataPage";
  * keeps it until a cleanup run finishes, which is what makes the number wrong,
  * and then reads `scan` again.
  *
- * An em dash is a figure that has not arrived — a read still in flight, or one
- * that failed. It is not a zero, and no row prints one for an emptiness.
+ * The dash is not a zero, and no row prints one for an emptiness.
  */
-function rowCount(id: DataRowId, state: DataPageState): string {
+function rowCount(id: DataRowId, state: DataPageState): string | null {
   switch (id) {
     case "shortcuts":
-      return state.shortcutCount === null ? "—" : `${state.shortcutCount}`;
+      return figure(state.shortcutCount, (count) => count);
     case "rom-files":
-      return state.inventory === null ? "—" : `${state.inventory.installed_roms}`;
+      return figure(state.inventory, (inventory) => inventory.installed_roms);
     case "grid-images":
       return state.orphanedGridImages === null ? "scan" : `${state.orphanedGridImages}`;
     case "non-steam":
-      return state.foreignApps === null ? "—" : `${state.foreignApps.length}`;
+      return figure(state.foreignApps, (apps) => apps.length);
     case "removed-games":
       return state.removedGames === null ? "scan" : `${state.removedGames}`;
     case "recovery-bundles":
-      return state.inventory === null ? "—" : `${state.inventory.recovery_bundles}`;
+      return figure(state.inventory, (inventory) => inventory.recovery_bundles);
   }
 }
 
-const RowLabel: FC<{ label: string; count: string; selected: boolean }> = ({ label, count, selected }) => (
+function figure<T>(read: PageRead<T>, count: (value: T) => number): string | null {
+  if (read.state === "reading") return null;
+  if (read.state === "failed") return "—";
+  return `${count(read.value)}`;
+}
+
+const RowLabel: FC<{ label: string; count: string | null; selected: boolean }> = ({ label, count, selected }) => (
   <span style={{ display: "flex", alignItems: "baseline", gap: "8px", width: "100%" }}>
     <span
       style={{
@@ -69,7 +75,11 @@ const RowLabel: FC<{ label: string; count: string; selected: boolean }> = ({ lab
     >
       {label}
     </span>
-    <span style={{ flex: "0 0 auto", fontSize: SECONDARY_FONT, color: MUTED }}>{count}</span>
+    <span style={{ flex: "0 0 auto", fontSize: SECONDARY_FONT, color: MUTED }}>
+      {/* `1em` of the slot's own font: the spinner's SVG fills whatever it is
+          not held to, and the count it stands in for is set in that size. */}
+      {count === null ? <Spinner width="1em" height="1em" /> : count}
+    </span>
   </span>
 );
 

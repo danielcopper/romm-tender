@@ -24,8 +24,19 @@ import { pluralize } from "../../utils/pluralize";
 import { SYNC_RUNNING_HINT, useSyncRunning } from "../../utils/syncRunning";
 import { LoadingRow } from "../LoadingRow";
 import { RemovedGamesCleanupSection } from "../RemovedGamesCleanup";
-import { ButtonRow, FLAT_BUTTON, Muted, RED, SECONDARY_FONT } from "../layout/pane";
-import { DEFAULT_WHITELIST_PATTERNS, type DataPageState, type NonSteamApp } from "./useDataPage";
+import {
+  ButtonRow,
+  FLAT_BUTTON,
+  MUTED,
+  Muted,
+  PaneTableHeader,
+  PaneTableRow,
+  RED,
+  SECONDARY_FONT,
+  type TableCell,
+} from "../layout/pane";
+import type { RecoveryBundleEntry } from "../../types";
+import { DEFAULT_WHITELIST_PATTERNS, type DataPageState, type NonSteamApp, type PageRead } from "./useDataPage";
 import type { DataRowId } from "./rows";
 
 /**
@@ -39,6 +50,17 @@ const ALARM = "#ff4444";
 const Figures: FC<{ children: ReactNode }> = ({ children }) => (
   <div style={{ fontSize: SECONDARY_FONT, color: "#dcdedf", padding: "0 16px 8px" }}>{children}</div>
 );
+
+/**
+ * A pane's figure line for a read the page makes when it opens: `Reading…`
+ * while it is in flight, what could not be read if it failed, and the figure
+ * once it is answered.
+ */
+function figureLine<T>(read: PageRead<T>, what: string, answer: (value: T) => string): string {
+  if (read.state === "reading") return "Reading…";
+  if (read.state === "failed") return `${what} could not be read — open the page again to retry.`;
+  return answer(read.value);
+}
 
 /** A pane's own action result, under its buttons. */
 const Status: FC<{ text: string; testId: string }> = ({ text, testId }) =>
@@ -90,7 +112,7 @@ const ShortcutsPane: FC<{ state: DataPageState }> = ({ state }) => {
         files where they are; the next sync puts the shortcuts back.
       </Muted>
       <Figures>
-        {state.shortcutCount === null ? "Counting…" : pluralize(state.shortcutCount, "shortcut")} in Steam
+        {figureLine(state.shortcutCount, "The shortcut count", (count) => `${pluralize(count, "shortcut")} in Steam`)}
       </Figures>
       <ButtonRow padding="2px 16px 6px">
         <ConfirmButton
@@ -116,16 +138,20 @@ const RomFilesPane: FC<{ state: DataPageState }> = ({ state }) => {
         these. Removing them keeps every shortcut, so the games stay in your library and can be downloaded again.
       </Muted>
       <Figures>
-        {inventory === null
-          ? "Reading…"
-          : `${inventory.installed_roms} installed · ≈ ${formatBytes(inventory.installed_bytes)}`}
+        {figureLine(
+          inventory,
+          "The installed ROMs",
+          (read) => `${read.installed_roms} installed · ≈ ${formatBytes(read.installed_bytes)}`,
+        )}
       </Figures>
       <Muted>The size is what your RomM server reported for these installs, not a measurement of your disk.</Muted>
       <ButtonRow padding="2px 16px 6px">
         <ConfirmButton
           label="Uninstall all ROM files"
           confirmLabel="Delete every downloaded ROM file?"
-          disabled={state.busy || syncRunning || inventory?.installed_roms === 0}
+          disabled={
+            state.busy || syncRunning || (inventory.state === "answered" && inventory.value.installed_roms === 0)
+          }
           onConfirm={() => detach(state.uninstallAllRoms())}
         />
       </ButtonRow>
@@ -185,7 +211,7 @@ const WhitelistSection: FC<{ state: DataPageState; onWhitelistChange: () => void
   // The list is what the removal would take, so it lists the foreign entries
   // and never this plugin's own — protecting one of ours from a removal that
   // cannot reach it would say the two were ever in the same set.
-  const listed = state.foreignApps ?? [];
+  const listed = state.foreignApps.state === "answered" ? state.foreignApps.value : [];
   const filteredApps = whitelistSearch ? listed.filter((app) => fuzzyMatch(whitelistSearch, app.name)) : listed;
 
   const handleToggle = (app: NonSteamApp, checked: boolean) => {
@@ -277,7 +303,7 @@ const NonSteamPane: FC<{ state: DataPageState }> = ({ state }) => {
     setArmed(false);
     setRetrodeckArmed(false);
   };
-  const foreign = state.foreignApps;
+  const foreign = state.foreignApps.state === "answered" ? state.foreignApps.value : null;
   const toRemove = (foreign ?? []).filter((a) => !state.whitelistedIds.has(a.appId));
   const retrodeckAtRisk = toRemove.some((a) => a.name.toLowerCase().includes("retrodeck"));
 
@@ -302,6 +328,7 @@ const NonSteamPane: FC<{ state: DataPageState }> = ({ state }) => {
   };
 
   const figures = () => {
+    if (state.foreignApps.state === "reading") return "Reading…";
     if (foreign === null) return "Could not be read";
     if (foreign.length === 0) return "No other non-Steam games found";
     return `${foreign.length} ${foreign.length === 1 ? "entry" : "entries"} · ${state.whitelistedIds.size} protected · ${toRemove.length} would be removed`;
@@ -322,7 +349,7 @@ const NonSteamPane: FC<{ state: DataPageState }> = ({ state }) => {
             : `${state.unidentifiedCount} entries could not be identified — Steam did not answer for them in time. They are not in the count above and nothing here will remove them; open the page again to retry.`}
         </Muted>
       )}
-      {foreign === null && (
+      {state.foreignApps.state === "failed" && (
         <Muted>
           Steam&apos;s shortcut list could not be read, so nothing here can be told apart from your RomM games. Nothing
           is removed while that is true — open the page again to retry.
@@ -365,6 +392,55 @@ const RemovedGamesPane: FC<{ state: DataPageState }> = ({ state }) => (
   </>
 );
 
+const BUNDLE_COLUMNS = "minmax(0, 1fr) 72px 64px";
+
+const SECONDARY_CELL = { color: MUTED, fontSize: SECONDARY_FONT, fontVariantNumeric: "tabular-nums" } as const;
+
+/** Newest first, and a bundle whose folder names no day after every one that does. */
+function newestFirst(a: RecoveryBundleEntry, b: RecoveryBundleEntry): number {
+  if (a.day !== b.day) {
+    if (a.day === null) return 1;
+    if (b.day === null) return -1;
+    return a.day < b.day ? 1 : -1;
+  }
+  return a.name.localeCompare(b.name);
+}
+
+/**
+ * The bundles one by one, as their folders name them.
+ *
+ * Every row is a focus stop though none offers anything: a pane scrolls only by
+ * moving focus, so a row nothing can focus is a bundle nothing can scroll to.
+ */
+const BundleTable: FC<{ bundles: readonly RecoveryBundleEntry[] }> = ({ bundles }) => {
+  // Two bundles can share a game and a day — they differ only in the id the
+  // folder name ends in, which the entry does not carry — so the key counts
+  // how many of that pair came before it.
+  const seen = new Map<string, number>();
+  return (
+    <div data-testid="bundle-table">
+      <PaneTableHeader
+        columns={BUNDLE_COLUMNS}
+        cells={["Game", "Sealed", { content: "Size", style: { textAlign: "right" } }]}
+        testId="bundle-header"
+      />
+      {[...bundles].sort(newestFirst).map((bundle) => {
+        const pair = `${bundle.day ?? "none"}:${bundle.name}`;
+        const nth = (seen.get(pair) ?? 0) + 1;
+        seen.set(pair, nth);
+        const sealed = bundle.day ?? "—";
+        const size = bundle.bytes === null ? "—" : formatBytes(bundle.bytes);
+        const cells: TableCell[] = [
+          { content: bundle.name, title: bundle.name },
+          { content: sealed, style: SECONDARY_CELL },
+          { content: size, style: { ...SECONDARY_CELL, textAlign: "right" } },
+        ];
+        return <PaneTableRow key={`${pair}:${nth}`} columns={BUNDLE_COLUMNS} cells={cells} />;
+      })}
+    </div>
+  );
+};
+
 /**
  * What the cleanup sealed before it deleted anything — listed, and deleted
  * nowhere. The page's claim is what this device holds, so a bundle taking disk
@@ -372,23 +448,31 @@ const RemovedGamesPane: FC<{ state: DataPageState }> = ({ state }) => (
  */
 const RecoveryBundlesPane: FC<{ state: DataPageState }> = ({ state }) => {
   const inventory = state.inventory;
+  const answered = inventory.state === "answered" ? inventory.value : null;
   return (
     <>
       <Muted>
         Before the cleanup deletes a game&apos;s local data it seals a snapshot of it
-        {inventory === null ? "" : `, in ${inventory.recovery_root}`}. Nothing is ever read back automatically and
-        nothing here removes one — they are yours to keep, move or delete in a file manager.
+        {answered === null ? "" : `, in ${answered.recovery_root}`}. Nothing is ever read back automatically and nothing
+        here removes one — they are yours to keep, move or delete in a file manager.
       </Muted>
       <Figures>
-        {inventory === null
-          ? "Reading…"
-          : `${pluralize(inventory.recovery_bundles, "bundle")} · ${formatBytes(inventory.recovery_bytes)}`}
+        {figureLine(
+          inventory,
+          "The recovery bundles",
+          (read) => `${pluralize(read.recovery_bundles, "bundle")} · ${formatBytes(read.recovery_bytes)}`,
+        )}
       </Figures>
-      <Muted>
-        {inventory === null || inventory.recovery_bundles === 0
-          ? "Nothing has been sealed under that folder. Bundles an older version wrote elsewhere are not counted here."
-          : "Each carries a README explaining what it holds. Bundles an older version sealed under a different folder are not counted here."}
-      </Muted>
+      {answered !== null && (
+        <Muted>
+          {answered.recovery_bundles === 0
+            ? "Nothing has been sealed under that folder. Bundles an older version wrote elsewhere are not counted here."
+            : "Each carries a README explaining what it holds. Bundles an older version sealed under a different folder are not counted here."}
+        </Muted>
+      )}
+      {answered !== null && answered.recovery_bundle_list.length > 0 && (
+        <BundleTable bundles={answered.recovery_bundle_list} />
+      )}
     </>
   );
 };

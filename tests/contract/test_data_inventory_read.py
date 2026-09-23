@@ -2,7 +2,8 @@
 
 Driven frontend-shaped per ``frontend/src/api/backend.ts``:
 ``getDataInventory = callable<[], DataInventory>``, taking no arguments and
-answering the four population figures the page draws its rows from.
+answering the four population figures the page draws its rows from, the
+recovery root, and one entry per counted bundle.
 
 What this tier adds over ``tests/services/test_data_inventory.py`` is the
 composition: the real ``bootstrap()`` hands the service the real SQLite Unit of
@@ -24,6 +25,7 @@ async def test_an_untouched_install_reports_every_population_as_empty(harness):
         "recovery_bundles": 0,
         "recovery_bytes": 0,
         "recovery_root": harness.plugin._data_inventory_service._recovery_inventory.root(),
+        "recovery_bundle_list": [],
     }
     # The real adapter's root, derived from the package name rather than spelled
     # by either side of the wire.
@@ -91,4 +93,7 @@ async def test_a_sealed_bundle_is_counted_and_measured_on_disk(harness):
     # The bundle holds the copied ROM plus its own seal, checksum and README,
     # so the total is bounded below by the bytes that were copied into it.
     assert result["recovery_bytes"] > 2048
+    assert result["recovery_bundle_list"] == [
+        {"name": "Game", "day": "2026-07-24", "bytes": result["recovery_bytes"]},
+    ]
     assert recovery.validate_sources(sealed) is True

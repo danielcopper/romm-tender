@@ -281,11 +281,12 @@ it, and whatever can be done with it. Most rows offer one action, Other non-Stea
 whitelist, and Recovery bundles offers none at all. The six rows are **Tender's shortcuts**, **Installed ROMs**, **Grid
 images**, **Other non-Steam games**, **Gone from RomM** and **Recovery bundles**.
 
-Two counts cost a server round trip or a backend scan, so they read **scan** until you press for them: Grid images and
-Gone from RomM. Grid images keeps what its scan found for the rest of the visit; Gone from RomM keeps it until a cleanup
-run finishes — which is what changes the number — and then asks to be scanned again. Every destructive action asks first
-— press once to see the prompt, press again to confirm. The per-platform actions — removing one platform's shortcuts,
-deleting its save files, deleting its BIOS files — live in
+A count that is still being read shows a small spinner; one that could not be read shows a dash, and its pane says what
+could not be read and to open the page again. Two counts cost a server round trip or a backend scan, so they read
+**scan** until you press for them: Grid images and Gone from RomM. Grid images keeps what its scan found for the rest of
+the visit; Gone from RomM keeps it until a cleanup run finishes — which is what changes the number — and then asks to be
+scanned again. Every destructive action asks first — press once to see the prompt, press again to confirm. The
+per-platform actions — removing one platform's shortcuts, deleting its save files, deleting its BIOS files — live in
 **[Library › Platforms](bios-management.md#library-platforms)**, on the platform's own pane.
 
 While a library sync is running (or cancelling), the shortcut and ROM removals and the grid-image cleanup are
@@ -398,8 +399,11 @@ The plugin shows extra warnings if RetroDECK is not whitelisted, since removing 
 ### Recovery bundles
 
 The row counts the snapshots the cleanup sealed under `~/romm-tender-recovery/bundles/`, and states the disk they take.
-**Nothing on this page removes one** — they are yours to keep, move or delete in a file manager. What a bundle holds is
-under [Gone from RomM](#gone-from-romm) above.
+Below that total the pane lists each bundle with the game it holds, the day it was sealed and its size, newest first.
+The game is spelled the way the bundle's folder spells it — `Shenmue-II` for Shenmue II — so it matches what you see in
+a file manager. A folder that does not carry a day in its name, such as one you renamed, is listed under its folder name
+at the bottom. **Nothing on this page removes one** — they are yours to keep, move or delete in a file manager. What a
+bundle holds is under [Gone from RomM](#gone-from-romm) above.
 
 The count covers that folder only. Bundles an older version sealed under `~/decky-romm-sync-recovery/bundles/` are still
 on your disk and are **not** counted here, so a device carrying those has more than this row reports.

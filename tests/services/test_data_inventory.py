@@ -17,7 +17,7 @@ class FakeRecoveryInventory:
     """In-memory ``RecoveryBundleInventoryReader`` recording every reading asked for."""
 
     def __init__(self, count: int = 0, total_bytes: int = 0, root: str = "/home/deck/tender-recovery") -> None:
-        self._answer: RecoveryBundleInventory = {"count": count, "total_bytes": total_bytes}
+        self._answer: RecoveryBundleInventory = {"count": count, "total_bytes": total_bytes, "bundles": []}
         self._root = root
         self.calls = 0
 
@@ -26,7 +26,11 @@ class FakeRecoveryInventory:
 
     def bundle_inventory(self) -> RecoveryBundleInventory:
         self.calls += 1
-        return {"count": self._answer["count"], "total_bytes": self._answer["total_bytes"]}
+        return {
+            "count": self._answer["count"],
+            "total_bytes": self._answer["total_bytes"],
+            "bundles": list(self._answer["bundles"]),
+        }
 
 
 def _seed_rom(uow, rom_id, *, fs_size_bytes, installed):
@@ -123,7 +127,7 @@ class TestTheRecoveryBundlePopulation:
 
     @pytest.mark.asyncio
     async def test_it_reports_the_readers_count_and_total(self, uow, service, recovery):
-        recovery._answer = {"count": 3, "total_bytes": 12_345}
+        recovery._answer = {"count": 3, "total_bytes": 12_345, "bundles": []}
 
         answer = await service.get_data_inventory()
 
@@ -132,18 +136,31 @@ class TestTheRecoveryBundlePopulation:
         assert recovery.calls == 1
 
     @pytest.mark.asyncio
+    async def test_it_lists_each_bundle_the_reader_listed(self, uow, service, recovery):
+        listed = [
+            {"name": "Shenmue", "day": "2026-09-20", "bytes": 1_000},
+            {"name": "hand-renamed", "day": None, "bytes": None},
+        ]
+        recovery._answer = {"count": 2, "total_bytes": 1_000, "bundles": listed}
+
+        answer = await service.get_data_inventory()
+
+        assert answer["recovery_bundle_list"] == listed
+
+    @pytest.mark.asyncio
     async def test_a_recovery_root_that_holds_nothing_reports_zero(self, service):
         answer = await service.get_data_inventory()
 
         assert answer["recovery_bundles"] == 0
         assert answer["recovery_bytes"] == 0
+        assert answer["recovery_bundle_list"] == []
 
 
 class TestTheAnswerShape:
-    """The five keys the page reads, and nothing else."""
+    """The six keys the page reads, and nothing else."""
 
     @pytest.mark.asyncio
-    async def test_it_answers_exactly_the_population_figures_and_the_root(self, service):
+    async def test_it_answers_exactly_the_population_figures_the_root_and_the_list(self, service):
         answer = await service.get_data_inventory()
 
         assert set(answer) == {
@@ -152,6 +169,7 @@ class TestTheAnswerShape:
             "recovery_bundles",
             "recovery_bytes",
             "recovery_root",
+            "recovery_bundle_list",
         }
 
     @pytest.mark.asyncio

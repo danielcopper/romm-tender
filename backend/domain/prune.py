@@ -44,6 +44,11 @@ _UNSAFE_PACKAGE_RUN = re.compile(r"[^A-Za-z0-9._-]+", re.ASCII)
 _SAFE_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$", re.ASCII)
 _SAFE_SHORT_ID = re.compile(r"^[A-Za-z0-9]{4,32}$", re.ASCII)
 _MAX_BUNDLE_NAME_CHARS = 64
+# A sanitized name keeps its underscores, so the name is everything before the
+# LAST `_<day>_<id>`: the greedy name group backtracks only as far as that suffix.
+_BUNDLE_ID_PARTS = re.compile(
+    r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)_(?P<day>\d{4}-\d{2}-\d{2})_[A-Za-z0-9]{4,32}", re.ASCII
+)
 
 # Every artifact kind the recovery producers emit, in the words a person reading
 # the folder would use. An unmapped kind degrades to its raw slug in the README,
@@ -87,6 +92,20 @@ def recovery_bundle_id(game_name: object, date: str, short_id: str) -> str:
     if not _SAFE_SHORT_ID.fullmatch(short_id):
         raise ValueError("short_id must be 4-32 ASCII letters or digits")
     return f"{sanitize_bundle_name(game_name)}_{date}_{short_id}"
+
+
+def parse_recovery_bundle_id(folder_name: str) -> tuple[str, str | None]:
+    """Read a bundle folder's name back into the game it names and the day it was sealed.
+
+    The inverse of :func:`recovery_bundle_id` over the name it writes, so the
+    game comes back SANITIZED ("Shenmue-II", not "Shenmue II"): the folder is
+    all this reads. A folder not in that shape — an older version's, or one
+    renamed by hand — answers its own name and no day, never a guess at either.
+    """
+    match = _BUNDLE_ID_PARTS.fullmatch(folder_name)
+    if match is None:
+        return folder_name, None
+    return match["name"], match["day"]
 
 
 def render_bundle_readme(context: BundleReadmeContext, records: Sequence[Mapping[str, object]]) -> str:

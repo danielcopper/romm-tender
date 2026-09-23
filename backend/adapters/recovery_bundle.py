@@ -20,13 +20,14 @@ from adapters.descriptor_paths import (
     remove_current,
 )
 from domain.identity import DISPLAY_NAME
-from domain.prune import render_bundle_readme, sanitize_package_name
+from domain.prune import parse_recovery_bundle_id, render_bundle_readme, sanitize_package_name
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from models.prune import (
         RecoveryArtifact,
+        RecoveryBundleEntry,
         RecoveryBundleInventory,
         SealedSourceClaims,
         SourceClaim,
@@ -112,27 +113,32 @@ class RecoveryBundleAdapter:
         bundle whose durability could not be confirmed is marked by a rename
         and still holds its data, so excluding it would hide disk from the one
         reader who asked what the bundles take. An entry that cannot be
-        measured is counted and contributes nothing, because its presence is
-        the more reliable of the two facts.
+        measured is counted and listed without a size, and contributes nothing
+        to the total, because its presence is the more reliable of the two
+        facts. Each listed bundle is named from its folder name alone.
         """
         bundles_dir = os.path.join(self._root, "bundles")
         try:
             names = os.listdir(bundles_dir)
         except OSError:
-            return {"count": 0, "total_bytes": 0}
-        count = 0
-        total = 0
+            return {"count": 0, "total_bytes": 0, "bundles": []}
+        bundles: list[RecoveryBundleEntry] = []
         for name in names:
             path = os.path.join(bundles_dir, name)
             entry = self._lstat_or_none(path)
             if entry is None or not stat.S_ISDIR(entry.st_mode):
                 continue
-            count += 1
             try:
-                total += measure_tree(path, bundles_dir)
+                size: int | None = measure_tree(path, bundles_dir)
             except (OSError, ValueError):
-                continue
-        return {"count": count, "total_bytes": total}
+                size = None
+            game, day = parse_recovery_bundle_id(name)
+            bundles.append({"name": game, "day": day, "bytes": size})
+        return {
+            "count": len(bundles),
+            "total_bytes": sum(bundle["bytes"] or 0 for bundle in bundles),
+            "bundles": bundles,
+        }
 
     @staticmethod
     def _lstat_or_none(path: str) -> os.stat_result | None:
