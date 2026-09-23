@@ -1,5 +1,5 @@
 -- =============================================================================
--- 001_initial.sql — initial SQLite schema for decky-romm-sync
+-- 001_initial.sql — initial SQLite schema for Tender (written under its earlier name, decky-romm-sync)
 -- Issue #780 (schema design) · Epic #271 (JSON -> SQLite persistence migration)
 -- =============================================================================
 --
