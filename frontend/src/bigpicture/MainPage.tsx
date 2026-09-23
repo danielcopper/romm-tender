@@ -379,9 +379,9 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   // and the transient status line.
   //
   // "A run is in flight" is DERIVED from the run's own frame, never mirrored in
-  // a second boolean: DangerZone and RemovedGamesCleanup read the same store
-  // field, so a path that ends the run locally without ending it in the store
-  // would make the three disagree (#1019). A run this page never started is
+  // a second boolean: Data Management, Library › Platforms and
+  // RemovedGamesCleanup read the same store field, so a path that ends the run
+  // locally without ending it in the store would make them disagree (#1019). A run this page never started is
   // still this page's to show — the store outlives the Sync page the press
   // happened on.
   const run = useSyncRunView({

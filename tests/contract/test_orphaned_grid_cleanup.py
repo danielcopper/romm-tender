@@ -1,9 +1,10 @@
 """Contract tests for ``cleanup_orphaned_grid_images`` (#1385).
 
-The Danger Zone's orphaned grid-image cleanup driven frontend-shaped over the
-real wired plugin: positional ``(live_app_ids, dry_run)`` exactly as
-``frontend/src/api/backend.ts`` declares. Pins the dry-run/real success shapes
-(the real run answers its own ``candidate_count`` beside ``removed_count``),
+Data Management's orphaned grid-image cleanup (the Grid images row) driven
+frontend-shaped over the real wired plugin: positional
+``(live_app_ids, dry_run)`` exactly as ``frontend/src/api/backend.ts`` declares.
+Pins the dry-run/real success shapes (the real run answers its own
+``candidate_count`` beside ``removed_count``),
 the ``incomplete_scan`` sanity-guard refusal (a bound ``roms.shortcut_app_id``
 missing from the submitted live set deletes nothing), and the
 ``sync_active`` gate refusal while a library sync is in flight.

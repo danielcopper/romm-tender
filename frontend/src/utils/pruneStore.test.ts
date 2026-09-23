@@ -230,7 +230,7 @@ describe("pruneStore — lost-result recovery", () => {
 
       expect(getPruneState()).toEqual({ runId: null, progress: null, complete: null });
       expect(isPruneResultLost()).toBe(true);
-      // Subscribers are told, so the Danger Zone re-renders its re-enabled entry.
+      // Subscribers are told, so the Gone from RomM section re-renders its re-enabled entry.
       expect(changes).toHaveBeenCalled();
     } finally {
       unsubscribe();

@@ -1,6 +1,6 @@
 // Per-test stubs for the Steam Deck globals `collectionStore` and `appStore`.
 // Use in `beforeEach` to control the non-Steam app enumeration surface for
-// components that read these globals (DangerZone, RomMPlaySection,
+// components that read these globals (DataManagementPage, RomMPlaySection,
 // RomMGameInfoPanel).
 //
 // The shapes here mirror the relevant slices of the ambient declarations in

@@ -556,8 +556,8 @@ Steam's in-memory shortcut state. A Steam restart clears it. Two things keep chu
 removals before additions, and every launch-options write uses the fire-then-poll `setLaunchOptionsConfirmed` so a
 silently dropped write is observable rather than assumed. And **mass removals are awaited and chunk-paced** through the
 shared `removeShortcutsPaced` helper (`frontend/src/utils/shortcutRemoval.ts`, over `pacedForEach`,
-[#977](https://github.com/danielcopper/romm-tender/issues/977)): every bulk removal path — the DangerZone actions
-(per-platform, Remove-All-RomM including the live-orphan sweep, and the Remove-Non-Steam bulk action) **and** the
+[#977](https://github.com/danielcopper/romm-tender/issues/977)): every bulk removal path — Library › Platforms' removal,
+Data Management's "Remove all shortcuts" with its live-orphan sweep, and its non-Steam-games removal, **and** the
 sync-run stale-shortcut cleanup (`sync_stale`, fired at run finalize) — awaits each `removeShortcut` in sequence and
 yields a 50ms breather every 25 removals, so the CEF renderer never blocks and thousands of removals can't stack as
 fire-and-forget promises. (The `sync_stale` handler records its "removed" delta for the terminal toast up front, before
@@ -573,10 +573,10 @@ delay). The two callers differ only in chunk size:
 
 - **Add** (`syncManager.ts` — `processUnitShortcuts`, `processCoverRefreshes`) paces **one item at a time**: a 50ms
   breather after every `addShortcut()` / cover apply, plus the per-unit heartbeat + cancel hooks.
-- **Remove** (`removeShortcutsPaced` in `frontend/src/utils/shortcutRemoval.ts`, shared by the DangerZone actions and
+- **Remove** (`removeShortcutsPaced` in `frontend/src/utils/shortcutRemoval.ts`, shared by the page removals above and
   the `sync_stale` cleanup) paces in **25-item chunks with a 50ms breather** between them. A removal is a single cheap
   call, so chunked yielding keeps a 5000-game teardown at ~seconds of overhead instead of the ~4 minutes strict
-  50ms/item would cost, while still letting the renderer breathe. DangerZone and `sync_stale` removals hold renewable
+  50ms/item would cost, while still letting the renderer breathe. RomM-shortcut and `sync_stale` removals hold renewable
   prune conflict leases for the complete paced loop even though the backend does not await the frontend's stale removal.
 
 ### The apply is chunked; a heartbeat timeout must not discard a chunk's delivered bindings

@@ -277,9 +277,9 @@ full live `kv_config` key set is `device_id` (the server-issued device identity)
 is changed _again_ before the migration runs — a `_hops` JSON array of the additional pending homes, oldest→newest, so
 files under an intermediate home are never stranded, [#1042](https://github.com/danielcopper/romm-tender/issues/1042)),
 and `save_sort_settings` (+ `_previous`) — the truly miscellaneous singleton scalars. The `platform_names` cache is a
-single JSON blob the library sync refreshes every run so offline reads (the DangerZone label, the game-detail platform
-name) show "Nintendo 64" rather than the bare `n64` slug when RomM is unreachable. The schema version is **not** a
-`kv_config` key — it is tracked in `PRAGMA user_version` by the [migration runner](#the-migration-framework)
+single JSON blob the library sync refreshes every run so offline reads (the Library › Platforms rows, the game-detail
+platform name) show "Nintendo 64" rather than the bare `n64` slug when RomM is unreachable. The schema version is
+**not** a `kv_config` key — it is tracked in `PRAGMA user_version` by the [migration runner](#the-migration-framework)
 ([#781](https://github.com/danielcopper/romm-tender/issues/781)).
 
 `SyncRun` is a **history** table, not a single "last run" row: a 1-row table would let a newly-started run

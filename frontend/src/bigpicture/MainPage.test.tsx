@@ -2535,8 +2535,9 @@ describe("MainPage", () => {
     });
 
     it("a cancel whose call failed leaves the run in flight for every reader of the store (#1019)", async () => {
-      // DangerZone and RemovedGamesCleanup read `running` straight from the
-      // module store, so whatever the panel concludes here they conclude too.
+      // Data Management, Library › Platforms and RemovedGamesCleanup read
+      // `running` straight from the module store, so whatever the panel concludes
+      // here they conclude too.
       vi.mocked(backend.getSyncStatus).mockResolvedValue({
         running: true,
         stage: "applying",
@@ -3312,9 +3313,9 @@ describe("MainPage", () => {
       // arrived — and the reset means the backend's own frame no longer names
       // that run either. `inFlight: false` is the only thing left that can say
       // so, and it has to be enough: "Cancel Sync" for an unknown run is answered
-      // "No sync in progress" with no terminal to follow, and DangerZone gates
-      // four more actions on the same flag — so a panel that cannot leave this
-      // state is stuck until a plugin reload.
+      // "No sync in progress" with no terminal to follow, and Data Management and
+      // Library › Platforms gate removals on the same flag — so a panel
+      // that cannot leave this state is stuck until a plugin reload.
       vi.mocked(backend.getSyncStats).mockResolvedValue(statsWithEveryStartControl());
       setSyncProgress({
         running: true,

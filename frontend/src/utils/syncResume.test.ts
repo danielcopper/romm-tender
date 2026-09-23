@@ -71,8 +71,8 @@ describe("syncResumeState", () => {
   });
 
   it("refuses when an interrupted attempt left ZERO bound shortcuts (all removed — nothing to resume)", () => {
-    // After an interrupted run the user removed every shortcut (DangerZone
-    // "remove all"), so roms is 0 and the next run is a full fresh import. A
+    // After an interrupted run the user removed every shortcut (Data
+    // Management's "Remove all shortcuts"), so roms is 0 and the next run is a full fresh import. A
     // surviving stamp alongside zero shortcuts is a REAL state, not a contrived
     // fixture: removal invalidates only the platform slugs its removed rows
     // name, and prune deletes rows without touching platform stamps, so a

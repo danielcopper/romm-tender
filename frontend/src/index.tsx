@@ -1037,8 +1037,8 @@ const tender = definePlugin(() => {
     },
   );
 
-  // Destructive cleanup actions must keep running even when the Danger Zone or
-  // game-detail picker unmounts. The backend emits one tokenized action at a
+  // Destructive cleanup actions must keep running even when the Data Management
+  // page or the game-detail picker unmounts. The backend emits one tokenized action at a
   // time; this root handler owns every Steam API mutation and reports the exact
   // token outcome before backend filesystem/SQLite finalization can proceed.
   const publishPruneSwitches = async (

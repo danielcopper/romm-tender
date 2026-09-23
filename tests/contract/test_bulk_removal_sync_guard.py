@@ -1,4 +1,4 @@
-"""Contract tests for the danger-zone sync guard (#1390).
+"""Contract tests for the bulk-removal sync guard (#1390).
 
 The three bulk-removal callables (``remove_all_shortcuts``,
 ``remove_platform_shortcuts``, ``uninstall_all_roms``) refuse with the

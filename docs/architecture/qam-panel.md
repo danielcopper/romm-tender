@@ -413,7 +413,7 @@ does not say it owns its regions. A tabbed body gets none from the frame, and ne
 | Sync            | 854   | preview as a table, the run as a plan, Skip preview, Force Full Sync, Steam memory, session budget, last runs | as described; the import choice (#1364) is the one thing still to come            |
 | Library         | 854   | Platforms as list and detail (sync, core, BIOS files, removal); Collections as filter and list                | Platforms is built; Collections still carries the narrow page's controls and list |
 | Settings        | 854   | five sections, list and detail                                                                                | as described; RetroAchievements has no sign-in to hold yet (#1627)                |
-| Data Management | 854   | six populations as list and detail — what this device holds, and what can be taken back                       | narrow; a Danger Zone of five operations, the cleanup in a modal                  |
+| Data Management | 854   | six populations as list and detail — what this device holds, and what can be taken back                       | as described                                                                      |
 | Downloads       | 348   | the queue with its controls                                                                                   | unchanged                                                                         |
 
 `Page` is `"main" | "sync" | "library" | "settings" | "data" | "downloads"`. **System is gone** — its core picker and

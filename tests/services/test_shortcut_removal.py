@@ -460,8 +460,8 @@ def _artwork_integration_service(uow, steam_config, tmp_path) -> ShortcutRemoval
 
 
 class TestReportRemovalInvalidatesStamps:
-    """DangerZone removals must drop the completion stamp (ADR-0023) of every platform
-    they touch, or the next sync's incremental-skip gate skips the platform wholesale
+    """Bulk shortcut removals must drop the completion stamp (ADR-0023) of every
+    platform they touch, or the next sync's incremental-skip gate skips the platform wholesale
     and never recreates the removed shortcuts (#1025)."""
 
     @pytest.mark.asyncio
@@ -482,8 +482,8 @@ class TestReportRemovalInvalidatesStamps:
 
     @pytest.mark.asyncio
     async def test_per_platform_removal_clears_only_that_platform_stamp(self, svc, uow):
-        """A per-platform DangerZone removal reports only that platform's ROMs, so only
-        its stamp is dropped — sibling platforms are untouched."""
+        """A per-platform removal (the Library page's Platforms tab) reports only
+        that platform's ROMs, so only its stamp is dropped — sibling platforms are untouched."""
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
         _seed_rom(uow, 11, app_id=1003, platform_slug="n64")
         _seed_rom(uow, 20, app_id=1002, platform_slug="snes")

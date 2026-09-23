@@ -35,9 +35,9 @@ if TYPE_CHECKING:
     )
 
 # kv_config key for the offline ``platform_slug → display_name`` cache the
-# library sync refreshes every run. Read here so the DangerZone "clear
-# platform" response shows "Nintendo 64" rather than the bare "n64" slug when
-# RomM is unreachable. Mirrors ``library.reporter._PLATFORM_NAMES_KEY``.
+# library sync refreshes every run. Read here so a platform's removal on the
+# Library page's Platforms tab answers with "Nintendo 64" rather than the bare
+# "n64" slug when RomM is unreachable. Mirrors ``library.reporter._PLATFORM_NAMES_KEY``.
 _PLATFORM_NAMES_KEY = "platform_names"
 
 
@@ -143,11 +143,12 @@ class ShortcutRemovalService:
         # removal touched. Unbinding keeps the row, so the platform's persisted-row
         # count is unchanged and a still-valid stamp would let the next sync's
         # incremental-skip gate skip the platform wholesale and never recreate the
-        # removed shortcuts (the #1025 silent-gap class). Both DangerZone flows —
-        # remove-all and per-platform removal — funnel their unbind here, so
-        # deleting the stamp per touched slug covers each: remove-all reports every
-        # ROM (all platforms invalidated), a per-platform removal reports only that
-        # platform's ROMs (only its slug invalidated). Same write UoW as the unbind.
+        # removed shortcuts (the #1025 silent-gap class). Both bulk flows — Data
+        # Management's remove-all and the per-platform removal on the Library
+        # page's Platforms tab — funnel their unbind here, so deleting the stamp per
+        # touched slug covers each: remove-all reports every ROM (all platforms
+        # invalidated), a per-platform removal reports only that platform's ROMs
+        # (only its slug invalidated). Same write UoW as the unbind.
         removed_ids: set[int] = set()
         with self._uow_factory() as uow:
             touched_slugs: set[str] = set()
@@ -234,7 +235,7 @@ class ShortcutRemovalService:
             # A shortcut deleted through Steam's own UI leaves the row's persisted
             # count unchanged, so its platform's completion stamp (ADR-0023) would
             # still let the next sync skip the platform and never recreate the
-            # shortcut — the same silent-gap class as the DangerZone flows (#1025).
+            # shortcut — the same silent-gap class as the bulk removals (#1025).
             # Invalidate the stamp of every platform we unbound here, in the same
             # write UoW, so the platform full-fetches and recreates the shortcut
             # (completing the #1046 recovery under the persisted-count skip).

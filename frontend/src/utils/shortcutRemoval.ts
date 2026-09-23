@@ -15,8 +15,8 @@ const REMOVAL_CHUNK_DELAY_MS = 50;
  * per-item errors are swallowed by ``removeShortcut``, so one bad appId never
  * aborts the batch. Resolves once every removal has run — callers await this
  * before their post-removal steps (result reporting, collection clear, re-count).
- * Shared by every bulk-removal path: the DangerZone actions and the sync-run
- * stale-shortcut cleanup (``sync_stale``).
+ * Shared by every bulk-removal path: the removals on Data Management and in
+ * Library › Platforms, and the sync-run stale-shortcut cleanup (``sync_stale``).
  *
  * *onProgress* (optional) is called after each removal with ``(removed, total)``
  * so a caller can drive a live progress counter; omit it (as ``sync_stale`` does)

@@ -471,7 +471,7 @@ export const refreshCoverArtwork = callable<
   [number],
   { success: boolean; reason?: string; message: string; cover_path?: string }
 >("refresh_cover_artwork");
-// Orphaned grid-image cleanup (Danger Zone). Args: the frontend's full scan of
+// Orphaned grid-image cleanup (Data Management › Grid images). Args: the frontend's full scan of
 // live non-Steam shortcut appIds (the keep-set — RomM-owned AND foreign) and a
 // dry_run flag. A dry run returns candidate_count without deleting; the real
 // run returns removed_count beside its own candidate_count. The backend guards (incomplete_scan when a bound

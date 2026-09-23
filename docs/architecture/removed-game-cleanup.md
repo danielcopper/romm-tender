@@ -103,10 +103,10 @@ namespace — a namespace change is uncertainty, not a 404.
 
 ### Discovery
 
-Bulk discovery from the Danger Zone is generation-gated: a platform with no known completed fetch produces no candidates
-at all, because absence from an incomplete fetch is not evidence of removal. Inline removal from an already-vanished
-version-picker row needs no generation — the row is already known vanished — but still takes the same fresh exact-id
-proof.
+Bulk discovery from Data Management's Gone from RomM row is generation-gated: a platform with no known completed fetch
+produces no candidates at all, because absence from an incomplete fetch is not evidence of removal. Inline removal from
+an already-vanished version-picker row needs no generation — the row is already known vanished — but still takes the
+same fresh exact-id proof.
 
 The preview discloses **every** member of an affected group, not only the candidates. A member carrying the platform
 stamp's current fetch generation is not evidence that RomM still serves it: whole-game removal is decided by the run's
@@ -282,8 +282,8 @@ unrelated user data on rewrite. Cleanup never edits `shortcuts.vdf`.
 
 Sizing is not hashing: the preview measures installed content with a size-only, descriptor-relative, no-follow
 traversal. Hashing a multi-gigabyte ROM tree to fill in a preview row — before the user has confirmed anything — would
-stall the Danger Zone for minutes. A path whose size cannot be measured reports `installed_bytes: None`, carries a
-warning, and cannot be selected for recovery.
+stall the Gone from RomM review for minutes. A path whose size cannot be measured reports `installed_bytes: None`,
+carries a warning, and cannot be selected for recovery.
 
 ## Recovery
 
@@ -373,11 +373,11 @@ Cancellation stops every group that has not started, and abandons the one in fli
 yet. Terminal results distinguish exact success, skipped work, known partial mutation, and ambiguous mutation, and the
 removed ids and affected appIds stay truthful even after cancellation or a failed event delivery.
 
-`cancel_prune(run_id)` is the wire entry point, reachable from the confirmation dialog and from the Danger Zone while a
-run is live. It is deliberately **not** gated by the prune claim — stopping the run is the one operation that must stay
-available while that claim is held. It cancels only the run whose id matches, is idempotent for repeat requests, and
-answers the canonical failure shape for an unknown, finished, or malformed id. Nothing is rolled back: the group already
-executing runs to its own verdict and reports what it committed.
+`cancel_prune(run_id)` is the wire entry point, reachable from the confirmation dialog and from the Gone from RomM pane
+while a run is live. It is deliberately **not** gated by the prune claim — stopping the run is the one operation that
+must stay available while that claim is held. It cancels only the run whose id matches, is idempotent for repeat
+requests, and answers the canonical failure shape for an unknown, finished, or malformed id. Nothing is rolled back: the
+group already executing runs to its own verdict and reports what it committed.
 
 ### Where a cancellation lands
 

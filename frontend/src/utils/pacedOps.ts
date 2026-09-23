@@ -4,7 +4,7 @@
  * Steam mutates its in-memory shortcut store on every add/remove; driving those
  * mutations in a tight synchronous loop blocks the CEF renderer and can corrupt
  * that store (the documented removal-churn hazard, #977). Every bulk shortcut
- * loop — the sync add path and the DangerZone removal paths — runs through
+ * loop — the sync add path and the bulk removal paths — runs through
  * {@link pacedForEach} so the pacing is defined in exactly one place and add and
  * remove can never diverge again. The add path paces one item at a time (the
  * CEF-safe 50ms cadence); bulk removals pace in larger chunks (a removal is a

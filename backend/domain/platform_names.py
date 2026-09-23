@@ -1,7 +1,7 @@
 """Pure decoding of the ``platform_slug → display_name`` cache.
 
 The cache is a JSON object stored as a single ``kv_config`` TEXT value, refreshed
-each sync so offline reads (DangerZone labels, game-detail platform names) show a
+each sync so offline reads (the Platforms tab's rows, game-detail platform names) show a
 human platform name rather than the bare slug. Anything that turns the stored
 string back into the ``slug → name`` mapping belongs here; reading the value out
 of ``kv_config`` stays in the service.

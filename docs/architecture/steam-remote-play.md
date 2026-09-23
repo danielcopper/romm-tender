@@ -92,7 +92,7 @@ The plugin can distinguish local shortcuts from remote phantom shortcuts using t
 ### `collectionStore.localGamesCollection`
 
 This collection contains only shortcuts created on the local machine. Remote streaming phantoms are excluded. Use this
-to filter DangerZone removal operations to local-only shortcuts.
+to filter the bulk shortcut removals to local-only shortcuts.
 
 ```typescript
 const localApps = collectionStore.localGamesCollection.apps;
@@ -133,7 +133,7 @@ clearly attributed.
 We investigated two approaches for programmatic detection of remote phantoms:
 
 1. **`collectionStore.localGamesCollection`** — Was supposed to contain only locally-created shortcuts, allowing us to
-   filter out remote phantoms in DangerZone and label them in the game detail panel. **In practice, this was
+   filter out remote phantoms in the bulk removals and label them in the game detail panel. **In practice, this was
    unreliable** — it incorrectly marked local shortcuts as remote.
 
 2. **`SteamAppOverview.per_client_data`** — Was supposed to provide per-device metadata for each shortcut, allowing us
@@ -143,15 +143,16 @@ We investigated two approaches for programmatic detection of remote phantoms:
 Both approaches were removed. **Steam's native UI already handles this well**: remote phantom shortcuts show a "Stream"
 button instead of "Play", which clearly communicates that the game is available from another device.
 
-### DangerZone and Remote Phantoms
+### Bulk Removals and Remote Phantoms
 
-DangerZone removal operations ("Remove All RomM Shortcuts", "Remove by Platform") use the **synced-ROM registry (the
-`roms` SQLite table)**, which is local-only. These operations can only affect shortcuts created by the plugin on the
-current machine. Remote streaming phantoms cannot be removed this way — and even if they could, they would reappear
-immediately since they're ephemeral entries from the live TCP connection.
+The bulk shortcut removals — **Remove all shortcuts** on Data Management and a platform's removal in Library › Platforms
+— use the **synced-ROM registry (the `roms` SQLite table)**, which is local-only. These operations can only affect
+shortcuts created by the plugin on the current machine. Remote streaming phantoms cannot be removed this way — and even
+if they could, they would reappear immediately since they're ephemeral entries from the live TCP connection.
 
-The "Remove Non-Steam Games" section shows all non-Steam apps visible to the current client, including remote phantoms.
-Removing a phantom has no lasting effect — it reappears as long as the source device is online.
+Data Management's **Other non-Steam games** row lists the non-Steam apps visible to the current client that this plugin
+did not create, remote phantoms included. Removing a phantom has no lasting effect — it reappears as long as the source
+device is online.
 
 ## What Can't Be Controlled
 

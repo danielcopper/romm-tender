@@ -1593,7 +1593,7 @@ class TestGetSyncStatsResumeInputs:
         """Removing every shortcut must drop the offer, and unbinding KEEPS the row.
 
         ``Rom.unbind_shortcut`` clears only ``shortcut_app_id`` (ADR-0007), so the
-        recorded command survives a DangerZone remove-all. It is not skip authority
+        recorded command survives Data Management's remove-all. It is not skip authority
         there: ``classify_roms`` (``domain/sync_diff.py``) sends an unbound row down
         the NEW branch before it reads the recorded value, because the next run has
         to mint the shortcut regardless. A count over every row would keep offering to resume

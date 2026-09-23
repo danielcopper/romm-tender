@@ -847,7 +847,7 @@ count survives a partial re-apply or a local removal, so a surviving stamp with 
 let the skip drop the un-recreated games (the #1025 silent gap). Two rules keep the contract true: the orchestrator
 **clears the stamp at a platform unit's apply start** (once the fetch succeeded and the apply is about to emit its first
 chunk) and only the final chunk re-writes it, so an apply interrupted by a crash / cancel / heartbeat-timeout before the
-final chunk leaves none; and the **local destructive flows** — DangerZone remove-all and per-platform removals (via
+final chunk leaves none; and the **local destructive flows** — "Remove all shortcuts" and per-platform removals (via
 `report_removal_results`) plus the Steam-UI-deletion reconcile (`reconcile_live_shortcuts`) — delete the touched
 platforms' stamps in the same write UoW as the unbind. The reporter's server-side stale removal is the deliberate
 exception (it leaves the stamp, since a server-dropped ROM lowers RomM's `rom_count` and the count guard catches it).
@@ -879,8 +879,8 @@ more condition inside that loop, since `iter_all` already selects the column, an
 
 **The game count is bound-AND-recorded, never recorded alone.** `classify_roms` (`domain/sync_diff.py`) sends an unbound
 row down the NEW branch — `if not reg or not reg.get("app_id")` — before it reads the recorded value, because the next
-run has to mint the shortcut regardless. Requiring the binding is what makes the count fall to zero after a DangerZone
-remove-all, where unbinding deliberately keeps the row and its recorded command (ADR-0007) — a count over every row
+run has to mint the shortcut regardless. Requiring the binding is what makes the count fall to zero after "Remove all
+shortcuts", where unbinding deliberately keeps the row and its recorded command (ADR-0007) — a count over every row
 would keep offering to resume shortcuts that no longer exist. The panel keeps `roms > 0` as a conjunct on top, and it is
 **load-bearing rather than a restatement**: `has_completion_stamp` asks whether any stamp survives anywhere, while the
 removal path is surgical — it deletes only the platform slugs its removed rows name, and only the collection stamps
@@ -1006,8 +1006,8 @@ and that cannot wedge, because the handler that wrote that frame always retracts
 Inferring the lifecycle from the frame instead would wedge the panel: with the snapshot reset above, a finished run and
 a run that never started are the same answer, so a lost terminal frame would leave every later mount believing a run is
 live. Nothing recovers from that state — the start controls all live in the idle branch, "Cancel Sync" for an unknown
-run is answered `{"success": True, "message": "No sync in progress"}` with no terminal to follow, and DangerZone and
-RemovedGamesCleanup gate four more actions on the same flag.
+run is answered `{"success": True, "message": "No sync in progress"}` with no terminal to follow, and Data Management
+and Library › Platforms gate removals on the same flag.
 
 The same `sync_plan` capture point also clears the frontend's per-run cancel flag (`_cancelRequested`). The per-unit
 handler resets that flag at its own start, but an incrementally-**skipped** unit never runs that handler, so a skip-only
