@@ -24,6 +24,7 @@ from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_download_file_store import FakeDownloadFileStore
 from fakes.fake_retrodeck_paths import FakeRetroDeckPaths
 from fakes.fake_romm_api import FakeRommApi
+from fakes.fake_save_location_reader import FakeSaveLocationReader
 from fakes.fake_save_quarantine import FakeSaveQuarantine
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.system_time import FakeClock
@@ -31,7 +32,8 @@ from fakes.system_time import FakeClock
 from domain.rom import Rom
 from domain.rom_candidates import CANDIDATE_LIMIT
 from domain.rom_install import RomInstall
-from domain.save_layout import ContentDir, InSaveDir, SaveLayout
+from domain.save_answer import build_save_answer, unestablished_answer
+from domain.savestate_location import NoSavestates, SavestateLocation
 from services.rom_adoption import RomAdoptionService, RomAdoptionServiceConfig
 from services.rom_install_recorder import RomInstallRecorder, RomInstallRecorderConfig
 
@@ -174,20 +176,10 @@ class Harness:
         self.paths = FakeRetroDeckPaths(roms=_ROMS, saves=_SAVES, states=_STATES)
         self.move = FakeAdoptionMoveStore(self.store)
         self.quarantine = FakeSaveQuarantine(self.store)
-        # The layouts a stock RetroDECK install reports: savefiles content-sorted,
-        # savestates not sorted at all. Tests that care flip them individually.
-        #
-        # ``save_layout`` is the LIVE retroarch.cfg and answers only whether
-        # savefiles are written next to the ROM; ``save_sorting`` is what the save
-        # sync resolves its own paths with, which is the recorded observation and
-        # differs from the live config while a save-sort migration is pending.
-        self.save_layout: SaveLayout = InSaveDir(sort_by_content=True, sort_by_core=False)
-        self.save_sorting = InSaveDir(sort_by_content=True, sort_by_core=False)
-        self.savestate_layout: SaveLayout = InSaveDir(sort_by_content=False, sort_by_core=False)
-        # Per-core save sorting is off by default, so neither of these is read
-        # until a test turns ``sort_by_core`` on.
+        # What a stock RetroDECK install answers: savefiles content-sorted,
+        # savestates not sorted at all. Tests that care seed their own answer.
+        self.save_locations = FakeSaveLocationReader(saves_root=_SAVES, states_root=_STATES)
         self.active_core = FakeActiveCoreResolver(default=(None, None))
-        self.core_name: str | None = None
         # Records every rom_id the supersede was asked about, and answers with
         # whatever a test has staged. Default: nothing to supersede.
         self.superseded: list[int] = []
@@ -208,12 +200,9 @@ class Harness:
                 install_recorder=self.recorder,
                 m3u_support=lambda system_name: self.m3u_supported,
                 system_extensions=lambda system_name: self.system_extensions.get(system_name, frozenset()),
-                save_layout=lambda: self.save_layout,
-                save_sorting=lambda: self.save_sorting,
-                savestate_layout=lambda: self.savestate_layout,
+                save_locations=self.save_locations,
                 active_core=self.active_core,
                 system_known=lambda system_name: self.known_systems.get(system_name),
-                get_core_name=lambda core_so: self.core_name,
                 sibling_supersede=lambda: self._supersede,
                 uow_factory=FakeUnitOfWorkFactory(self.uow),
                 loop=loop,
@@ -2443,7 +2432,7 @@ class TestAdoptCandidate:
         # matches the stem prefix and would be paired a second time.
         h.seed_rom()
         h.stage_detail(_single_file_detail())
-        h.save_layout = ContentDir()
+        h.save_locations.beside_content = True
         h.store.files[_OLD] = b"rom"
         h.store.files["/roms/snes/Game (U).srm"] = b"srm"
 
@@ -2458,7 +2447,7 @@ class TestAdoptCandidate:
         # a second time — out of a directory that no longer exists.
         h.seed_rom()
         h.stage_detail(_multi_file_detail(dir_name="Game"))
-        h.save_layout = ContentDir()
+        h.save_locations.beside_content = True
         h.store.dirs.add("/roms/psx/Game (U)")
         h.store.files["/roms/psx/Game (U)/disc.cue"] = b"cue"
         h.store.files["/roms/psx/Game (U)/disc.srm"] = b"srm"
@@ -2480,78 +2469,40 @@ class TestAdoptCandidate:
         assert result["success"] is True
         assert ("/saves/Game (U)/disc.srm", "/saves/Game/disc.srm") in h.move.moves
 
-    async def test_the_savefile_directory_is_the_one_the_sync_resolves(self, h):
-        # No migration pending: the two sources agree, and adoption reaches the
-        # same directory `find_save_files` would.
+    async def test_both_directories_are_the_resolvers_answer_for_both_names(self, h):
+        # The new name need not exist: the resolver places a game's saves by the
+        # content path's own coordinates.
         h.seed_rom()
         h.stage_detail(_single_file_detail())
-        h.store.files[_OLD] = b"rom"
-        h.store.files["/saves/snes/Game (U).srm"] = b"srm"
-
-        await h.service.adopt_existing_rom(_ROM_ID, _OLD, None)
-
-        assert ("/saves/snes/Game (U).srm", "/saves/snes/Game.srm") in h.move.moves
-
-    async def test_a_pending_save_sort_migration_keeps_the_rename_in_the_old_layout(self, h):
-        # The regression this pins. While a save-sort migration is pending the
-        # files are still in the PREVIOUS layout and the sync deliberately keeps
-        # looking there (#238). Reading the live config would move them to
-        # /saves/Game (U)/ — out from under the sync, and out from under the
-        # pending migration that is about to go looking for them.
-        h.seed_rom()
-        h.stage_detail(_single_file_detail())
-        h.save_layout = InSaveDir(sort_by_content=False, sort_by_core=False)
-        h.save_sorting = InSaveDir(sort_by_content=True, sort_by_core=False)
-        h.store.files[_OLD] = b"rom"
-        h.store.files["/saves/snes/Game (U).srm"] = b"recorded layout"
-        h.store.files["/saves/Game (U).srm"] = b"live-config layout"
-
-        await h.service.adopt_existing_rom(_ROM_ID, _OLD, None)
-
-        assert ("/saves/snes/Game (U).srm", "/saves/snes/Game.srm") in h.move.moves
-        assert all(not source.startswith("/saves/Game (U)") for source, _target in h.move.moves)
-        assert h.store.files["/saves/Game (U).srm"] == b"live-config layout"
-
-    async def test_a_savefile_migration_never_moves_the_savestates(self, h):
-        # The markers track savefile sorting only, so a pending savefile
-        # migration says nothing about savestates: they keep coming from the
-        # live config, whatever the recorded savefile layout says.
-        h.seed_rom()
-        h.stage_detail(_single_file_detail())
-        h.save_layout = InSaveDir(sort_by_content=False, sort_by_core=False)
-        h.save_sorting = InSaveDir(sort_by_content=True, sort_by_core=False)
-        h.store.files[_OLD] = b"rom"
-        h.store.files["/states/Game (U).state"] = b"state"
-        h.store.files["/states/snes/Game (U).state"] = b"not where states live"
-
-        await h.service.adopt_existing_rom(_ROM_ID, _OLD, None)
-
-        assert ("/states/Game (U).state", "/states/Game.state") in h.move.moves
-        assert h.store.files["/states/snes/Game (U).state"] == b"not where states live"
-
-    async def test_the_content_dir_question_still_comes_from_the_live_config(self, h):
-        # MigrationService writes no marker for a ContentDir machine, so there is
-        # nothing recorded to prefer — and a recorded sorting must not override
-        # the live "saves sit next to the ROM".
-        h.seed_rom()
-        h.stage_detail(_single_file_detail())
-        h.save_layout = ContentDir()
-        h.save_sorting = InSaveDir(sort_by_content=True, sort_by_core=False)
-        h.store.files[_OLD] = b"rom"
-        h.store.files["/roms/snes/Game (U).srm"] = b"beside the rom"
-        h.store.files["/saves/snes/Game (U).srm"] = b"not read on this machine"
-
-        await h.service.adopt_existing_rom(_ROM_ID, _OLD, None)
-
-        assert ("/roms/snes/Game (U).srm", "/roms/snes/Game.srm") in h.move.moves
-        assert h.store.files["/saves/snes/Game (U).srm"] == b"not read on this machine"
-
-    async def test_per_core_sorting_reaches_the_core_subdirectory(self, h):
-        h.seed_rom()
-        h.stage_detail(_single_file_detail())
-        h.save_sorting = InSaveDir(sort_by_content=True, sort_by_core=True)
         h.active_core.default = ("snes9x_libretro", "Snes9x")
-        h.core_name = "Snes9x"
+        h.store.files[_OLD] = b"rom"
+
+        await h.service.adopt_existing_rom(_ROM_ID, _OLD, None)
+
+        assert ("snes", _OLD, "Snes9x") in h.save_locations.calls
+        assert ("snes", _NEW, "Snes9x") in h.save_locations.calls
+        assert ("snes", _OLD, "Snes9x") in h.save_locations.savestate_calls
+        assert ("snes", _NEW, "Snes9x") in h.save_locations.savestate_calls
+
+    async def test_a_core_that_keeps_its_saves_in_a_folder_of_its_own_is_answered_so(self, h):
+        h.seed_rom()
+        h.stage_detail(_single_file_detail())
+        h.save_locations.answer_with(
+            "snes",
+            build_save_answer(
+                emulator="Snes9x",
+                directory="/saves/snes/Snes9x",
+                backing_directory=None,
+                granularity="per-game-file",
+                needs=(),
+                file_set_state="declared",
+                files=("Game.srm",),
+                groups=(),
+                caveats=(),
+                content_installed=True,
+                root_kind="savefile_directory",
+            ),
+        )
         h.store.files[_OLD] = b"rom"
         h.store.files["/saves/snes/Snes9x/Game (U).srm"] = b"srm"
 
@@ -2559,20 +2510,46 @@ class TestAdoptCandidate:
 
         assert ("/saves/snes/Snes9x/Game (U).srm", "/saves/snes/Snes9x/Game.srm") in h.move.moves
 
-    async def test_an_unresolvable_corename_looks_where_save_sync_looks(self, h, caplog):
-        # Warn-and-fall-back, exactly as RomInfoService does with the same
-        # question, so the rename and the sync never disagree about the directory.
+    async def test_no_save_directory_carries_no_save_and_still_carries_the_states(self, h):
         h.seed_rom()
         h.stage_detail(_single_file_detail())
-        h.save_sorting = InSaveDir(sort_by_content=True, sort_by_core=True)
+        h.save_locations.answer_with("snes", unestablished_answer())
+        h.store.files[_OLD] = b"rom"
+        h.store.files["/saves/snes/Game (U).srm"] = b"nobody said it is here"
+        h.store.files["/states/Game (U).state"] = b"state"
+
+        result = await h.service.adopt_existing_rom(_ROM_ID, _OLD, None)
+
+        assert result["success"] is True
+        assert ("/states/Game (U).state", "/states/Game.state") in h.move.moves
+        assert all(not source.startswith("/saves/") for source, _target in h.move.moves)
+
+    @pytest.mark.parametrize("answer", [NoSavestates(), None], ids=["keeps-none", "not-established"])
+    async def test_no_savestate_directory_carries_no_states(self, h, answer):
+        h.seed_rom()
+        h.stage_detail(_single_file_detail())
+        h.save_locations.savestates_with("snes", answer)
         h.store.files[_OLD] = b"rom"
         h.store.files["/saves/snes/Game (U).srm"] = b"srm"
+        h.store.files["/states/Game (U).state"] = b"left where it is"
 
-        with caplog.at_level(logging.WARNING):
-            await h.service.adopt_existing_rom(_ROM_ID, _OLD, None)
+        await h.service.adopt_existing_rom(_ROM_ID, _OLD, None)
 
         assert ("/saves/snes/Game (U).srm", "/saves/snes/Game.srm") in h.move.moves
-        assert any("corename" in record.message for record in caplog.records)
+        assert all(not source.startswith("/states/") for source, _target in h.move.moves)
+
+    async def test_states_the_emulator_keeps_elsewhere_are_carried_from_there(self, h):
+        h.seed_rom()
+        h.stage_detail(_single_file_detail())
+        h.save_locations.savestates_with(
+            "snes", SavestateLocation(directory="/states/snes", root_kind="savestate_directory")
+        )
+        h.store.files[_OLD] = b"rom"
+        h.store.files["/states/snes/Game (U).state1"] = b"state"
+
+        await h.service.adopt_existing_rom(_ROM_ID, _OLD, None)
+
+        assert ("/states/snes/Game (U).state1", "/states/snes/Game.state1") in h.move.moves
 
     async def test_a_candidate_outside_the_platform_folder_is_refused(self, h):
         h.seed_rom()

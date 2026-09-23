@@ -39,13 +39,15 @@ class FakeSaveLocationReader:
     The directory is the content file's own unless *saves_root* is given, in
     which case it is ``<saves_root>/<the content's parent folder>`` — RetroArch's
     content-sorted layout, the stock RetroDECK one. Either way the answer's root
-    kind is the save root, unless *beside_content* states the other thing: the
+    kind is the save root, unless ``beside_content`` states the other thing: the
     emulator writes the save next to the game, in the content's own directory,
-    which is what RetroArch's ``savefiles_in_content_dir`` produces.
+    which is what RetroArch's ``savefiles_in_content_dir`` produces. A test may
+    flip that attribute after construction.
 
-    Savestates answer ``<states_root>/<the content's parent folder>`` when
-    *states_root* is given and nothing could be established otherwise, unless
-    :meth:`savestates_with` seeded the system.
+    Savestates answer *states_root* itself when it is given — RetroDECK's stock
+    layout, which does not sort them — and nothing established otherwise, unless
+    :meth:`savestates_with` seeded the system. ``beside_content`` moves them next
+    to the game too.
 
     Deliberately insensitive to *emulator_label*, including ``None``. What a
     machine answers and whether the plugin had an emulator to ask about are two
@@ -67,7 +69,7 @@ class FakeSaveLocationReader:
         self._extensions = extensions
         self._saves_root = saves_root
         self._states_root = states_root
-        self._beside_content = beside_content
+        self.beside_content = beside_content
         self._by_system: dict[str, SaveAnswer] = {}
         self._states_by_system: dict[str, SavestateLocation | NoSavestates | None] = {}
         self.calls: list[tuple[str, str, str | None]] = []
@@ -103,7 +105,7 @@ class FakeSaveLocationReader:
             return replace(seeded, content_installed=content_installed)
         stem = os.path.splitext(os.path.basename(content_path))[0]
         directory = (
-            None if self._beside_content else self._sorted_by_content(self._saves_root, content_path)
+            None if self.beside_content else self._sorted_by_content(self._saves_root, content_path)
         ) or os.path.dirname(content_path)
         parts = _BY_SYSTEM.get(system) or tuple((ext, "battery") for ext in self._extensions)
         return SaveAnswer(
@@ -120,7 +122,7 @@ class FakeSaveLocationReader:
             ),
             caveats=(),
             content_installed=content_installed,
-            root_kind="content_directory" if self._beside_content else "savefile_directory",
+            root_kind="content_directory" if self.beside_content else "savefile_directory",
         )
 
     def resolve_savestate_location(
@@ -129,10 +131,11 @@ class FakeSaveLocationReader:
         self.savestate_calls.append((system, content_path, emulator_label))
         if system in self._states_by_system:
             return self._states_by_system[system]
-        directory = self._sorted_by_content(self._states_root, content_path)
-        if directory is None:
+        if self.beside_content:
+            return SavestateLocation(directory=os.path.dirname(content_path), root_kind="content_directory")
+        if self._states_root is None:
             return None
-        return SavestateLocation(directory=directory, root_kind="savestate_directory")
+        return SavestateLocation(directory=self._states_root, root_kind="savestate_directory")
 
     @staticmethod
     def _sorted_by_content(root: str | None, content_path: str) -> str | None:
