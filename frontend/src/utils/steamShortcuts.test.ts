@@ -10,7 +10,7 @@ import {
 } from "./steamShortcuts";
 import type { SyncAddItem } from "../types";
 
-const ROM_LAUNCHER = "/home/deck/homebrew/plugins/decky-romm-sync/bin/tender-rom-launcher";
+const ROM_LAUNCHER = "/home/deck/.local/bin/tender-rom-launcher";
 
 /**
  * Builds a RegisterForAppDetails mock that, on registration, schedules a single
@@ -285,8 +285,8 @@ describe("getExistingRomMShortcuts", () => {
 
   it("maps romId→appId for shortcuts with our exe AND a backend binding", async () => {
     const exeByAppId: Record<number, string> = {
-      10: "/home/deck/homebrew/plugins/decky-romm-sync/bin/tender-rom-launcher",
-      20: "/home/deck/homebrew/plugins/decky-romm-sync/bin/tender-rom-launcher",
+      10: "/home/deck/.local/bin/tender-rom-launcher",
+      20: "/home/deck/.local/bin/tender-rom-launcher",
     };
     const { fn } = makeRegisterForAppDetails((appId) => ({ strShortcutExe: exeByAppId[appId] ?? "" }));
     vi.stubGlobal("SteamClient", { Apps: { RegisterForAppDetails: fn } });
@@ -308,7 +308,7 @@ describe("getExistingRomMShortcuts", () => {
 
   it("excludes shortcuts whose exe is not our launcher", async () => {
     const exeByAppId: Record<number, string> = {
-      10: "/home/deck/homebrew/plugins/decky-romm-sync/bin/tender-rom-launcher",
+      10: "/home/deck/.local/bin/tender-rom-launcher",
       30: "/usr/bin/some-other-game",
     };
     const { fn } = makeRegisterForAppDetails((appId) => ({ strShortcutExe: exeByAppId[appId] ?? "" }));
@@ -330,7 +330,7 @@ describe("getExistingRomMShortcuts", () => {
   });
 
   it("excludes our-exe appIds absent from the backend map (orphans after DB reset)", async () => {
-    const exe = "/home/deck/homebrew/plugins/decky-romm-sync/bin/tender-rom-launcher";
+    const exe = "/home/deck/.local/bin/tender-rom-launcher";
     const { fn } = makeRegisterForAppDetails(() => ({ strShortcutExe: exe }));
     vi.stubGlobal("SteamClient", { Apps: { RegisterForAppDetails: fn } });
     vi.stubGlobal("collectionStore", {
@@ -349,7 +349,7 @@ describe("getExistingRomMShortcuts", () => {
   });
 
   it("returns empty and logs when the backend map fetch rejects", async () => {
-    const exe = "/home/deck/homebrew/plugins/decky-romm-sync/bin/tender-rom-launcher";
+    const exe = "/home/deck/.local/bin/tender-rom-launcher";
     const { fn } = makeRegisterForAppDetails(() => ({ strShortcutExe: exe }));
     vi.stubGlobal("SteamClient", { Apps: { RegisterForAppDetails: fn } });
     vi.stubGlobal("collectionStore", { deckDesktopApps: { apps: new Map([[10, {}]]) } });
@@ -373,7 +373,7 @@ describe("getExistingRomMShortcuts", () => {
     // Two full batches (CONCURRENCY=10 → 20 appIds across two iterations).
     const apps = new Map<number, object>();
     for (let appId = 1; appId <= 20; appId++) apps.set(appId, {});
-    const exe = "/home/deck/homebrew/plugins/decky-romm-sync/bin/tender-rom-launcher";
+    const exe = "/home/deck/.local/bin/tender-rom-launcher";
     const { fn } = makeRegisterForAppDetails(() => ({ strShortcutExe: exe }));
     vi.stubGlobal("SteamClient", { Apps: { RegisterForAppDetails: fn } });
     vi.stubGlobal("collectionStore", { deckDesktopApps: { apps } });
@@ -434,7 +434,7 @@ describe("getExistingRomMShortcuts", () => {
 });
 
 describe("addShortcut — overview-readiness poll + empty-launch-options skip", () => {
-  const EXE = "/home/deck/homebrew/plugins/decky-romm-sync/bin/tender-rom-launcher";
+  const EXE = "/home/deck/.local/bin/tender-rom-launcher";
 
   function item(launchOptions: string): SyncAddItem {
     return {

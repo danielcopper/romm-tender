@@ -345,7 +345,7 @@ class TestCustomProxyHeaders:
             settings,
             "/fake/plugin_dir",
             logging.getLogger("test"),
-            "decky-romm-sync/9.9.9",
+            "romm-tender/9.9.9",
             log_debug=lambda _msg: None,
         )
         dest = str(tmp_path / "cover.png")
@@ -357,7 +357,7 @@ class TestCustomProxyHeaders:
         req = mock_open.call_args[0][0]
         assert req.get_header("P-access-token") is None
         assert req.get_header("P-access-token-id") is None
-        assert req.get_header("User-agent") == "decky-romm-sync/9.9.9"
+        assert req.get_header("User-agent") == "romm-tender/9.9.9"
 
     def test_a_stored_authorization_never_displaces_the_bearer(self, plugin):
         """Unreachable through validation, so it is written straight into the settings dict."""
@@ -427,9 +427,7 @@ class TestCustomProxyHeaderLogging:
     def _adapter(self, headers: list[dict[str, str]]):
         log_debug = MagicMock()
         settings = {"romm_url": "http://romm.local", "romm_custom_headers": headers}
-        adapter = RommHttpAdapter(
-            settings, "/fake/plugin_dir", MagicMock(), "decky-romm-sync/9.9.9", log_debug=log_debug
-        )
+        adapter = RommHttpAdapter(settings, "/fake/plugin_dir", MagicMock(), "romm-tender/9.9.9", log_debug=log_debug)
         return adapter, log_debug
 
     def _request(self, adapter) -> None:

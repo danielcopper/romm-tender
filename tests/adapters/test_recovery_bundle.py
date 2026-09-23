@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 
 def _adapter(tmp_path) -> RecoveryBundleAdapter:
-    return RecoveryBundleAdapter(user_home=str(tmp_path), package_name="decky romm/sync", plugin_version="1.2.3")
+    return RecoveryBundleAdapter(user_home=str(tmp_path), package_name="romm tender/", plugin_version="1.2.3")
 
 
 def _create_layout(adapter: RecoveryBundleAdapter) -> None:
@@ -745,7 +745,7 @@ class TestCooperativeAbort:
                 lambda: True,
             )
 
-        recovery_root = tmp_path / "decky-romm-sync-recovery"
+        recovery_root = tmp_path / "romm-tender-recovery"
         assert list((recovery_root / "bundles").iterdir()) == [], "no bundle is published"
         assert list((recovery_root / "staging").iterdir()) == [], "staging is cleaned up"
 
@@ -773,7 +773,7 @@ class TestCooperativeAbort:
             )
 
         assert checks["count"] > 3, "the abort was polled repeatedly, not once up front"
-        recovery_root = tmp_path / "decky-romm-sync-recovery"
+        recovery_root = tmp_path / "romm-tender-recovery"
         assert list((recovery_root / "bundles").iterdir()) == []
         assert list((recovery_root / "staging").iterdir()) == []
 
