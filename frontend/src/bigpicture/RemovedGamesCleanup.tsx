@@ -375,9 +375,7 @@ const CandidateRow: FC<{
         {versionLine(item, name)}
       </div>
       {truncated && (
-        <div style={ROW_WARNING}>
-          One or more display fields were shortened to keep this preview page within the Decky wire limit.
-        </div>
+        <div style={ROW_WARNING}>One or more display fields were shortened to keep this preview page small.</div>
       )}
       {item.warning && <div style={ROW_WARNING}>{item.warning}</div>}
       {item.installed && (!recovery || !included) && (
@@ -503,7 +501,7 @@ const CleanupResult: FC<{ complete: PruneComplete }> = ({ complete }) => (
             {item.bundle_path !== undefined && removedInGroup(item) === 0 && (
               <div>Backup created, nothing removed. The folder stays at {item.bundle_path}.</div>
             )}
-            {item.message_truncated && <div>Detail was shortened to fit the Decky wire limit.</div>}
+            {item.message_truncated && <div>Detail was shortened to keep this result small.</div>}
             {item.warnings?.map((warning) => (
               <div key={warning}>Warning: {warning}</div>
             ))}

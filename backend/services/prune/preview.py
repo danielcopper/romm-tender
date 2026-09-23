@@ -183,7 +183,7 @@ class PreviewBuilder:
             result["items"] = candidate
             if len(json.dumps(result, ensure_ascii=True).encode("utf-8")) > _PREVIEW_BUDGET_BYTES:
                 if not items:
-                    raise ValueError("One cleanup preview entry exceeds the Decky wire budget")
+                    raise ValueError("One cleanup preview entry exceeds the preview page budget")
                 break
             items = candidate
         result["items"] = items

@@ -110,7 +110,7 @@ class PruneResultReporterConfig:
 
 
 class PruneResultReporter:
-    """Shape every cleanup outcome and publish it within the Decky wire budget."""
+    """Shape every cleanup outcome and publish it within the completion frame budget."""
 
     def __init__(self, *, config: PruneResultReporterConfig) -> None:
         self._emit = config.emit
