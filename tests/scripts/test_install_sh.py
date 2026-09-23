@@ -1545,11 +1545,12 @@ class TestHowTheRunLooks:
     def test_the_width_comes_from_the_terminal_whatever_is_on_stdin(self, machine, stdin_pipe):
         """``COLUMNS`` unset, so the run has to ask — and under a pipe it asked wrong.
 
-        ``tput`` reads the width off stdin, and inside a command substitution
-        stdout is a pipe already; under ``curl … | bash`` stdin is one too, and
-        with no terminal among them the answer is terminfo's 80. That is
-        narrower than the greeter needs, so a 160-column terminal laid the text
-        under the mark for every user who ran the command the README gives.
+        ``tput`` takes the size from whichever of its three streams is a
+        terminal. Inside a command substitution stdout is a pipe, the script's
+        ``2> /dev/null`` disqualifies stderr, and under ``curl … | bash`` stdin
+        is the script — so none is a terminal and the answer is terminfo's 80.
+        That is narrower than the greeter needs, so a 160-column terminal laid
+        the text under the mark on every run under ``curl … | bash``.
         """
         _code, output = machine.on_a_terminal(
             "--from",
@@ -1676,9 +1677,8 @@ class TestHowTheRunLooks:
 
         curl ends a bar that reached the end with a newline, so the cursor is a
         line lower than the block's own drawing left it. A redraw that did not
-        know about that line aimed the whole block one line short: the Checking
-        row stood three times and a spinner frame was left above the finished
-        rows.
+        know about that line aims the whole block one line short, and a row
+        stands on screen more than once.
         """
         machine.publish_release()
 
