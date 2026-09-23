@@ -93,9 +93,14 @@ TAG_UNREACHABLE=2
 TAG_ABSENT=3
 
 # What `curl -f` exits with when the server answered 400 or above (curl(1), EXIT
-# CODES) — for a release asset, normally that it has no such file. Every other
-# failure is the transfer itself.
+# CODES) — which answer it was is in HTTP_STATUS. Every other failure is the
+# transfer itself.
 CURL_HTTP_ERROR=22
+
+# The status the server answered the last download with, as curl's
+# `-w '%{http_code}'` prints it (curl(1), --write-out): the final response's,
+# after any redirect, and 000 where no response arrived at all.
+HTTP_STATUS=""
 
 # check_python's two refusals, which are two different things to tell a user.
 PYTHON_MISSING=2
@@ -1159,15 +1164,13 @@ obtain_tarball() {
 
     local fetched=0
     fetch_visibly "$DOWNLOAD_BASE/$tag/$archive" "$work/$archive" || fetched=$?
-    case "$fetched" in
-        0) ;;
-        "$CURL_HTTP_ERROR")
-            abort "release $tag carries no tarball" "try --version with a release that does, or --from a local build"
-            ;;
-        *) abort "the download was cut short" "check the network and run this again" ;;
-    esac
-    fetch "$DOWNLOAD_BASE/$tag/$archive.sha256" "$work/$archive.sha256" ||
-        abort "release $tag carries no checksum for its tarball" "this release cannot be verified, so it is refused"
+    [ "$fetched" -eq 0 ] ||
+        refuse_download "$fetched" "$archive" "release $tag carries no tarball" \
+            "try --version with a release that does, or --from a local build"
+    fetch "$DOWNLOAD_BASE/$tag/$archive.sha256" "$work/$archive.sha256" || fetched=$?
+    [ "$fetched" -eq 0 ] ||
+        refuse_download "$fetched" "$archive.sha256" "release $tag carries no checksum for its tarball" \
+            "this release cannot be verified, so it is refused"
 
     (cd "$work" && sha256sum -c "$archive.sha256" > /dev/null) ||
         abort "the downloaded tarball does not match its checksum" "nothing was changed; try again"
@@ -1204,8 +1207,23 @@ resolve_tag() {
     esac
 }
 
+# Ends the run over a release asset that did not arrive, with *missing* and its
+# hint only where the server said the file is not there. Any other error answer
+# — a rate limit, an outage — says nothing about the release, so it is reported
+# as the server's answer rather than as the release lacking the file.
+refuse_download() {
+    local status="$1" name="$2" missing="$3" missing_hint="$4"
+    if [ "$status" -ne "$CURL_HTTP_ERROR" ]; then
+        abort "the download was cut short" "check the network and run this again"
+    fi
+    if [ "$HTTP_STATUS" = "404" ]; then
+        abort "$missing" "$missing_hint"
+    fi
+    abort "the server answered $HTTP_STATUS for $name" "try again later"
+}
+
 fetch() {
-    curl -fsSL "$1" -o "$2"
+    HTTP_STATUS="$(curl -fsSL -w '%{http_code}' "$1" -o "$2")"
 }
 
 # The tarball is the one download worth watching — tens of megabytes over
@@ -1214,7 +1232,7 @@ fetch() {
 # and stays silent either way.
 fetch_visibly() {
     if ! on_a_terminal; then
-        curl -fsSL "$1" -o "$2"
+        fetch "$1" "$2"
         return
     fi
     # The bar draws on the line under the block, and so does the spinner's idea
@@ -1239,9 +1257,9 @@ fetch_visibly() {
     # silently, because a redirection that fails on the command itself would
     # skip the download and complain on stderr.
     if (: < /dev/tty) 2> /dev/null; then
-        curl -fL --progress-bar "$1" -o "$2" < /dev/tty || status=$?
+        HTTP_STATUS="$(curl -fL --progress-bar -w '%{http_code}' "$1" -o "$2" < /dev/tty)" || status=$?
     else
-        curl -fL --progress-bar "$1" -o "$2" || status=$?
+        HTTP_STATUS="$(curl -fL --progress-bar -w '%{http_code}' "$1" -o "$2")" || status=$?
     fi
     if ! may_animate; then
         return "$status"

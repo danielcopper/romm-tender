@@ -92,9 +92,11 @@ printf '%s\\n' "$*" >> "$STUB_CURL_ARGV_LOG"
 out=""
 url=""
 bar="no"
+write_out=""
 while [ $# -gt 0 ]; do
     case "$1" in
         -o) out="$2"; shift 2 ;;
+        -w) write_out="$2"; shift 2 ;;
         --max-time) shift 2 ;;
         --progress-bar) bar="yes"; shift ;;
         -*) shift ;;
@@ -106,6 +108,16 @@ printf '%s\\n' "$url" >> "$STUB_CURL_LOG"
 # stdin for the window size.
 if [ -t 0 ]; then stdin="terminal"; else stdin="not a terminal"; fi
 printf '%s %s\\n' "$url" "$stdin" >> "$STUB_CURL_STDIN_LOG"
+# `-w '%{http_code}'` is answered the way curl answers it: the final status
+# alone on stdout, with no newline, whether the transfer succeeded or not.
+write_status() {
+    [ -n "$write_out" ] || return 0
+    if [ "$write_out" != "%{http_code}" ]; then
+        printf 'stub curl: no answer for -w %s\\n' "$write_out" >&2
+        exit 2
+    fi
+    printf '%s' "$1"
+}
 if [ "$url" = "$STUB_DEBUGGER_URL" ]; then
     [ "${STUB_DEBUGGER:-silent}" = "answer" ] || exit 22
     echo '{"Browser":"stub"}'
@@ -114,16 +126,30 @@ fi
 if [ "$bar" = "yes" ] && [ -n "${STUB_CURL_DIES_MIDWAY:-}" ]; then
     # A transfer the server cut short, in the shape curl leaves behind: the bar
     # stops where it stopped, the reason is written onto that same line, and a
-    # blank line follows it.
+    # blank line follows it. The server had answered 200 before it stopped.
     printf '\\r############ 15.0%%curl: (18) end of response with 340000 bytes missing\\n\\n' >&2
+    write_status 200
     exit 18
 fi
 source="$STUB_SERVE/${url##*/}"
-[ -f "$source" ] || exit 22
+status=200
+case "$url" in
+    *.tar.gz) status="${STUB_CURL_TARBALL_STATUS:-200}" ;;
+    *.sha256) status="${STUB_CURL_SIDECAR_STATUS:-200}" ;;
+esac
+[ -f "$source" ] || status=404
+if [ "$status" -ge 400 ]; then
+    # What `curl -f` leaves behind on an error answer, bar or no bar: no file,
+    # curl's reason on a line of its own, and exit 22.
+    write_status "$status"
+    printf 'curl: (22) The requested URL returned error: %s\\n' "$status" >&2
+    exit 22
+fi
 # A transfer that reached the end, drawn the way curl draws one: rewritten in
 # place from the start of the line, and ended with a newline of its own.
 [ "$bar" = "no" ] || printf '\\r######################## 100.0%%\\n' >&2
 if [ -n "$out" ]; then cp "$source" "$out"; else cat "$source"; fi
+write_status 200
 """
 
 _PGREP_STUB = """#!/usr/bin/env bash
@@ -1144,7 +1170,7 @@ class TestWhatItDownloads:
         assert not machine.code.exists()
 
     def test_a_release_with_no_tarball_says_so(self, machine):
-        """A tarball the server answers with an HTTP error is reported as the release carrying none."""
+        """A tarball the server answers 404 for is reported as the release carrying none."""
         machine.publish_release()
         (machine.serve / _ARCHIVE).unlink()
 
@@ -1152,6 +1178,25 @@ class TestWhatItDownloads:
 
         assert result.returncode == 1
         assert _refusals(result.stderr) == [f"install.sh: release {_TAG} carries no tarball"]
+
+    @pytest.mark.parametrize(
+        ("knob", "status", "name"),
+        [
+            ("STUB_CURL_TARBALL_STATUS", "403", _ARCHIVE),
+            ("STUB_CURL_SIDECAR_STATUS", "503", f"{_ARCHIVE}.sha256"),
+        ],
+    )
+    def test_an_error_answer_other_than_404_is_the_servers_not_the_releases(self, machine, knob, status, name):
+        """A rate limit or an outage says nothing about what the release carries."""
+        machine.publish_release()
+
+        result = machine.run("--version", _VERSION, "--yes", **{knob: status})
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [f"install.sh: the server answered {status} for {name}"]
+        assert "try again later" in result.stderr
+        assert "carries no" not in result.stderr
+        assert not machine.code.exists()
 
     def test_a_release_with_no_checksum_is_refused_rather_than_trusted(self, machine):
         machine.publish_release(checksum=False)
@@ -1761,6 +1806,28 @@ class TestHowTheRunLooks:
         failed = [line for line in screen.splitlines() if line.startswith("✗ Installing")]
         assert failed == ["✗ Installing   the download was cut short"], screen
         assert "  check the network and run this again" in screen
+        assert not machine.code.exists()
+
+    def test_a_download_the_server_refuses_says_what_it_answered(self, machine):
+        """The row names the server's answer, and curl's own reason stays readable above it."""
+        machine.publish_release()
+
+        code, output = machine.on_a_terminal(
+            "--version",
+            _VERSION,
+            answer="y",
+            width=160,
+            COLORTERM="truecolor",
+            STUB_CURL_TARBALL_STATUS="503",
+        )
+
+        assert code == 1
+        screen = _screen(output)
+        assert "curl: (22) The requested URL returned error: 503" in screen, "curl's own reason was drawn over"
+        failed = [line for line in screen.splitlines() if line.startswith("✗ Installing")]
+        assert failed == [f"✗ Installing   the server answered 503 for {_ARCHIVE}"], screen
+        assert "  try again later" in screen
+        assert "carries no tarball" not in screen
         assert not machine.code.exists()
 
     def test_the_warning_is_four_lines_and_asks_once(self, machine):
