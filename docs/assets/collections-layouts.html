@@ -217,8 +217,8 @@
 
   <div class="facts">
     <dl>
-      <dt>What is here</dt><dd>Every collection RomM lists to you (your own, and other users' public ones), each with one switch: sync it or not. RomM has three kinds. <strong>Standard</strong> collections are picked by hand, and the favorites collection RomM keeps for starred games is one of them. <strong>Smart</strong> collections are saved searches, so their games change as matches come and go. <strong>Virtual</strong> collections are groupings RomM builds from game metadata; Tender shows two of them, franchises and IGDB collections. They have no owner.</dd>
-      <dt>What turning one on does</dt><dd>It adds a shortcut for <strong>every game in the collection, including games on platforms you do not sync</strong>. It also creates a Steam collection named <code>RomM: [name] (host)</code>. The Collections tab says neither of these today.</dd>
+      <dt>What is here</dt><dd>Every collection RomM lists to you (your own, and other users' public ones), each with one switch: sync it or not. RomM has three kinds. <strong>Standard</strong> collections are picked by hand, and the favorites collection RomM keeps for starred games is one of them. <strong>Smart</strong> collections are saved searches, so their games change as matches come and go. <strong>Virtual</strong> collections are groupings RomM builds from game metadata; Tender shows two of their types, franchises and IGDB collections. They have no owner.</dd>
+      <dt>What turning one on does</dt><dd>It adds a shortcut for <strong>every game in the collection, including games on platforms you do not sync</strong>. It also groups them in a Steam collection named after it (<code>RomM: [name] (host)</code>, with a type label when the setting that keeps same-named collections apart is on). The Collections tab says neither of these today.</dd>
       <dt>What the page knows</dt><dd>RomM's listing gives each collection its name, its kind, its ROM count, <strong>which games are in it</strong> (their ids), <strong>its owner's name</strong> (standard and smart only) and whether it is public. Tender passes on the name, the kind (and, for virtual ones, franchise or IGDB collection), the count, whether it is <em>yours</em>, and whether it syncs (plus its id and whether it is the favorites collection), and drops the member ids, the owner's name and whether it is public. With the member ids, <strong>how many of a collection's games are already in Steam</strong> is a local lookup against the shortcuts Tender made. It is approximate where several versions of one game share a shortcut. None of this costs more than the four requests one page load makes today; how big a collection is on disk would.</dd>
       <dt>Mine / All is not a filter</dt><dd>Under <em>Mine</em>, other users' collections are also <strong>left out of the sync</strong>, even ones switched on earlier. It is a setting shaped like a filter. Virtual collections have no owner, so it never touches them.</dd>
       <dt>Width and height</dt><dd>Content is 806 px on every display. Height is the scarce axis: after the title, Back and the tab row, the Deck leaves about <strong>263 px</strong>. The hatched area on each board is what the Deck does not show without scrolling. The names and numbers are invented.</dd>
@@ -249,7 +249,7 @@
       </div>
     </div>
   </div></div>
-  <div class="caption"><span>Before the first collection, seven lines: a toggle, a label, two button rows, a heading, a search and a button row</span><span>The first collection starts below the fold</span></div>
+  <div class="caption"><span>Before the first collection, seven lines, five of them controls: a toggle, a label, two segmented rows, a heading, a search and a button row</span><span>The first collection starts below the fold</span></div>
 
   <!-- ============ A ============ -->
   <section class="variant" id="v-a">
@@ -531,7 +531,7 @@
     <thead><tr><th></th><th>Today</th><th>A · one table</th><th>B · per pane</th><th>C · kinds left</th></tr></thead>
     <tbody>
       <tr><td>Collections above the fold on the Deck</td><td class="n">0</td><td>6</td><td class="n">4</td><td class="y">6, and every kind</td></tr>
-      <tr><td>Lines of controls before the first collection</td><td class="n">7</td><td>2</td><td class="n">3, in a narrow column</td><td class="y">1</td></tr>
+      <tr><td>Lines of controls before the first collection</td><td class="n">5</td><td>2</td><td class="n">3, in a narrow column</td><td class="y">1</td></tr>
       <tr><td>Says what turning one on does</td><td class="n">no</td><td class="n">below the fold</td><td class="y">yes, per collection</td><td class="y">yes, per kind</td></tr>
       <tr><td>Mine / All reads as what it is</td><td class="n">no</td><td class="n">no</td><td class="n">no</td><td class="y">yes</td></tr>
       <tr><td>New server requests</td><td class="y">none</td><td class="y">none</td><td class="y">none</td><td class="y">none</td></tr>
