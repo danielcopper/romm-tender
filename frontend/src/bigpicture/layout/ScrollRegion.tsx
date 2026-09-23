@@ -18,8 +18,8 @@
  * `ScrollingTab`, which the frame does not wrap, so a tab that does not build
  * its own regions does not get this.
  *
- * The room Steam's focus ring needs is here for the same reason, so that every
- * region inherits it — see `FOCUS_RING_REACH`.
+ * The room Steam's focus ring needs is here for the same reason — see
+ * `FOCUS_RING_REACH`.
  *
  * The panel comes from a webpack probe that can miss, and a page whose regions
  * silently vanish would be worse than one that scrolls without what the panel

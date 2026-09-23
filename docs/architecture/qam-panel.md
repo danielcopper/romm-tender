@@ -638,9 +638,9 @@ It spans exactly what a row spans, and that span is **not symmetric**: a row is 
 marker (a 3 px bar and a 5 px gap) and runs to the right edge of the list's content. Steam's `Field`, which every row is
 built from, adds nothing horizontally inside the QAM — it renders in its `Classic` mode there, whose only padding is 10
 px top and bottom — so there is no Steam inset to match and a symmetric padding on the header is simply narrower than
-the rows. The header and the rows sit inside one element, so they move together whatever inset that element takes —
-including the room each pane's region keeps for Steam's focus ring (§ Room for the focus ring), which this layout adds
-none of its own to.
+the rows. The header and the rows sit inside one element, so they move together whatever inset it sits in — including
+the room each pane's region keeps for Steam's focus ring (§ Room for the focus ring), which this layout adds none of its
+own to.
 
 ### Tables
 
