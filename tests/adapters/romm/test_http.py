@@ -19,6 +19,7 @@ from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from adapters.romm.http import RommHttpAdapter
 from adapters.steam_config import SteamConfigAdapter
+from domain.app_directories import resolve_directories
 from lib.errors import (
     RommApiError,
     RommAuthError,
@@ -36,7 +37,7 @@ from lib.errors import (
 from lib.list_result import ErrorCode
 
 # conftest.py patches decky before this import
-from main import Plugin
+from main import _CODE_DIR_FALLBACK, Plugin
 from services.connection import ConnectionService, ConnectionServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
 
@@ -1022,6 +1023,23 @@ class TestPlatformMap:
         adapter = plugin._http_adapter
         assert adapter.resolve_system("philips-cd-i") == "cdimono1"
         assert adapter.resolve_system("unknown-slug", "cdi") == "cdimono1"
+
+    def test_the_shipped_map_is_read_from_where_the_program_is_installed(self, tmp_path):
+        """The adapter reads ``defaults/config.json`` under the code directory the program resolves for itself.
+
+        A wrong path fails in silence: the map degrades to ``{}`` and every slug
+        passes through verbatim, so only a slug the shipped file maps to a
+        different name can tell the two apart. The directory comes from
+        ``resolve_directories`` over ``main``'s own fallback, as ``Plugin.run``
+        resolves it, rather than from the test setup.
+        """
+        import logging
+
+        directories = resolve_directories({}, str(tmp_path), _CODE_DIR_FALLBACK)
+        adapter = RommHttpAdapter(
+            {}, directories.code_dir, logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
+        )
+        assert adapter.resolve_system("dc") == "dreamcast"
 
     def test_missing_config_returns_empty_map(self, tmp_path):
         """A code_dir with no defaults/config.json degrades to an empty map, not an error.
