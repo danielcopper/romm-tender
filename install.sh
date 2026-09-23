@@ -92,9 +92,9 @@ TARBALL=""
 TAG_UNREACHABLE=2
 TAG_ABSENT=3
 
-# What `curl -f` exits with when the server answered with an HTTP error (curl(1),
-# EXIT CODES) — the one failure that says the release has no such file. Every
-# other one is the transfer itself failing.
+# What `curl -f` exits with when the server answered 400 or above (curl(1), EXIT
+# CODES) — for a release asset, normally that it has no such file. Every other
+# failure is the transfer itself.
 CURL_HTTP_ERROR=22
 
 # check_python's two refusals, which are two different things to tell a user.
@@ -1005,8 +1005,9 @@ refuse_decky_plugin() {
 # nothing, and both stop the unit whatever else is running.
 refuse_foreign_backend() {
     local lock="$DATA/$BACKEND_LOCK" own opener holder="" own_opens="no"
-    # No file, no holder. Asked first because `flock` handed a PATH creates the
-    # file; handed a descriptor opened for reading, it creates nothing.
+    # No file, no holder — and asked first because the read-only open below fails
+    # on a missing file, which the `if` would take for a held lock. A descriptor
+    # rather than a path because `flock` handed a path creates the file.
     [ -e "$lock" ] || return 0
     if flock -n 9 2> /dev/null 9< "$lock"; then
         return 0
@@ -1038,8 +1039,9 @@ refuse_foreign_backend() {
 # open too. Read off /proc rather than asked of `fuser` or `lsof`, which are not
 # on every target — this needs no tool beyond bash.
 #
-# `-ef` compares device and inode, both sides stat'ed through the descriptor's
-# link, so a holder that opened the lock under another name is found as well.
+# `-ef` stats both sides — the descriptor through its /proc link, which resolves
+# to the open file — and compares device and inode, so a holder that opened the
+# lock under another name is found as well.
 # Only this user's processes can answer: another user's fd directory cannot be
 # listed, so the glob yields nothing from it and no filter is needed. Best
 # effort: that process, one that ends mid-scan, and a lock held with no
@@ -1228,10 +1230,11 @@ fetch_visibly() {
         height="$(block_height)"
         set_block_height "$((height + 1))"
     fi
-    # curl sizes the bar from its stdin's window size (get_terminal_columns in
-    # curl's src/terminal.c; curl 8.21 asks stdin and nothing else), and under
-    # `curl | bash` stdin is the script, so the bar comes out at curl's default
-    # of 79 columns whatever the terminal is and a narrower one wraps it.
+    # curl takes the bar's width from COLUMNS where that is exported, and
+    # otherwise from its stdin's window size (get_terminal_columns in curl's
+    # src/terminal.c; 8.22 then falls back to stdout and stderr, 8.21 does not).
+    # Under `curl | bash` stdin is the script, so an 8.21 draws the bar at its
+    # default of 79 columns whatever the terminal is, and a narrower one wraps it.
     # /dev/tty is handed to it where it can be opened; the subshell asks first,
     # silently, because a redirection that fails on the command itself would
     # skip the download and complain on stderr.

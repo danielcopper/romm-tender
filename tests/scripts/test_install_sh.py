@@ -102,7 +102,8 @@ while [ $# -gt 0 ]; do
     esac
 done
 printf '%s\\n' "$url" >> "$STUB_CURL_LOG"
-# What the bar would be sized from: curl asks its stdin for the window size.
+# What the bar would be sized from: with no COLUMNS exported, curl 8.21 asks its
+# stdin for the window size.
 if [ -t 0 ]; then stdin="terminal"; else stdin="not a terminal"; fi
 printf '%s %s\\n' "$url" "$stdin" >> "$STUB_CURL_STDIN_LOG"
 if [ "$url" = "$STUB_DEBUGGER_URL" ]; then
@@ -878,7 +879,7 @@ class TestTheAcknowledgement:
         assert not any("--progress-bar" in line for line in sidecar)
 
     def test_the_bar_is_sized_from_the_terminal_under_a_piped_script(self, machine):
-        """curl takes the bar's width from its stdin, which under ``curl … | bash`` is the script."""
+        """Under ``curl … | bash`` stdin is the script, and with no COLUMNS exported curl 8.21 sizes from it."""
         machine.publish_release()
 
         code, _output = machine.on_a_terminal("--version", _VERSION, answer="y", stdin_pipe=True)
@@ -1346,9 +1347,8 @@ class TestABackendOutsideTheService:
     once the unit's process is forked and the service row reads a port file that
     is missing or the other backend's.
 
-    The lock is real in every case here: a helper process takes it with
-    ``flock`` under this machine's data root, so what the installer asks is
-    what the kernel answers.
+    Where a test needs the lock held, a real helper process takes it with
+    ``flock``, so what the installer asks is what the kernel answers.
     """
 
     def test_a_backend_holding_the_lock_is_refused_by_pid_command_and_directory(self, machine):
@@ -1426,7 +1426,7 @@ class TestABackendOutsideTheService:
         assert (machine.code / "backend" / "main.py").is_file()
 
     def test_asking_creates_no_lock_file(self, machine):
-        """``flock`` handed a path creates the file, so the question must not hand it one.
+        """Asking whether the lock is held leaves no lock file behind.
 
         The run fails after the pre-flight on purpose: a run that installed would
         start a backend, and a backend is allowed to create its own lock.
