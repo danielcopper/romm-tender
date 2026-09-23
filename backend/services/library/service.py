@@ -64,7 +64,7 @@ class LibraryServiceConfig:
     """Frozen wiring bundle handed to ``LibraryService.__init__``.
 
     Holds the Protocol-typed adapters, the live settings dict, runtime
-    infrastructure, time/sleep/uuid seams, plugin-dir reference, event
+    infrastructure, time/sleep/uuid seams, event
     emitter, the ``settings.json`` persister and the SQLite Unit-of-Work
     factory (the synced-ROM registry, last-sync timestamp, sync stats and
     metadata cache now live in ``roms`` / ``sync_runs`` / ``rom_metadata``
@@ -83,7 +83,6 @@ class LibraryServiceConfig:
     settings: dict[str, Any]
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
-    plugin_dir: str
     launcher_exe: str
     emit: EventEmitter
     clock: Clock
@@ -134,7 +133,6 @@ class LibraryService:
                 settings=config.settings,
                 loop=config.loop,
                 logger=config.logger,
-                plugin_dir=config.plugin_dir,
                 settings_persister=config.settings_persister,
                 log_debug=config.log_debug,
                 uow_factory=config.uow_factory,

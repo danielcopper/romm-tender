@@ -92,7 +92,6 @@ def plugin():
             settings=p.settings,
             loop=running_loop(),
             logger=decky.logger,
-            plugin_dir=decky.DECKY_PLUGIN_DIR,
             launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/tender-rom-launcher",
             emit=decky.emit,
             clock=FakeClock(),

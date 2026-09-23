@@ -380,7 +380,7 @@ Format: **invariant** — tier — enforced by.
   about the user's data as two plain `str` fields on structs the composition root passes around. **Counting rule** (an
   AST walk for an attribute in `{config_dir, data_dir, cache_dir, state_dir, runtime_dir,
   code_dir, bin_dir}` whose
-  base ends in `directories`): **19 reads over three modules**, `main.py` and `bootstrap/`'s two — `code_dir` 6,
+  base ends in `directories`): **18 reads over three modules**, `main.py` and `bootstrap/`'s two — `code_dir` 5,
   `cache_dir` 4, `data_dir` 4, `state_dir` 2, and one each for `config_dir`, `runtime_dir` and `bin_dir`. Re-derive it
   rather than trusting the number. **Two fields are read in `main.py` alone** and nowhere else: `state_dir`, which the
   logging setup opens and which the injection's crash record lives under, and `runtime_dir`, which the port file lives

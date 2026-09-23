@@ -103,8 +103,7 @@ class LibraryFetcherConfig:
     """Frozen wiring bundle handed to ``LibraryFetcher.__init__``.
 
     Holds the Protocol-typed RomM adapter, the live settings dict,
-    runtime infrastructure (loop, logger), plugin-dir reference (used
-    for shortcut-data path construction), settings persistence callback,
+    runtime infrastructure (loop, logger), settings persistence callback,
     debug-logger seam, the shared ``LibrarySyncStateBox`` (read for the
     cancel signal), and an ``_emit_progress`` callback the fetcher uses
     to surface long paginated fetches to the frontend.
@@ -114,7 +113,6 @@ class LibraryFetcherConfig:
     settings: dict[str, Any]
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
-    plugin_dir: str
     settings_persister: SettingsPersister
     log_debug: DebugLogger
     uow_factory: UnitOfWorkFactory
@@ -130,7 +128,6 @@ class LibraryFetcher:
         self._settings = config.settings
         self._loop = config.loop
         self._logger = config.logger
-        self._plugin_dir = config.plugin_dir
         self._settings_persister = config.settings_persister
         self._log_debug = config.log_debug
         self._uow_factory = config.uow_factory

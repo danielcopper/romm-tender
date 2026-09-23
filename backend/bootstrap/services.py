@@ -280,7 +280,6 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
             settings=cfg.stores.settings,
             loop=cfg.runtime.loop,
             logger=cfg.runtime.logger,
-            plugin_dir=cfg.directories.code_dir,
             launcher_exe=cfg.launcher.path,
             emit=cfg.runtime.emit,
             clock=cfg.runtime.clock,
