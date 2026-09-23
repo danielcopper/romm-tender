@@ -18,10 +18,8 @@
  * `ScrollingTab`, which the frame does not wrap, so a tab that does not build
  * its own regions does not get this.
  *
- * The room Steam's focus ring needs is here for the same reason: the ring is
- * drawn inside the region and clipped at its box, so a row spanning its column
- * would lose its edges in every region that did not keep the room itself — see
- * `FOCUS_RING_REACH`.
+ * The room Steam's focus ring needs is here for the same reason, so that every
+ * region inherits it — see `FOCUS_RING_REACH`.
  *
  * The panel comes from a webpack probe that can miss, and a page whose regions
  * silently vanish would be worse than one that scrolls without what the panel
@@ -79,7 +77,7 @@ const BOUNDS: CSSProperties = { height: "100%", minHeight: 0, overscrollBehavior
 
 /**
  * How far Steam's focus ring reaches past the focused box — a 2 px outline at a
- * 2 px offset — which the region would clip. Detail:
+ * 2 px offset — which Steam's scroll panel clips at its box. Detail:
  * `docs/architecture/qam-panel.md` § Building blocks, "Room for the focus ring".
  */
 export const FOCUS_RING_REACH = 4;

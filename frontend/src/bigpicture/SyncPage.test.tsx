@@ -2289,15 +2289,13 @@ describe("SyncPage", () => {
         setSyncProgress({ running: true, stage: "applying", step: 1, totalSteps: 1, runId: "run-live" });
         const { container } = await renderPage();
 
-        // The run table's rings are drawn from its own region's root and clipped
-        // at its box, so the room has to be that region's and not only its
-        // column's.
+        // The room is the unit list's own region's, not only its column's.
         const unitRegion = regionAround(container.querySelector('[data-testid="run-unit-platform-1"]')!);
         expect(unitRegion.getAttribute("data-testid")).toBe("run-units");
         expect(unitRegion.style.padding).toBe(`${FOCUS_RING_REACH}px`);
-        // Its column is a region too. The margins put the unit table's room in
-        // the column's, so its rows line up with the section title over them
-        // instead of starting a second room further in.
+        // Its column is a region too, and the margins stand the list in the
+        // column's room — why: `docs/architecture/qam-panel.md` § Room for the
+        // focus ring.
         expect(regionAround(unitRegion).style.padding).toBe(`${FOCUS_RING_REACH}px`);
         expect(unitRegion.style.marginLeft).toBe(`-${FOCUS_RING_REACH}px`);
         expect(unitRegion.style.marginRight).toBe(`-${FOCUS_RING_REACH}px`);

@@ -98,9 +98,10 @@ describe("ScrollRegion", () => {
   });
 
   it("keeps room for Steam's focus ring inside its own box, on both branches", async () => {
-    // What this pins is the declaration: the ring is drawn by Steam from a root
-    // inside the region and happy-dom lays nothing out, so whether a full-width
-    // row's ring now fits is device-only.
+    // What this pins is the declaration on both branches (why the fallback
+    // keeps it: `docs/architecture/qam-panel.md` § Room for the focus ring).
+    // happy-dom lays nothing out, so whether a full-width row's ring now fits
+    // is device-only.
     const { FOCUS_RING_REACH } = await import("./ScrollRegion");
     // The fallback's `Focusable` is stubbed with a fixed marker of its own.
     for (const [panel, marker] of [
