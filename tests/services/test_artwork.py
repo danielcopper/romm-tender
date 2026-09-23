@@ -2079,7 +2079,7 @@ class TestCleanupOrphanedGridImages:
         file_store.files[orphan] = b"orphan"
 
         result = await artwork_service.cleanup_orphaned_grid_images([], dry_run=False)
-        assert result == {"success": True, "removed_count": 1}
+        assert result == {"success": True, "candidate_count": 1, "removed_count": 1}
         assert orphan not in file_store.files
 
     @pytest.mark.asyncio
@@ -2090,7 +2090,7 @@ class TestCleanupOrphanedGridImages:
         file_store.files[store_art] = b"store art"
 
         result = await artwork_service.cleanup_orphaned_grid_images([], dry_run=False)
-        assert result == {"success": True, "removed_count": 0}
+        assert result == {"success": True, "candidate_count": 0, "removed_count": 0}
         assert store_art in file_store.files
 
     @pytest.mark.asyncio
@@ -2103,7 +2103,7 @@ class TestCleanupOrphanedGridImages:
         file_store.files[orphan] = b"orphan"
 
         result = await artwork_service.cleanup_orphaned_grid_images([self.FOREIGN], dry_run=False)
-        assert result == {"success": True, "removed_count": 1}
+        assert result == {"success": True, "candidate_count": 1, "removed_count": 1}
         assert foreign in file_store.files
         assert orphan not in file_store.files
 
@@ -2149,7 +2149,7 @@ class TestCleanupOrphanedGridImages:
         file_store.files[orphan] = b"orphan"
 
         result = await artwork_service.cleanup_orphaned_grid_images([self.BOUND], dry_run=False)
-        assert result == {"success": True, "removed_count": 1}
+        assert result == {"success": True, "candidate_count": 1, "removed_count": 1}
         assert bound_art in file_store.files
         assert orphan not in file_store.files
 
@@ -2183,7 +2183,7 @@ class TestCleanupOrphanedGridImages:
         file_store.files[store_art] = b"store"
 
         result = await artwork_service.cleanup_orphaned_grid_images([], dry_run=False)
-        assert result == {"success": True, "removed_count": 1}
+        assert result == {"success": True, "candidate_count": 1, "removed_count": 1}
         assert orphan not in file_store.files
         assert store_art in file_store.files
 
@@ -2199,7 +2199,7 @@ class TestCleanupOrphanedGridImages:
             file_store.files[path] = b"art"
 
         result = await artwork_service.cleanup_orphaned_grid_images([], dry_run=False)
-        assert result == {"success": True, "removed_count": 15}
+        assert result == {"success": True, "candidate_count": 15, "removed_count": 15}
         for path in staged:
             assert path not in file_store.files
 
@@ -2213,7 +2213,7 @@ class TestCleanupOrphanedGridImages:
             file_store.files[path] = b"keep"
 
         result = await artwork_service.cleanup_orphaned_grid_images([], dry_run=False)
-        assert result == {"success": True, "removed_count": 0}
+        assert result == {"success": True, "candidate_count": 0, "removed_count": 0}
         for path in (staging, sidecar, junk):
             assert path in file_store.files
 
@@ -2225,7 +2225,7 @@ class TestCleanupOrphanedGridImages:
         file_store.files[nested] = b"inside a dir"
 
         result = await artwork_service.cleanup_orphaned_grid_images([], dry_run=False)
-        assert result == {"success": True, "removed_count": 0}
+        assert result == {"success": True, "candidate_count": 0, "removed_count": 0}
         assert nested in file_store.files
 
     @pytest.mark.asyncio
@@ -2250,7 +2250,9 @@ class TestCleanupOrphanedGridImages:
         with caplog.at_level(logging.WARNING):
             result = await artwork_service.cleanup_orphaned_grid_images([], dry_run=False)
 
-        assert result == {"success": True, "removed_count": 1}
+        # The candidate the unlink failed on stays counted as a candidate, so the
+        # shortfall is the answer's own statement that one remains.
+        assert result == {"success": True, "candidate_count": 2, "removed_count": 1}
         assert failing in file_store.files
         assert removable not in file_store.files
         assert any("Failed to remove orphaned grid image" in r.message for r in caplog.records)

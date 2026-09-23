@@ -1007,7 +1007,11 @@ class ArtworkService:
         one bound ``roms.shortcut_app_id`` is provably incomplete — the whole
         run refuses (``incomplete_scan``) and deletes nothing. ``dry_run``
         counts the candidates without deleting (the first tap of the QAM
-        confirm flow); the real run hard-deletes and reports ``removed_count``.
+        confirm flow); the real run hard-deletes and reports ``removed_count``
+        beside its own ``candidate_count``. The real run re-derives the
+        candidates rather than trusting the dry run's, so its count can differ
+        from the one the dry run answered; any shortfall of ``removed_count``
+        below it is candidates whose unlink failed, which are still on disk.
         """
         grid = self._steam_config.grid_dir()
         if not grid or not self._cover_art_file_store.is_dir(grid):
@@ -1060,4 +1064,4 @@ class ArtworkService:
                 self._logger.warning(f"Failed to remove orphaned grid image {filename}: {e}")
         if removed:
             self._logger.info(f"Removed {removed} orphaned grid image(s)")
-        return {"success": True, "removed_count": removed}
+        return {"success": True, "candidate_count": len(orphans), "removed_count": removed}

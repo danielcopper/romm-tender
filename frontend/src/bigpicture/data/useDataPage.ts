@@ -407,6 +407,9 @@ export function useDataPage(): DataPageState {
           // Steam (exe = bin/tender-rom-launcher) that were never committed — no binding,
           // so the backend never returns them. The live exe-ownership scan sees
           // them; remove the UNION so no orphan is left behind.
+          // Why a shortcut removal un-asks the grid count:
+          // `docs/architecture/qam-panel.md`, section Data Management.
+          setOrphanedGridImages(NOT_ASKED);
           const backendAppIds = result.app_ids ?? [];
           const removed = new Set<number>(backendAppIds);
           await withPruneLease(
@@ -550,32 +553,36 @@ export function useDataPage(): DataPageState {
       }
       return;
     }
-    // Why only an exact match with the scan's count may stand as `0`, and why a
-    // refusal keeps it: `docs/architecture/qam-panel.md`, section Data Management.
-    const scanned = orphanedGridImages.state === "answered" ? orphanedGridImages.value : null;
-    try {
-      const result = await cleanupOrphanedGridImages(liveAppIds, false);
-      if (!result.success) {
-        setGridStatus(result.message ?? "Failed to remove orphaned images");
-        return;
+    // What each answer of the removal leaves on the row, and why:
+    // `docs/architecture/qam-panel.md`, section Data Management.
+    await runRemoval("Removing orphaned images", async () => {
+      try {
+        const result = await cleanupOrphanedGridImages(liveAppIds, false);
+        if (!result.success) {
+          setGridStatus(result.message ?? "Failed to remove orphaned images");
+          return;
+        }
+        const { candidate_count: candidates, removed_count: removed } = result;
+        if (candidates === undefined || removed === undefined || removed > candidates) {
+          setOrphanedGridImages(NOT_ASKED);
+          setGridStatus("The removal did not say whether every image went. Scan again to count what remains.");
+          return;
+        }
+        if (removed === candidates) {
+          setOrphanedGridImages({ state: "answered", value: 0 });
+          setGridStatus(`Removed ${pluralize(removed, "orphaned image")}`);
+          return;
+        }
+        setOrphanedGridImages(NOT_ASKED);
+        setGridStatus(
+          `Removed ${removed} of ${pluralize(candidates, "orphaned image")} — ${candidates - removed} could not be deleted. Scan again to count what remains.`,
+        );
+      } catch (e) {
+        logError(`Orphaned grid image removal failed: ${e}`);
+        setOrphanedGridImages(NOT_ASKED);
+        setGridStatus("Whether the images were removed could not be established. Scan again to count what remains.");
       }
-      const removed = result.removed_count ?? 0;
-      if (removed === scanned) {
-        setOrphanedGridImages({ state: "answered", value: 0 });
-        setGridStatus(`Removed ${pluralize(removed, "orphaned image")}`);
-        return;
-      }
-      setOrphanedGridImages(NOT_ASKED);
-      setGridStatus(
-        scanned !== null && removed < scanned
-          ? `Removed ${removed} of ${pluralize(scanned, "orphaned image")} — some remain. Scan again to count them.`
-          : `Removed ${pluralize(removed, "orphaned image")}. Scan again to count what remains.`,
-      );
-    } catch (e) {
-      logError(`Orphaned grid image removal failed: ${e}`);
-      setOrphanedGridImages(NOT_ASKED);
-      setGridStatus("Whether the images were removed could not be established. Scan again to count what remains.");
-    }
+    });
   };
 
   const handleRemoveNonSteamApps = async (apps: NonSteamApp[]) => {
@@ -586,6 +593,7 @@ export function useDataPage(): DataPageState {
       return;
     }
     await runRemoval("Removing non-Steam games", async (onProgress) => {
+      setOrphanedGridImages(NOT_ASKED);
       setNonSteamStatus(`Removing ${apps.length} non-Steam games...`);
       await removeShortcutsPaced(
         apps.map((a) => a.appId),

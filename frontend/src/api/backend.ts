@@ -474,7 +474,7 @@ export const refreshCoverArtwork = callable<
 // Orphaned grid-image cleanup (Danger Zone). Args: the frontend's full scan of
 // live non-Steam shortcut appIds (the keep-set — RomM-owned AND foreign) and a
 // dry_run flag. A dry run returns candidate_count without deleting; the real
-// run returns removed_count. The backend guards (incomplete_scan when a bound
+// run returns removed_count beside its own candidate_count. The backend guards (incomplete_scan when a bound
 // shortcut is missing from the live set, no_grid_dir) and the
 // @migration_blocked / @sync_active_blocked gates short-circuit to
 // success/reason?/message with no count.

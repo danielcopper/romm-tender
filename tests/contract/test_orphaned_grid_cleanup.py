@@ -2,7 +2,8 @@
 
 The Danger Zone's orphaned grid-image cleanup driven frontend-shaped over the
 real wired plugin: positional ``(live_app_ids, dry_run)`` exactly as
-``frontend/src/api/backend.ts`` declares. Pins the dry-run/real success shapes,
+``frontend/src/api/backend.ts`` declares. Pins the dry-run/real success shapes
+(the real run answers its own ``candidate_count`` beside ``removed_count``),
 the ``incomplete_scan`` sanity-guard refusal (a bound ``roms.shortcut_app_id``
 missing from the submitted live set deletes nothing), and the
 ``sync_active`` gate refusal while a library sync is in flight.
@@ -61,7 +62,7 @@ async def test_real_run_deletes_only_the_orphan(harness):
 
     result = await harness.plugin.cleanup_orphaned_grid_images([_BOUND_APP_ID, _FOREIGN_APP_ID], False)
 
-    assert result == {"success": True, "removed_count": 2}
+    assert result == {"success": True, "candidate_count": 2, "removed_count": 2}
     assert not orphan_portrait.exists()
     assert not orphan_hero.exists()
     assert bound_art.exists()

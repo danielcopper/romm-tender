@@ -1061,7 +1061,7 @@ describe("DataManagementPage", () => {
     it("removes the orphans on the confirmed second press", async () => {
       vi.mocked(backend.cleanupOrphanedGridImages)
         .mockResolvedValueOnce({ success: true, candidate_count: 2 })
-        .mockResolvedValue({ success: true, removed_count: 2 });
+        .mockResolvedValue({ success: true, candidate_count: 2, removed_count: 2 });
       const view = await pageOn("grid-images");
 
       await press(button(view, "Scan for orphaned images"));
@@ -1070,25 +1070,43 @@ describe("DataManagementPage", () => {
       await press(button(view, /Remove \d+ (orphaned )?image/));
 
       expect(vi.mocked(backend.cleanupOrphanedGridImages)).toHaveBeenLastCalledWith([], false);
-      expect(view.getByTestId("status-grid-images").textContent).toBe("Removed 2 orphaned images");
-      // Every image the scan counted went, so the row can say none are left.
+      await waitFor(() => expect(view.getByTestId("status-grid-images").textContent).toBe("Removed 2 orphaned images"));
+      // The removal took every candidate it found, so nothing orphaned at that
+      // moment is left and the row can say so.
       expect(view.getByTestId("data-row-grid-images").textContent).toContain("0");
       expect(view.getByTestId("data-row-grid-images").textContent).not.toContain("scan");
       expect(view.container.textContent).toContain("0 orphaned images found");
     });
 
-    it("asks to be scanned again when the removal took fewer images than the scan counted", async () => {
+    it("reads 0 when the removal took all of its own candidates, even more than the scan counted", async () => {
       vi.mocked(backend.cleanupOrphanedGridImages)
-        .mockResolvedValueOnce({ success: true, candidate_count: 3 })
-        .mockResolvedValue({ success: true, removed_count: 1 });
+        .mockResolvedValueOnce({ success: true, candidate_count: 2 })
+        .mockResolvedValue({ success: true, candidate_count: 3, removed_count: 3 });
       const view = await pageOn("grid-images");
 
       await press(button(view, "Scan for orphaned images"));
       fireEvent.click(button(view, /Remove \d+ (orphaned )?image/));
       await press(button(view, /Remove \d+ (orphaned )?image/));
 
-      expect(view.getByTestId("status-grid-images").textContent).toBe(
-        "Removed 1 of 3 orphaned images — some remain. Scan again to count them.",
+      await waitFor(() => expect(view.getByTestId("status-grid-images").textContent).toBe("Removed 3 orphaned images"));
+      expect(view.getByTestId("data-row-grid-images").textContent).not.toContain("scan");
+      expect(view.container.textContent).toContain("0 orphaned images found");
+    });
+
+    it("asks to be scanned again when some of the removal's own candidates could not be deleted", async () => {
+      vi.mocked(backend.cleanupOrphanedGridImages)
+        .mockResolvedValueOnce({ success: true, candidate_count: 3 })
+        .mockResolvedValue({ success: true, candidate_count: 3, removed_count: 1 });
+      const view = await pageOn("grid-images");
+
+      await press(button(view, "Scan for orphaned images"));
+      fireEvent.click(button(view, /Remove \d+ (orphaned )?image/));
+      await press(button(view, /Remove \d+ (orphaned )?image/));
+
+      await waitFor(() =>
+        expect(view.getByTestId("status-grid-images").textContent).toBe(
+          "Removed 1 of 3 orphaned images — 2 could not be deleted. Scan again to count what remains.",
+        ),
       );
       expect(view.getByTestId("data-row-grid-images").textContent).toContain("scan");
       expect(view.container.textContent).toContain("Not scanned yet");
@@ -1096,22 +1114,76 @@ describe("DataManagementPage", () => {
       expect(view.queryByText(/Remove \d+ orphaned image/)).toBeNull();
     });
 
-    it("asks to be scanned again when the removal took more images than the scan counted", async () => {
+    it("asks to be scanned again when a shortfall happens to match the scan's count", async () => {
+      // One image orphaned after the scan and one failed unlink: two removed of
+      // three, the same two the scan counted, with one still on disk.
       vi.mocked(backend.cleanupOrphanedGridImages)
         .mockResolvedValueOnce({ success: true, candidate_count: 2 })
-        .mockResolvedValue({ success: true, removed_count: 3 });
+        .mockResolvedValue({ success: true, candidate_count: 3, removed_count: 2 });
       const view = await pageOn("grid-images");
 
       await press(button(view, "Scan for orphaned images"));
       fireEvent.click(button(view, /Remove \d+ (orphaned )?image/));
       await press(button(view, /Remove \d+ (orphaned )?image/));
 
-      // Images orphaned after the scan were in the removal's own set, and
-      // whether it took all of them is not in its answer.
-      expect(view.getByTestId("status-grid-images").textContent).toBe(
-        "Removed 3 orphaned images. Scan again to count what remains.",
+      await waitFor(() =>
+        expect(view.getByTestId("status-grid-images").textContent).toBe(
+          "Removed 2 of 3 orphaned images — 1 could not be deleted. Scan again to count what remains.",
+        ),
       );
       expect(view.getByTestId("data-row-grid-images").textContent).toContain("scan");
+    });
+
+    it.each([
+      ["no candidate count", { success: true, removed_count: 2 }],
+      ["no removed count", { success: true, candidate_count: 2 }],
+    ])("asks to be scanned again when the removal's answer carries %s", async (_label, answer) => {
+      vi.mocked(backend.cleanupOrphanedGridImages)
+        .mockResolvedValueOnce({ success: true, candidate_count: 2 })
+        .mockResolvedValue(answer);
+      const view = await pageOn("grid-images");
+
+      await press(button(view, "Scan for orphaned images"));
+      fireEvent.click(button(view, /Remove \d+ (orphaned )?image/));
+      await press(button(view, /Remove \d+ (orphaned )?image/));
+
+      await waitFor(() =>
+        expect(view.getByTestId("status-grid-images").textContent).toBe(
+          "The removal did not say whether every image went. Scan again to count what remains.",
+        ),
+      );
+      expect(view.getByTestId("data-row-grid-images").textContent).toContain("scan");
+    });
+
+    it("cannot start a second removal while its own is running", async () => {
+      let release: (() => void) | undefined;
+      vi.mocked(backend.cleanupOrphanedGridImages)
+        .mockResolvedValueOnce({ success: true, candidate_count: 2 })
+        .mockReturnValue(
+          new Promise((resolve) => {
+            release = () => resolve({ success: true, candidate_count: 2, removed_count: 2 });
+          }),
+        );
+      const view = await pageOn("grid-images");
+
+      await press(button(view, "Scan for orphaned images"));
+      fireEvent.click(button(view, /Remove \d+ (orphaned )?image/));
+      await press(button(view, /Remove \d+ (orphaned )?image/));
+
+      expect(view.container.textContent).toContain("Removing orphaned images");
+      const remove = button(view, /Remove \d+ (orphaned )?image/);
+      expect(remove).toHaveProperty("disabled", true);
+      fireEvent.click(remove);
+      await press(remove);
+      // The scan and the one removal — a second confirm reached nothing.
+      expect(vi.mocked(backend.cleanupOrphanedGridImages)).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        release!();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(view.getByTestId("status-grid-images").textContent).toBe("Removed 2 orphaned images"));
     });
 
     it("aborts without calling the backend when the live-shortcut scan returns null", async () => {
@@ -1195,6 +1267,65 @@ describe("DataManagementPage", () => {
       expect(view.queryByText(/Remove \d+ orphaned image/)).toBeNull();
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Orphaned grid image removal failed: Error: boom"));
       logSpy.mockRestore();
+    });
+  });
+
+  describe("a shortcut removal un-asks the grid count", () => {
+    it("reads scan on Grid images after every shortcut was removed", async () => {
+      vi.mocked(backend.cleanupOrphanedGridImages).mockResolvedValue({ success: true, candidate_count: 2 });
+      vi.mocked(backend.getSyncStats).mockResolvedValue(stats({ total_shortcuts: 1 }));
+      vi.mocked(backend.removeAllShortcuts).mockResolvedValue({
+        success: true,
+        message: "Removed 1",
+        app_ids: [10],
+        rom_ids: [1],
+      });
+      const view = await pageOn("grid-images");
+      await press(button(view, "Scan for orphaned images"));
+      expect(view.getByTestId("data-row-grid-images").textContent).toContain("2");
+
+      selectRow(view, "shortcuts");
+      fireEvent.click(button(view, "Remove all shortcuts"));
+      await press(button(view, "Remove every RomM shortcut?"));
+      await waitFor(() => expect(view.getByTestId("status-shortcuts").textContent).toBe("Removed 1"));
+
+      expect(view.getByTestId("data-row-grid-images").textContent).toContain("scan");
+    });
+
+    it("keeps the grid count when the shortcut removal is refused", async () => {
+      vi.mocked(backend.cleanupOrphanedGridImages).mockResolvedValue({ success: true, candidate_count: 2 });
+      vi.mocked(backend.getSyncStats).mockResolvedValue(stats({ total_shortcuts: 1 }));
+      vi.mocked(backend.removeAllShortcuts).mockResolvedValue({
+        success: false,
+        reason: "sync_active",
+        message: "A sync is running",
+      });
+      const view = await pageOn("grid-images");
+      await press(button(view, "Scan for orphaned images"));
+
+      selectRow(view, "shortcuts");
+      fireEvent.click(button(view, "Remove all shortcuts"));
+      await press(button(view, "Remove every RomM shortcut?"));
+      await waitFor(() => expect(view.getByTestId("status-shortcuts").textContent).toBe("A sync is running"));
+
+      expect(view.getByTestId("data-row-grid-images").textContent).toContain("2");
+      expect(view.getByTestId("data-row-grid-images").textContent).not.toContain("scan");
+    });
+
+    it("reads scan on Grid images after other non-Steam games were removed", async () => {
+      vi.mocked(backend.cleanupOrphanedGridImages).mockResolvedValue({ success: true, candidate_count: 2 });
+      stubCollectionStore([2]);
+      stubAppStore({ 2: { strDisplayName: "Some Game" } });
+      const view = await pageOn("grid-images");
+      await press(button(view, "Scan for orphaned images"));
+      expect(view.getByTestId("data-row-grid-images").textContent).toContain("2");
+
+      selectRow(view, "non-steam");
+      fireEvent.click(button(view, /Remove \d+ /));
+      await press(button(view, /Remove \d+ /));
+      await waitFor(() => expect(view.getByTestId("status-non-steam").textContent).toBe("Removed 1 non-Steam game"));
+
+      expect(view.getByTestId("data-row-grid-images").textContent).toContain("scan");
     });
   });
 

@@ -379,9 +379,12 @@ puts the number on the row. The button then offers to remove that many, and asks
 permanent — there is no backup. If the shortcut scan can't run, or any synced RomM shortcut is missing from it, the
 cleanup refuses and deletes nothing, and the row keeps its count.
 
-After a removal the row reads **0** only when the removal took exactly as many images as the scan counted. Otherwise —
-some could not be deleted, more had been left behind since the scan, or the removal's result never came back — the row
-goes back to **scan** and the pane says what happened; press **Scan for orphaned images** again to count what is left.
+The removal looks for orphaned images again when it runs, so it also takes any left behind since the scan. While it
+runs, the page is busy and no other removal can start. Afterwards the row reads **0** only when every image the removal
+found was deleted. If some could not be deleted, the pane says how many, and the row goes back to **scan**; the same
+happens when the removal's result never came back. Removing Tender's shortcuts or other non-Steam games also puts the
+row back to **scan**, because their images are then left behind too. Press **Scan for orphaned images** again to count
+what is left.
 
 ### Other non-Steam games
 
