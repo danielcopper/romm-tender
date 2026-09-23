@@ -1,21 +1,19 @@
 -- =============================================================================
 -- 001_initial.sql — initial SQLite schema for Tender (written under its earlier name, decky-romm-sync)
--- Issue #780 (schema design) · Epic #271 (JSON -> SQLite persistence migration)
 -- =============================================================================
 --
--- This file is pure DDL. It is applied once, to an empty database, on first
--- run after the cutover (#784). There is NO JSON importer — SQLite starts
--- empty and the library re-syncs (BREAKING CHANGE, beta plugin).
+-- This file is pure DDL, applied once, to an empty database.
 --
 -- HOW THIS FILE IS LOADED is intentionally out of scope here. Connection-level
 -- PRAGMAs (synchronous=NORMAL, busy_timeout, temp_store, isolation_level) are
--- set per-connection by the runtime UoW adapter (#783), and schema versioning
+-- set per-connection by the runtime UoW adapter
+-- (adapters/repositories/unit_of_work.py), and schema versioning
 -- (PRAGMA user_version) is applied by the migration runner
--- (adapters/sqlite_migrations.py, #781). This file only declares tables.
+-- (adapters/sqlite_migrations.py). This file only declares tables.
 --
 -- NOTE: foreign_keys must be ON at runtime for the ON DELETE CASCADE clauses
--- below to fire. That PRAGMA is per-connection (the epic locks foreign_keys=ON)
--- and cannot be expressed in the schema itself.
+-- below to fire. That PRAGMA is per-connection and cannot be expressed in the
+-- schema itself.
 --
 -- -----------------------------------------------------------------------------
 -- Decisions locked here (the #780 deferred-decision set). Each is also noted
