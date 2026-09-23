@@ -863,12 +863,13 @@ values are `own` / `all` whatever the QAM calls them. How the QAM presents it is
 How the Steam-collection **name** is formed when RomM collections share a display name across kinds — the
 `collection_naming_mode` setting valued `merge` (default) or `by_label`. Under **`merge`**, same-named collections union
 into one `RomM: [<name>] (<host>)` Steam collection (#1503). Under **`by_label`**, same-named collections of different
-fine types stay separate Steam collections, told apart by a **type label** on the name, and the label follows what the
-QAM calls the kind; the type labels are listed in `docs/architecture/steam-non-steam-shortcuts.md` § Collection naming
-mode. The label is the fine label, not the coarse kind — franchise and IGDB-collection are both `kind="virtual"`,
-distinguished by `virtual_type` (see the **Collection kind** entry above). Computed backend-side at the reporter's union
-key (`domain/collection_label.py`), so the wire payload stays name→appIds and the frontend needs no change; the mode
-flip is applied by the ordinary complete-set reconcile on the next normal sync (no Force Full Sync).
+types stay separate Steam collections, told apart by a **type label** appended to the name, and the type label follows
+what the QAM calls the kind; the type labels are listed in `docs/architecture/steam-non-steam-shortcuts.md` § Collection
+naming mode. The type label names the virtual type rather than the coarse kind — franchise and IGDB-collection are both
+`kind="virtual"`, distinguished by `virtual_type` (see the **Collection kind** entry above) — except for a virtual
+collection of no known type, which gets its kind's label. Computed backend-side at the reporter's union key
+(`domain/collection_label.py`), so the wire payload stays name→appIds and the frontend needs no change; the mode flip is
+applied by the ordinary complete-set reconcile on the next normal sync (no Force Full Sync).
 Same-name-**within-one-label** still unions.
 
 ### Surface (bigpicture / desktop)
