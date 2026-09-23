@@ -217,9 +217,9 @@
 
   <div class="facts">
     <dl>
-      <dt>What is here</dt><dd>Every collection on the RomM server, each with one switch: sync it or not. RomM has three kinds. <strong>Standard</strong> collections are picked by hand, and the favorites collection RomM keeps for starred games is one of them. <strong>Smart</strong> collections are saved searches, so their games change as matches come and go. <strong>Virtual</strong> collections are groupings RomM builds from IGDB: franchises and IGDB collections. They have no owner.</dd>
-      <dt>What turning one on does</dt><dd>It adds a shortcut for <strong>every game in the collection, including games on platforms you do not sync</strong>. It also creates a Steam collection named <code>RomM: [name] (host)</code>. Nothing in the panel says either of these today.</dd>
-      <dt>What the page knows</dt><dd>Each collection carries its name, its kind (and, for virtual ones, franchise or IGDB collection), its ROM count, whether it is <em>yours</em>, and whether it syncs. The page does <strong>not</strong> know the owner's name, whether a collection is public, which games are in it, how big it is, or how many of its games are already in Steam. Any of those costs a paged server read <em>per collection</em>. One page load costs four requests today.</dd>
+      <dt>What is here</dt><dd>Every collection RomM lists to you (your own, and other users' public ones), each with one switch: sync it or not. RomM has three kinds. <strong>Standard</strong> collections are picked by hand, and the favorites collection RomM keeps for starred games is one of them. <strong>Smart</strong> collections are saved searches, so their games change as matches come and go. <strong>Virtual</strong> collections are groupings RomM builds from IGDB: franchises and IGDB collections. They have no owner.</dd>
+      <dt>What turning one on does</dt><dd>It adds a shortcut for <strong>every game in the collection, including games on platforms you do not sync</strong>. It also creates a Steam collection named <code>RomM: [name] (host)</code>. The Collections tab says neither of these today.</dd>
+      <dt>What the page knows</dt><dd>RomM's listing gives each collection its name, its kind, its ROM count, <strong>which games are in it</strong> (their ids), <strong>its owner's name</strong> and whether it is public. Tender passes on the name, the kind (and, for virtual ones, franchise or IGDB collection), the count, whether it is <em>yours</em>, and whether it syncs, and drops the rest. With the member ids, <strong>how many of a collection's games are already in Steam</strong> is a local lookup against the shortcuts Tender made. It is approximate where several versions of one game share a shortcut. None of this costs more than the four requests one page load makes today; how big a collection is on disk would.</dd>
       <dt>Mine / All is not a filter</dt><dd>Under <em>Mine</em>, other users' collections are also <strong>left out of the sync</strong>, even ones switched on earlier. It is a setting shaped like a filter. Virtual collections have no owner, so it never touches them.</dd>
       <dt>Width and height</dt><dd>Content is 806 px on every display. Height is the scarce axis: after the title, Back and the tab row, the Deck leaves about <strong>263 px</strong>. The hatched area on each board is what the Deck does not show without scrolling. The names and numbers are invented.</dd>
     </dl>
@@ -254,7 +254,7 @@
   <!-- ============ A ============ -->
   <section class="variant" id="v-a">
     <h2>A · One wide table</h2>
-    <p class="sub">What <code>qam-panel.md</code> records today: no detail side, one table under a short strip of filters. All four filter rows fold into one line, favorites moves beside the bulk buttons, and every collection is a row with name, kind, owner, ROM count and a toggle.</p>
+    <p class="sub">No detail side: one table under a short strip of filters. All four filter rows fold into one line, favorites moves beside the bulk buttons, and every collection is a row with name, kind, owner, ROM count and a toggle.</p>
 
     <div class="stage" data-w="854" data-h="534"><div class="deck">
       <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
@@ -280,11 +280,11 @@
               <tbody>
                 <tr class="sel"><td>Couch co-op</td><td class="mu">Standard</td><td class="you">you</td><td class="n">31</td><td class="c"><span class="tg on"></span></td></tr>
                 <tr><td>Finished</td><td class="mu">Standard</td><td class="you">you</td><td class="n">58</td><td class="c"><span class="tg"></span></td></tr>
-                <tr><td>Handheld picks</td><td class="mu">Standard</td><td class="other">another user</td><td class="n">22</td><td class="c"><span class="tg"></span></td></tr>
+                <tr><td>Handheld picks</td><td class="mu">Standard</td><td class="other">jonas</td><td class="n">22</td><td class="c"><span class="tg"></span></td></tr>
                 <tr><td>Kids</td><td class="mu">Standard</td><td class="you">you</td><td class="n">17</td><td class="c"><span class="tg on"></span></td></tr>
                 <tr><td>Short sessions</td><td class="mu">Standard</td><td class="you">you</td><td class="n">40</td><td class="c"><span class="tg"></span></td></tr>
                 <tr><td>To play next</td><td class="mu">Standard</td><td class="you">you</td><td class="n">9</td><td class="c"><span class="tg on"></span></td></tr>
-                <tr><td>Translations</td><td class="mu">Standard</td><td class="other">another user</td><td class="n">26</td><td class="c"><span class="tg"></span></td></tr>
+                <tr><td>Translations</td><td class="mu">Standard</td><td class="other">mara</td><td class="n">26</td><td class="c"><span class="tg"></span></td></tr>
               </tbody>
             </table>
             <div class="fade"></div>
@@ -300,7 +300,7 @@
         <ol>
           <li><span class="mk">1</span><p><strong>One line for every filter.</strong> Kind with its counts, owner scope and search sit side by side. Virtual adds a third segmented control on the same line.</p></li>
           <li><span class="mk">2</span><p><strong>Favorites beside the bulk buttons</strong>, as a single switch, because there is only ever one favorites collection.</p></li>
-          <li><span class="mk">3</span><p><strong>A table because a row has more than two facts</strong>, which is the panel's rule for tables. The owner column says <em>you</em> or <em>another user</em>. The payload has no owner name to show.</p></li>
+          <li><span class="mk">3</span><p><strong>A table because a row has more than two facts</strong>, which is the panel's rule for tables. The owner column says <em>you</em> or the owner's RomM user name, which the listing carries.</p></li>
         </ol>
       </div>
       <div><h3>What it costs</h3>
@@ -342,8 +342,8 @@
               <div class="ttl"><span class="ptitle" style="font-size:16px">Final Fantasy</span><span class="desc">Franchise · from IGDB · no owner</span></div>
               <div class="sec-t">Its games <span class="m">2</span></div>
               <div class="row"><span>On RomM</span><span class="val t">23 ROMs</span></div>
-              <div class="row"><span>On platforms you do not sync</span><span class="val">not read yet</span></div>
-              <div class="btn"><span>Count what turning it on adds</span><span class="ar">›</span></div>
+              <div class="row"><span>Already in Steam</span><span class="val t">14 of 23</span></div>
+              <div class="row"><span>Turning it on adds</span><span class="val">about 9 games</span></div>
               <div class="sec-t">In Steam <span class="m">3</span></div>
               <div class="row"><span>Collection</span><span class="val t">RomM: [Final Fantasy] (romm.lan)</span></div>
             </div>
@@ -352,20 +352,19 @@
         </div>
       </div>
     </div></div>
-    <div class="caption"><span>List 264 px · pane 526 px</span><span>Three lines of filters above the list leave four rows</span></div>
+    <div class="caption"><span>List 264 px · pane 530 px</span><span>Three lines of filters above the list leave four rows</span></div>
 
     <div class="notes">
       <div><h3>Notes</h3>
         <ol>
           <li><span class="mk">1</span><p><strong>The filters have to live above the list.</strong> In 264 px they stack: kind, the virtual sub-type (or Mine / All for the other kinds), then search.</p></li>
-          <li><span class="mk">2</span><p><strong>The one fact worth a pane costs a server read.</strong> "How many of its games are new to Steam" means paging through the collection's ROMs. Focus selects on this layout, so the count has to wait for a press, the same rule Data Management uses for its scans.</p></li>
+          <li><span class="mk">2</span><p><strong>What turning it on adds comes free.</strong> The listing already names a collection's games, so "how many are already in Steam" is a local lookup, approximate where versions of one game share a shortcut.</p></li>
           <li><span class="mk">3</span><p><strong>The Steam name</strong> is known locally and shows what turning it on creates.</p></li>
         </ol>
       </div>
       <div><h3>What it costs</h3>
         <ul>
-          <li><strong>Without the new read, the pane holds three facts</strong>, and the list row already shows two of them.</li>
-          <li>It needs a new callable, per-collection paging and a press-to-count state. None of that exists today.</li>
+          <li><strong>Every fact in the pane fits in a table column</strong>: owner, ROMs, already in Steam. The pane spends a whole column on one collection to show what a table row shows for six.</li>
           <li>Only four rows fit, and Virtual alone can hold 65 or more collections. Scrolling one row at a time through a narrow column is the slowest way to reach the 50th.</li>
           <li>Favorites has no clear place: it would be a row in the Standard list, or a switch on top of three lines of filters.</li>
         </ul>
@@ -376,7 +375,7 @@
   <!-- ============ C ============ -->
   <section class="variant on" id="v-c">
     <h2>C · Kinds on the left, collections on the right</h2>
-    <p class="sub">A list-and-detail layout where the <strong>list holds the kinds, not the collections</strong>. Kind stops being a filter row and becomes where you are. Mine / All becomes one toggle at the top of that column. Each pane opens with one sentence on what turning that kind on does, then a table of its collections.</p>
+    <p class="sub">A list-and-detail layout where the <strong>list holds the kinds, not the collections</strong>. Kind stops being a filter row and becomes where you are. Mine / All becomes one toggle at the top of that column. Each pane opens with one sentence on what turning one of its collections on does, then a table of its collections.</p>
 
     <h4>A kind, and its collections</h4>
     <div class="stage" data-w="854" data-h="534"><div class="deck">
@@ -402,14 +401,14 @@
               <div class="desc" style="margin:2px 0 6px">Turning one on adds all its games to Steam, including games on platforms you do not sync, and groups them as <span style="color:var(--t)">RomM: [name]</span>. <span class="m">3</span></div>
               <div class="strip" style="padding:0 0 4px"><div class="field">Search</div><span class="btn sm">Enable all</span><span class="btn sm">Disable all</span></div>
               <table class="tbl rows">
-                <thead><tr><th>Collection <span class="m">4</span></th><th>Owner</th><th class="n">ROMs</th><th class="c">Sync</th></tr></thead>
+                <thead><tr><th>Collection <span class="m">4</span></th><th>Owner</th><th class="n">ROMs</th><th class="n">In Steam <span class="m">5</span></th><th class="c">Sync</th></tr></thead>
                 <tbody>
-                  <tr class="sel"><td>Couch co-op</td><td class="you">you</td><td class="n">31</td><td class="c"><span class="tg on"></span></td></tr>
-                  <tr><td>Kids</td><td class="you">you</td><td class="n">17</td><td class="c"><span class="tg on"></span></td></tr>
-                  <tr><td>To play next</td><td class="you">you</td><td class="n">9</td><td class="c"><span class="tg on"></span></td></tr>
-                  <tr><td>Translations</td><td class="other">another user</td><td class="n">26</td><td class="c"><span class="tg on"></span></td></tr>
-                  <tr><td>Finished</td><td class="you">you</td><td class="n">58</td><td class="c"><span class="tg"></span></td></tr>
-                  <tr><td>Handheld picks</td><td class="other">another user</td><td class="n">22</td><td class="c"><span class="tg"></span></td></tr>
+                  <tr class="sel"><td>Couch co-op</td><td class="you">you</td><td class="n">31</td><td class="n">all</td><td class="c"><span class="tg on"></span></td></tr>
+                  <tr><td>Kids</td><td class="you">you</td><td class="n">17</td><td class="n">all</td><td class="c"><span class="tg on"></span></td></tr>
+                  <tr><td>To play next</td><td class="you">you</td><td class="n">9</td><td class="n">all</td><td class="c"><span class="tg on"></span></td></tr>
+                  <tr><td>Translations</td><td class="other">mara</td><td class="n">26</td><td class="n">all</td><td class="c"><span class="tg on"></span></td></tr>
+                  <tr><td>Finished</td><td class="you">you</td><td class="n">58</td><td class="n">41</td><td class="c"><span class="tg"></span></td></tr>
+                  <tr><td>Handheld picks</td><td class="other">jonas</td><td class="n">22</td><td class="n">22</td><td class="c"><span class="tg"></span></td></tr>
                 </tbody>
               </table>
               <div class="fade"></div>
@@ -419,7 +418,7 @@
         </div>
       </div>
     </div></div>
-    <div class="caption"><span>List 264 px: the owner toggle and five kinds, all visible</span><span>Pane 526 px: a sentence, one line of controls, six rows above the fold</span></div>
+    <div class="caption"><span>List 264 px: the owner toggle and five kinds, all visible</span><span>Pane 530 px: a sentence, one line of controls, six rows above the fold</span></div>
 
     <h4>Favorites, and a kind with no owner</h4>
     <div class="two" style="gap:18px">
@@ -479,14 +478,14 @@
               <div class="desc" style="margin:2px 0 6px">Turning one on adds every game of that franchise, on any platform, as <span style="color:var(--t)">RomM: [name]</span>.</div>
               <div class="strip" style="padding:0 0 4px"><div class="field">Search</div><span class="btn sm">Enable all</span><span class="btn sm">Disable all</span></div>
               <table class="tbl rows">
-                <thead><tr><th>Franchise</th><th class="n">ROMs</th><th class="c">Sync</th></tr></thead>
+                <thead><tr><th>Franchise</th><th class="n">ROMs</th><th class="n">In Steam</th><th class="c">Sync</th></tr></thead>
                 <tbody>
-                  <tr><td>Final Fantasy</td><td class="n">23</td><td class="c"><span class="tg on"></span></td></tr>
-                  <tr><td>Mega Man</td><td class="n">19</td><td class="c"><span class="tg on"></span></td></tr>
-                  <tr><td>Metroid</td><td class="n">8</td><td class="c"><span class="tg on"></span></td></tr>
-                  <tr class="sel"><td>Castlevania</td><td class="n">14</td><td class="c"><span class="tg"></span></td></tr>
-                  <tr><td>Sonic the Hedgehog</td><td class="n">21</td><td class="c"><span class="tg"></span></td></tr>
-                  <tr><td>The Legend of Zelda</td><td class="n">12</td><td class="c"><span class="tg"></span></td></tr>
+                  <tr><td>Final Fantasy</td><td class="n">23</td><td class="n">all</td><td class="c"><span class="tg on"></span></td></tr>
+                  <tr><td>Mega Man</td><td class="n">19</td><td class="n">all</td><td class="c"><span class="tg on"></span></td></tr>
+                  <tr><td>Metroid</td><td class="n">8</td><td class="n">all</td><td class="c"><span class="tg on"></span></td></tr>
+                  <tr class="sel"><td>Castlevania</td><td class="n">14</td><td class="n">9</td><td class="c"><span class="tg"></span></td></tr>
+                  <tr><td>Sonic the Hedgehog</td><td class="n">21</td><td class="n">0</td><td class="c"><span class="tg"></span></td></tr>
+                  <tr><td>The Legend of Zelda</td><td class="n">12</td><td class="n">12</td><td class="c"><span class="tg"></span></td></tr>
                 </tbody>
               </table>
               <div class="fade"></div>
@@ -506,7 +505,8 @@
           <li><span class="mk">1</span><p><strong>Mine / All becomes a toggle that says what it does:</strong> <em>Other users' collections</em>, on or off. Off means they are hidden here and left out of the sync, which is what <em>Mine</em> does today. It sits at the head of the column, where Platforms puts its own column-wide controls, because it applies to two of the kinds.</p></li>
           <li><span class="mk">2</span><p><strong>Favorites becomes a row with its switch in it</strong>, like a platform row. The number in the row is today's "Includes 14 favorited ROMs". With no favorites collection, the row stays, greyed, with a dash for the count.</p></li>
           <li><span class="mk">3</span><p><strong>What turning a collection on does, once per kind</strong>, worded for that kind. This is where the page finally says that collections bring in games from platforms you do not sync.</p></li>
-          <li><span class="mk">4</span><p><strong>The table orders collections that are on above those that are off</strong>, and freezes that order while the page is open, the same as Platforms. The <em>Owner</em> column appears only on the two kinds that have owners.</p></li>
+          <li><span class="mk">4</span><p><strong>The table orders collections that are on above those that are off</strong>, and freezes that order while the page is open, the same as Platforms. The <em>Owner</em> column appears only on the two kinds that have owners, and names the owner: <em>you</em>, or their RomM user name.</p></li>
+          <li><span class="mk">5</span><p><strong>In Steam</strong> says how many of a collection's games already have a shortcut, so the difference to <em>ROMs</em> is roughly what turning it on adds. It is worked out from the member ids the listing carries against Tender's own shortcuts, approximate where versions of one game share a shortcut, and costs no request. <strong>Enable all / Disable all ask first whenever no search narrows the list</strong>, on every kind, the way today's unfiltered view does.</p></li>
         </ol>
       </div>
       <div><h3>What it costs</h3>
@@ -522,7 +522,7 @@
 
   <div class="recbox">
     <b>Recommendation</b>
-    C. Kind is where the user already navigates, so it becomes the list, and the two segmented rows disappear instead of being squeezed. The owner switch stops pretending to be a filter. The promise of what turning a collection on does gets a sentence per kind. It needs no new backend read, and it reuses Platforms' list and detail, its column header and the pane table. A per-collection pane (B) would be the right shape only once there is something to put in it, and today there is nothing that does not cost a server read.
+    C. Kind is where the user already navigates, so it becomes the list, and the two segmented rows disappear instead of being squeezed. The owner switch stops pretending to be a filter. The promise of what turning a collection on does gets a sentence per kind. It needs no new server request, and it reuses Platforms' list and detail, its column header and the pane table. What a per-collection pane (B) would show — the owner, and how many of a collection's games are already in Steam — fits as two columns of C's table, so the pane buys nothing the table lacks.
   </div>
 
   <h3>Side by side</h3>
@@ -534,7 +534,8 @@
       <tr><td>Lines of controls before the first collection</td><td class="n">6</td><td>2</td><td class="n">3, in a narrow column</td><td class="y">1</td></tr>
       <tr><td>Says what turning one on does</td><td class="n">no</td><td class="n">below the fold</td><td class="y">yes, per collection</td><td class="y">yes, per kind</td></tr>
       <tr><td>Mine / All reads as what it is</td><td class="n">no</td><td class="n">no</td><td class="n">no</td><td class="y">yes</td></tr>
-      <tr><td>New backend reads</td><td class="y">none</td><td class="y">none</td><td class="n">per-collection paging</td><td class="y">none</td></tr>
+      <tr><td>New server requests</td><td class="y">none</td><td class="y">none</td><td class="y">none</td><td class="y">none</td></tr>
+      <tr><td>Shows what turning one on adds</td><td class="n">no</td><td class="n">no</td><td class="y">in the pane</td><td class="y">a column</td></tr>
       <tr><td>Survives German</td><td>—</td><td class="n">line one wraps</td><td>yes</td><td class="y">yes</td></tr>
       <tr><td>Parts it reuses</td><td>—</td><td>pane table</td><td>list and detail</td><td class="y">list and detail, column header, pane table</td></tr>
     </tbody>
@@ -545,8 +546,10 @@
   <ul style="max-width:74ch">
     <li><strong>C is the shape.</strong></li>
     <li><strong>The owner switch reads <em>Other users' collections</em></strong>; on means what <em>All</em> means today, and the behaviour is unchanged.</li>
-    <li><strong>The kinds take RomM's own headings</strong>: <em>Collections</em>, <em>Smart collections</em>, and <em>Autogenerated</em> as a group over <em>Franchises</em> and <em>IGDB collections</em>. The Steam names the type-distinguishing setting builds follow the same words: a hand-picked collection carries no suffix, and the others carry <em>(Smart)</em>, <em>(Franchise)</em> and <em>(IGDB collection)</em>. The keys on the wire and in the settings stay RomM's <code>standard</code> / <code>smart</code> / <code>virtual</code>.</li>
-    <li><strong>No "already in Steam" column.</strong> The count exists locally only for collections that have synced, which is the one case where nobody asks what turning it on would add.</li>
+    <li><strong>The kinds take RomM's own headings where it has them</strong> — <em>Collections</em>, <em>Smart collections</em>, <em>Autogenerated</em> — with <em>Favorites</em>, and <em>Franchises</em> and <em>IGDB collections</em> under Autogenerated. The Steam names the type-distinguishing setting builds follow the same words: a hand-picked collection carries no suffix, and the others carry <em>(Smart)</em>, <em>(Franchise)</em> and <em>(IGDB collection)</em>. The keys on the wire and in the settings stay <code>standard</code> / <code>smart</code> / <code>virtual</code>.</li>
+    <li><strong>An <em>In Steam</em> column</strong>, from the member ids the listing already carries, checked against Tender's shortcuts; approximate where versions of one game share a shortcut.</li>
+    <li><strong>The owner column names the owner</strong>: <em>you</em>, or their RomM user name.</li>
+    <li><strong>Enable all / Disable all ask first whenever no search narrows the list</strong>, on every kind.</li>
     <li><strong>Collections that are on come first</strong>, frozen while the page is open, as on Platforms.</li>
     <li><strong>#1020:</strong> a failed read says what went wrong, and leaving the tab and coming back asks again.</li>
   </ul>
