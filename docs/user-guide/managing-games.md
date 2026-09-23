@@ -109,40 +109,50 @@ Normal library sync never deletes retained local rows, installed files, saves, o
 disappears from RomM. To remove that state explicitly, open **Data Management → Gone from RomM**. The first scan is
 local and finds groups containing rows absent from a completed platform fetch.
 
-The dialog opens on the count that matters — how many locally kept versions are no longer on your RomM server — and
-lists those versions first, under **Versions no longer on RomM**. Other versions of the same games follow under **Other
-versions of these games — kept**: they were still on RomM at your last sync, and they go only if the run's fresh check
-finds every version of that game gone, in which case the whole game is removed with its Steam shortcut. They are listed
-so nothing can be removed without having been shown, and they appear only while **Remove fully vanished games** is on —
-with that option off they cannot be removed at all, so the list drops them. The headline count always counts the
-versions that are gone, never these. The modal byte-budgets every page for the Decky bridge; load every page before
-confirmation. The confirmation run checks every exact RomM id again. Only a confirmed 404 can be removed. Offline,
-timeout, authentication, server, malformed-response, active-download, and ambiguous multi-shortcut cases are skipped and
-reported without deleting data.
+The dialog opens on the count that matters — how many locally kept versions are no longer on your RomM server. Under
+that come the options in two columns, then the controls for the run, and last the versions themselves as a table: the
+game, its platform, a short verdict, how much is installed, and **Keep a copy**. Under each row a line names the version
+— its ROM id, and its file name where that differs from the game's name — so two versions of one game can be told apart.
+The versions that are gone come first, each marked **Gone from RomM**. Other versions of the same games follow under
+**Other versions of these games — still on RomM**, each marked **Still on RomM**: they were still on RomM at your last
+sync, and they go only if the run's fresh check finds every version of that game gone, in which case the whole game is
+removed with its Steam shortcut. Where a game has more than one version, the verdict says so — for example **Still on
+RomM · one of 4**. They are listed so nothing can be removed without having been shown, and they appear only while
+**Remove fully vanished games** is on — with that option off they cannot be removed at all, so the list drops them. A
+warning about a version — including that its downloaded ROM file will be deleted without a backup if that version is
+removed — is a line under its row. The headline count always counts the versions that are gone, never these. The modal
+byte-budgets every page for the Decky bridge; load every page before confirmation. The confirmation run checks every
+exact RomM id again. Only a confirmed 404 can be removed. Offline, timeout, authentication, server, malformed-response,
+active-download, and ambiguous multi-shortcut cases are skipped and reported without deleting data.
 
 The confirmation options apply to this run only:
 
-- **Repoint vanished shortcuts to the live default version** is on. It preserves the Steam shortcut and its appId,
-  collections, artwork, and playtime while switching to the group's natural live Default. This option works
-  independently of row removal.
-- **Remove confirmed rows and installed content from groups with a live version** is on.
-- **Remove fully vanished games, including any Steam shortcut** is on. It applies only to games where the server
-  confirms every single version is gone; those are removed whole, Steam shortcut included. It ships on because removing
-  a game RomM no longer has is what this dialog is for, and because the default-on recovery bundle keeps the shortcut's
-  Steam details so it can be rebuilt by hand. Switch it off to limit the run to individual versions of games that still
-  exist — the list then hides the retained siblings, since nothing else can reach them.
+- **Repoint vanished shortcuts** is on. It preserves the Steam shortcut and its appId, collections, artwork, and
+  playtime while switching to the group's natural live Default. This option works independently of row removal.
+- **Remove gone versions** is on. It removes the confirmed rows and their installed content in games that still have a
+  live version.
+- **Remove fully vanished games** is on. It applies only to games where the server confirms every single version is
+  gone; those are removed whole, with any Steam shortcut they have. It ships on because removing a game RomM no longer
+  has is what this dialog is for, and because the default-on recovery bundle keeps the shortcut's Steam details so it
+  can be rebuilt by hand. Switch it off to limit the run to individual versions of games that still exist — the list
+  then hides the retained siblings, since nothing else can reach them.
 - **Create recovery bundle** is on. Bundles are sealed under `~/romm-tender-recovery/bundles/` before mutation. Leaving
-  it on is what makes whole-game removal reversible by hand; turning it off asks you to confirm separately.
-- **Include installed ROM content** is off for every disclosed installed row. Its exact recursive size is shown;
-  selecting more than the currently free recovery space blocks confirmation. Turning recovery off clears and disables
-  these selections, and so does switching off whole-game removal for a row that is only listed because of it. Large
-  selections are staged in bounded pages before the run without a total selection cap. Unselected installed content is
-  still deleted if the row is removed. When no listed version has ROM files on this device the option has nothing to
-  attach to, so the list says so instead of leaving the option apparently missing.
+  it on is what makes whole-game removal reversible by hand; turning it off asks you to confirm separately, with **I
+  understand there is no recovery bundle** under it.
+- **Keep a copy** — the toggle in each installed row — is off for every disclosed installed row. It puts that version's
+  installed ROM content in the recovery bundle. Its exact recursive size is in the **Installed** column; selecting more
+  than the currently free recovery space blocks confirmation. Turning recovery off clears and disables these selections,
+  and so does switching off whole-game removal for a row that is only listed because of it. Large selections are staged
+  in bounded pages before the run without a total selection cap. Unselected installed content is still deleted if the
+  row is removed. When no listed version has ROM files on this device the option has nothing to attach to, so the list
+  says so instead of leaving the option apparently missing.
 
-The displayed selected-content total is a lower-bound preflight, not the complete bundle size. Use **Refresh free
-space** after freeing disk space. The backend remeasures selected ROMs plus mandatory saves, backup history, caches, and
-Steam files before mutation and safely fails the group if the complete bundle does not fit.
+The recovery estimate, **Refresh free space**, **Load more** (while part of the list is not loaded yet), **Cancel** and
+**Confirm Cleanup** sit directly under the options, above the table, so they are a few presses away however long the
+list is; a running cleanup's progress, its **Stop Cleanup** button and its result appear there too. The displayed
+selected-content total is a lower-bound preflight, not the complete bundle size. Use **Refresh free space** after
+freeing disk space. The backend remeasures selected ROMs plus mandatory saves, backup history, caches, and Steam files
+before mutation and safely fails the group if the complete bundle does not fit.
 
 Recovery always records the affected database state, local playtime and pending sessions, exact attributable current
 saves (including path-safe filenames retained in prior save-sync state) and backup history, and relevant plugin caches.

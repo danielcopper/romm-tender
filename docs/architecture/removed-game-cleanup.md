@@ -288,11 +288,11 @@ warning, and cannot be selected for recovery.
 ## Recovery
 
 Recovery is a temporary per-run choice, not a persisted setting. The confirmation dialog offers **Create recovery
-bundle** (default on), and **Include installed ROM content** per candidate (default off). Whole-game removal also
-defaults **on**: removing a game the server no longer has is the operation this dialog exists for, and the default-on
-bundle is what keeps it reversible by hand. The two defaults are a pair — turning recovery off requires a separate
-acknowledgement toggle before the run can start. The dialog shows recursive size per ROM alongside required and free
-space, and blocks confirmation when space is insufficient.
+bundle** (default on), and on every installed row a **Keep a copy** toggle that includes its installed ROM content
+(default off). Whole-game removal also defaults **on**: removing a game the server no longer has is the operation this
+dialog exists for, and the default-on bundle is what keeps it reversible by hand. The two defaults are a pair — turning
+recovery off requires a separate acknowledgement toggle before the run can start. The dialog shows recursive size per
+ROM alongside required and free space, and blocks confirmation when space is insufficient.
 
 The root is `~/<package-name>-recovery`, with the package name taken from `PACKAGE_NAME` (`domain/identity.py`) and
 path-sanitized (today: `~/romm-tender-recovery`). Reading free space must not create that layout — a read-only preview

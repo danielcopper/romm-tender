@@ -215,8 +215,8 @@ const GridImagesPane: FC<{ state: DataPageState }> = ({ state }) => {
 /**
  * The whitelist, kept as the expandable list it has always been.
  *
- * Its search box is the one text input left on a pane, where the panel's rule
- * puts text input in a modal.
+ * Its search box sits above the list it filters, which is where a search
+ * belongs: `docs/architecture/qam-panel.md`, Building blocks › Text input.
  */
 const WhitelistSection: FC<{ state: DataPageState; onWhitelistChange: () => void }> = ({
   state,

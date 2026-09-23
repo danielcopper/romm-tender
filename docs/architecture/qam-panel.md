@@ -673,6 +673,15 @@ three do nothing at all. What the clip takes away is handed back in a `title`, n
 Last in their group, red, behind the confirmation they carry today — two-tap or modal. Nothing here changes the
 backup-or-confirm rule in the invariant register.
 
+### Text input
+
+Two kinds of text input, and they go in different places. **A value input opens a modal** — Settings' RomM URL, custom
+headers, account, SteamGridDB API key and default slot: the reader types a value, confirms it and is done, nothing on
+the page has to be seen while typing, and the on-screen keyboard needs the room a page cannot give. **A search that
+filters a list sits inline, above the list it filters** — Library › Collections, and the whitelist on Data Management's
+Other non-Steam games pane: its point is the result beside the field, narrowing as the reader types, and a modal would
+hide exactly that. What decides is what the reader has to see while typing, not how much room the keyboard wants.
+
 ### Notices and homes
 
 A notice on Main names a condition and jumps to its home; the action exists only there. A condition with no home in the
@@ -1468,7 +1477,8 @@ stop or below its last (`ScrollRegion`'s `revealEdge`) — needs none, which is 
 And the devices table's **column header** carries none under the Tables rule: the names accompany the rows below them
 and a stop there would be a step that leads nowhere.
 
-Text input stays in modals — RomM URL, account, API key, default slot — because the on-screen keyboard needs the room.
+Settings' value inputs — RomM URL, custom headers, account, the SteamGridDB API key, default slot — each open a modal,
+because nothing on the page has to be seen while one is typed ([Text input](#text-input)).
 
 Two failures the narrow page carried are fixed here (#1020). A refused URL no longer sticks: the pending edit exists to
 carry a value across the remount that closing the modal can cause, so it is cleared whichever way the attempt ends, and
@@ -1521,11 +1531,10 @@ only when the two match, since then nothing orphaned at the moment of the remova
 means files that would not delete, and the row goes back to `scan` with the pane's status line saying how many; so does
 an answer missing either count or removing more than it found, or no answer at all. A refused removal deleted nothing,
 so the scanned count stands. The grid removal holds the page's busy state like the other removals, so no removal button
-— its own included — can start another while it runs. **The whitelist's search is the one text input left on a detail
-pane** — Collections carries one too, on the narrow body it keeps until its own cut, and it is a known exception rather
-than a decision: the panel's rule puts text input in a modal, for the reason Settings gives for its four inputs rather
-than by convention — the on-screen keyboard needs the room, and a detail pane has none to give. It moves with the
-review, in the cut that redraws both.
+— its own included — can start another while it runs.
+
+**The whitelist's search sits inline, above the list it filters**, which the pane expands under **Configure whitelist**
+— the search kind of text input, not the value kind that opens a modal ([Text input](#text-input)).
 
 **Two rows would overlap if either were read naively, and the one that gives way is the foreign one.** Tender's
 shortcuts are themselves non-Steam shortcuts, so a row counting Steam's store whole would report this plugin's own
@@ -1555,10 +1564,38 @@ an **untabbed** page's body is left with after whatever chrome sits above the pa
 the dev window's numbers above are carried across, which put the scroller some 14 px below the top of its view. Both of
 the pane's numbers are derived from what is written here rather than measured on the device for this section, and the
 margin is wide enough that the derivation would have to be badly wrong to change the answer: moving the review into the
-pane would shrink it in both axes. It is redrawn rather than kept: the options in two columns, the candidates as a table
-with a header (Game, Platform, Verdict, Installed, Keep a copy), and the free-space line with Start cleanup **pinned at
-the bottom** instead of standing after every candidate row, which is what a stick had to walk through to reach them. Its
-rules do not change; they live in [removed-game-cleanup.md](removed-game-cleanup.md).
+pane would shrink it in both axes. Its rules do not change; they live in
+[removed-game-cleanup.md](removed-game-cleanup.md).
+
+**The dialog reads top to bottom as the options, the run's bar, then the candidates.** The four options stand in two
+columns under the intro, each a short label with its full meaning in the line under it, and the acknowledgement a run
+without a recovery bundle asks for appears under the bundle's own toggle. The bar holds the recovery estimate against
+the free space at the target, **Refresh free space**, **Load more** while a page is still unloaded and the rule that
+every page is loaded before Confirm, **Cancel** and **Confirm Cleanup**, and while a run is going its progress and
+**Stop Cleanup**, then its result and the details region, and the line saying why Confirm would refuse a press. **The
+bar sits above the table, not pinned under it** as the layout study drew it: focus follows element order rather than the
+picture, so a bar after the rows is one press per row away however it is drawn — the Sync page keeps its buttons above
+its tables for the same reason. Load more is in the bar for that reason too: every row is a stop, and Confirm refuses
+until every page is loaded, so after the table it would be a table's length from the press it unblocks; the rows it adds
+land below it. The candidates are a table (Game, Platform, Verdict, Installed, Keep a copy). **A verdict says what is
+known now and never the run's outcome** — _Gone from RomM_ for a candidate, _Still on RomM_ for a version listed only
+because a whole-game removal could take it, each with _one of 4_ where the game has more than one version. A version
+still on RomM is removed too if the run's check finds every version of its game gone, so neither a verdict nor the
+section's heading (_Other versions of these games — still on RomM_) says _kept_: either would promise more than the
+preview knows, and a heading is read before the line that qualifies it. The full sentence behind a verdict is the cell's
+title, which is a mouse's way to it only: a tooltip is a hover the controller cannot perform, so on the controller the
+intro and the other versions' section line say the same. For the same reason **what tells two versions apart is on
+screen**: under each row a line names the version — its ROM id, and its file name where that says more than the game's
+name — because two gone versions of one game otherwise draw as identical rows, each with a toggle of its own. The other
+versions are a section of the same table under a heading whose line states the sentence for all of them. **Keep a copy**
+is the per-row toggle that puts a version's installed ROM content in the recovery bundle: an installed row carries it
+and it is that row's focus stop, since a second stop on the row would be a dead step in front of it; a row with nothing
+installed carries a dash and is a stop itself, so the table can be walked. A row's warnings — a field shortened for the
+wire, the preview's own warning, and the ROM file that goes without a backup — are lines under it, inside the row. **The
+dialog is revealed at both edges**: focus reaching the first option scrolls it to its top, so the intro comes back, and
+focus reaching the last row scrolls it to its end, so that row's own lines and the note after the table are not left
+under the view. Steam scrolls only far enough to reveal the focused control, which is why both are needed. The suite
+pins that each scroll is asked for; whether it lands where it should is device-only.
 
 **Recovery bundles are listed and nothing here removes them.** The row states how many are sealed and what they cost, so
 the disk they take stops being invisible, and the pane lists them under that total as a table — Game, Sealed, Size —

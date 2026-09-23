@@ -68,12 +68,12 @@ it("reads any failure as a cancellation once the plugin generation rolls", async
 
 it("rejects and releases a lease-bearing response that arrives after owner teardown", async () => {
   vi.mocked(releasePruneConflictLease).mockResolvedValue({ success: true, message: "released" });
-  mountPruneLeaseOwner("danger-zone");
-  const admission = capturePruneLeaseAdmission("danger-zone");
+  mountPruneLeaseOwner("data-management");
+  const admission = capturePruneLeaseAdmission("data-management");
   const operation = vi.fn().mockResolvedValue(undefined);
 
-  await releasePruneLeasesByOwner("danger-zone");
-  await expect(withPruneLease("late-owner", "Late owner", operation, "danger-zone", admission)).rejects.toThrow(
+  await releasePruneLeasesByOwner("data-management");
+  await expect(withPruneLease("late-owner", "Late owner", operation, "data-management", admission)).rejects.toThrow(
     "cancelled before lease registration",
   );
 

@@ -4,6 +4,7 @@ import {
   findOutermostScrollParent,
   scrollToTop,
   scrollNearestToTop,
+  scrollNearestToBottom,
   scrollFocusedToCenter,
   scrollElementToTop,
 } from "./scrollHelpers";
@@ -202,6 +203,42 @@ describe("scrollNearestToTop", () => {
     wrapper.scrollTo = scrollTo as unknown as typeof wrapper.scrollTo;
 
     scrollNearestToTop({ currentTarget: leaf });
+    vi.runAllTimers();
+
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+});
+
+describe("scrollNearestToBottom", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("scrolls the NEAREST scroll parent to its very end, leaving the outer one alone", () => {
+    const outer = makeElement({ overflowY: "auto", scrollHeight: 4000, clientHeight: 800 });
+    const inner = makeElement({ overflowY: "auto", scrollHeight: 2000, clientHeight: 600 });
+    const leaf = makeElement({});
+    chain(outer, inner, leaf);
+    const outerScrollTo = vi.fn();
+    const innerScrollTo = vi.fn();
+    outer.scrollTo = outerScrollTo as unknown as typeof outer.scrollTo;
+    inner.scrollTo = innerScrollTo as unknown as typeof inner.scrollTo;
+
+    scrollNearestToBottom({ currentTarget: leaf });
+    expect(innerScrollTo).not.toHaveBeenCalled();
+    vi.runAllTimers();
+
+    expect(innerScrollTo).toHaveBeenCalledExactlyOnceWith({ top: 2000, behavior: "smooth" });
+    expect(outerScrollTo).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op when no scroll parent is found", () => {
+    const wrapper = makeElement({ overflowY: "visible", scrollHeight: 600, clientHeight: 600 });
+    const leaf = makeElement({});
+    chain(wrapper, leaf);
+    const scrollTo = vi.fn();
+    wrapper.scrollTo = scrollTo as unknown as typeof wrapper.scrollTo;
+
+    scrollNearestToBottom({ currentTarget: leaf });
     vi.runAllTimers();
 
     expect(scrollTo).not.toHaveBeenCalled();

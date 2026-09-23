@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, FC, Fragment } from "react";
+import { useEffect, useRef, useState, FC, Fragment, type CSSProperties } from "react";
 import { showToast } from "../utils/toast";
 import {
   ButtonItem,
@@ -32,12 +32,24 @@ import {
   getPruneState,
   isPruneResultLost,
   onPruneStateChange,
+  type PruneComplete,
   type PruneProgress,
 } from "../utils/pruneStore";
-import { scrollNearestToTop } from "../utils/scrollHelpers";
+import { scrollNearestToBottom, scrollNearestToTop } from "../utils/scrollHelpers";
 import { getSyncProgress, onSyncProgressChange } from "../utils/syncProgress";
 import { withTimeout } from "../utils/withTimeout";
 import type { PageRead } from "./data/useDataPage";
+import {
+  ButtonRow,
+  CELL_CLIP,
+  FLAT_BUTTON,
+  MUTED,
+  PaneTableHeader,
+  PaneTableRow,
+  SECONDARY_FONT,
+  type TableCell,
+  type TableRegister,
+} from "./layout/pane";
 
 const PAGE_SIZE = 50;
 const SELECTION_PAGE_SIZE = 100;
@@ -145,7 +157,7 @@ function finishedGroupsPercent(current: number, total: number): number {
   return Math.min(100, Math.max(0, ((current - 1) / total) * 100));
 }
 
-/** Caption + bar for a running cleanup, shared by the modal and the Danger Zone. */
+/** Caption + bar for a running cleanup, shared by the dialog and Data Management's Gone from RomM pane. */
 const CleanupProgress: FC<{ progress: PruneProgress }> = ({ progress }) => (
   <div style={{ width: "100%" }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: "12px" }}>
@@ -268,6 +280,242 @@ function scanButtonDescription(syncRunning: boolean, runActive: boolean): string
   if (runActive) return "A cleanup is running. Its progress is shown below.";
   return undefined;
 }
+
+/** Game, Platform, Verdict, Installed, Keep a copy. */
+const CANDIDATE_COLUMNS = "minmax(0, 1fr) 64px 160px 64px 72px";
+
+/** The pane's register without its gutter: the dialog body is padded already. */
+const CANDIDATE_REGISTER: TableRegister = { rowPadding: "4px 0", headerPadding: "0 0 4px", rule: true };
+
+const SECONDARY_CELL: CSSProperties = { color: MUTED, fontSize: SECONDARY_FONT, fontVariantNumeric: "tabular-nums" };
+
+const ROW_WARNING: CSSProperties = { color: "#e5a43b", fontSize: SECONDARY_FONT };
+
+/**
+ * What a row's Verdict cell says, and the sentence it is short for. It states
+ * what is known now and never the run's outcome: a version still on RomM is
+ * removed too if the run's check finds every version of its game gone.
+ */
+function verdictFor(item: PrunePreviewItem): { short: string; full: string } {
+  const ofGroup = item.group_size > 1 ? ` · one of ${item.group_size}` : "";
+  if (item.candidate) {
+    return {
+      short: `Gone from RomM${ofGroup}`,
+      full: "Gone from RomM — removed once the server confirms it.",
+    };
+  }
+  return {
+    short: `Still on RomM${ofGroup}`,
+    full: "Still on RomM at your last sync. Removed only if the final check finds every version of this game gone — then the whole game goes, Steam shortcut included.",
+  };
+}
+
+/** What tells two versions of one game apart: their id, and the file where it says more than the name. */
+function versionLine(item: PrunePreviewItem, name: string): string {
+  return item.fs_name && item.fs_name !== name ? `ROM ${item.rom_id} · ${item.fs_name}` : `ROM ${item.rom_id}`;
+}
+
+function installedCell(item: PrunePreviewItem): TableCell {
+  const style = { ...SECONDARY_CELL, textAlign: "right" } as const;
+  if (!item.installed) return { content: "—", title: "No ROM files on this device", style };
+  if (item.installed_bytes === null) return { content: "unknown", title: "Size unavailable", style };
+  return { content: formatBytes(item.installed_bytes), style };
+}
+
+const CandidateRow: FC<{
+  item: PrunePreviewItem;
+  included: boolean;
+  recovery: boolean;
+  runInFlight: boolean;
+  onInclude: (checked: boolean) => void;
+}> = ({ item, included, recovery, runInFlight, onInclude }) => {
+  const name = item.name || item.fs_name || `ROM ${item.rom_id}`;
+  const verdict = verdictFor(item);
+  const truncated = item.name_truncated || item.fs_name_truncated || item.group_id_truncated || item.warning_truncated;
+  const keepCopy: TableCell = item.installed
+    ? {
+        content: (
+          <ToggleField
+            checked={included}
+            disabled={runInFlight || !recovery}
+            bottomSeparator="none"
+            onChange={onInclude}
+          />
+        ),
+        title: "Include this version's installed ROM content in the recovery bundle",
+        // A control draws its focus ring outside its own box.
+        clip: false,
+      }
+    : { content: "—", style: { ...SECONDARY_CELL, textAlign: "right" } };
+  return (
+    <PaneTableRow
+      columns={CANDIDATE_COLUMNS}
+      register={CANDIDATE_REGISTER}
+      testId={`cleanup-row-${item.rom_id}`}
+      // An installed row's Keep-a-copy toggle is its stop already.
+      focusStop={!item.installed}
+      {...(item.candidate ? {} : { style: { opacity: 0.75 } })}
+      cells={[
+        {
+          content: name,
+          title: name,
+          ...(item.candidate ? { style: { fontWeight: 600 } } : {}),
+        },
+        { content: item.platform_slug, title: item.platform_slug, style: SECONDARY_CELL },
+        {
+          content: verdict.short,
+          title: verdict.full,
+          style: { fontSize: SECONDARY_FONT, color: item.candidate ? "#c7d5e0" : MUTED },
+        },
+        installedCell(item),
+        keepCopy,
+      ]}
+    >
+      <div style={{ ...SECONDARY_CELL, ...CELL_CLIP }} title={versionLine(item, name)}>
+        {versionLine(item, name)}
+      </div>
+      {truncated && (
+        <div style={ROW_WARNING}>
+          One or more display fields were shortened to keep this preview page within the Decky wire limit.
+        </div>
+      )}
+      {item.warning && <div style={ROW_WARNING}>{item.warning}</div>}
+      {item.installed && (!recovery || !included) && (
+        <div style={ROW_WARNING}>Without a backup, the downloaded ROM file is deleted along with this version.</div>
+      )}
+    </PaneTableRow>
+  );
+};
+
+/**
+ * The candidates, then — as a section of the same table — the other versions a
+ * whole-game removal could still take. The backend sorts candidates first, so
+ * the first non-candidate row is where that section starts.
+ */
+const CandidateTable: FC<{
+  items: readonly PrunePreviewItem[];
+  includedContent: ReadonlySet<number>;
+  recovery: boolean;
+  runInFlight: boolean;
+  onInclude: (romId: number, checked: boolean) => void;
+}> = ({ items, includedContent, recovery, runInFlight, onInclude }) => (
+  <div data-testid="cleanup-table" style={{ marginTop: "14px" }}>
+    <PaneTableHeader
+      columns={CANDIDATE_COLUMNS}
+      register={CANDIDATE_REGISTER}
+      testId="cleanup-header"
+      cells={[
+        "Game",
+        "Platform",
+        "Verdict",
+        { content: "Installed", style: { textAlign: "right" } },
+        { content: "Keep a copy", style: { textAlign: "right" } },
+      ]}
+    />
+    {items.map((item, index) => (
+      <Fragment key={item.rom_id}>
+        {!item.candidate && (index === 0 || items[index - 1]!.candidate) && (
+          <div data-testid="cleanup-kept-section" style={{ margin: "12px 0 4px" }}>
+            <div style={{ fontWeight: 700 }}>Other versions of these games — still on RomM</div>
+            <div style={{ fontSize: SECONDARY_FONT, color: MUTED }}>
+              Still on RomM at your last sync. Each is removed only if the final check finds every version of its game
+              gone — then the whole game goes, Steam shortcut included.
+            </div>
+          </div>
+        )}
+        {/* Steam scrolls only far enough to reveal the focused control, so
+            reaching the last row brings up what sits under it — its own lines,
+            and the note after the table. */}
+        <div {...(index === items.length - 1 ? { onFocus: scrollNearestToBottom } : {})}>
+          <CandidateRow
+            item={item}
+            included={includedContent.has(item.rom_id)}
+            recovery={recovery}
+            runInFlight={runInFlight}
+            onInclude={(checked) => onInclude(item.rom_id, checked)}
+          />
+        </div>
+      </Fragment>
+    ))}
+  </div>
+);
+
+/** A run in flight: its caption and bar, and the Stop that ends it. */
+const CleanupRunProgress: FC<{ progress: PruneProgress; cancelling: boolean; onStop: () => void }> = ({
+  progress,
+  cancelling,
+  onStop,
+}) => (
+  <div style={{ marginTop: "10px", color: "#c7d5e0" }}>
+    <div role="status" aria-live="polite">
+      <CleanupProgress progress={progress} />
+    </div>
+    <div style={{ color: MUTED, fontSize: "12px", marginTop: "4px" }}>{CANCEL_HINT}</div>
+    <ButtonRow padding="6px 0 0">
+      <DialogButton style={FLAT_BUTTON} disabled={cancelling} onClick={onStop}>
+        {cancelling ? "Stopping..." : "Stop Cleanup"}
+      </DialogButton>
+    </ButtonRow>
+    {cancelling && (
+      <div role="status" aria-live="polite" style={{ color: MUTED, fontSize: "12px", marginTop: "4px" }}>
+        {CANCELLING_HINT}
+      </div>
+    )}
+  </div>
+);
+
+/** A finished run: the full bar, the counts, and the groups worth a second look. */
+const CleanupResult: FC<{ complete: PruneComplete }> = ({ complete }) => (
+  <div style={{ marginTop: "10px", color: complete.success ? "#8fd18b" : "#ffcc66" }}>
+    <FinishedCleanupBar />
+    <div role="status" aria-live="polite">
+      {complete.removed_count ?? complete.removed_rom_ids.length} removed;{" "}
+      {complete.problem_count ??
+        complete.results.filter((item) => ["partial", "failed", "skipped"].includes(item.status)).length}{" "}
+      skipped, partial, or failed.
+    </div>
+    <Focusable
+      role="region"
+      aria-label="Cleanup details"
+      {...DETAILS_REGION_STOP}
+      style={{ maxHeight: "180px", overflowY: "auto", marginTop: "6px" }}
+    >
+      {complete.message && (
+        <div style={{ fontSize: "12px", marginTop: "4px" }}>
+          {complete.reason ? `${complete.reason}: ` : ""}
+          {complete.message}
+        </div>
+      )}
+      {complete.results
+        .filter(
+          (item) =>
+            ["partial", "failed", "skipped"].includes(item.status) ||
+            (item.warnings?.length ?? 0) > 0 ||
+            item.warnings_omitted ||
+            item.warnings_truncated ||
+            // A sealed bundle that removed nothing leaves a folder on
+            // disk; saying so is what stops it being a mystery later.
+            (item.bundle_path !== undefined && removedInGroup(item) === 0),
+        )
+        .map((item) => (
+          <div key={item.group_id} style={{ fontSize: "12px", marginTop: "4px" }}>
+            {item.name || item.group_id}: {item.message}
+            {item.bundle_path !== undefined && removedInGroup(item) === 0 && (
+              <div>Backup created, nothing removed. The folder stays at {item.bundle_path}.</div>
+            )}
+            {item.message_truncated && <div>Detail was shortened to fit the Decky wire limit.</div>}
+            {item.warnings?.map((warning) => (
+              <div key={warning}>Warning: {warning}</div>
+            ))}
+            {item.warnings_omitted && (item.warning_count ?? 0) > (item.warnings?.length ?? 0) && (
+              <div>{(item.warning_count ?? 0) - (item.warnings?.length ?? 0)} additional warning(s) omitted.</div>
+            )}
+            {item.warnings_truncated && <div>One or more displayed warnings were shortened.</div>}
+          </div>
+        ))}
+    </Focusable>
+  </div>
+);
 
 interface CleanupModalProps {
   initial: PrunePreviewResult;
@@ -454,7 +702,7 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
       setRunStarted(true);
       if (!beginPruneRun(result.run_id, initial.preview_id)) {
         // The run IS executing; this dialog just can't receive its frames, and
-        // neither can the Danger Zone. Saying "running..." here would leave the
+        // neither can Data Management. Saying "running..." here would leave the
         // user watching a progress line that can never arrive.
         setStatus("Cleanup started, but this dialog lost track of it. Check the log, then re-scan to see the result.");
         logError(`[prune] run ${result.run_id} started but preview ${initial.preview_id} was no longer pending`);
@@ -477,11 +725,40 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
     }
   };
 
+  const stop = async (runId: string): Promise<void> => {
+    setCancelRequestedFor(runId);
+    const failure = await requestPruneCancel(runId);
+    if (failure !== null) {
+      // Refused means this run is not running, so no terminal
+      // frame is coming to re-open the control — do it here.
+      setCancelRequestedFor(null);
+      setStatus(failure);
+    }
+  };
+
+  const changeRemoveDeadGames = (checked: boolean): void => {
+    setRemoveDeadGames(checked);
+    // Turning it off hides the rows only a whole-game removal could
+    // take, so their content selections must not stay staged.
+    if (!checked) {
+      setIncludedContent((current) => {
+        const stillShown = new Set(items.filter((item) => item.candidate).map((item) => item.rom_id));
+        return new Set([...current].filter((romId) => stillShown.has(romId)));
+      });
+    }
+  };
+
+  const changeRecovery = (checked: boolean): void => {
+    setRecovery(checked);
+    if (checked) setConfirmWithoutRecovery(false);
+    else setIncludedContent(new Set());
+  };
+
   return (
     <ModalRoot closeModal={closeModal}>
-      {/* The whole dialog scrolls as one. A separate inner scroller for the list
-          leaves the space estimate pinned over the last row, and gives the
-          controller two scroll axes to choose between on every focus move. */}
+      {/* The whole dialog scrolls as one. A separate inner scroller for the table
+          gives the controller two scroll axes to choose between on every focus
+          move. */}
       <div
         style={{
           minWidth: "440px",
@@ -504,261 +781,135 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
             : ""}
         </div>
 
-        <div>
-          {/* Focusing the first control has to bring the intro above it back into
-              view — Steam's focus engine only scrolls far enough to reveal the
-              control itself, which strands the text off the top on a controller. */}
-          <div onFocus={scrollNearestToTop}>
+        {/* Two columns the stick crosses sideways; each column is walked up and
+            down, and leaving one at either end leaves the options. */}
+        <Focusable flow-children="horizontal" style={{ display: "flex", gap: "24px" }}>
+          <Focusable flow-children="vertical" style={{ flex: "1 1 0", minWidth: 0 }}>
+            {/* Focusing the first control has to bring the intro above it back into
+                view — Steam's focus engine only scrolls far enough to reveal the
+                control itself, which strands the text off the top on a controller. */}
+            <div onFocus={scrollNearestToTop}>
+              <ToggleField
+                label="Repoint vanished shortcuts"
+                description="Each to its game's live default version, keeping the shortcut."
+                checked={repoint}
+                disabled={runInFlight}
+                onChange={setRepoint}
+              />
+            </div>
             <ToggleField
-              label="Repoint vanished shortcuts to the live default version"
-              checked={repoint}
+              label="Remove gone versions"
+              description="The confirmed rows and their installed content, in games that still have a live version."
+              checked={removeRows}
               disabled={runInFlight}
-              onChange={setRepoint}
+              onChange={setRemoveRows}
             />
-          </div>
-          <ToggleField
-            label="Remove confirmed rows and installed content from groups with a live version"
-            checked={removeRows}
-            disabled={runInFlight}
-            onChange={setRemoveRows}
-          />
-          <ToggleField
-            label="Remove fully vanished games, including any Steam shortcut"
-            description="Only for games where the server confirms every single version is gone — those are removed whole, Steam shortcut included. The recovery bundle keeps the shortcut's Steam details so you can rebuild it by hand."
-            checked={removeDeadGames}
-            disabled={runInFlight}
-            onChange={(checked: boolean) => {
-              setRemoveDeadGames(checked);
-              // Turning it off hides the rows only a whole-game removal could
-              // take, so their content selections must not stay staged.
-              if (!checked) {
-                setIncludedContent((current) => {
-                  const stillShown = new Set(items.filter((item) => item.candidate).map((item) => item.rom_id));
-                  return new Set([...current].filter((romId) => stillShown.has(romId)));
-                });
-              }
-            }}
-          />
-          <ToggleField
-            label="Create recovery bundle"
-            description={`Verified bundles are sealed under ${initial.recovery_root ?? "the recovery directory"}.`}
-            checked={recovery}
-            disabled={runInFlight}
-            onChange={(checked: boolean) => {
-              setRecovery(checked);
-              if (checked) setConfirmWithoutRecovery(false);
-              else setIncludedContent(new Set());
-            }}
-          />
-          {!recovery && (
+          </Focusable>
+          <Focusable flow-children="vertical" style={{ flex: "1 1 0", minWidth: 0 }}>
             <ToggleField
-              label="I understand local database state and playtime will have no recovery bundle"
-              checked={confirmWithoutRecovery}
+              label="Remove fully vanished games"
+              description="Only for games where the server confirms every single version is gone — each is removed whole, with any Steam shortcut it has. The recovery bundle keeps the shortcut's Steam details so you can rebuild it by hand."
+              checked={removeDeadGames}
               disabled={runInFlight}
-              onChange={setConfirmWithoutRecovery}
+              onChange={changeRemoveDeadGames}
             />
-          )}
+            <ToggleField
+              label="Create recovery bundle"
+              description={`Verified bundles are sealed under ${initial.recovery_root ?? "the recovery directory"}.`}
+              checked={recovery}
+              disabled={runInFlight}
+              onChange={changeRecovery}
+            />
+            {!recovery && (
+              <ToggleField
+                label="I understand there is no recovery bundle"
+                description="Local database state and playtime will have no recovery bundle."
+                checked={confirmWithoutRecovery}
+                disabled={runInFlight}
+                onChange={setConfirmWithoutRecovery}
+              />
+            )}
+          </Focusable>
+        </Focusable>
 
-          <div style={{ margin: "14px 0 8px", fontWeight: 700 }}>Versions no longer on RomM</div>
-          {visibleItems.map((item, index) => (
-            <Fragment key={item.rom_id}>
-              {/* The backend sorts candidates first, so the first non-candidate
-                  row is where the disclosure block starts. */}
-              {!item.candidate && (index === 0 || visibleItems[index - 1]!.candidate) && (
-                <div style={{ margin: "18px 0 8px", fontWeight: 700 }}>Other versions of these games — kept</div>
-              )}
-              <div
-                style={{
-                  padding: "10px 0",
-                  borderTop: "1px solid rgba(255,255,255,0.10)",
-                  ...(item.candidate ? {} : { paddingLeft: "14px", opacity: 0.75 }),
-                }}
-              >
-                <div style={{ fontWeight: item.candidate ? 600 : 400 }}>
-                  {item.name || item.fs_name || `ROM ${item.rom_id}`}
-                </div>
-                {(item.name_truncated ||
-                  item.fs_name_truncated ||
-                  item.group_id_truncated ||
-                  item.warning_truncated) && (
-                  <div style={{ color: "#e5a43b", fontSize: "12px" }}>
-                    One or more display fields were shortened to keep this preview page within the Decky wire limit.
-                  </div>
-                )}
-                <div style={{ fontSize: "12px", color: "#8f98a0" }}>
-                  {item.platform_slug} · ROM {item.rom_id}
-                  {item.group_size > 1 ? ` · one of ${item.group_size} versions of this game` : ""}
-                </div>
-                <div style={{ fontSize: "12px", color: item.candidate ? "#c7d5e0" : "#8f98a0" }}>
-                  {item.candidate
-                    ? "Gone from RomM — removed once the server confirms it."
-                    : "Still on RomM at your last sync. Removed only if the final check finds every version of this game gone — then the whole game goes, Steam shortcut included."}
-                </div>
-                {item.warning && <div style={{ color: "#e5a43b", fontSize: "12px" }}>{item.warning}</div>}
-                {item.installed && (
-                  <ToggleField
-                    label={`Include installed ROM content (${item.installed_bytes === null ? "size unavailable" : formatBytes(item.installed_bytes)})`}
-                    checked={includedContent.has(item.rom_id)}
-                    disabled={runInFlight || !recovery}
-                    onChange={(checked: boolean) => toggleContent(item.rom_id, checked)}
-                  />
-                )}
-                {item.installed && (!recovery || !includedContent.has(item.rom_id)) && (
-                  <div style={{ color: "#e5a43b", fontSize: "12px" }}>
-                    Without a backup, the downloaded ROM file is deleted along with this version.
-                  </div>
-                )}
-              </div>
-            </Fragment>
-          ))}
-          {/* Without this the per-row "Include installed ROM content" checkbox is
-              invisible on a library where nothing is downloaded, and the option
-              reads as missing rather than as not applicable. Only claimed once
-              every page is loaded — an unseen page could still hold one. */}
-          {allEntriesLoaded && !visibleItems.some((item) => item.installed) && (
-            <div style={{ padding: "10px 0", fontSize: "12px", color: "#8f98a0" }}>
-              None of these versions has ROM files downloaded on this device, so there is nothing to back up.
+        {/* The run's controls sit ABOVE the table rather than after it: focus
+            follows element order, so a bar after the rows is one press per row
+            away however it is drawn. */}
+        <div data-testid="cleanup-bar" style={{ marginTop: "14px", padding: "10px", background: "rgba(0,0,0,0.20)" }}>
+          <div>
+            Selected ROM-content recovery estimate: {formatBytes(selectedBytes)} · Free at target:{" "}
+            {formatBytes(freeBytes)}
+          </div>
+          <div style={{ color: MUTED, fontSize: "12px", marginTop: "4px" }}>
+            A lower bound: the backend remeasures saves, histories, caches and Steam files before anything changes.
+            Large selections are staged in bounded pages first; every checked item stays part of this run.
+          </div>
+          {insufficientSpace && (
+            <div style={{ color: "#ff8c6a", marginTop: "4px" }}>
+              {unknownSelectedSize ? "A selected installed ROM has no safe measurable size." : "Not enough free space."}
             </div>
           )}
-          {items.length < total && (
-            <DialogButton disabled={loadingMore} onClick={() => detach(loadMore())}>
-              {loadingMore ? "Loading..." : `Load more (${items.length} of ${total})`}
+          <ButtonRow padding="8px 0 0">
+            <DialogButton style={FLAT_BUTTON} disabled={runInFlight} onClick={() => detach(refreshFreeSpace())}>
+              Refresh free space
             </DialogButton>
-          )}
+            {items.length < total && (
+              <DialogButton style={FLAT_BUTTON} disabled={loadingMore} onClick={() => detach(loadMore())}>
+                {loadingMore ? "Loading..." : `Load more (${items.length} of ${total})`}
+              </DialogButton>
+            )}
+            <DialogButton style={FLAT_BUTTON} disabled={starting && complete === null} onClick={() => closeModal?.()}>
+              {runStarted || complete !== null ? "Close" : "Cancel"}
+            </DialogButton>
+            <DialogButton style={FLAT_BUTTON} disabled={pressBlocked} onClick={() => detach(start())}>
+              {confirmButtonLabel(starting, progress)}
+            </DialogButton>
+          </ButtonRow>
           {!allEntriesLoaded && (
             <div style={{ color: "#ff8c6a", fontSize: "12px", marginTop: "8px" }}>
               Load every page before confirming so all potentially removed group members and installed content are
               disclosed.
             </div>
           )}
-        </div>
-
-        <div style={{ marginTop: "14px", padding: "10px", background: "rgba(0,0,0,0.20)" }}>
-          Selected ROM-content recovery estimate: {formatBytes(selectedBytes)} · Free at target:{" "}
-          {formatBytes(freeBytes)}
-          <div style={{ color: "#8f98a0", fontSize: "12px", marginTop: "4px" }}>
-            This is a lower bound. The backend remeasures mandatory saves, histories, caches, and Steam files before any
-            mutation.
-          </div>
-          <div style={{ color: "#8f98a0", fontSize: "12px", marginTop: "4px" }}>
-            Large installed-content selections are staged in bounded pages before cleanup; every checked item remains
-            part of this run.
-          </div>
-          <DialogButton disabled={runInFlight} onClick={() => detach(refreshFreeSpace())}>
-            Refresh free space
-          </DialogButton>
-          {insufficientSpace && (
-            <div style={{ color: "#ff8c6a", marginTop: "4px" }}>
-              {unknownSelectedSize ? "A selected installed ROM has no safe measurable size." : "Not enough free space."}
+          {progress && (
+            <CleanupRunProgress
+              progress={progress}
+              cancelling={cancelling}
+              onStop={() => detach(stop(progress.run_id))}
+            />
+          )}
+          {complete && <CleanupResult complete={complete} />}
+          {resultLost && (
+            <div role="status" aria-live="polite" style={{ marginTop: "10px", color: "#ff8c6a" }}>
+              {RESULT_LOST_MESSAGE}
             </div>
           )}
-        </div>
-        {progress && (
-          <div style={{ marginTop: "10px", color: "#c7d5e0" }}>
-            <div role="status" aria-live="polite">
-              <CleanupProgress progress={progress} />
+          {status && !complete && (
+            <div role="status" aria-live="polite" style={{ marginTop: "10px", color: "#ffcc66" }}>
+              {status}
             </div>
-            <div style={{ color: "#8f98a0", fontSize: "12px", marginTop: "4px" }}>{CANCEL_HINT}</div>
-            <DialogButton
-              disabled={cancelling}
-              onClick={() =>
-                detach(
-                  (async () => {
-                    setCancelRequestedFor(progress.run_id);
-                    const failure = await requestPruneCancel(progress.run_id);
-                    if (failure !== null) {
-                      // Refused means this run is not running, so no terminal
-                      // frame is coming to re-open the control — do it here.
-                      setCancelRequestedFor(null);
-                      setStatus(failure);
-                    }
-                  })(),
-                )
-              }
-            >
-              {cancelling ? "Stopping..." : "Stop Cleanup"}
-            </DialogButton>
-            {cancelling && (
-              <div role="status" aria-live="polite" style={{ color: "#8f98a0", fontSize: "12px", marginTop: "4px" }}>
-                {CANCELLING_HINT}
-              </div>
-            )}
-          </div>
-        )}
-        {complete && (
-          <div style={{ marginTop: "10px", color: complete.success ? "#8fd18b" : "#ffcc66" }}>
-            <FinishedCleanupBar />
-            <div role="status" aria-live="polite">
-              {complete.removed_count ?? complete.removed_rom_ids.length} removed;{" "}
-              {complete.problem_count ??
-                complete.results.filter((item) => ["partial", "failed", "skipped"].includes(item.status)).length}{" "}
-              skipped, partial, or failed.
-            </div>
-            <Focusable
-              role="region"
-              aria-label="Cleanup details"
-              {...DETAILS_REGION_STOP}
-              style={{ maxHeight: "180px", overflowY: "auto", marginTop: "6px" }}
-            >
-              {complete.message && (
-                <div style={{ fontSize: "12px", marginTop: "4px" }}>
-                  {complete.reason ? `${complete.reason}: ` : ""}
-                  {complete.message}
-                </div>
-              )}
-              {complete.results
-                .filter(
-                  (item) =>
-                    ["partial", "failed", "skipped"].includes(item.status) ||
-                    (item.warnings?.length ?? 0) > 0 ||
-                    item.warnings_omitted ||
-                    item.warnings_truncated ||
-                    // A sealed bundle that removed nothing leaves a folder on
-                    // disk; saying so is what stops it being a mystery later.
-                    (item.bundle_path !== undefined && removedInGroup(item) === 0),
-                )
-                .map((item) => (
-                  <div key={item.group_id} style={{ fontSize: "12px", marginTop: "4px" }}>
-                    {item.name || item.group_id}: {item.message}
-                    {item.bundle_path !== undefined && removedInGroup(item) === 0 && (
-                      <div>Backup created, nothing removed. The folder stays at {item.bundle_path}.</div>
-                    )}
-                    {item.message_truncated && <div>Detail was shortened to fit the Decky wire limit.</div>}
-                    {item.warnings?.map((warning) => (
-                      <div key={warning}>Warning: {warning}</div>
-                    ))}
-                    {item.warnings_omitted && (item.warning_count ?? 0) > (item.warnings?.length ?? 0) && (
-                      <div>
-                        {(item.warning_count ?? 0) - (item.warnings?.length ?? 0)} additional warning(s) omitted.
-                      </div>
-                    )}
-                    {item.warnings_truncated && <div>One or more displayed warnings were shortened.</div>}
-                  </div>
-                ))}
-            </Focusable>
-          </div>
-        )}
-        {resultLost && (
-          <div role="status" aria-live="polite" style={{ marginTop: "10px", color: "#ff8c6a" }}>
-            {RESULT_LOST_MESSAGE}
-          </div>
-        )}
-        {status && !complete && (
-          <div role="status" aria-live="polite" style={{ marginTop: "10px", color: "#ffcc66" }}>
-            {status}
-          </div>
-        )}
-        {blockedReason !== null && !runInFlight && (
-          <div style={{ marginTop: "10px", color: "#ff8c6a", fontSize: "12px" }}>{blockedReason}</div>
-        )}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
-          <DialogButton disabled={starting && complete === null} onClick={() => closeModal?.()}>
-            {runStarted || complete !== null ? "Close" : "Cancel"}
-          </DialogButton>
-          <DialogButton disabled={pressBlocked} onClick={() => detach(start())}>
-            {confirmButtonLabel(starting, progress)}
-          </DialogButton>
+          )}
+          {blockedReason !== null && !runInFlight && (
+            <div style={{ marginTop: "10px", color: "#ff8c6a", fontSize: "12px" }}>{blockedReason}</div>
+          )}
         </div>
+
+        <CandidateTable
+          items={visibleItems}
+          includedContent={includedContent}
+          recovery={recovery}
+          runInFlight={runInFlight}
+          onInclude={toggleContent}
+        />
+        {/* Without this the Keep-a-copy column is empty on a library where
+            nothing is downloaded, and the option reads as missing rather than as
+            not applicable. Only claimed once every page is loaded — an unseen
+            page could still hold one. */}
+        {allEntriesLoaded && !visibleItems.some((item) => item.installed) && (
+          <div style={{ padding: "10px 0", fontSize: "12px", color: MUTED }}>
+            None of these versions has ROM files downloaded on this device, so there is nothing to back up.
+          </div>
+        )}
       </div>
     </ModalRoot>
   );

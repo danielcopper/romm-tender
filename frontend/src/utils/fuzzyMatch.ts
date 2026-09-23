@@ -1,7 +1,7 @@
 /**
  * Subsequence fuzzy match (fzf-style): every character of `query` must appear in
  * `target` in order, case-insensitively. Used to filter long name lists (the
- * Danger Zone whitelist, the Collections list) from a single search box.
+ * Data Management whitelist, the Collections list) from a single search box.
  *
  * An empty query matches everything, so an empty search box never hides rows.
  */

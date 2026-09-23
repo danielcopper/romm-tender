@@ -1,4 +1,4 @@
-import { act, fireEvent, render, waitFor, type RenderResult } from "@testing-library/react";
+import { act, fireEvent, render, waitFor, within, type RenderResult } from "@testing-library/react";
 import { createElement, type ReactElement } from "react";
 import { toaster } from "../api/host";
 import { showModal } from "@decky/ui";
@@ -57,20 +57,35 @@ function shownModal(): ReactElement {
 }
 
 /**
- * The "include installed ROM content" checkbox belonging to `gameName`'s row.
+ * The candidate table's row for `gameName`.
+ *
+ * A row that carries a Keep-a-copy toggle is a plain element marked with the
+ * table's own test id; a row with nothing to press is a focus stop, which the
+ * `Focusable` stub renders under its own id. Either way it is the nearest of
+ * the two above the name. Throws rather than returning nothing: a missing row
+ * is the failure.
+ */
+function rowFor(modal: RenderResult, gameName: string): HTMLElement {
+  const row = modal
+    .getByText(gameName)
+    .closest<HTMLElement>('[data-testid^="cleanup-row-"], [data-testid="focusable"]');
+  if (!row) throw new Error(`No table row for ${gameName}`);
+  return row;
+}
+
+/**
+ * The Keep-a-copy checkbox belonging to `gameName`'s row.
  *
  * The dialog's option toggles and its per-row content toggles share one flat
  * `toggle-input` list, so indexing it ties every row assertion to the number of
- * options rendered above the list. Throws rather than returning nothing: a row
+ * options rendered above the table. Throws rather than returning nothing: a row
  * that has lost its content toggle is the failure, not a silently skipped click.
  */
 function contentToggleFor(modal: RenderResult, gameName: string): HTMLInputElement {
-  const row = modal.getByText(gameName).parentElement;
-  const toggle = [...(row?.querySelectorAll<HTMLElement>('[data-testid="toggle"]') ?? [])].find((el) =>
-    el.textContent.includes("Include installed ROM content"),
+  const input = rowFor(modal, gameName).querySelector<HTMLInputElement>(
+    '[data-testid="toggle"] [data-testid="toggle-input"]',
   );
-  const input = toggle?.querySelector<HTMLInputElement>('[data-testid="toggle-input"]');
-  if (!input) throw new Error(`No installed-content toggle in the row for ${gameName}`);
+  if (!input) throw new Error(`No Keep-a-copy toggle in the row for ${gameName}`);
   return input;
 }
 
@@ -81,11 +96,11 @@ function contentToggleFor(modal: RenderResult, gameName: string): HTMLInputEleme
  * only while the recovery bundle is switched off.
  */
 const OPTION_LABELS = {
-  repoint: "Repoint vanished shortcuts to the live default version",
-  removeRows: "Remove confirmed rows and installed content from groups with a live version",
-  removeDeadGames: "Remove fully vanished games, including any Steam shortcut",
+  repoint: "Repoint vanished shortcuts",
+  removeRows: "Remove gone versions",
+  removeDeadGames: "Remove fully vanished games",
   recovery: "Create recovery bundle",
-  confirmWithoutRecovery: "I understand local database state and playtime will have no recovery bundle",
+  confirmWithoutRecovery: "I understand there is no recovery bundle",
 } as const;
 
 /**
@@ -179,7 +194,7 @@ describe("RemovedGamesCleanup", () => {
     expect(contentToggleFor(modal, "Removed Game").checked).toBe(false);
     // The acknowledgement exists only to gate a run that keeps no bundle, so it
     // must not be on screen while the bundle is on.
-    expect(modal.queryByText(OPTION_LABELS.confirmWithoutRecovery)).toBeNull();
+    expect(modal.container.textContent).not.toContain(OPTION_LABELS.confirmWithoutRecovery);
     const confirm = modal.getByRole("button", { name: "Confirm Cleanup" }) as HTMLButtonElement;
     expect(confirm.disabled).toBe(false);
     expect(modal.container.textContent).toContain("Without a backup, the downloaded ROM file is deleted");
@@ -308,7 +323,7 @@ describe("RemovedGamesCleanup", () => {
     expect(modal.container.textContent).toContain("1 removed");
   });
 
-  it("surfaces scan rejection and re-enables the Danger Zone action", async () => {
+  it("surfaces scan rejection and re-enables the scan on Data Management", async () => {
     vi.mocked(backend.getPrunePreview).mockRejectedValue(new Error("offline"));
     const section = render(createElement(RemovedGamesCleanupSection));
     const button = section.getByRole("button", { name: "Clean Up Removed RomM Games" }) as HTMLButtonElement;
@@ -460,6 +475,232 @@ describe("RemovedGamesCleanup", () => {
 
     // The run would otherwise execute against a selection the backend never accepted.
     expect(backend.startPrune).not.toHaveBeenCalled();
+  });
+
+  describe("the review's layout", () => {
+    const withSibling: backend.PrunePreviewResult = {
+      ...preview,
+      total: 2,
+      candidate_total: 1,
+      items: [
+        { ...preview.items![0]!, warning: "Save ownership is shared.", name_truncated: true },
+        { ...preview.items![0]!, rom_id: 8, candidate: false, installed: false, name: "Live sibling", group_size: 2 },
+      ],
+    };
+
+    /** `a` comes before `b` in document order — which is the order focus walks. */
+    const precedes = (a: Element, b: Element): boolean =>
+      (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+
+    it("draws the candidates as a table under the five column names", async () => {
+      vi.mocked(backend.getPrunePreview).mockResolvedValue(withSibling);
+      await openRemovedGamesCleanupModal();
+      const modal = render(shownModal());
+
+      const header = modal.getByTestId("cleanup-header");
+      expect([...header.children].map((cell) => cell.textContent)).toEqual([
+        "Game",
+        "Platform",
+        "Verdict",
+        "Installed",
+        "Keep a copy",
+      ]);
+      const candidate = rowFor(modal, "Removed Game");
+      expect(candidate.textContent).toContain("gba");
+      expect(candidate.textContent).toContain("Gone from RomM");
+      expect(candidate.textContent).toContain("200 B");
+      const sibling = rowFor(modal, "Live sibling");
+      // A verdict says what is known now, never the run's outcome: this version
+      // still goes if the run finds every version of its game gone.
+      expect(sibling.textContent).toContain("Still on RomM · one of 2");
+      expect(sibling.textContent).not.toContain("kept");
+      // The full sentence is the cell's title for a mouse; the controller reads
+      // the same sentence in the section line above the row.
+      expect(within(sibling).getByTitle(/^Still on RomM at your last sync\./)).toBeTruthy();
+      // The versions still on RomM are a section of the same table, after the candidates.
+      const section = modal.getByTestId("cleanup-kept-section");
+      expect(section.textContent).toContain("Other versions of these games — still on RomM");
+      expect(precedes(candidate, section)).toBe(true);
+      expect(precedes(section, sibling)).toBe(true);
+    });
+
+    it("makes the Keep-a-copy toggle an installed row's stop, and the row itself the stop otherwise", async () => {
+      vi.mocked(backend.getPrunePreview).mockResolvedValue(withSibling);
+      await openRemovedGamesCleanupModal();
+      const modal = render(shownModal());
+
+      // A stop on the wrapper as well would put a dead step in front of the toggle.
+      const installed = rowFor(modal, "Removed Game");
+      expect(installed.getAttribute("data-activate")).toBeNull();
+      expect(within(installed).getAllByTestId("toggle")).toHaveLength(1);
+      // A row with nothing to press has to be a stop, or the table cannot be walked.
+      const notInstalled = rowFor(modal, "Live sibling");
+      expect(notInstalled.getAttribute("data-activate")).toBe("true");
+      expect(within(notInstalled).queryAllByTestId("toggle")).toHaveLength(0);
+    });
+
+    it("keeps every per-row warning on screen, under its own row", async () => {
+      vi.mocked(backend.getPrunePreview).mockResolvedValue(withSibling);
+      await openRemovedGamesCleanupModal();
+      const modal = render(shownModal());
+
+      const row = rowFor(modal, "Removed Game");
+      expect(row.textContent).toContain("Save ownership is shared.");
+      expect(row.textContent).toContain("One or more display fields were shortened");
+      expect(row.textContent).toContain(
+        "Without a backup, the downloaded ROM file is deleted along with this version.",
+      );
+    });
+
+    it("puts the options in two columns, the acknowledgement under the bundle it answers for", async () => {
+      await openRemovedGamesCleanupModal();
+      const modal = render(shownModal());
+      fireEvent.click(optionToggleFor(modal, OPTION_LABELS.recovery));
+
+      const column = (label: string) => optionToggleFor(modal, label).closest('[data-testid="focusable"]')!;
+      expect(column(OPTION_LABELS.repoint)).toBe(column(OPTION_LABELS.removeRows));
+      expect(column(OPTION_LABELS.removeDeadGames)).toBe(column(OPTION_LABELS.recovery));
+      expect(column(OPTION_LABELS.confirmWithoutRecovery)).toBe(column(OPTION_LABELS.recovery));
+      expect(column(OPTION_LABELS.repoint)).not.toBe(column(OPTION_LABELS.recovery));
+    });
+
+    it("puts the run's controls between the options and the table, where focus reaches them first", async () => {
+      vi.mocked(backend.getPrunePreview).mockResolvedValue(withSibling);
+      await openRemovedGamesCleanupModal();
+      const modal = render(shownModal());
+      const table = modal.getByTestId("cleanup-table");
+      const lastOption = optionToggleFor(modal, OPTION_LABELS.recovery);
+
+      // Focus follows element order, not the picture: a control after the rows
+      // is one press per row away however it is drawn.
+      for (const name of ["Refresh free space", "Cancel", "Confirm Cleanup"]) {
+        const control = modal.getByRole("button", { name });
+        expect(precedes(lastOption, control)).toBe(true);
+        expect(precedes(control, table)).toBe(true);
+      }
+      expect(precedes(modal.getByText(/Selected ROM-content recovery estimate/), table)).toBe(true);
+    });
+
+    it("keeps a running run's Stop and a finished run's details above the table too", async () => {
+      await openRemovedGamesCleanupModal();
+      const modal = render(shownModal());
+      fireEvent.click(modal.getByRole("button", { name: "Confirm Cleanup" }));
+      await waitFor(() => expect(modal.container.textContent).toContain("Cleanup running..."));
+      act(() => {
+        setPruneProgress({
+          run_id: "run-1",
+          preview_id: "preview-1",
+          current: 1,
+          total: 2,
+          stage: "checking",
+          rom_ids: [7],
+          name: "Removed Game",
+        });
+      });
+
+      expect(precedes(modal.getByRole("button", { name: "Stop Cleanup" }), modal.getByTestId("cleanup-table"))).toBe(
+        true,
+      );
+
+      act(() => {
+        setPruneComplete({
+          success: true,
+          partial: false,
+          run_id: "run-1",
+          preview_id: "preview-1",
+          removed_rom_ids: [7],
+          affected_app_ids: [],
+          results: [],
+        });
+      });
+
+      expect(precedes(modal.getByRole("region", { name: "Cleanup details" }), modal.getByTestId("cleanup-table"))).toBe(
+        true,
+      );
+    });
+
+    it("puts Load more and its rule in the bar, beside the Confirm it unblocks", async () => {
+      vi.mocked(backend.getPrunePreview).mockResolvedValue({ ...preview, total: 2 });
+      await openRemovedGamesCleanupModal();
+      const modal = render(shownModal());
+      const bar = modal.getByTestId("cleanup-bar");
+      const table = modal.getByTestId("cleanup-table");
+      const loadMore = modal.getByRole("button", { name: "Load more (1 of 2)" });
+
+      // Every row is a stop, so after the table it would be a table's length
+      // away from the Confirm that refuses until it has been pressed.
+      expect(bar.contains(loadMore)).toBe(true);
+      expect(precedes(loadMore, modal.getByRole("button", { name: "Confirm Cleanup" }))).toBe(true);
+      expect(precedes(loadMore, table)).toBe(true);
+      expect(bar.textContent).toContain("Load every page before confirming");
+    });
+
+    it("tells two gone versions of one game apart on screen, not only in a title", async () => {
+      vi.mocked(backend.getPrunePreview).mockResolvedValue({
+        ...preview,
+        total: 2,
+        candidate_total: 2,
+        items: [
+          {
+            ...preview.items![0]!,
+            rom_id: 21,
+            name: "Chrono Cross",
+            fs_name: "Chrono Cross (Disc 1).chd",
+            group_size: 2,
+          },
+          {
+            ...preview.items![0]!,
+            rom_id: 22,
+            name: "Chrono Cross",
+            fs_name: "Chrono Cross (Disc 2).chd",
+            group_size: 2,
+          },
+        ],
+      });
+      await openRemovedGamesCleanupModal();
+      const modal = render(shownModal());
+
+      // A title is a hover the controller cannot perform, and each row carries
+      // its own Keep a copy toggle.
+      const first = modal.getByTestId("cleanup-row-21");
+      const second = modal.getByTestId("cleanup-row-22");
+      expect(first.textContent).toContain("ROM 21 · Chrono Cross (Disc 1).chd");
+      expect(second.textContent).toContain("ROM 22 · Chrono Cross (Disc 2).chd");
+      expect(first.textContent).toContain("Gone from RomM · one of 2");
+      expect(second.textContent).toContain("Gone from RomM · one of 2");
+    });
+
+    it("scrolls the dialog to its end when the last row takes focus, and not before", async () => {
+      vi.useFakeTimers();
+      try {
+        vi.mocked(backend.getPrunePreview).mockResolvedValue(withSibling);
+        await openRemovedGamesCleanupModal();
+        const modal = render(shownModal());
+        const body = [...modal.container.querySelectorAll<HTMLElement>("div")].find(
+          (el) => el.style.overflowY === "auto",
+        )!;
+        Object.defineProperty(body, "scrollHeight", { value: 2000, configurable: true });
+        Object.defineProperty(body, "clientHeight", { value: 600, configurable: true });
+        const scrollTo = vi.fn();
+        body.scrollTo = scrollTo as unknown as typeof body.scrollTo;
+
+        fireEvent.focusIn(contentToggleFor(modal, "Removed Game"));
+        act(() => {
+          vi.runAllTimers();
+        });
+        expect(scrollTo).not.toHaveBeenCalled();
+
+        // Steam stops at the control itself, leaving what sits under the last
+        // row — its own lines, the note after the table — below the view.
+        fireEvent.focusIn(rowFor(modal, "Live sibling"));
+        act(() => {
+          vi.runAllTimers();
+        });
+        expect(scrollTo).toHaveBeenCalledExactlyOnceWith({ top: 2000, behavior: "smooth" });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe("stageInstalledSelections", () => {
@@ -675,7 +916,7 @@ describe("RemovedGamesCleanup", () => {
     expect(modal.container.textContent).not.toContain("Not enough free space.");
   });
 
-  it("counts only removable rows in the headline and labels a disclosed sibling as kept", async () => {
+  it("counts only removable rows in the headline and discloses a sibling as still on RomM", async () => {
     vi.mocked(backend.getPrunePreview).mockResolvedValue({
       ...preview,
       total: 2,
@@ -695,7 +936,7 @@ describe("RemovedGamesCleanup", () => {
     // The sibling is still disclosed — a fresh probe, not the local fetch
     // generation, decides whole-game removal — but never called a candidate.
     expect(text).toContain("Live sibling");
-    expect(text).toContain("Other versions of these games — kept");
+    expect(text).toContain("Other versions of these games — still on RomM");
     expect(text).toContain("Still on RomM at your last sync");
     expect(text).toContain("Other versions of the same games are listed below");
     expect(text).not.toContain("disclosed for whole-game removal");
@@ -720,7 +961,7 @@ describe("RemovedGamesCleanup", () => {
     // With whole-game removal off, `selected_prune_ids` can never return a
     // non-candidate, so disclosing one describes a thing that cannot happen.
     expect(modal.container.textContent).not.toContain("Live sibling");
-    expect(modal.container.textContent).not.toContain("Other versions of these games — kept");
+    expect(modal.container.textContent).not.toContain("Other versions of these games — still on RomM");
     expect(modal.container.textContent).not.toContain("Other versions of the same games are listed below");
     // The headline counted candidates only, so it does not move.
     expect(modal.container.textContent).toContain("1 locally kept version is no longer on your RomM server");
@@ -773,7 +1014,7 @@ describe("RemovedGamesCleanup", () => {
 
     expect(text).toContain("1 locally kept version is no longer on your RomM server");
     expect(text).not.toContain("Other versions of the same games are listed below");
-    expect(text).not.toContain("Other versions of these games — kept");
+    expect(text).not.toContain("Other versions of these games — still on RomM");
   });
 
   it("says so when no listed version has ROM files on this device", async () => {
@@ -805,7 +1046,8 @@ describe("RemovedGamesCleanup", () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
 
-    expect(modal.container.textContent).toContain("Include installed ROM content (200 B)");
+    expect(contentToggleFor(modal, "Removed Game")).toBeTruthy();
+    expect(rowFor(modal, "Removed Game").textContent).toContain("200 B");
     expect(modal.container.textContent).not.toContain("None of these versions has ROM files");
   });
 
@@ -919,9 +1161,11 @@ describe("RemovedGamesCleanup", () => {
     await openRemovedGamesCleanupModal();
     const modal = render(shownModal());
 
-    // Rows in a fully vanished group may have no shortcut at all, so the label
+    // Rows in a fully vanished group may have no shortcut at all, so the option
     // must not promise one is removed.
-    expect(modal.container.textContent).toContain("Remove fully vanished games, including any Steam shortcut");
+    const option = optionToggleFor(modal, OPTION_LABELS.removeDeadGames).closest('[data-testid="toggle"]')!;
+    expect(option.textContent).toContain("with any Steam shortcut it has");
+    expect(option.textContent).not.toContain("the Steam shortcut");
   });
 
   it("surfaces a success response that carries no run id instead of wedging admission", async () => {
@@ -946,7 +1190,7 @@ describe("RemovedGamesCleanup", () => {
     expect(showModal).not.toHaveBeenCalled();
   });
 
-  it("keeps the Danger Zone showing a run that has not emitted progress yet", async () => {
+  it("keeps Data Management showing a run that has not emitted progress yet", async () => {
     const section = render(createElement(RemovedGamesCleanupSection));
     const button = section.getByRole("button", { name: "Clean Up Removed RomM Games" }) as HTMLButtonElement;
     expect(button.disabled).toBe(false);
@@ -963,7 +1207,7 @@ describe("RemovedGamesCleanup", () => {
     expect(section.container.textContent).toContain("A cleanup is running.");
   });
 
-  it("offers a Stop control in the Danger Zone and sets expectations for it", async () => {
+  it("offers a Stop control on Data Management and sets expectations for it", async () => {
     vi.mocked(backend.cancelPrune).mockResolvedValue({ success: true, message: "ok", already_cancelling: false });
     const section = render(createElement(RemovedGamesCleanupSection));
     act(() => {
@@ -1113,7 +1357,7 @@ describe("RemovedGamesCleanup", () => {
     expect(section.container.querySelector('[data-testid="progress-progress"]')?.textContent).toBe(fill);
   });
 
-  it("fills the Danger Zone bar only when the run reaches its terminal frame", () => {
+  it("fills the Data Management bar only when the run reaches its terminal frame", () => {
     const section = render(createElement(RemovedGamesCleanupSection));
     act(() => {
       beginPrunePreview("preview-1");

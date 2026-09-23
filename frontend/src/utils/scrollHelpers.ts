@@ -102,6 +102,21 @@ export function scrollNearestToTop(e: FocusLike): void {
 }
 
 /**
+ * onFocus handler that scrolls the NEAREST scroll container to its very end —
+ * `scrollNearestToTop`'s twin, for text that sits BELOW the last focusable
+ * element, where Steam's focus engine stops just as short. Put it on a wrapper
+ * around the bottommost selectable.
+ */
+export function scrollNearestToBottom(e: FocusLike): void {
+  const el = e.currentTarget as HTMLElement | null;
+  setTimeout(() => {
+    if (!el) return;
+    const scroller = findScrollParent(el);
+    scroller?.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
+  }, 50);
+}
+
+/**
  * onFocus handler that scrolls to the top of the scroll container.
  * Use on the Play button so navigating back up reveals the banner/hero.
  */
