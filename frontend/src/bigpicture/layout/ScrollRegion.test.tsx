@@ -97,6 +97,28 @@ describe("ScrollRegion", () => {
     expect(screen.getByTestId("scroll-panel").style.overscrollBehavior).toBe("contain");
   });
 
+  it("keeps room for Steam's focus ring inside its own box, on both branches", async () => {
+    // What this pins is the declaration: the ring is drawn by Steam from a root
+    // inside the region and happy-dom lays nothing out, so whether a full-width
+    // row's ring now fits is device-only.
+    const { FOCUS_RING_REACH } = await import("./ScrollRegion");
+    // The fallback's `Focusable` is stubbed with a fixed marker of its own.
+    for (const [panel, marker] of [
+      [StubScrollPanel, "scroll-panel"],
+      [undefined, "focusable"],
+    ] as const) {
+      const ScrollRegion = await loadScrollRegion(panel);
+      render(<ScrollRegion style={{ flex: "1 1 auto" }} />);
+
+      const region = screen.getByTestId(marker);
+      expect(region.style.padding).toBe(`${FOCUS_RING_REACH}px`);
+      // Steam's panel computes `content-box`, under which the room would be
+      // added to the full height the region is given.
+      expect(region.style.boxSizing).toBe("border-box");
+      cleanup();
+    }
+  });
+
   it("keeps the region, its bounds and its place in the focus tree when the probe missed", async () => {
     const ScrollRegion = await loadScrollRegion(undefined);
 

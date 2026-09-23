@@ -40,7 +40,7 @@ import { pluralize } from "../../utils/pluralize";
 import type { SyncProgress, SyncStage } from "../../types";
 import { offsetWithinScroller } from "../../utils/scrollHelpers";
 import { ButtonRow, FLAT_BUTTON, GREEN, MUTED, Muted, SECONDARY_FONT, SectionTitle } from "../layout/pane";
-import { ScrollRegion } from "../layout/ScrollRegion";
+import { FOCUS_RING_REACH, ScrollRegion } from "../layout/ScrollRegion";
 import { InlineBar, PaneRow, TableHeader, TableRow } from "./paneTable";
 import type { SyncPageState } from "./useSyncPage";
 
@@ -57,8 +57,19 @@ const UNIT_REGION_TESTID = "run-units";
 const RUN_PANE: CSSProperties = { display: "flex", flexDirection: "column", height: "100%", minHeight: 0 };
 
 /** `height: auto` overrides the region's own `100%`: inside a column flex that
- *  would measure against the pane rather than against what is left of it. */
-const UNIT_REGION: CSSProperties = { flex: "1 1 auto", height: "auto", minHeight: 0 };
+ *  would measure against the pane rather than against what is left of it.
+ *
+ *  The side margins stand this region in its column's room for the focus ring,
+ *  so the unit table starts where the section title over it does rather than a
+ *  second room further in (`docs/architecture/qam-panel.md` § Room for the
+ *  focus ring). */
+const UNIT_REGION: CSSProperties = {
+  flex: "1 1 auto",
+  height: "auto",
+  minHeight: 0,
+  marginLeft: -FOCUS_RING_REACH,
+  marginRight: -FOCUS_RING_REACH,
+};
 
 /**
  * Put *row* in the middle of *region*, without scrolling past either end.

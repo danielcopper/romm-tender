@@ -38,6 +38,8 @@ import { resetSyncStatsStoreForTests } from "../utils/syncStatsStore";
 import { NEW_ITEM_SEC, UPDATED_ITEM_SEC, COVER_DOWNLOAD_SEC, FETCH_ALLOWANCE_SEC } from "../utils/syncEstimate";
 import { PREVIEW_COUNTDOWN_TICK_MS } from "../utils/previewState";
 import { ENTRY_FOCUS_DELAY_MS } from "../utils/entryFocus";
+import { regionAround } from "../test-utils/regionAround";
+import { FOCUS_RING_REACH } from "./layout/ScrollRegion";
 import type {
   PluginSettings,
   SessionBudgetStatus,
@@ -2247,6 +2249,61 @@ describe("SyncPage", () => {
       const unrecorded = container.querySelector('[data-testid="run-r8"]');
       expect(unrecorded?.textContent).toContain("nothing recorded");
       expect(unrecorded?.textContent).not.toContain("0 platforms");
+    });
+  });
+
+  // ===========================================================================
+  // Room for Steam's focus ring. Steam draws the ring from a root inside each
+  // region and happy-dom lays nothing out, so what is pinned is the room every
+  // region holding a full-width row declares — whether the whole ring shows is
+  // device-only.
+  // ===========================================================================
+  describe("room for Steam's focus ring", () => {
+    it("keeps it in the region of every table on the page: the last runs and the preview", async () => {
+      vi.mocked(backend.getSyncRuns).mockResolvedValue({ success: true, runs: [runRecord({ id: "r1" })] });
+      adoptPreview(
+        preview({
+          summary: summary({
+            new_count: 4,
+            platform_breakdown: [
+              { slug: "psx", name: "PlayStation", synced: true, new_count: 4, changed_count: 0, remove_count: 0 },
+            ],
+          }),
+        }),
+      );
+      const { container } = await renderPage();
+
+      const lastRun = container.querySelector('[data-testid="run-r1"]')!;
+      const previewRow = Array.from(container.querySelectorAll('[data-testid="focusable"]')).find((node) =>
+        node.textContent.startsWith("PlayStation"),
+      )!;
+      for (const row of [lastRun, previewRow]) {
+        expect(regionAround(row).style.padding).toBe(`${FOCUS_RING_REACH}px`);
+      }
+    });
+
+    it("keeps it in the run table's own region, which stands in its column's room rather than inside it", async () => {
+      seedRunUnits([planUnit({ id: 1, name: "PlayStation" })], "run-live");
+      const detach = attachRunUnitsMirror();
+      try {
+        setSyncProgress({ running: true, stage: "applying", step: 1, totalSteps: 1, runId: "run-live" });
+        const { container } = await renderPage();
+
+        // The run table's rings are drawn from its own region's root and clipped
+        // at its box, so the room has to be that region's and not only its
+        // column's.
+        const unitRegion = regionAround(container.querySelector('[data-testid="run-unit-platform-1"]')!);
+        expect(unitRegion.getAttribute("data-testid")).toBe("run-units");
+        expect(unitRegion.style.padding).toBe(`${FOCUS_RING_REACH}px`);
+        // Its column is a region too. The margins put the unit table's room in
+        // the column's, so its rows line up with the section title over them
+        // instead of starting a second room further in.
+        expect(regionAround(unitRegion).style.padding).toBe(`${FOCUS_RING_REACH}px`);
+        expect(unitRegion.style.marginLeft).toBe(`-${FOCUS_RING_REACH}px`);
+        expect(unitRegion.style.marginRight).toBe(`-${FOCUS_RING_REACH}px`);
+      } finally {
+        detach();
+      }
     });
   });
 

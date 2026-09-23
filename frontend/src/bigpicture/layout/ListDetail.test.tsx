@@ -10,7 +10,9 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { useState, type CSSProperties, type FC, type ReactNode } from "react";
 import { ENTRY_STOP_ATTR } from "../../utils/entryFocus";
-import { FOCUS_RING_REACH, ListDetail, type ListDetailItem, type ListDetailProps } from "./ListDetail";
+import { regionAround } from "../../test-utils/regionAround";
+import { ListDetail, type ListDetailItem, type ListDetailProps } from "./ListDetail";
+import { FOCUS_RING_REACH } from "./ScrollRegion";
 
 const PLATFORMS = [
   { id: "n64", name: "Nintendo 64" },
@@ -200,7 +202,7 @@ describe("ListDetail", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it("keeps room for Steam's focus ring around both panes' content, the header inside it with the rows", () => {
+  it("leaves the room for Steam's focus ring to its regions and adds none of its own, the header in it with the rows", () => {
     render(
       <ListDetail
         items={platformItems(() => {})}
@@ -214,11 +216,16 @@ describe("ListDetail", () => {
     // What this pins is the declaration: the ring itself is drawn by Steam and
     // happy-dom lays nothing out, so whether it now fits is device-only.
     const list = screen.getByRole("button", { name: "Enable all" }).parentElement!;
-    expect(list.style.padding).toBe(`${FOCUS_RING_REACH}px`);
-    // The header and every row share that one inset element, so the header's
-    // span moves with the rows' by construction.
+    const detail = screen.getByText("detail for n64").parentElement!;
+    for (const pane of [list, detail]) {
+      // The region each pane sits in keeps the room; a second one here would
+      // inset the pane's content twice.
+      expect(regionAround(pane).style.padding).toBe(`${FOCUS_RING_REACH}px`);
+      expect(pane.style.padding).toBe("");
+    }
+    // The header and every row share one element inside the room, so the
+    // header's span moves with the rows' by construction.
     expect(list.contains(screen.getByRole("button", { name: /Nintendo 64/ }))).toBe(true);
-    expect(screen.getByText("detail for n64").parentElement!.style.padding).toBe(`${FOCUS_RING_REACH}px`);
   });
 
   it("makes a control-less row a focus stop, and selects it on press", () => {

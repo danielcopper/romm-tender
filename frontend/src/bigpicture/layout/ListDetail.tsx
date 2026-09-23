@@ -60,15 +60,6 @@ export interface ListDetailProps {
 // The list takes about a third of the 806 px a wide tab panel offers.
 const LIST_WIDTH = "264px";
 
-/**
- * How far Steam's focus ring reaches past the focused box — a 2 px outline at a
- * 2 px offset — which the scroll region would clip. Detail:
- * `docs/architecture/qam-panel.md` § List and detail.
- */
-export const FOCUS_RING_REACH = 4;
-
-const RING_ROOM = { padding: `${FOCUS_RING_REACH}px` } as const;
-
 export const ListDetail: FC<ListDetailProps> = ({
   items,
   selectedId,
@@ -83,7 +74,7 @@ export const ListDetail: FC<ListDetailProps> = ({
         id: "list",
         width: LIST_WIDTH,
         content: (
-          <Focusable flow-children="vertical" style={RING_ROOM}>
+          <Focusable flow-children="vertical">
             {listHeader}
             {items.map((item) => (
               // The declaration sits on a wrapper rather than on the row itself
@@ -129,11 +120,7 @@ export const ListDetail: FC<ListDetailProps> = ({
         // Focus is in the list when this changes — that is what changed the
         // selection — so nothing focused is unmounted.
         regionKey: selectedId ?? "",
-        content: (
-          <Focusable flow-children="vertical" style={RING_ROOM}>
-            {renderDetail(selectedId)}
-          </Focusable>
-        ),
+        content: <Focusable flow-children="vertical">{renderDetail(selectedId)}</Focusable>,
       },
     ]}
   />

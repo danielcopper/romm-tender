@@ -18,6 +18,11 @@
  * `ScrollingTab`, which the frame does not wrap, so a tab that does not build
  * its own regions does not get this.
  *
+ * The room Steam's focus ring needs is here for the same reason: the ring is
+ * drawn inside the region and clipped at its box, so a row spanning its column
+ * would lose its edges in every region that did not keep the room itself — see
+ * `FOCUS_RING_REACH`.
+ *
  * The panel comes from a webpack probe that can miss, and a page whose regions
  * silently vanish would be worse than one that scrolls without what the panel
  * adds on top — so the fallback keeps the region, its bounds and its place in
@@ -71,6 +76,18 @@ export interface ScrollRegionProps {
 // and took the Back row off the top with it. A controller never showed it,
 // because Steam scrolls a region by moving focus rather than by wheel events.
 const BOUNDS: CSSProperties = { height: "100%", minHeight: 0, overscrollBehavior: "contain" };
+
+/**
+ * How far Steam's focus ring reaches past the focused box — a 2 px outline at a
+ * 2 px offset — which the region would clip. Detail:
+ * `docs/architecture/qam-panel.md` § Building blocks, "Room for the focus ring".
+ */
+export const FOCUS_RING_REACH = 4;
+
+// The region's own padding rather than a padded element inside it, and
+// `border-box` because Steam's panel computes `content-box` — both reasons are
+// in the section the constant above names.
+const RING_ROOM: CSSProperties = { padding: `${FOCUS_RING_REACH}px`, boxSizing: "border-box" };
 
 // Long enough to land after Steam's own focus scroll, which would otherwise
 // undo this one. The same 50 ms every helper in `utils/scrollHelpers.ts` uses,
@@ -170,11 +187,11 @@ export const ScrollRegion: FC<ScrollRegionProps> = ({ style, testId, children })
     // and that is the element the attribute lands on. React delivers it through
     // `focusin`, so it fires for focus landing anywhere inside the region.
     ScrollPanel ? (
-      <ScrollPanel style={{ ...BOUNDS, ...style }} onFocus={revealEdge} {...marker}>
+      <ScrollPanel style={{ ...BOUNDS, ...RING_ROOM, ...style }} onFocus={revealEdge} {...marker}>
         {children}
       </ScrollPanel>
     ) : (
-      <Focusable style={{ ...BOUNDS, overflow: "auto", ...style }} onFocus={revealEdge} {...marker}>
+      <Focusable style={{ ...BOUNDS, ...RING_ROOM, overflow: "auto", ...style }} onFocus={revealEdge} {...marker}>
         {children}
       </Focusable>
     )
