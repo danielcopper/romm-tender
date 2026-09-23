@@ -125,7 +125,7 @@ nothing when it answers nothing.
 That is also why no mode question arises in the check at all. Every entry is answered by something that does not differ
 between Steam's two modes; `findSP` was the only one that did, and it has left the list. (Measured in the desktop client
 over the list as it then stood: twenty-eight of twenty-nine answered and `findSP` alone missed. The desktop client's own
-surface is [#831](https://github.com/danielcopper/decky-romm-sync/issues/831), and nothing here branches on a mode.)
+surface is [#831](https://github.com/danielcopper/romm-tender/issues/831), and nothing here branches on a mode.)
 
 **Whether every search answered and whether the panel may mount are two questions**, and each entry states which one it
 bears on through what its absence costs: the `panel`, a whole `feature` outside it, only its `appearance`, or only a

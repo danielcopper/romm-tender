@@ -1,7 +1,7 @@
 # Save File Extensions
 
 Research results for which save file extensions RetroDECK cores produce, and what our plugin needs to support. This
-informs the implementation of [#196](https://github.com/danielcopper/decky-romm-sync/issues/196).
+informs the implementation of [#196](https://github.com/danielcopper/romm-tender/issues/196).
 
 !!! warning "Historical — the extension table this page designed no longer exists"
 
@@ -88,7 +88,7 @@ These cores all produce `.srm` (and optionally `.rtc`). No additional extensions
 - No `libretro_saves` field in core info -- uses its own VMU format
 - Produces `vmu_save_{A1-D1}.bin` files and `dc_nvmem.bin`
 - Multi-slot VMU support (games can produce multiple `.bin` files)
-- **Action**: Tracked separately in [#151](https://github.com/danielcopper/decky-romm-sync/issues/151). Not included in
+- **Action**: Tracked separately in [#151](https://github.com/danielcopper/romm-tender/issues/151). Not included in
   extension expansion.
 
 #### MAME / FBNeo (Arcade) -- `.nv`

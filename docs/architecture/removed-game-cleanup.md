@@ -196,9 +196,9 @@ never authorizes a delete or a quarantine.
 
 The safe root a source is anchored to is matched **symlink-resolved**, so a root named through a link — `/home` is a
 link to `/var/home` on image-based distributions — still contains the paths recorded under its resolved spelling
-([#1838](https://github.com/danielcopper/decky-romm-sync/issues/1838)). The root only: everything below it is compared
-and walked exactly as spelled, because resolving those components would resolve away the very symlinks the no-follow
-walk exists to refuse.
+([#1838](https://github.com/danielcopper/romm-tender/issues/1838)). The root only: everything below it is compared and
+walked exactly as spelled, because resolving those components would resolve away the very symlinks the no-follow walk
+exists to refuse.
 
 ### What the hashes are for, and where they stop
 
@@ -226,7 +226,7 @@ An identity-only claim is `claim_source(..., digest=False)` and records itself a
 else holds unchanged: staging rename, writer exclusion, mount checks, no-follow traversal, and exact-identity
 revalidation immediately before each unlink. The cost of not drawing this line was measured — hashing turned a 31 GB
 uninstall into roughly 23 minutes of reading, four times over
-([#1664](https://github.com/danielcopper/decky-romm-sync/issues/1664)).
+([#1664](https://github.com/danielcopper/romm-tender/issues/1664)).
 
 Earlier revisions of this page described the last two rows as taking a "presence-or-absence claim". That was never what
 the code did — those sources took a fully content-bound claim, and the phrase described only the **provenance** of the

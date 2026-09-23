@@ -188,13 +188,13 @@ decides on ambiguity" stance:
 ## Roadmap mapping
 
 - **(a)** — nothing to add: the resolver names these files already. Verification tracked in
-  [#237](https://github.com/danielcopper/decky-romm-sync/issues/237).
+  [#237](https://github.com/danielcopper/romm-tender/issues/237).
 - **(b)** — infix-aware per-game discovery (PS1 multi-card, Flycast per-game VMU, 3DO NVRAM); research in
-  [#237](https://github.com/danielcopper/decky-romm-sync/issues/237), implementation under the save-format epic
-  [#255](https://github.com/danielcopper/decky-romm-sync/issues/255).
-- **(c)** — shared/system-dir handling under [#255](https://github.com/danielcopper/decky-romm-sync/issues/255) (save
-  formats), [#151](https://github.com/danielcopper/decky-romm-sync/issues/151) (Dreamcast VMU), and
-  [#129](https://github.com/danielcopper/decky-romm-sync/issues/129) (standalone emulators) — all v2.0.
+  [#237](https://github.com/danielcopper/romm-tender/issues/237), implementation under the save-format epic
+  [#255](https://github.com/danielcopper/romm-tender/issues/255).
+- **(c)** — shared/system-dir handling under [#255](https://github.com/danielcopper/romm-tender/issues/255) (save
+  formats), [#151](https://github.com/danielcopper/romm-tender/issues/151) (Dreamcast VMU), and
+  [#129](https://github.com/danielcopper/romm-tender/issues/129) (standalone emulators) — all v2.0.
 
 ## Evidence level, and where the audit has since disagreed
 

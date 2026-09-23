@@ -95,7 +95,7 @@ consequences follow:
 - **`launchOptions` and `startDir` are appId-safe.** Changing either on an existing shortcut keeps the same `appId`, so
   the shortcut's identity, artwork, collection membership, and `roms.shortcut_app_id` binding all survive.
   `SetAppLaunchOptions` on an existing shortcut is **reliable** — confirmed on hardware in
-  [#827](https://github.com/danielcopper/decky-romm-sync/issues/827) across in-session writes, a Steam restart, and
+  [#827](https://github.com/danielcopper/romm-tender/issues/827) across in-session writes, a Steam restart, and
   removal-churn re-syncs. The plugin uses it directly to bake the launch command in at download-complete and to
   re-resolve paths after a RetroDECK-home migration.
 - **`exe` is appId-safe too, and that is now measured.** Every one of a 826-shortcut library had its `exe` and
@@ -549,14 +549,14 @@ Launches fail or open the wrong thing. The plugin gates the `Set*` calls on an o
 ### Removal-churn can corrupt shortcut state
 
 `SetAppLaunchOptions` on an existing shortcut is reliable (validated in
-[#827](https://github.com/danielcopper/decky-romm-sync/issues/827); see
+[#827](https://github.com/danielcopper/romm-tender/issues/827); see
 [Updating existing shortcuts](#updating-existing-shortcuts)) — the historical "property updates may not persist" warning
 has been narrowed. The remaining hazard is **removal-churn**: adding and removing many shortcuts in one pass can corrupt
 Steam's in-memory shortcut state. A Steam restart clears it. Two things keep churn down. The sync engine processes
 removals before additions, and every launch-options write uses the fire-then-poll `setLaunchOptionsConfirmed` so a
 silently dropped write is observable rather than assumed. And **mass removals are awaited and chunk-paced** through the
 shared `removeShortcutsPaced` helper (`frontend/src/utils/shortcutRemoval.ts`, over `pacedForEach`,
-[#977](https://github.com/danielcopper/decky-romm-sync/issues/977)): every bulk removal path — the DangerZone actions
+[#977](https://github.com/danielcopper/romm-tender/issues/977)): every bulk removal path — the DangerZone actions
 (per-platform, Remove-All-RomM including the live-orphan sweep, and the Remove-Non-Steam bulk action) **and** the
 sync-run stale-shortcut cleanup (`sync_stale`, fired at run finalize) — awaits each `removeShortcut` in sequence and
 yields a 50ms breather every 25 removals, so the CEF renderer never blocks and thousands of removals can't stack as
@@ -582,8 +582,8 @@ delay). The two callers differ only in chunk size:
 ### The apply is chunked; a heartbeat timeout must not discard a chunk's delivered bindings
 
 A unit's emitted shortcuts are split into fixed-size chunks (200,
-[ADR-0023](https://github.com/danielcopper/decky-romm-sync/blob/main/docs/adr/0023-chunked-per-unit-apply.md)); the
-pipeline emits one `sync_apply_unit` per chunk (carrying `chunk_index` / `chunk_count` / `chunk_offset` / `unit_total`,
+[ADR-0023](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0023-chunked-per-unit-apply.md)); the pipeline
+emits one `sync_apply_unit` per chunk (carrying `chunk_index` / `chunk_count` / `chunk_offset` / `unit_total`,
 `shortcuts` = the chunk slice), then waits for the frontend's `report_unit_results` ack — echoing the `chunk_index` back
 — and commits that chunk's `roms` rows durably before emitting the next. A mid-unit crash, cancel, or timeout forfeits
 only the in-flight chunk; every chunk committed before it stays committed. See

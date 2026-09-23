@@ -51,7 +51,7 @@ floor with `reason: "version_error"`.
 
 The `negotiate` / `complete` endpoints are wired into the adapter (`RommApiAdapter.negotiate_sync` /
 `complete_sync_session`), typed by the `models/sync.py` schemas (`ClientSaveState`, `SyncOperation`,
-`SyncNegotiateResponse`, …). As of [#1276](https://github.com/danielcopper/decky-romm-sync/issues/1276) /
+`SyncNegotiateResponse`, …). As of [#1276](https://github.com/danielcopper/romm-tender/issues/1276) /
 [ADR-0017](../adr/0017-client-baseline-detection-authoritative-negotiate-is-transport.md) they are the sync
 **transport**, not the sync **brain**: for a confirmed non-legacy ROM the run opens a negotiate session (per-device
 serialization) but the server's returned `operations` are **discarded**. The client's `compute_sync_action` decides
@@ -295,14 +295,14 @@ deleted after the lock is released.
 - Saves uploaded before v2 (or without the slot parameter) have `slot=null`.
 - These are separate entries from `slot="default"` — different slot = different save.
 - **Legacy `slot:null` is retired as a confirmable target**
-  ([#1276](https://github.com/danielcopper/decky-romm-sync/issues/1276) /
+  ([#1276](https://github.com/danielcopper/romm-tender/issues/1276) /
   [ADR-0017](../adr/0017-client-baseline-detection-authoritative-negotiate-is-transport.md)): a ROM can no longer be
   confirmed onto the legacy slot. Every confirmed slot is now a real, addressable name. The Slot Setup Wizard detects
   legacy saves and offers to **migrate them into a named slot**, never to "track legacy in place."
 - **`switch_slot`, `set_active_slot`, and `delete_slot` reject the legacy bucket too** — not just `confirm_slot_choice`.
   An empty / whitespace / `None` slot name returns `{success: false, reason: "invalid_slot_name", …}` before any lock or
   I/O, so a ROM can never be switched _into_ legacy mode through the slot switcher, and the web-player bucket can never
-  be torn down from the plugin ([#1478](https://github.com/danielcopper/decky-romm-sync/issues/1478)). The SAVES-tab UI
+  be torn down from the plugin ([#1478](https://github.com/danielcopper/romm-tender/issues/1478)). The SAVES-tab UI
   matches this: it no longer offers a "Use Legacy Mode?" action, and the legacy bucket's panel is **fully read-only** —
   its saves stay listable and expandable, but it has neither an "Activate Slot" nor a "Delete Slot" button. The panel is
   also visually **demoted**: muted styling, sorted last (below every named slot, just above "+ New Slot"), and a note
@@ -328,9 +328,9 @@ deleted after the lock is released.
 When the wizard's **Track** action carries a game's legacy (`slot:null`) saves into a chosen named slot, the migration
 is **content-based**, not filename-based. RomM's web player writes legacy saves under timestamped names (e.g.
 `Game [2026-07-19 13-41-44-611].srm`) that never equal the canonical local name, so the old filename-equality migration
-silently left the target slot empty (the [#1498](https://github.com/danielcopper/decky-romm-sync/issues/1498) defect,
-part of the [#1478](https://github.com/danielcopper/decky-romm-sync/issues/1478) triage). Instead, for each **canonical
-local target** (`<rom_name>.<ext>`, the same mapping `switch_slot` uses) the migration:
+silently left the target slot empty (the [#1498](https://github.com/danielcopper/romm-tender/issues/1498) defect, part
+of the [#1478](https://github.com/danielcopper/romm-tender/issues/1478) triage). Instead, for each **canonical local
+target** (`<rom_name>.<ext>`, the same mapping `switch_slot` uses) the migration:
 
 1. Groups the legacy saves by the canonical filename each maps to — independent of the legacy row's own name — and picks
    the **newest** by `updated_at` per target. Two legacy saves that resolve to one target collapse to the newest; the
@@ -389,7 +389,7 @@ The **active-slot matching filter** applies the same funnel from the other direc
 `get_save_status`, and rollback narrow the fetched saves through `domain.save_slot.filter_saves_to_slot`, and
 `switch_slot` client-filters its fetch the same way — every one keeps only `save_in_slot(save, active_slot)`. So a
 legacy `slot:null` save belongs **only** to the legacy slot and is **isolated from every named slot, including
-`"default"`** ([#877](https://github.com/danielcopper/decky-romm-sync/issues/877)): it never enters a named slot's
+`"default"`** ([#877](https://github.com/danielcopper/romm-tender/issues/877)): it never enters a named slot's
 `compute_sync_action` inputs (no spurious download or conflict from a newer legacy head), its status counts, or its slot
 listing, and a brand-new named slot is genuinely empty. The legacy saves stay readable through the legacy bucket
 (`get_slot_saves(rom, "")` and the Setup Wizard's server-slot grouping) — the null bucket is deliberately separate from
@@ -412,9 +412,8 @@ The wizard confirms a slot through `confirm_slot_choice(rom_id, chosen_slot, mig
 
 - `chosen_slot` **must be a real slot name.** A `null`, empty, or whitespace-only value is rejected up front with
   `{success: false, reason: "invalid_slot_name", …}` before the aggregate is touched — legacy confirm is retired, so
-  there is no longer a "confirm legacy mode" branch
-  ([#1276](https://github.com/danielcopper/decky-romm-sync/issues/1276)). `confirm_slot` on the aggregate mirrors this:
-  it raises on an empty/`None` name.
+  there is no longer a "confirm legacy mode" branch ([#1276](https://github.com/danielcopper/romm-tender/issues/1276)).
+  `confirm_slot` on the aggregate mirrors this: it raises on an empty/`None` name.
 - `migrate` is an explicit boolean — the default (`false`) never migrates. When `true`, saves are migrated from
   `migrate_from_slot` (`null` = the legacy `slot:null` **source**) into the named `chosen_slot`, and a server save is
   deleted from the old slot **only if it was successfully re-uploaded** into the new one; non-matching saves are left in
@@ -658,7 +657,7 @@ guard. A crashed emulator or a full disk can leave a **0-byte or truncated** sav
 with a valid-but-wrong content hash, so it reads as a "diverged" edit and would take the row 9 upload. Pushing that
 corrupt file would make it the newest save in the slot, so newest-wins would then propagate the garbage to every other
 device — and once `autocleanup_limit` prunes the older versions, the good copy could age out of recovery. This is the
-upload mirror of the [#965](https://github.com/danielcopper/decky-romm-sync/issues/965) backup-or-confirm invariant: the
+upload mirror of the [#965](https://github.com/danielcopper/romm-tender/issues/965) backup-or-confirm invariant: the
 download-overwrite path already quarantines the local file into `.romm-backup` first, but a blind upload of a
 corrupt-looking local had no equivalent guard.
 
@@ -686,10 +685,10 @@ The content hash breaks the tie:
 - **11b — the content differs.** We genuinely hold different local bytes than the server head, with no baseline to say
   which is newer. The earlier design silently `Download`ed here, quarantining the local bytes into `.romm-backup` on the
   bet that another device's work mattered more — a silent overwrite of possibly-newer local progress. Under
-  [#1276](https://github.com/danielcopper/decky-romm-sync/issues/1276) this is a **`Conflict`** instead: the user
-  decides via Keep Local / Use Server, the same exit rows 6c and 12b take. When the server save carries no
-  `content_hash` (older / migrated saves) the equality fails closed to this conflict — the safe default. mtime is never
-  trusted to break this tie.
+  [#1276](https://github.com/danielcopper/romm-tender/issues/1276) this is a **`Conflict`** instead: the user decides
+  via Keep Local / Use Server, the same exit rows 6c and 12b take. When the server save carries no `content_hash` (older
+  / migrated saves) the equality fails closed to this conflict — the safe default. mtime is never trusted to break this
+  tie.
 
 ### Why row 12 splits into download (12a) vs conflict (12b)
 
@@ -703,8 +702,8 @@ The content hash breaks the tie, mirroring row 11's split:
 - **12a — `server.content_hash == local_hash`.** The bytes on disk already equal the moved-past head, so adopting it is
   risk-free by construction (nothing differs to lose). We `Download(picked)`; the normal download bookkeeping
   re-establishes the baseline and `is_current`, so the next sync is a plain `Skip`. This is the
-  [#1480](https://github.com/danielcopper/decky-romm-sync/issues/1480) fix — before it, this collision surfaced a
-  needless conflict modal.
+  [#1480](https://github.com/danielcopper/romm-tender/issues/1480) fix — before it, this collision surfaced a needless
+  conflict modal.
 - **12b — the content differs.** Both sides genuinely hold unreconciled bytes → **`Conflict`**, the user decides via
   Keep Local / Use Server. Unchanged from before.
 
@@ -742,9 +741,9 @@ cross-device. `do_upload_save` compares the POST response against the pre-upload
 (`_dedup_returned_non_head`: the response is a pre-existing snapshot member that is not the newest) and raises
 `RommConflictError` **before** any baseline / confirm / own-upload write, so the same backstop below surfaces the true
 state and nothing stamps currency on the non-head save
-([#1482](https://github.com/danielcopper/decky-romm-sync/issues/1482)). An **empty** planned slot (no head to bypass —
-the empty-slot race) keeps today's behavior: the dedup response holds our content, so it is recorded as the baseline and
-any concurrent newer head is caught on the next sync's fresh list.
+([#1482](https://github.com/danielcopper/romm-tender/issues/1482)). An **empty** planned slot (no head to bypass — the
+empty-slot race) keeps today's behavior: the dedup response holds our content, so it is recorded as the baseline and any
+concurrent newer head is caught on the next sync's fresh list.
 
 On a 409 (or a client-detected dedup-to-non-head) the executor re-fetches the slot, picks the newest save in the
 canonical group, and resolves through the `ResolveUploadConflictFn` seam — the core's second entry point, reading the
@@ -769,8 +768,7 @@ safety: an automatic upload never blindly overwrites a save the device isn't cur
 
 **`overwrite=true` is reserved for the explicit `keep_local` resolution.** The only caller that sets it is
 `_resolve_conflict_keep_local` — when the user has chosen to overwrite the server head, the re-POST carries
-`overwrite=true` to bypass the 409 gate deliberately
-([#1276](https://github.com/danielcopper/decky-romm-sync/issues/1276) /
+`overwrite=true` to bypass the 409 gate deliberately ([#1276](https://github.com/danielcopper/romm-tender/issues/1276) /
 [ADR-0017](../adr/0017-client-baseline-detection-authoritative-negotiate-is-transport.md)).
 
 ## Slot Setup Wizard
@@ -821,7 +819,7 @@ install**, **config reset** (explicit / factory / component update / multi-user 
 — **not** on every game launch or routine boot. Between those events `retroarch.cfg` is user-owned and edits persist, so
 the plugin reads the live cfg for save **sorting** to stay correct. The one key it does not yet read —
 `savefiles_in_content_dir` — is therefore a **persistent** blind spot until the user toggles it back or a reset/install
-re-copies the default cfg ([#239](https://github.com/danielcopper/decky-romm-sync/issues/239)).
+re-copies the default cfg ([#239](https://github.com/danielcopper/romm-tender/issues/239)).
 
 _Verified against RetroDECK source on 2026-06-09: `RetroDECK/components` `retroarch/component_prepare.sh` sets the key
 only in its `reset` and `postmove` branches, and every `prepare_component` call in `RetroDECK/RetroDECK` uses action
@@ -869,7 +867,7 @@ as the ROM file** (e.g. `roms/gba/Game/Game.srm`) instead of the configured `sav
 directory at all.
 
 **The plugin detects this configuration and disables save sync for it — it does not silently miss saves
-([#239](https://github.com/danielcopper/decky-romm-sync/issues/239)).** `adapters/retroarch_config.py` reads all three
+([#239](https://github.com/danielcopper/romm-tender/issues/239)).** `adapters/retroarch_config.py` reads all three
 layout keys and models them as a `SaveLayout` value object (`domain/save_layout.py`): `ContentDir` when
 `savefiles_in_content_dir=true`, otherwise `InSaveDir(sort_by_content, sort_by_core)`. When the layout is `ContentDir`,
 the four save-sync entry points (`pre_launch_sync`, `post_exit_sync`, `sync_rom_saves`, `sync_all_saves`) return a
@@ -894,11 +892,11 @@ different things.
 | Sort Saves Into Folders by Content Directory | `sort_savefiles_by_content_enable` | **Layout inside `savefile_directory`** — group by ROM parent folder name. Plugin handles both values.                      |
 | Sort Saves Into Folders by Core Name         | `sort_savefiles_enable`            | **Layout inside `savefile_directory`** — further group by RetroArch core name. Plugin handles both values.                 |
 
-**Status**: detect-and-warn is **implemented** ([#239](https://github.com/danielcopper/decky-romm-sync/issues/239)) —
-the layout is read into `SaveLayout`, `ContentDir` hard-gates the four sync entry points, and the play-section banner
+**Status**: detect-and-warn is **implemented** ([#239](https://github.com/danielcopper/romm-tender/issues/239)) — the
+layout is read into `SaveLayout`, `ContentDir` hard-gates the four sync entry points, and the play-section banner
 surfaces it. Full support — resolving save paths relative to the ROM's actual on-disk location — remains deferred to the
-multi-emulator save work ([#129](https://github.com/danielcopper/decky-romm-sync/issues/129) /
-[#255](https://github.com/danielcopper/decky-romm-sync/issues/255)).
+multi-emulator save work ([#129](https://github.com/danielcopper/romm-tender/issues/129) /
+[#255](https://github.com/danielcopper/romm-tender/issues/255)).
 
 ## Save-Sort Migration: Automatic Detection and Conflict Resolution
 
@@ -1220,8 +1218,8 @@ a version history. Per-file rollback would revert one component and leave the si
 incoherent save.
 
 Until grouped save-states with atomic set rollback land
-([#908](https://github.com/danielcopper/decky-romm-sync/issues/908)), the plugin **detects multi-file slots and
-suppresses version history + rollback** for them:
+([#908](https://github.com/danielcopper/romm-tender/issues/908)), the plugin **detects multi-file slots and suppresses
+version history + rollback** for them:
 
 - `get_save_status` carries `multi_file: bool`, `component_files: list[str]` (the N filenames, sorted), and
   `rollback_supported: bool`. Detection counts the distinct canonical target filenames the active slot resolves to
@@ -1529,7 +1527,7 @@ If the RomM server is unreachable when a sync runs:
 
 `pre_launch_sync` and `post_exit_sync` pre-probe the server with a single `heartbeat` call before doing any sync work. A
 failure here is **classified by type**, not collapsed onto a blanket "Server offline"
-([#971](https://github.com/danielcopper/decky-romm-sync/issues/971)):
+([#971](https://github.com/danielcopper/romm-tender/issues/971)):
 
 - A genuine reachability failure (`RommConnectionError` / `RommTimeoutError`) returns the canonical `SERVER_UNREACHABLE`
   shape with `message: "Server offline"` **plus** the additive `offline: true` flag the launch path routes on

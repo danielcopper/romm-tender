@@ -55,7 +55,7 @@ The principle has three parts:
 2. **No cross-contamination.** When a parser cannot answer a question — the file is missing, a field is absent, the
    value is malformed — the parser returns `None` (or raises), it does **not** defer to another parser. Cross-parser
    fallbacks are how ES-DE's display label ended up being used as a RetroArch save directory name (the underlying bug of
-   [#208](https://github.com/danielcopper/decky-romm-sync/issues/208)). Each source owns its own answer or admits it has
+   [#208](https://github.com/danielcopper/romm-tender/issues/208)). Each source owns its own answer or admits it has
    none.
 
 3. **Services choose the parser per flow.** "Which core is active for this ROM?" is an ES-DE question. "What does
@@ -66,7 +66,7 @@ The principle has three parts:
 ### Worked example: ES-DE label vs RetroArch corename
 
 The concrete case that motivated this principle, and the bug in
-[#208](https://github.com/danielcopper/decky-romm-sync/issues/208):
+[#208](https://github.com/danielcopper/romm-tender/issues/208):
 
 - `AtlasCatalogueAdapter` (asks the resolver, which reads ES-DE) returns a tuple `(core_so, label)` for "which core is
   active?". `label` is ES-DE's **display string** — e.g. `"Snes9x - Current"`. It is a UI-level name, chosen by the
@@ -268,8 +268,8 @@ Every root is returned **symlink-resolved**, whichever of the two sources answer
 are asked about are recorded resolved wherever `lib/path_safety.safe_join` built them — so a root left as
 `retrodeck.json` spells it makes one directory look like two on any system where `/home` is a link to `/var/home`
 (Bazzite, Silverblue, and the other image-based distributions), and uninstalling a downloaded ROM fails with
-`Path is outside its safe root` ([#1838](https://github.com/danielcopper/decky-romm-sync/issues/1838)). `realpath` on a
-path that is not on disk resolves as far as it can instead of raising, so the getters stay best-effort.
+`Path is outside its safe root` ([#1838](https://github.com/danielcopper/romm-tender/issues/1838)). `realpath` on a path
+that is not on disk resolves as far as it can instead of raising, so the getters stay best-effort.
 
 `retrodeck_home()` is not a safe root, and it is resolved for a different reason: `MigrationService` stores it and diffs
 the stored value against the live one on every startup to decide whether RetroDECK moved. Resolving one side is not
@@ -290,12 +290,11 @@ nothing.
 Three user-visible spellings change with this: the `root_missing` banner's "Expected at:" line reports `resolved_home`,
 and the migration-blocked page renders `old_path` and `new_path`, both of which are now the resolved markers.
 
-Silently operating on the wrong root is the failure mode
-[#948](https://github.com/danielcopper/decky-romm-sync/issues/948) addresses. The fix keeps the getters
-silent-and-best-effort but pairs them with a loud health signal that the frontend surfaces as a QAM banner.
-`RetroDeckPathsAdapter.config_health()` returns a `RetroDeckConfigHealth` enum (`backend/lib/retrodeck_health.py` —
-placed in `lib/` because the adapter, the `RetroDeckPaths` Protocol, and `main.py` all import it, and import-linter
-forbids the adapter↔service directions). The four states:
+Silently operating on the wrong root is the failure mode [#948](https://github.com/danielcopper/romm-tender/issues/948)
+addresses. The fix keeps the getters silent-and-best-effort but pairs them with a loud health signal that the frontend
+surfaces as a QAM banner. `RetroDeckPathsAdapter.config_health()` returns a `RetroDeckConfigHealth` enum
+(`backend/lib/retrodeck_health.py` — placed in `lib/` because the adapter, the `RetroDeckPaths` Protocol, and `main.py`
+all import it, and import-linter forbids the adapter↔service directions). The four states:
 
 | State          | When                                                                                         | Loud? | Rationale                                                                                                                                                                     |
 | -------------- | -------------------------------------------------------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -329,8 +328,8 @@ The gap below is the consumer-side cautionary tale that motivated adding this se
 
 ### Case study: SaveService missed the RetroArch corename after #208
 
-[#208](https://github.com/danielcopper/decky-romm-sync/issues/208) introduced the `RetroArchCoreInfoAdapter` precisely
-to fix the "ES-DE label leaks into RetroArch save path" bug described in the
+[#208](https://github.com/danielcopper/romm-tender/issues/208) introduced the `RetroArchCoreInfoAdapter` precisely to
+fix the "ES-DE label leaks into RetroArch save path" bug described in the
 [Worked example](#worked-example-es-de-label-vs-retroarch-corename) above. That PR correctly updated `MigrationService`
 to ask ES-DE which core is active and then ask the RetroArch `.info` parser for the canonical `corename`. The parser was
 written, the protocol was defined, and the migration flow was fixed.
@@ -352,8 +351,8 @@ author only updated the consumer that the issue explicitly named and did not aud
 mistake. That omission is exactly what the "one parser per source" principle is supposed to prevent — but the principle
 had been documented only as parser-side guidance and never applied as an audit criterion against the existing codebase.
 
-[#232](https://github.com/danielcopper/decky-romm-sync/issues/232) closed the SaveService gap and added this section to
-make the consumer-compliance dimension explicit.
+[#232](https://github.com/danielcopper/romm-tender/issues/232) closed the SaveService gap and added this section to make
+the consumer-compliance dimension explicit.
 
 ### Consumer checklist for reviewers
 
@@ -382,10 +381,10 @@ in the question-to-source mapping table, walk each call site with these question
 
 ### Historical examples
 
-| Issue                                                              | Parser state                                                            | Consumer state                                                                                                                                   | Resolution                                                                                                                                            |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [#208](https://github.com/danielcopper/decky-romm-sync/issues/208) | `.info` parser did not exist; ES-DE label was the only core name source | `MigrationService` used the ES-DE label as the RetroArch save subdir name                                                                        | Add `RetroArchCoreInfoAdapter`, resolve corename from `.info`, wire into migration                                                                    |
-| [#232](https://github.com/danielcopper/decky-romm-sync/issues/232) | `.info` parser correct (from #208)                                      | `SaveService._get_rom_save_info` still called `resolve_save_dir` with `core_name=None`, so `sort_by_core` was a silent no-op for every save flow | Thread `get_core_name` into `SaveService`, extract `_resolve_retroarch_corename` helper mirroring `MigrationService`, warn+fallback when unresolvable |
+| Issue                                                          | Parser state                                                            | Consumer state                                                                                                                                   | Resolution                                                                                                                                            |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [#208](https://github.com/danielcopper/romm-tender/issues/208) | `.info` parser did not exist; ES-DE label was the only core name source | `MigrationService` used the ES-DE label as the RetroArch save subdir name                                                                        | Add `RetroArchCoreInfoAdapter`, resolve corename from `.info`, wire into migration                                                                    |
+| [#232](https://github.com/danielcopper/romm-tender/issues/232) | `.info` parser correct (from #208)                                      | `SaveService._get_rom_save_info` still called `resolve_save_dir` with `core_name=None`, so `sort_by_core` was a silent no-op for every save flow | Thread `get_core_name` into `SaveService`, extract `_resolve_retroarch_corename` helper mirroring `MigrationService`, warn+fallback when unresolvable |
 
 Both issues are parser-side fine in the sense that the parser itself returned the right answer for the question asked.
 They are consumer-side bugs: the consumer either asked the wrong parser or forgot to ask the right one. The checklist
