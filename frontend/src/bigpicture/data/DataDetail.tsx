@@ -163,7 +163,23 @@ const RomFilesPane: FC<{ state: DataPageState }> = ({ state }) => {
 
 const GridImagesPane: FC<{ state: DataPageState }> = ({ state }) => {
   const syncRunning = useSyncRunning();
-  const scanned = state.orphanedGridImages;
+  const read = state.orphanedGridImages;
+  const found = read.state === "answered" ? read.value : null;
+  const scanning = read.state === "reading";
+  const figures = (): string | null => {
+    switch (read.state) {
+      case "not-asked":
+        return "Not scanned yet";
+      case "reading":
+        // The button says it is scanning; a line saying so too would repeat it.
+        return null;
+      case "failed":
+        return "The scan failed — press Scan for orphaned images to try again.";
+      case "answered":
+        return `${pluralize(read.value, "orphaned image")} found`;
+    }
+  };
+  const line = figures();
   return (
     <>
       <Muted>
@@ -171,20 +187,20 @@ const GridImagesPane: FC<{ state: DataPageState }> = ({ state }) => {
         shortcut no longer exists. Images of games still in your library — including games this plugin did not add — are
         kept.
       </Muted>
-      <Figures>{scanned === null ? "Not scanned yet" : `${pluralize(scanned, "orphaned image")} found`}</Figures>
+      {line !== null && <Figures>{line}</Figures>}
       <ButtonRow padding="2px 16px 6px">
-        {scanned === null || scanned === 0 ? (
+        {found === null || found === 0 ? (
           <DialogButton
             style={FLAT_BUTTON}
-            disabled={state.busy || syncRunning}
+            disabled={state.busy || syncRunning || scanning}
             onClick={() => detach(state.cleanupGridImages(false))}
           >
-            Scan for orphaned images
+            {scanning ? "Scanning…" : "Scan for orphaned images"}
           </DialogButton>
         ) : (
           <ConfirmButton
-            label={`Remove ${pluralize(scanned, "orphaned image")}`}
-            confirmLabel={`Remove ${pluralize(scanned, "image")}?`}
+            label={`Remove ${pluralize(found, "orphaned image")}`}
+            confirmLabel={`Remove ${pluralize(found, "image")}?`}
             disabled={state.busy || syncRunning}
             onConfirm={() => detach(state.cleanupGridImages(true))}
           />
@@ -380,7 +396,8 @@ const NonSteamPane: FC<{ state: DataPageState }> = ({ state }) => {
  *
  * The count costs a server round trip, so it is the scan's answer rather than
  * something the page opens with, and the section that runs the scan is what
- * reports it.
+ * reports where it stands. That section's button says it is scanning; this
+ * pane adds only the retry a failed scan needs.
  */
 const RemovedGamesPane: FC<{ state: DataPageState }> = ({ state }) => (
   <>
@@ -388,7 +405,10 @@ const RemovedGamesPane: FC<{ state: DataPageState }> = ({ state }) => (
       Games whose entry is gone from your RomM server while this device still holds their shortcut, downloaded files and
       saves. The review below scans for them and shows what removing each one would take with it.
     </Muted>
-    <RemovedGamesCleanupSection onScanned={state.recordRemovedGamesScan} />
+    {state.removedGames.state === "failed" && (
+      <Figures>The scan failed — press Clean Up Removed RomM Games to try again.</Figures>
+    )}
+    <RemovedGamesCleanupSection onScanRead={state.recordRemovedGamesScan} />
   </>
 );
 

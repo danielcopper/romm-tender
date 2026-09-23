@@ -37,6 +37,7 @@ import {
 import { scrollNearestToTop } from "../utils/scrollHelpers";
 import { getSyncProgress, onSyncProgressChange } from "../utils/syncProgress";
 import { withTimeout } from "../utils/withTimeout";
+import type { PageRead } from "./data/useDataPage";
 
 const PAGE_SIZE = 50;
 const SELECTION_PAGE_SIZE = 100;
@@ -766,21 +767,29 @@ const CleanupModal: FC<CleanupModalProps> = ({ initial, scope, romId, closeModal
 /**
  * Scan for removed RomM games and open the review over what it found.
  *
- * Answers whether there was anything to review. *onScanned* is told the count
- * either way, including zero: a caller showing that number has to hear a scan
- * that found nothing as readily as one that found something.
+ * Answers whether there was anything to review. *onScanRead* is told where the
+ * scan stands at every step — reading as it starts, then the count either way,
+ * including zero, or failed — so a caller showing that number never has to
+ * infer a state from silence.
  */
 export async function openRemovedGamesCleanupModal(
   romId?: number,
-  onScanned?: (count: number) => void,
+  onScanRead?: (read: PageRead<number>) => void,
 ): Promise<boolean> {
   const scope: PruneScope = romId === undefined ? "bulk" : "rom";
-  const result = await withTimeout(
-    getPrunePreview(requestFor(scope, romId ?? null, null, 0)),
-    PRUNE_CALLABLE_TIMEOUT_MS,
-  );
-  if (!result.success) throw new Error(result.message ?? "Cleanup scan failed.");
-  onScanned?.(result.total ?? 0);
+  onScanRead?.({ state: "reading" });
+  let result: PrunePreviewResult;
+  try {
+    result = await withTimeout(getPrunePreview(requestFor(scope, romId ?? null, null, 0)), PRUNE_CALLABLE_TIMEOUT_MS);
+  } catch (e) {
+    onScanRead?.({ state: "failed" });
+    throw e;
+  }
+  if (!result.success) {
+    onScanRead?.({ state: "failed" });
+    throw new Error(result.message ?? "Cleanup scan failed.");
+  }
+  onScanRead?.({ state: "answered", value: result.total ?? 0 });
   if ((result.total ?? 0) === 0) return false;
   // Without a preview id nothing can admit this run's frames — surface the
   // malformed response rather than opening a modal that can never report.
@@ -790,7 +799,7 @@ export async function openRemovedGamesCleanupModal(
   return true;
 }
 
-export const RemovedGamesCleanupSection: FC<{ onScanned?: (count: number) => void }> = ({ onScanned }) => {
+export const RemovedGamesCleanupSection: FC<{ onScanRead?: (read: PageRead<number>) => void }> = ({ onScanRead }) => {
   const [scanning, setScanning] = useState(false);
   const [cancelRequestedFor, setCancelRequestedFor] = useState<string | null>(null);
   const [cancelStatus, setCancelStatus] = useState<string | null>(null);
@@ -824,7 +833,7 @@ export const RemovedGamesCleanupSection: FC<{ onScanned?: (count: number) => voi
   const scan = async (): Promise<void> => {
     setScanning(true);
     try {
-      if (!(await openRemovedGamesCleanupModal(undefined, onScanned))) {
+      if (!(await openRemovedGamesCleanupModal(undefined, onScanRead))) {
         showToast("No removed RomM entries were found.");
       }
     } catch (e) {

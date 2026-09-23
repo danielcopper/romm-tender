@@ -1444,11 +1444,12 @@ reason Settings needs none: six rows that each name a thing are their own order.
 | Gone from RomM        | `scan` until asked — the server round trip                      | Review, which opens the dialog below            |
 | Recovery bundles      | how many are sealed and what they take                          | the bundles one by one, and nothing to press    |
 
-**A figure the page reads when it opens has one face per state in its row's count slot**: a spinner while it is still
-being read, a dash where the read failed, the figure once it is answered. The pane under a failed read says what could
-not be read and to open the page again, where one still being read says `Reading…`; neither borrows the other's words.
-The two scan rows below are outside that rule: they show `scan` until a press answers them, and a scan that fails says
-so in the pane's status line.
+**Every figure is reading, failed or answered, and its row's count slot shows which**: a spinner while it is being read,
+a dash where the read failed, the number once it is answered. The two scan rows add a fourth state before those three,
+not asked, shown as `scan`. A pane never borrows one state's words for another: under a read still in flight it says
+`Reading…` (a scan's own button says it is scanning and cannot be pressed again), and under a failed one it says what
+could not be read and how to try again — reopening the page for a figure read on arrival, pressing the scan button again
+for a scan.
 
 **A number that costs a round trip or a backend scan sits behind a press.** Focus selects on this layout, so a reading
 that rode on the selection would fire under every row the stick passes — a local scan of the grid directory for one row,

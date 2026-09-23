@@ -893,6 +893,64 @@ describe("DataManagementPage", () => {
     });
   });
 
+  describe("a scan row, once pressed, reads like every other figure", () => {
+    it("shows a spinner in the Grid images row and a dead Scanning… button while its scan runs", async () => {
+      vi.mocked(backend.cleanupOrphanedGridImages).mockReturnValue(new Promise(() => {}));
+      const view = await pageOn("grid-images");
+
+      await press(button(view, "Scan for orphaned images"));
+
+      const row = view.getByTestId("data-row-grid-images");
+      expect(within(row).queryByTestId("spinner")).not.toBeNull();
+      expect(row.textContent).not.toContain("scan");
+      expect(row.textContent).not.toContain("—");
+      expect(button(view, "Scanning…").disabled).toBe(true);
+    });
+
+    it("shows a dash and the retry line when the Grid images scan rejects", async () => {
+      vi.mocked(backend.cleanupOrphanedGridImages).mockRejectedValue(new Error("offline"));
+      const view = await pageOn("grid-images");
+
+      await press(button(view, "Scan for orphaned images"));
+
+      expect(view.getByTestId("data-row-grid-images").textContent).toContain("—");
+      expect(view.container.textContent).toContain("The scan failed — press Scan for orphaned images to try again.");
+      // The button is the retry, and it is live again.
+      expect(button(view, "Scan for orphaned images").disabled).toBe(false);
+    });
+
+    it("counts a Grid images scan that cannot read Steam's shortcut list as failed", async () => {
+      vi.mocked(getAllNonSteamShortcutAppIds).mockReturnValue(null);
+      const view = await pageOn("grid-images");
+
+      await press(button(view, "Scan for orphaned images"));
+
+      expect(view.getByTestId("data-row-grid-images").textContent).toContain("—");
+    });
+
+    it("shows a spinner in the Gone from RomM row while its scan runs", async () => {
+      vi.mocked(backend.getPrunePreview).mockReturnValue(new Promise(() => {}));
+      const view = await pageOn("removed-games");
+
+      await press(button(view, "Clean Up Removed RomM Games"));
+
+      const row = view.getByTestId("data-row-removed-games");
+      expect(within(row).queryByTestId("spinner")).not.toBeNull();
+      expect(row.textContent).not.toContain("scan");
+      expect(button(view, "Scanning...").disabled).toBe(true);
+    });
+
+    it("shows a dash and the retry line when the Gone from RomM scan rejects", async () => {
+      vi.mocked(backend.getPrunePreview).mockRejectedValue(new Error("offline"));
+      const view = await pageOn("removed-games");
+
+      await press(button(view, "Clean Up Removed RomM Games"));
+
+      expect(view.getByTestId("data-row-removed-games").textContent).toContain("—");
+      expect(view.container.textContent).toContain("The scan failed — press Clean Up Removed RomM Games to try again.");
+    });
+  });
+
   describe("Gone from RomM carries what its scan found", () => {
     it("reads `scan` until pressed, then keeps the number for the visit", async () => {
       vi.mocked(backend.getPrunePreview).mockResolvedValue({
@@ -978,13 +1036,15 @@ describe("DataManagementPage", () => {
       expect(view.getByTestId("data-row-removed-games").textContent).toContain("3");
     });
 
-    it("leaves the row unscanned when the scan fails", async () => {
+    it("shows a dash and the retry line when the scan answers a failure", async () => {
       vi.mocked(backend.getPrunePreview).mockResolvedValue({ success: false, message: "offline" } as never);
       const view = await pageOn("removed-games");
 
       await press(button(view, "Clean Up Removed RomM Games"));
 
-      expect(view.getByTestId("data-row-removed-games").textContent).toContain("scan");
+      expect(view.getByTestId("data-row-removed-games").textContent).toContain("—");
+      expect(view.getByTestId("data-row-removed-games").textContent).not.toContain("scan");
+      expect(view.container.textContent).toContain("The scan failed — press Clean Up Removed RomM Games to try again.");
     });
   });
 
@@ -1034,7 +1094,10 @@ describe("DataManagementPage", () => {
       await press(button(view, "Scan for orphaned images"));
 
       expect(view.getByTestId("status-grid-images").textContent).toBe("A sync is running");
-      expect(view.getByTestId("data-row-grid-images").textContent).toContain("scan");
+      // A refused scan is a failed one: the row shows a dash and the button is
+      // the retry.
+      expect(view.getByTestId("data-row-grid-images").textContent).toContain("—");
+      expect(view.container.textContent).toContain("The scan failed — press Scan for orphaned images to try again.");
     });
 
     it("surfaces the incomplete_scan refusal on the removal", async () => {
@@ -1304,23 +1367,27 @@ describe("DataManagementPage", () => {
   });
 
   describe("the non-Steam enumeration", () => {
-    it("warns and lists nothing when collectionStore is undefined", async () => {
+    it("warns and shows a dash and the failure line when collectionStore is undefined", async () => {
       vi.stubGlobal("collectionStore", undefined);
       const logSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
       const view = await pageOn("non-steam");
 
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("collectionStore not available"));
-      expect(view.container.textContent).toContain("No other non-Steam games found");
+      expect(view.getByTestId("data-row-non-steam").textContent).toContain("—");
+      expect(view.container.textContent).toContain("Steam's shortcut list could not be read");
+      expect(view.container.textContent).not.toContain("No other non-Steam games found");
       logSpy.mockRestore();
     });
 
-    it("warns and lists nothing when deckDesktopApps.apps is missing", async () => {
+    it("warns and shows a dash and the failure line when deckDesktopApps.apps is missing", async () => {
       vi.stubGlobal("collectionStore", { deckDesktopApps: undefined, userCollections: [] });
       const logSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
       const view = await pageOn("non-steam");
 
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("deckDesktopApps.apps not available"));
-      expect(view.container.textContent).toContain("No other non-Steam games found");
+      expect(view.getByTestId("data-row-non-steam").textContent).toContain("—");
+      expect(view.container.textContent).toContain("Steam's shortcut list could not be read");
+      expect(view.container.textContent).not.toContain("No other non-Steam games found");
       logSpy.mockRestore();
     });
 

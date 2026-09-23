@@ -23,14 +23,15 @@ import { LoadingRow } from "./LoadingRow";
 import { MUTED, ROW_MARKER_GAP, ROW_MARKER_WIDTH, SECONDARY_FONT, SELECTION_ACCENT } from "./layout/pane";
 import { DataDetail } from "./data/DataDetail";
 import { DATA_ROWS, asDataRowId, type DataRowId } from "./data/rows";
-import { useDataPage, type DataPageState, type PageRead } from "./data/useDataPage";
+import { useDataPage, type DataPageState, type PageRead, type ScannedCount } from "./data/useDataPage";
 
 /**
  * What a row's count slot says: a figure, `—` for a read that failed, or `null`
  * while the read is still in flight, which the slot draws as a spinner.
  *
  * A figure that costs a round trip or a backend scan reads `scan` until the
- * reader asks for it, because focus selects on this layout: a figure fetched on
+ * reader asks for it, and from the press on is read like any other figure,
+ * because focus selects on this layout: a figure fetched on
  * selection would put that round trip under every row the stick passes. Grid
  * images keeps what its scan found for the rest of the visit; Gone from RomM
  * keeps it until a cleanup run finishes, which is what makes the number wrong,
@@ -45,11 +46,11 @@ function rowCount(id: DataRowId, state: DataPageState): string | null {
     case "rom-files":
       return figure(state.inventory, (inventory) => inventory.installed_roms);
     case "grid-images":
-      return state.orphanedGridImages === null ? "scan" : `${state.orphanedGridImages}`;
+      return scanned(state.orphanedGridImages);
     case "non-steam":
       return figure(state.foreignApps, (apps) => apps.length);
     case "removed-games":
-      return state.removedGames === null ? "scan" : `${state.removedGames}`;
+      return scanned(state.removedGames);
     case "recovery-bundles":
       return figure(state.inventory, (inventory) => inventory.recovery_bundles);
   }
@@ -59,6 +60,10 @@ function figure<T>(read: PageRead<T>, count: (value: T) => number): string | nul
   if (read.state === "reading") return null;
   if (read.state === "failed") return "—";
   return `${count(read.value)}`;
+}
+
+function scanned(read: ScannedCount): string | null {
+  return read.state === "not-asked" ? "scan" : figure(read, (count) => count);
 }
 
 const RowLabel: FC<{ label: string; count: string | null; selected: boolean }> = ({ label, count, selected }) => (

@@ -132,13 +132,15 @@ const READING = { state: "reading" } as const;
 const FAILED = { state: "failed" } as const;
 
 /**
- * A population figure that costs a round trip: `null` until the reader asks for
- * it, a number once an answer has come back.
+ * A population figure that costs a round trip: not asked until the reader
+ * presses for it, then read like any other figure.
  *
  * Focus selects on this layout, so a figure fetched on selection would put a
  * round trip under every row the stick passes.
  */
-export type ScannedCount = number | null;
+export type ScannedCount = { state: "not-asked" } | PageRead<number>;
+
+const NOT_ASKED = { state: "not-asked" } as const;
 
 export interface DataPageState {
   /** Bound RomM shortcuts, from the same stats read Main makes. */
@@ -189,8 +191,8 @@ export interface DataPageState {
   cleanupGridImages: (execute: boolean) => Promise<void>;
   removeNonSteamApps: (apps: NonSteamApp[]) => Promise<void>;
   persistWhitelist: (disabled: string[], custom: string[]) => void;
-  /** What a Gone-from-RomM scan found, reported by the section that ran it. */
-  recordRemovedGamesScan: (count: number) => void;
+  /** Where a Gone-from-RomM scan stands, reported by the section that runs it. */
+  recordRemovedGamesScan: (read: PageRead<number>) => void;
 }
 
 export function useDataPage(): DataPageState {
@@ -200,8 +202,8 @@ export function useDataPage(): DataPageState {
   const [disabledDefaults, setDisabledDefaults] = useState<string[]>([]);
   const [customNames, setCustomNames] = useState<string[]>([]);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [orphanedGridImages, setOrphanedGridImages] = useState<ScannedCount>(null);
-  const [removedGames, setRemovedGames] = useState<ScannedCount>(null);
+  const [orphanedGridImages, setOrphanedGridImages] = useState<ScannedCount>(NOT_ASKED);
+  const [removedGames, setRemovedGames] = useState<ScannedCount>(NOT_ASKED);
   // What Steam could be made to say about each of its non-Steam entries, read
   // by exe rather than from the database: a crashed run can leave one of ours
   // in Steam with no binding, and a removal that took it for a foreign entry
@@ -222,13 +224,13 @@ export function useDataPage(): DataPageState {
     try {
       if (typeof collectionStore === "undefined") {
         logWarn("collectionStore not available");
-        setNonSteamApps({ state: "answered", value: [] });
+        setNonSteamApps(FAILED);
         return;
       }
       const deckApps = collectionStore.deckDesktopApps?.apps;
       if (!deckApps) {
         logWarn("deckDesktopApps.apps not available");
-        setNonSteamApps({ state: "answered", value: [] });
+        setNonSteamApps(FAILED);
         return;
       }
       logInfo(`deckDesktopApps.apps size: ${deckApps.size}`);
@@ -320,7 +322,7 @@ export function useDataPage(): DataPageState {
     // worse than none: drop back to unscanned so the row asks to be scanned
     // again rather than reporting what the run has just removed.
     const unsubscribePrune = onPruneStateChange(() => {
-      if (getPruneState().complete !== null) setRemovedGames(null);
+      if (getPruneState().complete !== null) setRemovedGames(NOT_ASKED);
     });
     return () => {
       unsubscribePrune();
@@ -520,20 +522,24 @@ export function useDataPage(): DataPageState {
     if (liveAppIds === null) {
       // The scan could not run — without the live keep-set, nothing can be
       // proven orphaned. Abort without calling the backend.
+      if (!execute) setOrphanedGridImages(FAILED);
       setGridStatus("Could not read Steam's shortcut list — nothing was removed.");
       return;
     }
     if (!execute) {
+      setOrphanedGridImages(READING);
       try {
         const result = await cleanupOrphanedGridImages(liveAppIds, true);
         if (!result.success) {
+          setOrphanedGridImages(FAILED);
           setGridStatus(result.message ?? "Failed to scan for orphaned images");
           return;
         }
         const count = result.candidate_count ?? 0;
-        setOrphanedGridImages(count);
+        setOrphanedGridImages({ state: "answered", value: count });
         setGridStatus(count === 0 ? "No orphaned grid images found" : "");
       } catch {
+        setOrphanedGridImages(FAILED);
         setGridStatus("Failed to scan for orphaned images");
       }
       return;
@@ -545,7 +551,7 @@ export function useDataPage(): DataPageState {
         return;
       }
       const removed = result.removed_count ?? 0;
-      setOrphanedGridImages(0);
+      setOrphanedGridImages({ state: "answered", value: 0 });
       setGridStatus(`Removed ${removed} orphaned image${removed === 1 ? "" : "s"}`);
     } catch {
       setGridStatus("Failed to remove orphaned images");
