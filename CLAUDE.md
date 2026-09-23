@@ -202,19 +202,16 @@ locally with `mise run docs`.
   `domain/identity.py` — no hardcoded name and no hardcoded version at the format site, so the UA and the recovery root
   come from that one module rather than from two literals that could drift (the root additionally through
   `sanitize_package_name`, which is the identity for a name shaped like this one). Those two are everything
-  `PACKAGE_NAME` reaches; the folder the program ships as is not decided by it — and is decided nowhere in the tree
-  today, the build that decided it having gone with the Decky zip. **There is no fallback and no failure mode left**:
-  this used to be a `package.json` read that degraded to `decky-plugin/0.0.0` when the manifest was missing or
-  malformed, and a constant cannot be missing — so a UA naming anything but this program is now a code change, never a
-  deployment accident. `VERSION` is machine-stamped by release-please (`x-release-please-version` on its line) and never
-  edited by hand. `adapters/renderer_gc.py` also speaks HTTP — to Steam's debugger on `localhost` — and takes none.
+  `PACKAGE_NAME` reaches; the folder the program ships as is not decided by it. **There is no fallback and no failure
+  mode**: a constant cannot be missing, so a UA naming anything but this program is a code change, never a deployment
+  accident. `VERSION` is machine-stamped by release-please (`x-release-please-version` on its line) and never edited by
+  hand. `adapters/renderer_gc.py` also speaks HTTP — to Steam's debugger on `localhost` — and takes none.
 - **Large payloads**: two caps, and they fail differently — `host/dispatch.py` refuses an encoded answer over ~12 MiB as
   an ordinary error for that one call, while `host/connection.py` closes the socket on a frame over 16 MiB, which
   rejects every call in flight with it. So a bulk payload is chunked rather than sent: per-item callables, and bulk
   lists paged (the library apply emits shortcuts in batches; the metadata cache loads page-by-page). Those numbers are
   ours and were chosen — the reference library's largest cover is 5,869,834 bytes, which base64 turns into 7,826,448
-  (7.46 MiB), so a 4 MiB cap would have refused it silently. The plugin loader's own 1 MiB bridge limit is **not** in
-  this path any more; do not reason from it.
+  (7.46 MiB), so a 4 MiB cap would have refused it silently.
 - **No `BIsModOrShortcut` bypass**: the bypass counter was removed deliberately. Shortcuts return `true` (natural
   state); we own the game detail UI. Do not reintroduce a bypass.
 - **`instanceof` against a DOM global is false in QAM code**: plugin code runs in the **SharedJSContext** window while
@@ -1438,7 +1435,8 @@ register is what that sweep checks against.
 
 ## Security
 
-- NEVER read or use credentials from settings files (`~/homebrew/settings/`) without explicit user permission
+- NEVER read or use credentials from settings files (`~/.config/romm-tender/settings.json`) without explicit user
+  permission
 - NEVER pass credentials to agents — if API calls are needed, ask the user to run them and provide output
 - NEVER log secrets (passwords, API keys) — mask them in any log output
 
