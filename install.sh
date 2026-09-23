@@ -72,6 +72,12 @@ UNIT_NAME="romm-tender"
 MARKER_NOTE="debugger-marker"
 MARKER_FILE=".cef-enable-remote-debugging"
 
+# The lock a running backend holds, under the data root (LOCK_FILENAME in
+# backend/host/single_instance.py). tests/scripts/test_install_sh.py holds the
+# two spellings equal: a rename on one side only would leave this run asking
+# about a file no backend takes, and every backend let through.
+BACKEND_LOCK="backend.lock"
+
 # Steam's CEF debugger. Answering means the panel can be loaded without a
 # restart; not answering is the ordinary case on a fresh install.
 DEBUGGER_PROBE="http://127.0.0.1:8080/json/version"
@@ -982,13 +988,12 @@ refuse_decky_plugin() {
 }
 
 # A backend outside the unit holds the exclusive lock the unit's own takes
-# (LOCK_FILENAME in backend/host/single_instance.py, beside the database), so
-# the unit cannot come up while one is running — and this run would still report
-# it up. `systemctl restart` of a unit with no `Type=` returns as soon as its
-# process has been forked (systemd.service(5), Type=simple), before the backend
-# has asked for the lock, and service_state() then reads a port file that is
-# either missing ("enabled and started") or the hand-started backend's own.
-# Refused rather than reported.
+# (BACKEND_LOCK above), so the unit cannot come up while one is running — and
+# this run would still report it up. `systemctl restart` of a unit with no
+# `Type=` returns as soon as its process has been forked (systemd.service(5),
+# Type=simple), before the backend has asked for the lock, and service_state()
+# then reads a port file that is either missing ("enabled and started") or the
+# hand-started backend's own. Refused rather than reported.
 #
 # The LOCK is the question rather than a process name, because only a Tender
 # backend takes it: a backend started by hand runs as `python backend/main.py`
@@ -999,7 +1004,7 @@ refuse_decky_plugin() {
 # Only the modes that start the service ask: `--uninstall` and `--disable` start
 # nothing, and both stop the unit whatever else is running.
 refuse_foreign_backend() {
-    local lock="$DATA/backend.lock" own opener holder="" own_opens="no"
+    local lock="$DATA/$BACKEND_LOCK" own opener holder="" own_opens="no"
     # No file, no holder. Asked first because `flock` handed a PATH creates the
     # file; handed a descriptor opened for reading, it creates nothing.
     [ -e "$lock" ] || return 0
@@ -1027,23 +1032,27 @@ refuse_foreign_backend() {
         "it holds $(tilde "$lock") and runs $(command_line "$holder") in $(tilde "$directory") — stop it with Ctrl-C where it was started, or kill $holder, then run this again"
 }
 
-# Every process of this user's that has *1* open, one pid to a line. The lock is
-# held by one of them, which is all a caller can learn: the kernel says who has
-# a file OPEN, and a second backend waiting out its retry window has it open
-# too. Read off /proc rather than asked of `fuser` or `lsof`, which are not on
-# every target — this needs coreutils and nothing else. Best effort: a process
-# that ends mid-scan, or one whose descriptors cannot be read, is simply not
-# named.
+# Every process that has *1* open through a descriptor, one pid to a line. The
+# lock is held by one of them, which is all a caller can learn: the kernel says
+# who has a file OPEN, and a second backend waiting out its retry window has it
+# open too. Read off /proc rather than asked of `fuser` or `lsof`, which are not
+# on every target — this needs no tool beyond bash.
+#
+# `-ef` compares device and inode, both sides stat'ed through the descriptor's
+# link, so a holder that opened the lock under another name is found as well.
+# Only this user's processes can answer: another user's fd directory cannot be
+# listed, so the glob yields nothing from it and no filter is needed. Best
+# effort: that process, one that ends mid-scan, and a lock held with no
+# descriptor open on it at all are simply not named.
 lock_openers() {
-    local wanted dir targets
-    wanted="$(readlink -f "$1")"
-    for dir in /proc/[0-9]*; do
-        [ -O "$dir" ] || continue
-        targets="$(readlink "$dir"/fd/* 2> /dev/null || true)"
-        case $'\n'"$targets"$'\n' in
-            *$'\n'"$wanted"$'\n'*) printf '%s\n' "${dir#/proc/}" ;;
-            *) ;;
-        esac
+    local fd pid last=""
+    for fd in /proc/[0-9]*/fd/*; do
+        [ "$fd" -ef "$1" ] 2> /dev/null || continue
+        pid="${fd#/proc/}"
+        pid="${pid%%/*}"
+        [ "$pid" != "$last" ] || continue
+        printf '%s\n' "$pid"
+        last="$pid"
     done
 }
 

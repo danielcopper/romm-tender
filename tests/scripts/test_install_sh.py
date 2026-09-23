@@ -41,6 +41,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from host.single_instance import LOCK_FILENAME
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -179,6 +181,10 @@ class Install:
     @property
     def unit(self) -> Path:
         return self.home / ".config" / "systemd" / "user" / "romm-tender.service"
+
+    @property
+    def lock(self) -> Path:
+        return self.data / LOCK_FILENAME
 
     @property
     def marker(self) -> Path:
@@ -1353,9 +1359,9 @@ class TestABackendOutsideTheService:
 
         assert result.returncode == 1
         assert _refusals(result.stderr) == [f"install.sh: another Tender backend is running (pid {holder.pid})"]
-        command = " ".join([sys.executable, "-c", _HOLD_THE_LOCK, str(machine.data / "backend.lock")])
+        command = " ".join([sys.executable, "-c", _HOLD_THE_LOCK, str(machine.lock)])
         assert (
-            f"  it holds {machine.data / 'backend.lock'} and runs {command} in ~/checkout — stop it with Ctrl-C"
+            f"  it holds {machine.lock} and runs {command} in ~/checkout — stop it with Ctrl-C"
             f" where it was started, or kill {holder.pid}, then run this again"
         ) in result.stderr
         assert machine.curl_calls() == []
@@ -1372,24 +1378,38 @@ class TestABackendOutsideTheService:
         assert result.returncode == 0, result.stderr
         assert (machine.code / "backend" / "main.py").is_file()
 
+    def test_a_holder_through_another_name_for_the_file_is_still_named(self, machine):
+        """The question is which file a descriptor is open on, not what it is called.
+
+        The helper opens the lock through a hard link, so its descriptor's link
+        spells a different path; the file is the same one, and so is the lock.
+        """
+        machine.data.mkdir(parents=True)
+        machine.lock.touch()
+        other = machine.tmp_path / "same-file"
+        os.link(machine.lock, other)
+
+        with _holding_the_lock(machine, path=other) as holder:
+            result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [f"install.sh: another Tender backend is running (pid {holder.pid})"]
+        assert not machine.code.exists()
+
     def test_a_holder_it_cannot_name_is_still_refused(self, machine):
         """Naming the holder is best effort; the refusal is not.
 
-        The helper holds the lock through a second name for the same file, so
-        its descriptor points at a path that is not the lock's and no process is
-        found to have the lock open — while the kernel still says it is held.
+        The helper takes the lock and then keeps it only through a descriptor in
+        flight on a socket of its own, so no descriptor anywhere is open on the
+        file while the kernel still says it is held — what a holder this user
+        cannot see, such as another user's process, looks like from here.
         """
-        machine.data.mkdir(parents=True)
-        (machine.data / "backend.lock").touch()
-        other = machine.tmp_path / "same-file"
-        os.link(machine.data / "backend.lock", other)
-
-        with _holding_the_lock(machine, path=other):
+        with _holding_the_lock(machine, script=_HOLD_WITH_NO_DESCRIPTOR):
             result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
 
         assert result.returncode == 1
         assert _refusals(result.stderr) == [
-            f"install.sh: another process holds {machine.data / 'backend.lock'}, so Tender's service cannot start"
+            f"install.sh: another process holds {machine.lock}, so Tender's service cannot start"
         ]
         assert "  stop the Tender backend you started by hand, then run this again" in result.stderr
         assert not machine.code.exists()
@@ -1398,7 +1418,7 @@ class TestABackendOutsideTheService:
     def test_a_lock_nobody_holds_is_no_reason_to_stop(self, machine, lock_file):
         if lock_file:
             machine.data.mkdir(parents=True)
-            (machine.data / "backend.lock").touch()
+            machine.lock.touch()
 
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
 
@@ -1416,12 +1436,12 @@ class TestABackendOutsideTheService:
         result = machine.run("--from", str(machine.tmp_path / "gone.tar.gz"), "--yes")
 
         assert _refusals(result.stderr) == [f"install.sh: no such file: {machine.tmp_path / 'gone.tar.gz'}"]
-        assert not (machine.data / "backend.lock").exists()
+        assert not machine.lock.exists()
 
     def test_a_process_that_only_looks_like_a_backend_is_not_one(self, machine):
         """A command line naming ``backend/main.py`` is not a Tender backend holding the lock."""
         machine.data.mkdir(parents=True)
-        (machine.data / "backend.lock").touch()
+        machine.lock.touch()
         lookalike = [
             sys.executable,
             "-c",
@@ -1453,6 +1473,21 @@ _HOLD_THE_LOCK = (
     "sys.stdin.read()"
 )
 
+# The same, except that once it has the lock it sends its only descriptor for
+# the file down a socket nobody reads and closes it. The descriptor in flight
+# keeps the open file, and with it the lock, alive — with nothing in any fd
+# table pointing at the file.
+_HOLD_WITH_NO_DESCRIPTOR = (
+    "import fcntl, os, socket, sys; "
+    "fd = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT); "
+    "fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB); "
+    "keep, _ = socket.socketpair(); "
+    "socket.send_fds(keep, [b'x'], [fd]); "
+    "os.close(fd); "
+    "print('held', flush=True); "
+    "sys.stdin.read()"
+)
+
 
 @contextlib.contextmanager
 def _running(argv: list[str], *, cwd: Path) -> Iterator[subprocess.Popen[str]]:
@@ -1473,17 +1508,19 @@ def _running(argv: list[str], *, cwd: Path) -> Iterator[subprocess.Popen[str]]:
 
 
 @contextlib.contextmanager
-def _holding_the_lock(machine: Install, *, path: Path | None = None) -> Iterator[subprocess.Popen[str]]:
+def _holding_the_lock(
+    machine: Install, *, path: Path | None = None, script: str = _HOLD_THE_LOCK
+) -> Iterator[subprocess.Popen[str]]:
     """A process holding *machine*'s backend lock, started from ``~/checkout``.
 
     Started from a directory under the machine's home because a backend started
     by hand runs from wherever its checkout is, and the refusal names it.
     """
-    lock = path or machine.data / "backend.lock"
+    lock = path or machine.lock
     lock.parent.mkdir(parents=True, exist_ok=True)
     checkout = machine.home / "checkout"
     checkout.mkdir(parents=True, exist_ok=True)
-    with _running([sys.executable, "-c", _HOLD_THE_LOCK, str(lock)], cwd=checkout) as holder:
+    with _running([sys.executable, "-c", script, str(lock)], cwd=checkout) as holder:
         assert holder.stdout is not None
         assert holder.stdout.readline() == "held\n"
         yield holder
@@ -1497,6 +1534,14 @@ class TestTheNoteIsSpelledOnceOnEachSide:
         script = _INSTALL.read_text(encoding="utf-8")
 
         assert f'MARKER_NOTE="{DEBUGGER_MARKER_NOTE}"' in script
+
+
+class TestTheLockIsSpelledOnceOnEachSide:
+    def test_backend_lock_filename_matches_backend(self):
+        """The installer asks about the file the backend locks, by its name on both sides."""
+        script = _INSTALL.read_text(encoding="utf-8")
+
+        assert f'BACKEND_LOCK="{LOCK_FILENAME}"' in script
 
 
 class TestHowTheRunLooks:
