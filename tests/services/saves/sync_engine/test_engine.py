@@ -13,6 +13,7 @@ import struct
 import threading
 import time
 import zipfile
+from typing import cast
 
 import pytest
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
@@ -1485,12 +1486,38 @@ class TestSaveSyncContentDirGate:
 
         result = await svc.sync_all_saves()
 
-        # The answer is per ROM, so the sweep has no machine-wide verdict to
-        # return: it passes this ROM over, and the backstop never asks the server.
-        assert result["synced"] == 0
-        assert result["errors"] == []
+        # Every ROM the sweep read saves beside its content: the same skip a
+        # single-ROM sync returns, in the sweep's shape, and no server round-trip.
+        self._assert_benign_skip({**result, "roms_checked": 0}, all_saves=True)
         assert result["roms_checked"] == 1
         assert not any(c[0] in ("list_saves", "upload_save", "download_save_content") for c in fake.call_log)
+
+    @pytest.mark.asyncio
+    async def test_a_mixed_sweep_syncs_the_rest_and_says_what_it_held_back(self, tmp_path):
+        beside = FakeSaveLocationReader(beside_content=True).resolve_save_answer(
+            system="gba",
+            content_path=str(tmp_path / "retrodeck" / "roms" / "gba" / "game1.gba"),
+            emulator_label=None,
+        )
+        svc, fake = make_service(tmp_path)
+        cast("FakeSaveLocationReader", svc._rom_info._save_locations).answer_with("gba", beside)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
+        _install_rom(svc, tmp_path, rom_id=2, system="snes", file_name="game2.sfc")
+        _create_save(tmp_path, system="snes", rom_name="game2", content=b"save2")
+        _seed_save_state_dict(svc, 1, {"active_slot": "default", "slot_confirmed": True}, platform_slug="gba")
+        _seed_save_state_dict(svc, 2, {"active_slot": "default", "slot_confirmed": True}, platform_slug="snes")
+
+        result = await svc.sync_all_saves()
+
+        assert result["success"] is True
+        assert "reason" not in result
+        assert result["synced"] == 1
+        assert "1 game(s) skipped" in result["message"]
+        assert "content directory" in result["message"]
+        uploads = [c for c in fake.call_log if c[0] == "upload_save"]
+        assert len(uploads) == 1
 
     @pytest.mark.asyncio
     async def test_in_save_dir_layout_does_not_block(self, tmp_path):

@@ -124,6 +124,41 @@ class TestRename:
             save_files.rename(str(tmp_path / "missing"), str(tmp_path / "dst"))
 
 
+class TestMove:
+    def test_moves_file_into_another_directory(self, save_files, tmp_path):
+        src = tmp_path / "saves" / "snes" / "Game.srm"
+        dst_dir = tmp_path / "saves" / "snes" / "Snes9x"
+        src.parent.mkdir(parents=True)
+        dst_dir.mkdir()
+        src.write_bytes(b"payload")
+
+        save_files.move(str(src), str(dst_dir / "Game.srm"))
+
+        assert not src.exists()
+        assert (dst_dir / "Game.srm").read_bytes() == b"payload"
+
+    def test_crosses_filesystems_by_copy_and_delete(self, save_files, tmp_path, monkeypatch):
+        import errno
+
+        src = tmp_path / "a.srm"
+        dst = tmp_path / "b.srm"
+        src.write_bytes(b"payload")
+
+        def cross_device(_src, _dst):
+            raise OSError(errno.EXDEV, "Invalid cross-device link")
+
+        monkeypatch.setattr("os.rename", cross_device)
+
+        save_files.move(str(src), str(dst))
+
+        assert not src.exists()
+        assert dst.read_bytes() == b"payload"
+
+    def test_missing_source_raises(self, save_files, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            save_files.move(str(tmp_path / "missing"), str(tmp_path / "dst"))
+
+
 class TestGetMtime:
     def test_returns_unix_timestamp(self, save_files, tmp_path):
         f = tmp_path / "game.srm"

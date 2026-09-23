@@ -56,6 +56,7 @@ from services.saves._settings import (
     sync_after_exit,
     sync_before_launch,
 )
+from services.saves.save_directory import SaveDirectoryFollower
 from services.saves.sync_engine._gate import (
     POST_EXIT_GATE_TIMEOUT,
     PRE_LAUNCH_GATE_TIMEOUT,
@@ -64,7 +65,7 @@ from services.saves.sync_engine._gate import (
     SaveSyncGate,
     SaveSyncTimeoutError,
 )
-from services.saves.sync_engine._shape_refusal import live_save_answer, sync_refusal
+from services.saves.sync_engine._shape_refusal import ContentDirTally, live_save_answer, sync_refusal
 from services.saves.sync_engine.matrix import MatrixExecutor, MatrixOutcome
 from services.saves.sync_engine.rollback import RollbackOrchestrator
 
@@ -234,6 +235,14 @@ class SyncEngine:
             log_debug=config.log_debug,
             resolve_core=self.resolve_core,
             settings=config.settings,
+        )
+        self._follower = SaveDirectoryFollower(
+            uow_factory=config.uow_factory,
+            rom_info=config.rom_info,
+            save_file_store=config.save_file_store,
+            quarantine=self._matrix.quarantine_local_file,
+            logger=config.logger,
+            log_debug=config.log_debug,
         )
         # Device-level single-owner serialization gate: only one save-sync run
         # in flight at a time per device. A second trigger queues behind the
@@ -485,6 +494,27 @@ class SyncEngine:
                 e,
             )
 
+    async def _follow_save_directory(self, rom_id: int, answer: SaveAnswer | None) -> None:
+        """Carry this ROM's save files to the directory *answer* names, where it moved.
+
+        Runs under the caller's ``rom_lock`` and before any refusal: a moved
+        directory is followed whether or not this ROM may be synced, because the
+        files are the user's and the emulator now looks elsewhere for them.
+        """
+        if answer is not None:
+            await self._loop.run_in_executor(None, self._follower.do_follow, rom_id, answer)
+
+    async def record_save_directories(self) -> None:
+        """Record the answered save directory of every installed ROM that has none.
+
+        The one-time backfill. Serial and one ROM at a time under its own lock,
+        each reading offloaded to the executor, so it never holds the event
+        loop and never races a sync of the same ROM.
+        """
+        for rom_id in await self._loop.run_in_executor(None, self._installed_rom_ids):
+            async with self.rom_lock(rom_id):
+                await self._loop.run_in_executor(None, self._follower.do_record_if_absent, rom_id)
+
     async def content_dir_blocked(self, rom_id: int, where: str) -> bool:
         """Whether this ROM's emulator writes its save beside the game's content.
 
@@ -544,6 +574,7 @@ class SyncEngine:
         session_id: int | None = None,
         session_counts: list[int] | None = None,
         save_answer: SaveAnswer | None = None,
+        content_dir_tally: ContentDirTally | None = None,
     ) -> tuple[int, int, list[str], list[dict[str, Any]]]:
         """Read inputs → sync in executor → persist, for one ROM under its lock.
 
@@ -564,7 +595,9 @@ class SyncEngine:
         single-ROM entry points check it themselves so they can name the skip in
         their result, and that backstop is what makes the rule hold for the
         whole-library sweep, whose one result has no room to say which ROM was
-        passed over.
+        passed over. It does count the ROMs held back because their save sits
+        beside their content, into *content_dir_tally*, so that result can still
+        say that much.
 
         When *require_confirmed* is set (the bulk ``sync_all_saves`` sweep), a ROM
         whose slot the user has not confirmed is skipped entirely — no transfer,
@@ -591,6 +624,15 @@ class SyncEngine:
         if require_confirmed and not save_state.slot_confirmed:
             self._log_debug(f"_run_rom_sync({rom_id}): slot not confirmed, skipping bulk sync")
             return 0, 0, [], []
+        if save_answer is None:
+            # The whole-library sweep's per-ROM step: its one reading follows a
+            # moved directory and is then handed down. The follow may record, so
+            # the aggregate is read again rather than written back stale.
+            save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+            await self._follow_save_directory(rom_id, save_answer)
+            save_state, device_id = await self._loop.run_in_executor(None, self._read_sync_inputs, rom_id)
+            if content_dir_tally is not None:
+                content_dir_tally.count(save_answer)
         core_so = await self._loop.run_in_executor(None, self.resolve_core, rom_id)
         default_slot = resolve_default_slot(self._settings)
         cleanup_limit = autocleanup_limit(self._settings)
@@ -715,6 +757,7 @@ class SyncEngine:
                 await self._refresh_save_sort_state("pre_launch_sync")
 
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+                await self._follow_save_directory(rom_id, save_answer)
                 refusal = sync_refusal(save_answer)
                 if refusal is not None:
                     return refusal
@@ -812,6 +855,7 @@ class SyncEngine:
                 await self._refresh_save_sort_state("post_exit_sync")
 
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+                await self._follow_save_directory(rom_id, save_answer)
                 refusal = sync_refusal(save_answer)
                 if refusal is not None:
                     self._logger.info("post_exit_sync skipped: %s", refusal["reason"])
@@ -896,6 +940,7 @@ class SyncEngine:
                 await self._refresh_save_sort_state("sync_rom_saves")
 
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+                await self._follow_save_directory(rom_id, save_answer)
                 refusal = sync_refusal(save_answer)
                 if refusal is not None:
                     return refusal
@@ -1018,6 +1063,7 @@ class SyncEngine:
                 with self._save_file_store.hash_memo_scope():
                     session_id = await self._bulk_pre_negotiate(device_id)
                     session_counts = [0, 0]
+                    content_dir_tally = ContentDirTally()
 
                     total_synced = 0
                     total_errors: list[str] = []
@@ -1037,6 +1083,7 @@ class SyncEngine:
                                     require_confirmed=True,
                                     session_id=session_id,
                                     session_counts=session_counts if session_id is not None else None,
+                                    content_dir_tally=content_dir_tally,
                                 )
                             total_synced += uploaded + downloaded
                             total_errors.extend(errors)
@@ -1060,12 +1107,17 @@ class SyncEngine:
                         if session_id is not None:
                             await self._close_negotiate_session(session_id, session_counts[0], session_counts[1])
 
+                content_dir_skip = content_dir_tally.sweep_skip(roms_checked=rom_count)
+                if content_dir_skip is not None:
+                    return content_dir_skip
                 conflicts_count = len(all_conflicts)
-                msg = _summarize_sync_result(
-                    f"Synced {total_synced} save(s) across {rom_count} ROM(s)",
-                    synced=total_synced,
-                    errors=total_errors,
-                    conflicts=conflicts_count,
+                msg = content_dir_tally.annotate(
+                    _summarize_sync_result(
+                        f"Synced {total_synced} save(s) across {rom_count} ROM(s)",
+                        synced=total_synced,
+                        errors=total_errors,
+                        conflicts=conflicts_count,
+                    )
                 )
                 return {
                     "success": len(total_errors) == 0,

@@ -14,6 +14,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import os
+import shutil
 import tempfile
 import zipfile
 import zlib
@@ -106,6 +107,10 @@ class SaveFileAdapter:
     def rename(self, src: str, dst: str) -> None:
         """Atomically rename *src* to *dst*, replacing any existing file at *dst*."""
         os.replace(src, dst)
+
+    def move(self, src: str, dst: str) -> None:
+        """Move *src* to *dst*; ``shutil.move`` degrades to copy + delete across filesystems."""
+        shutil.move(src, dst)
 
     def claim_source(self, path: str, safe_root: str) -> SourceClaim:
         return claim_source(path, safe_root)

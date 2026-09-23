@@ -611,6 +611,15 @@ class SaveFileStore(Protocol):
         """
         ...
 
+    def move(self, src: str, dst: str) -> None:
+        """Move *src* to *dst*, across filesystems where the two differ.
+
+        A save directory can move between filesystems — a ROM on an SD card
+        with its save beside it, the saves root on internal storage — where
+        ``rename`` cannot follow. The caller checks *dst* is free first.
+        """
+        ...
+
     def claim_source(self, path: str, safe_root: str) -> SourceClaim:
         """Capture the current no-follow source and complete subtree identity."""
         ...

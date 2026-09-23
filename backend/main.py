@@ -92,6 +92,8 @@ class Plugin:
     # Lazily created on first schedule so a bare ``Plugin()`` (test/harness that
     # skips ``_main``) still tracks tasks.
     _playtime_flush_tasks: set[asyncio.Task[None]]
+    # The one-time save-directory backfill, held so the loop cannot collect it.
+    _save_directory_backfill: asyncio.Task[None]
 
     _MIN_REQUIRED_VERSION = (5, 3, 0)
 
@@ -244,7 +246,7 @@ class Plugin:
         steps.run("cleanup_leftover_tmp_files", self._download_service.cleanup_leftover_tmp_files)
 
         # ── 6. Background tasks ─────────────────────────────────────────────
-        steps.run("detect_save_sort_change", self._migration_service.detect_save_sort_change)
+        steps.run("record_save_directories", self._start_save_directory_backfill)
         logger.info("Tender backend loaded")
         return result.user_agent
 
@@ -259,7 +261,20 @@ class Plugin:
         """
         await self._connection_service.migrate_legacy_credentials()
 
+    def _start_save_directory_backfill(self):
+        """Start the one-time save-directory backfill without holding up start-up.
+
+        It asks the resolver once per installed ROM, which on a large library
+        takes a while; the task is kept here so the loop cannot collect it
+        mid-run and ``_unload`` can cancel it.
+        """
+        self._save_directory_backfill = self.loop.create_task(self._save_sync_service.record_save_directories_once())
+
     async def _unload(self):
+        backfill = getattr(self, "_save_directory_backfill", None)
+        if backfill is not None:
+            backfill.cancel()
+            await asyncio.gather(backfill, return_exceptions=True)
         self._sync_service.shutdown()
         await self._prune_service.shutdown()
         await self._download_service.shutdown()

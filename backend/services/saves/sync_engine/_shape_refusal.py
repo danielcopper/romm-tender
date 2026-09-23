@@ -17,6 +17,7 @@ offline should be told the honest thing rather than "server unreachable".
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.save_answer import save_shape_message
@@ -106,3 +107,47 @@ def save_shape_skip(answer: SaveAnswer) -> dict[str, Any]:
         "errors": [],
         "conflicts": [],
     }
+
+
+@dataclass
+class ContentDirTally:
+    """What a whole-library sweep saw of saves written beside the content.
+
+    The gate is per ROM, so the sweep passes such a ROM over inside its run —
+    and its one result still has to say so, because it is the sentence a user
+    who asked for a full sync reads. ``answered`` counts the ROMs the sweep
+    took a reading for (those whose slot the user confirmed), ``beside_content``
+    how many of them the gate held back.
+    """
+
+    answered: int = 0
+    beside_content: int = 0
+
+    def count(self, answer: SaveAnswer | None) -> None:
+        """Record one ROM's reading."""
+        if answer is None:
+            return
+        self.answered += 1
+        if answer.in_content_directory:
+            self.beside_content += 1
+
+    def sweep_skip(self, *, roms_checked: int) -> dict[str, Any] | None:
+        """The skip the sweep returns when every ROM it read saves beside its content, else ``None``.
+
+        The same reason slug and message a single-ROM sync returns, in the
+        sweep's own result shape.
+        """
+        if not self.beside_content or self.beside_content != self.answered:
+            return None
+        return {
+            **content_dir_skip(),
+            "conflicts": 0,
+            "conflicts_list": [],
+            "roms_checked": roms_checked,
+        }
+
+    def annotate(self, message: str) -> str:
+        """*message*, naming the ROMs held back where some were and others synced."""
+        if not self.beside_content:
+            return message
+        return f"{message}; {self.beside_content} game(s) skipped — {SAVE_SYNC_IN_CONTENT_DIR}"
