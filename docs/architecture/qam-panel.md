@@ -1444,10 +1444,11 @@ reason Settings needs none: six rows that each name a thing are their own order.
 | Gone from RomM        | `scan` until asked — the server round trip                      | Review, which opens the dialog below            |
 | Recovery bundles      | how many are sealed and what they take                          | the bundles one by one, and nothing to press    |
 
-**A row's count slot has one face per state of its figure**: a spinner while the page is still reading it, a dash where
-the read failed, the figure once it is answered — and `scan` for a figure nobody has asked for yet. The pane under a
-failed read says what could not be read and to open the page again, where one still being read says `Reading…`; neither
-borrows the other's words.
+**A figure the page reads when it opens has one face per state in its row's count slot**: a spinner while it is still
+being read, a dash where the read failed, the figure once it is answered. The pane under a failed read says what could
+not be read and to open the page again, where one still being read says `Reading…`; neither borrows the other's words.
+The two scan rows below are outside that rule: they show `scan` until a press answers them, and a scan that fails says
+so in the pane's status line.
 
 **A number that costs a round trip or a backend scan sits behind a press.** Focus selects on this layout, so a reading
 that rode on the selection would fire under every row the stick passes — a local scan of the grid directory for one row,
@@ -1494,12 +1495,12 @@ rules do not change; they live in [removed-game-cleanup.md](removed-game-cleanup
 
 **Recovery bundles are listed and nothing here removes them.** The row states how many are sealed and what they cost, so
 the disk they take stops being invisible, and the pane lists them under that total as a table — Game, Sealed, Size —
-newest first. Game and day are read off the folder's name alone and no seal is opened for them, so the game is spelled
-the way the folder spells it (`Shenmue-II`), and a folder not in the shape Tender writes — an older version's, one
-renamed by hand, one marked `.durability-uncertain` — is listed under its own name with no day, after every dated one.
-Each row is a focus stop with nothing to press, because the pane scrolls only by focus. Deleting one is the reader's own
-business in a file manager until a cut gives that action a home. A row that shows something and offers nothing is still
-a row this page owes, because the page's claim is what this device holds.
+newest first. Game and day (UTC) are read off the folder's name alone — no file's contents and no seal are read for them
+— so the game is spelled the way the folder spells it (`Shenmue-II`), and a folder not in the shape Tender writes — one
+renamed by hand, or one ending `.durability-uncertain` because its seal could not be confirmed — is listed under its own
+name with no day, after every dated one. Each row is a focus stop with nothing to press, because the pane scrolls only
+by focus. Deleting one is the reader's own business in a file manager until a cut gives that action a home. A row that
+shows something and offers nothing is still a row this page owes, because the page's claim is what this device holds.
 
 ## Downloads
 

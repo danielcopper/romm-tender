@@ -874,7 +874,7 @@ class TestCooperativeAbort:
 
 
 class TestBundleInventory:
-    """What the recovery root holds, counted without opening a seal."""
+    """What the recovery root holds, counted without reading a file's contents or a seal."""
 
     def test_a_root_that_was_never_created_is_an_empty_inventory(self, tmp_path):
         adapter = _adapter(tmp_path)
@@ -980,7 +980,7 @@ class TestBundleInventory:
         # here and never reaches the measurement at all.
         assert adapter.bundle_inventory() == {"count": 0, "total_bytes": 0, "bundles": []}
 
-    def test_it_opens_no_seal_and_leaves_the_bundle_untouched(self, tmp_path):
+    def test_it_reads_no_seal_and_leaves_the_bundle_untouched(self, tmp_path):
         source_root = tmp_path / "sources"
         source_root.mkdir()
         (source_root / "rom.chd").write_bytes(b"c" * 64)

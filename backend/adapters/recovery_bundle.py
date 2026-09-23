@@ -109,10 +109,11 @@ class RecoveryBundleAdapter:
         error: sealing is what creates the layout, so "no bundles" and "no
         recovery folder" are the same answer to the same question.
 
-        Every directory under ``bundles/`` counts, and no seal is opened. A
-        bundle whose durability could not be confirmed is marked by a rename
-        and still holds its data, so excluding it would hide disk from the one
-        reader who asked what the bundles take. An entry that cannot be
+        Every directory under ``bundles/`` counts, and no file's contents and no
+        seal are read — the measurement only sizes each file. A bundle whose
+        durability could not be confirmed is marked by a rename and still holds
+        its data, so excluding it would hide disk from the one reader who asked
+        what the bundles take. An entry that cannot be
         measured is counted and listed without a size, and contributes nothing
         to the total, because its presence is the more reliable of the two
         facts. Each listed bundle is named from its folder name alone.

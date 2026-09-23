@@ -140,7 +140,7 @@ const RomFilesPane: FC<{ state: DataPageState }> = ({ state }) => {
       <Figures>
         {figureLine(
           inventory,
-          "The installed ROMs",
+          "The installed-ROM figures",
           (read) => `${read.installed_roms} installed · ≈ ${formatBytes(read.installed_bytes)}`,
         )}
       </Figures>
@@ -406,12 +406,7 @@ function newestFirst(a: RecoveryBundleEntry, b: RecoveryBundleEntry): number {
   return a.name.localeCompare(b.name);
 }
 
-/**
- * The bundles one by one, as their folders name them.
- *
- * Every row is a focus stop though none offers anything: a pane scrolls only by
- * moving focus, so a row nothing can focus is a bundle nothing can scroll to.
- */
+/** The bundles one by one, as their folders name them. */
 const BundleTable: FC<{ bundles: readonly RecoveryBundleEntry[] }> = ({ bundles }) => {
   // Two bundles can share a game and a day — they differ only in the id the
   // folder name ends in, which the entry does not carry — so the key counts
@@ -459,7 +454,7 @@ const RecoveryBundlesPane: FC<{ state: DataPageState }> = ({ state }) => {
       <Figures>
         {figureLine(
           inventory,
-          "The recovery bundles",
+          "The list of recovery bundles",
           (read) => `${pluralize(read.recovery_bundles, "bundle")} · ${formatBytes(read.recovery_bytes)}`,
         )}
       </Figures>

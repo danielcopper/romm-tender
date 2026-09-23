@@ -124,15 +124,11 @@ export interface RemovalProgress {
  *
  * Reading and failed are kept apart because they tell the reader opposite
  * things — one is work that will finish on its own, the other asks them to open
- * the page again — and a single "not here yet" value had each pane saying one of
- * them for both.
+ * the page again.
  */
 export type PageRead<T> = { state: "reading" } | { state: "failed" } | { state: "answered"; value: T };
 
 const READING = { state: "reading" } as const;
-// A resolved `{success: false}` is a failure too, not an answer: it carries none
-// of the figures the callable's declared type names, so each read below tests
-// for it before storing what came back.
 const FAILED = { state: "failed" } as const;
 
 /**
@@ -200,7 +196,7 @@ export interface DataPageState {
 export function useDataPage(): DataPageState {
   const [shortcutCount, setShortcutCount] = useState<PageRead<number>>(READING);
   const [inventory, setInventory] = useState<PageRead<DataInventory>>(READING);
-  const [nonSteamApps, setNonSteamApps] = useState<NonSteamApp[]>([]);
+  const [nonSteamApps, setNonSteamApps] = useState<PageRead<NonSteamApp[]>>(READING);
   const [disabledDefaults, setDisabledDefaults] = useState<string[]>([]);
   const [customNames, setCustomNames] = useState<string[]>([]);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -226,13 +222,13 @@ export function useDataPage(): DataPageState {
     try {
       if (typeof collectionStore === "undefined") {
         logWarn("collectionStore not available");
-        setNonSteamApps([]);
+        setNonSteamApps({ state: "answered", value: [] });
         return;
       }
       const deckApps = collectionStore.deckDesktopApps?.apps;
       if (!deckApps) {
         logWarn("deckDesktopApps.apps not available");
-        setNonSteamApps([]);
+        setNonSteamApps({ state: "answered", value: [] });
         return;
       }
       logInfo(`deckDesktopApps.apps size: ${deckApps.size}`);
@@ -248,10 +244,13 @@ export function useDataPage(): DataPageState {
         apps.push({ appId, name });
       }
     } catch (e) {
+      // Whatever was listed before the throw is part of a list, not the list.
       logError(`Failed to enumerate non-steam games: ${e}`);
+      setNonSteamApps(FAILED);
+      return;
     }
     apps.sort((a, b) => a.name.localeCompare(b.name));
-    setNonSteamApps(apps);
+    setNonSteamApps({ state: "answered", value: apps });
   }, []);
 
   /**
@@ -264,8 +263,10 @@ export function useDataPage(): DataPageState {
     // No ordering guard: two sweeps in flight can land out of order, and the
     // older one's owned set is the LARGER one (it saw shortcuts a removal has
     // since taken out), so accepting it offers fewer entries for removal and
-    // never one of ours. The direction that matters cannot be made wrong by
-    // losing this race.
+    // never one of ours. An older sweep that FAILED can likewise land over a
+    // newer answer, and that too errs the safe way: the removal is refused and
+    // the pane asks for the page to be opened again. The direction that matters
+    // cannot be made wrong by losing this race.
     scanShortcutOwnership()
       .then((scan) => setOwnership(scan === null ? FAILED : { state: "answered", value: scan }))
       .catch((e) => {
@@ -274,8 +275,14 @@ export function useDataPage(): DataPageState {
       });
   }, []);
 
+  // Unguarded like `loadOwnership`: the mount read failing after the re-read an
+  // uninstall issues has answered leaves `failed` over a true figure — a
+  // reopen, never a wrong number.
   const readInventory = useCallback(() => {
     getDataInventory()
+      // No callable reached here resolves `{success: false}` today — a raising
+      // one rejects instead — so this test is defensive: were one to, it would
+      // carry none of the figures its declared type names.
       .then((answer) => setInventory(isCallableFailure(answer) ? FAILED : { state: "answered", value: answer }))
       .catch((e) => {
         logError(`Failed to read the data inventory: ${e}`);
@@ -300,6 +307,7 @@ export function useDataPage(): DataPageState {
       })
       .catch((e) => logError(`Failed to load whitelist settings: ${e}`));
     getSyncStats()
+      // The failure-shape test is defensive, for the reason at `readInventory`.
       .then((stats) =>
         setShortcutCount(isCallableFailure(stats) ? FAILED : { state: "answered", value: stats.total_shortcuts }),
       )
@@ -330,19 +338,21 @@ export function useDataPage(): DataPageState {
    *
    * This row is about what ELSE is in the library; removing what this plugin
    * created is the Tender's-shortcuts row's job, and it removes by binding and
-   * ownership rather than by name. Without the ownership answer the set cannot
-   * be formed at all, which is what `null` says.
+   * ownership rather than by name. Without both the enumeration and the
+   * ownership answer the set cannot be formed at all, which is what an
+   * unanswered read says — failed where either failed, else reading.
    */
   const foreignApps = useMemo((): PageRead<NonSteamApp[]> => {
-    if (ownership.state !== "answered") return ownership;
+    if (nonSteamApps.state === "failed" || ownership.state === "failed") return FAILED;
+    if (nonSteamApps.state !== "answered" || ownership.state !== "answered") return READING;
     const accountedFor = new Set([...ownership.value.owned, ...ownership.value.unresolved]);
-    return { state: "answered", value: nonSteamApps.filter((app) => !accountedFor.has(app.appId)) };
+    return { state: "answered", value: nonSteamApps.value.filter((app) => !accountedFor.has(app.appId)) };
   }, [nonSteamApps, ownership]);
 
   /** Entries Steam did not answer for, which are therefore offered to nothing. */
   const unidentifiedCount = useMemo(() => {
-    if (ownership.state !== "answered") return 0;
-    const listed = new Set(nonSteamApps.map((app) => app.appId));
+    if (nonSteamApps.state !== "answered" || ownership.state !== "answered") return 0;
+    const listed = new Set(nonSteamApps.value.map((app) => app.appId));
     return ownership.value.unresolved.filter((appId) => listed.has(appId)).length;
   }, [nonSteamApps, ownership]);
 

@@ -97,10 +97,13 @@ def recovery_bundle_id(game_name: object, date: str, short_id: str) -> str:
 def parse_recovery_bundle_id(folder_name: str) -> tuple[str, str | None]:
     """Read a bundle folder's name back into the game it names and the day it was sealed.
 
-    The inverse of :func:`recovery_bundle_id` over the name it writes, so the
-    game comes back SANITIZED ("Shenmue-II", not "Shenmue II"): the folder is
-    all this reads. A folder not in that shape — an older version's, or one
-    renamed by hand — answers its own name and no day, never a guess at either.
+    The inverse of :func:`recovery_bundle_id` over the name it writes —
+    ``<game>_<YYYY-MM-DD>_<id>`` — so the game comes back SANITIZED
+    ("Shenmue-II", not "Shenmue II"): the folder is all this reads. A folder not
+    in that shape answers its own name and no day, never a guess at either.
+    Under the recovery root that is a folder renamed by hand, or one ending
+    ``.durability-uncertain`` because its seal could not be confirmed — that
+    one still carries a day, and is not read for it.
     """
     match = _BUNDLE_ID_PARTS.fullmatch(folder_name)
     if match is None:

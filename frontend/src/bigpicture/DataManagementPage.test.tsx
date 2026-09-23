@@ -261,7 +261,7 @@ describe("DataManagementPage", () => {
       expect(view.getByTestId("data-row-rom-files").textContent).toContain("—");
       expect(view.getByTestId("data-row-recovery-bundles").textContent).toContain("—");
       expect(view.container.textContent).toContain(
-        "The installed ROMs could not be read — open the page again to retry.",
+        "The installed-ROM figures could not be read — open the page again to retry.",
       );
       expect(view.container.textContent).not.toContain("Reading…");
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to read the data inventory"));
@@ -269,7 +269,7 @@ describe("DataManagementPage", () => {
 
       selectRow(view, "recovery-bundles");
       expect(view.container.textContent).toContain(
-        "The recovery bundles could not be read — open the page again to retry.",
+        "The list of recovery bundles could not be read — open the page again to retry.",
       );
       // A failed read says nothing about what the folder holds.
       expect(view.container.textContent).not.toContain("Nothing has been sealed");
@@ -285,7 +285,7 @@ describe("DataManagementPage", () => {
 
       expect(view.getByTestId("data-row-rom-files").textContent).toContain("—");
       expect(view.getByTestId("data-row-rom-files").textContent).not.toContain("undefined");
-      expect(view.container.textContent).toContain("The installed ROMs could not be read");
+      expect(view.container.textContent).toContain("The installed-ROM figures could not be read");
     });
 
     it("ends a rejected shortcut count in failed, not in Reading…", async () => {
@@ -1357,7 +1357,7 @@ describe("DataManagementPage", () => {
       expect(view.getByText("Unknown (42)")).toBeTruthy();
     });
 
-    it("logs an error and lists nothing when enumeration throws", async () => {
+    it("logs an error and shows the store as unread when enumeration throws", async () => {
       vi.stubGlobal("collectionStore", {
         deckDesktopApps: {
           apps: {
@@ -1375,7 +1375,12 @@ describe("DataManagementPage", () => {
       const view = await pageOn("non-steam");
 
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Failed to enumerate non-steam games"));
-      expect(view.container.textContent).toContain("No other non-Steam games found");
+      // A list that broke off is not an empty library: the row shows a dash,
+      // the pane says the list could not be read, and nothing is offered.
+      expect(view.getByTestId("data-row-non-steam").textContent).toContain("—");
+      expect(view.container.textContent).not.toContain("No other non-Steam games found");
+      expect(view.container.textContent).toContain("Steam's shortcut list could not be read");
+      expect(view.queryByText(/Remove .*non-Steam game/)).toBeNull();
       logSpy.mockRestore();
     });
   });
@@ -1391,7 +1396,7 @@ describe("DataManagementPage", () => {
       expect(vi.mocked(backend.getRegistryPlatforms)).not.toHaveBeenCalled();
     });
 
-    it("logs the failure and leaves the figures unread when the inventory read rejects", async () => {
+    it("logs the failure and shows a dash in the Installed ROMs row when the inventory read rejects", async () => {
       vi.mocked(backend.getDataInventory).mockRejectedValue(new Error("offline"));
       const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
       const view = await renderPage();
@@ -1401,7 +1406,7 @@ describe("DataManagementPage", () => {
       logSpy.mockRestore();
     });
 
-    it("logs the failure when the shortcut count rejects", async () => {
+    it("logs the failure and shows a dash when the shortcut count rejects", async () => {
       vi.mocked(backend.getSyncStats).mockRejectedValue(new Error("offline"));
       const logSpy = vi.spyOn(backend, "logError").mockImplementation(() => {});
       const view = await renderPage();
