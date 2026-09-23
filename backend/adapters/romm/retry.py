@@ -28,7 +28,7 @@ from lib.list_result import ErrorCode
 # is 1, so the first retry is 2, the second 3 — it reads as "attempt N/M"). Fired
 # from the ladder just before it sleeps ahead of a retry. Injected at the
 # composition root (``bootstrap``) so the adapter stays service-free: it surfaces
-# retry progress without importing ``decky`` or any service (the composition root
+# retry progress without importing any service (the composition root
 # marshals the call onto the loop and emits the ``server_retry_progress`` event).
 RetryListener = Callable[[int, int, float], None]
 

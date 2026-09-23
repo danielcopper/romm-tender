@@ -190,7 +190,7 @@ class RomMetadataRepository(Protocol):
         """Iterate ``(rom_id, metadata)`` for one ``rom_id``-ordered page.
 
         Backs the paged frontend cache load so a large library never dumps every
-        row through the size-limited callable bridge in one response (#1025).
+        row as a single answer, which the host caps (``host/dispatch.py``).
         (metadata.py get_metadata_cache_page)
         """
         ...

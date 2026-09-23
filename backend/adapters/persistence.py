@@ -3,7 +3,7 @@
 Handles atomic writes, file locking, and schema version stamping for
 ``settings.json``, plus the one-time legacy ``save_sync_state.json`` read that
 feeds the settings fold. Migration logic lives in
-``domain/state_migrations.py``. No ``import decky``.
+``domain/state_migrations.py``.
 """
 
 import contextlib

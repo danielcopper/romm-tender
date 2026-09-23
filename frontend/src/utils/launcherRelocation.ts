@@ -1,11 +1,8 @@
 /**
- * Point every RomM-owned shortcut at the launcher's home outside the plugin
- * folder.
+ * Point every RomM-owned shortcut at the launcher's home.
  *
- * Decky deletes a plugin's folder whole before it unpacks an update, and until
- * this runs every shortcut's `exe` names a file inside it — so an update that
- * fails to unpack leaves the whole library unable to start, with nothing able to
- * repair it (ADR-0032).
+ * Why the launcher lives where it does, and which shortcuts count as ours, is
+ * `docs/architecture/steam-non-steam-shortcuts.md` → "Where the exe points".
  *
  * The frontend does not decide WHICH shortcuts, and does not record that it is
  * over: the backend reads every one of them out of `shortcuts.vdf` in a single
@@ -39,8 +36,8 @@ export type LauncherRelocation = { status: "relocated" } | { status: "blocked" }
 /**
  * Carry out whatever the backend says is left of the relocation.
  *
- * Runs once at plugin load — not on panel mount, because a user can launch a
- * game without ever opening the QAM.
+ * Runs once at panel load — not when the Quick Access panel mounts, because a
+ * user can launch a game without ever opening the QAM.
  */
 export async function relocateShortcutsToLauncher(): Promise<LauncherRelocation> {
   const plan = await getShortcutRelocation();
@@ -56,8 +53,8 @@ export async function relocateShortcutsToLauncher(): Promise<LauncherRelocation>
       SteamClient.Apps.SetShortcutStartDir(appId, plan.start_dir);
     }
   } catch (e) {
-    // A partial pass is not a relocation: the shortcuts it never reached are
-    // still in a plugin folder, so this answers `blocked` rather than claiming
+    // A partial pass is not a relocation: the shortcuts it never reached still
+    // name the old path, so this answers `blocked` rather than claiming
     // a move it did not finish. The next start's reading finds them and hands
     // them over again.
     logError(`launcher relocation: stopped after a failed write, leaving the rest for the next start: ${e}`);

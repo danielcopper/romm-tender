@@ -616,8 +616,8 @@ const FAILED_LOAD_RETRY_MS = 5000;
  *
  * The second occasion on {@link Entry.loadFailed}, next to the install-state
  * triggers below. It exists because those triggers miss the case that produces
- * the failure: the bridge rejects the read — plugin_loader restarting under the
- * page, a closed WebSocket — while a user looking at a game page and doing
+ * the failure: the read is rejected — the backend restarting under the page
+ * closes the WebSocket with the call in flight — while a user looking at a game page and doing
  * nothing else produces no download, no uninstall and no adoption for the entry
  * to take its cue from.
  *

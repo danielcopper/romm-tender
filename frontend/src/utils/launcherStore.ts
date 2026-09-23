@@ -12,7 +12,7 @@
  * evidence that a shortcut still points at the old path.
  *
  * Updated by:
- *   - plugin load init in index.tsx (relocateShortcutsToLauncher)
+ *   - panel load in index.tsx (relocateShortcutsToLauncher)
  *
  * Read by:
  *   - nothing, today. The card that read it through {@link useLauncherRelocated}

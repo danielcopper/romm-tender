@@ -7,9 +7,9 @@ composes the library sync sub-services (:class:`LibraryFetcher`,
 :class:`ChunkDispatcher`, :class:`CoverPreparer`, :class:`SyncRunRecorder`,
 :class:`LocalLibraryReader`)
 over a shared :class:`LibrarySyncStateBox` and exposes the callable surface
-consumed by the Decky entrypoints (platform/collection metadata, sync preview/
-apply, post-apply reporting, the ``roms``-derived queries). RomM communication
-goes through Protocol-typed adapters; no ``import decky``.
+consumed by the callables on ``Plugin`` (platform/collection metadata, sync
+preview/apply, post-apply reporting, the ``roms``-derived queries). RomM
+communication goes through Protocol-typed adapters.
 """
 
 from services.library.service import LibraryService, LibraryServiceConfig

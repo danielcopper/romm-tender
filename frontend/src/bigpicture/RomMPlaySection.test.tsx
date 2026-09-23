@@ -1186,8 +1186,8 @@ describe("RomMPlaySection", () => {
     });
 
     it("#1670 — a testConnection that throws SYNCHRONOUSLY still settles the badge and logs", async () => {
-      // The callable bridge is injected by the plugin loader; a synchronous
-      // throw out of it must not vanish into the fire-and-forget check.
+      // A synchronous throw out of the callable must not vanish into the
+      // fire-and-forget check.
       vi.mocked(backend.testConnection).mockImplementation(() => {
         throw new Error("bridge gone");
       });

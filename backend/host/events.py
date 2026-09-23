@@ -1,8 +1,7 @@
 """The event sink — where a backend event goes when there is a panel, and when there is not.
 
-Contract: the one place an event leaves this process. It replaces the bridge the
-plugin loader used to provide, and it answers one question the old one never
-did: **did this event reach anybody?**
+Contract: the one place an event leaves this process, and the one that answers
+**did this event reach anybody?**
 
 **Nothing is buffered.** An event with no panel listening is dropped, with a log
 line, and is not held for the next connection. The events this backend sends are

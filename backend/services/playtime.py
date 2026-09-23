@@ -9,7 +9,7 @@ notice: a reconcile GET that 403s (the token predates the ``roms.user.read``
 scope) raises the flag; a later successful GET, or a fresh sign-in, clears it.
 All durable state lives in the ``rom_playtime`` / ``rom_playtime_sessions`` tables
 and the ``kv_config`` scalar surface behind the Unit of Work; all RomM
-communication goes through ``RommPlaytimeApi``. No ``import decky``.
+communication goes through ``RommPlaytimeApi``.
 """
 
 from __future__ import annotations
@@ -260,7 +260,7 @@ class PlaytimeService:
         """Flush the pending-session outbox to RomM's native ingest (best-effort).
 
         Scheduled as a fire-and-forget background task (e.g. on session start)
-        so an offline backlog catches up on the next reconnect. Not a Decky
+        so an offline backlog catches up on the next reconnect. Not a
         callable — internal orchestration only.
         """
         await self._loop.run_in_executor(None, self._flush_pending_sessions_io)

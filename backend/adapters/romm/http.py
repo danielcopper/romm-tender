@@ -1,7 +1,7 @@
 """Standalone HTTP client for the RomM API.
 
-No dependency on ``decky`` — all external dependencies (settings, plugin_dir,
-logger) are injected via the constructor.
+All external dependencies (settings, plugin_dir, logger) are injected via the
+constructor.
 """
 
 import base64
@@ -51,7 +51,7 @@ class RommHttpAdapter:
     plugin_dir:
         Absolute path to the directory this program is installed in.
     logger:
-        Logger instance (replaces ``decky.logger``).
+        Logger instance.
     user_agent:
         Outgoing ``User-Agent`` header value — ``"<package name>/<version>"``,
         both from ``domain/identity.py`` (e.g. ``"romm-tender/1.2.3"``).

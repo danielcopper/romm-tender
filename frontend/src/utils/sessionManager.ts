@@ -121,11 +121,11 @@ function toSessionEntry(value: unknown): ActiveSession | null {
  * span would be silently discarded on the first reload after an upgrade.
  *
  * A KEY rename is outside what versioning can carry: a row under another key is
- * not read at all, so no branch here can lift it. This release performs one —
- * v1 and v2 both shipped under `decky-romm-sync:active-session` — so every row
- * written before it is orphaned, and nothing this plugin has ever written can
+ * not read at all, so no branch here can lift it. The key was renamed away from
+ * `decky-romm-sync:active-session`, under which v1 and v2 both shipped — so
+ * every row written under it is orphaned, and no row this program writes can
  * reach the `v === 1` branch below. It stays because the argument above is
- * about the next format change, not this one.
+ * about the next format change, not that one.
  *
  * Entries are read individually: one malformed entry never voids its siblings.
  */
@@ -142,7 +142,7 @@ function readSessionBreadcrumbs(): ActiveSession[] {
     }
     if (crumb.v === 1) {
       // v1 carried a single session inline — lift it into a one-entry list.
-      // Nothing this plugin wrote reaches here any more: the key rename above
+      // No row under the current key reaches here: the key rename above
       // orphaned every v1 row. Kept as the shape the next format change takes.
       const lifted = toSessionEntry(crumb);
       return lifted === null ? [] : [lifted];

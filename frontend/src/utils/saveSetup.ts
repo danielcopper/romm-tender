@@ -75,7 +75,7 @@ const NEEDS_USER_CHOICE_TOAST_BODY = "Configure save sync in the Saves tab first
 const CONFIRM_FAILED_TOAST_BODY = "Couldn't configure save sync — open the Saves tab to finish setup.";
 
 /** Side-effect bundle for the launch-gate handler. The component supplies
- *  Decky's `toaster.toast` and the global event dispatch; tests pass spies. */
+ *  Tender's `showToast` and the global event dispatch; tests pass spies. */
 export interface LaunchGateSetupDeps {
   /** ROM id passed to `confirmSlotChoice` on the auto-confirm branch. */
   rid: number;
@@ -90,7 +90,7 @@ export interface LaunchGateSetupDeps {
     migrateFrom: string | null,
     useServerOnConflict: boolean,
   ) => Promise<{ success?: boolean; message?: string } | undefined>;
-  /** Shows a Decky toast — wrapped as a callback so the helper is dispatch-agnostic. */
+  /** Shows a toast — wrapped as a callback so the helper is dispatch-agnostic. */
   toast: (body: string) => void;
   /** Switches to the Saves tab — wrapped as a callback so the helper is
    *  dispatch-agnostic (component dispatches a `CustomEvent`; tests pass a spy). */

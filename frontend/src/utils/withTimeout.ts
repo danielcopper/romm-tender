@@ -16,9 +16,9 @@ export class TimeoutError extends Error {
  * deadline timer is cleared as soon as the race settles, so a settled call never
  * leaves a pending timer behind.
  *
- * Decky's `callable()` has no timeout of its own and hangs forever when the
- * backend isn't ready — every callable probe that must stay responsive races
- * through this.
+ * `callable()` has no timeout of its own (`api/hostSocket.ts`): a call issued
+ * while the backend is down waits for it to come back — every callable probe
+ * that must stay responsive races through this.
  *
  * Losing the race abandons `promise`, it does not cancel it: a backend call that
  * answers late still runs to completion and still commits whatever it was going

@@ -570,10 +570,8 @@ const tender = definePlugin(() => {
     })(),
   );
 
-  // Point every shortcut at the launcher's home outside the plugin folder.
-  // Runs here rather than on panel mount because a user can launch a game
-  // without ever opening the QAM, and a shortcut still naming a file inside the
-  // plugin folder is one failed update away from not starting at all.
+  // Point every shortcut at the launcher's home. Runs here rather than on
+  // panel mount because a user can launch a game without ever opening the QAM.
   detach(
     (async () => {
       try {

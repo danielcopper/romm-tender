@@ -436,7 +436,7 @@ class SyncOrchestrator:
 
             return answer
         except SyncCancelled:
-            # sync_preview is a Decky callable — the frontend awaits its return.
+            # sync_preview is a callable — the frontend awaits its return.
             # Re-raising leaves that promise unsettled, so a user-initiated
             # cancel mid-preview returns the canonical failure shape instead of
             # propagating the cooperative cancel out of the callable (#1035).

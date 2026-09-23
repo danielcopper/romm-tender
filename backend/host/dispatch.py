@@ -40,10 +40,9 @@ if TYPE_CHECKING:
 # socket, which rejects every other call in flight, while an answer that came
 # out too large is one call's problem and must not cost the others anything.
 #
-# The number is chosen, not inherited. The reference library's largest cover is
-# 5,869,834 bytes, which base64 turns into 7,826,448 (7.46 MiB); a 4 MiB cap
-# would have refused that image with nothing to show for it. Decky's own 1 MiB
-# limit belongs to a bridge that is not in this path at all.
+# The number is chosen. The reference library's largest cover is 5,869,834
+# bytes, which base64 turns into 7,826,448 (7.46 MiB); a 4 MiB cap would have
+# refused that image with nothing to show for it.
 DEFAULT_PAYLOAD_LIMIT = 12 * 1024 * 1024
 
 

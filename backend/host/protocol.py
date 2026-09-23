@@ -23,9 +23,7 @@ exist, the answer is too large to send, the method raised. A callable's own
 failure is a perfectly successful transport and arrives in ``result``, in the
 ``{success, reason, message}`` shape ``scripts/check_failure_shape.py`` guards.
 Reading one as the other shows a user a sentence about their game where a
-programming error stands. Decky's bridge has exactly that bug in the other
-direction — it sends the key ``message`` and reads the key ``error`` — and it is
-not inherited here.
+programming error stands.
 """
 
 from __future__ import annotations

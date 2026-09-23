@@ -77,8 +77,8 @@ stayed ``1`` on-device while a manual factor was applied and rendering), so the 
 report a manual scale as automatic — and restoring "automatic" to a user who is on a
 manual scale is exactly the setting-destroying bug this capture exists to prevent.
 
-Transport: the CEF remote-debugging endpoint on ``localhost:8080`` (a Decky platform
-invariant — Decky Loader itself requires CEF debugging enabled). ``GET /json`` lists the
+Transport: the CEF remote-debugging endpoint on ``localhost:8080`` (Tender's own
+requirement — it loads its panel through the same debugger). ``GET /json`` lists the
 debuggable targets; ``SharedJSContext`` is where ``SteamClient`` lives, and the
 ``Big-Picture-*`` / ``QuickAccess_*`` page targets are the two views we measure.
 

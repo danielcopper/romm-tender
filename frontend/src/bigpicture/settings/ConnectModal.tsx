@@ -50,9 +50,9 @@ const CODE_INDICES = Array.from({ length: CODE_LENGTH }, (_unused, i) => i);
 
 const GENERIC_SIGN_IN_ERROR = "Sign-in failed. Check your connection and try again.";
 
-// Decky's callable() never times out on its own, so a plugin backend that is
-// down (or whose RPC bridge died) leaves the sign-in promise pending forever and
-// the modal stuck on "Signing in…" with no way out but Cancel. The deadline is
+// callable() never times out on its own (api/hostSocket.ts), so a backend that
+// is down or not answering leaves the sign-in promise pending and the modal
+// stuck on "Signing in…" with no way out but Cancel. The deadline is
 // the only thing that turns that into a message.
 //
 // The deadline is set above the backend's own per-request windows rather than at

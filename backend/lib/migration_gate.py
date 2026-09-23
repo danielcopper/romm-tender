@@ -1,6 +1,6 @@
-"""Decorator that blocks Decky callables while a RetroDECK migration is pending.
+"""Decorator that blocks callables while a RetroDECK migration is pending.
 
-The decorated method must be ``async def`` (every Decky callable is). The wrapped
+The decorated method must be ``async def`` (every callable is). The wrapped
 method's owner class **must** expose a ``_migration_service`` attribute with an
 ``is_retrodeck_migration_pending() -> bool`` method — this gate is a data-safety
 guard and refuses to run without it.
@@ -27,7 +27,7 @@ from typing import Any
 
 
 def migration_blocked(method):
-    """Block this Decky callable when ``is_retrodeck_migration_pending()`` is True.
+    """Block this callable when ``is_retrodeck_migration_pending()`` is True.
 
     Requires the owner to expose ``_migration_service``; raises ``RuntimeError``
     if it is missing (a wiring regression) so the safety gate fails loud rather

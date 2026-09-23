@@ -581,7 +581,7 @@ describe("ConnectModal", () => {
       expect(getByTestId("signin-error").textContent).toBe("Sign-in failed. Check your connection and try again.");
     });
 
-    // Decky's callable() stays pending forever against a downed backend, so the
+    // callable() stays pending against a backend that never answers, so the
     // never-settling handler here is the real shape of that failure, not a
     // contrived one.
     it("shows a backend-never-answered error and re-enables Sign in when the call never settles", async () => {

@@ -9,8 +9,9 @@ Chrome DevTools Protocol client:
   minutes, absent for 12+ min); the explicit collect reclaims deterministically
   (measured: 496 MB in ~5 s on-device 2026-07-11).
 
-Transport: the CEF remote-debugging endpoint on ``localhost:8080`` — a Decky
-platform invariant (Decky Loader itself requires CEF debugging enabled), and
+Transport: the CEF remote-debugging endpoint on ``localhost:8080`` — Tender's
+own requirement, since it loads its panel through the same debugger and creates
+the marker that opens it (``docs/architecture/loading-the-panel.md``), and
 NSLGameScanner is production precedent for driving it. ``GET /json`` lists the
 debuggable targets; the one titled ``SharedJSContext`` is the plugin-UI renderer.
 Its ``webSocketDebuggerUrl`` is opened with a minimal, stdlib-only RFC 6455

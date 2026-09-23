@@ -25,7 +25,7 @@ construct or consume it, and it has no place in the persisted-data layer.
 Canonical failure response shape for dict-returning callables
 =============================================================
 
-For Decky callables that return a plain ``dict`` (rather than the typed
+For callables that return a plain ``dict`` (rather than the typed
 :data:`ListResult` union above) and that can fail, the canonical failure
 shape is::
 

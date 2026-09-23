@@ -1,4 +1,4 @@
-"""Save-sync aggregate root and facade for the Decky callable surface.
+"""Save-sync aggregate root and facade for the callable surface.
 
 Composes the save-sync sub-services (sync_engine, status, versions,
 slots, rom_info, prune_support) over the SQLite ``rom_save_sync_states`` aggregate (reached
@@ -47,7 +47,7 @@ class SaveService:
 
     Composes the save-sync sub-services (sync_engine, status, versions, slots,
     rom_info, prune_support) over the SQLite ``rom_save_sync_states`` aggregate. Exposes the callable
-    surface consumed by the Decky entrypoints — every public method delegates to
+    surface consumed by the callables on ``Plugin`` — every public method delegates to
     a sub-service or reads ``settings.json``. Bulk local-save deletion is the
     only flow whose orchestration lives directly on the aggregate root because it
     spans :class:`RomInfoService` (file discovery), the on-disk save files (via

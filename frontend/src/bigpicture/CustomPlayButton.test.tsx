@@ -253,7 +253,7 @@ describe("CustomPlayButton — download_failed listener", () => {
     // Initial state lands on "play" once getCachedGameDetail resolves.
     await findByText("Play");
 
-    // Dispatch the Decky-loader event the listener subscribes to. The
+    // Dispatch the backend event the listener subscribes to. The
     // listener calls setState — wrap in act() so the resulting render flushes.
     act(() => {
       const event: DownloadFailedEvent = {
@@ -2524,7 +2524,7 @@ describe("CustomPlayButton — pre-launch relaunch re-confirm (#1150)", () => {
   });
 
   it("a hung getRomRelaunchOptions aborts launch after the timeout and restores Play", async () => {
-    // The Decky callable bridge can hang forever on a wedged backend. The fetch
+    // A callable can hang forever on a wedged backend. The fetch
     // is bounded by a 3s Promise.race; on timeout the launch is aborted and the
     // button must not stay stuck on "Launching…".
     // RTL's findBy* deadlocks under fake timers, so render + settle to "Play"
@@ -2781,7 +2781,7 @@ describe("CustomPlayButton — state-aware Resume (#1313)", () => {
   });
 
   it("removes the exact romm_session_changed handler on unmount", async () => {
-    // globalThis listeners aren't tracked by the decky harness, so spy the real
+    // globalThis listeners aren't tracked by the host event bus harness, so spy the real
     // add/remove to prove the []-effect cleanup removed the SAME handler ref.
     const addSpy = vi.spyOn(globalThis, "addEventListener");
     const removeSpy = vi.spyOn(globalThis, "removeEventListener");

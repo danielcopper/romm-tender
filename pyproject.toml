@@ -107,4 +107,4 @@ select = [
 # module against ``src`` (the repo root), and the entry point now lives under
 # ``backend/``, where that lookup does not reach it.
 known-first-party = ["lib", "domain", "services", "adapters", "host", "main"]
-known-third-party = ["_vendor", "decky"]
+known-third-party = ["_vendor"]

@@ -113,8 +113,8 @@ class MetadataService:
         """Return one ``rom_id``-ordered page of the metadata cache for plugin start.
 
         The frontend loads the cache in pages so a large library never
-        sends a multi-MB dump through the size-limited callable bridge in a
-        single response (#1025). Returns ``{"items": {str(rom_id): entry},
+        sends a multi-MB dump as a single answer, which the host caps
+        (``host/dispatch.py``). Returns ``{"items": {str(rom_id): entry},
         "total": int}`` — ``items`` keyed by ``str(rom_id)`` with the
         frontend metadata entry (list-shaped array fields), ``total`` the
         full row count. Both are read under the same short read UoW so the

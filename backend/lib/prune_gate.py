@@ -1,4 +1,4 @@
-"""Decorator that blocks conflicting Decky callables during explicit prune."""
+"""Decorator that blocks conflicting callables during explicit prune."""
 
 from __future__ import annotations
 

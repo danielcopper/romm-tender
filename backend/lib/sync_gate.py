@@ -1,6 +1,6 @@
-"""Decorator that blocks destructive Decky callables while a library sync is in flight.
+"""Decorator that blocks destructive callables while a library sync is in flight.
 
-The decorated method must be ``async def`` (every Decky callable is). The wrapped
+The decorated method must be ``async def`` (every callable is). The wrapped
 method's owner class **must** expose a ``_sync_service`` attribute with an
 ``is_sync_in_flight() -> bool`` method — this gate is a data-safety guard and
 refuses to run without it. In flight means the live sync state is RUNNING or
@@ -32,7 +32,7 @@ _BLOCKED_MESSAGE = (
 
 
 def sync_active_blocked(method):
-    """Block this Decky callable when ``is_sync_in_flight()`` is True.
+    """Block this callable when ``is_sync_in_flight()`` is True.
 
     Returns the canonical failure shape ``{success: False, reason:
     "sync_active", message}`` instead of running the gated callable while a
