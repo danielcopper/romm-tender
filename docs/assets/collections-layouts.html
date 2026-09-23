@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tender Collections Layouts</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --bg: #eef0f3; --surface: #ffffff; --ink: #1b2027; --muted: #5b6470; --line: #d5d9df;
+    --line-strong: #b9c0c9; --mark: #c4731a; --mark-ink: #ffffff; --chip: #e3e7ec;
+    --chip-on: #1b2027; --chip-on-ink: #ffffff; --rec: #2b6a3e; --rec-bg: #e6f2ea; --no: #b3401e;
+    --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    --font-mock: "Motiva Sans", "Noto Sans", "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151a; --surface: #1a1e25; --ink: #e4e8ee; --muted: #9aa3ae; --line: #2a3038;
+      --line-strong: #3a424c; --mark: #d98a2e; --mark-ink: #12151a; --chip: #262c35;
+      --chip-on: #e4e8ee; --chip-on-ink: #12151a; --rec: #8fd3a5; --rec-bg: #1c2f23; --no: #e0865f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151a; --surface: #1a1e25; --ink: #e4e8ee; --muted: #9aa3ae; --line: #2a3038;
+    --line-strong: #3a424c; --mark: #d98a2e; --mark-ink: #12151a; --chip: #262c35;
+    --chip-on: #e4e8ee; --chip-on-ink: #12151a; --rec: #8fd3a5; --rec-bg: #1c2f23; --no: #e0865f;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font-ui); }
+  button { font: inherit; color: inherit; }
+  button:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+
+  .top { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 28px; padding: 18px 28px;
+         border-bottom: 1px solid var(--line); background: var(--surface); position: sticky; top: 0; z-index: 5; }
+  .top h1 { margin: 0; font-size: 17px; font-weight: 600; }
+  .top h1 small { font-family: var(--font-mono); font-weight: 400; color: var(--muted); margin-left: 10px; font-size: 12px; }
+  .switch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .switch .lab { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: .04em; }
+  .chip { border: 1px solid var(--line-strong); background: var(--chip); border-radius: 3px; padding: 4px 10px; font-size: 13px; cursor: pointer; }
+  .chip[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-ink); border-color: var(--chip-on); }
+  .chip .rec { font-family: var(--font-mono); font-size: 10px; margin-left: 6px; color: var(--rec); letter-spacing: .06em; }
+  .chip[aria-pressed="true"] .rec { color: inherit; opacity: .75; }
+
+  main { padding: 26px 28px 80px; max-width: 1180px; }
+  h2 { margin: 0 0 4px; font-size: 22px; font-weight: 600; text-wrap: balance; }
+  .sub { margin: 0 0 18px; color: var(--muted); max-width: 74ch; }
+  h3 { margin: 0 0 8px; font-size: 13px; font-family: var(--font-mono); letter-spacing: .06em;
+       text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  h4 { margin: 26px 0 6px; font-size: 15px; font-weight: 600; }
+
+  .stage { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 4px; background: #0e1116; }
+  .caption { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 8px 0 26px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .variant { display: none; }
+  .variant.on { display: block; }
+
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px 36px; margin-bottom: 26px; }
+  .notes ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .notes ol > li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; max-width: 62ch; }
+  .notes ol > li p { margin: 0; }
+  .notes ul { margin: 0; padding-left: 18px; max-width: 62ch; display: grid; gap: 6px; }
+  .mk { width: 20px; height: 20px; border-radius: 50%; background: var(--mark); color: var(--mark-ink);
+        font: 600 11px/20px var(--font-mono); text-align: center; margin-top: 2px; }
+  .recbox { border-left: 3px solid var(--rec); background: var(--rec-bg); padding: 10px 14px; border-radius: 0 3px 3px 0; max-width: 66ch; margin-bottom: 26px; }
+  .recbox b { color: var(--rec); font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em;
+              text-transform: uppercase; display: block; margin-bottom: 4px; font-weight: 500; }
+
+  .facts { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 16px 20px; margin-bottom: 26px; max-width: 900px; }
+  .facts dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 20px; }
+  .facts dt { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+  .facts dd { margin: 0; }
+
+  .cmpwrap { overflow-x: auto; margin-bottom: 26px; }
+  .cmp { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); font-size: 14px; min-width: 720px; }
+  .cmp th, .cmp td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .cmp th { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  .cmp td.y { color: var(--rec); } .cmp td.n { color: var(--no); }
+
+  /* ---------- the Steam mock ---------- */
+  .deck { position: absolute; top: 0; left: 0; transform-origin: 0 0; overflow: hidden;
+          background: radial-gradient(900px 520px at 24% 20%, #262c39, #0e1116 70%);
+          --p: #23262e; --p2: #1a1d23; --t: #dcdedf; --mu: #8b929a; --ln: rgba(255,255,255,.07);
+          --ln2: rgba(255,255,255,.14); --blue: #1a9fff; --ok: #59bf40; --warn: #f0a030; --dng: #e8686a;
+          --fill: rgba(255,255,255,.08); --fill2: rgba(255,255,255,.14);
+          font-family: var(--font-mock); color: var(--t); font-size: 14px; line-height: 1.35; }
+  .deck::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 80px; background: #0b0d11; }
+  .deck::after { content: "95 %   13:28"; position: absolute; top: 28px; right: 24px; font: 600 15px/1 var(--font-mock); color: #dcdedf; }
+  .bgtile { position: absolute; border-radius: 6px; background: rgba(255,255,255,.035); }
+  .qam { position: absolute; top: 80px; right: 0; bottom: 0; width: 854px; display: flex; box-shadow: -12px 0 40px rgba(0,0,0,.45); }
+  .rail { width: 48px; background: var(--p2); display: flex; flex-direction: column; align-items: center; padding-top: 14px; gap: 16px; flex: none; }
+  .rail i { width: 18px; height: 18px; border: 2px solid #5a6270; border-radius: 4px; display: block; }
+  .rail i.c { border-radius: 50%; }
+  .rail i.on { border-color: #fff; background: rgba(255,255,255,.15); }
+  .content { flex: 1; min-width: 0; background: var(--p); display: flex; flex-direction: column; overflow: hidden; }
+  .dtitle { height: 34px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 600; font-size: 15px; border-bottom: 1px solid var(--ln); color: #fff; }
+  .dtitle .ar { color: var(--mu); font-size: 18px; line-height: 1; }
+  .phead { display: flex; align-items: center; gap: 12px; padding: 7px 16px 3px; flex: none; }
+  .back { background: var(--fill); padding: 4px 10px; border-radius: 2px; font-size: 13px; color: #fff; }
+  .ptitle { font-size: 17px; font-weight: 600; color: #fff; }
+
+  .cols { display: grid; gap: 16px; padding: 8px 16px 10px; flex: 1; min-height: 0; }
+  .cols.ab { grid-template-columns: minmax(0, 1fr) 270px; }
+  .cols.one { grid-template-columns: minmax(0, 1fr); }
+  .cols.ld { grid-template-columns: 264px minmax(0, 1fr); }
+  .list, .pane { overflow: hidden; min-height: 0; position: relative; }
+  .fade { position: absolute; left: 0; right: 0; bottom: 0; height: 26px; background: linear-gradient(transparent, var(--p)); pointer-events: none; }
+  .grp { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--mu); padding: 6px 0 3px; }
+  .lrow { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-bottom: 1px solid var(--ln); }
+  .lrow .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lrow .ct { font-size: 11px; font-variant-numeric: tabular-nums; flex: none; color: var(--mu); }
+  .lrow.sel { background: var(--fill2); outline: 2px solid #fff; outline-offset: -2px; border-radius: 2px; }
+  .sec-t { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--mu); padding: 10px 0 3px; display: flex; align-items: center; gap: 8px; }
+  .sec-t:first-child { padding-top: 2px; }
+  .sec-t .sp { margin-left: auto; letter-spacing: 0; text-transform: none; font-size: 12px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--ln); }
+  .row .val { color: var(--mu); font-variant-numeric: tabular-nums; text-align: right; display: flex; align-items: center; gap: 8px; flex: none; }
+  .row .val.t { color: var(--t); }
+  .desc { font-size: 12px; color: var(--mu); margin-top: 1px; }
+  .tg { width: 34px; height: 18px; border-radius: 9px; background: rgba(255,255,255,.22); position: relative; flex: none; }
+  .tg::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+  .tg.on { background: var(--blue); }
+  .tg.on::after { left: 18px; }
+  .btn { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--fill); padding: 6px 10px; border-radius: 2px; font-weight: 500; margin-top: 6px; color: #fff; font-size: 13px; }
+  .btn.dng { color: var(--dng); }
+  .btn.dis { color: var(--mu); }
+  .btn.foc { outline: 2px solid #fff; outline-offset: -2px; background: var(--fill2); }
+  .btn .ar { color: var(--mu); }
+  .btns { display: flex; gap: 6px; margin-top: 6px; }
+  .btns .btn { flex: 1; justify-content: center; margin: 0; }
+  .btn.sm { padding: 3px 8px; font-size: 12px; margin: 0; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tbl th { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--mu); text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--ln2); font-weight: 500; }
+  .tbl td { padding: 5px 6px; border-bottom: 1px solid var(--ln); vertical-align: middle; font-variant-numeric: tabular-nums; }
+  .tbl td.n, .tbl th.n { text-align: right; }
+  .tbl tr.sel td { background: var(--fill2); }
+  .tbl tr.sel td:first-child { box-shadow: inset 3px 0 0 #fff; }
+  .tbl tr.tot td { border-top: 1px solid var(--ln2); border-bottom: 0; }
+  .tbl.compact td { padding: 2px 6px; font-size: 12px; line-height: 1.25; }
+  .tbl.compact th { padding: 3px 6px; }
+  .tbl.compact .bar { height: 4px; margin: 3px 0 0; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .mu { color: var(--mu); } .dngt { color: var(--dng); }
+  .m { display: inline-block; width: 17px; height: 17px; border-radius: 50%; background: #c4731a; color: #fff;
+      font: 600 10px/17px var(--font-mono); text-align: center; vertical-align: middle; margin-left: 6px; flex: none; }
+  .notice { background: rgba(240,160,48,.10); border-left: 2px solid var(--warn); padding: 6px 10px; border-radius: 0 2px 2px 0; }
+  .notice .t { font-weight: 600; color: #fff; }
+  .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); margin: 8px 0 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 38%; background: var(--blue); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+</style>
+<style>
+  /* the tab row — a wide page may carry one; Sync did not, Library does */
+  .tabs { display: flex; align-items: center; gap: 16px; padding: 4px 16px 0; border-bottom: 1px solid var(--ln2); flex: none; }
+  .tab { padding: 6px 2px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--mu); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.on { color: #fff; border-color: #fff; }
+  .bump { font-size: 10px; padding: 1px 7px; border: 1px solid rgba(255,255,255,.4); border-radius: 10px; color: #c7cbd1; }
+  .bump.r { margin-left: auto; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--ok); flex: none; }
+  .dot.w { background: var(--warn); } .dot.r { background: var(--dng); } .dot.g { background: #6b7280; }
+  .field { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,.25); border: 1px solid var(--ln2); border-radius: 2px; padding: 5px 8px; color: var(--mu); font-size: 12px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .chp { font-size: 12px; padding: 2px 8px; border-radius: 12px; background: var(--fill); color: var(--t); }
+  .chp.on { background: #fff; color: #1a1d23; font-weight: 600; }
+  .inl { background: rgba(255,255,255,.045); border-left: 2px solid var(--blue); padding: 6px 10px; border-radius: 0 2px 2px 0; }
+  .recbox { border-left: 3px solid var(--rec); background: var(--rec-bg); padding: 10px 14px; border-radius: 0 3px 3px 0; max-width: 66ch; margin-bottom: 26px; }
+  .recbox b { color: var(--rec); font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em;
+              text-transform: uppercase; display: block; margin-bottom: 4px; font-weight: 500; }
+  .tgrow { display: flex; align-items: flex-start; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--ln); }
+  .tgrow .lb { flex: 1; min-width: 0; }
+  .bottombar { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--ln2); padding: 6px 16px 8px; margin-top: 0; flex: none; }
+  .bottombar .sp { margin-left: auto; display: flex; gap: 6px; }
+
+  /* a Steam dialog over the whole screen — 720 px wide, 76 vh tall */
+  .dim { position: absolute; inset: 0; background: rgba(0,0,0,.55); }
+  .modal { position: absolute; left: 67px; top: 64px; width: 720px; height: 406px; background: var(--p);
+           border-radius: 4px; box-shadow: 0 24px 70px rgba(0,0,0,.65); display: flex; flex-direction: column; overflow: hidden; }
+  .modal .mbody { flex: 1; min-height: 0; overflow: hidden; padding: 14px 18px 0; position: relative; }
+  .mtitle { font-size: 19px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+</style>
+<style>
+  /* additions for this study */
+  .cols { height: 263px; flex: none; }
+  .fold { flex: 1; border-top: 1px dashed rgba(255,255,255,.35); position: relative;
+          background: repeating-linear-gradient(135deg, rgba(255,255,255,.025) 0 6px, transparent 6px 12px); }
+  .fold span { position: absolute; top: 4px; right: 16px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--mu); }
+  .scrollbody { height: 263px; flex: none; overflow: hidden; padding: 4px 16px 0; position: relative; }
+  .seg { display: flex; gap: 4px; }
+  .seg span { flex: 1; text-align: center; padding: 7px 0; background: var(--fill); border-radius: 2px; opacity: .5; font-size: 13px; }
+  .seg span.on { opacity: 1; border-bottom: 2px solid var(--blue); }
+  .seg.sm span { flex: none; padding: 3px 10px; font-size: 12px; }
+  .strip { display: flex; align-items: center; gap: 10px; padding: 2px 0 6px; }
+  .strip .field { flex: 1; min-width: 0; }
+  .tbl td .tg { display: inline-block; vertical-align: middle; }
+  .tbl td.c, .tbl th.c { text-align: center; }
+  .tbl.rows td { padding: 4px 6px; }
+  .you { font-size: 11px; color: var(--mu); }
+  .other { font-size: 11px; color: var(--warn); }
+  .ttl { display: flex; align-items: baseline; gap: 10px; }
+  .lrow .tg { margin-left: 4px; }
+  .lrow.sub { padding-left: 16px; }
+  .hdrtg { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0 8px; border-bottom: 1px solid var(--ln2); margin-bottom: 2px; }
+  .hdrtg .lb { flex: 1; min-width: 0; font-size: 13px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Tender Collections Layouts <small>#1833 · panel 854 px wide, page body 263 px tall on the Deck</small></h1>
+  <div class="switch" role="group" aria-label="Layout">
+    <span class="lab">PAGE</span>
+    <button class="chip" data-v="a" aria-pressed="false">A · one wide table</button>
+    <button class="chip" data-v="b" aria-pressed="false">B · a collection per pane</button>
+    <button class="chip" data-v="c" aria-pressed="true">C · kinds left, collections right<span class="rec">RECOMMENDED</span></button>
+  </div>
+</header>
+
+<main>
+
+  <div class="facts">
+    <dl>
+      <dt>What is here</dt><dd>Every collection on the RomM server, each with one switch: sync it or not. RomM has three kinds. <strong>Standard</strong> collections are picked by hand, and the favorites collection RomM keeps for starred games is one of them. <strong>Smart</strong> collections are saved searches, so their games change as matches come and go. <strong>Virtual</strong> collections are groupings RomM builds from IGDB: franchises and IGDB collections. They have no owner.</dd>
+      <dt>What turning one on does</dt><dd>It adds a shortcut for <strong>every game in the collection, including games on platforms you do not sync</strong>. It also creates a Steam collection named <code>RomM: [name] (host)</code>. The tab says neither of these today. The only place that says it is a Settings toggle about platform groups.</dd>
+      <dt>What the page knows</dt><dd>Each collection carries its name, its kind (and, for virtual ones, franchise or IGDB collection), its ROM count, whether it is <em>yours</em>, and whether it syncs. The page does <strong>not</strong> know the owner's name, whether a collection is public, which games are in it, how big it is, or how many of its games are already in Steam. Any of those costs a paged server read <em>per collection</em>. One page load costs four requests today.</dd>
+      <dt>Mine / All is not a filter</dt><dd>Under <em>Mine</em>, other users' collections are also <strong>left out of the sync</strong>, even ones switched on earlier. It is a setting shaped like a filter. Virtual collections have no owner, so it never touches them.</dd>
+      <dt>Width and height</dt><dd>Content is 806 px on every display. Height is the scarce axis: after the title, Back and the tab row, the Deck leaves about <strong>263 px</strong>. The hatched area on each board is what the Deck does not show without scrolling. The names and numbers are invented.</dd>
+    </dl>
+  </div>
+
+  <h4>Today, at the new width</h4>
+  <div class="stage" data-w="854" data-h="534"><div class="deck">
+    <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
+    <div class="qam">
+      <div class="rail"><i></i><i class="c"></i><i></i><i class="c"></i><i></i><i class="on"></i></div>
+      <div class="content">
+        <div class="dtitle"><span class="ar">‹</span> Tender</div>
+        <div class="phead"><span class="back">‹ Back</span><span class="ptitle">Library</span></div>
+        <div class="tabs"><span class="bump">L1</span><span class="tab">Platforms</span><span class="tab on">Collections</span><span class="bump r">R1</span></div>
+        <div class="scrollbody">
+          <div class="tgrow"><span class="lb">Sync RomM favorites<div class="desc">Includes 14 favorited ROMs</div></span><span class="tg on"></span></div>
+          <div style="padding:8px 0 4px">Show collections<div class="desc">Every collection on the server, including other users' public ones.</div></div>
+          <div class="seg"><span class="on">All</span><span>Mine</span></div>
+          <div class="seg" style="margin-top:10px"><span class="on">Standard</span><span>Smart</span><span>Virtual</span></div>
+          <div class="sec-t" style="padding-top:14px">Standard collections (12)</div>
+          <div class="field">Search collections (fuzzy)</div>
+          <div class="btns"><div class="btn" style="justify-content:center">Enable All</div><div class="btn" style="justify-content:center">Disable All</div></div>
+          <div class="tgrow"><span class="lb">Couch co-op<div class="desc">31 ROMs</div></span><span class="tg on"></span></div>
+          <div class="tgrow"><span class="lb">Finished<div class="desc">58 ROMs</div></span><span class="tg"></span></div>
+        </div>
+        <div class="fold"><span>below the fold on the Deck</span></div>
+      </div>
+    </div>
+  </div></div>
+  <div class="caption"><span>Before the first collection: a toggle, a label, two button rows, a heading, a search and a button row</span><span>The first collection starts below the fold</span></div>
+
+  <!-- ============ A ============ -->
+  <section class="variant" id="v-a">
+    <h2>A · One wide table</h2>
+    <p class="sub">What <code>qam-panel.md</code> records today: no detail side, one table under a short strip of filters. All four filter rows fold into one line, favorites moves beside the bulk buttons, and every collection is a row with name, kind, owner, ROM count and a toggle.</p>
+
+    <div class="stage" data-w="854" data-h="534"><div class="deck">
+      <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
+      <div class="qam">
+        <div class="rail"><i></i><i class="c"></i><i></i><i class="c"></i><i></i><i class="on"></i></div>
+        <div class="content">
+          <div class="dtitle"><span class="ar">‹</span> Tender</div>
+          <div class="phead"><span class="back">‹ Back</span><span class="ptitle">Library</span></div>
+          <div class="tabs"><span class="bump">L1</span><span class="tab">Platforms</span><span class="tab on">Collections</span><span class="bump r">R1</span></div>
+          <div class="scrollbody">
+            <div class="strip">
+              <div class="seg sm"><span class="on">Standard 12</span><span>Smart 3</span><span>Virtual 65</span></div>
+              <span class="mu" style="font-size:12px">Show <span class="m">1</span></span>
+              <div class="seg sm"><span>Mine</span><span class="on">All</span></div>
+              <div class="field">Search</div>
+            </div>
+            <div class="strip" style="border-bottom:1px solid var(--ln2)">
+              <span class="tg on"></span><span style="font-size:13px">Sync RomM favorites <span class="mu">· 14 ROMs</span> <span class="m">2</span></span>
+              <span style="margin-left:auto;display:flex;gap:6px"><span class="btn sm">Enable all</span><span class="btn sm">Disable all</span></span>
+            </div>
+            <table class="tbl rows">
+              <thead><tr><th>Collection <span class="m">3</span></th><th>Kind</th><th>Owner</th><th class="n">ROMs</th><th class="c">Sync</th></tr></thead>
+              <tbody>
+                <tr class="sel"><td>Couch co-op</td><td class="mu">Standard</td><td class="you">you</td><td class="n">31</td><td class="c"><span class="tg on"></span></td></tr>
+                <tr><td>Finished</td><td class="mu">Standard</td><td class="you">you</td><td class="n">58</td><td class="c"><span class="tg"></span></td></tr>
+                <tr><td>Handheld picks</td><td class="mu">Standard</td><td class="other">another user</td><td class="n">22</td><td class="c"><span class="tg"></span></td></tr>
+                <tr><td>Kids</td><td class="mu">Standard</td><td class="you">you</td><td class="n">17</td><td class="c"><span class="tg on"></span></td></tr>
+                <tr><td>Short sessions</td><td class="mu">Standard</td><td class="you">you</td><td class="n">40</td><td class="c"><span class="tg"></span></td></tr>
+                <tr><td>To play next</td><td class="mu">Standard</td><td class="you">you</td><td class="n">9</td><td class="c"><span class="tg on"></span></td></tr>
+                <tr><td>Translations</td><td class="mu">Standard</td><td class="other">another user</td><td class="n">26</td><td class="c"><span class="tg"></span></td></tr>
+              </tbody>
+            </table>
+            <div class="fade"></div>
+          </div>
+          <div class="fold"><span>below the fold on the Deck</span></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="caption"><span>Two lines of controls, then a table · six rows above the fold</span><span>Virtual adds a Franchise / IGDB collection filter to line one</span></div>
+
+    <div class="notes">
+      <div><h3>Notes</h3>
+        <ol>
+          <li><span class="mk">1</span><p><strong>One line for every filter.</strong> Kind with its counts, owner scope and search sit side by side. Virtual adds a third segmented control on the same line.</p></li>
+          <li><span class="mk">2</span><p><strong>Favorites beside the bulk buttons</strong>, as a single switch, because there is only ever one favorites collection.</p></li>
+          <li><span class="mk">3</span><p><strong>A table because a row has more than two facts</strong>, which is the panel's rule for tables. The owner column says <em>you</em> or <em>another user</em>. The payload has no owner name to show.</p></li>
+        </ol>
+      </div>
+      <div><h3>What it costs</h3>
+        <ul>
+          <li><strong>The Mine / All switch still looks like a filter</strong> while it removes collections from the sync. Placing it next to the search makes that worse.</li>
+          <li><strong>Nothing says what turning a collection on does.</strong> The only room left is a line under the table, below the fold.</li>
+          <li>The <em>Kind</em> column says the same thing on every row, because the table already shows one kind at a time. It carries information only inside Virtual.</li>
+          <li>Line one holds three segmented controls and a search field. In German (<em>Standard · Intelligent · Virtuell</em>, <em>Meine · Alle</em>, <em>Suchen</em>) it wraps, and the table loses a row.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ B ============ -->
+  <section class="variant" id="v-b">
+    <h2>B · A collection per pane</h2>
+    <p class="sub">The Platforms shape: collections on the left, each with its toggle, and everything about the focused collection on the right. This is the answer to "what does a collection's detail show".</p>
+
+    <div class="stage" data-w="854" data-h="534"><div class="deck">
+      <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
+      <div class="qam">
+        <div class="rail"><i></i><i class="c"></i><i></i><i class="c"></i><i></i><i class="on"></i></div>
+        <div class="content">
+          <div class="dtitle"><span class="ar">‹</span> Tender</div>
+          <div class="phead"><span class="back">‹ Back</span><span class="ptitle">Library</span></div>
+          <div class="tabs"><span class="bump">L1</span><span class="tab">Platforms</span><span class="tab on">Collections</span><span class="bump r">R1</span></div>
+          <div class="cols ld">
+            <div class="list">
+              <div class="seg sm" style="margin:2px 0 4px"><span>Standard</span><span>Smart</span><span class="on">Virtual</span></div>
+              <div class="seg sm" style="margin-bottom:4px"><span class="on">All</span><span>Franchise</span><span>IGDB</span></div>
+              <div class="field" style="margin-bottom:4px">Search <span class="m">1</span></div>
+              <div class="lrow"><span class="nm">Castlevania</span><span class="tg"></span></div>
+              <div class="lrow sel"><span class="nm">Final Fantasy</span><span class="tg on"></span></div>
+              <div class="lrow"><span class="nm">Mega Man</span><span class="tg"></span></div>
+              <div class="lrow"><span class="nm">Mega Man X</span><span class="tg on"></span></div>
+              <div class="fade"></div>
+            </div>
+            <div class="pane">
+              <div class="ttl"><span class="ptitle" style="font-size:16px">Final Fantasy</span><span class="desc">Franchise · from IGDB · no owner</span></div>
+              <div class="sec-t">Its games <span class="m">2</span></div>
+              <div class="row"><span>On RomM</span><span class="val t">23 ROMs</span></div>
+              <div class="row"><span>On platforms you do not sync</span><span class="val">not read yet</span></div>
+              <div class="btn"><span>Count what turning it on adds</span><span class="ar">›</span></div>
+              <div class="sec-t">In Steam <span class="m">3</span></div>
+              <div class="row"><span>Collection</span><span class="val t">RomM: [Final Fantasy] (romm.lan)</span></div>
+            </div>
+          </div>
+          <div class="fold"><span>below the fold on the Deck</span></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="caption"><span>List 264 px · pane 526 px</span><span>Three lines of filters above the list leave four rows</span></div>
+
+    <div class="notes">
+      <div><h3>Notes</h3>
+        <ol>
+          <li><span class="mk">1</span><p><strong>The filters have to live above the list.</strong> In 264 px they stack: kind, the virtual sub-type (or Mine / All for the other kinds), then search.</p></li>
+          <li><span class="mk">2</span><p><strong>The one fact worth a pane costs a server read.</strong> "How many of its games are new to Steam" means paging through the collection's ROMs. Focus selects on this layout, so the count has to wait for a press, the same rule Data Management uses for its scans.</p></li>
+          <li><span class="mk">3</span><p><strong>The Steam name</strong> is known locally and shows what turning it on creates.</p></li>
+        </ol>
+      </div>
+      <div><h3>What it costs</h3>
+        <ul>
+          <li><strong>Without the new read, the pane holds three facts</strong>, and the list row already shows two of them.</li>
+          <li>It needs a new callable, per-collection paging and a press-to-count state. None of that exists today.</li>
+          <li>Only four rows fit, and Virtual alone can hold 65 or more collections. Scrolling one row at a time through a narrow column is the slowest way to reach the 50th.</li>
+          <li>Favorites has no clear place: it would be a row in the Standard list, or a switch on top of three lines of filters.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ C ============ -->
+  <section class="variant on" id="v-c">
+    <h2>C · Kinds on the left, collections on the right</h2>
+    <p class="sub">A list-and-detail layout where the <strong>list holds the kinds, not the collections</strong>. Kind stops being a filter row and becomes where you are. Mine / All becomes one toggle at the top of that column. Each pane opens with one sentence on what turning that kind on does, then a table of its collections.</p>
+
+    <h4>A kind, and its collections</h4>
+    <div class="stage" data-w="854" data-h="534"><div class="deck">
+      <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
+      <div class="qam">
+        <div class="rail"><i></i><i class="c"></i><i></i><i class="c"></i><i></i><i class="on"></i></div>
+        <div class="content">
+          <div class="dtitle"><span class="ar">‹</span> Tender</div>
+          <div class="phead"><span class="back">‹ Back</span><span class="ptitle">Library</span></div>
+          <div class="tabs"><span class="bump">L1</span><span class="tab">Platforms</span><span class="tab on">Collections</span><span class="bump r">R1</span></div>
+          <div class="cols ld">
+            <div class="list">
+              <div class="hdrtg"><span class="lb">Other users' collections <span class="m">1</span><div class="desc">Their public ones, shown and synced</div></span><span class="tg on"></span></div>
+              <div class="lrow"><span class="nm">Favorites <span class="m">2</span></span><span class="ct">14 ROMs</span><span class="tg on"></span></div>
+              <div class="lrow sel"><span class="nm">Collections</span><span class="ct">4 of 12 on</span></div>
+              <div class="lrow"><span class="nm">Smart collections</span><span class="ct">1 of 3 on</span></div>
+              <div class="grp">Autogenerated</div>
+              <div class="lrow"><span class="nm">Franchises</span><span class="ct">3 of 41 on</span></div>
+              <div class="lrow"><span class="nm">IGDB collections</span><span class="ct">0 of 24 on</span></div>
+            </div>
+            <div class="pane">
+              <div class="ttl"><span class="ptitle" style="font-size:16px">Collections</span><span class="desc">picked by hand in RomM</span></div>
+              <div class="desc" style="margin:2px 0 6px">Turning one on adds all its games to Steam, including games on platforms you do not sync, and groups them as <span style="color:var(--t)">RomM: [name]</span>. <span class="m">3</span></div>
+              <div class="strip" style="padding:0 0 4px"><div class="field">Search</div><span class="btn sm">Enable all</span><span class="btn sm">Disable all</span></div>
+              <table class="tbl rows">
+                <thead><tr><th>Collection <span class="m">4</span></th><th>Owner</th><th class="n">ROMs</th><th class="c">Sync</th></tr></thead>
+                <tbody>
+                  <tr class="sel"><td>Couch co-op</td><td class="you">you</td><td class="n">31</td><td class="c"><span class="tg on"></span></td></tr>
+                  <tr><td>Kids</td><td class="you">you</td><td class="n">17</td><td class="c"><span class="tg on"></span></td></tr>
+                  <tr><td>To play next</td><td class="you">you</td><td class="n">9</td><td class="c"><span class="tg on"></span></td></tr>
+                  <tr><td>Translations</td><td class="other">another user</td><td class="n">26</td><td class="c"><span class="tg on"></span></td></tr>
+                  <tr><td>Finished</td><td class="you">you</td><td class="n">58</td><td class="c"><span class="tg"></span></td></tr>
+                  <tr><td>Handheld picks</td><td class="other">another user</td><td class="n">22</td><td class="c"><span class="tg"></span></td></tr>
+                </tbody>
+              </table>
+              <div class="fade"></div>
+            </div>
+          </div>
+          <div class="fold"><span>below the fold on the Deck</span></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="caption"><span>List 264 px: the owner toggle and five kinds, all visible</span><span>Pane 526 px: a sentence, one line of controls, six rows above the fold</span></div>
+
+    <h4>Favorites, and a kind with no owner</h4>
+    <div class="two" style="gap:18px">
+    <div>
+    <div class="stage" data-w="854" data-h="534"><div class="deck">
+      <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
+      <div class="qam">
+        <div class="rail"><i></i><i class="c"></i><i></i><i class="c"></i><i></i><i class="on"></i></div>
+        <div class="content">
+          <div class="dtitle"><span class="ar">‹</span> Tender</div>
+          <div class="phead"><span class="back">‹ Back</span><span class="ptitle">Library</span></div>
+          <div class="tabs"><span class="bump">L1</span><span class="tab">Platforms</span><span class="tab on">Collections</span><span class="bump r">R1</span></div>
+          <div class="cols ld">
+            <div class="list">
+              <div class="hdrtg"><span class="lb">Other users' collections<div class="desc">Their public ones, shown and synced</div></span><span class="tg on"></span></div>
+              <div class="lrow sel"><span class="nm">Favorites</span><span class="ct">14 ROMs</span><span class="tg on"></span></div>
+              <div class="lrow"><span class="nm">Collections</span><span class="ct">4 of 12 on</span></div>
+              <div class="lrow"><span class="nm">Smart collections</span><span class="ct">1 of 3 on</span></div>
+              <div class="grp">Autogenerated</div>
+              <div class="lrow"><span class="nm">Franchises</span><span class="ct">3 of 41 on</span></div>
+              <div class="lrow"><span class="nm">IGDB collections</span><span class="ct">0 of 24 on</span></div>
+            </div>
+            <div class="pane">
+              <div class="ttl"><span class="ptitle" style="font-size:16px">Favorites</span><span class="desc">the games you starred in RomM</span></div>
+              <div class="desc" style="margin:2px 0 6px">RomM keeps one favorites collection per account. Turned on, its games come to Steam even from platforms you do not sync, grouped as <span style="color:var(--t)">RomM: [Favorites]</span>.</div>
+              <div class="row"><span>Games in it</span><span class="val t">14 ROMs</span></div>
+              <div class="row"><span>Sync</span><span class="val t">on — the switch is in the row</span></div>
+            </div>
+          </div>
+          <div class="fold"><span>below the fold on the Deck</span></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="caption"><span>The favorites switch is in its row, as a platform's is</span><span>"Includes 14 favorited ROMs" becomes the row's count</span></div>
+    </div>
+    <div>
+    <div class="stage" data-w="854" data-h="534"><div class="deck">
+      <div class="bgtile" style="left:40px;top:120px;width:300px;height:200px"></div>
+      <div class="qam">
+        <div class="rail"><i></i><i class="c"></i><i></i><i class="c"></i><i></i><i class="on"></i></div>
+        <div class="content">
+          <div class="dtitle"><span class="ar">‹</span> Tender</div>
+          <div class="phead"><span class="back">‹ Back</span><span class="ptitle">Library</span></div>
+          <div class="tabs"><span class="bump">L1</span><span class="tab">Platforms</span><span class="tab on">Collections</span><span class="bump r">R1</span></div>
+          <div class="cols ld">
+            <div class="list">
+              <div class="hdrtg"><span class="lb">Other users' collections<div class="desc">Their public ones, shown and synced</div></span><span class="tg on"></span></div>
+              <div class="lrow"><span class="nm">Favorites</span><span class="ct">14 ROMs</span><span class="tg on"></span></div>
+              <div class="lrow"><span class="nm">Collections</span><span class="ct">4 of 12 on</span></div>
+              <div class="lrow"><span class="nm">Smart collections</span><span class="ct">1 of 3 on</span></div>
+              <div class="grp">Autogenerated</div>
+              <div class="lrow sel"><span class="nm">Franchises</span><span class="ct">3 of 41 on</span></div>
+              <div class="lrow"><span class="nm">IGDB collections</span><span class="ct">0 of 24 on</span></div>
+            </div>
+            <div class="pane">
+              <div class="ttl"><span class="ptitle" style="font-size:16px">Franchises</span><span class="desc">grouped by RomM from IGDB · no owner</span></div>
+              <div class="desc" style="margin:2px 0 6px">Turning one on adds every game of that franchise, on any platform, as <span style="color:var(--t)">RomM: [name]</span>.</div>
+              <div class="strip" style="padding:0 0 4px"><div class="field">Search</div><span class="btn sm">Enable all</span><span class="btn sm">Disable all</span></div>
+              <table class="tbl rows">
+                <thead><tr><th>Franchise</th><th class="n">ROMs</th><th class="c">Sync</th></tr></thead>
+                <tbody>
+                  <tr><td>Final Fantasy</td><td class="n">23</td><td class="c"><span class="tg on"></span></td></tr>
+                  <tr><td>Mega Man</td><td class="n">19</td><td class="c"><span class="tg on"></span></td></tr>
+                  <tr><td>Metroid</td><td class="n">8</td><td class="c"><span class="tg on"></span></td></tr>
+                  <tr class="sel"><td>Castlevania</td><td class="n">14</td><td class="c"><span class="tg"></span></td></tr>
+                  <tr><td>Sonic the Hedgehog</td><td class="n">21</td><td class="c"><span class="tg"></span></td></tr>
+                  <tr><td>The Legend of Zelda</td><td class="n">12</td><td class="c"><span class="tg"></span></td></tr>
+                </tbody>
+              </table>
+              <div class="fade"></div>
+            </div>
+          </div>
+          <div class="fold"><span>below the fold on the Deck</span></div>
+        </div>
+      </div>
+    </div></div>
+    <div class="caption"><span>No owner column where the kind has no owner</span><span>The 50-row cap only bites here, and search stays</span></div>
+    </div>
+    </div>
+
+    <div class="notes">
+      <div><h3>Notes</h3>
+        <ol>
+          <li><span class="mk">1</span><p><strong>Mine / All becomes a toggle that says what it does:</strong> <em>Other users' collections</em>, on or off. Off means they are hidden here and left out of the sync, which is what <em>Mine</em> does today. It sits at the head of the column, where Platforms puts its own column-wide controls, because it applies to two of the kinds.</p></li>
+          <li><span class="mk">2</span><p><strong>Favorites becomes a row with its switch in it</strong>, like a platform row. The number in the row is today's "Includes 14 favorited ROMs". With no favorites collection, the row stays, greyed, with a dash for the count.</p></li>
+          <li><span class="mk">3</span><p><strong>What turning a collection on does, once per kind</strong>, worded for that kind. This is where the page finally says that collections bring in games from platforms you do not sync.</p></li>
+          <li><span class="mk">4</span><p><strong>The table orders collections that are on above those that are off</strong>, and freezes that order while the page is open, the same as Platforms. The <em>Owner</em> column appears only on the two kinds that have owners.</p></li>
+        </ol>
+      </div>
+      <div><h3>What it costs</h3>
+        <ul>
+          <li><strong>Moving between kinds is a walk down a list</strong>, not a single press on a segmented control. Search already works one kind at a time today, so nothing is lost there.</li>
+          <li>The virtual kind becomes two rows, <em>Franchises</em> and <em>IGDB collections</em>, under RomM's own heading <em>Autogenerated</em>. The sub-filter row disappears; the heading costs one line of the column.</li>
+          <li>The owner toggle is a switch outside a selectable row, at the head of a list-and-detail column. Platforms' Enable all / Disable all sit in the same slot, so the frame already supports it.</li>
+          <li>Once the answer arrives, walking the kind rows costs nothing: every count is local, so focus-selects has no reads to hold back.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="recbox">
+    <b>Recommendation</b>
+    C. Kind is where the user already navigates, so it becomes the list, and the two segmented rows disappear instead of being squeezed. The owner switch stops pretending to be a filter. The promise of what turning a collection on does gets a sentence per kind. It needs no new backend read, and it reuses Platforms' list and detail, its column header and the pane table. A per-collection pane (B) would be the right shape only once there is something to put in it, and today there is nothing that does not cost a server read.
+  </div>
+
+  <h3>Side by side</h3>
+  <div class="cmpwrap">
+  <table class="cmp">
+    <thead><tr><th></th><th>Today</th><th>A · one table</th><th>B · per pane</th><th>C · kinds left</th></tr></thead>
+    <tbody>
+      <tr><td>Collections above the fold on the Deck</td><td class="n">0</td><td>6</td><td class="n">4</td><td class="y">6, and every kind</td></tr>
+      <tr><td>Lines of controls before the first collection</td><td class="n">6</td><td>2</td><td class="n">3, in a narrow column</td><td class="y">1</td></tr>
+      <tr><td>Says what turning one on does</td><td class="n">no</td><td class="n">below the fold</td><td class="y">yes, per collection</td><td class="y">yes, per kind</td></tr>
+      <tr><td>Mine / All reads as what it is</td><td class="n">no</td><td class="n">no</td><td class="n">no</td><td class="y">yes</td></tr>
+      <tr><td>New backend reads</td><td class="y">none</td><td class="y">none</td><td class="n">per-collection paging</td><td class="y">none</td></tr>
+      <tr><td>Survives German</td><td>—</td><td class="n">line one wraps</td><td>yes</td><td class="y">yes</td></tr>
+      <tr><td>Parts it reuses</td><td>—</td><td>pane table</td><td>list and detail</td><td class="y">list and detail, column header, pane table</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Settled after this study</h3>
+  <ul style="max-width:74ch">
+    <li><strong>C is the shape.</strong></li>
+    <li><strong>The owner switch reads <em>Other users' collections</em></strong>; on means what <em>All</em> means today, and the behaviour is unchanged.</li>
+    <li><strong>The kinds take RomM's own headings</strong>: <em>Collections</em>, <em>Smart collections</em>, and <em>Autogenerated</em> as a group over <em>Franchises</em> and <em>IGDB collections</em>. The Steam names the type-distinguishing setting builds follow the same words: a hand-picked collection carries no suffix, and the others carry <em>(Smart)</em>, <em>(Franchise)</em> and <em>(IGDB collection)</em>. The keys on the wire and in the settings stay RomM's <code>standard</code> / <code>smart</code> / <code>virtual</code>.</li>
+    <li><strong>No "already in Steam" column.</strong> The count exists locally only for collections that have synced, which is the one case where nobody asks what turning it on would add.</li>
+    <li><strong>Collections that are on come first</strong>, frozen while the page is open, as on Platforms.</li>
+    <li><strong>#1020:</strong> a failed read says what went wrong, and leaving the tab and coming back asks again.</li>
+  </ul>
+
+</main>
+
+<script>
+  (function () {
+    var KEY = "tender-collections-layouts-v1";
+    var state = { v: "c" };
+    try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch (e) {}
+    if (!document.getElementById("v-" + state.v)) state.v = "c";
+
+    function fit() {
+      document.querySelectorAll(".stage").forEach(function (s) {
+        if (!s.closest(".variant") || s.closest(".variant").classList.contains("on")) {
+          var w = s.clientWidth; if (!w) return;
+          var dw = Number(s.dataset.w), dh = Number(s.dataset.h);
+          var sc = Math.min(1, w / dw);
+          var deck = s.querySelector(".deck");
+          deck.style.width = dw + "px";
+          deck.style.height = dh + "px";
+          deck.style.transform = "scale(" + sc + ")";
+          s.style.height = Math.round(dh * sc) + "px";
+        }
+      });
+    }
+    function apply() {
+      document.querySelectorAll(".variant").forEach(function (el) { el.classList.toggle("on", el.id === "v-" + state.v); });
+      document.querySelectorAll(".chip[data-v]").forEach(function (c) { c.setAttribute("aria-pressed", String(c.dataset.v === state.v)); });
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+      fit();
+    }
+    document.querySelectorAll(".chip[data-v]").forEach(function (c) {
+      c.addEventListener("click", function () { state.v = c.dataset.v; apply(); window.scrollTo({ top: 0 }); });
+    });
+    if ("ResizeObserver" in window) new ResizeObserver(fit).observe(document.body);
+    window.addEventListener("resize", fit);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+    apply();
+  })();
+</script>
+
+</body>
+</html>
