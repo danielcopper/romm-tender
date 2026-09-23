@@ -10,7 +10,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { useState, type CSSProperties, type FC, type ReactNode } from "react";
 import { ENTRY_STOP_ATTR } from "../../utils/entryFocus";
-import { ListDetail, type ListDetailItem, type ListDetailProps } from "./ListDetail";
+import { FOCUS_RING_REACH, ListDetail, type ListDetailItem, type ListDetailProps } from "./ListDetail";
 
 const PLATFORMS = [
   { id: "n64", name: "Nintendo 64" },
@@ -198,6 +198,27 @@ describe("ListDetail", () => {
 
     expect(onEnableAll).toHaveBeenCalledTimes(1);
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("keeps room for Steam's focus ring around both panes' content, the header inside it with the rows", () => {
+    render(
+      <ListDetail
+        items={platformItems(() => {})}
+        listHeader={<button>Enable all</button>}
+        selectedId="n64"
+        onSelect={() => {}}
+        renderDetail={(id) => <div>detail for {id ?? "nothing"}</div>}
+      />,
+    );
+
+    // What this pins is the declaration: the ring itself is drawn by Steam and
+    // happy-dom lays nothing out, so whether it now fits is device-only.
+    const list = screen.getByRole("button", { name: "Enable all" }).parentElement!;
+    expect(list.style.padding).toBe(`${FOCUS_RING_REACH}px`);
+    // The header and every row share that one inset element, so the header's
+    // span moves with the rows' by construction.
+    expect(list.contains(screen.getByRole("button", { name: /Nintendo 64/ }))).toBe(true);
+    expect(screen.getByText("detail for n64").parentElement!.style.padding).toBe(`${FOCUS_RING_REACH}px`);
   });
 
   it("makes a control-less row a focus stop, and selects it on press", () => {

@@ -580,11 +580,24 @@ and inside the same scrolling region. It sits outside every row on purpose: focu
 selection, because a page may do real work on one.
 
 It spans exactly what a row spans, and that span is **not symmetric**: a row is inset on the left by its own selection
-marker (a 3 px bar and a 5 px gap) and runs flush to the column's right edge. Steam's `Field`, which every row is built
-from, adds nothing horizontally inside the QAM — it renders in its `Classic` mode there, whose only padding is 10 px top
-and bottom — so there is no Steam inset to match and a symmetric padding on the header is simply narrower than the rows.
-Measured on the device through CEF at the Deck's 854 px: rows run 79.6 → 335.9 in a 264 px list column, and the header's
-pair now runs 79.9 → 335.9.
+marker (a 3 px bar and a 5 px gap) and runs to the right edge of the list's content. Steam's `Field`, which every row is
+built from, adds nothing horizontally inside the QAM — it renders in its `Classic` mode there, whose only padding is 10
+px top and bottom — so there is no Steam inset to match and a symmetric padding on the header is simply narrower than
+the rows. The header and the rows sit inside one element, so they move together whatever inset that element takes.
+
+**Both panes keep 4 px of room around their content for Steam's focus ring** (`FOCUS_RING_REACH` in
+`bigpicture/layout/ListDetail.tsx`). The ring is not drawn on the focused element: Steam measures that element and draws
+a separate `FocusRing` element over it, inside the scroll region's own focus-ring root, as a 2 px outline at a 2 px
+offset (`css/chunk~2dcc5aaf7.css`) — so it reaches 4 px past every edge of what is focused, and the region clips it at
+its own box. Without the room, a row spanning the list column lost both side edges of its ring and the first row its top
+edge too; a detail pane's focusable table rows (the recovery bundles, the registered devices) span their pane the same
+way. The room goes inside the region rather than on it, because the region's sideways clip is deliberate
+(`ScrollRegion`). Measured through CEF in the dev window (855 px wide) with the inset applied to the running page: a
+list row runs 52 → 308 in the 48 → 312 column, and the first row starts 4 px below the region's top, so the ring's 4 px
+lands exactly on the region's edges. The ring itself could not be observed there — Steam draws it only in the active
+navigation context — so its reach is read from Steam's stylesheet, not measured. The earlier device figures for this
+span (rows 79.6 → 335.9, header 79.9 → 335.9 at the Deck's 854 px) predate the inset and no longer hold; the device
+figures with it have not been taken.
 
 ### Tables
 
