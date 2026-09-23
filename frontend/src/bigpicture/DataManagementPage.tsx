@@ -30,12 +30,12 @@ import { useDataPage, type DataPageState, type PageRead, type ScannedCount } fro
  * while the read is still in flight, which the slot draws as a spinner.
  *
  * A figure that costs a round trip or a backend scan reads `scan` until the
- * reader asks for it, and from the press on is read like any other figure,
- * because focus selects on this layout: a figure fetched on
- * selection would put that round trip under every row the stick passes. Grid
- * images keeps what its scan found for the rest of the visit; Gone from RomM
- * keeps it until a cleanup run finishes, which is what makes the number wrong,
- * and then reads `scan` again.
+ * reader asks for it, because focus selects on this layout: a figure fetched on
+ * selection would put that round trip under every row the stick passes. From
+ * the press on it is read like any other figure. Grid images keeps what its
+ * scan found for the rest of the visit; Gone from RomM keeps it until a cleanup
+ * run finishes, which is what makes the number wrong, and then reads `scan`
+ * again.
  *
  * The dash is not a zero, and no row prints one for an emptiness.
  */

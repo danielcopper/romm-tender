@@ -937,7 +937,7 @@ describe("DataManagementPage", () => {
       const row = view.getByTestId("data-row-removed-games");
       expect(within(row).queryByTestId("spinner")).not.toBeNull();
       expect(row.textContent).not.toContain("scan");
-      expect(button(view, "Scanning...").disabled).toBe(true);
+      expect(button(view, "Scanning…").disabled).toBe(true);
     });
 
     it("shows a dash and the retry line when the Gone from RomM scan rejects", async () => {
@@ -1080,7 +1080,10 @@ describe("DataManagementPage", () => {
       await press(button(view, "Scan for orphaned images"));
 
       expect(vi.mocked(backend.cleanupOrphanedGridImages)).not.toHaveBeenCalled();
-      expect(view.getByTestId("status-grid-images").textContent).toContain("Could not read Steam's shortcut list");
+      // A scan press: the cause is worded for a scan, not for a removal.
+      expect(view.getByTestId("status-grid-images").textContent).toBe(
+        "Steam's shortcut list could not be read, so nothing could be checked.",
+      );
     });
 
     it("surfaces a gate refusal on the scan", async () => {
@@ -1113,13 +1116,14 @@ describe("DataManagementPage", () => {
       expect(view.getByTestId("status-grid-images").textContent).toBe("A bound shortcut was missing");
     });
 
-    it("surfaces the failure when the scan rejects", async () => {
+    it("says a rejected scan failed once, in the retry line, with no second status line", async () => {
       vi.mocked(backend.cleanupOrphanedGridImages).mockRejectedValue(new Error("boom"));
       const view = await pageOn("grid-images");
 
       await press(button(view, "Scan for orphaned images"));
 
-      expect(view.getByTestId("status-grid-images").textContent).toBe("Failed to scan for orphaned images");
+      expect(view.container.textContent).toContain("The scan failed — press Scan for orphaned images to try again.");
+      expect(view.queryByTestId("status-grid-images")).toBeNull();
     });
 
     it("surfaces the failure when the removal rejects", async () => {
@@ -1424,7 +1428,7 @@ describe("DataManagementPage", () => {
       expect(view.getByText("Unknown (42)")).toBeTruthy();
     });
 
-    it("logs an error and shows the store as unread when enumeration throws", async () => {
+    it("logs an error and shows a dash and the failure line when enumeration throws", async () => {
       vi.stubGlobal("collectionStore", {
         deckDesktopApps: {
           apps: {

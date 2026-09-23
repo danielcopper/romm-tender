@@ -119,12 +119,11 @@ export interface RemovalProgress {
 }
 
 /**
- * A figure the page reads as it opens: still being read, could not be read, or
- * answered.
+ * A figure the page reads: still being read, could not be read, or answered.
  *
  * Reading and failed are kept apart because they tell the reader opposite
- * things — one is work that will finish on its own, the other asks them to open
- * the page again.
+ * things — one is work that will finish on its own, the other asks them to try
+ * again.
  */
 export type PageRead<T> = { state: "reading" } | { state: "failed" } | { state: "answered"; value: T };
 
@@ -522,17 +521,24 @@ export function useDataPage(): DataPageState {
     if (liveAppIds === null) {
       // The scan could not run — without the live keep-set, nothing can be
       // proven orphaned. Abort without calling the backend.
-      if (!execute) setOrphanedGridImages(FAILED);
-      setGridStatus("Could not read Steam's shortcut list — nothing was removed.");
+      if (execute) {
+        setGridStatus("Could not read Steam's shortcut list — nothing was removed.");
+      } else {
+        setOrphanedGridImages(FAILED);
+        setGridStatus("Steam's shortcut list could not be read, so nothing could be checked.");
+      }
       return;
     }
     if (!execute) {
+      // A failed scan is said once, by the pane's retry line; the status line
+      // carries only a cause that line cannot give.
       setOrphanedGridImages(READING);
+      setGridStatus("");
       try {
         const result = await cleanupOrphanedGridImages(liveAppIds, true);
         if (!result.success) {
           setOrphanedGridImages(FAILED);
-          setGridStatus(result.message ?? "Failed to scan for orphaned images");
+          setGridStatus(result.message ?? "");
           return;
         }
         const count = result.candidate_count ?? 0;
@@ -540,7 +546,6 @@ export function useDataPage(): DataPageState {
         setGridStatus(count === 0 ? "No orphaned grid images found" : "");
       } catch {
         setOrphanedGridImages(FAILED);
-        setGridStatus("Failed to scan for orphaned images");
       }
       return;
     }

@@ -95,7 +95,7 @@ def recovery_bundle_id(game_name: object, date: str, short_id: str) -> str:
 
 
 def parse_recovery_bundle_id(folder_name: str) -> tuple[str, str | None]:
-    """Read a bundle folder's name back into the game it names and the day it was sealed.
+    """Read a bundle folder's name back into the game it names and the day (UTC) it was sealed.
 
     The inverse of :func:`recovery_bundle_id` over the name it writes —
     ``<game>_<YYYY-MM-DD>_<id>`` — so the game comes back SANITIZED

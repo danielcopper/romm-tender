@@ -863,7 +863,7 @@ export const RemovedGamesCleanupSection: FC<{ onScanRead?: (read: PageRead<numbe
           description={scanButtonDescription(syncRunning, runActive)}
           onClick={() => detach(scan())}
         >
-          {scanning ? "Scanning..." : "Clean Up Removed RomM Games"}
+          {scanning ? "Scanning…" : "Clean Up Removed RomM Games"}
         </ButtonItem>
       </PanelSectionRow>
       {resultLost && (
