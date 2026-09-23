@@ -1500,13 +1500,14 @@ existing one the same way, so a change of case alone would not rename a collecti
 suffixes read `(Standard)`, `(Smart)`, `(Franchise)`, `(IGDB Collection)` and `(Virtual)`.
 [steam-non-steam-shortcuts.md](steam-non-steam-shortcuts.md) § Collection naming mode lists the four a known type gets
 and requires them to match the frontend's collection-type words, and the code and tests around
-`domain/collection_label.py` say the same; singular suffixes cannot meet that requirement, so the build replaces it
-wherever it is stated with the rule stated here, and rewords CONTEXT.md → Collection naming mode, whose "different types
-stay separate" no longer holds without exception. Because a standard collection carries no suffix, a standard collection
-named "Foo (Smart)" and a smart one named "Foo" end up with the same Steam name and merge into one; that is accepted,
-since it takes a name spelling out another kind's suffix. New suffixes rename the Steam collections a `by_label` library
-already has; that is accepted, and the old-named collections must not be left behind. The keys on the wire and in
-`settings.json` stay `standard` / `smart` / `virtual`.
+`domain/collection_label.py` say the same; against the page's new plural words a singular suffix, or none, cannot meet
+that requirement, so the build replaces it wherever it is stated with the rule stated here. It also rewords the
+"different types stay separate" claim wherever it is made (CONTEXT.md → Collection naming mode, the
+`collection_label.py` docstring, the user guide), which no longer holds without exception. Because a standard collection
+carries no suffix, a standard collection named "Foo (Smart)" and a smart one named "Foo" end up with the same Steam name
+and merge into one; that is accepted, since it takes a name spelling out another kind's suffix. Dropping `(Standard)`
+and replacing `(Virtual)` renames those Steam collections in a `by_label` library; that is accepted, and the old-named
+ones must not be left behind. The keys on the wire and in `settings.json` stay `standard` / `smart` / `virtual`.
 
 **A failed read is answered, and asked again** (#1020). Today the tab marks its collections read as done before the
 fetch and never clears the mark, so one transient failure leaves the error card up for as long as the page is open, and
