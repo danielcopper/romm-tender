@@ -263,52 +263,52 @@ Steam also tracks playtime natively for non-Steam shortcuts, so you'll see playt
 
 ## Save File Location
 
-Save files are stored in your RetroDECK saves directory. The exact path is read from RetroDECK's configuration at
-runtime — typically:
+Save files live where the emulator itself keeps them. The plugin does not work that folder out on its own: it asks, for
+each game and for the emulator that game launches with, where that emulator reads and writes the save — the same answer
+that says which files the save consists of. On a stock RetroDECK install that is typically:
 
 - **Internal SSD**: `~/retrodeck/saves/{system}/{rom_name}.srm`
 - **SD card**: `/run/media/deck/Emulation/retrodeck/saves/{system}/{rom_name}.srm`
 
-## RetroArch Save Sorting Requirement
+Some cores keep their saves in a folder of their own below that — the 3DO core, for example, writes to
+`saves/3do/opera/per_game` — and the plugin looks there, because that is where the core looks.
 
-Save sync expects save files to be organized as `{saves_dir}/{system}/{rom_name}.srm`. This matches the **RetroDECK
-default** RetroArch configuration:
+## RetroArch Save Sorting
 
-| RetroArch Setting                            | Required Value | RetroDECK Default |
-| -------------------------------------------- | -------------- | ----------------- |
-| Sort Saves into Folders by Content Directory | **ON**         | ON                |
-| Sort Saves into Folders by Core Name         | **OFF**        | OFF               |
+RetroArch's two "Sort Saves into Folders" settings (**Settings > Saving**) decide which folder a game's save goes into.
+Save sync follows whichever combination you use — none of them is required:
 
-> **If you changed these settings in RetroArch, save sync will silently fail to find your save files.** No error is
-> shown — saves simply won't sync.
+| Content Directory | Core Name | Save path                 |
+| ----------------- | --------- | ------------------------- |
+| ON                | OFF       | `saves/gba/game.srm`      |
+| OFF               | ON        | `saves/mGBA/game.srm`     |
+| ON                | ON        | `saves/gba/mGBA/game.srm` |
+| OFF               | OFF       | `saves/game.srm` (flat)   |
 
-### What happens with other configurations
+On a fresh RetroDECK install the first row is what you have.
 
-RetroArch has four possible save sorting combinations. Only the first one is supported:
+### When you change the sorting
 
-| Content Directory | Core Name | Save path                 | Supported? |
-| ----------------- | --------- | ------------------------- | ---------- |
-| ON                | OFF       | `saves/gba/game.srm`      | Yes        |
-| OFF               | ON        | `saves/mGBA/game.srm`     | No         |
-| ON                | ON        | `saves/gba/mGBA/game.srm` | No         |
-| OFF               | OFF       | `saves/game.srm` (flat)   | No         |
+RetroArch does not move existing saves when you change these settings, so after a change your saves sit in a folder it
+no longer reads. The plugin notices at each game's next sync — at launch, at exit, when you sync the game by hand, or,
+for games whose save slot you have set up, when you use **Sync All Saves Now** — and moves that game's save files into
+the new folder before it syncs. There is nothing to confirm and no notice to act on; each game follows on its own.
 
-If you use "Sort by Core Name" (alone or combined with Content Directory), your saves end up in a subfolder named after
-the core (e.g., `mGBA`, `duckstation`, `Mesen`). The plugin does not search these subfolders.
+If the new folder already holds a file with the same name, nothing is overwritten: the older of the two copies is moved
+into a `.romm-backup` folder beside it, and the newer one is kept where RetroArch looks.
 
-### How to check your settings
+### Saves written next to the game file
 
-In RetroArch: **Settings > Saving**. Look for the two "Sort Saves into Folders" toggles. On a fresh RetroDECK install,
-they are already set correctly.
+RetroArch's **Write Saves to Content Directory** puts a game's save beside the game file instead of in the saves folder.
+Save sync stays off for those games — the game still launches, and the game page says why its saves are not synced.
 
-### If your saves are already in core-name folders
+### Updating from a version with the save-sorting migration
 
-If you previously played with "Sort by Core Name" enabled, your existing `.srm` files are inside core-named subfolders.
-You have two options:
-
-1. **Move the files** back to the parent system directory (e.g., move `saves/gba/mGBA/*.srm` to `saves/gba/`)
-2. **Change the RetroArch setting** back to Content Directory only (RetroArch will create new save files in the correct
-   location on next launch — but your old saves stay in the core folder)
+Earlier versions asked you to migrate save files in Settings after a sorting change. If you changed the sorting and had
+not run that migration yet when you updated, the plugin cannot tell where those saves were: it starts from where
+RetroArch looks now. A game whose save is on your RomM server gets it back at its next sync, downloaded into the new
+folder. A save that exists only on this device stays in the old folder — move it into the new folder yourself, or set
+the sorting back to what it was before.
 
 ## RomM Version Compatibility
 

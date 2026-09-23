@@ -254,8 +254,7 @@ picks the store:
    (`save_sync_enabled`, `sync_before_launch`, `sync_after_exit`, `default_slot`, `autocleanup_limit`), and
    `device_name`.
 2. **Observed / derived-from-an-external-source** — read, not set → **read live by default**; persisted (in `kv_config`)
-   only as a last-seen marker for cross-run change detection. The RetroDECK home path and save-sort settings markers
-   live here.
+   only as a last-seen marker for cross-run change detection. The RetroDECK home path markers live here.
 3. **Synced / derived relational state with real invariants** — per-ROM groups, history, caches of remote data →
    **SQLite aggregates**.
 
@@ -277,9 +276,10 @@ A key-value table for small singleton configuration values that don't justify th
 key.
 
 Residents (per [ADR-0003](docs/adr/0003-json-sqlite-persistence-boundary.md)): the RetroDECK home path marker
-(`retrodeck_home_path` + its pending-migration `_previous`), the save-sort settings markers (`save_sort_settings` +
-`_previous`), `device_id` (server-issued identity), and `platform_names` (platform_slug → display_name cache). The
-schema version is **not** a `kv_config` key — it lives in `PRAGMA user_version`.
+(`retrodeck_home_path` + its pending-migration `_previous`), `device_id` (server-issued identity), `platform_names`
+(platform_slug → display_name cache), and `save_directories_recorded`, the marker that the one-time pass recording every
+installed ROM's [answered save directory](#answered-save-directory) has finished. The schema version is **not** a
+`kv_config` key — it lives in `PRAGMA user_version`.
 
 **Not** a dumping ground: anything with its own lifecycle, invariants, or repeat-row potential gets its own aggregate.
 `kv_config` is for the truly small, the truly singleton, and the truly miscellaneous.
@@ -703,7 +703,13 @@ disc no longer present) degrades to the default with a WARNING, never fatal.
 
 What one ROM's save consists of, where the emulator keeps it, and whether this plugin may carry it —
 `domain.save_answer.SaveAnswer`, read live off the machine by the vendored resolver through `adapters/atlas_saves.py`.
-It replaced a per-system extension table the plugin maintained by hand.
+It replaced a per-system extension table the plugin maintained by hand, and its **directory** replaced the plugin's own
+RetroArch path math: every sync, probe, rename and move uses the directory the answer names and no other. An answer with
+no directory is never given one by a guess.
+
+The answer also says which anchor that directory hangs off (`root_kind`). A save written **beside the game's content**
+(RetroArch's "Write Saves to Content Directory") is read off it, and save sync stays off for that ROM whatever its state
+says.
 
 An answer is about one **ROM** and one **emulator**, never a platform (see
 [Save scope](#save-scope-per-rom-and-per-emulator-never-per-platform)), and it names the files, their directory, their
@@ -722,7 +728,8 @@ their uninstalled game already has save files.
 
 The five values a save answer classifies a ROM into, **exactly one of which holds**. Only the first is a save this
 plugin can carry; the other four **refuse** — no path is probed, no sync state is written, and the sync returns the
-benign-skip shape rather than a failure.
+benign-skip shape rather than a failure. The one field a refusal may record is the
+[answered save directory](#answered-save-directory), where the answer names one.
 
 - **per-game files** — the answer names concrete files with no hole. Sync as usual, any number of files.
 - **shared** — the emulator's granularity is a shared card or a shared file, so one file holds many games' progress and
@@ -756,6 +763,22 @@ So a save state is never reported for a platform, and whatever carries one names
 This is why the question goes to the **catalogue entry** the plugin resolved for this ROM (the label
 `ActiveCoreResolver` produced, which is the label the launch bakes) rather than to a bare core: a standalone emulator
 answers for itself.
+
+### Answered save directory
+
+The directory the resolver last answered for one ROM's save — `RomSaveSyncState.answered_save_dir`, written only by
+`record_answered_save_dir`. **It compares; it never locates.** A sync compares it with today's answer: the same, nothing
+happens; different, the game's files are carried from the recorded directory to the answered one and the record moves
+on; nothing recorded, today's answer is recorded. It is never where a save is looked for, read or written — that is
+always today's answer.
+
+A different answer is how a changed RetroArch save sorting reaches the plugin, and it is followed **per game, at that
+game's next sync**, never library-wide: nothing re-derives where a save used to be. A name present in both directories
+is never overwritten — the older copy goes to the save-backup folder. A one-time pass on the first start with the record
+fills it in for every installed ROM, so a game whose saves predate the record is covered from then on.
+
+Avoid "recorded save directory" as a location, and "save-sort migration": the markers and the migration that read them
+are gone.
 
 ### Save-sync slot
 

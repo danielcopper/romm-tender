@@ -19,8 +19,9 @@ Two hard properties follow, and they define the entire coverage envelope:
 
 1. **The filename must be the ROM stem.** A file named anything else — a fixed card name (`pcsx-card2.mcd`,
    `vmu_save_A1.bin`), or a name with a slot/unit infix (`game.1.mcr`) — is never probed.
-2. **The file must live in the save folder.** A save in RetroArch's _system_ directory (Flycast VMUs), in a per-emulator
-   subdirectory (`mame/nvram/`), or next to the ROM (`savefiles_in_content_dir`) is never seen.
+2. **The file must live in the directory the answer names.** That directory is the emulator's own answer too, so a
+   per-emulator subfolder is looked in exactly when the emulator writes there. A save the answer places next to the ROM
+   (`savefiles_in_content_dir`, read off the answer's `root_kind`) is never synced.
 
 The explicit removed-game cleanup starts with this exact-path projection and adds path-safe filenames already persisted
 for that ROM in `RomSaveSyncState.files`. This is an identity-backed exception to the filename rule, not directory
@@ -59,21 +60,40 @@ path built from `roms.fs_name` for one the library holds but has not installed. 
 different question and look like an answer to this one. Where no path can be formed at all, the answer is "not
 established", never a guess.
 
-### Named right, looked for in the wrong place
+### The directory is the emulator's too
 
-A per-game answer is not yet a save the plugin **finds**. The names now come from the resolver; the DIRECTORY still
-comes from this repo's own `resolve_save_dir`, and for two systems the two disagree:
+The answer names the files AND the directory they sit in, and every sync, probe, rename and move uses that directory and
+no other — the plugin holds no path math of its own. Where RetroArch sorts saves into subfolders, the resolver
+reproduces RetroArch's own path rule, so the sorting is part of the answer rather than a setting the plugin reads. A
+core that keeps its saves in a folder of its own is answered so: 3DO's Opera writes to `saves/3do/opera/per_game` and
+Neo Geo's FinalBurn Neo to `saves/neogeo/fbneo`, and the plugin looks there. An answer that names no directory — every
+not-established shape but `directory_known` — is never given one by a guess; each reader takes its refusal.
 
-| System  | The emulator's directory   | Where the plugin looks |
-| ------- | -------------------------- | ---------------------- |
-| 3DO     | `saves/3do/opera/per_game` | `saves/3do`            |
-| Neo Geo | `saves/neogeo/fbneo`       | `saves/neogeo`         |
+### Following a moved directory
 
-So **3DO and Neo Geo saves are still not found**, exactly as before this change — what improved is that the plugin now
-knows their names. Neither is a regression, and neither is fixed until the path math is retired. That is deliberately a
-separate change: discovery and the save-sort migration must agree on the directory, and moving one without the other
-reopens the race the migration's markers exist to prevent. The
-[Save sync support matrix](../user-guide/save-sync-support-matrix.md) reports both as not syncing.
+When the answer's directory changes — the user flipped one of RetroArch's sort flags, or anything else moved it — the
+files already on disk stay where the old answer put them. The plugin follows them **per game**, by comparison: each
+ROM's `RomSaveSyncState` records the directory the resolver last answered for it (`answered_save_dir`), and at every
+sync entry point — pre-launch, post-exit, the manual sync, and the whole-library sweep's per-ROM step for a ROM whose
+slot is confirmed — today's answer is compared with that record **before** any refusal:
+
+- nothing recorded → today's answer is recorded (a first sight); nothing moves;
+- the same → nothing;
+- different → the game's files move from the recorded directory to the answered one, then the record moves on.
+
+Which files move is the answer's own names, configuration included, where the answer is syncable; where it refuses,
+every file in the old directory named `<stem>.*` — but never in the content file's own directory, where that pattern is
+the game itself. A sorted directory RetroArch has not created yet (`sorted-dir-missing`) is created first. A name
+present in **both** directories is a collision and nothing is overwritten or removed: the older copy goes to the
+save-backup folder of the directory it sits in, and a tie keeps the copy the emulator already reads. The record moves on
+only once every file arrived, so a move that fails part-way is tried again at the next sync. Two spellings of one
+directory — a symlinked home — move nothing.
+
+The record is compared and **never used as a location**. A one-time pass on the first start with the record fills it in
+for every installed ROM (`SaveService.record_save_directories_once`, behind the `save_directories_recorded` marker), so
+a game whose saves predate the record is covered from then on. It runs in the background, one ROM at a time under that
+ROM's lock. The decision and the alternatives it replaced are in
+[ADR-0040](../adr/0040-the-save-directory-is-the-resolvers-answer.md).
 
 **Cost.** A live reading is roughly 170 ms warm and 490 ms cold per ROM on the reference device. A single-ROM sync and a
 status read each take one, whether or not the ROM's slot is confirmed: the sync's entry gate reads the answer to decide
@@ -96,7 +116,8 @@ removes.
 The answer classifies every ROM into **exactly one** of five states. Only the first is a save this plugin can carry; the
 other four are refusals, and each says something different about why. A refusal costs nothing: no path is probed, no
 sync state is written, and the sync returns the benign-skip shape (`reason: "save_shape_unsupported"`) rather than a
-failure — the same shape the `savefiles_in_content_dir` skip returns.
+failure — the same shape the `savefiles_in_content_dir` skip returns. The one field a refusal may record is the
+[answered save directory](#following-a-moved-directory), where the answer names one.
 
 | State                  | What it means                                                                 | Example on a stock RetroDECK        |
 | ---------------------- | ----------------------------------------------------------------------------- | ----------------------------------- |
@@ -128,9 +149,9 @@ file: MAME states a per-game `.cfg` as well, but its answer is not-established, 
 role is consulted.
 
 Such a file is still named on the wire, flagged `carried: false`, so a page can say "this file exists and we
-deliberately leave it alone" rather than simply not showing it. A **directory move** — the save-sort migration — does
-carry it, because splitting one save across two directories breaks the game as surely as leaving the battery file
-behind.
+deliberately leave it alone" rather than simply not showing it. A **directory move** —
+[following a moved directory](#following-a-moved-directory) — does carry it, because splitting one save across two
+directories breaks the game as surely as leaving the battery file behind.
 
 **The rule names the roles to hold back, never the roles to carry**, and that is a decision rather than the shape it
 happens to have. The resolver has a value for a file on the machine that no declaration describes (`unknown`), and a

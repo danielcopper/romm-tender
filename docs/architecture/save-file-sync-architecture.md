@@ -179,8 +179,7 @@ confirmed named-slot ROM never reaches the switch. Legacy `slot:null` ROMs open 
 **Cross-device pulls come from `list_saves`, not an op.** A confirmed ROM with a save on the server but **no local file
 here** is picked up by the matrix directly: `list_saves` returns the server save, it is grouped by its canonical local
 target with no matching local file, and `compute_sync_action` returns `Download` (matrix rows 3 / 4 / 5). No negotiate
-`download` op is needed or consulted. The save-sort migration guard still suppresses a server-only download while a
-migration is pending (#238).
+`download` op is needed or consulted.
 
 **Upload safety is the 409 backstop, not a server verdict.** Every upload the kernel dispatches on the automatic path is
 a POST with `overwrite=false` — see [Upload-time conflicts (the 409 backstop)](#upload-time-conflicts-the-409-backstop)
@@ -794,234 +793,43 @@ Before save sync can operate for a game, the user must choose which slot to trac
 
 ## Save File Discovery
 
-Save files are located using a predictable path pattern based on the system slug and ROM filename.
+Where a game's save lives and what it consists of are one answer, read live per ROM from the emulator that would launch
+it — the save answer (`RomInfoService.save_answer`, over `SaveLocationReader`). The plugin builds no save path of its
+own: every sync, probe, rename and move uses the directory that answer names.
 
-### Save base path
+### Where the save directory comes from
 
-The save base directory is read at runtime from RetroDECK's configuration file:
+The vendored resolver reads the machine the way the emulator does: RetroDECK's `retrodeck.json` for the roots,
+RetroArch's own configuration for where saves go below them, and the core's recorded behaviour for what it writes. So
+RetroArch's two sort settings — `sort_savefiles_by_content_enable` (group under the content's folder, RetroDECK's
+default) and `sort_savefiles_enable` (group under the core's name) — are part of the answer rather than settings the
+plugin reads, and so is a core that keeps its saves in a folder of its own (`saves/3do/opera/per_game`,
+`saves/neogeo/fbneo`). The answer's `directory` is the one the emulator opens; `backing_directory` is where a link
+resolves to and answers identity questions only.
 
-```text
-~/.var/app/net.retrodeck.retrodeck/config/retrodeck/retrodeck.json -> paths.saves_path
-```
+A sorted directory RetroArch has not created yet comes back with the `sorted-dir-missing` caveat and a
+`fallback_directory` — the unsorted root RetroArch reverts to when it cannot create the sorted one. A probe there finds
+nothing, which is the truth; moving files there creates the directory first. An answer that names no directory at all —
+no emulator resolved, nothing the resolver could establish — is never given one by a guess: the sync backstop, the
+status probe and the prune projection skip, and copy-to-slot, rollback, slot switch, the slot-choice migration and
+conflict resolution refuse with `save_shape_unsupported`.
 
-This path varies depending on where RetroDECK was installed:
+### Saves written next to the content (`savefiles_in_content_dir`)
 
-- **Internal SSD**: `/home/deck/retrodeck/saves/`
-- **SD card**: `/run/media/deck/Emulation/retrodeck/saves/`
+RetroArch's **Write Saves to Content Directory** writes a game's save into the directory of the ROM itself. The answer
+says so through its `root_kind` (`content_directory`), and the plugin keeps save sync off for that ROM whatever the
+answer's state is — syncing saves beside the content is a separate decision this one does not make. The single-ROM sync
+entry points return the benign skip (`{success: false, reason: "savefiles_in_content_dir", …}` — the game still
+launches, no error); the whole-library sweep passes such a ROM over inside its run and, where every ROM it read saves
+beside its content, returns the same skip, or otherwise names the ROMs it held back beside its count. The secondary
+write callables (rollback, slot switch, conflict resolve, slot-choice migration, copy to slot) refuse with the same
+reason. `get_save_status` carries the additive `savefiles_in_content_dir: true` flag, so the game-detail play section
+shows a banner asking the user to turn the setting back off — only while save sync is enabled, since the banner asks for
+a RetroArch change whose sole purpose is to make save sync work.
 
-The backend reads `retrodeck.json` → `paths.saves_path` as the source of truth (`backend/adapters/retrodeck_paths.py`).
-When that file is unreadable — e.g. a fresh install with no RetroDECK configured yet — it falls back to the hardcoded
-RetroDECK default `~/retrodeck/saves`.
-
-The plugin deliberately does **not** read `savefile_directory` from `retroarch.cfg`; it takes the saves root from
-`retrodeck.json` → `paths.saves_path`. RetroDECK re-pins `savefile_directory = saves_path` only at **first-run
-install**, **config reset** (explicit / factory / component update / multi-user switch), and **data-move** (`postmove`)
-— **not** on every game launch or routine boot. Between those events `retroarch.cfg` is user-owned and edits persist, so
-the plugin reads the live cfg for save **sorting** to stay correct. The one key it does not yet read —
-`savefiles_in_content_dir` — is therefore a **persistent** blind spot until the user toggles it back or a reset/install
-re-copies the default cfg ([#239](https://github.com/danielcopper/romm-tender/issues/239)).
-
-_Verified against RetroDECK source on 2026-06-09: `RetroDECK/components` `retroarch/component_prepare.sh` sets the key
-only in its `reset` and `postmove` branches, and every `prepare_component` call in `RetroDECK/RetroDECK` uses action
-`reset` / `postmove` / `factory-reset` — none from a launch (`run_game`) path._
-
-### RetroArch .srm pattern
-
-All RetroArch cores save in a consistent location:
-
-```text
-<saves_path>/{system}/{rom_name}.srm
-```
-
-Where:
-
-- `<saves_path>` is the base path from `retrodeck.json` → `paths.saves_path`
-- `{system}` is the RetroDECK ROM directory name (e.g. `gba`, `snes`, `n64`, `psx`) — this matches the ROM folder under
-  `roms/`
-- `{rom_name}` is the ROM filename without extension
-
-**Sort by content directory**: RetroDECK's default RetroArch config sets `sort_savefiles_by_content_enable = true`. This
-means save subdirectories match the ROM's parent folder name (the platform slug like `gba`), **not** the RetroArch core
-name (like `mGBA`). The separate `sort_savefiles_enable` setting (sort by core name) is `false` by default.
-
-**Sort by core name (optional)**: When a user enables `sort_savefiles_enable`, RetroArch organizes saves by the core's
-canonical name instead — e.g. `<saves_path>/Snes9x/game.srm` rather than `<saves_path>/snes/game.srm`. The canonical
-core name comes from the `corename` field of RetroArch's `.info` file for the active core, which is **not** the same as
-the ES-DE display label for that core (e.g. ES-DE labels the core `Snes9x - Current` while RetroArch calls it `Snes9x`).
-The plugin resolves this by asking two different parsers — ES-DE for "which core is active", then the RetroArch `.info`
-parser for "what does RetroArch call that core". The rationale and architecture are documented on the
-[Config Source Parsers](config-source-parsers.md) page.
-
-The backend resolves save paths by looking up the ROM's system slug in the platform config and constructing the expected
-`.srm` path. The file is checked for existence and its hash/mtime are read for comparison.
-
-### Unsupported: `savefiles_in_content_dir` (Write Saves to Content Directory)
-
-RetroArch has a third save-related layout setting that **the plugin does not support**:
-
-- `savefiles_in_content_dir` — RetroArch UI label: **"Write Saves to Content Directory"**
-
-When this setting is **enabled** (RetroDECK default is `false`), RetroArch writes save files into the **same directory
-as the ROM file** (e.g. `roms/gba/Game/Game.srm`) instead of the configured `savefile_directory`. The two
-`sort_savefiles_*` settings discussed above become irrelevant in that case because saves no longer live in the savefile
-directory at all.
-
-**The plugin detects this configuration and disables save sync for it — it does not silently miss saves
-([#239](https://github.com/danielcopper/romm-tender/issues/239)).** `adapters/retroarch_config.py` reads all three
-layout keys and models them as a `SaveLayout` value object (`domain/save_layout.py`): `ContentDir` when
-`savefiles_in_content_dir=true`, otherwise `InSaveDir(sort_by_content, sort_by_core)`. When the layout is `ContentDir`,
-the four save-sync entry points (`pre_launch_sync`, `post_exit_sync`, `sync_rom_saves`, `sync_all_saves`) return a
-benign skip (`{success: false, reason: "savefiles_in_content_dir", …}` — the game still launches, no error), and
-`get_save_status` carries an additive `savefiles_in_content_dir: true` flag so the game-detail play section shows a
-banner asking the user to turn the setting back off — only while save sync is enabled, since the banner asks for a
-RetroArch change whose sole purpose is to make save sync work. Actually _syncing_ ROM-adjacent saves stays unsupported
-(the deferred multi-emulator work).
-
-This blind spot is **persistent**: RetroDECK only restores the `false` default on a full config reset or first-run
-install — never on a normal launch (verified 2026-06-09) — so the plugin reads the layout live on every sync rather than
-assume RetroDECK keeps it off.
-
-**Why this is easy to confuse**: the RetroArch UI labels are deliberately similar. "Write Saves to **Content
-Directory**" controls the **destination** (next to the ROM vs the saves directory), while "Sort Saves **Into Folders by
-Content Directory**" controls the **layout within** the saves directory. They sound nearly identical but mean very
-different things.
-
-| RetroArch UI label                           | cfg key                            | What it controls                                                                                                           |
-| -------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Write Saves to Content Directory             | `savefiles_in_content_dir`         | **Destination** — next to ROM (true) vs `savefile_directory` (false). Plugin **detects `true`, warns, skips sync** (#239). |
-| Sort Saves Into Folders by Content Directory | `sort_savefiles_by_content_enable` | **Layout inside `savefile_directory`** — group by ROM parent folder name. Plugin handles both values.                      |
-| Sort Saves Into Folders by Core Name         | `sort_savefiles_enable`            | **Layout inside `savefile_directory`** — further group by RetroArch core name. Plugin handles both values.                 |
-
-**Status**: detect-and-warn is **implemented** ([#239](https://github.com/danielcopper/romm-tender/issues/239)) — the
-layout is read into `SaveLayout`, `ContentDir` hard-gates the four sync entry points, and the play-section banner
-surfaces it. Full support — resolving save paths relative to the ROM's actual on-disk location — remains deferred to the
-multi-emulator save work ([#129](https://github.com/danielcopper/romm-tender/issues/129) /
-[#255](https://github.com/danielcopper/romm-tender/issues/255)).
-
-## Save-Sort Migration: Automatic Detection and Conflict Resolution
-
-### Why detection needs to happen mid-session
-
-RetroArch save sorting is controlled by two keys in `retroarch.cfg`:
-
-- `sort_savefiles_by_content_enable` — group saves under the ROM's platform folder (e.g. `gba/`)
-- `sort_savefiles_enable` — group saves under the core's canonical name folder (e.g. `mGBA/`)
-
-When a user changes either setting — most commonly via the RetroArch Quick Menu **while a game is running** — RetroArch
-does not migrate existing `.srm` files. It silently begins writing future saves to the new layout. The result is a split
-state: older saves sit at the old path, newer in-session saves go to the new path, with no signal from RetroArch that
-anything changed.
-
-The plugin must detect this layout change and offer a one-click migration to consolidate files under the new path.
-Because the most common trigger is mid-game configuration (Quick Menu → Settings → Directory), detection cannot be
-deferred to plugin startup alone. It must also run at the points that bracket gameplay.
-
-### Detection trigger points
-
-All five trigger points run the same idempotent detection methods: the three frontend ones through the
-`refresh_migration_state` callable, the post-exit one through `MigrationService.refresh_state` directly, and backend
-start by calling the two methods itself. Running on every trigger is cheap: `detect_retrodeck_path_change()` and
-`detect_save_sort_change()` both have early-return guards that exit immediately when no config change has occurred since
-the last call.
-
-| When             | Where (code location)                                              | Why                                                                                                  |
-| ---------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Backend start    | `_main()` in `main.py`, as two start-up steps                      | Catches changes that occurred while the backend was not running                                      |
-| QAM open         | `MainPage.tsx` mount `useEffect`                                   | User navigating via QAM sees current state when Settings is one tap away                             |
-| Game-detail open | `RomMGameInfoPanel.tsx` `useEffect([appId])`                       | Per-game navigation refreshes state when the user browses without launching                          |
-| Pre-game-launch  | `launchInterceptor.ts`                                             | Catches setting changes made by external tooling between sessions                                    |
-| Post-game-exit   | `SessionLifecycleService.finalize` (backend, after post-exit sync) | **Primary trigger for the main real-world scenario** — user changed settings via Quick Menu mid-game |
-
-### Post-game ordering and the detect-first invariant (#238)
-
-In `SessionLifecycleService.finalize` (backend), the post-exit save sync runs first, then the migration refresh runs
-unconditionally; `sessionManager.ts` `handleGameStop` now makes a single `finalizeGameSession` call and feeds the
-returned payloads into the migration stores. However, the ordering is **not load-bearing** — save-sync is
-order-independent with respect to detect triggers because of three structural guards introduced in #238:
-
-**The race problem (pre-#238):** When the user changes RetroArch sort settings mid-game, `refreshMigrationState` from
-`RomMGameInfoPanel` remount could update state to the new layout before `postExitSync` read it. Save-sync would then
-look in the wrong directory, download stale server content, and the newest-wins resolver would pick the fresh-but-stale
-download over the real user progress.
-
-**Three structural guards:**
-
-1. **Rule 1 — Read previous layout during pending migration.** `RomInfoService.current_save_sorting`
-   (`services/saves/rom_info.py`) reads `save_sort_settings_previous` (the layout RetroArch was writing to during the
-   session) in preference to `save_sort_settings` (the new layout). This ensures save-sync always looks where RetroArch
-   actually wrote.
-
-   It is the **single** answer to "which savefile layout is current", and every consumer that has to address a save on
-   disk goes through it: `get_rom_save_info` for the sync's own resolution, and — across the service boundary via
-   `SaveService.current_save_sorting` (the `SaveSortingProvider` seam) — `RomAdoptionService`, which renames an adopted
-   ROM and has to carry that ROM's saves to the directory the sync will look in. A second read of the live
-   `retroarch.cfg` there would diverge from this one in exactly the pending-migration window, moving the files out from
-   under both the sync and the migration that is about to go looking for them. The seam exists so that divergence is not
-   expressible.
-
-   The seam answers **sorting only**. Whether savefiles live under the saves root at all is `savefiles_in_content_dir`,
-   which stays a live-config read: `detect_save_sort_change` writes no marker for a `ContentDir` machine (those saves
-   sit outside the tree the plugin syncs), so there is no recorded previous state to prefer.
-
-2. **Rule 2 — Upload-only mode during pending migration.** `SyncEngine.do_sync_rom_saves` skips `server_only` matches
-   (no downloads) when a save-sort migration is pending. This prevents stale server content from being written to disk
-   with `mtime=now`, which the mtime-naive migration resolver could then mispick.
-
-3. **Detect-first invariant.** `pre_launch_sync`, `post_exit_sync`, `sync_rom_saves`, and `sync_all_saves` all call
-   `detect_save_sort_change` (via an injected callback from `MigrationService`) before reading state. This closes the
-   race where `post_exit_sync` reaches the backend before any frontend detect trigger fires — ensuring
-   `save_sort_settings_previous` is always set before save-sync reads it.
-
-Combined, these three guards close all four race sub-scenarios (mid-session change with detect winning or post_exit
-winning the race, and NEW-from-start with detect winning or post_exit winning).
-
-Migration refresh still runs unconditionally regardless of connectivity because `refresh_migration_state` only reads
-config files and local state — it does not touch user save files. The actual migration runs only when the user
-explicitly clicks the migrate button in Settings.
-
-### Newest-wins conflict resolution
-
-Implemented in `_resolve_save_sort_conflict` in `backend/services/migration/save_sort.py`.
-
-**The scenario**: the user enables `sort_savefiles_enable` mid-game and saves in-game. RetroArch writes fresh progress
-to the new layout — e.g. `saves/gba/mGBA/Example Quest.srm`. The old file at the original layout — e.g.
-`saves/gba/Example Quest.srm` — still exists with pre-change content. When migration runs, both files are present and
-the migration logic treats this as a conflict.
-
-**Resolution rule**: the file with the newer `mtime` wins.
-
-| Case                        | Condition                                                                                  | Action                                                                                     |
-| --------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| Destination newer (typical) | In-game save wrote to the new layout during the session                                    | Remove the orphan at the old path via `os.remove`, keep the destination, count as migrated |
-| Source newer (rare)         | Source `mtime` exceeds destination; possible if the user reverted settings without playing | Atomically overwrite the destination via `os.replace`, count as migrated                   |
-| Tie (equal mtime)           | `mtime` values identical at filesystem granularity                                         | Bias toward destination (no-op keep)                                                       |
-
-On any `OSError` during `mtime` reads or file operations, the error is appended to the errors list and processing
-continues with the next item. The migration never leaves state partially inconsistent — each file is either fully
-resolved or skipped with an error recorded.
-
-### Why newest-wins is safe
-
-- If the user played game G during the setting change, the in-game save at the new path contains all progress up to that
-  save point. The old file at the old path contains only pre-change progress — a strict subset. Deleting the old file
-  loses nothing.
-- If the user did **not** play game G during the setting change, only the old file exists (no destination file, no
-  conflict) and migration is a simple move to the new path.
-- Save-sync has already uploaded the new-path version to RomM before migration runs (see post-game ordering above). Even
-  a catastrophic local migration failure leaves the latest version on the server.
-
-**Mtime-naive limitation:** The resolver compares pure `os.path.getmtime` timestamps. A freshly-downloaded file has
-`mtime=now` regardless of how old its content actually is. This is structurally prevented by #238 Rule 2 (upload-only
-mode during pending migration prevents downloads that would create stale files with misleading mtimes). If Rule 2 is
-ever removed, the resolver would need to be made hash-aware.
-
-### Relationship to `retrodeck_path_migration`
-
-The RetroDECK **path** migration — `_migrate_retrodeck_files_io` in `migration/service.py`, triggered when the RetroDECK
-home directory moves between the internal SSD and an SD card — uses a different conflict-resolution approach: a
-user-driven bulk strategy modal (overwrite / skip / cancel). That is intentional. ROMs and BIOS files are not progress
-files, and `mtime`-based resolution is not semantically meaningful for them. See
-[RetroDECK Path Migration](../user-guide/retrodeck-path-migration.md) for the user-facing side.
+**Why this is easy to confuse**: "Write Saves to **Content Directory**" controls the **destination** (next to the ROM vs
+the saves directory), while "Sort Saves **Into Folders by Content Directory**" controls the **layout within** the saves
+directory. They sound nearly identical and mean different things; only the first stops the sync.
 
 ### Supported systems
 
@@ -1043,6 +851,48 @@ answers differently for a different game file, and three of the rows a table lik
 
 The per-state picture, and which systems land where on a stock RetroDECK, is in
 [Save sync coverage](save-sync-coverage.md).
+
+## Following a Moved Save Directory
+
+RetroArch does not move existing saves when its sort settings change — most commonly flipped in the Quick Menu while a
+game is running — so after a change the files sit where the old answer put them and the emulator looks elsewhere. The
+plugin follows them per game, by comparison, not by computing where the old directory was.
+
+Each ROM's `RomSaveSyncState` records the directory the resolver last answered for it (`answered_save_dir`, written only
+by `record_answered_save_dir`). At `pre_launch_sync`, `post_exit_sync`, `sync_rom_saves`, and the whole-library sweep's
+per-ROM step for a ROM whose slot is confirmed, `SyncEngine` hands its one live reading to
+`SaveDirectoryFollower.do_follow` (`services/saves/save_directory.py`) under the ROM's `rom_lock`, **before** any
+refusal:
+
+- nothing recorded → today's answer is recorded; nothing moves;
+- the same directory → nothing;
+- a different one → the game's files move from the recorded directory to the answered one, then the record moves on.
+
+The files moved are the answer's own names, configuration included, where it is syncable; where it refuses, everything
+in the old directory named `<stem>.*` — never in the content file's own directory, where that pattern is the game
+itself. A missing sorted directory is created first. A name in **both** directories is a collision and nothing is
+overwritten or removed: the older copy goes through `MatrixExecutor.quarantine_local_file` into the `.romm-backup`
+folder of the directory it sits in, and a tie keeps the copy where the emulator looks. The record moves on only once
+every file arrived, so a move that fails part-way is picked up at the next sync. Two spellings of one directory move
+nothing. No Unit of Work is open across a file operation or a resolver reading. In the sweep the aggregate is read again
+after the follow, so the sync's own write-back cannot restore the record from before it.
+
+The record is compared and never used as a location. A one-time background task on the first start with the record
+(`SaveService.record_save_directories_once`, started from `main.py`, cancelled at unload) asks the resolver for every
+installed ROM, one at a time under each ROM's lock, and records the answer where none is recorded; the
+`save_directories_recorded` marker in `kv_config` makes it one-time and is written only once the pass finished. A
+save-sort migration left pending by an older version cannot be followed — its old directory is known to nothing — and
+its games recover from the server at their next sync. The decision is
+[ADR-0040](../adr/0040-the-save-directory-is-the-resolvers-answer.md).
+
+### Relationship to `retrodeck_path_migration`
+
+The RetroDECK **path** migration — `_migrate_retrodeck_files_io` in `migration/service.py`, triggered when the RetroDECK
+home directory moves between the internal SSD and an SD card — uses a user-driven bulk strategy modal (overwrite / skip
+/ cancel). That is intentional: it moves ROMs and BIOS files as well as saves, and the user decides. A game whose save
+directory moved with the home is followed at its next sync like any other; its files are already at the new path by
+then, so there is nothing left in the old directory to carry. See
+[RetroDECK Path Migration](../user-guide/retrodeck-path-migration.md) for the user-facing side.
 
 ## Slot Deletion
 
@@ -1161,9 +1011,9 @@ resolve on one specific rom) is unaffected. The lock is created lazily on first 
 The lock is **not reentrant** (plain `asyncio.Lock`), so a critical section must never call a peer that re-acquires the
 same lock. `switch_slot` is the live instance: its tail `get_save_status` re-takes `rom_lock(rom_id)`, so the lock is
 released at the end of the read-mutate-write block and the status read runs **outside** it — nesting them would
-self-deadlock. The peer calls a slot mutation makes while holding the lock (`content_dir_blocked`,
-`_migrate_slot_saves`, `_delete_server_slot_saves`, the matrix download/upload workers) are all lock-free by design, so
-holding the lock across their server/file I/O is safe and is the intended serialization point.
+self-deadlock. The peer calls a slot mutation makes while holding the lock (`content_dir_blocked`, which reads the save
+answer, `_migrate_slot_saves`, `_delete_server_slot_saves`, the matrix download/upload workers) are all lock-free by
+design, so holding the lock across their server/file I/O is safe and is the intended serialization point.
 
 The realistic race the lock prevents: user clicks Keep Local → executor runs the POST (`overwrite=true`) + state
 mutation → in parallel, `post_exit_sync` for a game that just stopped runs and mutates the same per-file state →
@@ -1319,9 +1169,10 @@ neither in place):
 2. Under `rom_lock`, refuse an unconfigured ROM (`active_slot` is `None` or the slot is unconfirmed) with
    `not_configured` — the Copy action is only reachable on a configured ROM, and this is the defensive backstop, not a
    UI-gate reliance (the #1529 lesson). `rom_not_installed` when there is no install record.
-3. Multi-file (#908) and content-dir (#239) layouts are refused with `unsupported` (the content-dir case carries the
-   `savefiles_in_content_dir` reason), exactly as rollback refuses them — copying one component of an N-file set would
-   produce an incoherent save, and a content-dir layout writes where RetroArch never reads.
+3. Multi-file (#908) saves, saves written beside the content, and answers with no save directory are refused with
+   `unsupported` (the latter two carry the `savefiles_in_content_dir` and `save_shape_unsupported` reasons), exactly as
+   rollback refuses them — copying one component of an N-file set would produce an incoherent save, and the other two
+   have nowhere the sync writes to.
 4. A **matrix pre-flight** (`do_sync_rom_saves`) runs unconditionally on the _current_ slot, protecting its dirty local
    before the copy overwrites it: `conflict_blocked` / `preflight_failed` on a bad pre-flight (same shapes as rollback).
 5. `list_saves` with **no slot filter** (the chosen save may live in any slot) locates the save by id; a missing id is

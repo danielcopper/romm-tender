@@ -145,39 +145,6 @@ Updating the vectors means deliberately re-copying the JSON from the matching up
 bumping the release tag in `tests/adapters/gavel_vectors/README.md` — in lockstep with the `.so`, which is pinned to the
 same release; never edit a vector to match the core.
 
-### emu-atlas conformance vectors
-
-The config-aware emulator knowledge — where a RetroArch / RetroDECK install keeps its saves — is likewise published as a
-standalone library, [emu-atlas](https://github.com/danielcopper/emu-atlas), extracted from this plugin. Its `machines`
-vector family (16 fixture machines in, detected installations + save placements out) runs against the plugin's own
-save-path kernel in `tests/test_atlas_machine_vectors.py`, so the two can't silently drift. Each vector materializes a
-`{path: content}` file tree under a `tmp_path` fake home, then drives the real adapters (`RetroDeckPathsAdapter` +
-`RetroArchConfigAdapter`) and the domain save-path functions (`resolve_save_dir` / `compute_local_save_target`).
-
-The overlap is partial, so every vector carries an explicit check level (an `_CHECK_LEVELS` allowlist entry that also
-records _why_):
-
-- **`full`** — end-to-end placement. The plugin derives the saves root the same way atlas does (from `retrodeck.json`,
-  or the `~/retrodeck` fallback), so the final directory + filename strings are compared. Covers the RetroDECK-flavor
-  `InSaveDir` cases and the RetroDECK-first coexistence case.
-- **`layout-only`** — only the `retroarch.cfg` interpretation overlaps. The plugin has no standalone-RetroArch
-  saves-root concept (its saves base always comes from RetroDECK paths), so a vector whose placement hangs off a
-  standalone `savefile_directory` is checked on the `SaveLayout` the plugin derives from the same cfg text — the sort
-  flags for an `InSaveDir` placement, or the `ContentDir` (next-to-ROM) classification.
-- **`n/a`** — no overlap (the plugin has no installation-enumeration surface, so atlas's "nothing detected" outcome has
-  no plugin equivalent). The check only guards that the vector stays in its non-checkable shape.
-
-No vector is silently skipped: a new upstream vector without an allowlist entry (or a stale entry for a removed one)
-fails at collection. The vectors are vendored verbatim under `tests/atlas_vectors/machines/` at a pinned upstream
-release tag — no submodule, no network in CI. Run it like any other test:
-
-```bash
-python -m pytest tests/test_atlas_machine_vectors.py -q
-```
-
-Updating means deliberately re-copying the JSON from upstream `vectors/machines/` and bumping the release tag in
-`tests/atlas_vectors/README.md`; never edit a vector to match the kernel.
-
 Every backend feature or callable where testing makes sense should have unit tests covering:
 
 - **Happy path** — normal successful operation
@@ -435,7 +402,7 @@ backend/
     downloads.py                     # DownloadService — ROM downloads, ZIP/M3U, fcntl queue
     firmware/                        # FirmwareService façade — listing, demand, status, downloads, deletion
     session_lifecycle.py             # SessionLifecycleService — post-exit orchestration
-    migration/                       # MigrationService — RetroDECK home migration; SaveSortMigrator — save-sort migration
+    migration/                       # MigrationService — RetroDECK home migration
     steamgrid.py                     # SteamGridService — SteamGridDB artwork
     artwork.py                       # ArtworkService — cover art staging/cleanup
     game_detail.py / playtime.py / achievements.py / settings.py / cores.py
@@ -450,7 +417,7 @@ backend/
                                      #    bios_file, firmware_cache, sync_run, kv_config)
     sqlite_migrations.py / machine_id.py  # schema migration runner (PRAGMA user_version) + machine-id reader
     download_file.py / firmware_file.py / migration_file.py / rom_files.py / save_file.py
-    retrodeck_paths.py / retroarch_config.py / retroarch_core_info.py / es_find_rules.py
+    retrodeck_paths.py / retroarch_core_info.py / es_find_rules.py
     atlas_catalogue.py / atlas_firmware.py / atlas_saves.py  # the adapters over the vendored emu-atlas resolver
     system_clock.py / system_uuid_gen.py / asyncio_sleeper.py / hostname.py / path_probe.py / debug_logger.py
   db/
@@ -460,7 +427,7 @@ backend/
     rom.py / rom_install.py / rom_metadata.py / rom_metadata_mapping.py / playtime.py
     rom_save_sync_state.py / bios_file.py / firmware_cache.py / sync_run.py
     sync_action.py / sync_diff.py / preview_delta.py / work_unit.py
-    save_path.py / save_status*.py / save_attribution.py / save_answer.py
+    save_path.py / save_status*.py / save_attribution.py / save_answer.py / savestate_location.py
     firmware_paths.py / bios.py / achievements.py / shortcut_data.py / steam_categories.py
     sgdb_artwork.py / installed_roms.py / rom_files.py / retroarch_core_info.py
     state_migrations.py / sync_state.py / emulator_tag.py / version.py

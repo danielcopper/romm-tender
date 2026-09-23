@@ -230,7 +230,7 @@ value:
 | Consumer                                      | What it uses the core for                                   |
 | --------------------------------------------- | ----------------------------------------------------------- |
 | `FirmwareService` / game-detail BIOS check    | which BIOS files the active core requires (optional vs req) |
-| `RomInfoService` (saves) → RetroArch corename | the sort-by-core save subdirectory name                     |
+| `RomInfoService` (saves) → save answer        | which emulator is asked where the save lives                |
 | `SyncEngine` (saves) core tag                 | the per-core save-sync identity                             |
 | `StatusService.check_core_change`             | detect a core change since the last save sync               |
 | `GameDetailService` → CPU badge / Active Core | the core shown on the game detail page                      |

@@ -421,27 +421,26 @@ BIOS files are in Library › Platforms, and the value, the router branch and th
 
 The Sync page opens from the menu, from the conditional slot while there is something in it, and from **Open Sync** on
 the paused-run notice; Downloads opens from **View All** in the download summary, which is shown only while the queue is
-not empty. A notice can carry a door of its own, and three of them name a Settings SECTION rather than the page — **Open
-Controller**, **Open Save Sync**, **Open Connections** — but a notice and the slot are both there only while their
-condition is, so the menu is the navigation a reader can go looking for. A target is a page id, or
-`{ page: "settings", section }` for those three (`frontend/src/types/navigation.ts`); the section rides on the page
-rather than beside it, so no target can pair a section with a page that has none, and the router
-(`frontend/src/index.tsx`) stays the only thing that decides what is mounted. A navigation naming no section opens
-Settings on its first, exactly as the menu's own entry does. Every page but Main opens with a **Back** chip, which
-returns to Main. The chip shares its line with the page title — one row, not the three a full-width button plus a title
-line used to cost, which on the Deck's body is most of what a detail pane has to spend. Back is also on **B**, and the
-binding lives in the panel's router (`frontend/src/index.tsx`) rather than on a page: one `Focusable` with
-`onCancelButton` wraps the mounted content **only while `page` is not `main`**, so every sub-page — wide and narrow —
-answers B from wherever focus sits, and Main answers nothing, so B does on Main whatever the menu holding the panel does
-with it. That condition is what makes taking B safe: the escape route is never removed, it is exactly as far away as the
-user walked in, and the last press is never swallowed. Steam already prints "B ZURÜCK" in its footer legend, which this
-makes true rather than misleading, so no legend entry of ours is needed. The chip stays as the discoverable half and as
-the mouse path, and it carries **Steam's own B glyph** — drawn for the controller in the user's hands, so it is ○ on a
-PlayStation pad and the swapped face button under a Nintendo layout. `@decky/ui` does not re-export that component, so
-`frontend/src/utils/deckyUiInternals.ts` reaches it by a module probe and types it as possibly absent; the chip falls
-back to its chevron the day the probe misses. The button number it passes is Steam's own action-button enum
-(`A=0, B=1, X=2, Y=3`), **not** `@decky/ui`'s `GamepadButton`, where 1 is A — the two disagree on every value, and the
-wrong one draws the wrong glyph without failing.
+not empty. A notice can carry a door of its own, and two of them name a Settings SECTION rather than the page — **Open
+Controller** and **Open Connections** — but a notice and the slot are both there only while their condition is, so the
+menu is the navigation a reader can go looking for. A target is a page id, or `{ page: "settings", section }` for those
+two (`frontend/src/types/navigation.ts`); the section rides on the page rather than beside it, so no target can pair a
+section with a page that has none, and the router (`frontend/src/index.tsx`) stays the only thing that decides what is
+mounted. A navigation naming no section opens Settings on its first, exactly as the menu's own entry does. Every page
+but Main opens with a **Back** chip, which returns to Main. The chip shares its line with the page title — one row, not
+the three a full-width button plus a title line used to cost, which on the Deck's body is most of what a detail pane has
+to spend. Back is also on **B**, and the binding lives in the panel's router (`frontend/src/index.tsx`) rather than on a
+page: one `Focusable` with `onCancelButton` wraps the mounted content **only while `page` is not `main`**, so every
+sub-page — wide and narrow — answers B from wherever focus sits, and Main answers nothing, so B does on Main whatever
+the menu holding the panel does with it. That condition is what makes taking B safe: the escape route is never removed,
+it is exactly as far away as the user walked in, and the last press is never swallowed. Steam already prints "B ZURÜCK"
+in its footer legend, which this makes true rather than misleading, so no legend entry of ours is needed. The chip stays
+as the discoverable half and as the mouse path, and it carries **Steam's own B glyph** — drawn for the controller in the
+user's hands, so it is ○ on a PlayStation pad and the swapped face button under a Nintendo layout. `@decky/ui` does not
+re-export that component, so `frontend/src/utils/deckyUiInternals.ts` reaches it by a module probe and types it as
+possibly absent; the chip falls back to its chevron the day the probe misses. The button number it passes is Steam's own
+action-button enum (`A=0, B=1, X=2, Y=3`), **not** `@decky/ui`'s `GamepadButton`, where 1 is A — the two disagree on
+every value, and the wrong one draws the wrong glyph without failing.
 
 **A tabbed wide page has to get out of the way for that to work.** Steam's tabbed page renders its content pane as
 `onCancelButton: !cancelSkipTabHeader && <focus the tab row>` (`chunk~2dcc5aaf7.js`), so without the flag the first B
@@ -687,15 +686,14 @@ hide exactly that. What decides is what the reader has to see while typing, not 
 A notice on Main names a condition and jumps to its home; the action exists only there. A condition with no home in the
 plugin stays a card without a jump, with Dismiss where the condition has a sensible end.
 
-| Condition                                   | On Main                             | Home                                                  |
-| ------------------------------------------- | ----------------------------------- | ----------------------------------------------------- |
-| Settings were reset                         | text, backup path, Dismiss          | none — the card is the whole of it                    |
-| Cross-device playtime needs a fresh sign-in | text, **Open Connections**, Dismiss | Settings › Connections, where the accounts are        |
-| RetroDECK paths missing or unreadable       | warning card, no action             | none — the fix is outside the plugin                  |
-| Steam answers for no notifications          | warning card, no action             | none — the fix is outside the plugin                  |
-| RetroArch `input_driver` is wrong           | text, **Open Controller**           | Settings › Controller, which holds the Fix button     |
-| Save-file sorting changed                   | text, **Open Save Sync**            | Settings › Save Sync, which holds Migrate and Dismiss |
-| Sync paused on the session budget           | text, **Open Sync**                 | Sync, which holds Restart Steam now and Resume        |
+| Condition                                   | On Main                             | Home                                              |
+| ------------------------------------------- | ----------------------------------- | ------------------------------------------------- |
+| Settings were reset                         | text, backup path, Dismiss          | none — the card is the whole of it                |
+| Cross-device playtime needs a fresh sign-in | text, **Open Connections**, Dismiss | Settings › Connections, where the accounts are    |
+| RetroDECK paths missing or unreadable       | warning card, no action             | none — the fix is outside the plugin              |
+| Steam answers for no notifications          | warning card, no action             | none — the fix is outside the plugin              |
+| RetroArch `input_driver` is wrong           | text, **Open Controller**           | Settings › Controller, which holds the Fix button |
+| Sync paused on the session budget           | text, **Open Sync**                 | Sync, which holds Restart Steam now and Resume    |
 
 Every row of that table is what the panel does today. The two full-page states — a version error and a pending RetroDECK
 migration — are not notices; they replace the page, and neither carries a condition inside it any more: the one that did
@@ -713,7 +711,7 @@ full-width ones: Main is the narrow page, and a notice costing three rows pushes
 screen. Its jump is not an answer either — only a fresh sign-in ends the condition, so **Open Connections** leaves it
 standing and **Dismiss** remains the way to put it away for this view.
 
-Four of the seven conditions above carry no Dismiss anywhere — RetroDECK paths, the missing notifications, the
+Four of the six conditions above carry no Dismiss anywhere — RetroDECK paths, the missing notifications, the
 `input_driver` fix and the session budget — so the absence is ordinary.
 
 ## Main
@@ -721,12 +719,12 @@ Four of the seven conditions above carry no Dismiss anywhere — RetroDECK paths
 Narrow, in this order: the settings-reset and playtime-scope notices, each a titled section of its own, both above
 everything else; the status block — the RetroDECK warning and, where Steam answers for no notifications, the warning
 that says so, then Connection, Last sync, Library, then the conditional slot and, while a run is going, Cancel Sync,
-then the transient line a just-ended run leaves behind (and a cancel whose call failed), and under all of those the
-three notices that carry a button (the RetroArch input driver, the save-file sorting, a run paused on the session
-budget); the download summary (up to two rows, an overflow count, a completed count, View All); the menu — Sync,
-Library, Settings, Data Management. **Those last three blocks carry no section title at all** — what separates one from
-the next is a hairline (`BlockSeparator`), which costs one pixel of height where a heading would cost a whole row. The
-layout study it was chosen from is [main-layouts.html](../assets/main-layouts.html).
+then the transient line a just-ended run leaves behind (and a cancel whose call failed), and under all of those the two
+notices that carry a button (the RetroArch input driver, a run paused on the session budget); the download summary (up
+to two rows, an overflow count, a completed count, View All); the menu — Sync, Library, Settings, Data Management.
+**Those last three blocks carry no section title at all** — what separates one from the next is a hairline
+(`BlockSeparator`), which costs one pixel of height where a heading would cost a whole row. The layout study it was
+chosen from is [main-layouts.html](../assets/main-layouts.html).
 
 **The menu is the navigation that is always there — complete, and always in the same place. The status rows state and do
 nothing. The single exception is one conditional slot that exists only while the Sync page has something to report; a
@@ -1416,22 +1414,17 @@ not when the reader opens its pane, and never at all for a platform the page has
 ES-DE options read and a `settings.json` lookup, and opens no database transaction. `count_platform_saves` answers how
 many save files the platform holds, for the Delete _N_ save files button: nothing else knows the number, because the
 delete finds its files through the platform's installed ROMs and counts only what it removed, afterwards. It walks that
-same path without deleting, and **that path is 3N+1 short `BEGIN IMMEDIATE` transactions** in the ordinary case, not
-one. The platform's id read opens one (`SaveService._installed_rom_ids_on_platform`), and `find_save_files` →
-`RomInfo.get_rom_save_info` opens three more per ROM: `rom_installs.get`, then `current_save_sorting()` — which is
-unconditional — asking `pending_sort_settings()` and, because nothing is normally pending,
-`_read_current_sort_settings()` behind the same `or`. Nothing memoises the sorting answer, so both are re-read for every
-ROM. A pending save-sort migration makes it **2N+1**: the `or` short-circuits. `sort_by_core` recorded makes it **4N+1**
-and adds an ES-DE read per ROM, because `resolve_retroarch_corename` → `ActiveCoreResolver.active_core_for_rom` opens a
-fourth transaction for the ROM and its install and then resolves through `get_emulator_options(system)` — the heavy
-read, which globs each option's emulator install through the find rules, not the cheaper `get_default_emulator`. On a
-128-ROM platform that is 385 lock acquisitions ordinarily and 513 with sort-by-core. That cost is deliberate and is not
-the read's to fix: it must walk exactly what the delete walks, or the number offered stops being the number taken. What
-keeps it out of the way is that it is offloaded off the event loop and asked once per selection, and that a failure —
-`SQLITE_BUSY` among them — degrades to a line saying the count could not be read rather than to a wrong number — and
-that failure forgets the slug, so re-selecting the platform asks again, which is what the line says and is the only
-failure on this pane that does not need the page reopened. It is asked again after a delete, so the button stops
-offering saves that are gone.
+same path without deleting, and **that path is 2N+1 short `BEGIN IMMEDIATE` transactions**, not one. The platform's id
+read opens one (`SaveService._installed_rom_ids_on_platform`), and `find_save_files` → `RomInfo.get_rom_save_info` opens
+two more per ROM: `rom_installs.get`, then the save answer's `ActiveCoreResolver.active_emulator_for_rom`, which opens
+its own for the ROM and its install and then resolves through `get_emulator_options(system)` — the heavy read, which
+globs each option's emulator install through the find rules — before the resolver reads the machine for the answer
+itself. On a 128-ROM platform that is 257 lock acquisitions. That cost is deliberate and is not the read's to fix: it
+must walk exactly what the delete walks, or the number offered stops being the number taken. What keeps it out of the
+way is that it is offloaded off the event loop and asked once per selection, and that a failure — `SQLITE_BUSY` among
+them — degrades to a line saying the count could not be read rather than to a wrong number — and that failure forgets
+the slug, so re-selecting the platform asks again, which is what the line says and is the only failure on this pane that
+does not need the page reopened. It is asked again after a delete, so the button stops offering saves that are gone.
 
 **Collections** is list and detail too, and **the list holds the kinds, not the collections**: kind is where a reader
 already navigates, so it becomes the list, and a collection is a row in its kind's pane. The layout study the shape was
@@ -1532,13 +1525,14 @@ and what resets it there, the build decides.
 ## Settings
 
 Wide, untabbed, list and detail: the sections on the left, the focused section on the right. Five sections, where the
-narrow page stacked eight — the save-sort migration is a notice with its actions inside Save Sync, Registered Devices
-sits under Save Sync, and SteamGridDB joins the other external service under Connections.
+narrow page stacked eight — Registered Devices sits under Save Sync, SteamGridDB joins the other external service under
+Connections, and the save-sort migration the narrow page carried is gone, because each game now follows its own save
+directory at its next sync.
 
 | Section       | Holds                                                                                                                                                                                                                                                                                                   |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Connections   | the services the plugin talks to: RomM (URL, account, Sign out, Allow insecure SSL) and SteamGridDB (the API key), one group each, titled by service. Home of every sign-in.                                                                                                                            |
-| Save Sync     | the save-sort migration first, as the condition asking to be answered; then the toggle, device, before-launch and after-exit, default slot, history limit, Sync all now; then the registered devices as a table                                                                                         |
+| Save Sync     | the toggle, device, before-launch and after-exit, default slot, history limit, Sync all now; then the registered devices as a table                                                                                                                                                                     |
 | Controller    | Steam Input mode, Apply to all shortcuts, the `input_driver` fix. Home of the fix.                                                                                                                                                                                                                      |
 | Steam Library | preferred region, collection games in platform groups, collection types in Steam names — the narrow page's **Library** section, renamed because a Library page now exists: the page is the RomM side (what is synced), the section is the Steam side (which version, in which groups, under which name) |
 | Advanced      | log level                                                                                                                                                                                                                                                                                               |
@@ -1711,7 +1705,6 @@ menu entry.
 | Remove one platform's shortcuts    | Library › Platforms    | Library › Platforms                                    |
 | Delete one platform's save files   | Library › Platforms    | Library › Platforms                                    |
 | Fix the RetroArch `input_driver`   | Settings › Controller  | Settings › Controller; Main shows the notice           |
-| Migrate the save-file sorting      | Settings › Save Sync   | Settings › Save Sync; Main shows the notice            |
 | Pause or cancel a download         | Downloads              | Downloads                                              |
 | Clean up removed RomM games        | Data Management, modal | Data Management › Gone from RomM, reviewed in a dialog |
 
