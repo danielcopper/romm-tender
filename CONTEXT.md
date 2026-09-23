@@ -865,12 +865,12 @@ How the Steam-collection **name** is formed when RomM collections share a displa
 into one `RomM: [<name>] (<host>)` Steam collection (#1503). Under **`by_label`**, same-named collections of different
 types stay separate Steam collections, told apart by a **type label** appended to the name, and the type label follows
 what the QAM calls the kind; the type labels are listed in `docs/architecture/steam-non-steam-shortcuts.md` § Collection
-naming mode. The type label names the virtual type rather than the coarse kind — franchise and IGDB-collection are both
-`kind="virtual"`, distinguished by `virtual_type` (see the **Collection kind** entry above) — except for a virtual
-collection of no known type, which gets its kind's label. Computed backend-side at the reporter's union key
+naming mode. For a virtual collection the type label names its virtual type rather than the kind — franchise and
+IGDB-collection are both `kind="virtual"`, distinguished by `virtual_type` (see the **Collection kind** entry above) —
+except one of no known type, which gets the kind's label. Computed backend-side at the reporter's union key
 (`domain/collection_label.py`), so the wire payload stays name→appIds and the frontend needs no change; the mode flip is
-applied by the ordinary complete-set reconcile on the next normal sync (no Force Full Sync).
-Same-name-**within-one-label** still unions.
+applied by the ordinary complete-set reconcile on the next normal sync (no Force Full Sync). Same-named collections that
+share a type label still union.
 
 ### Surface (bigpicture / desktop)
 
