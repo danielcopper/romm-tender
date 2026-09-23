@@ -550,6 +550,9 @@ export function useDataPage(): DataPageState {
       }
       return;
     }
+    // Why only an exact match with the scan's count may stand as `0`, and why a
+    // refusal keeps it: `docs/architecture/qam-panel.md`, section Data Management.
+    const scanned = orphanedGridImages.state === "answered" ? orphanedGridImages.value : null;
     try {
       const result = await cleanupOrphanedGridImages(liveAppIds, false);
       if (!result.success) {
@@ -557,10 +560,21 @@ export function useDataPage(): DataPageState {
         return;
       }
       const removed = result.removed_count ?? 0;
-      setOrphanedGridImages({ state: "answered", value: 0 });
-      setGridStatus(`Removed ${removed} orphaned image${removed === 1 ? "" : "s"}`);
-    } catch {
-      setGridStatus("Failed to remove orphaned images");
+      if (removed === scanned) {
+        setOrphanedGridImages({ state: "answered", value: 0 });
+        setGridStatus(`Removed ${pluralize(removed, "orphaned image")}`);
+        return;
+      }
+      setOrphanedGridImages(NOT_ASKED);
+      setGridStatus(
+        scanned !== null && removed < scanned
+          ? `Removed ${removed} of ${pluralize(scanned, "orphaned image")} — some remain. Scan again to count them.`
+          : `Removed ${pluralize(removed, "orphaned image")}. Scan again to count what remains.`,
+      );
+    } catch (e) {
+      logError(`Orphaned grid image removal failed: ${e}`);
+      setOrphanedGridImages(NOT_ASKED);
+      setGridStatus("Whether the images were removed could not be established. Scan again to count what remains.");
     }
   };
 

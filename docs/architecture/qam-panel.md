@@ -1510,12 +1510,16 @@ for a scan.
 **A number that costs a round trip or a backend scan sits behind a press.** Focus selects on this layout, so a reading
 that rode on the selection would fire under every row the stick passes — a local scan of the grid directory for one row,
 a RomM round trip for the other. Grid images and Gone from RomM therefore read `scan` until they are asked, and keep the
-answer until something makes it wrong — a finished cleanup puts Gone from RomM back to `scan`, because a stale number
-about what the server no longer has is worse than no number. **The whitelist's search is the one text input left on a
-detail pane** — Collections carries one too, on the narrow body it keeps until its own cut, and it is a known exception
-rather than a decision: the panel's rule puts text input in a modal, for the reason Settings gives for its four inputs
-rather than by convention — the on-screen keyboard needs the room, and a detail pane has none to give. It moves with the
-review, in the cut that redraws both.
+answer until something makes it wrong, because a stale number is worse than no number. A finished cleanup puts Gone from
+RomM back to `scan`. A grid-image removal leaves the row at `0` only when it removed exactly as many images as the scan
+counted: its answer says how many it removed and not how many it set out to remove, since it re-derives the candidates
+itself, so a removal that took fewer (a file that would not delete), took more (an image orphaned after the scan), or
+whose answer never arrived puts the row back to `scan`, and the pane's status line says which. A refused removal deleted
+nothing, so the scanned count stands. **The whitelist's search is the one text input left on a detail pane** —
+Collections carries one too, on the narrow body it keeps until its own cut, and it is a known exception rather than a
+decision: the panel's rule puts text input in a modal, for the reason Settings gives for its four inputs rather than by
+convention — the on-screen keyboard needs the room, and a detail pane has none to give. It moves with the review, in the
+cut that redraws both.
 
 **Two rows would overlap if either were read naively, and the one that gives way is the foreign one.** Tender's
 shortcuts are themselves non-Steam shortcuts, so a row counting Steam's store whole would report this plugin's own

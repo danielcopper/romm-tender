@@ -285,11 +285,11 @@ A count shows a small spinner while it is being read, and a dash if it could not
 trip or a backend scan, so they read **scan** until you press for them: Grid images and Gone from RomM; while that scan
 runs, its row shows the spinner and the button says it is scanning. When a count could not be read, its pane says so and
 how to try again: open the page again for most rows, or press the scan button again for a scan that failed. Grid images
-keeps what its scan found for the rest of the visit; Gone from RomM keeps it until a cleanup run finishes — which is
-what changes the number — and then asks to be scanned again. Every destructive action asks first — press once to see the
-prompt, press again to confirm. The per-platform actions — removing one platform's shortcuts, deleting its save files,
-deleting its BIOS files — live in **[Library › Platforms](bios-management.md#library-platforms)**, on the platform's own
-pane.
+keeps what its scan found until a removal changes it (see [Grid images](#grid-images)); Gone from RomM keeps it until a
+cleanup run finishes — which is what changes the number — and then asks to be scanned again. Every destructive action
+asks first — press once to see the prompt, press again to confirm. The per-platform actions — removing one platform's
+shortcuts, deleting its save files, deleting its BIOS files — live in
+**[Library › Platforms](bios-management.md#library-platforms)**, on the platform's own pane.
 
 While a library sync is running (or cancelling), the shortcut and ROM removals and the grid-image cleanup are
 unavailable — the buttons are disabled with a short hint, and the backend refuses the request too. Wait for the sync to
@@ -377,7 +377,11 @@ An image counts as orphaned only when **all** of these hold:
 The row reads **scan** until you press **Scan for orphaned images**, which counts them without deleting anything and
 puts the number on the row. The button then offers to remove that many, and asks once before it does. Deletion is
 permanent — there is no backup. If the shortcut scan can't run, or any synced RomM shortcut is missing from it, the
-cleanup refuses and deletes nothing.
+cleanup refuses and deletes nothing, and the row keeps its count.
+
+After a removal the row reads **0** only when the removal took exactly as many images as the scan counted. Otherwise —
+some could not be deleted, more had been left behind since the scan, or the removal's result never came back — the row
+goes back to **scan** and the pane says what happened; press **Scan for orphaned images** again to count what is left.
 
 ### Other non-Steam games
 
