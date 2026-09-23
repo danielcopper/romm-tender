@@ -565,6 +565,11 @@ TITLE_SEPARATOR="  -  "
 ARROW="->"
 ROW_INDENT="    "
 SPINNER_FRAMES=("|" "/" "-" "\\")
+ELLIPSIS="..."
+# How many columns a row's mark takes: `[ok]` without the glyphs, one cell with.
+ROW_MARK_WIDTH=4
+# The terminal's width while the rows are drawn, 0 where they are not redrawn.
+ROW_COLUMNS=0
 
 resolve_look() {
     if [ -t 1 ]; then
@@ -584,12 +589,14 @@ resolve_look() {
     esac
     if [ "$USE_COLOUR" = "yes" ] && [ "$USE_UTF8" = "yes" ]; then
         USE_FANCY_MARKS="yes"
+        ROW_MARK_WIDTH=1
     fi
     resolve_logo_colours
     if [ "$USE_UTF8" = "yes" ]; then
         DOT_SEPARATOR=" · "
         TITLE_SEPARATOR="  ·  "
         ARROW="→"
+        ELLIPSIS="…"
         SPINNER_FRAMES=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
     fi
 }
@@ -599,8 +606,27 @@ rows_begin() {
     set_block_height 0
     flush_rows
     if may_animate; then
+        # Read once, here, because the spinner is forked after this and draws
+        # with what it inherited.
+        ROW_COLUMNS="$(terminal_width)"
         draw_block ""
     fi
+}
+
+# Keeps one line of a row inside the terminal, into FITTED. A line that wrapped
+# would stand on two lines of the screen and on one in the block's height, and
+# every later redraw would aim one line short of the block — the row standing
+# there again, once per frame. The last column is left free: a terminal that
+# wraps as soon as it is written to would otherwise wrap there too.
+fit_row() {
+    local line="$1" room="$2" keep
+    FITTED="$line"
+    [ "$ROW_COLUMNS" -gt 0 ] || return 0
+    room=$((room - 1))
+    [ "${#line}" -gt "$room" ] || return 0
+    keep=$((room - ${#ELLIPSIS}))
+    [ "$keep" -gt 0 ] || keep=0
+    FITTED="${line:0:keep}$ELLIPSIS"
 }
 
 # Written whole and renamed into place, so the spinner never reads half a block.
@@ -727,7 +753,8 @@ print_row() {
     if [ "$state" = "pending" ]; then
         style 2
     fi
-    printf '%s' "$detail"
+    fit_row "$detail" "$((ROW_COLUMNS - ROW_MARK_WIDTH - 14))"
+    printf '%s' "$FITTED"
     reset_style
     printf '\n'
     if [ -n "$sub" ]; then
@@ -737,7 +764,8 @@ print_row() {
         else
             style 2
         fi
-        printf '%s%s' "$ROW_INDENT" "$sub"
+        fit_row "$sub" "$((ROW_COLUMNS - ${#ROW_INDENT}))"
+        printf '%s%s' "$ROW_INDENT" "$FITTED"
         reset_style
         printf '\n'
     fi

@@ -1802,6 +1802,27 @@ class TestHowTheRunLooks:
             assert not [line for line in lines if line.startswith(frame)], f"a spinner frame is still there: {screen}"
         assert "100.0%" not in screen, "the progress bar is still on screen"
 
+    def test_a_narrow_terminal_keeps_every_row_on_one_line(self, machine):
+        """A row wider than the terminal is cut to fit rather than wrapped.
+
+        The replay here does not wrap long lines, so a wrapped row would still
+        read as one; what it can see is the width, and a row that fits is one
+        the terminal cannot wrap. The rows' mark and label take fifteen columns
+        of the fifty, so the Checking row's detail is the one that runs out.
+        """
+        machine.publish_release()
+
+        _code, output = machine.on_a_terminal("--version", _VERSION, answer="y", width=50, COLORTERM="truecolor")
+
+        lines = _screen(output).splitlines()
+        rows = [line for line in lines if line[2:].startswith(("Checking", "Installing", "Service", "Steam"))]
+        assert rows, "no row reached the screen"
+        for row in rows:
+            assert len(row) < 50, f"a row wider than the terminal: {row!r}"
+        checking = [row for row in rows if row[2:].startswith("Checking")]
+        assert len(checking) == 1
+        assert checking[0].endswith("…")
+
     def test_a_download_that_dies_midway_keeps_curls_reason_and_says_its_own(self, machine):
         """Two reasons, both readable: the transport's and the run's.
 
