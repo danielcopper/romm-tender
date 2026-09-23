@@ -177,8 +177,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
 
     # MigrationService is constructed before SaveService so that
     # save_sync_service can receive a bound reference to
-    # ``migration_service.detect_save_sort_change``. SaveService must observe
-    # fresh sort state before computing saves_dir (#238).
+    # ``migration_service.is_retrodeck_migration_pending``.
     migration_service = MigrationService(
         config=MigrationServiceConfig(
             migration_file_store=cfg.adapters.migration_file_store,
@@ -189,11 +188,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
             emit=cfg.runtime.emit,
             firmware_resolver=cfg.adapters.firmware_resolver,
             retrodeck_paths=cfg.callbacks.retrodeck_paths,
-            get_save_layout=cfg.callbacks.get_save_layout,
-            active_core=active_core_resolver,
-            save_locations=cfg.adapters.save_locations,
             relaunch_options=relaunch_options_resolver,
-            get_core_name=cfg.callbacks.get_core_name,
             uow_factory=cfg.callbacks.uow_factory,
         ),
     )
@@ -216,13 +211,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         hostname_provider=cfg.runtime.hostname_provider,
         machine_id_provider=cfg.runtime.machine_id_provider,
         log_debug=cfg.callbacks.log_debug,
-        get_core_name=cfg.callbacks.get_core_name,
         emit=cfg.runtime.emit,
-        # StatusService reports the live layout so the SAVES tab can warn when
-        # saves go to the content dir (#239).
-        get_save_layout=cfg.callbacks.get_save_layout,
-        # SaveService must observe fresh sort state before computing saves_dir (#238).
-        detect_sort_change=migration_service.detect_save_sort_change,
         is_retrodeck_migration_pending=migration_service.is_retrodeck_migration_pending,
         uow_factory=cfg.callbacks.uow_factory,
     )

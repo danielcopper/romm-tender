@@ -723,7 +723,7 @@ class TestResolveSyncConflictContentDirGate:
     @pytest.mark.asyncio
     async def test_in_save_dir_layout_still_resolves(self, tmp_path):
         """Control: a supported layout resolves the conflict normally (no gate)."""
-        svc, fake = make_service(tmp_path)  # default layout is InSaveDir
+        svc, fake = make_service(tmp_path)  # saves under the save root by default
         save_path = self._seed_conflict(svc, tmp_path)
         # The conflict is on the active "default" slot, so the server save lives
         # in "default" too — a legacy (slot:null) save is no longer matched under

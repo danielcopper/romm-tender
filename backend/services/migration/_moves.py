@@ -1,15 +1,10 @@
 """Moving one file to a path something may already occupy.
 
-The one thing the two migrations in this package share. Both walk a list of
-``(label, old_path, new_path, state_updater, kind)`` items and have to answer
-the same three questions per item — the source is gone, the destination is
-taken, or the move is clean — while accumulating per-kind counts and per-item
-errors rather than aborting the run.
-
-What they do NOT share is how a taken destination is decided, so that stays
-with each caller: the home migration is handed a ``conflict_strategy`` chosen by
-the user, and the save-sort migration resolves newest-wins in place before it
-ever gets here.
+The home migration walks a list of ``(label, old_path, new_path,
+state_updater, kind)`` items and has to answer the same three questions per
+item — the source is gone, the destination is taken, or the move is clean —
+while accumulating per-kind counts and per-item errors rather than aborting the
+run. A taken destination is decided by the ``conflict_strategy`` the user chose.
 """
 
 from __future__ import annotations

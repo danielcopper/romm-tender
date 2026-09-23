@@ -47,7 +47,6 @@ from adapters.romm.romm_api import RommApiAdapter
 from adapters.steam_config import SteamConfigAdapter
 from domain.app_directories import AppDirectories
 from domain.identity import PACKAGE_NAME, VERSION
-from domain.save_layout import InSaveDir
 from main import Plugin
 from services.achievements import AchievementsService
 from services.cores import CoreService
@@ -438,9 +437,6 @@ class TestWireServices:
                 bios=str(tmp_path / "retrodeck" / "bios"),
                 home=str(tmp_path / "retrodeck"),
             ),
-            "get_save_layout": MagicMock(return_value=InSaveDir(sort_by_content=True, sort_by_core=False)),
-            "get_savestate_layout": MagicMock(return_value=InSaveDir(sort_by_content=False, sort_by_core=False)),
-            "get_core_name": MagicMock(return_value="Snes9x"),
             "platform_core_reader": FakePlatformCoreReader(),
             "m3u_support": MagicMock(return_value=True),
             "sandbox_launcher": MagicMock(return_value=None),
@@ -506,9 +502,6 @@ class TestWireServices:
             ),
             callbacks=CallbackBundle(
                 retrodeck_paths=deps["retrodeck_paths"],
-                get_save_layout=deps["get_save_layout"],
-                get_savestate_layout=deps["get_savestate_layout"],
-                get_core_name=deps["get_core_name"],
                 platform_core_reader=deps["platform_core_reader"],
                 m3u_support=deps["m3u_support"],
                 sandbox_launcher=deps["sandbox_launcher"],
@@ -640,49 +633,8 @@ class TestWireServices:
         assert migration_service._firmware_resolver is deps["firmware_resolver"]
         deps["loop"].close()
 
-    def test_migration_service_receives_get_core_name(self, tmp_path):
-        """MigrationService must receive the get_core_name callback from wire_services."""
-        deps = self._make_deps(tmp_path)
-        get_core_name_mock = deps["get_core_name"]
-        result = wire_services(self._make_config(deps))
-        migration_service = result["migration_service"]
-        # Callback is stored as _get_core_name on the service
-        assert migration_service._get_core_name is get_core_name_mock
-        deps["loop"].close()
-
-    def test_save_sync_service_receives_migration_detect_sort_change(self, tmp_path):
-        """Regression test for #238: SaveService must receive
-        ``migration_service.detect_save_sort_change`` via its
-        ``detect_sort_change`` constructor parameter.
-
-        Without this wiring, post_exit_sync could run with stale sort
-        state and download stale server content to the wrong layout,
-        causing real user progress to be destroyed during the next
-        migration step.
-        """
-        deps = self._make_deps(tmp_path)
-        result = wire_services(self._make_config(deps))
-        save_sync_service = result["save_sync_service"]
-        migration_service = result["migration_service"]
-        # Bound method equality: same function + same bound instance.
-        # ``is`` fails because Python creates a fresh bound method object
-        # on each attribute access.
-        # detect_sort_change is dispatched by the sync_engine sub-service; the
-        # SaveServiceConfig.detect_sort_change wiring threads through to it.
-        assert save_sync_service._sync_engine._detect_sort_change == migration_service.detect_save_sort_change
-        # Also check it's the actual migration instance, not some other.
-        assert save_sync_service._sync_engine._detect_sort_change.__self__ is migration_service  # type: ignore[union-attr]
-        deps["loop"].close()
-
     def test_save_sync_and_migration_share_uow(self, tmp_path):
-        """Regression test for #238: SaveService and MigrationService must
-        observe the same save-sort markers.
-
-        Post-cutover the save-sort markers live in ``kv_config`` behind the
-        Unit of Work, so the detect-first invariant holds as long as
-        MigrationService (which writes the markers) and SaveService's
-        RomInfoService (which reads them) resolve the same UoW.
-        """
+        """SaveService and MigrationService resolve the same Unit of Work — one database."""
         deps = self._make_deps(tmp_path)
         shared_uow = deps["uow_factory"].uow
         result = wire_services(self._make_config(deps))
@@ -706,34 +658,4 @@ class TestWireServices:
             migration_service.is_retrodeck_migration_pending
         )
         assert save_sync_service._sync_engine._is_retrodeck_migration_pending.__self__ is migration_service  # type: ignore[union-attr]
-        deps["loop"].close()
-
-    def test_save_sync_detect_sort_change_mutates_shared_state(self, tmp_path):
-        """Functional check for #238: invoking the wired detect callback
-        from SaveService writes the marker SaveService subsequently reads.
-
-        The wired callback writes the current sort settings into the
-        ``save_sort_settings`` ``kv_config`` marker on first run. SaveService
-        and MigrationService must see that write through the same UoW.
-        """
-        import json
-
-        deps = self._make_deps(tmp_path)
-        shared_uow = deps["uow_factory"].uow
-        # The default mock returns (True, False); no prior marker seeded.
-        with shared_uow as uow:
-            assert uow.kv_config.get("save_sort_settings") is None
-        result = wire_services(self._make_config(deps))
-        save_sync_service = result["save_sync_service"]
-
-        # Invoke the bound detect callback SaveService received.
-        save_sync_service._sync_engine._detect_sort_change()  # type: ignore[misc]
-
-        # The marker now holds the current sort settings through the shared
-        # UoW — SaveService reads it on its next get_rom_save_info call.
-        with shared_uow as uow:
-            assert json.loads(uow.kv_config.get("save_sort_settings")) == {
-                "sort_by_content": True,
-                "sort_by_core": False,
-            }
         deps["loop"].close()

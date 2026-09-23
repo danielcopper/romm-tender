@@ -47,8 +47,6 @@ from adapters.recovery_bundle import RecoveryBundleAdapter
 from adapters.renderer_gc import RendererGcAdapter
 from adapters.renderer_rss import RendererRssAdapter
 from adapters.repositories.unit_of_work import SqliteUnitOfWork
-from adapters.retroarch_config import RetroArchConfigAdapter
-from adapters.retroarch_core_info import RetroArchCoreInfoAdapter
 from adapters.retrodeck_paths import RetroDeckPathsAdapter
 from adapters.rom_files import RomFileAdapter
 from adapters.romm.http import RommHttpAdapter
@@ -76,7 +74,6 @@ if TYPE_CHECKING:
         Clock,
         ComputeSyncActionFn,
         CoreInfoProvider,
-        CoreNameProviderFn,
         CoverArtFileStore,
         DebugLogger,
         DirectoryFileListerFn,
@@ -98,8 +95,6 @@ if TYPE_CHECKING:
         RendererRssFn,
         ResolvedPathFn,
         ResolveUploadConflictFn,
-        RetroArchSaveLayoutProvider,
-        RetroArchSavestateLayoutProvider,
         RetroDeckPaths,
         RomFileStore,
         RommApi,
@@ -194,9 +189,6 @@ class CallbackBundle:
     """Provider callables and persister Protocols injected into services."""
 
     retrodeck_paths: RetroDeckPaths
-    get_save_layout: RetroArchSaveLayoutProvider
-    get_savestate_layout: RetroArchSavestateLayoutProvider
-    get_core_name: CoreNameProviderFn
     platform_core_reader: PlatformCoreReader
     m3u_support: SystemM3uSupportFn
     sandbox_launcher: SandboxLauncherFn
@@ -358,8 +350,6 @@ def bootstrap(
     uow_factory: UnitOfWorkFactory = functools.partial(SqliteUnitOfWork, db_path)
 
     retrodeck_paths = RetroDeckPathsAdapter(user_home=user_home, logger=logger)
-    retroarch_config = RetroArchConfigAdapter(user_home=user_home, logger=logger)
-    retroarch_core_info = RetroArchCoreInfoAdapter(user_home=user_home, logger=logger)
     es_find_rules = EsFindRulesAdapter(logger=logger, user_home=user_home)
 
     persistence = PersistenceAdapter(directories.config_dir, directories.data_dir, logger, clock=clock)
@@ -490,9 +480,6 @@ def bootstrap(
     )
     callbacks = CallbackBundle(
         retrodeck_paths=retrodeck_paths,
-        get_save_layout=retroarch_config.get_save_layout,
-        get_savestate_layout=retroarch_config.get_savestate_layout,
-        get_core_name=retroarch_core_info.get_corename,
         platform_core_reader=platform_core_reader,
         m3u_support=emulator_catalogue.system_supports_m3u,
         sandbox_launcher=es_find_rules.resolve_sandbox_launcher,

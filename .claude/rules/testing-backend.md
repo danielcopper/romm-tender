@@ -41,18 +41,17 @@ service's `_loop`, the way `tests/services/test_downloads.py` does.
 
 Neither shape is available where the test **body** builds the service: no fixture does the constructing, and at fixture
 time there is no service yet to rebind. Then an async autouse fixture captures the running loop into a module-level
-holder and the body reads it at construction — `tests/services/test_migration_save_sort.py`, whose
-`_capture_running_loop` fills that holder through `monkeypatch`, so teardown empties it again instead of leaving a
-closed loop there for the rest of the session.
+holder and the body reads it at construction — filling that holder through `monkeypatch`, so teardown empties it again
+instead of leaving a closed loop there for the rest of the session.
 
 ## Property-based tests — pure decision kernels (hypothesis)
 
 The pure decision kernels carry a property tier on top of hand-enumerated cases. The in-tree ones
-(`domain/save_path.py`, `domain/iso_time.py`) have theirs in `tests/domain/test_*_property.py`; the save-sync decision
-is made by the compiled gavel core, so its properties drive `GavelNativeAdapter` — the production seam — from
-`tests/adapters/test_gavel_native_property.py`. Properties state the safety invariant directly (no destructive action
-without a recovery source; decisions stable under timestamp-format variation; replay determinism). `hypothesis` is
-dev-only and never ships.
+(`domain/save_path.py`'s canonical-target key, `domain/iso_time.py`) have theirs in `tests/domain/test_*_property.py`;
+the save-sync decision is made by the compiled gavel core, so its properties drive `GavelNativeAdapter` — the production
+seam — from `tests/adapters/test_gavel_native_property.py`. Properties state the safety invariant directly (no
+destructive action without a recovery source; decisions stable under timestamp-format variation; replay determinism).
+`hypothesis` is dev-only and never ships.
 
 **A property earns its place only where a vector cannot reach.** It either quantifies over a space the vendored vectors
 do not exhaust, or it relates several runs to each other — the same decision under two ISO renderings, a replay, a state
@@ -112,17 +111,3 @@ only ever confirms our own reading of the contract.
 They earn it in practice, not just in principle: deliberately breaking the marshalling (reading a 0-byte size as "no
 size", swapping the two recorded hashes, taking `is_current` from key presence rather than value, dropping the
 adopt-baseline flag) turns this tier red, and for one of those breakages it is the only tier that notices.
-
-## emu-atlas conformance vectors — vendored contract tier
-
-The same self-conformance pattern proves the plugin's save-path kernel agrees with
-[emu-atlas](https://github.com/danielcopper/emu-atlas), the config-aware emulator-knowledge library extracted from this
-plugin, where the two overlap. Its `machines` vector family (16 fixture machines in, detected installations + save
-placements out) runs against the real adapters (`RetroDeckPathsAdapter` + `RetroArchConfigAdapter`) and domain functions
-(`resolve_save_dir` / `compute_local_save_target`) in `tests/test_atlas_machine_vectors.py`. The overlap is partial by
-design — the plugin has no standalone-RetroArch saves-root concept (its saves base always comes from RetroDECK paths) —
-so every vector carries an explicit `_CHECK_LEVELS` entry: `full` (end-to-end dir + filename), `layout-only` (only the
-`retroarch.cfg` interpretation — sort flags or the `ContentDir` classification), or `n/a` (no overlap). No vector is
-silently skipped: a new upstream vector without an allowlist entry fails at collection. Vectors are vendored verbatim
-under `tests/atlas_vectors/machines/` at a pinned upstream release tag; **never edit a vector to make the kernel pass**
-— updating means re-copying the JSON and bumping the tag in that folder's `README.md`.

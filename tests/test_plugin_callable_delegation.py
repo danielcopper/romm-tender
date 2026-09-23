@@ -181,27 +181,6 @@ class TestMigrationCallableDelegation:
         assert result == {"pending": False}
 
     @pytest.mark.asyncio
-    async def test_get_save_sort_migration_status_delegates(self, plugin):
-        plugin._migration_service.get_save_sort_migration_status = AsyncMock(return_value={"pending": False})
-        result = await plugin.get_save_sort_migration_status()
-        plugin._migration_service.get_save_sort_migration_status.assert_awaited_once_with()
-        assert result == {"pending": False}
-
-    @pytest.mark.asyncio
-    async def test_migrate_save_sort_files_delegates(self, plugin):
-        plugin._migration_service.migrate_save_sort_files = AsyncMock(return_value={"ok": True})
-        result = await plugin.migrate_save_sort_files("skip")
-        plugin._migration_service.migrate_save_sort_files.assert_awaited_once_with("skip")
-        assert result == {"ok": True}
-
-    @pytest.mark.asyncio
-    async def test_dismiss_save_sort_migration_delegates(self, plugin):
-        plugin._migration_service.dismiss_save_sort_migration.return_value = {"ok": True}
-        result = await plugin.dismiss_save_sort_migration()
-        plugin._migration_service.dismiss_save_sort_migration.assert_called_once_with()
-        assert result == {"ok": True}
-
-    @pytest.mark.asyncio
     async def test_dismiss_retrodeck_migration_delegates(self, plugin):
         plugin._migration_service.dismiss_retrodeck_migration.return_value = {"ok": True}
         result = await plugin.dismiss_retrodeck_migration()
@@ -891,3 +870,26 @@ class TestUnloadHook:
         plugin._migration_service.shutdown.assert_awaited_once_with()
         plugin._session_lifecycle_service.shutdown.assert_awaited_once_with()
         plugin._prune_service.shutdown.assert_awaited_once_with()
+
+    @pytest.mark.asyncio
+    async def test_unload_cancels_a_save_directory_backfill_still_running(self, plugin):
+        import asyncio
+
+        started = asyncio.Event()
+
+        async def endless() -> None:
+            started.set()
+            await asyncio.Event().wait()
+
+        plugin.loop = asyncio.get_running_loop()
+        plugin._save_sync_service.record_save_directories_once = endless
+        plugin._download_service.shutdown = AsyncMock()
+        plugin._migration_service.shutdown = AsyncMock()
+        plugin._session_lifecycle_service.shutdown = AsyncMock()
+        plugin._prune_service.shutdown = AsyncMock()
+        plugin._start_save_directory_backfill()
+        await started.wait()
+
+        await plugin._unload()
+
+        assert plugin._save_directory_backfill.cancelled()

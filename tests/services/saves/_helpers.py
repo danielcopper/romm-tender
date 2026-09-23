@@ -22,7 +22,6 @@ from adapters.save_file import SaveFileAdapter
 from domain.rom import Rom
 from domain.rom_install import RomInstall
 from domain.rom_save_sync_state import FileSyncState, RomSaveSyncState
-from domain.save_layout import InSaveDir
 from services.saves import SaveService, SaveServiceConfig
 
 # One ctypes load for the whole SaveService suite — the adapter is stateless,
@@ -74,11 +73,6 @@ def make_service(tmp_path, fake_api=None, *, emit=None, **overrides) -> tuple["S
         "machine_id_provider": FakeMachineIdReader(),
         "log_debug": lambda _msg: None,
         "emit": emit if emit is not None else _noop_emit,
-        "get_core_name": lambda core_so: None,
-        # Supported layout by default; tests that exercise the content-dir
-        # gate override both seams with a ``ContentDir``-returning callable.
-        "get_save_layout": lambda: InSaveDir(sort_by_content=True, sort_by_core=False),
-        "detect_sort_change": lambda: InSaveDir(sort_by_content=True, sort_by_core=False),
         "is_retrodeck_migration_pending": lambda: False,
         "uow_factory": FakeUnitOfWorkFactory(),
     }
@@ -355,22 +349,6 @@ def _get_device_id(svc) -> str | None:
     """Read the persisted server device id from ``kv_config``."""
     with _uow(svc) as uow:
         return uow.kv_config.get("device_id")
-
-
-def _set_sort_settings(svc, settings: dict[str, Any]) -> None:
-    """Seed the last-seen save-sort observation marker in ``kv_config``."""
-    import json
-
-    with _uow(svc) as uow:
-        uow.kv_config.set("save_sort_settings", json.dumps(settings))
-
-
-def _set_sort_settings_previous(svc, settings: dict[str, Any]) -> None:
-    """Seed the pending pre-change save-sort marker in ``kv_config``."""
-    import json
-
-    with _uow(svc) as uow:
-        uow.kv_config.set("save_sort_settings_previous", json.dumps(settings))
 
 
 def _server_save_with_syncs(

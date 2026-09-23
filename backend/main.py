@@ -1040,16 +1040,6 @@ class Plugin:
     async def get_migration_status(self):
         return await self._migration_service.get_migration_status()
 
-    async def get_save_sort_migration_status(self):
-        return await self._migration_service.get_save_sort_migration_status()
-
-    @prune_active_blocked
-    async def migrate_save_sort_files(self, conflict_strategy=None):
-        return await self._migration_service.migrate_save_sort_files(conflict_strategy)
-
-    async def dismiss_save_sort_migration(self):
-        return self._migration_service.dismiss_save_sort_migration()
-
     async def dismiss_retrodeck_migration(self):
         return self._migration_service.dismiss_retrodeck_migration()
 

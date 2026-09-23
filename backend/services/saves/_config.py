@@ -18,20 +18,17 @@ if TYPE_CHECKING:
         ActiveCoreReader,
         Clock,
         ComputeSyncActionFn,
-        CoreNameProviderFn,
         DebugLogger,
         EventEmitter,
         HostnameReader,
         MachineIdReader,
         MigrationPendingFn,
         ResolveUploadConflictFn,
-        RetroArchSaveLayoutProvider,
         RetroDeckPaths,
         RetryStrategy,
         RommSyncApi,
         SaveFileStore,
         SaveLocationReader,
-        SaveSortChangeFn,
         SettingsPersister,
         SystemResolver,
         UnitOfWorkFactory,
@@ -83,8 +80,8 @@ class SaveServiceConfig:
         ``ActiveCoreReader`` seam resolving the active RetroArch core for a
         ROM by ``rom_id``. Returns ``(core_so, label)``; either may be None if
         unresolved. Folds the per-game ``emulator_override`` pin over the
-        system-layer ES-DE resolution so the per-core save dir / save-emulator
-        tag / core-change warning key off the same core the ROM launches with.
+        system-layer ES-DE resolution so the save answer / save-emulator tag /
+        core-change warning key off the same core the ROM launches with.
     hostname_provider:
         ``HostnameReader`` Protocol seam — supplies the local device
         hostname used as the registered device name during initial
@@ -96,38 +93,8 @@ class SaveServiceConfig:
         server dedupes this device across reinstalls. ``None`` when the
         machine id is unreadable, which degrades registration to the
         no-fingerprint path.
-    get_core_name:
-        Callable returning the RetroArch canonical ``corename`` field
-        from a core's ``.info`` file for a given ``core_so`` (e.g.
-        ``"mgba_libretro"`` -> ``"mGBA"``). When
-        ``sort_savefiles_enable`` is active on RetroArch, this is the
-        authoritative name used for the per-core save subdirectory — it
-        is NOT the same as the ES-DE UI label returned by the
-        ``active_core`` reader (see the Config-Source-Parsers wiki page
-        for the one-parser-per-source rationale). When resolution fails
-        at runtime (the callable returns ``None``), SaveService warns
-        and falls back to the parent directory path; see
-        ``_resolve_retroarch_corename``.
     emit:
         Event emitter for pushing save-sync progress to the frontend.
-    get_save_layout:
-        ``RetroArchSaveLayoutProvider`` seam returning the live
-        ``SaveLayout`` from ``retroarch.cfg``. StatusService reads it so
-        the SAVES tab can surface the ``savefiles_in_content_dir`` warning
-        when RetroArch is set to write saves next to the ROM — the
-        unsupported case where plugin save sync is hard-gated off (#239).
-    detect_sort_change:
-        Synchronous callback that refreshes save-sort state from the
-        live RetroArch config (wired to
-        ``MigrationService.detect_save_sort_change`` in ``bootstrap``).
-        Save-sync MUST see fresh save-sort state before computing
-        ``saves_dir`` — otherwise a direct-Steam-launch with no
-        pre-launch detect trigger would silently download stale server
-        content to the wrong layout and destroy real user progress
-        during the subsequent migration (#238). ``pre_launch_sync`` and
-        ``post_exit_sync`` invoke this callback once at their entry
-        point; failures are logged and swallowed so save-sync degrades
-        gracefully to the previously-known state.
     is_retrodeck_migration_pending:
         Callback returning ``True`` when a RetroDECK migration is in
         flight; SaveService gates destructive operations on this signal.
@@ -160,9 +127,6 @@ class SaveServiceConfig:
     hostname_provider: HostnameReader
     machine_id_provider: MachineIdReader
     log_debug: DebugLogger
-    get_core_name: CoreNameProviderFn
     emit: EventEmitter
-    get_save_layout: RetroArchSaveLayoutProvider
-    detect_sort_change: SaveSortChangeFn
     is_retrodeck_migration_pending: MigrationPendingFn
     uow_factory: UnitOfWorkFactory

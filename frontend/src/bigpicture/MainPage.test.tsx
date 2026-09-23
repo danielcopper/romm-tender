@@ -66,7 +66,6 @@ import {
 } from "../utils/notificationsHealth";
 import type {
   MigrationStatus,
-  SaveSortMigrationStatus,
   SyncStats,
   SyncStatusAnswer,
   SyncPreview,
@@ -120,31 +119,6 @@ vi.mock("../utils/migrationStore", () => {
   return mod;
 });
 import * as migrationStore from "../utils/migrationStore";
-
-// saveSortMigrationStore — same listener-array pattern.
-const saveSortListeners: Array<() => void> = [];
-let currentSaveSortState: SaveSortMigrationStatus = { pending: false };
-vi.mock("../utils/saveSortMigrationStore", () => {
-  const subscribe = (cb: () => void) => mod.onSaveSortMigrationChange(cb);
-  const snapshot = () => mod.getSaveSortMigrationState();
-  const mod = {
-    getSaveSortMigrationState: vi.fn(() => currentSaveSortState),
-    setSaveSortMigrationStatus: vi.fn((s: SaveSortMigrationStatus) => {
-      currentSaveSortState = s;
-      saveSortListeners.forEach((fn) => fn());
-    }),
-    onSaveSortMigrationChange: vi.fn((cb: () => void) => {
-      saveSortListeners.push(cb);
-      return () => {
-        const i = saveSortListeners.indexOf(cb);
-        if (i >= 0) saveSortListeners.splice(i, 1);
-      };
-    }),
-    useSaveSortMigrationState: () => useSyncExternalStore(subscribe, snapshot),
-  };
-  return mod;
-});
-import * as saveSortMigrationStore from "../utils/saveSortMigrationStore";
 
 vi.mock("../utils/syncManager", () => ({
   requestSyncCancel: vi.fn(),
@@ -319,9 +293,7 @@ describe("MainPage", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     migrationListeners.length = 0;
-    saveSortListeners.length = 0;
     currentMigrationState = { pending: false };
-    currentSaveSortState = { pending: false };
     setDownloads([]);
     // Clear the module-level live-ETA estimator so a prior test's run never bleeds
     // into the next (its state persists across renders like the other stores).
@@ -363,20 +335,6 @@ describe("MainPage", () => {
       };
     });
 
-    // Re-stub saveSortMigrationStore impls.
-    vi.mocked(saveSortMigrationStore.getSaveSortMigrationState).mockImplementation(() => currentSaveSortState);
-    vi.mocked(saveSortMigrationStore.setSaveSortMigrationStatus).mockImplementation((s: SaveSortMigrationStatus) => {
-      currentSaveSortState = s;
-      saveSortListeners.forEach((fn) => fn());
-    });
-    vi.mocked(saveSortMigrationStore.onSaveSortMigrationChange).mockImplementation((cb: () => void) => {
-      saveSortListeners.push(cb);
-      return () => {
-        const i = saveSortListeners.indexOf(cb);
-        if (i >= 0) saveSortListeners.splice(i, 1);
-      };
-    });
-
     // The playtime-scope store is module-level and outlives a render, so a test
     // that raises the condition would leave the notice standing over every test
     // after it.
@@ -385,7 +343,6 @@ describe("MainPage", () => {
     // Default backend mocks — tests override per case.
     vi.mocked(backend.refreshMigrationState).mockResolvedValue({
       retrodeck: { pending: false },
-      save_sort: { pending: false },
     });
     vi.mocked(backend.getSyncStats).mockResolvedValue(defaultStats());
     vi.mocked(backend.getSessionBudgetStatus).mockResolvedValue({
@@ -473,7 +430,6 @@ describe("MainPage", () => {
       currentMigrationState = { pending: true };
       vi.mocked(backend.refreshMigrationState).mockResolvedValue({
         retrodeck: { pending: true },
-        save_sort: { pending: false },
       });
       const { queryByTestId } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
@@ -512,19 +468,15 @@ describe("MainPage", () => {
 
     it("opens there with a notice's own button on screen, which no button-first rule could", async () => {
       // Main's first BUTTON depends on which condition is showing, so a
-      // button-first rule would open the panel on the save-sort notice today
-      // and somewhere else tomorrow.
-      currentSaveSortState = { pending: true, saves_count: 3 };
-      vi.mocked(backend.refreshMigrationState).mockResolvedValue({
-        retrodeck: { pending: false },
-        save_sort: { pending: true, saves_count: 3 },
-      });
+      // button-first rule would open the panel on the playtime-scope notice
+      // today and somewhere else tomorrow.
+      vi.mocked(backend.getPlaytimeScopeNotice).mockResolvedValue({ pending: true });
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
 
-      const noticeButton = buttonByExactText(container, "Open Save Sync");
-      expect(noticeButton).not.toBeNull();
-      expect(container.querySelector("button")).toBe(noticeButton);
+      const noticeButtons = [buttonByExactText(container, "Open Connections"), buttonByExactText(container, "Dismiss")];
+      expect(noticeButtons).not.toContain(null);
+      expect(noticeButtons).toContain(container.querySelector("button"));
       expect(pageEntryStop(container)?.textContent).toBe("Sync");
     });
   });
@@ -533,17 +485,12 @@ describe("MainPage", () => {
   // B. Mount useEffect — initial fetches
   // ===========================================================================
   describe("mount useEffect", () => {
-    it("calls refreshMigrationState and pushes the result into both stores", async () => {
+    it("calls refreshMigrationState and pushes the result into the migration store", async () => {
       const retrodeck: MigrationStatus = { pending: false, roms_count: 1 };
-      const saveSort: SaveSortMigrationStatus = { pending: false };
-      vi.mocked(backend.refreshMigrationState).mockResolvedValue({
-        retrodeck,
-        save_sort: saveSort,
-      });
+      vi.mocked(backend.refreshMigrationState).mockResolvedValue({ retrodeck });
       render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
       expect(vi.mocked(migrationStore.setMigrationStatus)).toHaveBeenCalledWith(retrodeck);
-      expect(vi.mocked(saveSortMigrationStore.setSaveSortMigrationStatus)).toHaveBeenCalledWith(saveSort);
     });
 
     it("logs the failure when refreshMigrationState rejects", async () => {
@@ -698,14 +645,6 @@ describe("MainPage", () => {
       expect(migrationListeners.length).toBe(0);
     });
 
-    it("subscribes to onSaveSortMigrationChange on mount, unsubscribes on unmount", async () => {
-      const { unmount } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      expect(saveSortListeners.length).toBe(1);
-      unmount();
-      expect(saveSortListeners.length).toBe(0);
-    });
-
     it("re-renders MigrationBlockedPage when migration store flips to pending", async () => {
       const { queryByTestId } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
@@ -717,22 +656,6 @@ describe("MainPage", () => {
       });
 
       expect(queryByTestId("migration-blocked-page")).not.toBeNull();
-    });
-
-    it("re-renders the save-sort migration banner when saveSort store flips to pending", async () => {
-      const { container } = render(<MainPage onNavigate={vi.fn()} />);
-      await flushAsync();
-      expect(container.textContent).not.toContain("RetroArch save sorting changed");
-
-      await act(async () => {
-        vi.mocked(saveSortMigrationStore.setSaveSortMigrationStatus)({
-          pending: true,
-          saves_count: 7,
-        });
-      });
-
-      expect(container.textContent).toContain("RetroArch save sorting changed");
-      expect(container.textContent).toContain("7 save file(s) to migrate");
     });
   });
 
@@ -2633,24 +2556,6 @@ describe("MainPage", () => {
       const { container } = render(<MainPage onNavigate={vi.fn()} />);
       await flushAsync();
       expect(buttonByExactText(container, "System")).toBeNull();
-    });
-
-    it("the save-sort notice's Open Save Sync lands on Settings › Save Sync", async () => {
-      currentSaveSortState = { pending: true, saves_count: 3 };
-      // refreshMigrationState runs on mount and writes save_sort back to the
-      // store — also return pending:true so the banner stays visible.
-      vi.mocked(backend.refreshMigrationState).mockResolvedValue({
-        retrodeck: { pending: false },
-        save_sort: { pending: true, saves_count: 3 },
-      });
-      const onNavigate = vi.fn();
-      const { container } = render(<MainPage onNavigate={onNavigate} />);
-      await flushAsync();
-      // The migration itself has one home, and this is not it: Main names the
-      // condition, Settings › Save Sync holds Migrate and Dismiss.
-      expect(buttonByExactText(container, "Migrate Save Files")).toBeNull();
-      fireEvent.click(buttonByExactText(container, "Open Save Sync")!);
-      expect(onNavigate).toHaveBeenCalledWith({ page: "settings", section: "save-sync" });
     });
 
     it("the playtime-scope notice's Open Connections lands on Settings › Connections", async () => {

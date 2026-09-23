@@ -720,7 +720,6 @@ class TestRefreshMigrationState:
 
         sentinel = {
             "retrodeck": {"pending": True, "old_path": "/a", "new_path": "/b"},
-            "save_sort": {"pending": True, "saves_count": 3},
         }
         plugin._migration_service = MagicMock()
         plugin._migration_service.refresh_state = AsyncMock(return_value=sentinel)
@@ -742,9 +741,6 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # Migration management itself (the unblock pathway must work while pending).
     "migrate_retrodeck_files",
     "get_migration_status",
-    "get_save_sort_migration_status",
-    "migrate_save_sort_files",
-    "dismiss_save_sort_migration",
     "dismiss_retrodeck_migration",
     "refresh_migration_state",
     # Connection / settings (read-only or non-retrodeck).
@@ -1048,9 +1044,8 @@ class TestMainStartupOrdering:
         migration_service.detect_retrodeck_path_change.side_effect = lambda: call_order.append(
             "detect_retrodeck_path_change"
         )
-        migration_service.detect_save_sort_change = MagicMock()
-
         save_sync_service = MagicMock()
+        save_sync_service.record_save_directories_once = AsyncMock()
 
         sgdb_service = MagicMock()
         sgdb_service.prune_orphaned_artwork_cache = MagicMock()
@@ -1139,9 +1134,6 @@ class TestMainStartupOrdering:
             ),
             callbacks=CallbackBundle(
                 retrodeck_paths=MagicMock(),
-                get_save_layout=MagicMock(),
-                get_savestate_layout=MagicMock(),
-                get_core_name=MagicMock(),
                 platform_core_reader=MagicMock(),
                 m3u_support=MagicMock(),
                 sandbox_launcher=MagicMock(return_value=None),
@@ -1188,6 +1180,9 @@ class TestMainStartupOrdering:
         assert "detect_retrodeck_path_change" in call_order
         assert "prune_stale_installed_roms" in call_order
         assert call_order.index("detect_retrodeck_path_change") < call_order.index("prune_stale_installed_roms")
+        # The save-directory backfill is started without holding start-up up.
+        await plugin._save_directory_backfill
+        save_sync_service.record_save_directories_once.assert_awaited_once_with()
 
 
 class TestCancelCallablesNotBlockedByMigration:

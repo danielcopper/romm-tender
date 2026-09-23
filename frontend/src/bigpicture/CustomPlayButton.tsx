@@ -643,7 +643,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       );
       // Any resolved failure must surface as sync_failed, not silently proceed.
       // Failures with no errors array — DEVICE_NOT_REGISTERED,
-      // blocked_by_migration, save_sort_changed — still mean sync didn't run;
+      // blocked_by_migration — still mean sync didn't run;
       // without this the user plays on stale local saves believing pre-launch
       // sync happened (#1050).
       return { success: false, message: result.message };

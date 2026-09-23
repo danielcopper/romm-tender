@@ -1019,7 +1019,7 @@ class TestRollbackToVersionContentDirGate:
     @pytest.mark.asyncio
     async def test_in_save_dir_layout_still_rolls_back(self, tmp_path):
         """Control: a supported layout rolls back normally (no gate)."""
-        svc, fake = make_service(tmp_path)  # default layout is InSaveDir
+        svc, fake = make_service(tmp_path)  # saves under the save root by default
         _create_save(tmp_path)
         local_hash = _file_md5(str(tmp_path / "saves" / "gba" / "pokemon.srm"))
         _install_rom(svc, tmp_path)

@@ -36,9 +36,6 @@ import {
   fixRetroarchInputDriver,
   ensureDeviceRegistered,
   listDevices,
-  getSaveSortMigrationStatus,
-  migrateSaveSortFiles,
-  dismissSaveSortMigration,
   logError,
 } from "../api/backend";
 import type {
@@ -50,18 +47,12 @@ import type {
   SettingsSection,
 } from "../types";
 import { SETTINGS_SECTIONS } from "../types";
-import {
-  setSaveSortMigrationStatus as setStoreSaveSortStatus,
-  clearSaveSortMigration,
-  useSaveSortMigrationState,
-} from "../utils/saveSortMigrationStore";
 import { detach } from "../utils/detach";
 import { trimServerUrl, isValidServerUrl } from "../utils/serverUrl";
 import { WidePage } from "./layout/WidePage";
 import { ListDetail, type ListDetailItem } from "./layout/ListDetail";
 import { ROW_MARKER_GAP, ROW_MARKER_WIDTH, SELECTION_ACCENT } from "./layout/pane";
 import { pendingEdits } from "./settings/TextInputModal";
-import { SaveSortMigrationSection } from "./settings/SaveSortMigrationSection";
 import { ConnectionSection } from "./settings/ConnectionSection";
 import { SteamGridDBSection } from "./settings/SteamGridDBSection";
 import { SaveSyncSection } from "./settings/SaveSyncSection";
@@ -137,11 +128,6 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
   const [retroarchWarning, setRetroarchWarning] = useState<RetroArchInputCheck | null>(null);
   const [retroarchFixStatus, setRetroarchFixStatus] = useState("");
 
-  // Save sort migration state
-  const saveSortMigration = useSaveSortMigrationState();
-  const [saveSortMigrating, setSaveSortMigrating] = useState(false);
-  const [saveSortResult, setSaveSortResult] = useState("");
-
   // Advanced state
   const [logLevel, setLogLevel] = useState("warn");
 
@@ -198,14 +184,6 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
         }
       })
       .catch((e) => logError(`Failed to load save sync settings: ${e}`));
-
-    getSaveSortMigrationStatus()
-      .then((s) => {
-        if (s.pending) {
-          setStoreSaveSortStatus(s);
-        }
-      })
-      .catch(() => {});
   }, []);
 
   function loadDevices() {
@@ -279,10 +257,10 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
           "Coverage varies by system; see the save sync support matrix in the docs.\n\n" +
           "Before enabling, please back up your local save files. " +
           "They are stored in your RetroArch/RetroDECK saves directory.\n\n" +
-          "IMPORTANT: Save sync requires RetroArch's save sorting to be set to " +
-          '"Sort Saves into Folders by Content Directory = ON" and ' +
-          '"Sort Saves into Folders by Core Name = OFF" (RetroDECK default). ' +
-          "If you changed these settings, save sync will not find your save files.\n\n" +
+          "Save sync follows RetroArch's own save sorting, so no setting is required: when you " +
+          "change how RetroArch sorts saves into folders, each game's save files are moved to " +
+          "the new folder the next time that game syncs. Saves RetroArch writes next to the " +
+          'game file ("Write Saves to Content Directory") are not synced.\n\n' +
           "Also make sure you are not using this on a shared RomM account " +
           "(e.g. admin, romm, guest) - unless you know what you are doing. " +
           "Save sync is intended for single user accounts.\n\n" +
@@ -537,31 +515,6 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
     );
   };
 
-  // --- Save sort migration handlers ---
-  const handleMigrateSaveSort = async () => {
-    setSaveSortMigrating(true);
-    setSaveSortResult("");
-    try {
-      const result = await migrateSaveSortFiles(null);
-      setSaveSortResult(result.message);
-      if (result.success) {
-        clearSaveSortMigration();
-        showToast(result.message || "Migration complete.");
-      }
-    } catch {
-      setSaveSortResult("Migration failed");
-    }
-    setSaveSortMigrating(false);
-  };
-  const handleDismissSaveSort = async () => {
-    try {
-      await dismissSaveSortMigration();
-      clearSaveSortMigration();
-    } catch {
-      /* ignore */
-    }
-  };
-
   const renderSection = (id: SettingsSection): ReactNode => {
     switch (id) {
       case "connections":
@@ -591,22 +544,6 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
       case "save-sync":
         return (
           <>
-            {/* First in the pane: it is a condition asking to be answered, and
-                the two settings groups below it are true whether it stands or
-                not. */}
-            {saveSortMigration.pending && (
-              <SaveSortMigrationSection
-                migration={saveSortMigration}
-                migrating={saveSortMigrating}
-                result={saveSortResult}
-                onMigrate={() => {
-                  detach(handleMigrateSaveSort());
-                }}
-                onDismiss={() => {
-                  detach(handleDismissSaveSort());
-                }}
-              />
-            )}
             <SaveSyncSection
               saveSyncSettings={saveSyncSettings}
               saveSyncToggleKey={saveSyncToggleKey}

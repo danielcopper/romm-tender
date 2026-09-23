@@ -42,7 +42,6 @@ if TYPE_CHECKING:
     from models.sync import ClientSaveState
 
     from domain.save_answer import SaveAnswer
-    from domain.save_layout import InSaveDir
     from services.protocols import UnitOfWorkFactory
 
 
@@ -122,7 +121,6 @@ class SaveService:
                 active_core=config.active_core,
                 hostname_provider=config.hostname_provider,
                 machine_id_provider=config.machine_id_provider,
-                detect_sort_change=config.detect_sort_change,
                 is_retrodeck_migration_pending=config.is_retrodeck_migration_pending,
                 build_inventory=self.build_save_inventory,
             ),
@@ -276,16 +274,6 @@ class SaveService:
         slot-switch paths do (#965). Satisfies the ``SaveQuarantineFn`` seam.
         """
         return self._sync_engine.quarantine_local_file(saves_dir, filename)
-
-    def current_save_sorting(self) -> InSaveDir:
-        """Return the subdirectory sorting savefile paths are resolved with right now.
-
-        Delegates to the shared ``RomInfoService.current_save_sorting`` — the
-        same decision the sync's own path resolution runs on — so a consumer that
-        has to address a save on disk can never disagree with where the sync
-        looks for it. Satisfies the ``SaveSortingProvider`` seam.
-        """
-        return self._rom_info.current_save_sorting()
 
     def last_sync_hashes(self, rom_id: int) -> dict[str, str | None]:
         """Return the per-file ``last_sync_hash`` baselines for a ROM.

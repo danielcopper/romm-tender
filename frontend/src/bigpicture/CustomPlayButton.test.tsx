@@ -1593,7 +1593,6 @@ describe("CustomPlayButton — pre-launch failure shapes without an errors array
       reason: "device_not_registered",
       message: "Device is not registered with RomM. Open the Saves tab to set it up.",
     },
-    { reason: "save_sort_changed", message: "RetroArch save sorting changed — migrate saves in Settings first" },
     {
       reason: "blocked_by_migration",
       message: "Pending RetroDECK migration. Open the plugin QAM to migrate or dismiss.",
@@ -1624,8 +1623,8 @@ describe("CustomPlayButton — pre-launch failure shapes without an errors array
       });
 
       // The shared fallback confirm opened (not a silent launch) carrying the
-      // backend's specific message (e.g. save_sort_changed's "migrate saves in
-      // Settings first" — previously never shown).
+      // backend's specific message (e.g. blocked_by_migration's "Open the
+      // plugin QAM to migrate or dismiss" — previously never shown).
       await waitFor(() => expect(vi.mocked(showFallbackLaunchModal)).toHaveBeenCalledWith(message));
       // Cancelling the fallback must NOT launch.
       expect(vi.mocked(SteamClient.Apps.RunGame)).not.toHaveBeenCalled();

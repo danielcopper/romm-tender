@@ -2,8 +2,9 @@
 
 Owns the rom-level concurrency seam (``_rom_sync_locks``) and the
 sequencing rules every public save-sync callable must follow (save-sync
-enabled check, retrodeck migration gate, save-sort detect, device-
-registration fallback, dispatch into the matrix executor, persistence).
+enabled check, retrodeck migration gate, following a moved save
+directory, device-registration fallback, dispatch into the matrix
+executor, persistence).
 Each public callable owns a narrow Unit of Work (ADR-0006): it reads the
 ``RomSaveSyncState`` aggregate + ``device_id`` at the start, performs all
 server/file I/O outside any transaction, and writes the mutated
@@ -87,7 +88,6 @@ if TYPE_CHECKING:
         RommSyncApi,
         SaveFileStore,
         SaveInventoryBuilderFn,
-        SaveSortChangeFn,
         UnitOfWorkFactory,
     )
     from services.saves.rom_info import RomInfoService
@@ -160,8 +160,8 @@ class SyncEngineConfig:
     infrastructure (loop, logger, clock), the Protocol-typed filesystem
     adapter, the ``DebugLogger`` seam, the per-ROM active-core resolver,
     the hostname provider + machine-id provider passed through to device
-    registration, and the optional sort-change and migration-pending
-    callbacks SyncEngine consults at the entry of every public flow.
+    registration, and the migration-pending callback SyncEngine consults at
+    the entry of every public flow.
     """
 
     settings: dict[str, Any]
@@ -180,7 +180,6 @@ class SyncEngineConfig:
     active_core: ActiveCoreReader
     hostname_provider: HostnameReader
     machine_id_provider: MachineIdReader
-    detect_sort_change: SaveSortChangeFn
     is_retrodeck_migration_pending: MigrationPendingFn
     build_inventory: SaveInventoryBuilderFn
 
@@ -204,7 +203,6 @@ class SyncEngine:
         self._active_core = config.active_core
         self._hostname_provider = config.hostname_provider
         self._machine_id_provider = config.machine_id_provider
-        self._detect_sort_change = config.detect_sort_change
         self._is_retrodeck_migration_pending = config.is_retrodeck_migration_pending
         self._build_inventory = config.build_inventory
         # Per-rom lock dict — serializes concurrent sync operations on the
@@ -474,26 +472,6 @@ class SyncEngine:
     # Public sync orchestration callables
     # ------------------------------------------------------------------
 
-    async def _refresh_save_sort_state(self, where: str) -> None:
-        """Refresh save-sort state from the live RetroArch config.
-
-        Save-sync must observe fresh save-sort state before it syncs: without
-        it, a direct-Steam-launch with no pre-detect would silently download
-        stale server content while a save-sort migration is pending (#238).
-
-        Graceful degradation: if detect fails (e.g. retroarch.cfg is
-        temporarily unreadable) we log and continue with the previously-known
-        state — save-sync must not abort because of a config read error.
-        """
-        try:
-            await self._loop.run_in_executor(None, self._detect_sort_change)
-        except Exception as e:
-            self._logger.warning(
-                "%s: detect_sort_change failed (%s) — proceeding with stale state",
-                where,
-                e,
-            )
-
     async def _follow_save_directory(self, rom_id: int, answer: SaveAnswer | None) -> None:
         """Carry this ROM's save files to the directory *answer* names, where it moved.
 
@@ -753,23 +731,11 @@ class SyncEngine:
                         "blocked_by_migration": True,
                     }
 
-                # Refresh save-sort state before the migration gate — see #238.
-                await self._refresh_save_sort_state("pre_launch_sync")
-
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
                 await self._follow_save_directory(rom_id, save_answer)
                 refusal = sync_refusal(save_answer)
                 if refusal is not None:
                     return refusal
-
-                if self._rom_info.is_save_sort_changed():
-                    return {
-                        "success": False,
-                        "reason": "save_sort_changed",
-                        "message": "RetroArch save sorting changed — migrate saves in Settings first",
-                        "synced": 0,
-                        "save_sort_changed": True,
-                    }
 
                 if not sync_before_launch(self._settings):
                     return {"success": True, "message": "Pre-launch sync disabled", "synced": 0}
@@ -851,9 +817,6 @@ class SyncEngine:
                     self._logger.info("post_exit_sync skipped: sync_after_exit disabled")
                     return {"success": True, "message": "Post-exit sync disabled", "synced": 0}
 
-                # Refresh save-sort state before do_sync_rom_saves reads saves_dir — see #238.
-                await self._refresh_save_sort_state("post_exit_sync")
-
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
                 await self._follow_save_directory(rom_id, save_answer)
                 refusal = sync_refusal(save_answer)
@@ -933,12 +896,6 @@ class SyncEngine:
 
         try:
             async with self._device_gate.bounded_run(max_wait=SYNC_ROM_GATE_TIMEOUT), self.rom_lock(rom_id):
-                # Refresh save-sort state before do_sync_rom_saves reads saves_dir — see #238.
-                # Manual sync paths must observe fresh sort state too: a user could
-                # edit retroarch.cfg outside of a session and then trigger a manual
-                # sync before any detect has fired.
-                await self._refresh_save_sort_state("sync_rom_saves")
-
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
                 await self._follow_save_directory(rom_id, save_answer)
                 refusal = sync_refusal(save_answer)
@@ -1041,12 +998,6 @@ class SyncEngine:
             # Device gate sits OUTSIDE the per-ROM locks — it wraps the whole
             # sweep; each ROM still takes its own rom_lock inside the loop.
             async with self._device_gate.bounded_run(max_wait=SYNC_ALL_GATE_TIMEOUT):
-                # Refresh save-sort state before do_sync_rom_saves reads saves_dir — see #238.
-                # Manual sync paths must observe fresh sort state too: a user could
-                # edit retroarch.cfg outside of a session and then trigger a manual
-                # sync before any detect has fired.
-                await self._refresh_save_sort_state("sync_all_saves")
-
                 failure = await self._ensure_device_live_or_fail()
                 if failure is not None:
                     return failure

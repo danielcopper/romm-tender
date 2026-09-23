@@ -4,31 +4,19 @@ Asks the resolver where an installed ROM's emulator keeps its save and what
 the save consists of, and enumerates the matching local save files. The
 directory is the resolver's answer and nothing else: this module holds no
 knowledge of how any emulator lays its saves out. No RomM I/O, no state
-mutation. Shared by SlotsService, SyncEngine, and StatusService; reads about
-whether a save-sort migration is pending live here too.
+mutation. Shared by SlotsService, SyncEngine, and StatusService.
 """
 
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.save_answer import UNESTABLISHED_NOT_ASKED, unestablished_answer
-from domain.save_layout import InSaveDir
-
-# kv_config keys for the cross-run save-sort markers MigrationService writes
-# (ADR-0003 Bucket 2): the last-seen observation and the pending pre-change
-# snapshot. RomInfoService reads them to honour the previous save layout while
-# a save-sort migration is in flight (#238).
-_KV_SAVE_SORT = "save_sort_settings"
-_KV_SAVE_SORT_PREVIOUS = "save_sort_settings_previous"
 
 if TYPE_CHECKING:
     import logging
-
-    from models.state import SaveSortSettings
 
     from domain.save_answer import SaveAnswer
     from services.protocols import (
@@ -46,9 +34,9 @@ class RomInfoServiceConfig:
     """Frozen wiring bundle handed to ``RomInfoService.__init__``.
 
     Holds the Unit-of-Work factory (the ``rom_installs`` aggregate is the
-    source of truth for installed-ROM file records — WS3 — and ``kv_config``
-    holds the save-sort markers), the Protocol-typed filesystem adapter, the
-    RetroDECK runtime-path accessor, the per-ROM active-core resolver, the
+    source of truth for installed-ROM file records — WS3), the Protocol-typed
+    filesystem adapter, the RetroDECK runtime-path accessor, the per-ROM
+    active-core resolver, the
     save-location reader that answers what a game's save consists of, the
     platform-slug-to-system resolver (which, with ``roms.fs_name``, builds the
     path a ROM the library knows but has not installed WOULD occupy — a save
@@ -120,32 +108,6 @@ class RomInfoService:
         whether the ROM is installed ask here, so that costs one row read.
         """
         return self._install_row(rom_id) is not None
-
-    def current_save_sorting(self) -> InSaveDir:
-        """The subdirectory sorting savefile paths are resolved with right now.
-
-        The single answer to "which savefile layout is current", so every caller
-        that has to address a save on disk addresses the same directory. It comes
-        from the markers MigrationService records, never from the live
-        ``retroarch.cfg``: while a save-sort migration is pending the *previous*
-        layout wins, because RetroArch caches its runtime save-path at game-load
-        time and the session that just ended still wrote to the old directory.
-        Reading the live config here would point every caller at a directory the
-        files have not reached yet (#238).
-
-        Falls back to the RetroDECK defaults when nothing has been observed yet.
-        Answers only the **sorting**: whether savefiles live under the saves root
-        at all is ``savefiles_in_content_dir``, which is a live-config fact with
-        no recorded counterpart — MigrationService never writes these markers for
-        a ``ContentDir`` machine.
-        """
-        recorded = self.pending_sort_settings() or self._read_current_sort_settings()
-        if not recorded:
-            return InSaveDir(sort_by_content=True, sort_by_core=False)
-        return InSaveDir(
-            sort_by_content=recorded.get("sort_by_content", True),
-            sort_by_core=recorded.get("sort_by_core", False),
-        )
 
     def save_answer(self, rom_id: int) -> SaveAnswer:
         """What this ROM's save consists of and whether it may be synced at all.
@@ -281,27 +243,3 @@ class RomInfoService:
             }
             for name in names
         ]
-
-    def pending_sort_settings(self) -> SaveSortSettings | None:
-        """Return previous save-sort settings if a migration is pending, else None.
-
-        Rejects empty dicts to avoid the half-state where ``get_rom_save_info``'s
-        ``or`` fallback would treat ``{}`` as "no pending migration" (and read
-        current settings) while ``is_save_sort_changed`` would treat the same
-        ``{}`` as "pending" (and gate sync). Both call sites must agree on
-        what counts as pending — see #238 review finding 3.
-        """
-        with self._uow_factory() as uow:
-            raw = uow.kv_config.get(_KV_SAVE_SORT_PREVIOUS)
-        prev: SaveSortSettings | None = json.loads(raw) if raw is not None else None
-        return prev if prev else None
-
-    def _read_current_sort_settings(self) -> SaveSortSettings | None:
-        """Return the last-seen RetroArch save-sort observation, ``None`` when unobserved."""
-        with self._uow_factory() as uow:
-            raw = uow.kv_config.get(_KV_SAVE_SORT)
-        return json.loads(raw) if raw is not None else None
-
-    def is_save_sort_changed(self) -> bool:
-        """Check if a save sort migration is pending (detected by MigrationService)."""
-        return self.pending_sort_settings() is not None

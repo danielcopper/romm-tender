@@ -70,10 +70,6 @@ vi.mock("./migrationStore", () => ({
   setMigrationStatus: vi.fn(),
 }));
 
-vi.mock("./saveSortMigrationStore", () => ({
-  setSaveSortMigrationStatus: vi.fn(),
-}));
-
 /**
  * The prompts the interceptor asks its caller for. Stubbing them here is the
  * whole point of the injection: a gate branch is reachable without standing up
@@ -142,7 +138,6 @@ describe("launchInterceptor — full funnel watcher", () => {
     vi.mocked(rommAppIds.isRomMAppId).mockReturnValue(true);
     vi.mocked(backend.refreshMigrationState).mockResolvedValue({
       retrodeck: { pending: false },
-      save_sort: { pending: false },
     } as unknown as Awaited<ReturnType<typeof backend.refreshMigrationState>>);
     // Default: installed ROM so the funnel runs.
     vi.mocked(backend.getInstalledRom).mockResolvedValue({

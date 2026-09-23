@@ -21,7 +21,6 @@ import { refreshSyncStats, refreshSyncStatsAfterChange, useSyncStats } from "../
 import { setMigrationStatus, useMigrationStatus } from "../utils/migrationStore";
 import { useSettingsResetState } from "../utils/settingsResetStore";
 import { fetchPlaytimeScopeState, usePlaytimeScopeState } from "../utils/playtimeScopeStore";
-import { setSaveSortMigrationStatus, useSaveSortMigrationState } from "../utils/saveSortMigrationStore";
 import { requestSyncCancel } from "../utils/syncManager";
 import { useConnectionProbe } from "../utils/connectionProbe";
 import type { BackendFailed, ConnectionFailure } from "../utils/connectionProbe";
@@ -363,7 +362,6 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
   const migration = useMigrationStatus();
   const settingsReset = useSettingsResetState();
   const playtimeScope = usePlaytimeScopeState();
-  const saveSortMigration = useSaveSortMigrationState();
   const downloads = useDownloads();
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -414,9 +412,8 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
 
   useEffect(() => {
     refreshMigrationState()
-      .then(({ retrodeck, save_sort }) => {
+      .then(({ retrodeck }) => {
         setMigrationStatus(retrodeck);
-        setSaveSortMigrationStatus(save_sort);
       })
       .catch((e) => logError(`Failed to refresh migration state: ${e}`));
     detach(refreshSyncStats());
@@ -730,39 +727,6 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
                 onClick={() => onNavigate({ page: "settings", section: "controller" })}
               >
                 Open Controller
-              </ButtonItem>
-            </PanelSectionRow>
-          </>
-        )}
-        {saveSortMigration.pending && (
-          <>
-            <PanelSectionRow>
-              <Focusable onActivate={() => {}}>
-                <div
-                  style={{
-                    padding: "8px 12px",
-                    backgroundColor: "rgba(212, 167, 44, 0.15)",
-                    borderLeft: "3px solid #d4a72c",
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                  }}
-                >
-                  <div style={{ fontWeight: "bold", color: "#d4a72c", marginBottom: "4px" }}>
-                    {"\u26A0\uFE0F"} RetroArch save sorting changed
-                  </div>
-                  <div style={{ color: "rgba(255, 255, 255, 0.7)" }}>
-                    {saveSortMigration.saves_count ?? 0} save file(s) to migrate
-                  </div>
-                </div>
-              </Focusable>
-            </PanelSectionRow>
-            <PanelSectionRow>
-              <ButtonItem
-                layout="below"
-                bottomSeparator="none"
-                onClick={() => onNavigate({ page: "settings", section: "save-sync" })}
-              >
-                Open Save Sync
               </ButtonItem>
             </PanelSectionRow>
           </>

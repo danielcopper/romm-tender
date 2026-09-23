@@ -87,13 +87,12 @@ class SessionFinalizeSyncResult:
 class SessionFinalizeMigration:
     """Migration-status payloads returned from ``MigrationService.refresh_state``.
 
-    Repacked into a typed aggregate so the frontend feeds each field
-    into its dedicated store (``migrationStore`` / ``saveSortMigrationStore``)
-    without re-deriving them from a loose dict.
+    Repacked into a typed aggregate so the frontend feeds it into its
+    dedicated store (``migrationStore``) without re-deriving it from a loose
+    dict.
     """
 
     retrodeck: dict[str, Any]
-    save_sort: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -108,8 +107,8 @@ class SessionFinalizeResult:
     when the migration-state refresh raised — the frontend then leaves
     the migration stores untouched (any stale ``pending`` badge keeps
     showing) and logs the failure backend-side. When the refresh
-    succeeds, ``migration`` carries the two typed status payloads the
-    frontend feeds into its stores.
+    succeeds, ``migration`` carries the typed status payload the frontend
+    feeds into its store.
     """
 
     total_seconds: int | None
@@ -364,7 +363,7 @@ class SessionLifecycleService:
         )
 
     async def _refresh_migration(self) -> SessionFinalizeMigration | None:
-        """Re-detect migration state and return the typed status pair.
+        """Re-detect migration state and return its typed status.
 
         Returns ``None`` on refresh failure (exception or non-dict
         payload) — the frontend then leaves the migration stores
@@ -380,8 +379,6 @@ class SessionLifecycleService:
         if not isinstance(payload, dict):
             return None
         retrodeck = payload.get("retrodeck")
-        save_sort = payload.get("save_sort")
         return SessionFinalizeMigration(
             retrodeck=retrodeck if isinstance(retrodeck, dict) else {"pending": False},
-            save_sort=save_sort if isinstance(save_sort, dict) else {"pending": False},
         )

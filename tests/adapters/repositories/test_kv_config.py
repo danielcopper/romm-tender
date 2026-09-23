@@ -14,8 +14,8 @@ class TestRoundTrip:
         assert uow.kv_config.get("device_id") == "abc-123"
 
     def test_json_encoded_value_is_stored_verbatim(self, uow: SqliteUnitOfWork):
-        uow.kv_config.set("save_sort_settings", '{"sort_by_content": true}')
-        assert uow.kv_config.get("save_sort_settings") == '{"sort_by_content": true}'
+        uow.kv_config.set("platform_names", '{"snes": "Super Nintendo"}')
+        assert uow.kv_config.get("platform_names") == '{"snes": "Super Nintendo"}'
 
 
 class TestMiss:

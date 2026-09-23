@@ -989,7 +989,6 @@ class MatrixExecutor:
         uploaded = 0
         downloaded = 0
 
-        pending_migration = self._rom_info.is_save_sort_changed()
         for outcome in self.iter_matrix_outcomes(
             server_in_slot,
             save_state=save_state,
@@ -1004,11 +1003,6 @@ class MatrixExecutor:
             self._log_debug(
                 f"do_sync_rom_saves({rom_id}): {origin} {outcome.filename} -> {type(outcome.action).__name__}"
             )
-            if outcome.local_path is None and pending_migration:
-                self._log_debug(
-                    f"do_sync_rom_saves({rom_id}): skipping server_only {outcome.filename} — migration pending"
-                )
-                continue
             direction = self._dispatch_sync_action(
                 outcome.action,
                 ctx=ctx,

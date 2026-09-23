@@ -3,9 +3,9 @@
 The plugin's relational state lives in SQLite after the cutover (#784);
 nothing here is loaded from on-disk JSON. These TypedDicts are checked
 shapes still consumed by services that read/return those records
-(``ShortcutRegistryEntry``, ``InstalledRomEntry``, ``MetadataCacheEntry``,
-``SaveSortSettings``) — they describe the dict contract at a service
-boundary without changing the dict's runtime identity.
+(``ShortcutRegistryEntry``, ``InstalledRomEntry``, ``MetadataCacheEntry``)
+— they describe the dict contract at a service boundary without changing the
+dict's runtime identity.
 """
 
 from __future__ import annotations
@@ -49,13 +49,6 @@ class InstalledRomEntry(TypedDict):
     installed_at: str
     launchable: bool
     rom_dir: NotRequired[str]
-
-
-class SaveSortSettings(TypedDict):
-    """RetroArch save-sorting settings snapshot used by save migrations."""
-
-    sort_by_content: bool
-    sort_by_core: bool
 
 
 class MetadataCacheEntry(TypedDict):

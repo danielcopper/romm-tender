@@ -1979,7 +1979,7 @@ class TestSlotsContentDirGate:
     @pytest.mark.asyncio
     async def test_switch_slot_in_save_dir_still_switches(self, tmp_path):
         """Control: a supported layout switches normally (no gate)."""
-        svc, fake = make_service(tmp_path)  # default layout is InSaveDir
+        svc, fake = make_service(tmp_path)  # saves under the save root by default
         svc._config.settings["save_sync_enabled"] = True
         _install_rom(svc, tmp_path)
         save_path = _create_save(tmp_path)

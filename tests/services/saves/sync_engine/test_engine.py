@@ -8,7 +8,6 @@ conflict rollback in tests/services/saves/sync_engine/test_rollback.py.
 
 import asyncio
 import io
-import logging
 import struct
 import threading
 import time
@@ -50,8 +49,6 @@ from tests.services.saves._helpers import (
     _server_save,
     _server_save_with_syncs,
     _set_device_id,
-    _set_sort_settings,
-    _set_sort_settings_previous,
     make_service,
 )
 
@@ -122,93 +119,6 @@ class TestSyncRomSaves:
         assert downloaded == 0
         assert len(errors) == 1
         assert "Failed to fetch saves" in errors[0]
-
-    # ------------------------------------------------------------------
-    # Regression tests for issue #238 — pending-migration handling.
-    # Rule 2: skip server_only downloads while a save-sort migration is
-    # pending so the mtime-naive resolver cannot prefer freshly-downloaded
-    # stale server content over real user progress at the other layout.
-    # ------------------------------------------------------------------
-
-    def test_sync_rom_saves_skips_server_only_downloads_during_pending_migration(self, tmp_path):
-        """server_only matches must be skipped while migration is pending (#238)."""
-        svc, fake = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _install_rom(svc, tmp_path)
-        # Mark migration pending — detect has fired, user hasn't resolved yet.
-        _set_sort_settings(svc, {"sort_by_content": True, "sort_by_core": False})
-        _set_sort_settings_previous(svc, {"sort_by_content": True, "sort_by_core": False})
-        # Server has a save, no local file anywhere.
-        ss = _server_save()
-        fake.saves[100] = ss
-
-        uploaded, downloaded, errors, conflicts = _do_sync(svc, 42)
-
-        assert uploaded == 0
-        assert downloaded == 0
-        assert errors == []
-        assert conflicts == []
-        # No download was initiated.
-        assert fake.downloaded_files == {}
-        # No file landed on disk under either layout.
-        saves_dir = tmp_path / "saves" / "gba"
-        assert not (saves_dir / "pokemon.srm").exists()
-
-    def test_sync_rom_saves_uploads_local_only_during_pending_migration(self, tmp_path):
-        """local_only matches must still upload during pending migration (#238)."""
-        svc, fake = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "dev-1")
-        _install_rom(svc, tmp_path)
-        _set_sort_settings(svc, {"sort_by_content": True, "sort_by_core": False})
-        _set_sort_settings_previous(svc, {"sort_by_content": True, "sort_by_core": False})
-        # Local save at the (previous == current, same layout) location.
-        _create_save(tmp_path, content=b"user progress")
-
-        uploaded, downloaded, errors, conflicts = _do_sync(svc, 42)
-
-        assert uploaded == 1
-        assert downloaded == 0
-        assert errors == []
-        assert conflicts == []
-        # Upload went through.
-        assert any(c[0] == "upload_save" for c in fake.call_log)
-
-    @pytest.mark.asyncio
-    async def test_sync_rom_saves_invokes_detect_sort_change_before_sync(self, tmp_path):
-        """Manual sync_rom_saves must also refresh save-sort state first (#238).
-
-        Without the detect-first call, a user editing retroarch.cfg outside
-        of a session and then triggering manual sync would race the same
-        way that direct-Steam-launch does — sync would compute saves_dir
-        from stale state and risk landing stale server content at the
-        wrong layout.
-        """
-        call_order: list[str] = []
-
-        def fake_detect() -> None:
-            call_order.append("detect")
-
-        svc, _ = make_service(tmp_path, detect_sort_change=fake_detect)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-        _create_save(tmp_path, content=b"progress")
-
-        orig_sync = svc._sync_engine.do_sync_rom_saves
-
-        def wrapped_sync(rom_id, *args, **kwargs):
-            call_order.append("sync")
-            return orig_sync(rom_id, *args, **kwargs)
-
-        svc._sync_engine.do_sync_rom_saves = wrapped_sync  # type: ignore[method-assign]
-
-        result = await svc.sync_rom_saves(42)
-
-        assert result["success"] is True
-        # detect fired exactly once, before sync ran.
-        assert call_order.count("detect") == 1
-        assert call_order.index("detect") < call_order.index("sync")
 
     @pytest.mark.asyncio
     async def test_sync_rom_saves_message_includes_conflict_count(self, tmp_path):
@@ -331,42 +241,6 @@ class TestSyncAllSaves:
         result = await svc.sync_all_saves()
         assert result["synced"] >= 1
         assert len(result["errors"]) >= 1
-
-    @pytest.mark.asyncio
-    async def test_sync_all_saves_invokes_detect_sort_change_before_sync(self, tmp_path):
-        """Manual sync_all_saves must also refresh save-sort state first (#238).
-
-        Same race as sync_rom_saves but for the bulk path: detect must
-        fire once at the top of the method, before any per-ROM sync runs.
-        """
-        call_order: list[str] = []
-
-        def fake_detect() -> None:
-            call_order.append("detect")
-
-        svc, _ = make_service(tmp_path, detect_sort_change=fake_detect)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
-        _seed_save_state(svc, 1, RomSaveSyncState(system="gba", slot_confirmed=True, active_slot="default"))
-        _create_save(tmp_path, system="gba", rom_name="game1", content=b"save1")
-
-        # Every ROM decides via the local matrix now (ADR-0017) — the worker is
-        # do_sync_rom_saves, wrapped to record call ordering.
-        orig_sync = svc._sync_engine.do_sync_rom_saves
-
-        def wrapped_sync(rom_id, *args, **kwargs):
-            call_order.append("sync")
-            return orig_sync(rom_id, *args, **kwargs)
-
-        svc._sync_engine.do_sync_rom_saves = wrapped_sync  # type: ignore[method-assign]
-
-        result = await svc.sync_all_saves()
-
-        assert result["success"] is True
-        # detect fired exactly once, before any per-ROM sync ran.
-        assert call_order.count("detect") == 1
-        assert call_order.index("detect") < call_order.index("sync")
 
     @pytest.mark.asyncio
     async def test_sync_all_saves_success_stays_true_with_only_conflicts(self, tmp_path):
@@ -497,34 +371,6 @@ class TestPreLaunchSync:
         result = await svc.pre_launch_sync(42)
         assert result["synced"] == 0
 
-    @pytest.mark.asyncio
-    async def test_pre_launch_sync_invokes_detect_sort_change_before_migration_gate(self, tmp_path):
-        """detect_sort_change is called before the _is_save_sort_changed gate (#238)."""
-        order: list[str] = []
-
-        def fake_detect() -> None:
-            # Simulate detect discovering a pending migration.
-            order.append("detect")
-
-        svc, _ = make_service(tmp_path, detect_sort_change=fake_detect)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-
-        # Track when is_save_sort_changed is consulted.
-        orig_gate = svc._rom_info.is_save_sort_changed
-
-        def wrapped_gate():
-            order.append("gate")
-            return orig_gate()
-
-        svc._rom_info.is_save_sort_changed = wrapped_gate  # type: ignore[method-assign]
-
-        await svc.pre_launch_sync(42)
-
-        assert "detect" in order
-        assert "gate" in order
-        assert order.index("detect") < order.index("gate")
-
 
 class TestPostExitSync:
     @pytest.mark.asyncio
@@ -567,67 +413,6 @@ class TestPostExitSync:
         result = await svc.post_exit_sync(42)
         assert result["success"] is True
         assert _get_device_id(svc) is not None
-
-    # ------------------------------------------------------------------
-    # Regression tests for issue #238 — detect-first invariant.
-    #
-    # Save-sync must refresh save-sort state via detect_sort_change
-    # before computing saves_dir, so that Rule 1 / Rule 2 engage even
-    # when a direct-Steam-launch race delivers post_exit_sync before
-    # refreshMigrationState. See #238.
-    # ------------------------------------------------------------------
-
-    @pytest.mark.asyncio
-    async def test_post_exit_sync_invokes_detect_sort_change_before_sync(self, tmp_path):
-        """detect_sort_change is called exactly once before the sync path runs (#238)."""
-        call_order: list[str] = []
-
-        def fake_detect() -> None:
-            call_order.append("detect")
-
-        svc, _ = make_service(tmp_path, detect_sort_change=fake_detect)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-        _create_save(tmp_path, content=b"progress")
-
-        # Patch do_sync_rom_saves to record call ordering.
-        orig_sync = svc._sync_engine.do_sync_rom_saves
-
-        def wrapped_sync(rom_id, *args, **kwargs):
-            call_order.append("sync")
-            return orig_sync(rom_id, *args, **kwargs)
-
-        svc._sync_engine.do_sync_rom_saves = wrapped_sync  # type: ignore[method-assign]
-
-        result = await svc.post_exit_sync(42)
-
-        assert result["success"] is True
-        # detect fired exactly once, before sync ran.
-        assert call_order.count("detect") == 1
-        assert call_order.index("detect") < call_order.index("sync")
-
-    @pytest.mark.asyncio
-    async def test_post_exit_sync_continues_when_detect_sort_change_raises(self, tmp_path, caplog):
-        """If detect_sort_change raises, save-sync logs a warning and proceeds (#238)."""
-
-        def boom() -> None:
-            raise RuntimeError("cfg file unreadable")
-
-        svc, _ = make_service(tmp_path, detect_sort_change=boom)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-        _create_save(tmp_path, content=b"progress")
-
-        with caplog.at_level(logging.WARNING, logger="test"):
-            result = await svc.post_exit_sync(42)
-
-        assert result["success"] is True
-        # Sync still ran despite detect failure.
-        assert result["synced"] == 1
-        # Warning was logged.
-        assert any("detect_sort_change failed" in rec.message for rec in caplog.records)
 
     @pytest.mark.asyncio
     async def test_post_exit_sync_message_includes_conflict_count(self, tmp_path):
@@ -1521,7 +1306,7 @@ class TestSaveSyncContentDirGate:
 
     @pytest.mark.asyncio
     async def test_in_save_dir_layout_does_not_block(self, tmp_path):
-        """Control: a supported InSaveDir layout syncs normally — no gate."""
+        """Control: a save under the save root syncs normally — no gate."""
         svc, _ = make_service(tmp_path)
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
@@ -1533,49 +1318,6 @@ class TestSaveSyncContentDirGate:
         assert result["success"] is True
         assert "reason" not in result
         assert result["synced"] == 1
-
-    @pytest.mark.asyncio
-    async def test_detect_failure_fails_open_does_not_block(self, tmp_path):
-        """A detect that raises leaves ``_current_layout`` unset — sync proceeds."""
-
-        def boom():
-            raise RuntimeError("cfg unreadable")
-
-        svc, _ = make_service(tmp_path, detect_sort_change=boom)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-        _create_save(tmp_path, content=b"progress")
-
-        result = await svc.sync_rom_saves(42)
-
-        # Fail-open: no benign-skip reason, sync ran.
-        assert "reason" not in result
-        assert result["success"] is True
-        assert result["synced"] == 1
-
-
-class TestPreLaunchSaveSortGate:
-    """pre_launch_sync short-circuits when a save-sort migration is pending
-    (engine.py line 297-303)."""
-
-    @pytest.mark.asyncio
-    async def test_pre_launch_sync_returns_save_sort_changed(self, tmp_path):
-        svc, fake = make_service(tmp_path)
-        svc._config.settings["save_sync_enabled"] = True
-        _set_device_id(svc, "test-device")
-        _install_rom(svc, tmp_path)
-        # Flag save-sort changed via the kv_config markers RomInfoService reads.
-        _set_sort_settings(svc, {"sort_by_content": True, "sort_by_core": False})
-        _set_sort_settings_previous(svc, {"sort_by_content": False, "sort_by_core": False})
-
-        result = await svc.pre_launch_sync(42)
-
-        assert result["success"] is False
-        assert result["save_sort_changed"] is True
-        assert result["synced"] == 0
-        # No sync ran.
-        assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)
 
 
 class TestSaveSyncDeviceGate:
