@@ -52,7 +52,7 @@ def _readme_context() -> BundleReadmeContext:
 
 
 def test_package_name_sanitization():
-    assert sanitize_package_name("decky romm/../sync") == "decky-romm-..-sync"
+    assert sanitize_package_name("romm tender/../x") == "romm-tender-..-x"
     assert sanitize_package_name("dëcky") == "d-cky"
     assert sanitize_package_name("aéb") == "a-b"
 
