@@ -1497,9 +1497,9 @@ turns that mode on, and the user guide. Under `by_label` a standard collection c
 today they read `(Standard)`, `(Smart)`, `(Franchise)`, `(IGDB Collection)` and `(Virtual)`, and the build updates
 [steam-non-steam-shortcuts.md](steam-non-steam-shortcuts.md) § Collection naming mode, which lists them. Because a
 standard collection carries no suffix, a standard collection named "Foo (Smart)" and a smart one named "Foo" end up with
-the same Steam name. New suffixes rename the Steam collections a `by_label` library already has; that is accepted, and
-the old-named collections must not be left behind. The keys on the wire and in `settings.json` stay `standard` / `smart`
-/ `virtual`.
+the same Steam name; that is accepted, since it takes a name spelling out another kind's suffix. New suffixes rename the
+Steam collections a `by_label` library already has; that is accepted, and the old-named collections must not be left
+behind. The keys on the wire and in `settings.json` stay `standard` / `smart` / `virtual`.
 
 **A failed read is answered, and asked again** (#1020). Today the tab marks its collections read as done before the
 fetch and never clears the mark, so one transient failure leaves the error card up for as long as the page is open, and
