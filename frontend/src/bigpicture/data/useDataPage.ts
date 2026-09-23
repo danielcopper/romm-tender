@@ -317,11 +317,13 @@ export function useDataPage(): DataPageState {
         setShortcutCount(FAILED);
       });
     readInventory();
-    // A finished cleanup makes the scanned number wrong, and a wrong number is
-    // worse than none: drop back to unscanned so the row asks to be scanned
-    // again rather than reporting what the run has just removed.
+    // A finished cleanup can make both scanned numbers wrong, and a wrong
+    // number is worse than none; why Grid images is one of them:
+    // `docs/architecture/qam-panel.md`, section Data Management.
     const unsubscribePrune = onPruneStateChange(() => {
-      if (getPruneState().complete !== null) setRemovedGames(NOT_ASKED);
+      if (getPruneState().complete === null) return;
+      setRemovedGames(NOT_ASKED);
+      setOrphanedGridImages(NOT_ASKED);
     });
     return () => {
       unsubscribePrune();

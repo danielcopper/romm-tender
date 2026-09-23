@@ -1511,8 +1511,11 @@ for a scan.
 that rode on the selection would fire under every row the stick passes — a local scan of the grid directory for one row,
 a RomM round trip for the other. Grid images and Gone from RomM therefore read `scan` until they are asked, and keep the
 answer until something makes it wrong, because a stale number is worse than no number. A finished cleanup puts Gone from
-RomM back to `scan`. Grid images goes back to `scan` whenever a shortcut removal on this page begins — Tender's
-shortcuts or other non-Steam games — because removing a shortcut orphans its images. A grid-image removal re-derives its
+RomM back to `scan`. Grid images goes back to `scan` after any removal of shortcuts from this page — Tender's shortcuts
+once the backend has accepted, other non-Steam games, and a finished Gone from RomM cleanup — because each can leave
+images the scan did not count: a Tender shortcut the plugin had no record of, or one whose removal report did not
+complete (that report is what deletes a bound shortcut's images), a foreign entry whose art nothing here deletes, or a
+cleanup run without recovery, which leaves its shortcuts' images in place. A grid-image removal re-derives its
 candidates rather than taking the scan's, and answers how many it found beside how many it removed; the row reads `0`
 only when the two match, since then nothing orphaned at the moment of the removal is left. Fewer removed than found
 means files that would not delete, and the row goes back to `scan` with the pane's status line saying how many; so does

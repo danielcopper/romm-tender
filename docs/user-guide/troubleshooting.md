@@ -382,9 +382,10 @@ cleanup refuses and deletes nothing, and the row keeps its count.
 The removal looks for orphaned images again when it runs, so it also takes any left behind since the scan. While it
 runs, the page is busy and no other removal can start. Afterwards the row reads **0** only when every image the removal
 found was deleted. If some could not be deleted, the pane says how many, and the row goes back to **scan**; the same
-happens when the removal's result never came back. Removing Tender's shortcuts or other non-Steam games also puts the
-row back to **scan**, because their images are then left behind too. Press **Scan for orphaned images** again to count
-what is left.
+happens when the removal's result never came back. Removing Tender's shortcuts or other non-Steam games, or finishing a
+Gone from RomM cleanup, also puts the row back to **scan**, because each can leave images the scan did not count — a
+Tender shortcut the plugin had no record of, a non-Steam game whose images nothing here deletes, or a cleanup run
+without recovery, which leaves its games' images behind. Press **Scan for orphaned images** again to count what is left.
 
 ### Other non-Steam games
 

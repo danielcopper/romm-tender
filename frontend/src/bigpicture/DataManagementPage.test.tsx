@@ -1010,6 +1010,38 @@ describe("DataManagementPage", () => {
       expect(view.getByTestId("data-row-removed-games").textContent).toContain("scan");
     });
 
+    it("puts Grid images back to unscanned once a cleanup run completes", async () => {
+      // A run without recovery removes shortcuts and leaves their grid images,
+      // which the last grid scan never counted.
+      vi.mocked(backend.getPrunePreview).mockResolvedValue({
+        success: true,
+        total: 3,
+        preview_id: "preview-1",
+        items: [],
+      } as never);
+      vi.mocked(backend.cleanupOrphanedGridImages).mockResolvedValue({ success: true, candidate_count: 2 });
+      const view = await pageOn("removed-games");
+      await press(button(view, "Clean Up Removed RomM Games"));
+      selectRow(view, "grid-images");
+      await press(button(view, "Scan for orphaned images"));
+      expect(view.getByTestId("data-row-grid-images").textContent).toContain("2");
+
+      await act(async () => {
+        beginPruneRun("run-1", "preview-1");
+        setPruneComplete({
+          preview_id: "preview-1",
+          run_id: "run-1",
+          success: true,
+          removed_rom_ids: [1],
+          results: [],
+          message: "",
+        } as never);
+        await Promise.resolve();
+      });
+
+      expect(view.getByTestId("data-row-grid-images").textContent).toContain("scan");
+    });
+
     it("keeps the number while a run is only in progress", async () => {
       vi.mocked(backend.getPrunePreview).mockResolvedValue({
         success: true,
@@ -1116,7 +1148,7 @@ describe("DataManagementPage", () => {
 
     it("asks to be scanned again when a shortfall happens to match the scan's count", async () => {
       // One image orphaned after the scan and one failed unlink: two removed of
-      // three, the same two the scan counted, with one still on disk.
+      // three, as many as the scan counted, with one still on disk.
       vi.mocked(backend.cleanupOrphanedGridImages)
         .mockResolvedValueOnce({ success: true, candidate_count: 2 })
         .mockResolvedValue({ success: true, candidate_count: 3, removed_count: 2 });
@@ -1289,6 +1321,34 @@ describe("DataManagementPage", () => {
       await press(button(view, "Remove every RomM shortcut?"));
       await waitFor(() => expect(view.getByTestId("status-shortcuts").textContent).toBe("Removed 1"));
 
+      expect(view.getByTestId("data-row-grid-images").textContent).toContain("scan");
+    });
+
+    it("reads scan on Grid images when the shortcut removal fails part-way through", async () => {
+      // The bound shortcuts are already gone from Steam when the live sweep
+      // that follows them rejects, so the run ends in a failure after it has
+      // removed shortcuts. A per-shortcut failure cannot stand in here: the
+      // paced removal logs it and carries on rather than rejecting.
+      vi.mocked(backend.cleanupOrphanedGridImages).mockResolvedValue({ success: true, candidate_count: 2 });
+      vi.mocked(backend.getSyncStats).mockResolvedValue(stats({ total_shortcuts: 2 }));
+      vi.mocked(backend.removeAllShortcuts).mockResolvedValue({
+        success: true,
+        message: "Removed 2",
+        app_ids: [10, 20],
+        rom_ids: [1, 2],
+      });
+      vi.mocked(getLiveRomMShortcutAppIds).mockRejectedValue(new Error("Steam went away"));
+      const view = await pageOn("grid-images");
+      await press(button(view, "Scan for orphaned images"));
+      expect(view.getByTestId("data-row-grid-images").textContent).toContain("2");
+
+      selectRow(view, "shortcuts");
+      fireEvent.click(button(view, "Remove all shortcuts"));
+      await press(button(view, "Remove every RomM shortcut?"));
+      await waitFor(() => expect(view.getByTestId("status-shortcuts").textContent).toBe("Failed to remove shortcuts"));
+
+      expect(vi.mocked(removeShortcut)).toHaveBeenCalledWith(10);
+      expect(vi.mocked(removeShortcut)).toHaveBeenCalledWith(20);
       expect(view.getByTestId("data-row-grid-images").textContent).toContain("scan");
     });
 
