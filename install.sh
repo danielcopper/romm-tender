@@ -86,6 +86,11 @@ TARBALL=""
 TAG_UNREACHABLE=2
 TAG_ABSENT=3
 
+# What `curl -f` exits with when the server answered with an HTTP error (curl(1),
+# EXIT CODES) — the one failure that says the release has no such file. Every
+# other one is the transfer itself failing.
+CURL_HTTP_ERROR=22
+
 # check_python's two refusals, which are two different things to tell a user.
 PYTHON_MISSING=2
 PYTHON_TOO_OLD=3
@@ -1139,8 +1144,15 @@ obtain_tarball() {
     archive="romm-tender-$version.tar.gz"
     row_detail "$INSTALLING" "downloading $tag"
 
-    fetch_visibly "$DOWNLOAD_BASE/$tag/$archive" "$work/$archive" ||
-        abort "release $tag carries no tarball" "try --version with a release that does, or --from a local build"
+    local fetched=0
+    fetch_visibly "$DOWNLOAD_BASE/$tag/$archive" "$work/$archive" || fetched=$?
+    case "$fetched" in
+        0) ;;
+        "$CURL_HTTP_ERROR")
+            abort "release $tag carries no tarball" "try --version with a release that does, or --from a local build"
+            ;;
+        *) abort "the download was cut short" "check the network and run this again" ;;
+    esac
     fetch "$DOWNLOAD_BASE/$tag/$archive.sha256" "$work/$archive.sha256" ||
         abort "release $tag carries no checksum for its tarball" "this release cannot be verified, so it is refused"
 

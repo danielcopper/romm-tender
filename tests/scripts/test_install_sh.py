@@ -1118,6 +1118,7 @@ class TestWhatItDownloads:
         assert not machine.code.exists()
 
     def test_a_release_with_no_tarball_says_so(self, machine):
+        """curl's HTTP-error exit is the server saying the release has no such file."""
         machine.publish_release()
         (machine.serve / _ARCHIVE).unlink()
 
@@ -1694,7 +1695,8 @@ class TestHowTheRunLooks:
         screen = _screen(output)
         assert "curl: (18) end of response" in screen, "curl's own reason was drawn over"
         failed = [line for line in screen.splitlines() if line.startswith("✗ Installing")]
-        assert failed == ["✗ Installing   release tender-v1.2.3 carries no tarball"], screen
+        assert failed == ["✗ Installing   the download was cut short"], screen
+        assert "  check the network and run this again" in screen
         assert not machine.code.exists()
 
     def test_the_warning_is_four_lines_and_asks_once(self, machine):
