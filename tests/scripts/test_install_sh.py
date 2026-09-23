@@ -1353,7 +1353,7 @@ class TestABackendOutsideTheService:
 
         assert result.returncode == 1
         assert _refusals(result.stderr) == [f"install.sh: another Tender backend is running (pid {holder.pid})"]
-        command = " ".join(str(argument) for argument in holder.args)
+        command = " ".join([sys.executable, "-c", _HOLD_THE_LOCK, str(machine.data / "backend.lock")])
         assert (
             f"  it holds {machine.data / 'backend.lock'} and runs {command} in ~/checkout — stop it with Ctrl-C"
             f" where it was started, or kill {holder.pid}, then run this again"
