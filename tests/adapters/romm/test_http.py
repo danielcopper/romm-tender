@@ -342,7 +342,7 @@ class TestCustomProxyHeaders:
         }
         adapter = RommHttpAdapter(
             settings,
-            "/fake/plugin_dir",
+            "/fake/code_dir",
             logging.getLogger("test"),
             "romm-tender/9.9.9",
             log_debug=lambda _msg: None,
@@ -426,7 +426,7 @@ class TestCustomProxyHeaderLogging:
     def _adapter(self, headers: list[dict[str, str]]):
         log_debug = MagicMock()
         settings = {"romm_url": "http://romm.local", "romm_custom_headers": headers}
-        adapter = RommHttpAdapter(settings, "/fake/plugin_dir", MagicMock(), "romm-tender/9.9.9", log_debug=log_debug)
+        adapter = RommHttpAdapter(settings, "/fake/code_dir", MagicMock(), "romm-tender/9.9.9", log_debug=log_debug)
         return adapter, log_debug
 
     def _request(self, adapter) -> None:
@@ -1024,7 +1024,7 @@ class TestPlatformMap:
         assert adapter.resolve_system("unknown-slug", "cdi") == "cdimono1"
 
     def test_missing_config_returns_empty_map(self, tmp_path):
-        """A plugin_dir with no config.json degrades to an empty map, not an error.
+        """A code_dir with no defaults/config.json degrades to an empty map, not an error.
 
         ``resolve_system`` then falls back to its verbatim pass-through (ADR-0010
         §5) rather than raising into the synchronous game-detail builder.
@@ -1042,7 +1042,8 @@ class TestPlatformMap:
         """A corrupt (non-JSON) config.json degrades to an empty map, not an error."""
         import logging
 
-        (tmp_path / "config.json").write_text("{ this is not valid json")
+        (tmp_path / "defaults").mkdir()
+        (tmp_path / "defaults" / "config.json").write_text("{ this is not valid json")
         adapter = RommHttpAdapter(
             {}, str(tmp_path), logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
         )
@@ -1905,7 +1906,7 @@ class TestDownloadTimeout:
 
         settings = {"romm_url": "http://romm.local", "romm_user": "user", "romm_pass": "pass"}
         return RommHttpAdapter(
-            settings, "/fake/plugin_dir", logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
+            settings, "/fake/code_dir", logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
         )
 
     # ------------------------------------------------------------------
@@ -2168,7 +2169,7 @@ def _resume_adapter():
 
     settings = {"romm_url": "http://romm.local", "romm_user": "u", "romm_pass": "p"}
     return RommHttpAdapter(
-        settings, "/fake/plugin_dir", logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
+        settings, "/fake/code_dir", logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
     )
 
 
@@ -2365,7 +2366,7 @@ class TestDownloadExternal:
             "romm_api_token_origin": "http://romm.local",
         }
         return RommHttpAdapter(
-            settings, "/fake/plugin_dir", logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
+            settings, "/fake/code_dir", logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
         )
 
     def test_omits_authorization_even_with_stored_token(self, tmp_path):
@@ -2557,7 +2558,7 @@ class TestDownloadConditional:
             "romm_api_token_origin": "http://romm.local",
         }
         adapter = RommHttpAdapter(
-            settings, "/fake/plugin_dir", logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
+            settings, "/fake/code_dir", logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
         )
         dest = str(tmp_path / "c.png")
         resp = _make_resp(200, {"Content-Length": "1"}, b"x")

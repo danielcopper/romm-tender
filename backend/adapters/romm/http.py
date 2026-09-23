@@ -1,6 +1,6 @@
 """Standalone HTTP client for the RomM API.
 
-All external dependencies (settings, plugin_dir, logger) are injected via the
+All external dependencies (settings, code_dir, logger) are injected via the
 constructor.
 """
 
@@ -48,7 +48,7 @@ class RommHttpAdapter:
     ----------
     settings:
         Shared settings dict (held by reference — mutations are visible here).
-    plugin_dir:
+    code_dir:
         Absolute path to the directory this program is installed in.
     logger:
         Logger instance.
@@ -78,7 +78,7 @@ class RommHttpAdapter:
     def __init__(
         self,
         settings: dict[str, Any],
-        plugin_dir: str,
+        code_dir: str,
         logger: logging.Logger,
         user_agent: str,
         on_retry: RetryListener | None = None,
@@ -86,7 +86,7 @@ class RommHttpAdapter:
         log_debug: Callable[[str], None],
     ) -> None:
         self._settings = settings
-        self._plugin_dir = plugin_dir
+        self._code_dir = code_dir
         self._logger = logger
         self._user_agent = user_agent
         self._retry = RetryLadder(logger, on_retry=on_retry)
@@ -111,7 +111,7 @@ class RommHttpAdapter:
     # ------------------------------------------------------------------
 
     def load_platform_map(self) -> dict[str, str]:
-        """Load the platform slug -> RetroDECK system mapping from config.json.
+        """Load the platform slug -> RetroDECK system mapping from ``defaults/config.json``.
 
         Degrades to an empty map on a missing or corrupt config.json — the same
         default-safe direction every other config reader here takes — so
@@ -119,12 +119,7 @@ class RommHttpAdapter:
         instead of raising into callers, several of which (the synchronous
         game-detail builder) have no surrounding guard.
         """
-        # Check the program root first (a Decky-packaged install carried
-        # defaults/ contents flattened there), then defaults/, which is where
-        # this repo keeps them
-        root_path = os.path.join(self._plugin_dir, "config.json")
-        dev_path = os.path.join(self._plugin_dir, "defaults", "config.json")
-        config_path = root_path if os.path.exists(root_path) else dev_path
+        config_path = os.path.join(self._code_dir, "defaults", "config.json")
         try:
             with open(config_path) as f:
                 config = json.load(f)

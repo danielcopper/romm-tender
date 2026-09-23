@@ -1,8 +1,7 @@
 # Packaged defaults
 
-Reference data that ships inside the plugin. The runtime looks for each file at the plugin root first and under
-`defaults/` second — Decky-packaged installs carried these flattened into the root — so they keep their bare names; do
-not move or rename them.
+Reference data that ships with the program. The backend reads each file from this directory by its name, so do not move
+or rename them.
 
 ## `config.json` — in-tree default
 

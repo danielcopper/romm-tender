@@ -221,16 +221,16 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # the implementation's own method name.
         "resolve_sandbox_launcher",
         "_sandbox_launcher",
-        # SystemResolver (services/protocols/paths.py) — parses the plugin's OWN
-        # bundled config.json (plugin root, else defaults/config.json) for its
-        # platform_map. Implemented on the RomM HTTP adapter, which the name makes
-        # easy to misread twice over: it does no network work, and the file is not
-        # RetroDECK's retrodeck.json. It is also the odd one out — the adapter
-        # memoises the map for the life of the process, so exactly one call ever
-        # opens the file. The entry earns its place because that one call can land
-        # inside a UoW. The Protocol is call-shaped, so `_resolve_system` — the
-        # attribute every consumer in services/ binds it to — is listed beside
-        # `resolve_system`, the implementation's own method name.
+        # SystemResolver (services/protocols/paths.py) — parses the plugin's
+        # OWN bundled defaults/config.json for its platform_map. Implemented
+        # on the RomM HTTP adapter, which the name makes easy to misread twice
+        # over: it does no network work, and the file is not RetroDECK's
+        # retrodeck.json. It is also the odd one out — the adapter memoises
+        # the map for the life of the process, so exactly one call ever opens
+        # the file. The entry earns its place because that one call can land
+        # inside a UoW. The Protocol is call-shaped, so `_resolve_system` —
+        # the attribute every consumer in services/ binds it to — is listed
+        # beside `resolve_system`, the implementation's own method name.
         "resolve_system",
         "_resolve_system",
         # SteamConfigStore.read_shortcut_exes (services/protocols/transport.py) —
