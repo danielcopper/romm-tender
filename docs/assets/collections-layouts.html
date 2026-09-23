@@ -217,9 +217,9 @@
 
   <div class="facts">
     <dl>
-      <dt>What is here</dt><dd>Every collection RomM lists to you (your own, and other users' public ones), each with one switch: sync it or not. RomM has three kinds. <strong>Standard</strong> collections are picked by hand, and the favorites collection RomM keeps for starred games is one of them. <strong>Smart</strong> collections are saved searches, so their games change as matches come and go. <strong>Virtual</strong> collections are groupings RomM builds from IGDB: franchises and IGDB collections. They have no owner.</dd>
+      <dt>What is here</dt><dd>Every collection RomM lists to you (your own, and other users' public ones), each with one switch: sync it or not. RomM has three kinds. <strong>Standard</strong> collections are picked by hand, and the favorites collection RomM keeps for starred games is one of them. <strong>Smart</strong> collections are saved searches, so their games change as matches come and go. <strong>Virtual</strong> collections are groupings RomM builds from game metadata; Tender shows two of them, franchises and IGDB collections. They have no owner.</dd>
       <dt>What turning one on does</dt><dd>It adds a shortcut for <strong>every game in the collection, including games on platforms you do not sync</strong>. It also creates a Steam collection named <code>RomM: [name] (host)</code>. The Collections tab says neither of these today.</dd>
-      <dt>What the page knows</dt><dd>RomM's listing gives each collection its name, its kind, its ROM count, <strong>which games are in it</strong> (their ids), <strong>its owner's name</strong> and whether it is public. Tender passes on the name, the kind (and, for virtual ones, franchise or IGDB collection), the count, whether it is <em>yours</em>, and whether it syncs, and drops the rest. With the member ids, <strong>how many of a collection's games are already in Steam</strong> is a local lookup against the shortcuts Tender made. It is approximate where several versions of one game share a shortcut. None of this costs more than the four requests one page load makes today; how big a collection is on disk would.</dd>
+      <dt>What the page knows</dt><dd>RomM's listing gives each collection its name, its kind, its ROM count, <strong>which games are in it</strong> (their ids), <strong>its owner's name</strong> (standard and smart only) and whether it is public. Tender passes on the name, the kind (and, for virtual ones, franchise or IGDB collection), the count, whether it is <em>yours</em>, and whether it syncs (plus its id and whether it is the favorites collection), and drops the member ids, the owner's name and whether it is public. With the member ids, <strong>how many of a collection's games are already in Steam</strong> is a local lookup against the shortcuts Tender made. It is approximate where several versions of one game share a shortcut. None of this costs more than the four requests one page load makes today; how big a collection is on disk would.</dd>
       <dt>Mine / All is not a filter</dt><dd>Under <em>Mine</em>, other users' collections are also <strong>left out of the sync</strong>, even ones switched on earlier. It is a setting shaped like a filter. Virtual collections have no owner, so it never touches them.</dd>
       <dt>Width and height</dt><dd>Content is 806 px on every display. Height is the scarce axis: after the title, Back and the tab row, the Deck leaves about <strong>263 px</strong>. The hatched area on each board is what the Deck does not show without scrolling. The names and numbers are invented.</dd>
     </dl>
@@ -249,7 +249,7 @@
       </div>
     </div>
   </div></div>
-  <div class="caption"><span>Before the first collection: a toggle, a label, two button rows, a heading, a search and a button row</span><span>The first collection starts below the fold</span></div>
+  <div class="caption"><span>Before the first collection, seven lines: a toggle, a label, two button rows, a heading, a search and a button row</span><span>The first collection starts below the fold</span></div>
 
   <!-- ============ A ============ -->
   <section class="variant" id="v-a">
@@ -308,7 +308,7 @@
           <li><strong>The Mine / All switch still looks like a filter</strong> while it removes collections from the sync. Placing it next to the search makes that worse.</li>
           <li><strong>Nothing says what turning a collection on does.</strong> The only room left is a line under the table, below the fold.</li>
           <li>The <em>Kind</em> column says the same thing on every row, because the table already shows one kind at a time. It carries information only inside Virtual.</li>
-          <li>Line one holds three segmented controls and a search field. In German (<em>Standard · Intelligent · Virtuell</em>, <em>Meine · Alle</em>, <em>Suchen</em>) it wraps, and the table loses a row.</li>
+          <li>On Virtual, line one holds three segmented controls and a search field. In German (<em>Standard · Intelligent · Virtuell</em>, <em>Meine · Alle</em>, <em>Suchen</em>) it wraps, and the table loses a row.</li>
         </ul>
       </div>
     </div>
@@ -506,13 +506,13 @@
           <li><span class="mk">2</span><p><strong>Favorites becomes a row with its switch in it</strong>, like a platform row. The number in the row is today's "Includes 14 favorited ROMs". With no favorites collection, the row stays, greyed, with a dash for the count.</p></li>
           <li><span class="mk">3</span><p><strong>What turning a collection on does, once per kind</strong>, worded for that kind. This is where the page finally says that collections bring in games from platforms you do not sync.</p></li>
           <li><span class="mk">4</span><p><strong>The table orders collections that are on above those that are off</strong>, and freezes that order while the page is open, the same as Platforms. The <em>Owner</em> column appears only on the two kinds that have owners, and names the owner: <em>you</em>, or their RomM user name.</p></li>
-          <li><span class="mk">5</span><p><strong>In Steam</strong> says how many of a collection's games already have a shortcut, so the difference to <em>ROMs</em> is roughly what turning it on adds. It is worked out from the member ids the listing carries against Tender's own shortcuts, approximate where versions of one game share a shortcut, and costs no request. <strong>Enable all / Disable all ask first whenever no search narrows the list</strong>, on every kind, the way today's unfiltered view does.</p></li>
+          <li><span class="mk">5</span><p><strong>In Steam</strong> says how many of a collection's games already have a shortcut, so the difference to <em>ROMs</em> is roughly what turning it on adds. It is worked out from the member ids the listing carries against Tender's own shortcuts, approximate where versions of one game share a shortcut, and costs no request. <strong>Enable all / Disable all ask first whenever no search narrows the list</strong>, on every kind, the way today's whole-kind view does.</p></li>
         </ol>
       </div>
       <div><h3>What it costs</h3>
         <ul>
           <li><strong>Moving between kinds is a walk down a list</strong>, not a single press on a segmented control. Search already works one kind at a time today, so nothing is lost there.</li>
-          <li>The virtual kind becomes two rows, <em>Franchises</em> and <em>IGDB collections</em>, under RomM's own heading <em>Autogenerated</em>. The sub-filter row disappears; the heading costs one line of the column.</li>
+          <li>The virtual kind becomes two rows, <em>Franchises</em> and <em>IGDB collections</em>, under <em>Autogenerated</em>, which follows RomM's own heading. The sub-filter row disappears; the heading costs one line of the column.</li>
           <li>The owner toggle is a switch outside a selectable row, at the head of a list-and-detail column. Platforms' Enable all / Disable all sit in the same slot, so the frame already supports it.</li>
           <li>Once the answer arrives, walking the kind rows costs nothing: every count is local, so focus-selects has no reads to hold back.</li>
         </ul>
@@ -531,7 +531,7 @@
     <thead><tr><th></th><th>Today</th><th>A · one table</th><th>B · per pane</th><th>C · kinds left</th></tr></thead>
     <tbody>
       <tr><td>Collections above the fold on the Deck</td><td class="n">0</td><td>6</td><td class="n">4</td><td class="y">6, and every kind</td></tr>
-      <tr><td>Lines of controls before the first collection</td><td class="n">6</td><td>2</td><td class="n">3, in a narrow column</td><td class="y">1</td></tr>
+      <tr><td>Lines of controls before the first collection</td><td class="n">7</td><td>2</td><td class="n">3, in a narrow column</td><td class="y">1</td></tr>
       <tr><td>Says what turning one on does</td><td class="n">no</td><td class="n">below the fold</td><td class="y">yes, per collection</td><td class="y">yes, per kind</td></tr>
       <tr><td>Mine / All reads as what it is</td><td class="n">no</td><td class="n">no</td><td class="n">no</td><td class="y">yes</td></tr>
       <tr><td>New server requests</td><td class="y">none</td><td class="y">none</td><td class="y">none</td><td class="y">none</td></tr>
@@ -546,7 +546,7 @@
   <ul style="max-width:74ch">
     <li><strong>C is the shape.</strong></li>
     <li><strong>The owner switch reads <em>Other users' collections</em></strong>; on means what <em>All</em> means today, and the behaviour is unchanged.</li>
-    <li><strong>The kinds take RomM's own headings where it has them</strong> — <em>Collections</em>, <em>Smart collections</em>, <em>Autogenerated</em> — with <em>Favorites</em>, and <em>Franchises</em> and <em>IGDB collections</em> under Autogenerated. The Steam names the type-distinguishing setting builds follow the same words: a hand-picked collection carries no suffix, and the others carry <em>(Smart)</em>, <em>(Franchise)</em> and <em>(IGDB collection)</em>. The keys on the wire and in the settings stay <code>standard</code> / <code>smart</code> / <code>virtual</code>.</li>
+    <li><strong>The kinds follow RomM's own headings where it has them</strong> — RomM's <em>Collections</em>, <em>Smart Collections</em> and <em>Autogenerated collections</em> become <em>Collections</em>, <em>Smart collections</em> and <em>Autogenerated</em> — with <em>Favorites</em>, and <em>Franchises</em> and <em>IGDB collections</em> under Autogenerated. The Steam names the type-distinguishing setting builds follow the same words: a hand-picked collection carries no suffix, and the others carry <em>(Smart)</em>, <em>(Franchise)</em> and <em>(IGDB collection)</em>, with <em>(Autogenerated)</em> for a virtual collection of no known type. The keys on the wire and in the settings stay <code>standard</code> / <code>smart</code> / <code>virtual</code>.</li>
     <li><strong>An <em>In Steam</em> column</strong>, from the member ids the listing already carries, checked against Tender's shortcuts; approximate where versions of one game share a shortcut.</li>
     <li><strong>The owner column names the owner</strong>: <em>you</em>, or their RomM user name.</li>
     <li><strong>Enable all / Disable all ask first whenever no search narrows the list</strong>, on every kind.</li>
