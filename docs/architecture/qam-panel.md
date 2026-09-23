@@ -1457,8 +1457,8 @@ A kind's pane holds, in order:
 1. the kind's name with a short description;
 2. **one sentence, worded for that kind, on what turning one of its collections on does**: it adds all of that
    collection's games to Steam, **including games on platforms the reader does not sync**, and groups them in a Steam
-   collection named after it (`RomM: [name] (host)`, with the kind's suffix, none on Collections, when the Steam Library
-   setting distinguishes collection types). The narrow tab says neither;
+   collection named after it (`RomM: [name] (host)`, with the kind's suffix, none on Collections or Favorites, when the
+   Steam Library setting distinguishes collection types). The narrow tab says neither;
 3. one line with the fuzzy search and Enable all / Disable all;
 4. a table drawn with § Tables' shared one — Collection, Owner, ROMs, In Steam, Sync on Collections and Smart
    collections, and Collection, ROMs, In Steam, Sync on Franchises and IGDB collections, which have no owner. Owner
@@ -1503,12 +1503,13 @@ and requires them to match the frontend's collection-type words, and the code an
 `domain/collection_label.py` say the same; against the page's new plural words a singular suffix, or none, cannot meet
 that requirement, so the build replaces it wherever it is stated with the rule stated here. It also rewords the
 "different types stay separate" claim wherever it is made, since it no longer holds without exception: CONTEXT.md →
-Collection naming mode, the user guide, the Steam Library setting's description, and the backend and frontend comments
-and docstrings that repeat it (a search for "stay separate" finds them). Because a standard collection carries no
-suffix, a standard collection named "Foo (Smart)" and a smart one named "Foo" end up with the same Steam name and merge
-into one; that is accepted, since it takes a name spelling out another kind's suffix. Dropping `(Standard)` and
-replacing `(Virtual)` renames those Steam collections in a `by_label` library; that is accepted, and the old-named ones
-must not be left behind. The keys on the wire and in `settings.json` stay `standard` / `smart` / `virtual`.
+Collection naming mode, the user guide, the Steam Library setting's description, and the backend and frontend comments,
+docstrings and test docstrings that repeat it. They word it more than one way ("stay separate", "land in separate Steam
+collections", one split across a line), so a single phrase search does not find them all. Because a standard collection
+carries no suffix, a standard collection named "Foo (Smart)" and a smart one named "Foo" end up with the same Steam name
+and merge into one; that is accepted, since it takes a name spelling out another kind's suffix. Dropping `(Standard)`
+and replacing `(Virtual)` renames those Steam collections in a `by_label` library; that is accepted, and the old-named
+ones must not be left behind. The keys on the wire and in `settings.json` stay `standard` / `smart` / `virtual`.
 
 **A failed read is answered, and asked again** (#1020). Today the tab marks its collections read as done before the
 fetch and never clears the mark, so one transient failure leaves the error card up for as long as the page is open, and
