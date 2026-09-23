@@ -782,9 +782,10 @@ class SyncOrchestrator:
                 # is_cancelling() checkpoints. Route it into the same graceful
                 # finalize the checkpoint break uses, so the SyncRun is marked
                 # cancelled and sync_state is restored to IDLE instead of wedging
-                # until a plugin reload (#1035). SyncCancelled is a BaseException,
-                # so a REAL asyncio.CancelledError raised mid-fetch is NOT caught
-                # here — it propagates out, never swallowed into the finalize.
+                # until a plugin reload (#1035). This clause names SyncCancelled
+                # alone, and a REAL asyncio.CancelledError raised mid-fetch is a
+                # BaseException outside it, so that one is NOT caught here — it
+                # propagates out, never swallowed into the finalize.
                 cancelled = True
 
             # Final phase: stale cleanup + Steam collections + sync_complete.

@@ -33,7 +33,7 @@ class TestCheckCancelling:
     def test_raises_when_cancelling(self, plugin):
         plugin._sync_service._box.sync_state = SyncState.CANCELLING
         # The cooperative cancel signal is the dedicated ``SyncCancelled``
-        # BaseException — NOT ``asyncio.CancelledError`` — so a cooperative
+        # exception — NOT ``asyncio.CancelledError`` — so a cooperative
         # sync cancel is never conflated with a real asyncio task cancel.
         with pytest.raises(SyncCancelled):
             plugin._sync_service._fetcher._check_cancelling()

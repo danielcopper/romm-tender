@@ -1320,15 +1320,18 @@ class TestSyncPreviewErrorHandling:
     @pytest.mark.asyncio
     async def test_cancelled_error_returns_canonical_failure(self, plugin, fake_romm_api):
         """A cooperative cancel during sync_preview RETURNS the canonical failure
-        shape — it does NOT re-raise out of the Decky callable (#1035).
+        shape — it does NOT re-raise out of the callable (#1035).
 
-        sync_preview is awaited by the frontend; re-raising would leave that
-        promise unsettled. The cooperative cancel — now the dedicated
-        ``SyncCancelled`` BaseException, matching the production signal raised
-        by ``fetcher._check_cancelling`` and the per-unit checkpoint — must
-        surface as ``{success: False, reason: "cancelled", message: ...}`` and
-        leave sync_state IDLE with no pending delta. ``SyncCancelled`` skips the
-        generic ``except Exception`` and lands in ``except SyncCancelled``.
+        A cancel is the callable's own outcome, not a transport failure:
+        re-raising would reach the panel as a ``backend_exception`` error
+        (``host/dispatch.py``) where the canonical failure shape belongs. The
+        cooperative cancel — the dedicated ``SyncCancelled``, matching the
+        production signal raised by ``fetcher._check_cancelling`` and the
+        per-unit checkpoint — must surface as ``{success: False, reason:
+        "cancelled", message: ...}`` and leave sync_state IDLE with no pending
+        delta. ``SyncCancelled`` is an ``Exception``; the clause order routes it
+        into ``except SyncCancelled``, which sits above the generic
+        ``except Exception``.
         """
         import decky
 
@@ -3546,11 +3549,10 @@ class TestDoSyncPerUnitErrors:
         The cancel arrives while ``_sync_one_unit`` is fetching the unit's
         ROMs (``fetcher._check_cancelling`` raising ``SyncCancelled`` from
         inside ``list_roms``) — NOT at an ``is_cancelling()`` checkpoint and
-        NOT during ``build_work_queue``. ``SyncCancelled`` is a
-        ``BaseException`` (like ``asyncio.CancelledError``), so it unwinds
-        through the fetcher's ``except Exception`` re-raise around ``list_roms``
-        untouched and lands in ``_do_sync_per_unit``'s dedicated
-        ``except SyncCancelled``. On the un-fixed code (raising
+        NOT during ``build_work_queue``. The fetcher's own ``except
+        SyncCancelled`` around ``list_roms``, above its ``except Exception``,
+        re-raises it untouched and unlogged, and it lands in
+        ``_do_sync_per_unit``'s dedicated ``except SyncCancelled``. On the un-fixed code (raising
         ``asyncio.CancelledError`` and catching it) sonar's S7497 would flag the
         swallow; the refactor uses a distinct cooperative type so the swallow is
         scoped to the cooperative signal only.
