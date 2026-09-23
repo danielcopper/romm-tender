@@ -1435,8 +1435,7 @@ register is what that sweep checks against.
 
 ## Security
 
-- NEVER read or use credentials from settings files (`~/.config/romm-tender/settings.json`) without explicit user
-  permission
+- NEVER read or use credentials from settings files (`~/.config/romm-tender/`) without explicit user permission
 - NEVER pass credentials to agents — if API calls are needed, ask the user to run them and provide output
 - NEVER log secrets (passwords, API keys) — mask them in any log output
 
