@@ -394,6 +394,9 @@ def _drain(pid: int, master: int, timeout: float = 30.0) -> tuple[int, str]:
 
 _ANSI = re.compile(r"\x1b\[([\d;]*)([A-Za-z])")
 
+# A row as the replay shows it: a mark of any width, then its label.
+_ROW_SHAPE = re.compile(r"^\S+ (Checking|Installing|Service|Steam) ")
+
 
 def _screen(transcript: str) -> str:
     """What the terminal SHOWS after replaying *transcript*, colour removed.
@@ -1802,26 +1805,43 @@ class TestHowTheRunLooks:
             assert not [line for line in lines if line.startswith(frame)], f"a spinner frame is still there: {screen}"
         assert "100.0%" not in screen, "the progress bar is still on screen"
 
-    def test_a_narrow_terminal_keeps_every_row_on_one_line(self, machine):
-        """A row wider than the terminal is cut to fit rather than wrapped.
+    @pytest.mark.parametrize(
+        ("lang", "ellipsis"),
+        [("C.UTF-8", "…"), ("C", "...")],
+        ids=["glyph-marks", "text-marks"],
+    )
+    def test_a_narrow_terminal_keeps_every_row_on_one_line(self, machine, lang, ellipsis):
+        """A row, or the line under one, wider than the terminal is cut to fit rather than wrapped.
 
         The replay here does not wrap long lines, so a wrapped row would still
-        read as one; what it can see is the width, and a row that fits is one
-        the terminal cannot wrap. The rows' mark and label take fifteen columns
-        of the fifty, so the Checking row's detail is the one that runs out.
+        read as one; what it can see is the width, and a line that fits is one
+        the terminal cannot wrap. At forty columns a detail has twenty-four of
+        them, twenty-one beside a text mark — the Checking row's always runs
+        out — and the covers moved here put a line under the Installing row
+        that runs out too. Outside a
+        UTF-8 locale the marks are four columns of text rather than one glyph,
+        which is the other width the rows are cut to.
         """
-        machine.publish_release()
+        for name, filename in (("covers", "a.png"), ("artwork", "b.png")):
+            (machine.data / name).mkdir(parents=True, exist_ok=True)
+            (machine.data / name / filename).write_text("x", encoding="utf-8")
 
-        _code, output = machine.on_a_terminal("--version", _VERSION, answer="y", width=50, COLORTERM="truecolor")
+        _code, output = machine.on_a_terminal(
+            "--from", str(_build_tarball(machine.tmp_path)), answer="y", width=40, COLORTERM="truecolor", LANG=lang
+        )
 
         lines = _screen(output).splitlines()
-        rows = [line for line in lines if line[2:].startswith(("Checking", "Installing", "Service", "Steam"))]
-        assert rows, "no row reached the screen"
-        for row in rows:
-            assert len(row) < 50, f"a row wider than the terminal: {row!r}"
-        checking = [row for row in rows if row[2:].startswith("Checking")]
+        labelled = [(found.group(1), line) for line in lines if (found := _ROW_SHAPE.match(line))]
+        assert {label for label, _line in labelled} == {"Checking", "Installing", "Service", "Steam"}
+        for _label, row in labelled:
+            assert len(row) < 40, f"a row wider than the terminal: {row!r}"
+        checking = [row for label, row in labelled if label == "Checking"]
         assert len(checking) == 1
-        assert checking[0].endswith("…")
+        assert checking[0].endswith(ellipsis)
+        moved = [line for line in lines if line.startswith("    1 cover and")]
+        assert len(moved) == 1, "the covers' line under the Installing row is not on screen"
+        assert len(moved[0]) < 40, f"a line under a row wider than the terminal: {moved[0]!r}"
+        assert moved[0].endswith(ellipsis)
 
     def test_a_download_that_dies_midway_keeps_curls_reason_and_says_its_own(self, machine):
         """Two reasons, both readable: the transport's and the run's.
