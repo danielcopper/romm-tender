@@ -1144,7 +1144,7 @@ class TestWhatItDownloads:
         assert not machine.code.exists()
 
     def test_a_release_with_no_tarball_says_so(self, machine):
-        """curl's HTTP-error exit is the server saying the release has no such file."""
+        """A tarball the server answers with an HTTP error is reported as the release carrying none."""
         machine.publish_release()
         (machine.serve / _ARCHIVE).unlink()
 
