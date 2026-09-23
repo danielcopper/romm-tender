@@ -202,8 +202,8 @@ locally with `mise run docs`.
   `domain/identity.py` — no hardcoded name and no hardcoded version at the format site, so the UA and the recovery root
   come from that one module rather than from two literals that could drift (the root additionally through
   `sanitize_package_name`, which is the identity for a name shaped like this one). Those two are everything
-  `PACKAGE_NAME` reaches; the folder the program ships as is not decided by it. **There is no fallback and no failure
-  mode**: a constant cannot be missing, so a UA naming anything but this program is a code change, never a deployment
+  `PACKAGE_NAME` reaches; the folder the program ships as is not decided by it. **The UA has no fallback and no failure
+  mode**: both halves are constants, so a UA naming anything but this program is a code change, never a deployment
   accident. `VERSION` is machine-stamped by release-please (`x-release-please-version` on its line) and never edited by
   hand. `adapters/renderer_gc.py` also speaks HTTP — to Steam's debugger on `localhost` — and takes none.
 - **Large payloads**: two caps, and they fail differently — `host/dispatch.py` refuses an encoded answer over ~12 MiB as
