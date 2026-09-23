@@ -55,9 +55,9 @@ if TYPE_CHECKING:
 
 
 # kv_config key for the offline ``platform_slug → display_name`` cache,
-# refreshed on every sync from the live work-queue. Read by the offline
-# ``roms``-derived queries (the Platforms tab's rows, game-detail platform name) so a
-# RomM-down panel shows "Nintendo 64" rather than the bare "n64" slug.
+# refreshed on every sync from the live work-queue. Read for the game-detail
+# page's platform name, and for the name a platform removal answers with, which
+# the frontend uses to find that platform's Steam collection.
 _PLATFORM_NAMES_KEY = "platform_names"
 
 # How many of the newest sync runs ``get_sync_runs`` answers with — the run

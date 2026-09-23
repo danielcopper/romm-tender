@@ -35,9 +35,8 @@ if TYPE_CHECKING:
     )
 
 # kv_config key for the offline ``platform_slug → display_name`` cache the
-# library sync refreshes every run. Read here so a platform's removal on the
-# Library page's Platforms tab answers with "Nintendo 64" rather than the bare
-# "n64" slug when RomM is unreachable. Mirrors ``library.reporter._PLATFORM_NAMES_KEY``.
+# library sync refreshes every run. Read here so a platform's removal can find
+# the platform's Steam collection by the name the sync gave it. Mirrors ``library.reporter._PLATFORM_NAMES_KEY``.
 _PLATFORM_NAMES_KEY = "platform_names"
 
 
