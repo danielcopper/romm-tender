@@ -21,7 +21,7 @@ body:
     id: solution
     attributes:
       label: Proposed solution
-      description: How should the plugin behave? Sketch the UX or the API surface. If you have ideas, share them — if not, leave blank and we'll figure it out.
+      description: How should Tender behave? Sketch the UX or the API surface. If you have ideas, share them — if not, leave blank and we'll figure it out.
     validations:
       required: false
 

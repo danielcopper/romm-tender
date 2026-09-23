@@ -328,7 +328,7 @@ shapes.
 
 For a fully vanished game whose shortcut will be removed, an enabled bundle also captures Steam artwork and per-app
 Steam Input files, the appId, name, executable, start directory, launch options, collection membership, available Steam
-playtime, and the relevant controller-config value. No artwork base64 crosses the Decky bridge.
+playtime, and the relevant controller-config value. No artwork base64 crosses from the panel to the backend.
 
 Failure is never rewritten into success. Seal, rename and cleanup durability failures surface as exact or ambiguous
 partial mutations. If a bundle cannot be proven durable it is renamed aside rather than published; if that rename also

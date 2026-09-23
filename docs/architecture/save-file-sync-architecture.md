@@ -918,13 +918,15 @@ deferred to plugin startup alone. It must also run at the points that bracket ga
 
 ### Detection trigger points
 
-All five trigger points call the `refresh_migration_state` callable and share the same idempotent backend methods.
-Running on every trigger is cheap: `detect_retrodeck_path_change()` and `detect_save_sort_change()` both have
-early-return guards that exit immediately when no config change has occurred since the last call.
+All five trigger points run the same idempotent detection methods: the three frontend ones through the
+`refresh_migration_state` callable, the post-exit one through `MigrationService.refresh_state` directly, and backend
+start by calling the two methods itself. Running on every trigger is cheap: `detect_retrodeck_path_change()` and
+`detect_save_sort_change()` both have early-return guards that exit immediately when no config change has occurred since
+the last call.
 
 | When             | Where (code location)                                              | Why                                                                                                  |
 | ---------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Plugin load      | `main.py` Phase 6 in `_main()`                                     | Catches changes that occurred between plugin sessions                                                |
+| Backend start    | `_main()` in `main.py`, as two start-up steps                      | Catches changes that occurred while the backend was not running                                      |
 | QAM open         | `MainPage.tsx` mount `useEffect`                                   | User navigating via QAM sees current state when Settings is one tap away                             |
 | Game-detail open | `RomMGameInfoPanel.tsx` `useEffect([appId])`                       | Per-game navigation refreshes state when the user browses without launching                          |
 | Pre-game-launch  | `launchInterceptor.ts`                                             | Catches setting changes made by external tooling between sessions                                    |

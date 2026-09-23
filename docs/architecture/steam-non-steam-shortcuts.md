@@ -99,11 +99,13 @@ consequences follow:
   removal-churn re-syncs. The plugin uses it directly to bake the launch command in at download-complete and to
   re-resolve paths after a RetroDECK-home migration.
 - **`exe` is appId-safe too, and that is now measured.** Every one of a 826-shortcut library had its `exe` and
-  `startDir` rewritten in one pass — the launcher relocation at plugin start (ADR-0032) — and the appId set afterwards
-  was identical to a `shortcuts.vdf` backup taken before it: 0 new, 0 lost, names unchanged, and the 826 `Set*` calls
-  cost 12 ms of renderer time. Earlier revisions of this page said an `exe` change had to be applied by delete +
-  recreate; that rested on the CRC derivation disproven in [App IDs and Artwork](#app-ids-and-artwork), and this
-  measurement replaces it.
+  `startDir` rewritten in one pass — the relocation 0.33 ran at plugin start, into the launcher home of
+  [ADR-0032](../adr/0032-shortcuts-are-rewritten-in-place.md) that ADR-0038 has since superseded (see
+  [Where the exe points](#where-the-exe-points)) — and the appId set afterwards was identical to a `shortcuts.vdf`
+  backup taken before it: 0 new, 0 lost, names unchanged, and the 1,652 `Set*` calls (one `SetShortcutExe` and one
+  `SetShortcutStartDir` per shortcut) cost 12 ms of renderer time. Earlier revisions of this page said an `exe` change
+  had to be applied by delete + recreate; that rested on the CRC derivation disproven in
+  [App IDs and Artwork](#app-ids-and-artwork), and this measurement replaces it.
 - **The display name is the one nobody has measured.** The sync writes it in place as well — `rewriteShortcutIdentity`
   sets name, exe, start dir and launch options together for a rom that already holds a binding — and nothing has
   established what a `SetShortcutName` does to the appId, in either direction. Do not read the `exe` measurement above
@@ -561,8 +563,7 @@ Data Management's "Remove all shortcuts" with its live-orphan sweep, and its non
 sync-run stale-shortcut cleanup (`sync_stale`, fired at run finalize) — awaits each `removeShortcut` in sequence and
 yields a 50ms breather every 25 removals, so the CEF renderer never blocks and thousands of removals can't stack as
 fire-and-forget promises. (The `sync_stale` handler records its "removed" delta for the terminal toast up front, before
-the first breather, so the paced removal can't leave the count partial when `sync_complete` interleaves.) Only
-`exe`/name changes still go through delete + recreate — a fresh `AddShortcut`, which yields a new `appId`.
+the first breather, so the paced removal can't leave the count partial when `sync_complete` interleaves.)
 
 ### AddShortcut / RemoveShortcut timing between shortcuts
 

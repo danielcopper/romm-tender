@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a bug in the plugin
+description: Report a bug in Tender
 title: "bug: "
 labels: ["bug"]
 assignees: ["danielcopper"]
@@ -20,8 +20,8 @@ body:
   - type: input
     id: plugin-version
     attributes:
-      label: Plugin version
-      description: Shown in the QAM panel header. Required for triage.
+      label: Tender version
+      description: "`cat ~/.local/lib/romm-tender/version.txt` prints it. Required for triage."
       placeholder: "0.18.0"
     validations:
       required: true
@@ -32,7 +32,7 @@ body:
       label: Repro steps
       description: Numbered steps that reproduce the bug from a known-good state. Even a one-line description of what you were doing helps.
       placeholder: |
-        1. Open QAM > Decky > Tender
+        1. Open the Quick Access menu > Tender
         2. Click "Sync Library"
         3. ...
     validations:
@@ -69,7 +69,7 @@ body:
     attributes:
       label: Log excerpt
       description: |
-        Plugin logs live at `~/homebrew/logs/romm-tender/` or `~/homebrew/logs/decky-romm-sync/` — older installs use the second name; if both are there, take the one with recent files. Set log level to "debug" in plugin settings for full output. Decky Loader's own log goes to the journal: `journalctl -u plugin_loader`.
+        Tender's log is `~/.local/state/romm-tender/backend.log`; the service's own output goes to the journal: `journalctl --user -u romm-tender`. Set the log level to "Debug" in Tender's settings for full output.
       render: text
     validations:
       required: false

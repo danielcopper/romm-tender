@@ -121,7 +121,7 @@ RomM · one of 4**. They are listed so nothing can be removed without having bee
 **Remove fully vanished games** is on — with that option off they cannot be removed at all, so the list drops them. A
 warning about a version — including that its downloaded ROM file will be deleted without a backup if that version is
 removed — is a line under its row. The headline count always counts the versions that are gone, never these. The modal
-byte-budgets every page for the Decky bridge; load every page before confirmation. The confirmation run checks every
+loads the list a page at a time, each kept small; load every page before confirmation. The confirmation run checks every
 exact RomM id again. Only a confirmed 404 can be removed. Offline, timeout, authentication, server, malformed-response,
 active-download, and ambiguous multi-shortcut cases are skipped and reported without deleting data.
 
