@@ -55,6 +55,15 @@ opens one connection, exposes the repositories, and commits on clean exit / roll
 database reads/writes, never network/file I/O or a frontend round-trip; cross-operation consistency comes from the
 operation's own serialization (the per-ROM save lock, the single library-sync task), not from holding a UoW open.
 
+### What Tender is
+
+A **Steam plugin** and a **RomM client**. It extends Steam's own interface — a Quick Access entry, a section on the game
+page, the panel — and talks to a RomM server as a registered client. It is not a Decky Loader plugin: it hosts itself,
+and it runs beside a Decky Loader when one is installed. "The plugin" means Tender in that first sense.
+
+_Avoid_: **Decky plugin**, **plugin loader**, **plugin folder** — each implies a host that loads Tender, and there is
+none.
+
 ### Display name (Tender) vs identifier (romm-tender)
 
 The program has two names, and they are not interchangeable. The **display name** is `Tender`: the one a person reads —
