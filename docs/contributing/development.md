@@ -249,11 +249,13 @@ at the tag: CI's build job packs a tarball from every pull request's own build a
 inside works — the script's own docstring states the blind spot.
 
 **The install refuses while a backend of your own is up.** `mise run dev` and `mise run dev:backend` start one outside
-the unit, and it holds the same exclusive lock the unit's backend takes — a second one gives up on it after five
-seconds, so the unit would never come up, systemd would retry it every five seconds for as long as your process lives,
-and the run would still report a started service. The refusal names the process and its command line: stop it where you
-started it with Ctrl-C, or `kill <pid>`, then install again. `--uninstall` and `--disable` do not ask, because neither
-starts a backend.
+the unit, and it holds the same exclusive lock the unit's backend takes — `backend.lock`, beside the database. A second
+one gives up on it after five seconds, so the unit would never come up, systemd would start it again five seconds after
+each failure for as long as your process lives, and the run would still report a started service. What the installer
+asks is the lock, not a process name, and the one holder it lets through is the unit's own backend, which is an update.
+The refusal names the holder where it can find one — its pid, command line and the directory it was started in: stop it
+where you started it with Ctrl-C, or `kill <pid>`, then install again. `--uninstall` and `--disable` do not ask, because
+neither starts a backend.
 
 ## Linting
 

@@ -974,32 +974,78 @@ refuse_decky_plugin() {
     done
 }
 
-# A backend outside the unit holds the same exclusive lock the unit's own takes
-# (backend/host/single_instance.py), so the unit cannot come up while one is
-# running — and this run would report that it had, because `is-active` is asked
-# before the first attempt has had time to fail. Refused rather than reported,
-# and the process is named so the user knows which one to end.
+# A backend outside the unit holds the exclusive lock the unit's own takes
+# (LOCK_FILENAME in backend/host/single_instance.py, beside the database), so
+# the unit cannot come up while one is running — and this run would still report
+# it up. `systemctl restart` of a unit with no `Type=` returns as soon as its
+# process has been forked (systemd.service(5), Type=simple), before the backend
+# has asked for the lock, and service_state() then reads a port file that is
+# either missing ("enabled and started") or the hand-started backend's own.
+# Refused rather than reported.
+#
+# The LOCK is the question rather than a process name, because only a Tender
+# backend takes it: a backend started by hand runs as `python backend/main.py`
+# from wherever it was started, and any other program may run a file of that
+# name. The one holder that is not refused is the unit's own MainPID, which is
+# an update over a running service.
 #
 # Only the modes that start the service ask: `--uninstall` and `--disable` start
 # nothing, and both stop the unit whatever else is running.
 refuse_foreign_backend() {
-    local own line pid
+    local lock="$DATA/backend.lock" own opener holder="" own_opens="no"
+    # No file, no holder. Asked first because `flock` handed a PATH creates the
+    # file; handed a descriptor opened for reading, it creates nothing.
+    [ -e "$lock" ] || return 0
+    if flock -n 9 2> /dev/null 9< "$lock"; then
+        return 0
+    fi
     own="$(service_main_pid)"
-    while IFS= read -r line; do
-        [ -n "$line" ] || continue
-        pid="${line%% *}"
-        [ "$pid" != "$own" ] || continue
-        abort "another Tender backend is already running (pid $pid)" \
-            "$UNIT_NAME.service cannot start beside it — stop it first: ${line#* }"
-    done < <(running_backends)
+    while IFS= read -r opener; do
+        if [ "$opener" = "$own" ]; then
+            own_opens="yes"
+        else
+            holder="$opener"
+        fi
+    done < <(lock_openers "$lock")
+    if [ -z "$holder" ] && [ "$own_opens" = "yes" ]; then
+        return 0
+    fi
+    if [ -z "$holder" ]; then
+        abort "another process holds $(tilde "$lock"), so Tender's service cannot start" \
+            "stop the Tender backend you started by hand, then run this again"
+    fi
+    local directory
+    directory="$(readlink "/proc/$holder/cwd" 2> /dev/null || true)"
+    abort "another Tender backend is running (pid $holder)" \
+        "it holds $(tilde "$lock") and runs $(command_line "$holder") in $(tilde "$directory") — stop it with Ctrl-C where it was started, or kill $holder, then run this again"
 }
 
-# Every process running this program's backend, one `<pid> <command line>` to a
-# line. The pattern's first letter is bracketed so that a process carrying the
-# pattern ITSELF in its command line does not answer for one: pgrep leaves its
-# own process out of the answer and nothing else's.
-running_backends() {
-    pgrep -af '[b]ackend/main\.py' || true
+# Every process of this user's that has *1* open, one pid to a line. The lock is
+# held by one of them, which is all a caller can learn: the kernel says who has
+# a file OPEN, and a second backend waiting out its retry window has it open
+# too. Read off /proc rather than asked of `fuser` or `lsof`, which are not on
+# every target — this needs coreutils and nothing else. Best effort: a process
+# that ends mid-scan, or one whose descriptors cannot be read, is simply not
+# named.
+lock_openers() {
+    local wanted dir targets
+    wanted="$(readlink -f "$1")"
+    for dir in /proc/[0-9]*; do
+        [ -O "$dir" ] || continue
+        targets="$(readlink "$dir"/fd/* 2> /dev/null || true)"
+        case $'\n'"$targets"$'\n' in
+            *$'\n'"$wanted"$'\n'*) printf '%s\n' "${dir#/proc/}" ;;
+            *) ;;
+        esac
+    done
+}
+
+# A process's command line, its arguments joined by spaces. The kernel keeps
+# them NUL-separated, and a command substitution cannot carry a NUL.
+command_line() {
+    local -a argv=()
+    mapfile -d '' argv 2> /dev/null < "/proc/$1/cmdline" || true
+    printf '%s\n' "${argv[*]}"
 }
 
 # The backend the service is running, or 0 — which is what systemd answers for a

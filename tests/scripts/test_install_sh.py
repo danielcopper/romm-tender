@@ -23,6 +23,7 @@ whether this script still has a stderr afterwards — is invisible without one.
 
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import hashlib
 import os
@@ -32,11 +33,16 @@ import selectors
 import shutil
 import struct
 import subprocess
+import sys
 import tarfile
 import termios
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 _REPO = Path(__file__).resolve().parents[2]
 _INSTALL = _REPO / "install.sh"
@@ -115,17 +121,12 @@ if [ -n "$out" ]; then cp "$source" "$out"; else cat "$source"; fi
 """
 
 _PGREP_STUB = """#!/usr/bin/env bash
-printf '%s\\n' "$*" >> "$STUB_PGREP_LOG"
-# Two questions, told apart by the flags each is asked with — so a run that
-# stopped asking one of them the way it does today answers nothing here.
+# Answers for `steam` only, and only when the test says it is up — told apart by
+# its flag, so a pgrep asked anything else answers nothing here.
 case "$1" in
     -x)
         [ "${STUB_STEAM_RUNNING:-no}" = "yes" ] || exit 1
         printf '4242\\n'
-        ;;
-    -af)
-        [ -n "${STUB_FOREIGN_BACKEND:-}" ] || exit 1
-        printf '%s\\n' "$STUB_FOREIGN_BACKEND"
         ;;
     *) exit 1 ;;
 esac
@@ -155,7 +156,6 @@ class Install:
         self.systemctl_log = tmp_path / "systemctl.log"
         self.curl_log = tmp_path / "curl.log"
         self.curl_argv_log = tmp_path / "curl-argv.log"
-        self.pgrep_log = tmp_path / "pgrep.log"
         self.python = self.stubs / "stub-python3"
 
         for directory in (self.home, self.stubs, self.serve, self.runtime):
@@ -163,7 +163,6 @@ class Install:
         self.systemctl_log.touch()
         self.curl_log.touch()
         self.curl_argv_log.touch()
-        self.pgrep_log.touch()
         _write_executable(self.stubs / "systemctl", _SYSTEMCTL_STUB)
         _write_executable(self.stubs / "curl", _CURL_STUB)
         _write_executable(self.python, _PYTHON_STUB)
@@ -209,7 +208,6 @@ class Install:
             "STUB_SYSTEMCTL_LOG": str(self.systemctl_log),
             "STUB_CURL_LOG": str(self.curl_log),
             "STUB_CURL_ARGV_LOG": str(self.curl_argv_log),
-            "STUB_PGREP_LOG": str(self.pgrep_log),
             "STUB_SERVE": str(self.serve),
             "STUB_DEBUGGER_URL": _DEBUGGER_PROBE,
         }
@@ -299,10 +297,6 @@ class Install:
     def curl_argv(self) -> list[str]:
         """Every curl invocation's whole argument line, for the flags the URL does not show."""
         return self.curl_argv_log.read_text(encoding="utf-8").split("\n")[:-1]
-
-    def pgrep_calls(self) -> list[str]:
-        """Every pgrep invocation's whole argument line, pattern included."""
-        return self.pgrep_log.read_text(encoding="utf-8").split("\n")[:-1]
 
     def publish_release(self, *, tag: str = _TAG, archive: str | None = None, checksum: bool = True) -> Path:
         """Put a real tarball where the stubbed curl will serve it from."""
@@ -1321,56 +1315,158 @@ class TestABackendOutsideTheService:
     """A backend started by hand holds the lock the service's own backend needs.
 
     A second backend gives up on the lock after five seconds, so the unit never
-    comes up and systemd retries it for as long as the hand-started one lives —
-    while the run reports a started service, because ``is-active`` is asked
-    before the first attempt has had time to fail.
+    comes up while the hand-started one lives — and without the refusal the run
+    would still report the service up, because ``systemctl restart`` returns
+    once the unit's process is forked and the service row reads a port file that
+    is missing or the other backend's.
+
+    The lock is real in every case here: a helper process takes it with
+    ``flock`` under this machine's data root, so what the installer asks is
+    what the kernel answers.
     """
 
-    _FOREIGN = "4711 /usr/bin/python3 /home/someone/tender/backend/main.py"
+    def test_a_backend_holding_the_lock_is_refused_by_pid_command_and_directory(self, machine):
+        machine.publish_release()
 
-    def test_it_refuses_before_it_installs_anything_and_names_the_process(self, machine):
-        result = machine.run(
-            "--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_FOREIGN_BACKEND=self._FOREIGN
-        )
+        with _holding_the_lock(machine) as holder:
+            result = machine.run("--version", _VERSION, "--yes")
 
         assert result.returncode == 1
-        assert _refusals(result.stderr) == ["install.sh: another Tender backend is already running (pid 4711)"]
-        assert "/usr/bin/python3 /home/someone/tender/backend/main.py" in result.stderr
-        assert "[y/N]" not in result.stdout
+        assert _refusals(result.stderr) == [f"install.sh: another Tender backend is running (pid {holder.pid})"]
+        command = " ".join(str(argument) for argument in holder.args)
+        assert (
+            f"  it holds {machine.data / 'backend.lock'} and runs {command} in ~/checkout — stop it with Ctrl-C"
+            f" where it was started, or kill {holder.pid}, then run this again"
+        ) in result.stderr
+        assert machine.curl_calls() == []
         assert not machine.code.exists()
         assert not machine.unit.exists()
 
-    def test_the_service_running_its_own_backend_is_not_one(self, machine):
-        """The unit's own MainPID is the one process this refusal is not about."""
-        result = machine.run(
-            "--from",
-            str(_build_tarball(machine.tmp_path)),
-            "--yes",
-            STUB_FOREIGN_BACKEND=self._FOREIGN,
-            STUB_UNIT_MAIN_PID="4711",
-        )
+    def test_the_services_own_backend_holding_it_is_an_update(self, machine):
+        """The unit's own MainPID is the one holder this refusal is not about."""
+        with _holding_the_lock(machine) as holder:
+            result = machine.run(
+                "--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_UNIT_MAIN_PID=str(holder.pid)
+            )
 
         assert result.returncode == 0, result.stderr
         assert (machine.code / "backend" / "main.py").is_file()
 
-    def test_the_run_does_not_answer_for_itself(self, machine):
-        """``pgrep -f`` matches command lines, and a shell's can carry the pattern.
+    def test_a_holder_it_cannot_name_is_still_refused(self, machine):
+        """Naming the holder is best effort; the refusal is not.
 
-        pgrep leaves its own process out of its answer and nothing else's, so
-        the first letter is bracketed: the pattern then matches a backend and
-        does not match a process that is merely holding the pattern's own text.
+        The helper holds the lock through a second name for the same file, so
+        its descriptor points at a path that is not the lock's and no process is
+        found to have the lock open — while the kernel still says it is held.
         """
+        machine.data.mkdir(parents=True)
+        (machine.data / "backend.lock").touch()
+        other = machine.tmp_path / "same-file"
+        os.link(machine.data / "backend.lock", other)
+
+        with _holding_the_lock(machine, path=other):
+            result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == [
+            f"install.sh: another process holds {machine.data / 'backend.lock'}, so Tender's service cannot start"
+        ]
+        assert "  stop the Tender backend you started by hand, then run this again" in result.stderr
+        assert not machine.code.exists()
+
+    @pytest.mark.parametrize("lock_file", [False, True], ids=["no-lock-file", "lock-file-nobody-holds"])
+    def test_a_lock_nobody_holds_is_no_reason_to_stop(self, machine, lock_file):
+        if lock_file:
+            machine.data.mkdir(parents=True)
+            (machine.data / "backend.lock").touch()
+
         result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
 
         assert result.returncode == 0, result.stderr
-        assert [call for call in machine.pgrep_calls() if "ackend/main" in call] == ["-af [b]ackend/main\\.py"]
+        assert (machine.code / "backend" / "main.py").is_file()
+
+    def test_asking_creates_no_lock_file(self, machine):
+        """``flock`` handed a path creates the file, so the question must not hand it one.
+
+        The run fails after the pre-flight on purpose: a run that installed would
+        start a backend, and a backend is allowed to create its own lock.
+        """
+        machine.data.mkdir(parents=True)
+
+        result = machine.run("--from", str(machine.tmp_path / "gone.tar.gz"), "--yes")
+
+        assert _refusals(result.stderr) == [f"install.sh: no such file: {machine.tmp_path / 'gone.tar.gz'}"]
+        assert not (machine.data / "backend.lock").exists()
+
+    def test_a_process_that_only_looks_like_a_backend_is_not_one(self, machine):
+        """A command line naming ``backend/main.py`` is not a Tender backend holding the lock."""
+        machine.data.mkdir(parents=True)
+        (machine.data / "backend.lock").touch()
+        lookalike = [
+            sys.executable,
+            "-c",
+            "import sys; sys.stdin.read()",
+            str(machine.home / "other" / "backend" / "main.py"),
+        ]
+
+        with _running(lookalike, cwd=machine.home):
+            result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes")
+
+        assert result.returncode == 0, result.stderr
+        assert (machine.code / "backend" / "main.py").is_file()
 
     @pytest.mark.parametrize("mode", ["--uninstall", "--disable"])
     def test_the_modes_that_start_nothing_do_not_ask(self, machine, mode):
-        result = machine.run(mode, STUB_FOREIGN_BACKEND=self._FOREIGN)
+        with _holding_the_lock(machine):
+            result = machine.run(mode)
 
         assert result.returncode == 0, result.stderr
-        assert [call for call in machine.pgrep_calls() if "ackend/main" in call] == []
+
+
+# What the helper runs: take the lock on the path it is given, say so, and hold
+# it until its stdin closes.
+_HOLD_THE_LOCK = (
+    "import fcntl, os, sys; "
+    "fd = os.open(sys.argv[1], os.O_RDWR | os.O_CREAT); "
+    "fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB); "
+    "print('held', flush=True); "
+    "sys.stdin.read()"
+)
+
+
+@contextlib.contextmanager
+def _running(argv: list[str], *, cwd: Path) -> Iterator[subprocess.Popen[str]]:
+    """A process of this user's for the length of the block, ended however the block ends."""
+    process = subprocess.Popen(argv, cwd=cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    try:
+        yield process
+    finally:
+        assert process.stdin is not None
+        process.stdin.close()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+        if process.stdout is not None:
+            process.stdout.close()
+
+
+@contextlib.contextmanager
+def _holding_the_lock(machine: Install, *, path: Path | None = None) -> Iterator[subprocess.Popen[str]]:
+    """A process holding *machine*'s backend lock, started from ``~/checkout``.
+
+    Started from a directory under the machine's home because a backend started
+    by hand runs from wherever its checkout is, and the refusal names it.
+    """
+    lock = path or machine.data / "backend.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    checkout = machine.home / "checkout"
+    checkout.mkdir(parents=True, exist_ok=True)
+    with _running([sys.executable, "-c", _HOLD_THE_LOCK, str(lock)], cwd=checkout) as holder:
+        assert holder.stdout is not None
+        assert holder.stdout.readline() == "held\n"
+        yield holder
 
 
 class TestTheNoteIsSpelledOnceOnEachSide:
