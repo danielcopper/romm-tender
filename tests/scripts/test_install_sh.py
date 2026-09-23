@@ -139,11 +139,19 @@ case "$url" in
 esac
 [ -f "$source" ] || status=404
 if [ "$status" -ge 400 ]; then
-    # What `curl -f` leaves behind on an error answer, bar or no bar: no file,
-    # curl's reason on a line of its own, and exit 22.
+    # What `curl -f` leaves behind on an error answer: no file, curl's reason on
+    # a line of its own, and exit 22. Where it would have drawn a bar, it draws
+    # none and a blank line follows the reason.
     write_status "$status"
     printf 'curl: (22) The requested URL returned error: %s\\n' "$status" >&2
+    [ "$bar" = "no" ] || printf '\\n' >&2
     exit 22
+fi
+if [ -n "${STUB_CURL_SIDECAR_DROPS:-}" ] && [ "${url%.sha256}" != "$url" ]; then
+    # A connection that fails before any answer: curl's reason, status 000, exit 7.
+    printf 'curl: (7) Failed to connect to stub: Connection refused\\n' >&2
+    write_status 000
+    exit 7
 fi
 # A transfer that reached the end, drawn the way curl draws one: rewritten in
 # place from the start of the line, and ended with a newline of its own.
@@ -1196,6 +1204,18 @@ class TestWhatItDownloads:
         assert _refusals(result.stderr) == [f"install.sh: the server answered {status} for {name}"]
         assert "try again later" in result.stderr
         assert "carries no" not in result.stderr
+        assert not machine.code.exists()
+
+    def test_a_checksum_that_never_arrived_is_the_networks_not_the_releases(self, machine):
+        """A connection lost on the sidecar says nothing about whether the release has one."""
+        machine.publish_release()
+
+        result = machine.run("--version", _VERSION, "--yes", STUB_CURL_SIDECAR_DROPS="yes")
+
+        assert result.returncode == 1
+        assert _refusals(result.stderr) == ["install.sh: the download was cut short"]
+        assert "check the network" in result.stderr
+        assert "carries no checksum" not in result.stderr
         assert not machine.code.exists()
 
     def test_a_release_with_no_checksum_is_refused_rather_than_trusted(self, machine):
