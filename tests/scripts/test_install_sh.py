@@ -100,6 +100,9 @@ while [ $# -gt 0 ]; do
     esac
 done
 printf '%s\\n' "$url" >> "$STUB_CURL_LOG"
+# What the bar would be sized from: curl asks its stdin for the window size.
+if [ -t 0 ]; then stdin="terminal"; else stdin="not a terminal"; fi
+printf '%s %s\\n' "$url" "$stdin" >> "$STUB_CURL_STDIN_LOG"
 if [ "$url" = "$STUB_DEBUGGER_URL" ]; then
     [ "${STUB_DEBUGGER:-silent}" = "answer" ] || exit 22
     echo '{"Browser":"stub"}'
@@ -156,6 +159,7 @@ class Install:
         self.systemctl_log = tmp_path / "systemctl.log"
         self.curl_log = tmp_path / "curl.log"
         self.curl_argv_log = tmp_path / "curl-argv.log"
+        self.curl_stdin_log = tmp_path / "curl-stdin.log"
         self.python = self.stubs / "stub-python3"
 
         for directory in (self.home, self.stubs, self.serve, self.runtime):
@@ -163,6 +167,7 @@ class Install:
         self.systemctl_log.touch()
         self.curl_log.touch()
         self.curl_argv_log.touch()
+        self.curl_stdin_log.touch()
         _write_executable(self.stubs / "systemctl", _SYSTEMCTL_STUB)
         _write_executable(self.stubs / "curl", _CURL_STUB)
         _write_executable(self.python, _PYTHON_STUB)
@@ -208,6 +213,7 @@ class Install:
             "STUB_SYSTEMCTL_LOG": str(self.systemctl_log),
             "STUB_CURL_LOG": str(self.curl_log),
             "STUB_CURL_ARGV_LOG": str(self.curl_argv_log),
+            "STUB_CURL_STDIN_LOG": str(self.curl_stdin_log),
             "STUB_SERVE": str(self.serve),
             "STUB_DEBUGGER_URL": _DEBUGGER_PROBE,
         }
@@ -297,6 +303,10 @@ class Install:
     def curl_argv(self) -> list[str]:
         """Every curl invocation's whole argument line, for the flags the URL does not show."""
         return self.curl_argv_log.read_text(encoding="utf-8").split("\n")[:-1]
+
+    def curl_stdin(self) -> list[str]:
+        """Every curl invocation's URL, and whether its stdin was a terminal."""
+        return self.curl_stdin_log.read_text(encoding="utf-8").split("\n")[:-1]
 
     def publish_release(self, *, tag: str = _TAG, archive: str | None = None, checksum: bool = True) -> Path:
         """Put a real tarball where the stubbed curl will serve it from."""
@@ -860,6 +870,15 @@ class TestTheAcknowledgement:
         assert all("--progress-bar" in line for line in archive)
         assert sidecar, "the checksum was never fetched"
         assert not any("--progress-bar" in line for line in sidecar)
+
+    def test_the_bar_is_sized_from_the_terminal_under_a_piped_script(self, machine):
+        """curl takes the bar's width from its stdin, which under ``curl … | bash`` is the script."""
+        machine.publish_release()
+
+        code, _output = machine.on_a_terminal("--version", _VERSION, answer="y", stdin_pipe=True)
+
+        assert code == 0
+        assert f"{_DOWNLOAD_BASE}/{_TAG}/{_ARCHIVE} terminal" in machine.curl_stdin()
 
     def test_a_piped_download_stays_silent(self, machine):
         machine.publish_release()

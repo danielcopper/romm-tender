@@ -1217,7 +1217,18 @@ fetch_visibly() {
         height="$(block_height)"
         set_block_height "$((height + 1))"
     fi
-    curl -fL --progress-bar "$1" -o "$2" || status=$?
+    # curl sizes the bar from its stdin's window size (get_terminal_columns in
+    # curl's src/terminal.c; curl 8.21 asks stdin and nothing else), and under
+    # `curl | bash` stdin is the script, so the bar comes out at curl's default
+    # of 79 columns whatever the terminal is and a narrower one wraps it.
+    # /dev/tty is handed to it where it can be opened; the subshell asks first,
+    # silently, because a redirection that fails on the command itself would
+    # skip the download and complain on stderr.
+    if (: < /dev/tty) 2> /dev/null; then
+        curl -fL --progress-bar "$1" -o "$2" < /dev/tty || status=$?
+    else
+        curl -fL --progress-bar "$1" -o "$2" || status=$?
+    fi
     if ! may_animate; then
         return "$status"
     fi
