@@ -616,10 +616,9 @@ const FAILED_LOAD_RETRY_MS = 5000;
  *
  * The second occasion on {@link Entry.loadFailed}, next to the install-state
  * triggers below. It exists because those triggers miss the case that produces
- * the failure: the read is rejected — the backend restarting under the page
- * closes the WebSocket with the call in flight — while a user looking at a game page and doing
- * nothing else produces no download, no uninstall and no adoption for the entry
- * to take its cue from.
+ * the failure: the read is rejected — the socket closed with the call in
+ * flight — while a user looking at a game page and doing nothing else produces
+ * no download, no uninstall and no adoption for the entry to take its cue from.
  *
  * One TIMER, for the entry's whole lifetime — {@link Entry.timedRetryUsed} is
  * spent where it is scheduled, so a retry that throws too schedules nothing

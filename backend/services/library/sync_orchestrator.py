@@ -436,13 +436,12 @@ class SyncOrchestrator:
 
             return answer
         except SyncCancelled:
-            # sync_preview is a callable — the frontend awaits its return.
-            # Re-raising leaves that promise unsettled, so a user-initiated
-            # cancel mid-preview returns the canonical failure shape instead of
-            # propagating the cooperative cancel out of the callable (#1035).
-            # SyncCancelled is a BaseException (not Exception), so it skips the
-            # generic ``except Exception`` below and lands here as a distinct
-            # cooperative signal — never conflated with a real asyncio cancel.
+            # sync_preview is a callable, and a user's cancel is its own
+            # outcome, not a transport failure: re-raising would reach the
+            # frontend as a ``backend_exception`` error (host/dispatch.py) where
+            # the canonical failure shape belongs. The clause order is what
+            # routes it here — SyncCancelled is an Exception, so it must stay
+            # above the generic ``except Exception`` below.
             box.discard_preview()
             await self._finish_sync(_SYNC_CANCELLED)
             return {"success": False, "reason": "cancelled", "message": _SYNC_CANCELLED}
