@@ -544,7 +544,8 @@ export function useDataPage(): DataPageState {
         const count = result.candidate_count ?? 0;
         setOrphanedGridImages({ state: "answered", value: count });
         setGridStatus(count === 0 ? "No orphaned grid images found" : "");
-      } catch {
+      } catch (e) {
+        logWarn(`Orphaned grid image scan failed: ${e}`);
         setOrphanedGridImages(FAILED);
       }
       return;

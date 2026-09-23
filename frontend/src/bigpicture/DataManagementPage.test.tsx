@@ -1116,14 +1116,19 @@ describe("DataManagementPage", () => {
       expect(view.getByTestId("status-grid-images").textContent).toBe("A bound shortcut was missing");
     });
 
-    it("says a rejected scan failed once, in the retry line, with no second status line", async () => {
+    it("says a rejected scan failed once, in the retry line, with no second status line, and logs why", async () => {
       vi.mocked(backend.cleanupOrphanedGridImages).mockRejectedValue(new Error("boom"));
+      const logSpy = vi.spyOn(backend, "logWarn").mockImplementation(() => {});
       const view = await pageOn("grid-images");
 
       await press(button(view, "Scan for orphaned images"));
 
       expect(view.container.textContent).toContain("The scan failed — press Scan for orphaned images to try again.");
       expect(view.queryByTestId("status-grid-images")).toBeNull();
+      // The screen names no cause, so the log is the only place a lost
+      // connection or a timeout behind that line is recorded.
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Orphaned grid image scan failed: Error: boom"));
+      logSpy.mockRestore();
     });
 
     it("surfaces the failure when the removal rejects", async () => {

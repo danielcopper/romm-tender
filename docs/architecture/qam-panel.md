@@ -586,18 +586,21 @@ px top and bottom — so there is no Steam inset to match and a symmetric paddin
 the rows. The header and the rows sit inside one element, so they move together whatever inset that element takes.
 
 **Both panes keep 4 px of room around their content for Steam's focus ring** (`FOCUS_RING_REACH` in
-`bigpicture/layout/ListDetail.tsx`). The ring is not drawn on the focused element: Steam measures that element and draws
-a separate `FocusRing` element over it, inside the scroll region's own focus-ring root, as a 2 px outline at a 2 px
-offset (`css/chunk~2dcc5aaf7.css`) — so it reaches 4 px past every edge of what is focused, and the region clips it at
-its own box. Without the room, a row spanning the list column lost both side edges of its ring and the first row its top
-edge too; a detail pane's focusable table rows (the recovery bundles, the registered devices) span their pane the same
-way. The room goes inside the region rather than on it, because the region's sideways clip is deliberate
-(`ScrollRegion`). Measured through CEF in the dev window (855 px wide) with the inset applied to the running page: a
-list row runs 52 → 308 in the 48 → 312 column, and the first row starts 4 px below the region's top, so the ring's 4 px
-lands exactly on the region's edges. The ring itself could not be observed there — Steam draws it only in the active
-navigation context — so its reach is read from Steam's stylesheet, not measured. The earlier device figures for this
-span (rows 79.6 → 335.9, header 79.9 → 335.9 at the Deck's 854 px) predate the inset and no longer hold; the device
-figures with it have not been taken.
+`bigpicture/layout/ListDetail.tsx`). The ring is not drawn on the focused element but over it, from Steam's own
+focus-ring root inside the scroll region. Measured through CEF in the dev window (855 px wide): the region's first child
+is that root — an absolutely positioned element at the region's top left, which Steam's class map names `FocusRingRoot`
+— and the size Steam takes for a row's ring (`GetBoundingRectForFocusRing` on its nav node) is the row's own box, which
+in the list column is the column's full width and, for the first row, starts at the region's top. Read from Steam's
+stylesheet rather than measured: the ring is the `FocusRing` class of the same module that exports `FocusRingRoot` (in
+`css/chunk~2dcc5aaf7.css` for the client this was read on — the chunk name changes between Steam builds, the module's
+two class names are how to find it again), a 2 px outline at a 2 px offset, so it reaches 4 px past every edge of what
+is focused, and the region clips it at its own box. The ring itself could not be observed — Steam draws it only in the
+active navigation context. Without the room, a row spanning the list column lost both side edges of its ring and the
+first row its top edge too; a detail pane's focusable table rows (the recovery bundles, the registered devices) span
+their pane the same way. The room goes inside the region rather than on it, because the region's sideways clip is
+deliberate (`ScrollRegion`). Measured the same way with the inset applied to the running page: a list row runs 52 → 308
+in the 48 → 312 column, and the first row starts 4 px below the region's top, so the ring's 4 px lands exactly on the
+region's edges. Device figures for this span with the inset have not been taken.
 
 ### Tables
 

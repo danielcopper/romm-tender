@@ -61,12 +61,9 @@ export interface ListDetailProps {
 const LIST_WIDTH = "264px";
 
 /**
- * How far Steam's focus ring reaches past the focused element's box: its
- * `FocusRing` class (`css/chunk~2dcc5aaf7.css`) draws a 2 px outline at a 2 px
- * offset. The ring is drawn inside the scroll region, which clips at its own
- * box, so each pane's content keeps this much room on every side — otherwise a
- * row spanning the column loses both side edges of its ring, and the first row
- * its top edge as well.
+ * How far Steam's focus ring reaches past the focused box — a 2 px outline at a
+ * 2 px offset — which the scroll region would clip. Detail:
+ * `docs/architecture/qam-panel.md` § List and detail.
  */
 export const FOCUS_RING_REACH = 4;
 
