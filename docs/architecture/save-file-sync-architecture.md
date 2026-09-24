@@ -15,6 +15,11 @@ see [Save sync coverage](save-sync-coverage.md), which owns the states and the r
 syncs **independently against the server save sharing its own canonical target**, so a multi-file set never cross-mixes
 extensions.
 
+That per-file shape is what runs today. How a save is to travel instead — one file raw, several as one bundle, and what
+a client does with a bundle it receives — is proposed in
+[ADR-0042](../adr/0042-a-save-travels-to-romm-as-one-file-or-one-flat-bundle.md) and tracked under
+[#1235](https://github.com/danielcopper/romm-tender/issues/1235).
+
 The plugin used to hold its own per-system extension table (`domain/save_extensions.py`, retired). It was written from a
 one-pass desk audit and it was wrong in both directions: it searched forever for an Amiga `.nvr` that no core writes,
 and it never knew about the version digit in 3DO's `<stem>.0.srm`. Neither failure was visible — the search simply found
@@ -477,6 +482,10 @@ created before v2 have `emulator=retroarch` and will keep that tag. New saves cr
 `retroarch-{core}` tag.
 
 For future standalone emulator support (Phase 9): just the emulator name, e.g. `duckstation`.
+
+This format is what runs today. [ADR-0042](../adr/0042-a-save-travels-to-romm-as-one-file-or-one-flat-bundle.md)
+proposes the core's short name without the frontend, tracked under
+[#2019](https://github.com/danielcopper/romm-tender/issues/2019).
 
 ## Sync Decision Algorithm
 
