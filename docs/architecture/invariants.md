@@ -2,7 +2,7 @@
 
 The invariant register in the repository's `CLAUDE.md` lists the cross-cutting safety rules: the ones that span files,
 so no diff-scoped review sees the whole rule. There, each rule is one binding statement with its enforcement tier and
-the artifact that enforces it. This page holds the long form of every entry, in the same order: why the rule exists,
+what enforces it, if anything. This page holds the long form of every entry, in the same order: why the rule exists,
 what breaks without it, and where it lives in the code.
 
 The statement in `CLAUDE.md` is the rule. Where this page and that statement disagree, the statement wins and this page
