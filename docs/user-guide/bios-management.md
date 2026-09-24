@@ -381,14 +381,15 @@ its own format instead, and for those the plugin uses a packaged rule card that 
 are read live, so the answers follow your RetroDECK install, including emulators added after the plugin was released.
 
 That same reading also answers whether a **declared** file is already sitting where the emulator will look for it, and
-for those the plugin takes its answer rather than checking the path itself. The difference matters on a stock RetroDECK:
-`bios/pcsx2/bios` is a link pointing back at the BIOS folder, so working the location out from where a link ends up
-loses the folder the emulator actually opens. Following the emulator's own spelling gets the check right. The rest the
-plugin looks up itself, in three cases. A file in your library that no emulator RetroDECK offers for the system was
-found to declare has no reading to take. A file whose declared location the plugin cannot place under your BIOS folder —
-a standalone emulator keeping its firmware in a folder of its own, for example — is checked where the plugin would put
-it itself, since the reading is about somewhere else. And a download of several files checks each destination before
-fetching, because the reading was taken before the first file arrived.
+for those placed under your BIOS folder the plugin takes its answer rather than checking the path itself. The difference
+matters on a stock RetroDECK: `bios/pcsx2/bios` is a link pointing back at the BIOS folder, so working the location out
+from where a link ends up loses the folder the emulator actually opens. Following the emulator's own spelling gets the
+check right. The rest the plugin looks up itself, in three cases. A file in your library that no emulator RetroDECK
+offers for the system was found to declare has no reading to take. A file whose declared location the plugin cannot
+place under your BIOS folder — a standalone emulator keeping its firmware in a folder of its own, for example — is
+checked where the plugin would put it itself, since the reading is about somewhere else. And every download the page
+offers — one row's or several at once — checks each destination before fetching, because the reading was taken before
+the files it fetches arrived.
 
 The reading **opens files and reads them**, which is what two answers need. Where an emulator asks for a **folder**
 rather than a file, the folder being there settles nothing — a folder is satisfied by what is in it — so the candidates

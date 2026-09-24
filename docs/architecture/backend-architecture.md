@@ -2034,8 +2034,8 @@ regardless — and `nothingEstablished` has that single consumer. A declined rea
 were answered, so the pane has a file list to point at instead. `required_withheld` is what separates the two on the
 wire, and `system_image: "unsettled"` (below) joins it on the side that keeps the file list. Neither condition is ever
 per file — a platform whose reading is complete for its launching emulator (`reading_complete_for`) may hold plenty of
-`not_needed` files — no placement in the platform's catalogue — and every one of those stays fetchable, because "no
-emulator was found to ask for this" is an answer.
+`not_needed` files, with no placement in the platform's catalogue, and trips neither, because "no emulator was found to
+ask for this" is an answer. Those files stay fetchable like every other, since fetchability never reads the answer.
 
 **The console's own firmware demand is a third axis — beside the launching core's required-file counts and the library's
 own held/offered ratio — and it is a value rather than a count.** A libretro `.info` marks each file required or
