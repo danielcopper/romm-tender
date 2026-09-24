@@ -7,10 +7,9 @@ short human label the reporter appends to a collection name so same-named
 collections of different types stay separate Steam collections
 (``RomM: [<name> (Franchise)] (host)``). No I/O, no state.
 
-The strings are spelled in two other places, and a change here is a change
-in both: the user guide (``docs/user-guide/syncing-your-library.md``,
-"Collections that share a name") and the Steam Library setting's description
-(``frontend/src/bigpicture/settings/LibrarySection.tsx``).
+Where else these strings are spelled, and so what a change here must also
+change: ``docs/architecture/steam-non-steam-shortcuts.md`` § Collection naming
+mode.
 
 Label-format safety: a label is appended inside the single bracket pair of
 ``RomM: [<name> (<label>)]``, and the frontend reconcile parses that name with

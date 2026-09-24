@@ -136,11 +136,14 @@ export function useCollectionsPage(): CollectionsPageState {
 
   const readOwnerScope = useCallback(() => {
     settingsRead.current = "loading";
+    const since = latestValueWrite.current.get(OWNER_SWITCH) ?? 0;
     getSettings()
       .then((settings) => {
         const scope: CollectionOwnerScope = settings.collection_owner_scope === "own" ? "own" : "all";
         confirmedScope.current = scope;
-        setOwnerScopeState(scope);
+        // A switch written since the read was issued shows what the reader
+        // chose; the read is older than that and must not put it back.
+        if ((latestValueWrite.current.get(OWNER_SWITCH) ?? 0) === since) setOwnerScopeState(scope);
         settingsRead.current = "done";
       })
       .catch(() => {
@@ -190,8 +193,8 @@ export function useCollectionsPage(): CollectionsPageState {
 
   // The writes are optimistic; what an answer may change on its control and on
   // its line is `docs/architecture/qam-panel.md` § Library, "Only the latest
-  // write speaks". None of these callables throws to refuse, so a refusal and a
-  // rejection are one outcome.
+  // write speaks". A refusal and a rejection are one outcome here — neither
+  // leaves the write standing; none of these callables throws to refuse.
   const toggleCollection = useCallback(
     (collection: CollectionSyncSetting, enabled: boolean, place: WritePlace) => {
       const key = collectionKey(collection);

@@ -1,10 +1,9 @@
 """Tests for domain.collection_label.collection_label.
 
 The fine display label appended to a Steam collection name under the ``by_label``
-naming mode. The strings are spelled in two other places as well — the user
-guide's "Collections that share a name" and the Steam Library setting's
-description (``frontend/src/bigpicture/settings/LibrarySection.tsx``). No label
-may contain ``]`` (it sits inside the ``RomM: [<name> (<label>)]`` bracket
+naming mode; where else the strings are spelled is
+``docs/architecture/steam-non-steam-shortcuts.md`` § Collection naming mode. No
+label may contain ``]`` (it sits inside the ``RomM: [<name> (<label>)]`` bracket
 pair the frontend reconcile parses).
 """
 

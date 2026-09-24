@@ -88,8 +88,7 @@ const FavoritesPane: FC<{ state: CollectionsPageState; favorites: FavoritesAnswe
   return (
     <>
       <Title kind="favorites" />
-      {/* Only where the row stands for a collection: the sentence is about
-          turning one on, and a greyed row has none to turn on. */}
+      {/* `docs/architecture/qam-panel.md` § Library, the Favorites pane. */}
       {favorites.state === "one" && <Sentence text={kindSentence("favorites")} />}
       {body}
     </>

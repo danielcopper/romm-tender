@@ -507,8 +507,10 @@ row was declared each of those jumps mounted the right section and then had it o
 Controller landed on Connections. A list opened with no section named loses nothing: it either selects its own first
 row, which is what the fallback would have picked, or selects nothing and so declares nothing (the Library page's
 platforms, which additionally are tabbed, so Steam places that focus and the frame places none). Library › Collections
-is the third case: it opens on a default row of its own, Collections, below the Favorites row, and declares it — but it
-is tabbed too, so Steam's tabbed page places the focus and the declaration is not what keeps it there (§ Library).
+is the third case: it opens on a default row of its own, Collections, below the Favorites row, and declares it. The
+declaration is read only in the frame's fallback, where the probe for Steam's tabbed page missed and the frame places
+focus itself; wherever Steam's tabbed page renders, Steam places the focus and the declaration decides nothing (§
+Library).
 
 **Downloads is unmoved** and declares nothing: it leads with its Back button, which is both the first stop and the first
 button, so the router's default already opens it there. **Data Management needs no declaration of its own** — it is a
@@ -1478,11 +1480,11 @@ neither listed nor counted. Every one of those counts comes from the one `get_co
 read, and focus selecting holds nothing back behind a press here. While the answer is out a row states nothing, and
 where the read failed it states a dash.
 
-The page opens with **Collections** selected, and its row carries the entry-stop mark (§ List and detail). On this page
-the mark is not what places focus: Steam's tabbed page does that itself (§ Tabs), and the first stop of the list column
-is the owner toggle, which reports no selection — so where Steam takes the first stop, the page stays on Collections.
-Only the device shows which stop Steam takes; no test here can. The selection is kept across a switch to Platforms and
-back.
+The page opens with **Collections** selected, and its row carries the entry-stop mark (§ List and detail). The mark is
+read only in the frame's fallback, where the probe for Steam's tabbed page missed; wherever Steam's tabbed page renders,
+Steam places focus itself (§ Tabs) and the mark decides nothing. The first stop of the list column is the owner toggle,
+which reports no selection — so where Steam takes the first stop, the page stays on Collections. Only the device shows
+which stop Steam takes; no test here can. The selection is kept across a switch to Platforms and back.
 
 A kind's pane holds, in order:
 
@@ -1503,7 +1505,8 @@ A kind's pane holds, in order:
    the owner toggle hiding some of the kind's collections, a second line says how many: "N from other users are hidden
    while Other users' collections is off"; with a search, or with nothing hidden, there is no such line.
 
-The Favorites pane has no table: the sentence and the game count where the row stands for a collection, and otherwise
+The Favorites pane has no table. While the read is out it shows the spinner, and where it failed the failure, as every
+pane does; once it has answered, the sentence and the game count where the row stands for a collection, and otherwise
 only why the row is greyed — the sentence is about turning one on, and a greyed row has none.
 
 **In Steam counts how many of a collection's ROMs are already in Steam** (CONTEXT.md → Reachable). It costs no RomM
@@ -1563,11 +1566,11 @@ toggle are already standing, and each pane shows a spinner where its table goes.
 
 **The four writes are optimistic** — a table row's switch, the Favorites switch, Enable all / Disable all, and the owner
 toggle. A refusal or a rejection is one outcome: the control goes back to the value last stored for it, and a line says
-why **where the write was made**, while it is still the latest write there (below), taking no space otherwise. A refused
-owner toggle or Favorites switch is reported in the list column, under the owner toggle; a refused table switch or
-Enable all / Disable all in the pane, under the search line. Each line is taken back by the next write in the same place
-that succeeds. The pane's line also goes when another kind is selected, and both go when the tab is entered again.
-Selecting another kind also clears the search, since a search is about the kind it was typed on.
+why **where the write was made** — both only while the write is still the latest there (below) — the line taking no
+space otherwise. A refused owner toggle or Favorites switch is reported in the list column, under the owner toggle; a
+refused table switch or Enable all / Disable all in the pane, under the search line. Each line is taken back by the next
+write in the same place that succeeds. The pane's line also goes when another kind is selected, and both go when the tab
+is entered again. Selecting another kind also clears the search, since a search is about the kind it was typed on.
 
 **Only the latest write speaks** — on a control's value, and on a line. **A control** — each collection, and the owner
 toggle — keeps the value last stored for it, taken from the read and moved on by every write that succeeds, and numbers
@@ -1575,12 +1578,12 @@ the writes issued to it. Enable all / Disable all number every collection they w
 shows only while its write is still the latest for that control: a success leaves the value the write showed, and a
 failure puts back the stored value. An answer that is no longer the latest only moves the stored value on, when it is a
 success, and never touches what is shown. So two refused switches of one row leave it showing what is stored, a refusal
-of an older write cannot undo a newer one still in flight, and a refused Enable all puts back only the collections
-nobody has switched on their own since. **A line** — the list column's and the pane's — numbers the writes issued in its
-place, and an answer sets or clears that line only while it is still the latest write there and the tab has not been
-entered again since it was issued; a pane answer also only while the kind it was made on is still selected. So a slow
-refusal cannot stand a line over a write that has since succeeded, a slow success cannot take back a newer refusal's
-line, and nothing lands on another kind's pane or on a view entered afresh.
+of an older write cannot undo a newer one still in flight, and a refused Enable all puts back only the collections no
+later write has touched. **A line** — the list column's and the pane's — numbers the writes issued in its place, and an
+answer sets or clears that line only while it is still the latest write there and the tab has not been entered again
+since it was issued; a pane answer also only while the kind it was made on is still selected. So a slow refusal cannot
+stand a line over a write that has since succeeded, a slow success cannot take back a newer refusal's line, and nothing
+lands on another kind's pane or on a view entered afresh.
 
 ## Settings
 

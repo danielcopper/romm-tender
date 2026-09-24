@@ -858,8 +858,64 @@ describe("Library › Collections", () => {
     });
   });
 
+  describe("the owner switch against its settings read", () => {
+    it("keeps a switch flipped while the settings read was out, once the read answers with the old value", async () => {
+      let answerRead: (value: PluginSettings) => void = () => {};
+      vi.mocked(backend.getSettings).mockReturnValueOnce(
+        new Promise<PluginSettings>((r) => {
+          answerRead = r;
+        }),
+      );
+      const write = held();
+      vi.mocked(backend.setCollectionOwnerScope).mockReturnValueOnce(write.promise);
+      const { container } = await openCollections();
+      await click(ownerSwitch(container));
+      expect(ownerSwitch(container).checked).toBe(false);
+
+      await act(async () => {
+        answerRead(settings({ collection_owner_scope: "all" }));
+        for (let i = 0; i < 6; i++) await Promise.resolve();
+      });
+      expect(ownerSwitch(container).checked).toBe(false);
+
+      await write.answer({ success: true });
+      expect(ownerSwitch(container).checked).toBe(false);
+    });
+
+    it("goes back to the scope the settings read found when a write is refused", async () => {
+      vi.mocked(backend.getSettings).mockResolvedValue(settings({ collection_owner_scope: "own" }));
+      vi.mocked(backend.setCollectionOwnerScope).mockResolvedValueOnce({ success: false, message: "No" });
+      const { container } = await openCollections();
+      expect(ownerSwitch(container).checked).toBe(false);
+
+      await click(ownerSwitch(container));
+
+      expect(ownerSwitch(container).checked).toBe(false);
+    });
+  });
+
   describe("a refused write after one that was stored", () => {
     const REFUSED = { success: false, message: "Migration pending" };
+
+    it("leaves a row at the value a later Enable all gave it when an earlier single switch is refused", async () => {
+      const single = held();
+      const batch = held();
+      vi.mocked(backend.saveCollectionSync).mockReturnValueOnce(single.promise);
+      vi.mocked(backend.saveCollectionsSync).mockReturnValueOnce(batch.promise);
+      const { container } = await openCollections();
+      // Finished is off in the read; switched on on its own, then Enable all.
+      await click(checkbox(tableRow(container, "Finished")));
+      await typeSearch(container, "i");
+      await click(button(container, "Enable all"));
+
+      await single.answer({ success: false, message: "Migration pending" });
+      expect(checkbox(tableRow(container, "Finished")).checked).toBe(true);
+      expect(paneStatus(container)).toBeNull();
+
+      await batch.answer({ success: true });
+      expect(checkbox(tableRow(container, "Finished")).checked).toBe(true);
+      expect(paneStatus(container)).toBeNull();
+    });
 
     it("puts a row back to what its last stored write set", async () => {
       vi.mocked(backend.saveCollectionSync).mockResolvedValueOnce({ success: true }).mockResolvedValueOnce(REFUSED);
