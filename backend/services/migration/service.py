@@ -105,6 +105,9 @@ class MigrationService:
         # write as the relocations, before it re-records the save directories;
         # the gate has to hold until that has finished.
         self._migrations_in_flight = 0
+        # The move the latest run in flight is making, oldest pending home to
+        # the new one, so the status can still name it once the markers are gone.
+        self._move_in_flight: tuple[str, str] | None = None
 
     def _spawn_background_task(self, coro) -> asyncio.Task[Any]:
         """Schedule ``coro`` on the plugin loop and track the task for shutdown.
@@ -670,10 +673,13 @@ class MigrationService:
             return {"success": False, "reason": "no_migration_needed", "message": "No path migration needed"}
 
         self._migrations_in_flight += 1
+        self._move_in_flight = (pending[0], new_home)
         try:
             return await self._run_migration(pending, new_home, conflict_strategy)
         finally:
             self._migrations_in_flight -= 1
+            if not self._migrations_in_flight:
+                self._move_in_flight = None
 
     async def _run_migration(self, pending, new_home, conflict_strategy):
         """Move the files, re-bake the shortcuts and re-record the save directories, in that order."""
@@ -752,7 +758,13 @@ class MigrationService:
         }
 
     async def get_migration_status(self):
-        """Return whether a RetroDECK path migration is pending and file counts."""
+        """Return whether a RetroDECK path migration is pending and file counts.
+
+        A run in flight is still pending after it has cleared the markers, until
+        it has re-recorded the save directories — the same answer
+        :meth:`is_retrodeck_migration_pending` gives — so the panel does not let
+        go of the migration while syncs are still held off.
+        """
         with self._uow_factory() as uow:
             stored_pending = self._read_pending_homes(uow)
             stored_home = uow.kv_config.get(_KV_RETRODECK_HOME) or ""
@@ -760,6 +772,9 @@ class MigrationService:
         new_home = self._resolved_home(stored_home)
 
         if not pending or not new_home:
+            if self._move_in_flight is not None:
+                old_path, new_path = self._move_in_flight
+                return {"pending": True, "old_path": old_path, "new_path": new_path}
             return {"pending": False}
 
         return await self._loop.run_in_executor(None, self._get_migration_status_io, pending, new_home)

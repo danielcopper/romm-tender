@@ -986,6 +986,27 @@ class TestMigrateRetroDeckFiles:
         assert service.is_retrodeck_migration_pending() is False
 
     @pytest.mark.asyncio
+    async def test_the_status_stays_pending_during_the_re_record(self, plugin, tmp_path):
+        # The panel reads this status; answering "not pending" while syncs are
+        # still held off would let it drop the migration mid-run.
+        self._conflicting_rom(plugin, tmp_path)
+        service = plugin._migration_service
+        seen: list[dict[str, Any]] = []
+
+        class _Watching(RecordingSaveDirectories):
+            async def __call__(self) -> None:
+                seen.append(await service.get_migration_status())
+
+        service._save_directories = _Watching().provide
+
+        await plugin.migrate_retrodeck_files("skip")
+
+        assert seen[0]["pending"] is True
+        assert seen[0]["old_path"] == str(tmp_path / "old")
+        assert seen[0]["new_path"] == str(tmp_path / "new")
+        assert await service.get_migration_status() == {"pending": False}
+
+    @pytest.mark.asyncio
     async def test_nothing_is_recorded_while_the_user_is_still_asked(self, plugin, tmp_path):
         self._conflicting_rom(plugin, tmp_path)
 
