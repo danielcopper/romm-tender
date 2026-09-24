@@ -611,8 +611,17 @@ Format: **invariant** — tier — enforced by.
   `docs/requirements.*` beside the docs)** — check — `scripts/check_lock_sync.py`
 - **Every local markdown link in tracked docs resolves (file target + heading/attr-list anchor)** — check —
   `scripts/check_markdown_links.py`
-- **Every stated RomM minimum version matches the enforced `Plugin._MIN_REQUIRED_VERSION`** — check —
-  `scripts/check_romm_min_version.py` (ADRs excluded: frozen history)
+- **Every RomM minimum stated for a reader matches the enforced `Plugin._MIN_REQUIRED_VERSION`** — check —
+  `scripts/check_romm_min_version.py`. The constant in `backend/main.py` is the floor `test_connection()` refuses a
+  server below; every other place the number appears is a restatement for a reader, and a restatement drifts. The check
+  holds exactly the statements its `CLAIMS` list names — each one a narrow regex that captures the version and nothing
+  around it, so `--fix` can rewrite it in place — and fails both when a named statement says another number and when it
+  no longer matches at all, because a regex that silently stopped matching would read as a claim that holds. **What it
+  cannot see is a restatement nobody added to that list**: a new page stating the floor is unchecked until its sentence
+  is listed there. The worked examples beside the listed statements are left out on purpose — a version above the floor
+  (`5.3.1-beta`) cannot be checked by equality, and an at-floor example such as the one in the ConnectionService notes
+  of [backend-architecture.md](backend-architecture.md) stays true whatever the floor is. ADRs are out of scope: they
+  record the floor as it stood when the decision was taken, so the numbers in them are history and must not be rewritten
 - **Every tree under `backend/_vendor/` is pinned by the `<pkg>.SHA256SUMS` beside it: every manifest entry under
   `<pkg>/` matches the vendored file's digest, the vendored file set EQUALS the manifest's set restricted to that
   prefix, and a package directory with NO manifest is a failure** — check — `scripts/check_vendored_trees.py` (the
