@@ -1107,16 +1107,16 @@ Format: **invariant** — tier — enforced by.
   both use a **non-first** row deliberately. **The rule spans three modules and nothing joins them**:
   `utils/entryFocus.ts` owns `ENTRY_STOP_ATTR` and `pageEntryStop`, `bigpicture/layout/WidePage.tsx` places entry focus
   through it rather than through `firstBodyStop`, and `bigpicture/layout/ListDetail.tsx` marks its selected row — plus
-  whatever page passes a starting selection at all, `SettingsPage` today. Library › Collections also opens on a
-  non-first row and carries the mark, but it is tabbed: wherever the panel mounts, Steam's tabbed page places the focus
-  and the mark goes unread. The frame reads it only on its missed-`Tabs` branch, which the start-up check does not let a
-  panel reach (`Tabs` costs the panel). Another wide page that opens on a non-first row and forgets the mark selects its
-  first row instead, and every test still passes. **The end to end is unreachable here**: happy-dom performs no layout
-  and does not reproduce Steam's focus resolution, so what the suite pins is the declaration and the finder, never the
-  press. Only a controller confirms it. **What hid this for a whole review round is the shape of the failure, not its
-  size**: Main's notices name sections, and the one naming the FIRST section keeps working, so a reader checking Open
-  Connections sees the feature working while Open Controller lands on Connections. A check that exercises the first row
-  proves nothing about the rule. The mark sits on a `display: contents` wrapper AROUND each row rather than on the row,
-  and that is load-bearing rather than stylistic: `pageEntryStop` calls `firstBodyStop(declared)`, which searches
-  DESCENDANTS — a mark on the row itself finds no candidate inside it, falls back to the first row, and ships the defect
-  under a comment saying it does not
+  whatever page passes a starting selection at all — `SettingsPage`, and Library › Collections, which carries the mark
+  but is tabbed: wherever the panel mounts, Steam's tabbed page places the focus and the mark goes unread. The frame
+  reads it only on its missed-`Tabs` branch, which the start-up check does not let a panel reach (`Tabs` costs the
+  panel). Another wide page that opens on a non-first row and forgets the mark selects its first row instead, and every
+  test still passes. **The end to end is unreachable here**: happy-dom performs no layout and does not reproduce Steam's
+  focus resolution, so what the suite pins is the declaration and the finder, never the press. Only a controller
+  confirms it. **What hid this for a whole review round is the shape of the failure, not its size**: Main's notices name
+  sections, and the one naming the FIRST section keeps working, so a reader checking Open Connections sees the feature
+  working while Open Controller lands on Connections. A check that exercises the first row proves nothing about the
+  rule. The mark sits on a `display: contents` wrapper AROUND each row rather than on the row, and that is load-bearing
+  rather than stylistic: `pageEntryStop` calls `firstBodyStop(declared)`, which searches DESCENDANTS — a mark on the row
+  itself finds no candidate inside it, falls back to the first row, and ships the defect under a comment saying it does
+  not

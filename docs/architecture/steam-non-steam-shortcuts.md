@@ -404,8 +404,8 @@ setting:
   `RomM: [<name> (Franchise)]` and `RomM: [<name> (IGDB Collection)]` — separate Steam collections. Two collections that
   share **both** name and label still union.
 
-The Collections page does not quote the label strings. Besides the kernel and its test they are spelled in these places,
-and a label change is a change in each:
+The Collections page does not quote the label strings. Besides the kernel, its test and this section's own examples,
+they are spelled in these places, and a label change is a change in each:
 
 - the user guide's "Collections that share a name" (`docs/user-guide/syncing-your-library.md`);
 - the description of the Steam Library setting that turns the mode on

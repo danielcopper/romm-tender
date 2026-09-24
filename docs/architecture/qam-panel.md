@@ -1480,12 +1480,10 @@ neither listed nor counted. Every one of those counts comes from the one `get_co
 read, and focus selecting holds nothing back behind a press here. While the answer is out a row states nothing, and
 where the read failed it states a dash.
 
-The page opens with **Collections** selected, and its row carries the entry-stop mark (§ List and detail) — but it is
-tabbed: wherever the panel mounts, Steam's tabbed page places the focus (§ Tabs) and the mark goes unread. The frame
-reads it only on its missed-`Tabs` branch, which the start-up check does not let a panel reach (`Tabs` costs the panel).
-The first stop of the list column is the owner toggle, which reports no selection — so where Steam takes the first stop,
-the page stays on Collections. Only the device shows which stop Steam takes; no test here can. The selection is kept
-across a switch to Platforms and back.
+The page opens with **Collections** selected, and its row carries the entry-stop mark, which goes unread here because
+the page is tabbed (§ List and detail). The first stop of the list column is the owner toggle, which reports no
+selection — so where Steam takes the first stop, the page stays on Collections. Only the device shows which stop Steam
+takes; no test here can. The selection is kept across a switch to Platforms and back.
 
 A kind's pane holds, in order:
 
@@ -1533,7 +1531,8 @@ collections included, which a confirmation reserved for a whole RomM kind would 
 half of the virtual kind. **They write exactly the collections the table lists, in one batch** (`save_collections_sync`
 over their ids): with a search, every collection the search leaves, those past the 50-row render cap included; with
 none, the whole table. So on Franchises and on IGDB collections they write that type alone, and with Other users'
-collections off no write reaches a collection of another user. Where the Favorites row stands for a collection, the
+collections off no write reaches a collection known to be another user's — until Tender knows the user's RomM id it
+cannot tell, and it writes what it lists, as the sync syncs it. Where the Favorites row stands for a collection, the
 Collections write leaves that one out, since it is not in the table; where the row is greyed because more than one
 favorites collection is a candidate, those are ordinary rows of the Collections table and the write includes them.
 
