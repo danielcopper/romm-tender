@@ -986,21 +986,21 @@ Format: **invariant** — tier — enforced by.
 - **A firmware row's presence comes from the resolver wherever the resolver declared it; the plugin's own filesystem
   probe covers only three leftovers** — prompt-only — `services/firmware/demand.py::FirmwareDemand.is_downloaded` is the
   single crossing point and states the boundary: the probe answers for a library file no core declares, for a placement
-  whose location the plugin cannot honour, and for the already-there skip in the download batch. Everything else reads
-  the resolver's `present`, which follows symlinks the plugin would have to re-implement — the PS2 folder is one
-  directory reached through two spellings. `present is None` reads as absent, the safe direction, because the row then
-  shows work outstanding rather than a readiness nobody established. **Nothing enforces the crossing point.** A fourth
-  status builder calling `_firmware_file_store.exists(dest)` directly would go green, and its rows would silently answer
-  from the weaker source — `os.path.exists` on a path the plugin assembled, which is what this cut removed after it
-  rendered a satisfied requirement as missing. `services/firmware/status.py` holds that store itself, for
-  `_stamp_deletable`'s records-still-on-disk probe, so the wrong probe is one line away from every row builder that
-  should be asking `FirmwareDemand`. Related and separate: presence is not the row's verdict (CONTEXT.md → Row verdict),
-  and a withheld verdict is not an absence — its cause is read off the row's caveat codes and, for a declared FILE, off
-  its `checked` (CONTEXT.md → Byte reading), never off the verdict itself. Three of that vocabulary's eight values sit
-  behind one withheld verdict and are three different statements: a file the emulator READ and does not recognise was
-  checked, so wording it "could not be checked" is untrue; `refused` is not withheld at all, arriving with the verdict
-  already `false`. Nothing checks that a consumer keeps them apart — `checked` is a plain string on the row beside a
-  `satisfied` that reads like its summary
+  whose location the plugin cannot honour, and for the already-there check before a download (the batch and the per-row
+  fetch). Everything else reads the resolver's `present`, which follows symlinks the plugin would have to re-implement —
+  the PS2 folder is one directory reached through two spellings. `present is None` reads as absent, the safe direction,
+  because the row then shows work outstanding rather than a readiness nobody established. **Nothing enforces the
+  crossing point.** A fourth status builder calling `_firmware_file_store.exists(dest)` directly would go green, and its
+  rows would silently answer from the weaker source — `os.path.exists` on a path the plugin assembled, which is what
+  this cut removed after it rendered a satisfied requirement as missing. `services/firmware/status.py` holds that store
+  itself, for `_stamp_deletable`'s records-still-on-disk probe, so the wrong probe is one line away from every row
+  builder that should be asking `FirmwareDemand`. Related and separate: presence is not the row's verdict (CONTEXT.md →
+  Row verdict), and a withheld verdict is not an absence — its cause is read off the row's caveat codes and, for a
+  declared FILE, off its `checked` (CONTEXT.md → Byte reading), never off the verdict itself. Three of that vocabulary's
+  eight values sit behind one withheld verdict and are three different statements: a file the emulator READ and does not
+  recognise was checked, so wording it "could not be checked" is untrue; `refused` is not withheld at all, arriving with
+  the verdict already `false`. Nothing checks that a consumer keeps them apart — `checked` is a plain string on the row
+  beside a `satisfied` that reads like its summary
 - **A firmware row's verdict is `BiosFileEntry.satisfied`, and for a folder declaration it is what the folder HOLDS —
   never that the folder is there** — test + prompt-only —
   `tests/services/test_firmware.py::TestAFolderRequirementIsAnsweredByItsContents` pins all three answers end-to-end,

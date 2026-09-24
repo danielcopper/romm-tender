@@ -147,9 +147,8 @@ class FirmwareDemand:
         will reach it — following the symlinks a distribution strings through
         the BIOS tree — while a bare existence check answers about whatever the
         path assembled here happens to name. Two derivations of one fact is one
-        too many, and the LRPS2 row is what it cost: with the destination wrong,
-        the resolver had the file and this service did not. Placed elsewhere the
-        boundary falls the other way, and the next paragraph is why.
+        too many. Placed elsewhere the boundary falls the other way, and the
+        next paragraph is why.
 
         Our own probe covers what is left, and both halves of it are the same
         rule read backwards — we answer for the destinations the resolver did
