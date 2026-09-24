@@ -41,6 +41,7 @@ def _answer(
     names: tuple[str, ...] = ("pokemon.srm",),
     state: str = "per_game_files",
     caveats: tuple[str, ...] = (),
+    root_kind: str = "savefile_directory",
 ) -> SaveAnswer:
     return SaveAnswer(
         state=cast("Any", state),
@@ -55,7 +56,7 @@ def _answer(
         ),
         caveats=caveats,
         content_installed=True,
-        root_kind="savefile_directory",
+        root_kind=root_kind,
     )
 
 
@@ -328,6 +329,72 @@ class TestARefusingAnswerCarriesWhatIsNamedAfterTheGame:
 
         assert os.listdir(rom_dir) == ["pokemon.gba"]
         assert (new / "pokemon.srm").read_bytes() == b"progress"
+
+
+class TestNeverIntoTheContentDirectory:
+    """Beside the content is a multi-file game's own folder, which an uninstall removes whole."""
+
+    @pytest.fixture
+    def rom_dir(self, tmp_path):
+        return tmp_path / "retrodeck" / "roms" / "gba"
+
+    def test_a_moved_answer_beside_the_content_moves_nothing_and_keeps_the_record(self, tmp_path, dirs, rom_dir):
+        old, _new = dirs
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        save = _create_save(tmp_path, content=b"progress")
+
+        _follow(svc, _answer(str(rom_dir), root_kind="content_directory"))
+
+        assert save.read_bytes() == b"progress"
+        assert not rom_dir.exists()
+        assert _recorded(svc) == str(old)
+
+    def test_a_refusing_answer_beside_the_content_moves_nothing(self, tmp_path, dirs, rom_dir):
+        # The by-name rule would otherwise carry every never-synced ``<stem>.*`` in.
+        old, _new = dirs
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        save = _create_save(tmp_path, content=b"progress")
+
+        _follow(svc, _answer(str(rom_dir), names=(), state="shared", root_kind="content_directory"))
+
+        assert save.read_bytes() == b"progress"
+        assert _recorded(svc) == str(old)
+
+    def test_a_first_sight_beside_the_content_records_nothing(self, tmp_path, rom_dir):
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+
+        _follow(svc, _answer(str(rom_dir), root_kind="content_directory"))
+
+        assert _recorded(svc) is None
+
+    def test_switching_the_option_back_finds_the_old_record_and_moves_nothing(self, tmp_path, dirs, rom_dir):
+        old, _new = dirs
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        save = _create_save(tmp_path, content=b"progress")
+
+        _follow(svc, _answer(str(rom_dir), root_kind="content_directory"))
+        _follow(svc, _answer(str(old)))
+
+        assert save.read_bytes() == b"progress"
+        assert sorted(os.listdir(old)) == ["pokemon.srm"]
+        assert _recorded(svc) == str(old)
+
+    @pytest.mark.asyncio
+    async def test_the_backfill_records_nothing_beside_the_content(self, tmp_path, rom_dir):
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _seed_answer(svc, _answer(str(rom_dir), root_kind="content_directory"))
+
+        await svc.record_save_directories_once()
+
+        assert _recorded(svc) is None
 
 
 class _WatchedStore:

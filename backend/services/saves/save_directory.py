@@ -63,12 +63,12 @@ class SaveDirectoryFollower:
     def do_follow(self, rom_id: int, answer: SaveAnswer) -> None:
         """Bring this ROM's save files to *answer*'s directory, then record it.
 
-        No directory in the answer: nothing to compare, and nothing is recorded
-        — a refusal never becomes the record a later answer is measured against.
-        No record yet: this is the first sight, so the answer is recorded and
+        An answer that places no directory, or places it beside the content,
+        moves nothing and records nothing (:func:`_followable_directory`). No
+        record yet: this is the first sight, so the answer is recorded and
         nothing moves. The same directory: nothing to do.
         """
-        answered = answer.directory
+        answered = _followable_directory(answer)
         if answered is None:
             return
         recorded = self._recorded(rom_id)
@@ -91,7 +91,7 @@ class SaveDirectoryFollower:
         """
         if not self._rom_info.is_content_installed(rom_id) or self._recorded(rom_id) is not None:
             return
-        answered = self._rom_info.save_answer(rom_id).directory
+        answered = _followable_directory(self._rom_info.save_answer(rom_id))
         if answered is not None:
             self._record(rom_id, answered)
 
@@ -195,3 +195,18 @@ class SaveDirectoryFollower:
                 found,
             )
         return found
+
+
+def _followable_directory(answer: SaveAnswer) -> str | None:
+    """The directory a follow compares and carries into, or ``None`` where it may do neither.
+
+    ``None`` where the answer places no directory, and where it places the save
+    beside the content: for a multi-file game that is the game's own folder,
+    which an uninstall removes whole, so nothing is carried into it or recorded
+    for it — the old record stays, and switching the option back finds it
+    unchanged.
+    """
+    if answer.in_content_directory:
+        # Holds until the content-directory gate is lifted.
+        return None
+    return answer.directory
