@@ -81,12 +81,9 @@ no panel attached is dropped with a log line, because every event this backend s
 
 The answer is what `_emit_with_prune_continuation` needs. That funnel attaches a prune claim to the five events whose
 Steam-side work outlives the backend's, and a claim handed to a panel that is not there blocks every later operation
-until it expires — so the funnel gives it straight back the moment the sink says nobody heard. A sink that cannot know
-must answer `True`: the plugin loader's bridge reports no delivery at all, and inventing a "nobody heard" there would
-release a claim while the panel is still working. That is the whole reason the seam is an object rather than a call. Two
-consequences follow and neither is checked: **an event carrying a claim is awaited, never scheduled as a task** (the
-answer would arrive after the claim was handed out), and a second event argument is refused outright rather than given
-an invented wire form.
+until it expires — so the funnel gives it straight back the moment the sink says nobody heard. One consequence follows
+and nothing checks it: **an event carrying a claim is awaited, never scheduled as a task** (the answer would arrive
+after the claim was handed out).
 
 **The start-up order** is what makes the port file meaningful:
 

@@ -13,9 +13,7 @@ Dropping is exactly why the answer is returned. One caller acts on it: the
 funnel in ``main.py`` that attaches a prune claim to the events whose Steam-side
 work outlives the backend's. A claim handed to a panel that is not there is held
 against every later operation until it expires, so the funnel releases it the
-moment the sink says nobody heard. That case cannot arise today — of the nine
-start-up routines only two send anything, and neither carries a claim — and the
-answer exists for the day a claim-bearing event fires at start-up.
+moment the sink says nobody heard.
 """
 
 from __future__ import annotations

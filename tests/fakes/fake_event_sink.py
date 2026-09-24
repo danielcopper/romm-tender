@@ -8,12 +8,11 @@ from typing import Any
 class FakeEventSink:
     """Records what was emitted, and can answer as a panel that is not there.
 
-    ``delivers`` is the answer :meth:`emit` gives back — the one thing the real
-    sink knows that the loader's bridge never could. Setting it ``False`` is how
-    a test reaches the branch where a claim goes back because nobody heard the
-    event it was attached to. ``raises`` makes the send itself fail, which is a
-    different case again: the event may or may not have arrived, so the claim is
-    released and the failure is re-raised rather than swallowed.
+    ``delivers`` is the answer :meth:`emit` gives back. Setting it ``False`` is
+    how a test reaches the branch where a claim goes back because nobody heard
+    the event it was attached to. ``raises`` makes the send itself fail, which
+    is a different case again: the event may or may not have arrived, so the
+    claim is released and the failure is re-raised rather than swallowed.
     """
 
     def __init__(self, *, delivers: bool = True, raises: BaseException | None = None) -> None:

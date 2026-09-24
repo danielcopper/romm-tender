@@ -54,12 +54,7 @@ from lib.sync_gate import sync_active_blocked
 
 
 class PluginEventSink(Protocol):
-    """Where an event leaves this process, and whether anybody heard it.
-
-    The answer is the half a module-level ``emit`` could never give. One caller
-    acts on it — the continuation funnel below — and it can only act on it
-    because the seam is an object it was handed rather than a call it makes.
-    """
+    """Where an event leaves this process; answers whether anybody heard it."""
 
     async def emit(self, name: str, payload: object, /) -> bool: ...
 
@@ -147,10 +142,6 @@ class Plugin:
             if lease_token is not None:
                 await release_prune_gate_lease(self, lease_token)
             raise
-        # A claim handed to a panel that is not there is held against every
-        # later operation until it expires, so it goes back the moment the sink
-        # says nobody heard. Only a sink that knows can say so — the loader's
-        # bridge always answers True.
         if lease_token is not None and not delivered:
             await release_prune_gate_lease(self, lease_token)
 
@@ -162,8 +153,8 @@ class Plugin:
         network is deliberately not here — see :meth:`_open_network`.
         """
         self.loop = asyncio.get_running_loop()
-        # Before anything can emit: the start-up routines below already send two
-        # events, and wiring passes the funnel to every service.
+        # Before anything can emit: start-up routines below send events, and
+        # wiring passes the funnel to every service.
         self._event_sink = events
 
         # ── 1. Wire adapters ────────────────────────────────────────────────
