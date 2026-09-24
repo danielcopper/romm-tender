@@ -310,8 +310,8 @@ async def test_get_collections_happy_shape(harness):
     assert c["is_own"] is True
 
 
-async def test_get_collections_states_each_collections_reach_into_steam_and_its_owner(harness):
-    """``in_steam_count`` and ``owner_username`` over the real wiring and SQLite rows.
+async def test_get_collections_states_each_collections_in_steam_count_and_its_owner(harness):
+    """``in_steam_count`` over the real wiring and SQLite rows; ``owner_username`` from the RomM listing.
 
     30 is bound, 31 is an unbound version of the same game, 40 is an
     unbound version of a game nobody bound, and 50 has no row at all.

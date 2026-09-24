@@ -331,8 +331,8 @@ solo groups). Key derivation: `domain/sibling_group.py`, persisted as `roms.sibl
   only equal where every group **that holds a binding** is a single version — a group with no binding raises neither
   count (`reachable_count` vs. `count`, `services/library/reporter.py`). The platform count (`reachable_count`) also
   leaves out the versions the platform's last fetch did not return, because the picker refuses a switch to them; the
-  collection count (`in_steam_count`) does not, because it follows the sync's collection filing
-  (`services/library/reporter.py`), and that filing does not exclude them.
+  collection count (`in_steam_count`) does not, because it follows the sync's collection filing, and that filing does
+  not exclude them. Both start from one computation, `domain/sibling_resolution.py`'s `reachable_rom_ids`.
 
 **Region** and **Languages** are **attributes of a single version**, parsed from its filename tags: `(Spain)` → where
 that release shipped; `(En,Fr,De,Es)` → the languages contained in that one dump. A multi-language version is still one

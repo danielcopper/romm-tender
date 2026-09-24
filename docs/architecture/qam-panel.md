@@ -1485,8 +1485,8 @@ either yet. It costs the four RomM requests `get_collections` makes — one each
 of the two virtual types the plugin syncs — and one read of Tender's own database after them.
 
 **Those two columns are why a kind is the pane and a collection a row.** A pane per collection would show the owner and
-how many of its games are already in Steam, and both fit as a column of the kind's table, so such a pane spends the
-whole detail on what one row already says.
+how many of its ROMs are already in Steam, and both fit as a column of the kind's table, so such a pane spends the whole
+detail on what one row already says.
 
 **Enable all / Disable all ask first whenever no search narrows the list, on every kind** — Franchises and IGDB
 collections included, which a confirmation reserved for a whole RomM kind would otherwise leave unasked now that each is

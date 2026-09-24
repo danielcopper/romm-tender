@@ -827,16 +827,16 @@ per-kind enable state without mutating it, so switching back to `"all"` restores
 identity never filters**, the feature is non-breaking: it silently no-ops until `romm_user_id` is stamped (see the
 ConnectionService lazy-identity note), then activates — no re-login required.
 
-**Each collection row states how much of it Steam already reaches, and who owns it (#1833).** `get_collections` adds two
-fields to its rows. `in_steam_count`, on all three kinds, is how many of the collection's member ROM ids (RomM's
-listings carry `rom_ids` on each) are reachable (CONTEXT.md → Reachable, which owns the rule and how it differs from the
-platform count). It counts members, not shortcuts: two versions of one game both count although they share one. It is
-absent, never `0`, when it is unknown — the local read failed, which does not fail the listing and is logged as a
-warning. The fetcher asks its inward pair (`LocalLibraryReader.do_read_reachable_rom_ids`) in one short read UoW once
-all the listing requests have returned, never across one; the per-row count is `domain/collection_listing.py`'s.
-`owner_username` is RomM's own field on the standard and smart listings (`CollectionSchema` / `SmartCollectionSchema` in
-every RomM version the plugin accepts), forwarded as `null` where a listing lacks it; virtual rows carry no such key,
-since they have no owner.
+**Each collection row states how many of its members are already in Steam, and who owns it (#1833).** `get_collections`
+adds two fields to its rows. `in_steam_count`, on all three kinds, counts the collection's member ROM ids (RomM's
+listings carry `rom_ids` on each) that the sync's collection filing resolves to a shortcut (CONTEXT.md → Reachable,
+which owns the rule and how it differs from the platform count). It counts members, not shortcuts: two versions of one
+game both count although they share one. It is absent, never `0`, when it is unknown — the local read failed, which does
+not fail the listing and is logged as a warning. The fetcher asks its inward pair
+(`LocalLibraryReader.do_read_reachable_rom_ids`) in one short read UoW once all the listing requests have returned,
+never across one; the per-row count is `domain/collection_listing.py`'s. `owner_username` is RomM's own field on the
+standard and smart listings (`CollectionSchema` / `SmartCollectionSchema` in every RomM version the plugin accepts),
+forwarded as `null` where a listing lacks it; virtual rows carry no such key, since they have no owner.
 
 **Incremental skip — the per-platform completion stamp is the sole authority.** A platform unit skips only when its
 `PlatformSyncState` stamp exists

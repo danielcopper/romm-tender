@@ -502,8 +502,7 @@ class TestGetCollectionsOwnerScope:
 
 
 class TestGetCollectionsInSteamCount:
-    """Each collection states how many of its members the sync's collection filing
-    resolves to a shortcut (CONTEXT.md → Reachable)."""
+    """How many of a collection's members the sync's collection filing resolves to a shortcut."""
 
     async def _in_steam_count(self, plugin, rom_ids, *, kind="standard"):
         listing = [{"id": 1, "name": "C", "rom_ids": rom_ids}]
