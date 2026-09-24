@@ -7,8 +7,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-
-# Use _make_testable_plugin for test-only attrs
 from _factories import _make_testable_plugin
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver

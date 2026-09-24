@@ -2,8 +2,6 @@ import asyncio
 from unittest.mock import MagicMock
 
 import pytest
-
-# Use _make_testable_plugin for test-only attrs
 from _factories import _make_testable_plugin
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
