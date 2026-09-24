@@ -33,20 +33,6 @@ def rebind_loop(library_service, loop):
     library_service._session_budget._loop = loop
 
 
-def _make_loop_with_executor(*return_values):
-    """Return a mock loop whose run_in_executor returns values in sequence.
-
-    Each call to run_in_executor returns the next value from return_values.
-    If only one value is given it is returned for every call.
-    """
-    mock_loop = MagicMock()
-    if len(return_values) == 1:
-        mock_loop.run_in_executor = AsyncMock(return_value=return_values[0])
-    else:
-        mock_loop.run_in_executor = AsyncMock(side_effect=list(return_values))
-    return mock_loop
-
-
 def _make_loop_raising(exc):
     """Return a mock loop whose run_in_executor always raises exc."""
     mock_loop = MagicMock()
@@ -55,10 +41,9 @@ def _make_loop_raising(exc):
 
 
 def _make_collections_loop(user=None, smart=None, virtual=None):
-    """Mock loop matching the executor call order of ``get_collections`` /
-    ``set_all_collections_sync`` (scope=None).
+    """Mock loop matching the executor call order of ``get_collections``.
 
-    Both fetch list_collections, then list_smart_collections, then one
+    It fetches list_collections, then list_smart_collections, then one
     list_virtual_collections call per :data:`_SUPPORTED_VIRTUAL_TYPES` (in order).
     ``virtual`` is returned for the FIRST supported virtual type and ``[]`` for
     every other, so the whole virtual set is exactly ``virtual`` (tagged as the

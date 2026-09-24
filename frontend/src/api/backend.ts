@@ -395,19 +395,12 @@ export const getCollections = callable<
 export const saveCollectionSync = callable<[string, CollectionKind, boolean], { success: boolean; message?: string }>(
   "save_collection_sync",
 );
-// One settings write stamping exactly these ids into one kind's bucket — what
-// the Collections tab's Enable all / Disable all send, since they write the set
-// the table shows. The whole-kind write below re-fetches the kind from RomM and
-// stamps what it finds instead, so the panel does not call it; it is declared
-// because the backend still offers it (scripts/check_callable_manifest.py).
+// One settings write stamping these ids into one kind's bucket — the
+// Collections tab's Enable all / Disable all, over the ids its table lists.
 export const saveCollectionsSync = callable<
   [string[], CollectionKind, boolean],
   { success: boolean; reason?: string; message?: string }
 >("save_collections_sync");
-export const setAllCollectionsSync = callable<
-  [boolean, "standard" | "smart" | "virtual" | null],
-  { success: boolean; message?: string }
->("set_all_collections_sync");
 export const saveCollectionPlatformGroups = callable<[boolean], { success: boolean }>(
   "save_collection_platform_groups",
 );

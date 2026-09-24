@@ -7,10 +7,9 @@ short human label the reporter appends to a collection name so same-named
 collections of different types stay separate Steam collections
 (``RomM: [<name> (Franchise)] (host)``). No I/O, no state.
 
-The label strings MUST match the frontend vocabulary exactly — ``SUB_TAB_LABELS``
-and ``VIRTUAL_TYPE_LABELS`` in ``frontend/src/bigpicture/LibraryPage.tsx`` — so
-the type a user sees on the Collections page is the type baked into the Steam
-name. Keep the two in sync.
+The frontend holds no copy of these strings; the user guide
+(``docs/user-guide/syncing-your-library.md``, "Collections that share a name")
+names them, so a change here is a change there.
 
 Label-format safety: a label is appended inside the single bracket pair of
 ``RomM: [<name> (<label>)]``, and the frontend reconcile parses that name with
@@ -22,16 +21,14 @@ fallback capitalises a controlled kind literal, which is too.
 
 from __future__ import annotations
 
-# Coarse kind → label. Mirrors ``SUB_TAB_LABELS`` in LibraryPage.tsx.
+# Coarse kind → label.
 _KIND_LABELS: dict[str, str] = {
     "standard": "Standard",
     "smart": "Smart",
     "virtual": "Virtual",
 }
 
-# Virtual sub-type → label. Mirrors ``VIRTUAL_TYPE_LABELS`` in LibraryPage.tsx:
-# "IGDB Collection" (not "Collection") disambiguates from the Collections page
-# it lives inside.
+# Virtual sub-type → label.
 _VIRTUAL_TYPE_LABELS: dict[str, str] = {
     "franchise": "Franchise",
     "collection": "IGDB Collection",

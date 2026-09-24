@@ -306,8 +306,9 @@ async def test_get_collections_happy_shape(harness):
     assert c["name"] == "Favorites"
     assert c["kind"] == "standard"
     assert isinstance(c["sync_enabled"], bool)
-    # Owner-scope tag (#1532): no stored identity → treated as own (degrade to "All").
-    assert c["is_own"] is True
+    # No stored identity: ownership is not established, so the wire says so
+    # rather than calling another user's collection yours.
+    assert c["is_own"] is None
 
 
 async def test_get_collections_states_each_collections_in_steam_count_and_its_owner(harness):

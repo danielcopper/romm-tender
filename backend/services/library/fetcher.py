@@ -16,7 +16,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 from domain.collection_listing import collection_entry
-from domain.collection_owner import is_own_collection
+from domain.collection_owner import listing_is_own
 from domain.fetch_generation import backfill_needed, count_rows_for_skip
 from domain.platform_prefs import materialize_enabled_platforms, resolve_sync_enabled
 from domain.skip_prediction import collapsed_shortcut_count, new_shortcut_count, predict_unit_skip
@@ -242,10 +242,8 @@ class LibraryFetcher:
             virtual_by_type.append((virtual_type, items))
 
         enabled = self._get_enabled_collections_buckets()
-        # Own identity for the owner-scope tag. ``None`` (never fetched / offline)
-        # tags every collection ``is_own=True`` so the frontend "Mine" filter
-        # degrades to "All" rather than filtering wrongly (the non-breaking
-        # fallback).
+        # Own identity for the owner tag. ``None`` (never fetched / offline) tags
+        # standard and smart collections ``is_own=None`` (:func:`listing_is_own`).
         own_user_id = self._settings.get("romm_user_id")
         # One short read UoW for every collection at once — after the listing
         # fetches, never across them.
@@ -261,7 +259,7 @@ class LibraryFetcher:
                 enabled,
                 reachable,
                 is_favorite=bool(c.get("is_favorite", False)),
-                is_own=is_own_collection(c.get("user_id"), own_user_id, kind="standard"),
+                is_own=listing_is_own(c.get("user_id"), own_user_id, kind="standard"),
                 owner_username=c.get("owner_username"),
             )
             for c in standard_collections
@@ -273,7 +271,7 @@ class LibraryFetcher:
                 enabled,
                 reachable,
                 is_favorite=False,
-                is_own=is_own_collection(c.get("user_id"), own_user_id, kind="smart"),
+                is_own=listing_is_own(c.get("user_id"), own_user_id, kind="smart"),
                 owner_username=c.get("owner_username"),
             )
             for c in smart_collections
@@ -301,16 +299,14 @@ class LibraryFetcher:
         return {"success": True}
 
     def save_collections_sync(self, collection_ids, kind, enabled):
-        """Batch-stamp a bounded set of collection ids into one kind's bucket.
+        """Batch-stamp a set of collection ids into one kind's bucket.
 
-        The frontend uses this for the filtered-subset Enable/Disable All (a
-        search or per-type filter is active) so the whole-kind
-        ``set_all_collections_sync`` — which re-fetches every collection from the
-        server — stays reserved for the unfiltered case. One settings write
-        stamps every id in ``collection_ids`` to ``enabled`` in the ``kind``
-        bucket. An unknown kind or a non-list id argument is rejected with the
-        canonical failure shape; an empty id list is a success no-op (nothing to
-        stamp, no write).
+        The Collections tab's Enable all / Disable all, over the ids its table
+        lists. One settings write stamps every id in ``collection_ids`` to
+        ``enabled`` in the ``kind`` bucket and touches nothing else in it. An
+        unknown kind or a non-list id argument is rejected with the canonical
+        failure shape; an empty id list is a success no-op (nothing to stamp, no
+        write).
         """
         if kind not in ("standard", "smart", "virtual"):
             return {"success": False, "reason": "invalid_kind", "message": f"Invalid collection kind: {kind}"}
@@ -324,87 +320,6 @@ class LibraryFetcher:
         self._settings["enabled_collections"] = buckets
         self._settings_persister.save_settings()
         return {"success": True}
-
-    async def set_all_collections_sync(self, enabled, scope=None):
-        enabled = bool(enabled)
-        if scope not in (None, "standard", "smart", "virtual"):
-            return {"success": False, "reason": "invalid_scope", "message": f"Invalid scope: {scope}"}
-
-        buckets = self._get_enabled_collections_buckets()
-
-        for apply_bucket in (self._apply_standard_bucket, self._apply_smart_bucket, self._apply_virtual_bucket):
-            failure = await apply_bucket(buckets=buckets, enabled=enabled, scope=scope)
-            if failure is not None:
-                return failure
-
-        self._settings["enabled_collections"] = buckets
-        self._settings_persister.save_settings()
-        return {"success": True}
-
-    async def _apply_standard_bucket(
-        self, *, buckets: dict[str, dict[str, bool]], enabled: bool, scope: str | None
-    ) -> dict[str, Any] | None:
-        """Fetch standard collections and stamp the ``standard`` bucket. Returns failure dict or None."""
-        if scope not in (None, "standard"):
-            return None
-        try:
-            standard_collections = await self._loop.run_in_executor(None, self._romm_api.list_collections)
-        except Exception as e:
-            self._logger.error(f"Failed to fetch collections: {e}")
-            _reason, _msg = classify_error(e)
-            return {"success": False, "reason": _reason, "message": _msg}
-        for c in standard_collections:
-            if scope == "standard" and bool(c.get("is_favorite", False)):
-                continue
-            buckets["standard"][str(c["id"])] = enabled
-        return None
-
-    async def _apply_smart_bucket(
-        self, *, buckets: dict[str, dict[str, bool]], enabled: bool, scope: str | None
-    ) -> dict[str, Any] | None:
-        """Fetch smart collections and stamp the ``smart`` bucket. Returns failure dict or None."""
-        if scope not in (None, "smart"):
-            return None
-        try:
-            smart_collections = await self._loop.run_in_executor(None, self._romm_api.list_smart_collections)
-        except Exception as e:
-            if scope == "smart":
-                self._logger.error(f"Failed to fetch smart collections: {e}")
-                _reason, _msg = classify_error(e)
-                return {"success": False, "reason": _reason, "message": _msg}
-            self._logger.warning(f"Failed to fetch smart collections, continuing without them: {e}")
-            return None
-        for c in smart_collections:
-            buckets["smart"][str(c["id"])] = enabled
-        return None
-
-    async def _apply_virtual_bucket(
-        self, *, buckets: dict[str, dict[str, bool]], enabled: bool, scope: str | None
-    ) -> dict[str, Any] | None:
-        """Fetch every supported virtual type and stamp the ``virtual`` bucket.
-
-        Returns a failure dict or None. Under the ``virtual`` scope a failed
-        type-fetch surfaces the error (the user targeted virtual collections);
-        under the all-buckets scope (``None``) it warns and continues so a single
-        unavailable type never fails the whole Enable/Disable All.
-        """
-        if scope not in (None, "virtual"):
-            return None
-        for virtual_type in _SUPPORTED_VIRTUAL_TYPES:
-            try:
-                virtual_collections = await self._loop.run_in_executor(
-                    None, self._romm_api.list_virtual_collections, virtual_type
-                )
-            except Exception as e:
-                if scope == "virtual":
-                    self._logger.error(f"Failed to fetch {virtual_type} collections: {e}")
-                    _reason, _msg = classify_error(e)
-                    return {"success": False, "reason": _reason, "message": _msg}
-                self._logger.warning(f"Failed to fetch {virtual_type} collections, continuing without them: {e}")
-                continue
-            for c in virtual_collections:
-                buckets["virtual"][str(c["id"])] = enabled
-        return None
 
     def _get_enabled_collections_buckets(self) -> dict[str, dict[str, bool]]:
         """Return the ``enabled_collections`` setting in its nested-by-kind shape.
@@ -488,12 +403,12 @@ class LibraryFetcher:
         if not (enabled_standard_ids or enabled_smart_ids or enabled_virtual_ids):
             return units
 
-        # Owner-scope filter (#1532): when "Mine" is selected AND our identity is
-        # known, foreign standard/smart collections are dropped from the queue — a
-        # sync scope that filters OVER the enabled ids without mutating them.
-        # Unknown identity (own_user_id is None) never filters, so "Mine" is a
-        # no-op until identity is available (non-breaking). Virtual collections
-        # have no owner and are never filtered.
+        # Owner scope (#1532): under ``own`` AND with our identity known, foreign
+        # standard/smart collections are dropped from the queue — a sync scope
+        # applied OVER the enabled ids without mutating them. Unknown identity
+        # (own_user_id is None) drops nothing, so ``own`` is a no-op until identity
+        # is available (non-breaking). Virtual collections have no owner and are
+        # never dropped.
         own_user_id = self._settings.get("romm_user_id")
         filter_to_own = self._settings.get("collection_owner_scope") == "own" and own_user_id is not None
 
@@ -520,7 +435,7 @@ class LibraryFetcher:
     ) -> list[WorkUnit]:
         """Fetch standard collections and emit work units for those whose id is in *enabled_ids*.
 
-        Under the "Mine" owner-scope (*filter_to_own*), foreign collections are
+        Under the ``own`` owner scope (*filter_to_own*), foreign collections are
         dropped even when enabled (see :func:`domain.work_unit.collection_units`).
         """
         if not enabled_ids:
@@ -539,7 +454,7 @@ class LibraryFetcher:
     ) -> list[WorkUnit]:
         """Fetch smart collections and emit work units for those whose id is in *enabled_ids*.
 
-        Under the "Mine" owner-scope (*filter_to_own*), foreign collections are
+        Under the ``own`` owner scope (*filter_to_own*), foreign collections are
         dropped even when enabled (see :func:`domain.work_unit.collection_units`).
         """
         if not enabled_ids:
