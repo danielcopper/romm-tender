@@ -387,9 +387,9 @@ from where a link ends up loses the folder the emulator actually opens. Followin
 check right. The rest the plugin looks up itself, in three cases. A file in your library that no emulator RetroDECK
 offers for the system was found to declare has no reading to take. A file whose declared location the plugin cannot
 place under your BIOS folder — a standalone emulator keeping its firmware in a folder of its own, for example — is
-checked where the plugin would put it itself, since the reading is about somewhere else. And every download the page
-offers — one row's or several at once — checks each destination before fetching, because the reading was taken before
-the files it fetches arrived.
+checked where the plugin would put it itself, since the reading is about somewhere else. And every BIOS download the
+plugin offers — one file or several at once — checks each destination before fetching, because the reading was taken
+before the files it fetches arrived.
 
 The reading **opens files and reads them**, which is what two answers need. Where an emulator asks for a **folder**
 rather than a file, the folder being there settles nothing — a folder is satisfied by what is in it — so the candidates

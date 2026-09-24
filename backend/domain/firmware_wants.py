@@ -14,9 +14,7 @@ own file list comes from the RomM server rather than from the resolver, so each
 server file is classified by whether the catalogue holds a placement for it, and
 by whether the reading was complete for the emulator the game will launch with:
 
-``needed`` · ``optional`` · ``not_needed`` (the whole reading succeeded and no
-emulator asked for it) · ``unknown`` (something in the reading failed, so no
-claim can be made either way).
+``needed`` · ``optional`` · ``not_needed`` · ``unknown`` (:func:`classify_wanted`).
 
 Collapsing the last two into one value is the defect this vocabulary exists to
 prevent: a file nothing wants is a finished answer, and a file we could not ask
@@ -421,7 +419,8 @@ def classify_wanted(placement: FirmwarePlacement | None, complete: bool) -> str:
     """Classify one server file against the catalogue — one of :data:`WANTED_VALUES`.
 
     *placement* is the catalogue's entry for the file, ``None`` when it holds
-    none; *complete* is the catalogue's own reading state.
+    none; *complete* is :meth:`FirmwareCatalogue.reading_complete_for` asked
+    about the emulator the game will launch with.
     """
     if placement is not None:
         return WANTED_NEEDED if placement.required_by_any else WANTED_OPTIONAL

@@ -143,8 +143,9 @@ type FirmwareRow = FirmwarePlatformExt["files"][number];
  *   summary above the table counts the same way and the two must not disagree
  *   about what "required" means.
  *
- * The two axes are read in that order, and the order is load-bearing. A row with
- * no placement is `wanted: "unknown"` — no installed emulator could be asked —
+ * The two axes are read in that order, and the order is load-bearing. A
+ * `wanted: "unknown"` row has no placement and a launching emulator whose
+ * reading is incomplete (`reading_complete_for`, `domain/firmware_wants.py`),
  * and its verdict is `downloaded` all the same (`domain/bios_status.py`,
  * `_row_verdict(None, …)`), so it IS established. Testing the need axis first
  * would spend the glyph on a need-axis fact and throw that verdict away, and a
@@ -152,10 +153,10 @@ type FirmwareRow = FirmwarePlatformExt["files"][number];
  * the pane telling the reader they can place BIOS files by hand, so which ones
  * are already there is the one thing it must not stop saying.
  *
- * So the four states the device pass asked for come out as required + met green
- * `✓`, required + unmet red `✗`, spare + met pale green `✓`, spare + unmet grey
- * `✗`; a need nothing could establish keeps its glyph and goes amber; and only a
- * verdict nothing could establish becomes `?`.
+ * So the four states come out as required + met green `✓`, required + unmet red
+ * `✗`, spare + met pale green `✓`, spare + unmet grey `✗`; a need nothing could
+ * establish keeps its glyph and goes amber; and only a verdict nothing could
+ * establish becomes `?`.
  *
  * `not_needed` and `optional` share the muted branch on purpose: for the core
  * about to launch, a file it does not require is not a gap either way.
