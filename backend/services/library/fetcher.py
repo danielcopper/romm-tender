@@ -248,8 +248,7 @@ class LibraryFetcher:
         # fallback).
         own_user_id = self._settings.get("romm_user_id")
         # One short read UoW for every collection at once — after the listing
-        # fetches, never across them. Fail-open: ``in_steam_count`` is a
-        # secondary column, so a failed read lists the collections without it.
+        # fetches, never across them.
         try:
             reachable = await self._loop.run_in_executor(None, self._local_library_reader.do_read_reachable_rom_ids)
         except Exception as e:

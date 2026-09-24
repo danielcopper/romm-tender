@@ -8,10 +8,11 @@ SQLite, and nothing here talks to RomM. That split is the reason the two exist
 separately, so a method that would have to ask the server does not belong here
 however well it fits the sentence below.
 
-What the local side knows is the ``Rom`` rows this device bound to Steam
-shortcuts, the per-platform completion stamps its runs left behind, the sibling
-group keys it persisted, and the last run that finished — shaped here into the
-projections a run's decisions are made against. The decisions themselves live in
+What the local side knows is the ``Rom`` rows this device keeps and their Steam
+shortcut bindings, the per-platform completion stamps its runs left behind, the
+sibling group keys it persisted, and the last run that finished — shaped here
+into the projections a run's decisions are made against, and into the reachable
+set the collections listing counts against. The decisions themselves live in
 ``domain/`` and the moves in
 :class:`~services.library.sync_orchestrator.SyncOrchestrator`; the reads are all
 this module does. It has no phase of its own — the baseline reads open a
@@ -185,14 +186,10 @@ class LocalLibraryReader:
             }
 
     def do_read_reachable_rom_ids(self) -> set[int]:
-        """Every ``rom_id`` a reader can reach from Steam (CONTEXT.md → Reachable).
+        """Every ``rom_id`` the sync's collection filing resolves to a shortcut.
 
-        A row is reachable when it or a member of its sibling group holds a
-        binding — the test the sync applies when it resolves a collection member
-        to the appId it files under (``SyncReporter._member_app_id``). A row with
-        no group key is its own group (:func:`domain.sibling_resolution.group_rows`),
-        so it is reachable only through its own binding. A ROM this device holds
-        no row for is absent. One short read UoW.
+        The same set ``SyncReporter._member_app_id`` answers, member by member
+        (CONTEXT.md → Reachable). One short read UoW.
         """
         with self._uow_factory() as uow:
             rows = list(uow.roms.iter_all())

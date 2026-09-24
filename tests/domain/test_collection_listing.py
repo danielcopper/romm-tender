@@ -8,7 +8,7 @@ _ENABLED = {"standard": {"7": True}, "smart": {}, "virtual": {}}
 
 
 class TestSharedFields:
-    def test_shared_fields_then_the_kind_specific_ones(self):
+    def test_derived_fields_with_the_callers_fields_merged_in(self):
         listing = {"id": 7, "name": "Faves", "rom_count": 3, "rom_ids": [1, 2, 3]}
 
         entry = collection_entry(listing, "standard", _ENABLED, None, is_favorite=True)

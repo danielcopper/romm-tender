@@ -62,15 +62,13 @@ export interface CollectionSyncSetting {
    */
   is_own?: boolean;
   /**
-   * How many of the collection's members are reachable from Steam — through
-   * their own shortcut or their version group's. Counts members, not
-   * shortcuts. Absent when the backend could not read its own record, and on
-   * older backends: absent is unknown, never zero.
+   * How many of the collection's members are in Steam (CONTEXT.md →
+   * Reachable). Absent is unknown, never zero — also on older backends.
    */
   in_steam_count?: number;
   /**
-   * The RomM user who owns the collection; `null` when RomM's listing did not
-   * name one. Absent on virtual collections, which have no owner, and on older
+   * The RomM user who owns the collection; `null` where the listing lacks the
+   * field. Absent on virtual collections, which have no owner, and on older
    * backends.
    */
   owner_username?: string | null;

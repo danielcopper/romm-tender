@@ -85,7 +85,7 @@ class TestReachableRomIds:
         assert plugin._sync_service._local_library_reader.do_read_reachable_rom_ids() == set()
 
     def test_null_keyed_unbound_rows_are_not_folded_into_a_bound_null_keyed_row(self, plugin):
-        """A NULL key relates a row to nothing, so another NULL-keyed binding reaches it not."""
+        """A NULL key relates a row to nothing, so a binding on another NULL-keyed row does not reach it."""
         _seed_rom_row(plugin, 1, app_id=100, platform_slug="n64", sibling_group_key=None)
         _seed_rom_row(plugin, 2, app_id=None, platform_slug="n64", sibling_group_key=None)
 
@@ -93,3 +93,35 @@ class TestReachableRomIds:
 
     def test_no_rows_reach_nothing(self, plugin):
         assert plugin._sync_service._local_library_reader.do_read_reachable_rom_ids() == set()
+
+    def test_agrees_with_the_syncs_collection_filing(self, plugin):
+        """The set is exactly the rom_ids ``SyncReporter._member_app_id`` resolves to a shortcut.
+
+        Two copies of one rule: the reporter resolves each collection member at
+        filing time, this reader answers the whole set for the collections
+        listing. One mixed table holds every shape either could get wrong.
+        """
+        from services.library.reporter import SyncReporter
+
+        _seed_rom_row(plugin, 1, app_id=100, platform_slug="n64", sibling_group_key=None)
+        _seed_rom_row(plugin, 2, app_id=None, platform_slug="n64", sibling_group_key=None)
+        _seed_rom_row(plugin, 3, app_id=300, platform_slug="n64", sibling_group_key="igdb:3:n64")
+        _seed_rom_row(plugin, 4, app_id=None, platform_slug="n64", sibling_group_key="igdb:3:n64")
+        _seed_rom_row(plugin, 5, app_id=None, platform_slug="n64", sibling_group_key="igdb:5:n64")
+        _seed_rom_row(plugin, 6, app_id=None, platform_slug="n64", sibling_group_key="igdb:5:n64")
+        _seed_rom_row(plugin, 7, app_id=700, platform_slug="n64", sibling_group_key="igdb:7:n64")
+        _seed_rom_row(plugin, 8, app_id=800, platform_slug="n64", sibling_group_key="igdb:7:n64")
+        missing = 99
+
+        reachable = plugin._sync_service._local_library_reader.do_read_reachable_rom_ids()
+
+        reporter = plugin._sync_service._reporter
+        with plugin._uow as uow:
+            _platform_app_ids, group_bound = reporter._scan_bound_rows(uow, None, {})
+            filed = {
+                rid
+                for rid in (1, 2, 3, 4, 5, 6, 7, 8, missing)
+                if SyncReporter._member_app_id(uow, rid, group_bound) is not None
+            }
+        assert reachable == filed
+        assert reachable == {1, 3, 4, 7, 8}

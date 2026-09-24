@@ -3,8 +3,7 @@
 Shaped from one item of a RomM collection listing — standard, smart or virtual,
 which all carry ``id``, ``name``, ``rom_count`` and ``rom_ids`` — plus what only
 this device knows about it: whether its sync is enabled, and how many of its
-members are reachable from Steam (CONTEXT.md → Reachable). No I/O: the listing
-item, the enabled bucket and the reachable set come in as arguments.
+members are reachable from Steam (CONTEXT.md → Reachable).
 """
 
 from __future__ import annotations
@@ -19,7 +18,7 @@ def collection_entry(
     reachable: set[int] | None,
     **fields: Any,
 ) -> dict[str, Any]:
-    """The listing row for *listing*, with the kind-specific *fields* after the shared ones.
+    """The listing row for *listing*: what it derives from the item, with the caller's *fields* merged in.
 
     ``in_steam_count`` counts the member ids in *reachable*, so two versions of
     one game both count although they share one shortcut. It is absent, never
