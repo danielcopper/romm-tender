@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Frontend↔backend callable-manifest parity gate.
 
-The Decky callable surface is declared twice: once on the frontend as
+Every endpoint is declared twice: once on the frontend as
 ``callable<[Args], Return>("wire_name")`` (TypeScript) and once on the backend
-as a public ``async def`` method on the ``Plugin`` class in ``main.py``. Nothing
-ties the two together at build time — a renamed/added/removed callable on either
-side, or an arg-count change that the other side doesn't follow, only surfaces as
-a runtime "method not found" / wrong-arity failure once the plugin is loaded.
+as a public method on the ``Plugin`` class in ``main.py`` whose first decorator
+is ``@route`` — ``def`` or ``async def`` alike. Nothing ties the two together at
+build time — a renamed/added/removed endpoint on either side, or an arg-count
+change that the other side doesn't follow, only surfaces as a runtime "method
+not found" / wrong-arity failure once the backend is running.
 
 This check derives both surfaces from source and fails when they diverge, so the
 wire stays one source of truth. It is the static sibling of the
@@ -16,8 +17,12 @@ callable is driven.
 
 What it guarantees (and what it deliberately does not):
 
-  * Every frontend ``callable("name")`` has a matching backend ``async def name``
+  * Every frontend ``callable("name")`` has a matching backend endpoint ``name``
     and vice versa — no orphan on either side.
+  * ``@route`` is where this gate can see it: a ``route`` below another
+    decorator, or on a name with a leading underscore, is a finding of its own.
+    Beneath a gate the marker still reaches the wrapper and so the dispatcher,
+    which would make a name reachable that nothing here checks.
   * Where a name exists on both sides, the **arity** (positional parameter count,
     ``self`` dropped on the backend) matches. Python method signatures carry no
     type hints, so arity is the only mechanically checkable shape — arg TYPES are
@@ -314,30 +319,37 @@ def _parse_text_into(text: str, result: dict[str, int]) -> None:
         i = end
 
 
-def parse_backend_callables(main_py: Path) -> dict[str, int]:
-    """Parse the public ``async def`` methods of the ``Plugin`` class in *main_py*.
-
-    Uses ``ast`` (never imports ``main.py`` — it needs a decky runtime). Returns
-    ``{method_name: arity}`` for every ``AsyncFunctionDef`` on ``Plugin`` whose
-    name does not start with ``_`` (those are internal lifecycle, not callables).
-    Arity counts positional parameters only — ``posonlyargs`` + ``args`` minus
-    ``self``; a method with ``*args`` has variable arity, recorded as ``None``
-    (name still checked). Keyword-only args (``*, c``) and ``**kwargs`` are NOT
-    part of positional arity: the frontend's positional ``[Args]`` tuple can't
-    fill them, so they're excluded by design (a non-occurring corner on this
-    callable surface).
-    """
-    result: dict[str, int | None] = {}
-    source = main_py.read_text(encoding="utf-8")
-    tree = ast.parse(source, filename=str(main_py))
+def _plugin_methods(main_py: Path) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
+    """Every ``def`` and ``async def`` directly on the ``Plugin`` class in *main_py*."""
+    tree = ast.parse(main_py.read_text(encoding="utf-8"), filename=str(main_py))
     plugin = next(
         (node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "Plugin"),
         None,
     )
     if plugin is None:
-        return {}
-    for node in plugin.body:
-        if not isinstance(node, ast.AsyncFunctionDef) or node.name.startswith("_"):
+        return []
+    return [node for node in plugin.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+
+
+def _is_route(decorator: ast.expr) -> bool:
+    return isinstance(decorator, ast.Name) and decorator.id == "route"
+
+
+def parse_backend_callables(main_py: Path) -> dict[str, int | None]:
+    """Parse the endpoints of the ``Plugin`` class in *main_py*.
+
+    Uses ``ast`` (never imports ``main.py``). Returns ``{method_name: arity}``
+    for every ``def`` or ``async def`` on ``Plugin`` whose FIRST decorator is
+    ``route`` and whose name does not start with ``_``. Arity counts positional parameters only — ``posonlyargs`` + ``args`` minus
+    ``self``; a method with ``*args`` has variable arity, recorded as ``None``
+    (name still checked). Keyword-only args (``*, c``) and ``**kwargs`` are NOT
+    part of positional arity: the frontend's positional ``[Args]`` tuple can't
+    fill them, so they're excluded by design (a non-occurring corner on this
+    endpoint surface).
+    """
+    result: dict[str, int | None] = {}
+    for node in _plugin_methods(main_py):
+        if not node.decorator_list or not _is_route(node.decorator_list[0]) or node.name.startswith("_"):
             continue
         args = node.args
         if args.vararg is not None:
@@ -347,6 +359,28 @@ def parse_backend_callables(main_py: Path) -> dict[str, int]:
         # occupy a positional slot the frontend fills (e.g. ``null``).
         result[node.name] = len(args.posonlyargs) + len(args.args) - 1
     return result
+
+
+def find_misplaced_routes(main_py: Path) -> list[str]:
+    """One line per ``@route`` on ``Plugin`` that this gate would not count.
+
+    Two placements: ``route`` below another decorator, and ``route`` on a name
+    with a leading underscore. Neither is in :func:`parse_backend_callables`'s
+    surface, so without this each would be a marker the parity check never sees.
+    """
+    findings: list[str] = []
+    for node in _plugin_methods(main_py):
+        decorators = node.decorator_list
+        if any(_is_route(decorator) for decorator in decorators[1:]):
+            findings.append(
+                f"{node.name}: @route is not its first decorator — move it to the top, above every gate, "
+                f"so this check counts it."
+            )
+        if node.name.startswith("_") and any(_is_route(decorator) for decorator in decorators):
+            findings.append(
+                f"{node.name}: @route on an underscored name — an endpoint is public; rename it or drop @route."
+            )
+    return findings
 
 
 def find_discrepancies(
@@ -373,12 +407,12 @@ def find_discrepancies(
 
     findings.extend(
         f'{name}: frontend declares callable("{name}") but main.py has no public '
-        f"async def {name} on Plugin — add the backend method, fix a rename, or "
+        f"method {name} marked @route on Plugin — add the backend method, fix a rename, or "
         f"add it to EXEMPT in this script if it is intentionally frontend-only."
         for name in sorted(frontend_names - backend_names)
     )
     findings.extend(
-        f"{name}: main.py exposes public async def {name} on Plugin but no frontend "
+        f"{name}: main.py marks {name} on Plugin with @route but no frontend "
         f'callable("{name}") declares it — add the frontend declaration, fix a '
         f"rename, or add it to EXEMPT in this script if it is intentionally backend-only."
         for name in sorted(backend_names - frontend_names)
@@ -394,7 +428,7 @@ def find_discrepancies(
         if fe_arity != be_arity:
             findings.append(
                 f"{name}: arity mismatch — frontend declares {fe_arity} arg(s) "
-                f"(callable<[...]>) but main.py async def {name} takes {be_arity} "
+                f"(callable<[...]>) but main.py endpoint {name} takes {be_arity} "
                 f"(self dropped). Align the argument count on one side."
             )
 
@@ -407,16 +441,17 @@ def main(argv: list[str]) -> int:
         return 0
     frontend = parse_frontend_callables(SRC_DIR)
     backend = parse_backend_callables(MAIN_PY)
-    findings = find_discrepancies(frontend, backend, EXEMPT)
+    findings = find_misplaced_routes(MAIN_PY) + find_discrepancies(frontend, backend, EXEMPT)
     if findings:
         for line in findings:
             print(line)
         print()
         print(
-            "ERROR: the frontend (frontend/src/**/*.ts callable declarations) and backend "
-            "(Plugin async methods in main.py) callable surfaces have drifted. Every "
-            "callable must be declared on both sides with matching arity (or be "
-            "explicitly EXEMPT) so the frontend↔backend wire stays one source of truth."
+            "ERROR: an @route sits where this check cannot count it, or the frontend "
+            "(frontend/src/**/*.ts callable declarations) and backend (@route endpoints "
+            "on Plugin in main.py) surfaces have drifted. Every endpoint must be declared "
+            "on both sides with matching arity (or be explicitly EXEMPT) so the "
+            "frontend↔backend wire stays one source of truth."
         )
         return 1
     matched = len(set(frontend) & set(backend))

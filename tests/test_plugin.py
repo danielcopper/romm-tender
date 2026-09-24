@@ -956,14 +956,11 @@ class TestMigrationBlockedDecoratorCoverage:
     unguarded against pending migration corruption (#251)."""
 
     def test_all_callables_either_whitelisted_or_decorated(self):
-        import inspect
-
+        from host.dispatch import reachable_methods
         from main import Plugin
 
         unclassified: list[str] = []
-        for name, value in inspect.getmembers(Plugin, predicate=inspect.iscoroutinefunction):
-            if name.startswith("_"):
-                continue  # lifecycle hooks (_main, _unload) are not callables
+        for name, value in reachable_methods(Plugin()).items():
             if name in _MIGRATION_BLOCKED_WHITELIST:
                 continue
             if getattr(value, "_migration_blocked", False):
@@ -971,7 +968,7 @@ class TestMigrationBlockedDecoratorCoverage:
             unclassified.append(name)
 
         assert not unclassified, (
-            "Unclassified async callables on Plugin — every one must be in "
+            "Unclassified endpoints on Plugin — every one must be in "
             "_MIGRATION_BLOCKED_WHITELIST or carry @migration_blocked: "
             f"{sorted(unclassified)}"
         )
@@ -979,14 +976,11 @@ class TestMigrationBlockedDecoratorCoverage:
     def test_no_callable_is_both_decorated_and_whitelisted(self):
         """A callable that is both decorated AND whitelisted is silently
         passing the coverage check — likely a misclassification. Catch it."""
-        import inspect
-
+        from host.dispatch import reachable_methods
         from main import Plugin
 
         double_classified: list[str] = []
-        for name, value in inspect.getmembers(Plugin, predicate=inspect.iscoroutinefunction):
-            if name.startswith("_"):
-                continue
+        for name, value in reachable_methods(Plugin()).items():
             if name in _MIGRATION_BLOCKED_WHITELIST and getattr(value, "_migration_blocked", False):
                 double_classified.append(name)
 

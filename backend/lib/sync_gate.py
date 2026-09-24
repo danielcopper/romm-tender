@@ -1,10 +1,12 @@
 """Decorator that blocks destructive callables while a library sync is in flight.
 
-The decorated method must be ``async def`` (every callable is). The wrapped
-method's owner class **must** expose a ``_sync_service`` attribute with an
-``is_sync_in_flight() -> bool`` method — this gate is a data-safety guard and
-refuses to run without it. In flight means the live sync state is RUNNING or
-CANCELLING; IDLE (which paused and completed runs reset to) passes through.
+The decorated method must be ``async def``, because the wrapper awaits it;
+decorating a ``def`` raises ``TypeError`` when the class is defined, not when the
+method is first called. The wrapped method's owner class **must** expose a
+``_sync_service`` attribute with an ``is_sync_in_flight() -> bool`` method — this
+gate is a data-safety guard and refuses to run without it. In flight means the
+live sync state is RUNNING or CANCELLING; IDLE (which paused and completed runs
+reset to) passes through.
 
 A missing ``_sync_service`` is a wiring regression, not a tolerable state: the
 wrapper raises ``RuntimeError`` rather than silently skipping the gate. In
@@ -24,6 +26,7 @@ graph (per import-linter contracts).
 from __future__ import annotations
 
 import functools
+import inspect
 from typing import Any
 
 _BLOCKED_MESSAGE = (
@@ -41,6 +44,10 @@ def sync_active_blocked(method):
     regression) so the safety gate fails loud rather than silently disabling
     itself for the gated callable.
     """
+    if not inspect.iscoroutinefunction(method):
+        raise TypeError(
+            f"@sync_active_blocked on {method.__name__!r}: the gate awaits what it wraps, so it must be async def."
+        )
 
     @functools.wraps(method)
     async def wrapper(self, *args: Any, **kwargs: Any):

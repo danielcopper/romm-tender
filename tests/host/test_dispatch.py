@@ -25,6 +25,7 @@ from host.protocol import (
     TYPE_ERROR,
     TYPE_REPLY,
 )
+from host.route import route
 from tests.host.conftest import FakePlugin
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -59,27 +60,36 @@ class TestTheReachableSurface:
 
         assert set(reachable_methods(Plugin())) == set(gate.parse_backend_callables(_MAIN_PY))
 
-    def test_a_public_coroutine_method_is_reachable(self, dispatcher):
+    def test_a_marked_coroutine_method_is_reachable(self, dispatcher):
         assert "echo" in dispatcher.method_names
 
-    def test_an_underscored_method_is_not(self, dispatcher):
+    def test_a_marked_synchronous_method_is_reachable(self, dispatcher):
+        assert "answers_synchronously" in dispatcher.method_names
+
+    def test_a_marked_underscored_method_is_not(self, dispatcher):
         assert "_private" not in dispatcher.method_names
 
-    def test_a_synchronous_method_is_not(self, dispatcher):
+    def test_an_unmarked_synchronous_method_is_not(self, dispatcher):
         assert "synchronous" not in dispatcher.method_names
 
-    def test_an_instance_attribute_holding_a_coroutine_function_is_not(self):
+    def test_an_unmarked_coroutine_method_is_not(self, dispatcher):
+        """Being ``async`` is no longer what publishes a method."""
+        assert "unmarked_coroutine" not in dispatcher.method_names
+
+    def test_an_instance_attribute_holding_a_marked_function_is_not(self):
         """Reachability is a property of the class, never of what a test poked in."""
         plugin = FakePlugin()
 
+        @route
         async def smuggled() -> None: ...
 
         plugin.smuggled = smuggled  # type: ignore[attr-defined]
 
         assert "smuggled" not in CallDispatcher(plugin, LOGGER).method_names
 
-    def test_inherited_public_coroutines_are_reachable(self):
+    def test_inherited_endpoints_are_reachable(self):
         class Extended(FakePlugin):
+            @route
             async def extra(self) -> str:
                 return "extra"
 
@@ -95,6 +105,24 @@ class TestDispatch:
         answer = json.loads(await dispatcher.dispatch(42, "echo", ["hi"]))
 
         assert answer == {"type": TYPE_REPLY, "id": 42, "result": {"echo": "hi"}}
+
+    async def test_a_synchronous_endpoint_answers_with_its_return_value(self, dispatcher):
+        answer = json.loads(await dispatcher.dispatch(7, "answers_synchronously", ["hi"]))
+
+        assert answer == {"type": TYPE_REPLY, "id": 7, "result": {"synchronously": "hi"}}
+
+    async def test_a_raising_synchronous_endpoint_answers_with_a_traceback(self):
+        """The call itself sits inside the exception boundary, not only the await."""
+
+        class Raising(FakePlugin):
+            @route
+            def breaks(self) -> None:
+                raise ValueError("the synchronous backend broke")
+
+        answer = json.loads(await CallDispatcher(Raising(), LOGGER).dispatch(1, "breaks", []))
+
+        assert answer["reason"] == REASON_BACKEND_EXCEPTION
+        assert "the synchronous backend broke" in answer["traceback"]
 
     async def test_a_string_call_id_comes_back_unchanged(self, dispatcher):
         """The id is the caller's; nothing here interprets it."""

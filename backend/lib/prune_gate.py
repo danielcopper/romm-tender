@@ -1,9 +1,15 @@
-"""Decorator that blocks conflicting callables during explicit prune."""
+"""Decorator that blocks conflicting callables during explicit prune.
+
+Both gates must wrap an ``async def``, because each wrapper awaits it; decorating
+a ``def`` raises ``TypeError`` when the class is defined, not when the method is
+first called.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import functools
+import inspect
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -139,6 +145,10 @@ def _blocked_message(gate: _PruneAdmissionGate) -> str:
 
 def prune_active_blocked(method):
     """Return a canonical failure while the wired prune service owns its run claim."""
+    if not inspect.iscoroutinefunction(method):
+        raise TypeError(
+            f"@prune_active_blocked on {method.__name__!r}: the gate awaits what it wraps, so it must be async def."
+        )
 
     @functools.wraps(method)
     async def wrapper(self, *args: Any, **kwargs: Any):
@@ -179,6 +189,10 @@ def prune_exclusive_start(method):
     cleanup is indistinguishable from a plugin that has stopped responding, and
     the holder cannot be identified after the fact (#1570 F13).
     """
+    if not inspect.iscoroutinefunction(method):
+        raise TypeError(
+            f"@prune_exclusive_start on {method.__name__!r}: the gate awaits what it wraps, so it must be async def."
+        )
 
     @functools.wraps(method)
     async def wrapper(self, *args: Any, **kwargs: Any):

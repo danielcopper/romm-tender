@@ -243,10 +243,13 @@ class TestParseBackendCallables:
         body = textwrap.dedent(
             """\
             class Plugin:
+                @route
                 async def get_settings(self):
                     ...
+                @route
                 async def start_download(self, rom_id):
                     ...
+                @route
                 async def switch_slot(self, rom_id, new_slot):
                     ...
             """
@@ -266,6 +269,7 @@ class TestParseBackendCallables:
                     ...
                 async def _unload(self):
                     ...
+                @route
                 async def test_connection(self):
                     ...
             """
@@ -277,6 +281,7 @@ class TestParseBackendCallables:
         body = textwrap.dedent(
             """\
             class Plugin:
+                @route
                 async def connect_with_credentials(self, url, user, pw, allow_insecure_ssl=None):
                     ...
             """
@@ -288,6 +293,7 @@ class TestParseBackendCallables:
         body = textwrap.dedent(
             """\
             class Plugin:
+                @route
                 async def flexible(self, *args):
                     ...
             """
@@ -295,18 +301,46 @@ class TestParseBackendCallables:
         main_py = _write_main(tmp_path, body)
         assert check.parse_backend_callables(main_py) == {"flexible": None}
 
-    def test_sync_methods_ignored(self, tmp_path: Path):
+    def test_unmarked_methods_ignored(self, tmp_path: Path):
         body = textwrap.dedent(
             """\
             class Plugin:
                 def helper(self):
                     ...
+                async def unmarked_coroutine(self):
+                    ...
+                @route
                 async def real_callable(self):
                     ...
             """
         )
         main_py = _write_main(tmp_path, body)
         assert check.parse_backend_callables(main_py) == {"real_callable": 0}
+
+    def test_a_marked_synchronous_method_counts_with_its_arity(self, tmp_path: Path):
+        body = textwrap.dedent(
+            """\
+            class Plugin:
+                @route
+                def get_settings(self, section, key=None):
+                    ...
+            """
+        )
+        main_py = _write_main(tmp_path, body)
+        assert check.parse_backend_callables(main_py) == {"get_settings": 2}
+
+    def test_route_below_another_decorator_is_not_counted(self, tmp_path: Path):
+        body = textwrap.dedent(
+            """\
+            class Plugin:
+                @migration_blocked
+                @route
+                async def start_sync(self):
+                    ...
+            """
+        )
+        main_py = _write_main(tmp_path, body)
+        assert check.parse_backend_callables(main_py) == {}
 
     def test_no_plugin_class_returns_empty(self, tmp_path: Path):
         main_py = _write_main(tmp_path, "class Other:\n    async def foo(self):\n        ...\n")
@@ -318,6 +352,7 @@ class TestParseBackendCallables:
         body = textwrap.dedent(
             """\
             class Plugin:
+                @route
                 async def m(self, a, b, *, c):
                     ...
             """
@@ -330,12 +365,72 @@ class TestParseBackendCallables:
         body = textwrap.dedent(
             """\
             class Plugin:
+                @route
                 async def m(self, a, b, **kwargs):
                     ...
             """
         )
         main_py = _write_main(tmp_path, body)
         assert check.parse_backend_callables(main_py) == {"m": 2}
+
+
+class TestFindMisplacedRoutes:
+    def test_route_first_on_a_public_name_is_no_finding(self, tmp_path: Path):
+        body = textwrap.dedent(
+            """\
+            class Plugin:
+                @route
+                @migration_blocked
+                async def start_sync(self):
+                    ...
+                @route
+                def get_settings(self):
+                    ...
+            """
+        )
+        assert check.find_misplaced_routes(_write_main(tmp_path, body)) == []
+
+    def test_route_below_a_gate_is_a_finding(self, tmp_path: Path):
+        body = textwrap.dedent(
+            """\
+            class Plugin:
+                @migration_blocked
+                @route
+                async def start_sync(self):
+                    ...
+            """
+        )
+        findings = check.find_misplaced_routes(_write_main(tmp_path, body))
+        assert len(findings) == 1
+        assert findings[0].startswith("start_sync:")
+        assert "not its first decorator" in findings[0]
+
+    def test_route_on_an_underscored_name_is_a_finding(self, tmp_path: Path):
+        body = textwrap.dedent(
+            """\
+            class Plugin:
+                @route
+                async def _main(self):
+                    ...
+            """
+        )
+        findings = check.find_misplaced_routes(_write_main(tmp_path, body))
+        assert len(findings) == 1
+        assert findings[0].startswith("_main:")
+        assert "underscored name" in findings[0]
+
+    def test_unmarked_methods_are_no_finding(self, tmp_path: Path):
+        body = textwrap.dedent(
+            """\
+            class Plugin:
+                async def _main(self):
+                    ...
+                @classmethod
+                def run(cls):
+                    ...
+            """
+        )
+        assert check.find_misplaced_routes(_write_main(tmp_path, body)) == []
 
 
 class TestFindDiscrepancies:
@@ -399,7 +494,7 @@ class TestMainEntryPoint:
         src = _write_ts(tmp_path, "a.ts", 'callable<[], A>("present");\ncallable<[number], B>("frontend_only");')
         main_py = _write_main(
             tmp_path,
-            "class Plugin:\n    async def present(self):\n        ...\n",
+            "class Plugin:\n    @route\n    async def present(self):\n        ...\n",
         )
         monkeypatch.setattr(check, "SRC_DIR", src)
         monkeypatch.setattr(check, "MAIN_PY", main_py)
@@ -410,9 +505,24 @@ class TestMainEntryPoint:
         assert "frontend_only" in out
         assert "ERROR:" in out
 
+    def test_a_misplaced_route_fails_even_when_the_surfaces_match(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ):
+        src = _write_ts(tmp_path, "a.ts", 'callable<[], A>("present");')
+        main_py = _write_main(
+            tmp_path,
+            "class Plugin:\n    @route\n    async def present(self):\n        ...\n"
+            "    @route\n    async def _hidden(self):\n        ...\n",
+        )
+        monkeypatch.setattr(check, "SRC_DIR", src)
+        monkeypatch.setattr(check, "MAIN_PY", main_py)
+        monkeypatch.setattr(check, "EXEMPT", frozenset())
+        assert check.main([]) == 1
+        assert "_hidden: @route on an underscored name" in capsys.readouterr().out
+
     def test_in_sync_fake_repo_returns_zero(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         src = _write_ts(tmp_path, "a.ts", 'callable<[number], A>("match");')
-        main_py = _write_main(tmp_path, "class Plugin:\n    async def match(self, rom_id):\n        ...\n")
+        main_py = _write_main(tmp_path, "class Plugin:\n    @route\n    async def match(self, rom_id):\n        ...\n")
         monkeypatch.setattr(check, "SRC_DIR", src)
         monkeypatch.setattr(check, "MAIN_PY", main_py)
         monkeypatch.setattr(check, "EXEMPT", frozenset())
