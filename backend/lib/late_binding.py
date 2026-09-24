@@ -16,15 +16,13 @@ underlying object).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-T = TypeVar("T")
 
-
-class LateBinding(Generic[T]):
+class LateBinding[T]:
     """Typed forward-reference for service wiring."""
 
     __slots__ = ("_name", "_reader")

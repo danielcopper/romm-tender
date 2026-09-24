@@ -76,9 +76,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Generic, TypeAlias, TypeVar
-
-T = TypeVar("T")
 
 
 class ErrorCode(StrEnum):
@@ -118,7 +115,7 @@ class ErrorCode(StrEnum):
 
 
 @dataclass(frozen=True)
-class OkListResult(Generic[T]):
+class OkListResult[T]:
     """Success branch of :data:`ListResult` — wraps the fetched list.
 
     ``items`` may be empty (the server answered, nothing matched) — that is
@@ -140,4 +137,4 @@ class FailedListResult:
     error_message: str | None = None
 
 
-ListResult: TypeAlias = "OkListResult[T] | FailedListResult"
+type ListResult[T] = OkListResult[T] | FailedListResult

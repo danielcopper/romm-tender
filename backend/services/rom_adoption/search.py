@@ -24,7 +24,6 @@ from domain.rom_adoption import is_archive_name, server_manifest
 from domain.rom_candidates import (
     DIR,
     FILE,
-    EntryT,
     LocalEntry,
     LocalName,
     candidates_refusal,
@@ -272,7 +271,7 @@ class CandidateSearch:
         """
         return self._system_known(system) is not False
 
-    def _named(
+    def _named[EntryT: LocalName](
         self,
         entries: tuple[EntryT, ...],
         *,

@@ -7,13 +7,11 @@ codebase. Value Objects (immutable members of an aggregate) use plain
 from __future__ import annotations
 
 from dataclasses import Field, dataclass, field
-from typing import TypeVar, dataclass_transform
-
-T = TypeVar("T", bound=type)
+from typing import dataclass_transform
 
 
 @dataclass_transform(field_specifiers=(Field, field))
-def cosmic_aggregate(cls: T) -> T:
+def cosmic_aggregate[T: type](cls: T) -> T:
     """Declare ``cls`` as a Cosmic Python aggregate root.
 
     Applies ``@dataclass(slots=True)`` so the class gets ``__init__``,

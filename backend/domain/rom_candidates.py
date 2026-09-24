@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Literal, TypeVar
+from typing import Literal
 
 # Ranked strongest first: what a row rests on decides where it sits in the list.
 # ``crc32`` is a checksum the ZIP's own central directory hands over for free and
@@ -102,9 +102,6 @@ class LocalEntry(LocalName):
     modified_at: float
 
 
-EntryT = TypeVar("EntryT", bound=LocalName)
-
-
 @dataclass(frozen=True)
 class AdoptionCandidate:
     """One entry the search is willing to offer, and what its offer rests on.
@@ -169,7 +166,7 @@ def _strip_bracketed(name: str) -> str:
     return "".join(kept)
 
 
-def matching_entries(
+def matching_entries[EntryT: LocalName](
     entries: tuple[EntryT, ...],
     *,
     wanted_names: frozenset[str],
