@@ -465,11 +465,12 @@ follow, because Steam draws them only while gamepad focus is within the tabbed p
 **Entry focus belongs to the frame, on every wide page.** `WidePage` marks its root as placing its own, so the panel's
 router leaves the page alone rather than placing focus of its own, which would land on the Back chip above the body.
 Where Steam's tabbed page renders, its `autoFocusContents` does the placing; everywhere else — an untabbed page, and a
-tabbed one whose `Tabs` probe missed — the frame places focus inside the body itself, by the router's own rule and on
-the same 50 ms delay: the area the body declared, or its first stop where it declared none. The delay is there because
-Steam's navigation resolves a focus pointer it retained across the page swap after the mount. Opening a page is the
-frame's moment and its only one: a page whose body changes while it stays open answers for that swap itself, by the same
-rule and under a condition of its own — the Sync page's left column is the one that does.
+tabbed one whose `Tabs` probe missed, which the start-up check does not let a mounted panel reach (`Tabs` costs the
+panel, `frontend/src/boot/steamModules.ts`) — the frame places focus inside the body itself, by the router's own rule
+and on the same 50 ms delay: the area the body declared, or its first stop where it declared none. The delay is there
+because Steam's navigation resolves a focus pointer it retained across the page swap after the mount. Opening a page is
+the frame's moment and its only one: a page whose body changes while it stays open answers for that swap itself, by the
+same rule and under a condition of its own — the Sync page's left column is the one that does.
 
 **The stop it picks is the first enabled focus stop in document order that contains no focus stop at all** — one rule,
 both widths. Document order rather than "the first button", because a page's first button is not its first row, and it
@@ -507,10 +508,9 @@ row was declared each of those jumps mounted the right section and then had it o
 Controller landed on Connections. A list opened with no section named loses nothing: it either selects its own first
 row, which is what the fallback would have picked, or selects nothing and so declares nothing (the Library page's
 platforms, which additionally are tabbed, so Steam places that focus and the frame places none). Library › Collections
-is the third case: it opens on a default row of its own, Collections, below the Favorites row, and declares it. The
-declaration is read only in the frame's fallback, where the probe for Steam's tabbed page missed and the frame places
-focus itself; wherever Steam's tabbed page renders, Steam places the focus and the declaration decides nothing (§
-Library).
+is the third case: it opens on a default row of its own, Collections, below the Favorites row, and declares it — but it
+is tabbed: wherever the panel mounts, Steam's tabbed page places the focus and the mark goes unread. The frame reads it
+only on its missed-`Tabs` branch, which the start-up check does not let a panel reach (`Tabs` costs the panel).
 
 **Downloads is unmoved** and declares nothing: it leads with its Back button, which is both the first stop and the first
 button, so the router's default already opens it there. **Data Management needs no declaration of its own** — it is a
@@ -1480,11 +1480,12 @@ neither listed nor counted. Every one of those counts comes from the one `get_co
 read, and focus selecting holds nothing back behind a press here. While the answer is out a row states nothing, and
 where the read failed it states a dash.
 
-The page opens with **Collections** selected, and its row carries the entry-stop mark (§ List and detail). The mark is
-read only in the frame's fallback, where the probe for Steam's tabbed page missed; wherever Steam's tabbed page renders,
-Steam places focus itself (§ Tabs) and the mark decides nothing. The first stop of the list column is the owner toggle,
-which reports no selection — so where Steam takes the first stop, the page stays on Collections. Only the device shows
-which stop Steam takes; no test here can. The selection is kept across a switch to Platforms and back.
+The page opens with **Collections** selected, and its row carries the entry-stop mark (§ List and detail) — but it is
+tabbed: wherever the panel mounts, Steam's tabbed page places the focus (§ Tabs) and the mark goes unread. The frame
+reads it only on its missed-`Tabs` branch, which the start-up check does not let a panel reach (`Tabs` costs the panel).
+The first stop of the list column is the owner toggle, which reports no selection — so where Steam takes the first stop,
+the page stays on Collections. Only the device shows which stop Steam takes; no test here can. The selection is kept
+across a switch to Platforms and back.
 
 A kind's pane holds, in order:
 
@@ -1565,12 +1566,13 @@ as the page is open, and a read still out is not asked twice. While the collecti
 toggle are already standing, and each pane shows a spinner where its table goes.
 
 **The four writes are optimistic** — a table row's switch, the Favorites switch, Enable all / Disable all, and the owner
-toggle. A refusal or a rejection is one outcome: the control goes back to the value last stored for it, and a line says
-why **where the write was made** — both only while the write is still the latest there (below) — the line taking no
-space otherwise. A refused owner toggle or Favorites switch is reported in the list column, under the owner toggle; a
-refused table switch or Enable all / Disable all in the pane, under the search line. Each line is taken back by the next
-write in the same place that succeeds. The pane's line also goes when another kind is selected, and both go when the tab
-is entered again. Selecting another kind also clears the search, since a search is about the kind it was typed on.
+toggle. A refusal or a rejection is one outcome: the control goes back to the value last stored for it while the write
+is still the latest for that control, and a line says why **where the write was made** while it is still the latest
+write there (both below), the line taking no space otherwise. A refused owner toggle or Favorites switch is reported in
+the list column, under the owner toggle; a refused table switch or Enable all / Disable all in the pane, under the
+search line. Each line is taken back by the next write in the same place that succeeds. The pane's line also goes when
+another kind is selected, and both go when the tab is entered again. Selecting another kind also clears the search,
+since a search is about the kind it was typed on.
 
 **Only the latest write speaks** — on a control's value, and on a line. **A control** — each collection, and the owner
 toggle — keeps the value last stored for it, taken from the read and moved on by every write that succeeds, and numbers

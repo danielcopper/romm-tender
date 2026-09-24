@@ -404,12 +404,21 @@ setting:
   `RomM: [<name> (Franchise)]` and `RomM: [<name> (IGDB Collection)]` — separate Steam collections. Two collections that
   share **both** name and label still union.
 
-The Collections page does not quote the label strings. They are spelled in three other places, and a label change is a
-change in each: the user guide's "Collections that share a name"; the description of the Steam Library setting that
-turns the mode on (`frontend/src/bigpicture/settings/LibrarySection.tsx`), which gives two as examples; and the
-`CollectionNamingMode` doc comment in `frontend/src/types/sync.ts`, which quotes one. The reporter needs the
-kind/virtual_type at its union key, so `WorkUnit.virtual_type` and `CollectionMembership.kind` +
-`CollectionMembership.virtual_type` thread that identity through the fetcher → orchestrator → reporter.
+The Collections page does not quote the label strings. Besides the kernel and its test they are spelled in these places,
+and a label change is a change in each:
+
+- the user guide's "Collections that share a name" (`docs/user-guide/syncing-your-library.md`);
+- the description of the Steam Library setting that turns the mode on
+  (`frontend/src/bigpicture/settings/LibrarySection.tsx`), which gives two as examples;
+- the `CollectionNamingMode` doc comment in `frontend/src/types/sync.ts`;
+- [qam-panel.md](qam-panel.md) § Library, which quotes all four;
+- format examples in comments and docstrings: `backend/services/library/reporter.py`, `backend/services/settings.py`,
+  `backend/adapters/persistence.py`, and the `virtual_type` comment in `backend/domain/work_unit.py`.
+
+`tests/services/library/test_reporter.py` asserts the union keys the reporter builds, so a label change fails there on
+its own. The reporter needs the kind/virtual_type at its union key, so `WorkUnit.virtual_type` and
+`CollectionMembership.kind` + `CollectionMembership.virtual_type` thread that identity through the fetcher →
+orchestrator → reporter.
 
 **Label-format constraint:** the reconcile parses the collection name with `/^RomM: \[([^\]]+)\]/`
 (`frontend/src/index.tsx`), so a label must contain **no** `]` character — it sits inside the single existing bracket
