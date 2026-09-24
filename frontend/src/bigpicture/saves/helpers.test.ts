@@ -8,6 +8,7 @@ import {
   formatAttributionSegment,
   slotDeleteFailureToast,
   statusLabel,
+  unsupportedRestoreMessage,
 } from "./helpers";
 import type { DeviceSyncInfo, SaveStatus, SyncConflict, SlotDeleteInfo } from "../../types";
 
@@ -483,5 +484,32 @@ describe("computeSyncSummary", () => {
     const result = computeSyncSummary(true, status, []);
     expect(result.syncSummaryColor).toBe("#5ba32b");
     expect(result.syncSummaryText).toMatch(/^Synced \d+m ago$/);
+  });
+});
+
+describe("unsupportedRestoreMessage", () => {
+  it("says the saves are written beside the game file for savefiles_in_content_dir", () => {
+    expect(unsupportedRestoreMessage({ status: "unsupported", reason: "savefiles_in_content_dir" })).toBe(
+      "Save sync is off for this game: its saves are written beside the game file.",
+    );
+  });
+
+  it("shows the backend's own explanation for save_shape_unsupported", () => {
+    const message = "Save sync is unavailable: this emulator writes saves inside the game file itself.";
+    expect(unsupportedRestoreMessage({ status: "unsupported", reason: "save_shape_unsupported", message })).toBe(
+      message,
+    );
+  });
+
+  it("falls back to the multi-file sentence for save_shape_unsupported without a message", () => {
+    expect(unsupportedRestoreMessage({ status: "unsupported", reason: "save_shape_unsupported" })).toBe(
+      "Restoring isn't available for multi-file saves yet.",
+    );
+  });
+
+  it("names the multi-file refusal when the backend gives no reason", () => {
+    expect(unsupportedRestoreMessage({ status: "unsupported" })).toBe(
+      "Restoring isn't available for multi-file saves yet.",
+    );
   });
 });

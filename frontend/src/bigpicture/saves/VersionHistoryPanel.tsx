@@ -12,7 +12,7 @@ import type { SaveVersionEntry, RollbackStatus, ListFileVersionsResult } from ".
 import { showSyncConflictModal } from "../SyncConflictModal";
 import { scrollFocusedToCenter } from "../../utils/scrollHelpers";
 import { formatBytes, formatTimestamp } from "../../utils/formatters";
-import { formatAttributionSegment, formatRelativeTime, pickLastSyncer } from "./helpers";
+import { formatAttributionSegment, formatRelativeTime, pickLastSyncer, unsupportedRestoreMessage } from "./helpers";
 import { renderCopyToSlotButton, type CopyToSlotHandler } from "./CopyToSlotButton";
 import { detach } from "../../utils/detach";
 
@@ -154,13 +154,7 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
         showToast("RomM couldn't find this game's save data — nothing was restored.");
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- exhaustive final branch of the 9-member RollbackStatus union; an explicit check (vs. plain `else`) keeps the per-status symmetry and leaves any future-added status unhandled instead of silently routing it to the "unsupported" toast
       } else if (result.status === "unsupported") {
-        if (result.reason === "savefiles_in_content_dir") {
-          showToast("Save sync is off for this game: its saves are written beside the game file.");
-        } else if (result.reason === "save_shape_unsupported" && result.message) {
-          showToast(result.message);
-        } else {
-          showToast("Restoring isn't available for multi-file saves yet.");
-        }
+        showToast(unsupportedRestoreMessage(result));
       }
     } catch (e) {
       detach(debugLog(`VersionHistoryPanel: restore error for save ${version.id}: ${e}`));
