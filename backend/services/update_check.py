@@ -97,9 +97,9 @@ class UpdateCheckService:
         Returns ``{"available", "newer", "latest_version", "current_version",
         "enabled", "installed_program"}``. ``latest_version`` is the last
         available release a check saw — the release GitHub called latest, with
-        its tarball attached — ``None`` where none was established. ``newer`` says it is strictly newer than the running
-        version. ``available`` is the card: newer, not the dismissed version,
-        and the check switched on.
+        its tarball attached — ``None`` where none was established. ``newer``
+        says it is strictly newer than the running version. ``available`` is
+        the card: newer, not the dismissed version, and the check switched on.
 
         Reads GitHub at most once a day: inside that window the answer comes
         from the stored marker, so a reload shows the card again without a
@@ -113,6 +113,9 @@ class UpdateCheckService:
         if not self._enabled():
             return self._notice(None, enabled=False)
         async with self._check_lock:
+            # Asked again: the switch may have gone off while this waited.
+            if not self._enabled():
+                return self._notice(None, enabled=False)
             check = await self._loop.run_in_executor(None, self._read_last_check_io)
             if self._is_due(check):
                 check, _ = await self._check_now(check)
@@ -134,8 +137,12 @@ class UpdateCheckService:
         """
         if not self._enabled():
             return {**self._notice(None, enabled=False), "reached": False}
-        self._forget_dismissal()
         async with self._check_lock:
+            # Asked again: the switch may have gone off while this waited, and
+            # then nothing is read and nothing is forgotten.
+            if not self._enabled():
+                return {**self._notice(None, enabled=False), "reached": False}
+            self._forget_dismissal()
             previous = await self._loop.run_in_executor(None, self._read_last_check_io)
             check, reached = await self._check_now(previous)
         return {**self._notice(check, enabled=True), "reached": reached}

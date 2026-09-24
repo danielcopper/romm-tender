@@ -171,6 +171,18 @@ describe("updateNoticeStore", () => {
       expect(getUpdateNotice).toHaveBeenCalledTimes(1);
     });
 
+    it("a refused switch still rejects when a later press overtook it, and the later press stands", async () => {
+      const refused = deferred<UpdateSettingWrite>();
+      vi.mocked(setUpdateCheckEnabled).mockReturnValueOnce(refused.promise).mockResolvedValueOnce({ success: true });
+
+      const first = setUpdateCheckSwitch(true);
+      await setUpdateCheckSwitch(false);
+      refused.resolve({ success: false, reason: "invalid_value", message: "Invalid value" });
+
+      await expect(first).rejects.toThrow("invalid_value: Invalid value");
+      expect(getUpdateNoticeState().enabled).toBe(false);
+    });
+
     it("a read issued before the switch went off does not put the card back", async () => {
       const read = deferred<UpdateNotice>();
       vi.mocked(getUpdateNotice).mockReturnValue(read.promise);

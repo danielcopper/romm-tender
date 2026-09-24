@@ -362,8 +362,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `AppDirectories`** — prompt-only — `domain/app_directories.py` is the pure ladder (`TENDER_*`, then XDG, then the
   built-in defaults); `Plugin.run` resolves it once and hands it to `bootstrap()`, which derives nothing, and
   `RuntimeBundle` carries no directory. Re-derivable data goes under `cache_dir`, data that is not re-derivable under
-  `data_dir`, and nothing under `bin_dir` is ours to remove. Nothing mechanical tells its seven `str` fields apart. One
-  second read of `TENDER_CODE_DIR` is deliberate: `domain/update_release.resolve_update_source` asks whether the
+  `data_dir`, and nothing under `bin_dir` is ours to remove. Nothing mechanical tells its seven `str` fields apart. A
+  second read of `TENDER_CODE_DIR` is deliberate: `domain/update_release.py::resolve_update_source` asks whether the
   variable was SET, which `AppDirectories.code_dir` has already erased
 - **The identifier's three homes are never derived from one another — in particular `APP_DIR_NAME`
   (`domain/user_data_location.py`) is never read from `PACKAGE_NAME` (`domain/identity.py`)** — test + prompt-only —

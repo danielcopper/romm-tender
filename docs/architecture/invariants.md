@@ -53,10 +53,11 @@ Format: **invariant** — tier — enforced by.
   binary in, which is why nothing under it may be treated as ours to remove. Nothing mechanical tells the seven apart:
   they are seven `str` fields on one frozen struct, so a read of the wrong one is a rename away and fails silently in
   whichever direction it happened to point. **One raw read of `TENDER_CODE_DIR` is deliberate and is not a directory
-  read**: `domain/update_release.resolve_update_source`, called once by `Plugin.run` beside `resolve_directories`, asks
-  whether the variable was SET and whether it names the directory this process's code sits in — which decides whether
-  this is the installed program an update may replace. `AppDirectories.code_dir` cannot answer that, because the ladder
-  has already folded "set" and "fell back to where the code sits" into one value; the function derives no directory
+  read**: `domain/update_release.py::resolve_update_source`, called once by `Plugin.run` beside `resolve_directories`,
+  asks whether the variable was SET and whether it names the directory this process's code sits in — which decides
+  whether this is the installed program an update may replace. `AppDirectories.code_dir` cannot answer that, because the
+  ladder has already folded "set" and "fell back to where the code sits" into one value; the function derives no
+  directory
 - **The identifier's three homes are never derived from one another — in particular `APP_DIR_NAME`
   (`domain/user_data_location.py`) is never read from `PACKAGE_NAME` (`domain/identity.py`)** — test + prompt-only — the
   three homes and the question each answers are enumerated in `backend/domain/identity.py`'s module docstring.

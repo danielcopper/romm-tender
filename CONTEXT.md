@@ -1003,7 +1003,7 @@ A **notice** is Main's standing statement of a condition that needs the user (se
 driver is wrong, a sync paused on the session budget). Most are cards and the input-driver one is a row; the shape is
 not what makes it a notice. They do not all sit at the top: four lead the panel above the status rows — two sections of
 their own, then two warnings at the head of the status block — and four more sit inside the status block, below the
-conditional slot — `docs/architecture/qam-panel.md`'s Main section has the order. The **home** of a condition is the one
+conditional slot. `docs/architecture/qam-panel.md`'s Main section has the order. The **home** of a condition is the one
 page where it is acted on. A notice names the condition and jumps to its home; the action exists only there, never on
 the notice — with one exception today, the RetroArch input driver, whose **Fix** still applies in place behind a
 confirmation until Settings (#1816) gives it a home. A condition answered **once and for all** — the user picks between

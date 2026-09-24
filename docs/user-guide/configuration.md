@@ -284,8 +284,8 @@ notice on the main panel says **Tender X is available** and names the version yo
 **Settings › Updates** shows:
 
 - **Installed** — the version you are running.
-- **Available** — the newest release a check has found, **None newer** when you already have it, **Not known yet**
-  before a check has found anything, or **Not checked — the daily check is off** while the check is switched off.
+- **Available** — the release the last successful check found, **None newer** when you already have it, **Not known
+  yet** before a check has found anything, or **Not checked — the daily check is off** while the check is switched off.
 - **Check for updates daily** — on by default. Switch it off and Tender asks GitHub nothing at all, not even when you
   press **Check now**.
 - **Check now** — asks straight away rather than waiting for the day to pass, and brings back a notice you dismissed.

@@ -34,7 +34,7 @@ export interface UpdateNoticeState {
   available: boolean;
   /** A newer release exists, dismissed or not. */
   newer: boolean;
-  /** The newest available release. `null` until a check established one. */
+  /** The last available release a check saw. `null` until a check established one. */
   latestVersion: string | null;
   /** `""` until the backend has answered once. */
   currentVersion: string;
@@ -162,19 +162,20 @@ function requireAccepted(write: UpdateSettingWrite): void {
  * Wave the card away for one release, then take it down here — only once the
  * backend answered that it persisted the dismissal. A refused or failed write
  * rejects and leaves the card up, rather than hiding it until the next start
- * brings it back.
+ * brings it back — whether or not a later write overtook it.
  */
 export async function dismissUpdateForVersion(version: string): Promise<void> {
   const seq = ++_seq;
   const write = await dismissUpdateNotice(version);
-  if (seq !== _seq) return;
   requireAccepted(write);
+  if (seq !== _seq) return;
   setUpdateNoticeState({ ..._state, available: false });
 }
 
 /**
  * Persist the switch, then reflect it here — only once the backend answered
- * that it persisted it. A refused or failed write rejects and changes nothing.
+ * that it persisted it. A refused or failed write rejects and changes nothing,
+ * whether or not a later write overtook it.
  *
  * Off drops what the backend drops for a switched-off check — the card and the
  * version. On cannot restore them from anything held here, so a fresh read is
@@ -184,8 +185,8 @@ export async function dismissUpdateForVersion(version: string): Promise<void> {
 export async function setUpdateCheckSwitch(enabled: boolean): Promise<void> {
   const seq = ++_seq;
   const write = await setUpdateCheckEnabled(enabled);
-  if (seq !== _seq) return;
   requireAccepted(write);
+  if (seq !== _seq) return;
   if (enabled) {
     setUpdateNoticeState({ ..._state, enabled });
     detach(fetchUpdateNotice());

@@ -1184,7 +1184,7 @@ export const getPlaytimeScopeNotice = callable<[], { pending: boolean }>("get_pl
 export interface UpdateNotice {
   available: boolean;
   newer: boolean;
-  /** The newest available release, `null` until a check established one or while the check is off. */
+  /** The last available release a check saw, `null` until a check established one or while the check is off. */
   latest_version: string | null;
   current_version: string;
   enabled: boolean;
@@ -1196,7 +1196,7 @@ export const getUpdateNotice = callable<[], UpdateNotice>("get_update_notice");
 
 /** The same notice, plus whether the read behind it answered at all. */
 export interface UpdateCheckNow extends UpdateNotice {
-  /** False for an unreachable GitHub — and for a switched-off check, which asks nothing. */
+  /** False when GitHub gave no usable answer — and for a switched-off check, which asks nothing. */
   reached: boolean;
 }
 
@@ -1204,7 +1204,7 @@ export interface UpdateCheckNow extends UpdateNotice {
 export const checkForUpdateNow = callable<[], UpdateCheckNow>("check_for_update_now");
 
 /** A settings write the backend accepted, or the reason it refused one. */
-export type UpdateSettingWrite = { success: true } | { success: false; reason: string; message: string };
+export type UpdateSettingWrite = { success: true } | CallableFailure;
 
 /** Wave the card away for one release version; the next release raises it again. */
 export const dismissUpdateNotice = callable<[string], UpdateSettingWrite>("dismiss_update_notice");

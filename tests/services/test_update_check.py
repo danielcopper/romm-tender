@@ -498,19 +498,25 @@ class TestOverlappingChecks:
     """The panel-load read and a Check now can overlap; one runs at a time."""
 
     def _make_gated(self, seam: _GatedRelease, uow_factory: FakeUnitOfWorkFactory) -> UpdateCheckService:
-        return UpdateCheckService(
+        return self._make_gated_with_settings(seam, uow_factory, {})[0]
+
+    def _make_gated_with_settings(
+        self, seam: _GatedRelease, uow_factory: FakeUnitOfWorkFactory, settings: dict[str, Any]
+    ) -> tuple[UpdateCheckService, dict[str, Any]]:
+        service = UpdateCheckService(
             config=UpdateCheckServiceConfig(
                 latest_release=seam,
                 current_version="0.33.0",
                 installed_program=True,
                 clock=FakeClock(),
                 uow_factory=uow_factory,
-                settings={},
+                settings=settings,
                 settings_persister=FakeSettingsPersister(),
                 loop=running_loop(),
                 log_debug=lambda msg: None,
             ),
         )
+        return service, settings
 
     async def test_a_slow_failed_read_does_not_stamp_over_a_fresh_answer(self):
         """Without the lock the panel-load read, finishing last, recorded its stale previous answer."""
@@ -545,3 +551,38 @@ class TestOverlappingChecks:
 
         assert seam.calls == 1
         assert [a["latest_version"] for a in answers] == ["0.34.0", "0.34.0"]
+
+    async def test_a_check_now_queued_behind_a_read_asks_nothing_once_the_switch_went_off(self):
+        uow_factory = FakeUnitOfWorkFactory()
+        seam = _GatedRelease(first=_release("0.34.0"), later=_release("0.35.0"))
+        service, settings = self._make_gated_with_settings(seam, uow_factory, {DISMISSED_KEY: "0.34.0"})
+
+        panel_load = asyncio.ensure_future(service.get_update_notice())
+        await asyncio.to_thread(seam.first_started.wait, 5)
+        check_now = asyncio.ensure_future(service.check_for_update_now())
+        await asyncio.sleep(0)
+        assert service.set_update_check_enabled(False) == {"success": True}
+        seam.release_first.set()
+        _, answer = await asyncio.gather(panel_load, check_now)
+
+        assert seam.calls == 1
+        assert answer["enabled"] is False
+        assert answer["reached"] is False
+        assert answer["latest_version"] is None
+        assert settings[DISMISSED_KEY] == "0.34.0", "nothing is forgotten either"
+
+    async def test_a_throttled_read_queued_behind_a_check_asks_nothing_once_the_switch_went_off(self):
+        uow_factory = FakeUnitOfWorkFactory()
+        seam = _GatedRelease(first=_release("0.34.0"), later=_release("0.35.0"))
+        service, _ = self._make_gated_with_settings(seam, uow_factory, {})
+
+        check_now = asyncio.ensure_future(service.check_for_update_now())
+        await asyncio.to_thread(seam.first_started.wait, 5)
+        panel_load = asyncio.ensure_future(service.get_update_notice())
+        await asyncio.sleep(0)
+        service.set_update_check_enabled(False)
+        seam.release_first.set()
+        _, answer = await asyncio.gather(check_now, panel_load)
+
+        assert seam.calls == 1
+        assert answer["enabled"] is False
