@@ -17,7 +17,8 @@ kept that parameter on purpose: the change that made `rom_ids` the only ROM scop
 left the public `rom_id` on both routes, because dropping it "would break every existing client"
 ([rommapp/romm#4305](https://github.com/rommapp/romm/pull/4305)).
 
-What moves is the work planned after 1.0, which builds on what RomM 5.3.0 added. Neither addition is in 5.2.0:
+What changes the picture is the work planned after 1.0, which builds on what RomM 5.3.0 added. Neither addition is in
+5.2.0:
 
 - a `rom_ids` scope on `POST /api/sync/negotiate` (and on `GET /api/saves`), so a device holding part of a library can
   scope a sync session to the ROMs it holds;
@@ -32,7 +33,8 @@ already. Raising the floor inside 1.x would break users in a minor release.
 change: a server below the floor is refused, a pre-release ranks below its own release (so `5.3.0-beta.1` is refused and
 `5.3.1-beta` accepted), and a `development` build or a missing version bypasses the check.
 
-The floor moves ahead of the first feature that needs it, so that no feature in 1.x has to raise it.
+The floor moves ahead of the first feature that needs it, so that the work built on what 5.3.0 added does not raise it
+inside 1.x.
 
 ## Consequences
 
@@ -42,14 +44,13 @@ The floor moves ahead of the first feature that needs it, so that no feature in 
   every request the program makes. The floor states what the program supports, not the lowest server that happens to
   work today.
 - **Enforcement is unchanged in kind.** The gate in `test_connection()` is pinned by tests in both directions at the new
-  floor, and the statements of the floor written for a reader that `scripts/check_romm_min_version.py` lists are held to
-  the constant by it. It reads no ADR, so the numbers in this record and the two it supersedes stay as written.
+  floor, and the reader-facing statements of the floor that `scripts/check_romm_min_version.py` lists are held to the
+  constant; it reads no ADR, so the numbers in this record and the two it supersedes stay as written.
 
 ## Alternatives considered
 
 - **Raise the floor with the first feature that needs 5.3.0, and ship that as 2.0.** Rejected: it spends a major version
-  on a floor raise that 1.0, a breaking release already, can carry, and it holds every 5.3-dependent feature back until
-  a 2.0 is worth cutting.
+  on a floor raise that 1.0, a breaking release already, can carry.
 
 ## Related
 
