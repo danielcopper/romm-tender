@@ -1278,6 +1278,39 @@ class TestSaveSyncContentDirGate:
         assert not any(c[0] in ("list_saves", "upload_save", "download_save_content") for c in fake.call_log)
 
     @pytest.mark.asyncio
+    async def test_a_sweep_with_nothing_confirmed_still_names_the_content_directory(self, tmp_path):
+        svc, fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
+        _install_rom(svc, tmp_path, rom_id=2, system="gba", file_name="game2.gba")
+
+        result = await svc.sync_all_saves()
+
+        self._assert_benign_skip({**result, "roms_checked": 0}, all_saves=True)
+        assert result["roms_checked"] == 2
+        # One installed game was asked, not every one.
+        asked = cast("FakeSaveLocationReader", svc._rom_info._save_locations).calls
+        assert len(asked) == 1
+        assert not any(c[0] in ("list_saves", "upload_save", "download_save_content") for c in fake.call_log)
+
+    @pytest.mark.asyncio
+    async def test_a_sweep_with_nothing_confirmed_elsewhere_reports_as_before(self, tmp_path):
+        svc, _fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
+        _create_save(tmp_path, system="gba", rom_name="game1", content=b"save1")
+
+        result = await svc.sync_all_saves()
+
+        assert result["success"] is True
+        assert "reason" not in result
+        assert result["synced"] == 0
+        assert result["roms_checked"] == 1
+        assert result["message"] == "Synced 0 save(s) across 1 ROM(s)"
+
+    @pytest.mark.asyncio
     async def test_a_mixed_sweep_syncs_the_rest_and_says_what_it_held_back(self, tmp_path):
         beside = FakeSaveLocationReader(beside_content=True).resolve_save_answer(
             system="gba",

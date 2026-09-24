@@ -1063,6 +1063,13 @@ class SyncEngine:
                         if session_id is not None:
                             await self._close_negotiate_session(session_id, session_counts[0], session_counts[1])
 
+                if not content_dir_tally.answered and rom_ids:
+                    # No ROM had a confirmed slot, so the sweep read none. One
+                    # installed game's reading still says whether saves are
+                    # written beside the content, instead of a bare "Synced 0".
+                    content_dir_tally.count(
+                        await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_ids[0])
+                    )
                 content_dir_skip = content_dir_tally.sweep_skip(roms_checked=rom_count)
                 if content_dir_skip is not None:
                     return content_dir_skip
