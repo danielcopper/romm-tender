@@ -277,32 +277,33 @@ problems.
 
 ## Updates
 
-Tender checks once a day whether a newer release is out. When there is one, a notice on the main panel says **Tender X
-is available** and names the version you have; **Open Updates** takes you to **Settings › Updates**, and **Dismiss**
-puts the notice away for that version only — the next release brings it back.
+Each time Steam loads Tender, it asks GitHub whether a newer release is out — at most once a day. When there is one, a
+notice on the main panel says **Tender X is available** and names the version you have; **Open Updates** takes you to
+**Settings › Updates**, and **Dismiss** puts the notice away for that version only — the next release brings it back.
 
 **Settings › Updates** shows:
 
 - **Installed** — the version you are running.
-- **Available** — the newest release out, **None newer** when you already have it, or **Not known yet** before a check
-  has found out.
+- **Available** — the newest release a check has found, **None newer** when you already have it, **Not known yet**
+  before a check has found anything, or **Not checked — the daily check is off** while the check is switched off.
 - **Check for updates daily** — on by default. Switch it off and Tender asks GitHub nothing at all, not even when you
   press **Check now**.
 - **Check now** — asks straight away rather than waiting for the day to pass, and brings back a notice you dismissed.
-  The line under the button says what it found: a newer release, that you have the newest one, or that GitHub could not
-  be reached.
+  The line under the button says what it found: a newer release, that you have the newest one, or that GitHub gave no
+  usable answer.
 
 A release counts as out only once its download is attached, which happens a few minutes after the release is published;
 until then Tender says nothing about it.
 
-**What the check sends where.** Once a day, and when you press **Check now**, Tender asks GitHub's public API for the
-newest release of `danielcopper/romm-tender`. The request names the program and its version (for example
-`romm-tender/1.0.0`), and GitHub sees your IP address, as it does for any request. Nothing about your library, your RomM
-server or your accounts is sent. If the check cannot reach GitHub — you are offline, or GitHub is down — nothing is
-shown and it tries again the next day.
+**What the check sends where.** When Steam loads Tender and a day has passed since the last check, and whenever you
+press **Check now**, Tender asks GitHub's public API for the newest release of `danielcopper/romm-tender`. The request
+names the program and its version (for example `romm-tender/1.0.0`), and GitHub sees your IP address, as it does for any
+request. Nothing about your library, your RomM server or your accounts is sent. If the check gets no usable answer — you
+are offline, GitHub is down, or it refuses the request — nothing changes: whatever the last successful check found stays
+as it was, and Tender tries again the next time it loads, once a day has passed.
 
-Installing the update from here is not available yet. If you run Tender from a source checkout rather than from the
-installer, the section says that updates install only into the installed program.
+**Settings › Updates** tells you a newer release is out; it does not install it. If you run Tender from a source
+checkout rather than from the installer, the section says that updates install only into the installed program.
 
 ## RetroArch Input Driver Fix
 

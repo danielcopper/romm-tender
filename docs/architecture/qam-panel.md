@@ -720,11 +720,11 @@ standing and **Dismiss** remains the way to put it away for this view.
 
 The update notice is the other one with two buttons, side by side for the same reason. Its Dismiss is **per version**:
 it records the version the card names (`update_notice_dismissed_version`), so the next release raises the card again,
-and **Check now** in its home forgets it. Its jump leads to where the install button will go; in this release the home
-has none, and a run from a checkout says there that updates install only into the installed program. The card's
+and **Check now** in its home forgets it. The home states the versions and holds the check's switch and Check now; it
+installs nothing, and a run from a checkout says there that updates install only into the installed program. The card's
 condition is `available` on the backend's answer and nothing else — a newer release with its tarball attached, not the
-dismissed version, the check switched on — read once at panel load from a detached call that nothing awaits, because on
-the one day the check is due it waits on GitHub.
+dismissed version, the check switched on. The answer is fetched at panel load by a detached call nothing awaits (the
+store's `fetchUpdateNotice` says why), and rewritten by Dismiss, the switch and Check now.
 
 Four of the seven conditions above carry no Dismiss anywhere — RetroDECK paths, the missing notifications, the
 `input_driver` fix and the session budget — so the absence is ordinary.

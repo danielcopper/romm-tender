@@ -1592,18 +1592,19 @@ once its `romm-tender-<V>.tar.gz` asset is attached. The assets job uploads the 
 published, so for that window the release is read, answered and passed over: the last available release the checks found
 stays standing, and a check that reached nothing at all does the same.
 
-- **Once a day.** The last answer lives in `kv_config` under `update_check_last_seen` — its version, the tarball's
-  `browser_download_url` and the bare sha256 hex of its `digest`, which name one release and stay paired, plus the time
-  of the last attempt. The stamp records the ATTEMPT, so an offline start does not pay the ten-second timeout at every
-  panel load; a stamp dated in the future is due at once.
+- **At most once a day, when the panel loads.** The last answer lives in `kv_config` under `update_check_last_seen` —
+  its version, the tarball's `browser_download_url` and the bare sha256 hex of its `digest`, which name one release and
+  stay paired, plus the time of the last attempt. The stamp records the ATTEMPT, so an offline start does not pay the
+  ten-second timeout at every panel load; a stamp dated in the future is due at once.
 - **The user's two keys** are in `settings.json` and are written only through the `SettingsPersister`:
   `update_check_enabled` (absent means on) and `update_notice_dismissed_version`, which holds a version rather than a
   flag so the next release raises the card again. With the switch off nothing is requested — not by the daily check and
   not by Check now either.
 - **Check now** (`check_for_update_now`) skips the throttle and forgets the dismissal, and adds `reached` to the answer,
   so the Settings section can tell "nothing newer" from "nothing found out".
-- **What the request carries** is the program's User-Agent (`romm-tender/<version>`, from `domain/identity.py`); GitHub
-  sees the machine's IP address like any other request, and nothing else about the user.
+- **What the request carries** is the program's User-Agent (`romm-tender/<version>`, from `domain/identity.py`) and
+  GitHub's JSON `Accept` header; GitHub sees the machine's IP address like any other request, and nothing else about the
+  user.
 
 Two answers come from the environment rather than from the service, and the entry point resolves both once
 (`domain/update_release.py::resolve_update_source`) next to the directories. `TENDER_RELEASE_API` is the installer's own
