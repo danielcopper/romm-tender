@@ -2538,6 +2538,28 @@ class TestAdoptCandidate:
         assert ("/saves/snes/Game (U).srm", "/saves/snes/Game.srm") in h.move.moves
         assert all(not source.startswith("/states/") for source, _target in h.move.moves)
 
+    @pytest.mark.parametrize(
+        ("answer", "said"),
+        [
+            (NoSavestates(), "The emulator keeps no savestates"),
+            (None, "No savestate directory could be established"),
+        ],
+        ids=["keeps-none", "not-established"],
+    )
+    async def test_the_log_says_which_of_the_two_it_was(self, h, caplog, answer, said):
+        # One is a fact about the emulator, the other an absence of any fact.
+        h.seed_rom()
+        h.stage_detail(_single_file_detail())
+        h.save_locations.savestates_with("snes", answer)
+        h.store.files[_OLD] = b"rom"
+        caplog.set_level(logging.INFO, logger="test_rom_adoption")
+
+        await h.service.adopt_existing_rom(_ROM_ID, _OLD, None)
+
+        lines = [r.getMessage() for r in caplog.records if "carrying none" in r.getMessage()]
+        assert len(lines) == 1
+        assert lines[0].startswith(said)
+
     async def test_states_the_emulator_keeps_elsewhere_are_carried_from_there(self, h):
         h.seed_rom()
         h.stage_detail(_single_file_detail())

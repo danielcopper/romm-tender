@@ -30,7 +30,7 @@ from domain.adoption_rename import (
     split_collisions,
 )
 from domain.rom_files import detect_launch_file
-from domain.savestate_location import SavestateLocation
+from domain.savestate_location import NoSavestates, SavestateLocation
 
 if TYPE_CHECKING:
     import logging
@@ -343,6 +343,9 @@ class AdoptionRenamer:
         )
         found: list[CompanionDir] = []
         for kind, source_dir, target_dir in directories:
+            if isinstance(source_dir, NoSavestates) or isinstance(target_dir, NoSavestates):
+                self._logger.info(f"The emulator keeps no savestates for rom {rom_id}; carrying none")
+                continue
             if source_dir is None or target_dir is None:
                 self._logger.info(f"No {kind} directory could be established for rom {rom_id}; carrying none")
                 continue
@@ -359,14 +362,14 @@ class AdoptionRenamer:
             system=system, content_path=content_path, emulator_label=emulator_label, content_installed=installed
         ).directory
 
-    def _savestate_dir(self, system: str, content_path: str, emulator_label: str | None) -> str | None:
+    def _savestate_dir(self, system: str, content_path: str, emulator_label: str | None) -> str | NoSavestates | None:
         """The directory the resolver answers for the savestates of the game at *content_path*.
 
-        ``None`` both where the emulator keeps none and where nothing could be
-        established — the rename carries nothing either way, and says which in
-        the debug log the adapter writes.
+        :class:`NoSavestates` where the emulator keeps none and ``None`` where
+        nothing could be established — the rename carries nothing either way,
+        and its log line says which.
         """
         answer = self._save_locations.resolve_savestate_location(
             system=system, content_path=content_path, emulator_label=emulator_label
         )
-        return answer.directory if isinstance(answer, SavestateLocation) else None
+        return answer.directory if isinstance(answer, SavestateLocation) else answer
