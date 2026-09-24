@@ -1533,7 +1533,7 @@ and what resets it there, the build decides.
 Wide, untabbed, list and detail: the sections on the left, the focused section on the right. Five sections, where the
 narrow page stacked eight — Registered Devices sits under Save Sync, SteamGridDB joins the other external service under
 Connections, and the save-sort migration the narrow page carried is gone, because each game now follows its own save
-directory at its next sync.
+directory the next time the plugin touches its saves.
 
 | Section       | Holds                                                                                                                                                                                                                                                                                                   |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

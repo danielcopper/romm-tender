@@ -13,7 +13,7 @@ read only as the source of that one move — never where a sync or a probe looks
 **Nothing is overwritten or removed here.** A name present in both directories
 is a collision, and the older copy goes through the save-backup funnel. The
 record moves on only once every file has arrived, so a move that fails part-way
-is picked up again at the next sync.
+is picked up again the next time a path that follows touches that game's saves.
 """
 
 from __future__ import annotations

@@ -317,12 +317,10 @@ class VersionsService:
           The same status carries an additive
           ``"reason": "savefiles_in_content_dir"`` field when the refusal is
           instead because the save is written beside the game file (#239),
-          where the sync never writes, so the switch could never take effect;
+          where the sync never writes, so the rollback could never take effect;
           and ``"reason": "save_shape_unsupported"`` plus that answer's own
           ``"message"`` for any other answer a sync would not carry. The
-          frontend already hides the panel via ``get_save_status``'s
-          ``rollback_supported=False`` for the first; the additive reason lets a
-          direct caller distinguish the causes.
+          additive reason lets a caller distinguish the causes.
         - ``{"status": "version_deleted"}`` if the chosen save id is no
           longer on the server (genuinely deleted — the ``list_saves``
           call succeeded and the id was absent).
@@ -373,8 +371,8 @@ class VersionsService:
             # effect. Refuse before any preflight or destructive I/O. Reuse the
             # existing ``unsupported`` status (the frontend already routes it to a
             # benign refusal toast) and add the ``reason`` slug so a direct
-            # caller can distinguish the cause — as it can where no save
-            # directory could be resolved at all.
+            # caller can distinguish the cause — as it can for any other answer a
+            # sync would not carry.
             if info["save_answer"].in_content_directory:
                 self._log_debug(f"rollback_to_version: rom {rom_id} saves beside its content; refusing")
                 return {"status": "unsupported", "reason": SAVE_SYNC_CONTENT_DIR_REASON}

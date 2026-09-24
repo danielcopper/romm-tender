@@ -4,8 +4,9 @@ Owns the rom-level concurrency seam (``_rom_sync_locks``) and the
 sequencing rules the public save-sync callables follow (save-sync
 enabled check, retrodeck migration gate, device-registration fallback,
 dispatch into the matrix executor, persistence), plus following a moved
-save directory, which the sync entry points do here and the write, delete
-and count paths of the peer services do through ``follow_save_directory``.
+save directory, which the sync entry points do here and the write, delete,
+count and status paths of the peer services do through
+``follow_save_directory``.
 Each public callable owns a narrow Unit of Work (ADR-0006): it reads the
 ``RomSaveSyncState`` aggregate + ``device_id`` at the start, performs all
 server/file I/O outside any transaction, and writes the mutated
@@ -478,7 +479,8 @@ class SyncEngine:
 
         The caller holds ``rom_lock`` and hands over the reading it already
         took, and calls this before it looks at any local file. Public
-        (peer-called): the write, delete and count paths follow first as well.
+        (peer-called): the write, delete, count and status paths follow first as
+        well.
         The follow belongs to the sync, so it does nothing while save sync is
         off, and nothing while a RetroDECK home migration is pending or still
         running: the files are that migration's to move, and a follow then would

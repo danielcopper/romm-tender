@@ -914,9 +914,9 @@ pattern is the game itself. Where there is something to carry, a missing directo
 directories is a collision and nothing is overwritten or removed: the older copy goes through
 `MatrixExecutor.quarantine_local_file` into the `.romm-backup` folder of the directory it sits in, and a tie keeps the
 copy where the emulator looks. Something other than a file under the save's name at the target stops that file and keeps
-the old record. The record moves on only once every file arrived, so a move that fails part-way is tried again at the
-next sync. Two spellings of one directory move nothing. No Unit of Work is open across a file operation or a resolver
-reading.
+the old record. The record moves on only once every file arrived, so a move that fails part-way is tried again the next
+time one of the paths above touches that game's saves. Two spellings of one directory move nothing. No Unit of Work is
+open across a file operation or a resolver reading.
 
 **Filling the record in.** A one-time background task on the first start with the record
 (`SaveService.record_save_directories_once`, started from `main.py`, cancelled at unload) walks the installed ROMs one
@@ -941,7 +941,7 @@ home stays there and is never carried over the one the user kept. The migration 
 the migration as still pending until that re-record has finished, although the run clears its markers before it, so no
 sync meets a record still naming the old home. Two limits: while no emulator installation is detected the re-record
 leaves every record as it was, and a ROM whose re-record fails keeps its old record (the failure is logged, the rest are
-recorded), so for that ROM the next sync can still follow the copy left in the old home. See
+recorded), so for those ROMs the next path that follows can still carry the copy left in the old home. See
 [RetroDECK Path Migration](../user-guide/retrodeck-path-migration.md) for the user-facing side.
 
 ### Detecting a home change

@@ -141,8 +141,8 @@ The button is unavailable while RomM is offline. If the game's current slot has 
 again.
 
 A game whose save the plugin does not sync is refused here too, and so are switching its slot and restoring an older
-version: a memory card every game shares (standalone PCSX2's, for example, even though the plugin knows its folder), a
-save written into the game file itself, or saves written beside it. The message says which of these it is.
+version — for example a memory card every game shares (standalone PCSX2's, even though the plugin knows its folder), a
+save written into the game file itself, or saves written beside it; the message says why.
 
 ## Core Switch Warning
 
