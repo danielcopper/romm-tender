@@ -1260,7 +1260,8 @@ describe("SettingsPage", () => {
       expect(props?.strDescription).not.toContain("(.srm)");
       expect(props?.strDescription).toContain("support matrix");
       // No save-sorting setting is required any more: the copy says the plugin
-      // follows RetroArch's sorting and no longer asks for a particular one.      expect(props?.strDescription).toContain("follows RetroArch's own save sorting");
+      // follows RetroArch's sorting and no longer asks for a particular one.
+      expect(props?.strDescription).toContain("follows RetroArch's own save sorting");
       expect(props?.strDescription).toContain("the next time the plugin touches that game's saves");
       expect(props?.strDescription).not.toContain("the next time that game syncs");
       expect(props?.strDescription).not.toContain("Sort Saves into Folders");
