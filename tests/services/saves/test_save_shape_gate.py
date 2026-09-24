@@ -471,7 +471,7 @@ def _anchored_in_the_rom_folder(tmp_path, **overrides: Any) -> SaveAnswer:
 # save inside the game file, and the writes discarded outright.
 _NOT_SYNCABLE_BESIDE_THE_ROM = [
     pytest.param({"caveats": ("save-inside-content",)}, id="amiga-adf-inside-the-floppy"),
-    pytest.param({"caveats": ("save-inside-image",), "emulator": "xemu"}, id="xbox-inside-the-disk-image"),
+    pytest.param({"caveats": ("save-inside-image",)}, id="inside-a-disk-image"),
     pytest.param(
         {"caveats": ("save-writes-discarded",), "granularity": "none"}, id="amiga-adz-floppy-format-discarded"
     ),

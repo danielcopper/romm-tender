@@ -73,7 +73,9 @@ class RomInfoService:
         ``platform_slug``, ``file_path`` and ``save_answer``. ``saves_dir`` is
         the resolver's answer for where this ROM's emulator keeps the save, and
         is ``None`` wherever no placement could be resolved — never replaced by
-        a guess, so every reader has to take its refusal there.
+        a guess. A reader that writes or syncs keys its refusal on
+        ``save_answer.sync_directory`` rather than on ``saves_dir``: an answer
+        can name a directory and still be one a sync would not carry.
 
         *save_answer* is this ROM's reading where the caller already took one
         in the same operation; absent it, one is taken here.

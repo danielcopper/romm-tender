@@ -268,8 +268,8 @@ class TestWhereASyncMayReadAndWrite:
 
     @pytest.mark.parametrize("caveat", ["save-inside-content", "save-inside-image"])
     def test_a_save_inside_the_content_is_not_one_beside_it(self, caveat):
-        # PUAE on an .adf, xemu's disk image: anchored in the content's
-        # directory, refused for being inside the file, never for sitting beside it.
+        # Anchored in the content's directory and refused for being inside the
+        # content or an image, never for sitting beside it.
         answer = _answer(caveats=(caveat,), files=(), root_kind="content_directory")
 
         assert answer.state == SAVE_STATE_INSIDE_CONTENT

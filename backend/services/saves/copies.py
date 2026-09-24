@@ -252,7 +252,8 @@ class SaveCopyService:
            with ``not_configured``. The Copy action is only reachable on a
            configured ROM; this is the defensive backstop, not a UI-gate reliance.
         4. ``rom_not_installed`` when the ROM has no install record.
-        5. Multi-file (#908) and content-dir (#239) layouts are ``unsupported``.
+        5. Multi-file (#908) saves, saves beside the game file (#239) and any other
+           answer a sync would not carry are ``unsupported``.
         6. Pre-flight ``do_sync_rom_saves`` on the current (confirmed) slot,
            unconditionally, to protect its dirty local before the copy overwrites
            it — ``conflict_blocked`` / ``preflight_failed`` on a bad pre-flight.

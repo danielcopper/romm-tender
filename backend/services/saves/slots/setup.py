@@ -288,8 +288,8 @@ class SetupWizard:
         content into the slot and leaves the sources in the read-only legacy
         bucket (#1478).
 
-        When a migration is requested but RetroArch writes saves to the content
-        dir (#239), the migration is refused before any download; the slot
+        When a migration is requested but the save is written beside the game
+        file (#239), or is one a sync would not carry at all, the migration is refused before any download; the slot
         confirmation itself — a non-destructive metadata flip — is still
         persisted (``reason="savefiles_in_content_dir"``). The non-migration path
         is never gated (no file write).

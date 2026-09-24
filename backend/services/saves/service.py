@@ -320,9 +320,9 @@ class SaveService:
         resolver about each installed ROM, serially, and records the answer
         where nothing is recorded yet and the follow would act on it. The
         ``kv_config`` marker is written only once the pass finished over a
-        detected emulator installation, so a pass cut short by a shutdown, or
-        one with nothing to ask yet, runs again; recording where nothing is
-        recorded is safe to repeat.
+        detected emulator installation with no ROM failing, so a pass cut short
+        by a shutdown, one with nothing to ask yet, or one in which a ROM
+        failed runs again; recording where nothing is recorded is safe to repeat.
         """
         if await self._loop.run_in_executor(None, self._kv_marker_set, _KV_SAVE_DIRECTORIES_RECORDED):
             return
@@ -669,7 +669,9 @@ class SaveService:
         The read half of :meth:`delete_platform_saves`, over the same two steps
         in the same order — the platform's installed ROM ids, then each one's
         save files — so the number a button offers is the number the delete would
-        remove. It only looks: nothing here unlinks a file or writes a row.
+        remove. It deletes nothing, but it is not a pure read: like the delete, it
+        follows each ROM's moved save directory first, which can move files,
+        back up a collision and write the ROM's answered-directory record.
 
         The Library page's platform detail asks it once per selected platform,
         beside the core read, and puts the count on Delete _N_ save files. That

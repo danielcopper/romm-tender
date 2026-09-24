@@ -54,8 +54,9 @@ SaveState = Literal[
 # doubt lands, so collapsing them would make one message stand for all of them.
 #
 # ``not_asked`` is the one that is easy to lose: the question was never put, so
-# the emulator is not implicated at all. RetroArch writing saves to the content
-# directory reaches it, and so does a ROM with no resolvable emulator. Without
+# the emulator is not implicated at all. A save the plugin could otherwise sync
+# sitting beside the content reaches it (the status read reports that case as
+# not asked), and so does a ROM with no resolvable emulator. Without
 # it those payloads are byte-identical to an unaudited core's, and a page would
 # tell a user their emulator is a mystery when the truth is that the plugin
 # never asked.
@@ -198,8 +199,8 @@ class SaveAnswer:
     codes verbatim for the log and for a later rendering.
 
     ``root_kind`` is the anchor ``directory`` hangs off, in the resolver's own
-    vocabulary; :attr:`in_content_directory` is the one reading of it a sync
-    path acts on. ``fallback_directory`` is the unsorted root of the
+    vocabulary; :attr:`in_content_directory` reads it together with
+    :attr:`syncable`, and the directory follow reads it alone. ``fallback_directory`` is the unsorted root of the
     :data:`SORTED_DIR_MISSING` note (the resolver's ``fallback_dir``). Both are
     ``None`` wherever no placement was resolved.
 

@@ -316,11 +316,13 @@ class VersionsService:
           Interim #908 guard; grouped atomic-set rollback is tracked there.
           The same status carries an additive
           ``"reason": "savefiles_in_content_dir"`` field when the refusal is
-          instead because RetroArch writes saves to the content dir (#239):
-          the rollback's ``saves_dir`` target is ignored by RetroArch, so the
-          switch could never take effect. The frontend already hides the panel
-          via ``get_save_status``'s ``rollback_supported=False``; the
-          additive reason lets a direct caller distinguish the two causes.
+          instead because the save is written beside the game file (#239),
+          where the sync never writes, so the switch could never take effect;
+          and ``"reason": "save_shape_unsupported"`` plus that answer's own
+          ``"message"`` for any other answer a sync would not carry. The
+          frontend already hides the panel via ``get_save_status``'s
+          ``rollback_supported=False`` for the first; the additive reason lets a
+          direct caller distinguish the causes.
         - ``{"status": "version_deleted"}`` if the chosen save id is no
           longer on the server (genuinely deleted — the ``list_saves``
           call succeeded and the id was absent).

@@ -1298,8 +1298,12 @@ class TestSaveSyncContentDirGate:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("caveat", "emulator"),
-        [("save-inside-content", "PUAE"), ("save-inside-content", "Hatari"), ("save-inside-image", "xemu")],
-        ids=["amiga-adf", "atari-st", "xbox-disk-image"],
+        [
+            ("save-inside-content", "PUAE"),
+            ("save-inside-content", "Hatari"),
+            ("save-inside-image", "an image-backed core"),
+        ],
+        ids=["amiga-adf", "atari-st", "inside-a-disk-image"],
     )
     async def test_a_save_inside_the_game_file_gets_the_save_shape_refusal(self, tmp_path, caveat, emulator):
         svc, fake = make_service(tmp_path)

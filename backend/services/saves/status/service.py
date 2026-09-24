@@ -369,17 +369,17 @@ class StatusService:
         explicit ``server_unreachable`` drives the UI's offline state (#1570).
 
         The additive ``savefiles_in_content_dir: bool`` flag is ``True``
-        when this ROM's emulator writes its save next to the ROM (the
-        unsupported case, read off the save answer's root): local probing is
-        skipped and the display reads "Save sync off", while playtime /
-        device_id stay intact.
+        where a save the plugin could otherwise sync sits beside the ROM
+        (``SaveAnswer.in_content_directory``): local probing is skipped and
+        the display reads "Save sync off", while playtime / device_id stay
+        intact.
 
-        The ``rom_save_sync_states`` read-modify-write (the baseline-adopt
-        write in ``_get_save_status_io``) runs under the per-ROM sync lock
-        (``SyncEngine.rom_lock(rom_id)``), so it cannot interleave with a
-        concurrent ``do_sync_rom_saves`` and lose that sync's update. The
-        server-saves network fetch stays outside the lock — only the local
-        RMW is the critical section.
+        The save-answer reading, the directory follow it feeds (for an installed
+        ROM) and the ``rom_save_sync_states`` read-modify-write (the
+        baseline-adopt write in ``_get_save_status_io``) run under the per-ROM
+        sync lock (``SyncEngine.rom_lock(rom_id)``), so they cannot interleave
+        with a concurrent ``do_sync_rom_saves`` and lose that sync's update. The
+        server-saves network fetch stays outside the lock.
         """
         rom_id = int(rom_id)
 

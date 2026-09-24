@@ -4,7 +4,8 @@ Owns the rom-level concurrency seam (``_rom_sync_locks``) and the
 sequencing rules the public save-sync callables follow (save-sync
 enabled check, retrodeck migration gate, device-registration fallback,
 dispatch into the matrix executor, persistence), plus following a moved
-save directory at the four sync entry points.
+save directory, which the sync entry points do here and the write, delete
+and count paths of the peer services do through ``follow_save_directory``.
 Each public callable owns a narrow Unit of Work (ADR-0006): it reads the
 ``RomSaveSyncState`` aggregate + ``device_id`` at the start, performs all
 server/file I/O outside any transaction, and writes the mutated
