@@ -888,7 +888,7 @@ live reading the caller already took, before the caller looks at any local file:
   are after a sort flip;
 - by the two deletes and the two reads that count local saves — `delete_local_saves`, `delete_platform_saves`,
   `count_platform_saves` and `get_save_status` (for an installed ROM) — so a delete after a sort flip takes the old
-  folder's files too, and nothing is carried back in by the next sync.
+  folder's files too, and nothing is carried back in by the next path that follows.
 
 The follow belongs to the sync, so it does nothing while save sync is off; a sorting change made meanwhile is followed
 once save sync is on again, for a game whose directory was recorded. It also does nothing while a RetroDECK home

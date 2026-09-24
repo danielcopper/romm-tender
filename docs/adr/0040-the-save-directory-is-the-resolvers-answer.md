@@ -68,8 +68,8 @@ it.
 **A library-wide sweep at every start.** Comparing every installed game's answer with its record at start-up would
 follow a moved directory before the first launch, at one live reading per game: 186 answers took 36 s on the reference
 machine, on one core (a median of 137 ms and a p90 of 393 ms per ROM). For a library of a few hundred games that is
-about a minute of background I/O on every start to catch a change that the next sync of each game catches anyway. The
-one-time pass pays that once, to fill the record in.
+about a minute of background I/O on every start to catch a change that the next time the plugin touches each game's
+saves catches anyway. The one-time pass pays that once, to fill the record in.
 
 ## Consequences
 
