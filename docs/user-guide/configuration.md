@@ -5,7 +5,7 @@ Tender plugin, and pick **Settings** from the menu at the bottom of the panel.
 
 ## The Settings page
 
-Settings is a wide page split in two: a list of five sections on the left, and the focused section's controls on the
+Settings is a wide page split in two: a list of six sections on the left, and the focused section's controls on the
 right. Move onto a section in the list and the right-hand side changes at once — there is nothing to confirm.
 
 | Section           | What is in it                                                                                                                                                 |
@@ -14,25 +14,27 @@ right. Move onto a section in the list and the right-hand side changes at once �
 | **Save Sync**     | the save-sync switch and its settings (device, before launch, after exit, default slot, history limit, Sync All Saves Now) and the list of registered devices |
 | **Controller**    | Steam Input Mode, Apply to All Shortcuts, and the RetroArch `input_driver` fix                                                                                |
 | **Steam Library** | preferred region, collection games in platform groups, collection types in Steam names                                                                        |
+| **Updates**       | the version you have and the newest one out, the daily update check, and **Check now**                                                                        |
 | **Advanced**      | log level                                                                                                                                                     |
 
 If you used an earlier version, everything is still here — the eight blocks the panel used to stack are grouped into
-those five. Registered Devices is now inside **Save Sync**, the SteamGridDB key is inside **Connections**, and the
-section that used to be called **Library** is now **Steam Library**: the Library _page_ is about what gets synced out of
-RomM, this section is about how it looks once it is in Steam.
+five of those six; **Updates** is new. Registered Devices is now inside **Save Sync**, the SteamGridDB key is inside
+**Connections**, and the section that used to be called **Library** is now **Steam Library**: the Library _page_ is
+about what gets synced out of RomM, this section is about how it looks once it is in Steam.
 
 **Signing in to RetroAchievements is not here yet.** When it arrives it will live under Connections, with the other
 accounts.
 
 ### Getting there from a notice
 
-Two of the notices on the plugin's main panel are doors into a section, and the action they are about lives only behind
-that door:
+Three of the notices on the plugin's main panel are doors into a section, and the action they are about lives only
+behind that door:
 
 | The notice says               | Its button           | Where it takes you     |
 | ----------------------------- | -------------------- | ---------------------- |
 | RetroArch: input_driver issue | **Open Controller**  | Settings › Controller  |
 | Cross-device playtime         | **Open Connections** | Settings › Connections |
+| Tender X is available         | **Open Updates**     | Settings › Updates     |
 
 The main panel only names the condition — it no longer carries a Fix button, so there is one place to do each of these
 and no chance of two of them disagreeing. **B** takes you back to the main panel from anywhere on the page.
@@ -272,6 +274,35 @@ A dropdown in **Settings › Advanced**. Controls how much detail the plugin log
 
 Leave this at **Warn** unless you're investigating an issue. Switch to **Debug** when reporting bugs or diagnosing
 problems.
+
+## Updates
+
+Tender checks once a day whether a newer release is out. When there is one, a notice on the main panel says **Tender X
+is available** and names the version you have; **Open Updates** takes you to **Settings › Updates**, and **Dismiss**
+puts the notice away for that version only — the next release brings it back.
+
+**Settings › Updates** shows:
+
+- **Installed** — the version you are running.
+- **Available** — the newest release out, **None newer** when you already have it, or **Not known yet** before a check
+  has found out.
+- **Check for updates daily** — on by default. Switch it off and Tender asks GitHub nothing at all, not even when you
+  press **Check now**.
+- **Check now** — asks straight away rather than waiting for the day to pass, and brings back a notice you dismissed.
+  The line under the button says what it found: a newer release, that you have the newest one, or that GitHub could not
+  be reached.
+
+A release counts as out only once its download is attached, which happens a few minutes after the release is published;
+until then Tender says nothing about it.
+
+**What the check sends where.** Once a day, and when you press **Check now**, Tender asks GitHub's public API for the
+newest release of `danielcopper/romm-tender`. The request names the program and its version (for example
+`romm-tender/1.0.0`), and GitHub sees your IP address, as it does for any request. Nothing about your library, your RomM
+server or your accounts is sent. If the check cannot reach GitHub — you are offline, or GitHub is down — nothing is
+shown and it tries again the next day.
+
+Installing the update from here is not available yet. If you run Tender from a source checkout rather than from the
+installer, the section says that updates install only into the installed program.
 
 ## RetroArch Input Driver Fix
 
