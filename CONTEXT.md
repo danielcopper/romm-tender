@@ -877,9 +877,8 @@ setting valued `all` (every collection RomM lists to the signed-in user: their o
 from the list **and** left out of the sync, even one switched on earlier — once the signed-in user's id is known, since
 until then no collection counts as foreign. Orthogonal to the collection kind axis: it decides by owner (`is_own` /
 `user_id` vs `romm_user_id`), not by kind, and virtual collections have no owner so it never touches them. The stored
-values are `own` / `all` whatever the QAM calls them. The QAM presents it as the **Other users' collections** toggle at
-the head of Library › Collections' list — on is `all`, off is `own` (`docs/architecture/qam-panel.md` § Library).
-_Avoid_ calling it a filter.
+values are `own` / `all` whatever the QAM calls them. In the QAM it is the **Other users' collections** toggle; how it
+is presented is `docs/architecture/qam-panel.md` § Library. _Avoid_ calling it a filter.
 
 ### Collection naming mode (merge / by_label)
 

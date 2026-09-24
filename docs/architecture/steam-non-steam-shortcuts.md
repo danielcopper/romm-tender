@@ -404,9 +404,9 @@ setting:
   `RomM: [<name> (Franchise)]` and `RomM: [<name> (IGDB Collection)]` — separate Steam collections. Two collections that
   share **both** name and label still union.
 
-The label strings **must** match the suffixes the Collections page quotes in each kind's sentence (`STEAM_NAME_SUFFIX`
-in `frontend/src/bigpicture/library/collectionKinds.ts`), so the name the page promises is the name baked into Steam.
-The reporter needs the kind/virtual_type at its union key, so `WorkUnit.virtual_type` and `CollectionMembership.kind` +
+The frontend holds no copy of the label strings and the Collections page does not quote them; the user guide's
+"Collections that share a name" names them, so a label change is a change there. The reporter needs the
+kind/virtual_type at its union key, so `WorkUnit.virtual_type` and `CollectionMembership.kind` +
 `CollectionMembership.virtual_type` thread that identity through the fetcher → orchestrator → reporter.
 
 **Label-format constraint:** the reconcile parses the collection name with `/^RomM: \[([^\]]+)\]/`
