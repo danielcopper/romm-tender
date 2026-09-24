@@ -49,6 +49,4 @@ ruff==0.15.22
 sortedcontainers==2.4.0
     # via hypothesis
 typing-extensions==4.16.0
-    # via
-    #   import-linter
-    #   pytest-asyncio
+    # via import-linter

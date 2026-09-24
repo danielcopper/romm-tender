@@ -172,9 +172,16 @@ case "$1" in
 esac
 """
 
+# Runs the installer's own version question under a real interpreter that reports
+# the version the test names, so the comparison under test is the installer's
+# rather than one this stub makes up.
 _PYTHON_STUB = """#!/usr/bin/env bash
-printf 'python %s\\n' "${STUB_PYTHON_VERSION:-3.13}"
-exit "${STUB_PYTHON_EXIT:-0}"
+[ "$1" = "-c" ] || exit 2
+exec "$STUB_REAL_PYTHON" -c '
+import sys
+sys.version_info = tuple(int(part) for part in sys.argv[1].split("."))
+exec(sys.argv[2])
+' "${STUB_PYTHON_VERSION:-3.13}" "$2"
 """
 
 
@@ -243,6 +250,7 @@ class Install:
             "TERM": "xterm-256color",
             "XDG_RUNTIME_DIR": str(self.runtime),
             "TENDER_PYTHON": str(self.python),
+            "STUB_REAL_PYTHON": sys.executable,
             "TENDER_CODE_DIR": str(self.code),
             "TENDER_CONFIG_DIR": str(self.config),
             "TENDER_DATA_DIR": str(self.data),
@@ -743,12 +751,19 @@ class TestAFreshInstall:
 
 
 class TestThePreflight:
-    def test_a_python_older_than_3_11_is_refused(self, machine):
-        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_PYTHON_EXIT="1")
+    def test_a_python_older_than_3_13_is_refused(self, machine):
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_PYTHON_VERSION="3.12")
 
         assert result.returncode == 1
-        assert "older than 3.11" in result.stderr
+        assert "older than 3.13" in result.stderr
         assert not machine.code.exists()
+
+    @pytest.mark.parametrize("version", ["3.13", "3.14"])
+    def test_a_python_at_or_above_the_floor_is_accepted(self, machine, version):
+        result = machine.run("--from", str(_build_tarball(machine.tmp_path)), "--yes", STUB_PYTHON_VERSION=version)
+
+        assert result.returncode == 0, result.stderr
+        assert f"[ok] Checking     python {version}" in result.stdout
 
     def test_a_python_that_is_not_there_at_all_is_refused(self, machine):
         result = machine.run(

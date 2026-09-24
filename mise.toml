@@ -1,7 +1,7 @@
 [tools]
 node = "24"      # major pin — "lts" is a moving alias that silently jumps majors; CI uses node 24
 pnpm = "10.29.3" # exact — must match frontend/package.json "packageManager"; bump both together
-python = "3.11"  # match Decky Loader's embedded Python (libpython3.11)
+python = "3.13"  # the Python SteamOS ships; Tender runs on the system interpreter
 uv = "0.10.2"    # exact — uv creates the venv AND compiles the dependency locks; pin so the local resolver == the lock author
 deno = "2.8"     # minor pin — deno fmt is a formatter; a version jump can reformat Markdown (the CI drift we're killing)
 
