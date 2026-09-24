@@ -196,10 +196,9 @@ class BiosStatus:
     known_count: int | None = None
     unknown_count: int = 0
     # Whether an absence from this platform's file list may be read as "nothing
-    # wants it" — ``FirmwareCatalogue.reading_complete_for`` scoped to the
-    # emulators the platform offers. Defaults to ``True`` so a caller that does
-    # not supply it keeps the level it always got; the one decision it moves is
-    # a platform with no files at all.
+    # wants it" — ``FirmwareCatalogue.reading_complete_for`` asked about the
+    # emulator the game will launch with. Defaults to ``True`` so a caller that
+    # does not supply it keeps the level it always got.
     reading_complete: bool = True
     # The launching emulator's system-image answer (:func:`classify_system_image`),
     # one of :data:`SYSTEM_IMAGE_VALUES`. Defaults to the neutral value so a
