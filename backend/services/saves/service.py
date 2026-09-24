@@ -34,8 +34,8 @@ from services.saves.sync_engine import SyncEngine, SyncEngineConfig
 from services.saves.sync_engine.devices import DeviceRegistry
 from services.saves.versions import VersionsService, VersionsServiceConfig
 
-# kv_config marker for the one-time pass that records every installed ROM's
-# answered save directory (ADR-0003 Bucket 2): present once the pass finished.
+# kv_config marker for the one-time pass that records the installed ROMs'
+# answered save directories: present once the pass finished.
 _KV_SAVE_DIRECTORIES_RECORDED = "save_directories_recorded"
 
 if TYPE_CHECKING:
@@ -311,15 +311,16 @@ class SaveService:
         return await self._sync_engine.sync_all_saves()
 
     async def record_save_directories_once(self) -> None:
-        """Record every installed ROM's answered save directory, once per database.
+        """Record the installed ROMs' answered save directories, once per database.
 
         The first start after the record existed has no record for any game, so
         a directory that moved before its next sync would be taken for a first
         sight and its files left behind. This pass closes that: it asks the
-        resolver for every installed ROM, serially, and records the answer where
-        nothing is recorded yet. The ``kv_config`` marker is written only once
-        the pass finished, so one cut short by a shutdown runs again, and
-        recording where nothing is recorded is safe to repeat.
+        resolver about each installed ROM, serially, and records the answer
+        where nothing is recorded yet and the follow would act on it. The
+        ``kv_config`` marker is written only once the pass finished, so one cut
+        short by a shutdown runs again, and recording where nothing is recorded
+        is safe to repeat.
         """
         if await self._loop.run_in_executor(None, self._kv_marker_set, _KV_SAVE_DIRECTORIES_RECORDED):
             return

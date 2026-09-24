@@ -9,7 +9,7 @@ None of the rules below has a mechanical check. They hold only if they are carri
 
 ## Protocol naming — suffix by shape `[ours]`
 
-- `…Reader` — object-shaped Protocols with multiple methods (`RetroArchConfigReader`).
+- `…Reader` — object-shaped Protocols with multiple methods (`SaveLocationReader`).
 - `…Provider` / `…Fn` — call-shaped (`__call__`-only) Protocols (`SiblingSupersedeProvider`, `SaveQuarantineFn`).
 - `…Store` — file-store Protocols (`CoverArtFileStore`).
 - `…Cache` — cache Protocols (`SgdbArtworkCache`).

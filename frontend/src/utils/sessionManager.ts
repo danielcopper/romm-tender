@@ -303,9 +303,8 @@ async function handleGameStop(stoppedAppId: number): Promise<void> {
 
     // Migration store update — backend ran refresh_state, frontend just
     // feeds the typed payload into the store. When backend refresh failed
-    // (``migration == null``) leave the store untouched, matching the pre-PR
-    // ``refreshMigrationState().catch`` behavior where a refresh failure
-    // logged a warning without clearing any stale "pending" badge.
+    // (``migration == null``) leave the store untouched: a failed refresh
+    // must not clear a stale "pending" badge it could not re-check.
     if (result.migration) {
       setMigrationStatus(result.migration.retrodeck);
     }

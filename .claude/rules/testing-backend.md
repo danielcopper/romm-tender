@@ -40,9 +40,9 @@ so that service needs the real loop object. Take it in an **async** fixture — 
 service's `_loop`, the way `tests/services/test_downloads.py` does.
 
 Neither shape is available where the test **body** builds the service: no fixture does the constructing, and at fixture
-time there is no service yet to rebind. Then an async autouse fixture captures the running loop into a module-level
-holder and the body reads it at construction — filling that holder through `monkeypatch`, so teardown empties it again
-instead of leaving a closed loop there for the rest of the session.
+time there is no service yet to rebind. Then capture the running loop in an async autouse fixture, into a module-level
+holder the body reads at construction, and fill the holder through `monkeypatch` so teardown empties it again instead of
+leaving a closed loop there for the rest of the session.
 
 ## Property-based tests — pure decision kernels (hypothesis)
 

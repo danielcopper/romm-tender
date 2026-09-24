@@ -1,5 +1,5 @@
 """Tests for SyncEngine — public-callable orchestration: lock dispatch, save-sync
-gates (enabled, migration-pending, save-sort changed), heartbeat probe,
+gates (enabled, migration-pending, content directory), heartbeat probe,
 device-registration fallback, error/conflict count surfacing, and matrix/registry
 delegate wiring. Per-file matrix dispatch lives in tests/services/saves/sync_engine/test_matrix.py;
 device registration in tests/services/saves/sync_engine/test_devices.py;

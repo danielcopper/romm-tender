@@ -196,9 +196,10 @@ class SaveAnswer:
 
     ``root_kind`` is the anchor ``directory`` hangs off, in the resolver's own
     vocabulary; :attr:`in_content_directory` is the one reading of it a sync
-    path acts on. ``fallback_directory`` is the unsorted root RetroArch falls
-    back to while ``directory`` does not exist yet. Both are ``None`` wherever
-    no placement was resolved.
+    path acts on. ``fallback_directory`` is the unsorted root RetroArch reverts
+    to when ``directory`` does not exist yet and it cannot create it on the
+    first save (the resolver's ``fallback_dir``). Both are ``None`` wherever no
+    placement was resolved.
 
     ``content_installed`` says whether this ROM's content is on disk. It is
     ``False`` for a ROM the library holds but has not installed — the question

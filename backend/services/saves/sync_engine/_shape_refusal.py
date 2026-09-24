@@ -45,10 +45,10 @@ def live_save_answer(rom_info: RomInfoService, rom_id: int) -> SaveAnswer | None
     changes a core's options in the emulator's own quick menu between one launch
     and the next sync, and a granularity read before that change would have the
     plugin carry a shared card as though it belonged to one game. Within a
-    single operation the caller hands this same reading to both consumers that
-    would otherwise take their own — the matrix, and the negotiate session's
-    inventory on a confirmed ROM — rather than taking a second: live is a
-    property of operations, not of layers.
+    single operation the caller hands this same reading to the consumers that
+    would otherwise take their own — the directory follow, the matrix, and the
+    negotiate session's inventory on a confirmed ROM — rather than taking a
+    second: live is a property of operations, not of layers.
     """
     if not rom_info.is_content_installed(rom_id):
         return None
@@ -116,8 +116,8 @@ class ContentDirTally:
     The gate is per ROM, so the sweep passes such a ROM over inside its run —
     and its one result still has to say so, because it is the sentence a user
     who asked for a full sync reads. ``answered`` counts the ROMs the sweep
-    took a reading for (those whose slot the user confirmed), ``beside_content``
-    how many of them the gate held back.
+    took a reading for (those whose slot the user confirmed, or the one it asks
+    about when none is), ``beside_content`` how many of them the gate held back.
     """
 
     answered: int = 0
@@ -147,7 +147,7 @@ class ContentDirTally:
         }
 
     def annotate(self, message: str) -> str:
-        """*message*, naming the ROMs held back where some were and others synced."""
+        """*message*, with the count of ROMs held back where some were and others synced."""
         if not self.beside_content:
             return message
         return f"{message}; {self.beside_content} game(s) skipped — {SAVE_SYNC_IN_CONTENT_DIR}"

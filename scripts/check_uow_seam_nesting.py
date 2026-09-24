@@ -210,10 +210,9 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         "resolve_savestate_location",
         # RomInfoService.save_answer (services/saves/rom_info.py) — the saves
         # package's own wrapper around that seam, listed because it is what the
-        # peers in services/saves/ actually call. The seam itself is reached
-        # directly from two modules only (rom_info.py and rom_adoption/renamer.py), so
-        # without this entry the rule would be enforced in those two files and
-        # green everywhere else it is reached from.
+        # peers in services/saves/ actually call. Without this entry the rule
+        # would be enforced only where the seam itself is named, and green
+        # everywhere the wrapper reaches it from.
         "save_answer",
         # SandboxLauncherFn (services/protocols/paths.py) — reads ES-DE's
         # es_find_rules.xml (re-probing the flatpak roots for it and re-statting

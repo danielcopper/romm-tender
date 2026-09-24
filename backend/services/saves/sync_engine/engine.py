@@ -1,10 +1,10 @@
 """SyncEngine entry point: per-rom lock dispatch and public-callable orchestration.
 
 Owns the rom-level concurrency seam (``_rom_sync_locks``) and the
-sequencing rules every public save-sync callable must follow (save-sync
-enabled check, retrodeck migration gate, following a moved save
-directory, device-registration fallback, dispatch into the matrix
-executor, persistence).
+sequencing rules the public save-sync callables follow (save-sync
+enabled check, retrodeck migration gate, device-registration fallback,
+dispatch into the matrix executor, persistence), plus following a moved
+save directory at the four sync entry points.
 Each public callable owns a narrow Unit of Work (ADR-0006): it reads the
 ``RomSaveSyncState`` aggregate + ``device_id`` at the start, performs all
 server/file I/O outside any transaction, and writes the mutated
@@ -475,19 +475,20 @@ class SyncEngine:
     async def _follow_save_directory(self, rom_id: int, answer: SaveAnswer | None) -> None:
         """Carry this ROM's save files to the directory *answer* names, where it moved.
 
-        Runs under the caller's ``rom_lock`` and before any refusal: a moved
-        directory is followed whether or not this ROM may be synced, because the
-        files are the user's and the emulator now looks elsewhere for them.
+        Runs under the caller's ``rom_lock`` and before the refusal that reads
+        the same answer: a moved directory is followed whether or not this ROM
+        may be synced, because the files are the user's and the emulator now
+        looks elsewhere for them.
         """
         if answer is not None:
             await self._loop.run_in_executor(None, self._follower.do_follow, rom_id, answer)
 
     async def record_save_directories(self) -> None:
-        """Record the answered save directory of every installed ROM that has none — the one-time backfill."""
+        """Record the answered save directory of each installed ROM that has none — the one-time backfill."""
         await self._record_each_installed_rom(self._follower.do_record_if_absent)
 
     async def rerecord_save_directories(self) -> None:
-        """Record the answered save directory of every installed ROM afresh, replacing what is recorded."""
+        """Record the answered save directory of each installed ROM afresh, replacing what is recorded."""
         await self._record_each_installed_rom(self._follower.do_rerecord)
 
     async def _record_each_installed_rom(self, record: Callable[[int], None]) -> None:

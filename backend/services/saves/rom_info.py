@@ -160,9 +160,7 @@ class RomInfoService:
         system any emulator declares, so asking with it answers about nothing.
         One of the two places in THIS service that decide a system and a path —
         :meth:`_uninstalled_answer` is the other — so the leak has two sites to
-        guard here rather than one per caller. ``services/rom_adoption/renamer.py``
-        decides its own — the adoption target's resolved system and both launch
-        paths — and is the third site the rule holds at.
+        guard here rather than one per caller.
         """
         return self._ask_resolver(rom_id, system, file_path, installed=True)
 

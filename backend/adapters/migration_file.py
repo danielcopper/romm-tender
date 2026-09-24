@@ -1,11 +1,10 @@
-"""Filesystem adapter for RetroDECK path and save-sort migration I/O.
+"""Filesystem adapter for the RetroDECK home migration's I/O.
 
 Owns the raw POSIX calls used by MigrationService to walk source
 locations, create destination directories, and relocate files when the
-RetroDECK home path changes or RetroArch save sorting flips. Path
-construction, conflict policy, and state updates remain a service
-concern; this adapter exposes only the I/O seams declared by
-``services.protocols.MigrationFileStore``.
+RetroDECK home path changes. Path construction, conflict policy, and
+state updates remain a service concern; this adapter exposes only the
+I/O seams declared by ``services.protocols.MigrationFileStore``.
 """
 
 from __future__ import annotations

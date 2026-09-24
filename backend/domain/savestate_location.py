@@ -24,9 +24,9 @@ class SavestateLocation:
 
     ``root_kind`` is the anchor ``directory`` hangs off, in the resolver's own
     vocabulary — ``content_directory`` for states written beside the game.
-    ``fallback_directory`` is the unsorted root RetroArch falls back to while
-    ``directory`` does not exist yet, ``None`` where the placement is not
-    conditional.
+    ``fallback_directory`` is the unsorted root RetroArch reverts to when
+    ``directory`` does not exist yet and it cannot create it, ``None`` where the
+    placement is not conditional.
     """
 
     directory: str

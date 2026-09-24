@@ -406,21 +406,18 @@ class FirmwareFileStore(Protocol):
 
 
 class MigrationFileStore(Protocol):
-    """Filesystem seam for RetroDECK path and save-sort migration I/O.
+    """Filesystem seam for the RetroDECK home migration's I/O.
 
     Owns the raw POSIX calls MigrationService uses to walk source
     locations, create destination directories, and relocate files when
-    the RetroDECK home path changes or RetroArch save sorting flips.
-    Path construction, conflict policy, and state updates remain a
-    service concern; this Protocol exposes only the I/O seams.
+    the RetroDECK home path changes. Path construction, conflict policy,
+    and state updates remain a service concern; this Protocol exposes
+    only the I/O seams.
 
-    The Protocol distinguishes ``move`` from ``rename`` because the two
-    migration flows have different filesystem semantics. ``move`` is
-    the cross-device-safe shutil-style relocation used for RetroDECK
-    home changes (e.g., internal SSD to SD card); it falls back to
+    ``move`` is the cross-device-safe shutil-style relocation a home
+    change needs (e.g., internal SSD to SD card); it falls back to
     copy+delete on ``EXDEV``. ``rename`` is the same-filesystem atomic
-    ``os.replace`` used inside the saves tree where source and
-    destination are guaranteed to share a filesystem.
+    ``os.replace``.
 
     Implementations are synchronous — services that call from an async
     context offload via ``loop.run_in_executor``.
@@ -459,9 +456,7 @@ class MigrationFileStore(Protocol):
     def rename(self, src: str, dst: str) -> None:
         """Atomically rename *src* to *dst*, replacing any existing file at *dst*.
 
-        Uses ``os.replace`` semantics — same-filesystem only. Use this
-        for save-sort migrations inside the saves tree where source
-        and destination are guaranteed to share a filesystem.
+        Uses ``os.replace`` semantics — same-filesystem only.
         """
         ...
 
