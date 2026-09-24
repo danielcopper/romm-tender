@@ -1,6 +1,6 @@
 """Direct unit tests for the @migration_blocked decorator.
 
-The decorator wraps Decky callables on Plugin so they short-circuit with a
+The decorator wraps callables on Plugin so they short-circuit with a
 blocked-dict whenever ``self._migration_service.is_retrodeck_migration_pending()``
 is True. ``_migration_service`` is a hard requirement: a missing/None service is
 a wiring regression and the wrapper raises ``RuntimeError`` rather than silently

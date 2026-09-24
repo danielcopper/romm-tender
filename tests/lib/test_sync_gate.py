@@ -1,6 +1,6 @@
 """Direct unit tests for the @sync_active_blocked decorator.
 
-The decorator wraps Decky callables on Plugin so they short-circuit with the
+The decorator wraps callables on Plugin so they short-circuit with the
 canonical failure shape whenever ``self._sync_service.is_sync_in_flight()``
 is True. ``_sync_service`` is a hard requirement: a missing/None service is
 a wiring regression and the wrapper raises ``RuntimeError`` rather than

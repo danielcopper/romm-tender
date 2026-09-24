@@ -4,7 +4,8 @@
 declares it — positional ``(offset, limit)`` numbers — and the assertions pin
 the ``{items, total}`` response shape (the contract), not delegation. The
 frontend pages this callable at plugin start so a large library never sends a
-multi-MB dump through the size-limited callable bridge in one response (#1025).
+multi-MB dump as one answer, which the host caps (``DEFAULT_PAYLOAD_LIMIT`` in
+``host/dispatch.py``) (#1025).
 """
 
 from __future__ import annotations
