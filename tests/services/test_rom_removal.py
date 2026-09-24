@@ -1311,7 +1311,14 @@ class TestRemovalProgressFrames:
         )
 
         await service.remove_rom(42)
-        await asyncio.sleep(0)
+        # The frame is marshaled from the executor thread and emitted from a task
+        # of its own, so it can land a tick after the removal returns.
+        try:
+            async with asyncio.timeout(2):
+                while not emitter.payloads("uninstall_progress"):
+                    await asyncio.sleep(0.001)
+        except TimeoutError:
+            pytest.fail("no uninstall_progress frame arrived within 2 s of the removal")
 
         assert emitter.payloads("uninstall_progress")[-1] == {
             "rom_id": 42,
