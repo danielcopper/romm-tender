@@ -5,10 +5,11 @@ answer changes — the user flipped one of RetroArch's sort flags, or anything e
 moved it — the files already on disk stay where the old answer put them, and the
 emulator no longer looks there. This module notices per game and carries them.
 
-It notices by comparison, never by computation: each ROM's save-sync state holds
-the directory the resolver last answered for it (``answered_save_dir``), and a
-later answer that differs is the whole signal. The recorded directory is read
-only as the source of that one move — it is never where a save is looked for.
+It notices by comparison, never by computation: each ROM's
+``AnsweredSaveDirectory`` holds the directory the resolver last answered for it,
+and a later answer that differs is the whole signal. The recorded directory is
+read only as the source of that one move — it is never where a save is looked
+for.
 
 **Nothing is overwritten or removed here.** A name present in both directories
 is a collision, and the older copy goes through the save-backup funnel. The
@@ -21,7 +22,7 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING
 
-from domain.rom_save_sync_state import RomSaveSyncState
+from domain.answered_save_directory import AnsweredSaveDirectory
 from domain.save_answer import SORTED_DIR_MISSING
 
 if TYPE_CHECKING:
@@ -37,9 +38,9 @@ class SaveDirectoryFollower:
     """Keeps one game's save files in the directory its emulator answers today.
 
     Every method is a synchronous worker for ``run_in_executor``. The caller
-    holds ``SyncEngine.rom_lock(rom_id)``, because the record is a field of the
-    ``RomSaveSyncState`` aggregate; no Unit of Work is open across any file
-    operation or resolver reading here.
+    holds ``SyncEngine.rom_lock(rom_id)``, so a record's read, the move and its
+    write are never interleaved with another follow of the same ROM; no Unit of
+    Work is open across any file operation or resolver reading here.
     """
 
     def __init__(
@@ -96,14 +97,12 @@ class SaveDirectoryFollower:
 
     def _recorded(self, rom_id: int) -> str | None:
         with self._uow_factory() as uow:
-            state = uow.rom_save_sync_states.get(rom_id)
-        return state.answered_save_dir if state is not None else None
+            record = uow.answered_save_directories.get(rom_id)
+        return record.directory if record is not None else None
 
     def _record(self, rom_id: int, directory: str) -> None:
         with self._uow_factory() as uow:
-            state = uow.rom_save_sync_states.get(rom_id) or RomSaveSyncState()
-            state.record_answered_save_dir(directory)
-            uow.rom_save_sync_states.save(rom_id, state)
+            uow.answered_save_directories.save(AnsweredSaveDirectory.record(rom_id=rom_id, directory=directory))
 
     def _move(self, rom_id: int, recorded: str, answered: str, answer: SaveAnswer, file_path: str) -> bool:
         """Carry this game's files from *recorded* to *answered*.

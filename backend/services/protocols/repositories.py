@@ -12,7 +12,8 @@ concern — services see a single aggregate.
 The Protocols match the aggregate roots settled in ADR-0003 — ``Rom``,
 ``RomInstall``, ``RomMetadata``, ``Playtime``, ``RomSaveSyncState``, ``BiosFile``,
 ``FirmwareCacheEntry``, ``SyncRun`` — plus ``PlatformSyncState`` (the per-platform
-completion stamp, ADR-0023) and the ``kv_config`` key-value surface.
+completion stamp, ADR-0023), ``AnsweredSaveDirectory`` (the save directory the
+resolver last answered per ROM, ADR-0040) and the ``kv_config`` key-value surface.
 ``SyncSettings``/``Platform``/``Device`` are NOT repositories — ADR-0003 dropped
 those aggregates.
 
@@ -28,6 +29,7 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from domain.answered_save_directory import AnsweredSaveDirectory
     from domain.bios_file import BiosFile
     from domain.collection_sync_state import CollectionSyncState
     from domain.firmware_cache import FirmwareCacheEntry
@@ -250,6 +252,21 @@ class RomSaveSyncStateRepository(Protocol):
 
     def iter_all(self) -> Iterator[tuple[int, RomSaveSyncState]]:
         """Iterate ``(rom_id, state)`` for every ROM. (saves/service.py save-inventory scan)"""
+        ...
+
+
+class AnsweredSaveDirectoryRepository(Protocol):
+    """Persistence seam for the ``AnsweredSaveDirectory`` aggregate (per-ROM answered save directory).
+
+    Keyed by *rom_id*. (saves/save_directory.py, the one reader and writer)
+    """
+
+    def get(self, rom_id: int) -> AnsweredSaveDirectory | None:
+        """Return the directory recorded for *rom_id*, or ``None`` when none is."""
+        ...
+
+    def save(self, record: AnsweredSaveDirectory) -> None:
+        """Upsert *record* under its ``rom_id``."""
         ...
 
 

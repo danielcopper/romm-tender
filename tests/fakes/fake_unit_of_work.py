@@ -1,4 +1,4 @@
-"""In-memory ``UnitOfWork`` composing the eleven fake repositories, for service tests.
+"""In-memory ``UnitOfWork`` composing the twelve fake repositories, for service tests.
 
 Mirrors the real UoW's context-manager shape — a clean ``__exit__`` commits and
 flips ``committed``; an exceptional one truly rolls back (discards every write
@@ -29,6 +29,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from fakes.fake_answered_save_directory_repository import FakeAnsweredSaveDirectoryRepository
 from fakes.fake_bios_file_repository import FakeBiosFileRepository
 from fakes.fake_collection_sync_state_repository import FakeCollectionSyncStateRepository
 from fakes.fake_firmware_cache_repository import FakeFirmwareCacheRepository
@@ -44,6 +45,7 @@ from fakes.fake_sync_run_repository import FakeSyncRunRepository
 if TYPE_CHECKING:
     from types import TracebackType
 
+    from domain.answered_save_directory import AnsweredSaveDirectory
     from domain.bios_file import BiosFile
     from domain.collection_sync_state import CollectionSyncState
     from domain.firmware_cache import FirmwareCacheEntry
@@ -65,6 +67,7 @@ class _Snapshot:
     rom_metadata: dict[int, RomMetadata]
     playtime: dict[int, Playtime]
     rom_save_sync_states: dict[int, RomSaveSyncState]
+    answered_save_directories: dict[int, AnsweredSaveDirectory]
     bios_files: dict[tuple[str, str], BiosFile]
     firmware_cache: dict[tuple[str, str], FirmwareCacheEntry]
     sync_runs: dict[str, SyncRun]
@@ -74,15 +77,22 @@ class _Snapshot:
 
 
 class FakeUnitOfWork:
-    """In-memory unit of work over eleven fake repositories with commit/rollback flags."""
+    """In-memory unit of work over twelve fake repositories with commit/rollback flags."""
 
     # Child repos whose aggregate carries a ``rom_id`` foreign key onto ``roms``
     # (schema: rom_installs / rom_metadata / rom_playtime / rom_save_sync_states +
-    # rom_save_files, the last two backing the one ``rom_save_sync_states`` repo).
+    # rom_save_files, the last two backing the one ``rom_save_sync_states`` repo,
+    # and answered_save_directories).
     # Each is keyed by ``rom_id``, so ``repo._snapshot().keys()`` are the FK
     # values the commit check validates against ``roms``. Adding a new per-rom
     # vertical means adding its repo attr name here — nothing else.
-    _PER_ROM_FK_CHILD_REPOS = ("rom_installs", "rom_metadata", "playtime", "rom_save_sync_states")
+    _PER_ROM_FK_CHILD_REPOS = (
+        "rom_installs",
+        "rom_metadata",
+        "playtime",
+        "rom_save_sync_states",
+        "answered_save_directories",
+    )
 
     def __init__(self) -> None:
         self.roms = FakeRomRepository()
@@ -90,6 +100,7 @@ class FakeUnitOfWork:
         self.rom_metadata = FakeRomMetadataRepository()
         self.playtime = FakePlaytimeRepository()
         self.rom_save_sync_states = FakeRomSaveSyncStateRepository()
+        self.answered_save_directories = FakeAnsweredSaveDirectoryRepository()
         self.bios_files = FakeBiosFileRepository()
         self.firmware_cache = FakeFirmwareCacheRepository()
         self.sync_runs = FakeSyncRunRepository()
@@ -123,6 +134,7 @@ class FakeUnitOfWork:
             rom_metadata=self.rom_metadata._snapshot(),
             playtime=self.playtime._snapshot(),
             rom_save_sync_states=self.rom_save_sync_states._snapshot(),
+            answered_save_directories=self.answered_save_directories._snapshot(),
             bios_files=self.bios_files._snapshot(),
             firmware_cache=self.firmware_cache._snapshot(),
             sync_runs=self.sync_runs._snapshot(),
@@ -168,6 +180,7 @@ class FakeUnitOfWork:
         self.rom_metadata._restore(snapshot.rom_metadata)
         self.playtime._restore(snapshot.playtime)
         self.rom_save_sync_states._restore(snapshot.rom_save_sync_states)
+        self.answered_save_directories._restore(snapshot.answered_save_directories)
         self.bios_files._restore(snapshot.bios_files)
         self.firmware_cache._restore(snapshot.firmware_cache)
         self.sync_runs._restore(snapshot.sync_runs)
@@ -203,6 +216,7 @@ class FakeUnitOfWork:
             self.rom_metadata.delete(rom_id)
             self.playtime.delete(rom_id)
             self.rom_save_sync_states.delete(rom_id)
+            self.answered_save_directories.delete(rom_id)
 
 
 class FakeUnitOfWorkFactory:

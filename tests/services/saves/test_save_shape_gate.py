@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
-from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON, SaveAnswer, SaveComponent
 
 if TYPE_CHECKING:
@@ -140,23 +139,18 @@ class TestARefusalProbesNothing:
 
 
 class TestARefusalWritesNoState:
-    """States two to five write no sync state.
-
-    The one field a refusal may write is the answered save directory — recorded
-    so a later move of that directory is followed. Everything the sync itself
-    keeps stays exactly as it was.
-    """
+    """States two to five leave the per-ROM save state exactly as they found it."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("state", _REFUSING_STATES)
-    async def test_sync_rom_saves_writes_no_sync_state(self, tmp_path, state: str):
+    async def test_sync_rom_saves_writes_nothing(self, tmp_path, state: str):
         svc, _store, _fake = _service(tmp_path, _refusing(state))
 
         result = await svc.sync_rom_saves(42)
 
         assert result["reason"] == SAVE_SHAPE_UNSUPPORTED_REASON
         assert result["synced"] == 0
-        assert _uow(svc).rom_save_sync_states.get(42) == RomSaveSyncState(answered_save_dir="/saves/ps2/pcsx2/memcards")
+        assert _uow(svc).rom_save_sync_states.get(42) is None
 
     @pytest.mark.asyncio
     async def test_the_control_writes_state(self, tmp_path):

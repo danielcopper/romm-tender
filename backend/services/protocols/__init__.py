@@ -108,6 +108,7 @@ from services.protocols.paths import (
 )
 from services.protocols.persistence import SettingsPersister
 from services.protocols.repositories import (
+    AnsweredSaveDirectoryRepository,
     BiosFileRepository,
     FirmwareCacheRepository,
     KvConfigRepository,
@@ -145,6 +146,7 @@ __all__ = [
     "ActiveDownloadRomIdsFn",
     "AdoptionCandidateProbeFn",
     "AdoptionMoveStore",
+    "AnsweredSaveDirectoryRepository",
     "ArtworkManager",
     "ArtworkRemover",
     "BiosChecker",

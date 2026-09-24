@@ -604,11 +604,9 @@ class SyncEngine:
             return 0, 0, [], []
         if save_answer is None:
             # The whole-library sweep's per-ROM step: its one reading follows a
-            # moved directory and is then handed down. The follow may record, so
-            # the aggregate is read again rather than written back stale.
+            # moved directory and is then handed down.
             save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
             await self._follow_save_directory(rom_id, save_answer)
-            save_state, device_id = await self._loop.run_in_executor(None, self._read_sync_inputs, rom_id)
             if content_dir_tally is not None:
                 content_dir_tally.count(save_answer)
         core_so = await self._loop.run_in_executor(None, self.resolve_core, rom_id)

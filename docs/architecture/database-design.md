@@ -636,7 +636,7 @@ is deleted on uninstall and this record has to survive one. The same migration d
 ## The runtime Unit of Work
 
 The schema is read and written at runtime through a **Unit of Work** (UoW) — the atomic transaction boundary one
-operation works inside. The concrete UoW and the eleven `sqlite3` repository adapters that back it live in
+operation works inside. The concrete UoW and the twelve `sqlite3` repository adapters that back it live in
 [`backend/adapters/repositories/`](https://github.com/danielcopper/romm-tender/tree/main/backend/adapters/repositories)
 ([#783](https://github.com/danielcopper/romm-tender/issues/783)). The `UnitOfWork` / `UnitOfWorkFactory` Protocols
 services depend on live in `backend/services/protocols/uow.py`; the per-aggregate Repository Protocols in

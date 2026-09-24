@@ -19,7 +19,6 @@ class TestDefaults:
         assert state.slots == {}
         assert state.files == {}
         assert state.last_sync_check_at is None
-        assert state.answered_save_dir is None
 
     def test_slots_and_files_are_independent_per_instance(self):
         a = RomSaveSyncState()
@@ -300,24 +299,6 @@ class TestMarkSyncEvaluated:
         state = RomSaveSyncState()
         state.mark_sync_evaluated("2026-05-28T12:00:00")
         assert state.last_sync_check_at == "2026-05-28T12:00:00"
-
-
-class TestRecordAnsweredSaveDir:
-    def test_records_the_directory(self):
-        state = RomSaveSyncState()
-        state.record_answered_save_dir("/saves/snes")
-        assert state.answered_save_dir == "/saves/snes"
-
-    def test_a_later_answer_replaces_the_earlier_one(self):
-        state = RomSaveSyncState(answered_save_dir="/saves/snes")
-        state.record_answered_save_dir("/saves/snes/Snes9x")
-        assert state.answered_save_dir == "/saves/snes/Snes9x"
-
-    def test_an_empty_directory_is_refused(self):
-        state = RomSaveSyncState(answered_save_dir="/saves/snes")
-        with pytest.raises(ValueError, match="directory is required"):
-            state.record_answered_save_dir("")
-        assert state.answered_save_dir == "/saves/snes"
 
 
 class TestRecordSyncedCore:

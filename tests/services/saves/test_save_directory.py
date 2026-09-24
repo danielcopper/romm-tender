@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
+from domain.answered_save_directory import AnsweredSaveDirectory
 from domain.rom_save_sync_state import RomSaveSyncState
 from domain.save_answer import SaveAnswer, SaveComponent, unestablished_answer
 from tests.services.saves._helpers import (
@@ -62,15 +63,15 @@ def _seed_answer(svc, answer: SaveAnswer) -> None:
     cast("FakeSaveLocationReader", svc._rom_info._save_locations).answer_with("gba", answer)
 
 
-def _record(svc, directory: str) -> None:
-    state = RomSaveSyncState()
-    state.record_answered_save_dir(directory)
-    _seed_save_state(svc, _ROM, state)
+def _record(svc, directory: str, rom_id: int = _ROM) -> None:
+    with _uow(svc) as uow:
+        uow.answered_save_directories.save(AnsweredSaveDirectory.record(rom_id=rom_id, directory=directory))
 
 
-def _recorded(svc) -> str | None:
-    state = _get_save_state(svc, _ROM)
-    return state.answered_save_dir if state is not None else None
+def _recorded(svc, rom_id: int = _ROM) -> str | None:
+    with _uow(svc) as uow:
+        record = uow.answered_save_directories.get(rom_id)
+    return record.directory if record is not None else None
 
 
 def _follow(svc, answer: SaveAnswer) -> None:
@@ -115,6 +116,18 @@ class TestTheComparison:
 
         _follow(svc, unestablished_answer(content_installed=True))
 
+        assert _recorded(svc) is None
+
+    def test_a_first_sight_creates_no_save_sync_state(self, tmp_path, dirs):
+        # A save-sync state row means "tracked for save sync"; a game seen for
+        # the first time never was.
+        old, _new = dirs
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+
+        _follow(svc, _answer(str(old)))
+
+        assert _recorded(svc) == str(old)
         assert _get_save_state(svc, _ROM) is None
 
     def test_an_answer_with_no_directory_leaves_the_record_alone(self, tmp_path, dirs):
@@ -392,19 +405,17 @@ class TestTheEntryPointsFollowBeforeTheyRefuse:
         _install_rom(svc, tmp_path)
         state = RomSaveSyncState()
         state.confirm_slot("default")
-        state.record_answered_save_dir(str(old))
         _seed_save_state(svc, _ROM, state)
+        _record(svc, str(old))
         _create_save(tmp_path, content=b"progress")
         _seed_answer(svc, _answer(str(new)))
 
         await svc.sync_all_saves()
 
         assert (new / "pokemon.srm").read_bytes() == b"progress"
+        assert _recorded(svc) == str(new)
         after = _get_save_state(svc, _ROM)
         assert after is not None
-        # The sync that ran after the follow wrote the aggregate back, and did
-        # not carry the record from before the follow with it.
-        assert after.answered_save_dir == str(new)
         assert after.slot_confirmed is True
 
 
@@ -414,19 +425,30 @@ class TestTheOneTimeBackfill:
         svc, _ = make_service(tmp_path)
         _install_rom(svc, tmp_path, rom_id=1, file_name="one.gba")
         _install_rom(svc, tmp_path, rom_id=2, file_name="two.gba")
-        state = RomSaveSyncState()
-        state.record_answered_save_dir("/kept/as/it/was")
-        _seed_save_state(svc, 2, state)
+        _record(svc, "/kept/as/it/was", rom_id=2)
 
         await svc.record_save_directories_once()
 
-        with _uow(svc) as uow:
-            one = uow.rom_save_sync_states.get(1)
-            two = uow.rom_save_sync_states.get(2)
-        assert one is not None
-        assert two is not None
-        assert one.answered_save_dir == str(tmp_path / "saves" / "gba")
-        assert two.answered_save_dir == "/kept/as/it/was"
+        assert _recorded(svc, 1) == str(tmp_path / "saves" / "gba")
+        assert _recorded(svc, 2) == "/kept/as/it/was"
+        # Recorded beside the save-sync state, never as one: neither game was synced.
+        assert _get_save_state(svc, 1) is None
+        assert _get_save_state(svc, 2) is None
+
+    @pytest.mark.asyncio
+    async def test_a_never_synced_game_still_lists_the_default_slot(self, tmp_path):
+        # The listing reads "no save-sync state" as "never tracked" and offers the
+        # default slot; a row there would read as the retired legacy mode.
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+
+        await svc.record_save_directories_once()
+        result = await svc.get_save_slots(_ROM)
+
+        assert _recorded(svc) == str(tmp_path / "saves" / "gba")
+        assert result["success"] is True
+        assert result["active_slot"] == "autosave"
 
     @pytest.mark.asyncio
     async def test_runs_once(self, tmp_path):
@@ -437,12 +459,12 @@ class TestTheOneTimeBackfill:
         await svc.record_save_directories_once()
         first = len(asked)
         with _uow(svc) as uow:
-            uow.rom_save_sync_states.delete(_ROM)
+            uow.answered_save_directories.delete(_ROM)
         await svc.record_save_directories_once()
 
         assert first == 1
         assert len(asked) == first
-        assert _get_save_state(svc, _ROM) is None
+        assert _recorded(svc) is None
 
     @pytest.mark.asyncio
     async def test_an_answer_with_no_directory_records_nothing(self, tmp_path):
@@ -452,7 +474,7 @@ class TestTheOneTimeBackfill:
 
         await svc.record_save_directories_once()
 
-        assert _get_save_state(svc, _ROM) is None
+        assert _recorded(svc) is None
 
     @pytest.mark.asyncio
     async def test_a_rom_with_no_usable_install_row_is_passed_over(self, tmp_path):
@@ -461,7 +483,7 @@ class TestTheOneTimeBackfill:
 
         await svc.record_save_directories_once()
 
-        assert _get_save_state(svc, _ROM) is None
+        assert _recorded(svc) is None
 
     @pytest.mark.asyncio
     async def test_a_failed_pass_is_not_marked_done(self, tmp_path, caplog):

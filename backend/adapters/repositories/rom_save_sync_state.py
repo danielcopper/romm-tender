@@ -26,8 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 _STATE_COLUMNS = (
-    "rom_id, active_slot, slot_confirmed, emulator, system, last_synced_core, own_upload_ids, slots, "
-    "last_sync_check_at, answered_save_dir"
+    "rom_id, active_slot, slot_confirmed, emulator, system, last_synced_core, own_upload_ids, slots, last_sync_check_at"
 )
 _FILE_COLUMNS = (
     "rom_id, filename, tracked_save_id, last_sync_hash, last_sync_server_hash, last_sync_at, "
@@ -64,7 +63,6 @@ class SqliteRomSaveSyncStateRepository(BaseRepository):
             slots=self._json_or_none(row["slots"]) or {},
             files=files,
             last_sync_check_at=row["last_sync_check_at"],
-            answered_save_dir=row["answered_save_dir"],
         )
 
     def get(self, rom_id: int) -> RomSaveSyncState | None:
@@ -85,7 +83,7 @@ class SqliteRomSaveSyncStateRepository(BaseRepository):
 
     def save(self, rom_id: int, state: RomSaveSyncState) -> None:
         self._conn.execute(
-            f"INSERT OR REPLACE INTO rom_save_sync_states ({_STATE_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            f"INSERT OR REPLACE INTO rom_save_sync_states ({_STATE_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 rom_id,
                 state.active_slot,
@@ -96,7 +94,6 @@ class SqliteRomSaveSyncStateRepository(BaseRepository):
                 None if state.own_upload_ids is None else self._json(state.own_upload_ids),
                 self._json(state.slots),
                 state.last_sync_check_at,
-                state.answered_save_dir,
             ),
         )
         self._conn.execute("DELETE FROM rom_save_files WHERE rom_id = ?", (rom_id,))
