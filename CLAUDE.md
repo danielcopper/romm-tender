@@ -224,21 +224,11 @@ locally with `mise run docs`.
   the constructor from the node — `el.ownerDocument.defaultView` — as `WidePage` and `ScrollRegion` do. **The frontend
   suite cannot see this**: happy-dom has one realm, so the wrong global and the right one are the same object and every
   test passes.
-- **A vendored package's assumptions about the runtime it loads in are invisible to every check here**: nothing in this
-  repo's toolchain runs Decky Loader's frozen Python, so vendoring or bumping anything under `_vendor/` is a device-test
-  trigger, and what it risks is not confined to load — the plugin may fail to come up at all, or a question may reach
-  the assumption later and do its damage then: the spawn shape the grant below answers took the whole Steam UI down at
-  the first save question — [`.claude/rules/vendored-assets.md`](.claude/rules/vendored-assets.md). That assumption is
-  answered by a **grant this repo makes and nothing enforces**: `adapters/atlas_host.py` hands the resolver an
-  interpreter for its core probe, because frozen, `sys.executable` is the loader binary rather than a Python. Removing
-  or forgetting the grant fails nothing — atlas probes no core, so every core it is asked about comes back unknown, and
-  the one question this plugin puts that reaches the probe degrades: a **libretro** entry's save answer, which loses the
-  core's recorded save behaviour (`core-generation-unestablished`, `core-unqueryable`) and then usually establishes
-  nothing and names no file. Usually, not always — an answer that comes from a per-game override still names its files —
-  and a standalone emulator's save answer never probes at all, so what is lost is a subset nothing counts. Green suite,
-  green gate, quietly poorer answers: `bootstrap/adapters.py` logs which interpreter a probe would run under because
-  that line is the only place the **cause** is named — the caveat itself reaches the debug log and the wire, but nothing
-  in it separates "no interpreter" from "the core would not load".
+- **The Python CI tests is not the one a device runs**: CI and the venv run the version `mise.toml` pins, while a device
+  runs the system interpreter the service unit starts, which an OS update moves without a commit here. So vendoring or
+  bumping anything under `_vendor/` is a device-test trigger — a green gate proves the copy imports under CI's Python
+  and says nothing about the Deck's — and the rule that owns it arrives only once a file under `_vendor/` is read:
+  [`.claude/rules/vendored-assets.md`](.claude/rules/vendored-assets.md).
 - **An empty collection in a resolver answer is a statement about PROVENANCE, never about need** — and Python spells it
   the same as an absence, which is what makes this the trap it is. The verdict on a catalogue entry is
   `requirements_met`, three-valued: `True`, `False`, `None` for "could not be established". It narrows only and is never

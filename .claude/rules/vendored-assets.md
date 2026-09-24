@@ -7,11 +7,12 @@ paths:
 
 # Vendored code, binaries, and data `[ours]`
 
-**Vendored deps (`_vendor/`)**: Third-party runtime deps are vendored under `backend/_vendor/<package>/` (Decky has no
-plugin-level package manager) and imported as `from _vendor import <package>`. Only adapters import `_vendor.*`;
-services/domain/lib stay third-party-free (`domain-stdlib-only` contract in `.importlinter`). `_vendor/` is excluded
-from ruff, basedpyright, and Sonar. Every vendored package ships its upstream `LICENSE` and a provenance entry in
-[`_vendor/README.md`](../../backend/_vendor/README.md).
+**Vendored deps (`_vendor/`)**: Third-party runtime deps are vendored under `backend/_vendor/<package>/` (Tender runs on
+the system Python with no pip and no venv; why that rules a venv out, and the limit it sets for compiled extension
+modules, is [`_vendor/README.md`](../../backend/_vendor/README.md)'s) and imported as `from _vendor import <package>`.
+Only adapters import `_vendor.*`; services/domain/lib stay third-party-free (`domain-stdlib-only` contract in
+`.importlinter`). `_vendor/` is excluded from ruff, basedpyright, and Sonar. Every vendored package ships its upstream
+`LICENSE` and a provenance entry in [`_vendor/README.md`](../../backend/_vendor/README.md).
 
 **One manifest per tree.** `backend/_vendor/<package>/` is pinned by the `<package>.SHA256SUMS` beside it, and
 `scripts/check_vendored_trees.py` fails on a package directory that has none — the manifest is discovered, never named
@@ -22,39 +23,17 @@ each one is, and both are asserted the same way. Where it is a wheel's manifest 
 `<package>.LICENSE`: the checked file set is an exact equality, so a licence inside the tree would be an extra file the
 gate has to except.
 
-**Nothing in this repo's toolchain runs Decky Loader's frozen Python.** The venv, the tests, the type-checker and the
-linters all run ordinary CPython, so a vendored package's assumptions about the runtime it loads in are invisible here
-and surface on a device — when the plugin loads, or the first time a question reaches the assumption. Three shapes have
-actually occurred, all recorded in emu-atlas and all fixed upstream in the release vendored today — the third only
-halfway, by design, with the other half a grant this repo has to make. The first one hit this plugin's own code months
-before any vendoring, and that fix is still in the tree:
+**The Python CI runs is not the Python a device runs.** The venv, the tests, the type-checker and the linters run the
+version `mise.toml` pins; a device runs the system interpreter the service unit starts, and an OS update moves that one
+without a commit here. So a vendored package's assumptions about the interpreter it loads in are checked only against
+CI's, and surface on a device — when the backend starts, or the first time a question reaches the assumption.
+[`_vendor/README.md`](../../backend/_vendor/README.md) holds the account.
 
-- **A stdlib wrapper package a frozen build drops while the extension it wraps ships.** `xml.etree` is Python source
-  over the expat extension; PyInstaller bundles only what its analysis reaches, so `import xml.etree.ElementTree` raises
-  `ModuleNotFoundError: No module named 'xml.etree'` on Decky's bundle while expat itself sits in `lib-dynload`. This is
-  **not** a hypothetical import from someone else's history: #57 shipped this plugin's own `es_systems.xml` parsing on
-  `xml.etree` and had to rewrite both readers onto expat's callback API, which is why `adapters/es_de_config.py` still
-  parses through `xml.parsers.expat` today. Fixed in emu-atlas the same way — see the vendored `atlas/_xml.py`, which
-  states the whole account, and [emu-atlas#339](https://github.com/danielcopper/emu-atlas/issues/339). The vendored copy
-  then carried it straight back in: atlas 0.5.0 landed here (#1805) still importing `xml.etree` at module level, and
-  #1807 — the change that wired the resolver in and bumped past it — hit the raise on a device, at bootstrap, before
-  that bump. A device test is what found it; no gate here would have.
-- **A package name passed as a string rather than imported.** `importlib.resources.files("<pkg>")` names the package in
-  a string literal, so it is invisible to any import rewrite and to every grep for import statements. Fixed in emu-atlas
-  by making a directory copy resolve under any parent package
-  ([emu-atlas#327](https://github.com/danielcopper/emu-atlas/issues/327)).
-- **A package that spawns `sys.executable`.** Frozen, that is the application and not an interpreter, so the spawn
-  starts the host a second time — under Decky Loader it took the whole Steam UI down with it, at the first save question
-  rather than at load. Fixed in emu-atlas 0.14.0 halfway by design: atlas now spawns nothing it was not handed, so
-  **this host has to hand it one** — [`adapters/atlas_host.py`](../../backend/adapters/atlas_host.py), whose absence
-  fails nothing and quietly degrades save answers. Removing a grant is therefore a device-test trigger of its own. The
-  full account is in [`_vendor/README.md`](../../backend/_vendor/README.md).
-
-The consequence for this repo is the actionable half: **vendoring a package is a device-test trigger.** A green
-`mise run gate` says the copy hashes correctly and imports under CPython; it says nothing about whether it imports under
-Decky's interpreter. How far a load-time failure spreads is a property of the wiring, not of vendoring: today `main.py`
-→ `bootstrap/adapters.py` → `adapters/atlas_firmware.py` → `from _vendor.atlas import …` are all module-level imports,
-so a raise inside the vendored tree takes the whole plugin down rather than one feature. A package reached only behind a
+The consequence for this repo is the actionable half: **vendoring or bumping a package is a device-test trigger.** A
+green `mise run gate` says the copy hashes correctly and imports under CI's Python; it says nothing about the system
+Python on the Deck. How far a load-time failure spreads is a property of the wiring, not of vendoring: today `main.py` →
+`bootstrap/adapters.py` → `adapters/atlas_firmware.py` → `from _vendor.atlas import …` are all module-level imports, so
+a raise inside the vendored tree takes the whole backend down rather than one feature. A package reached only behind a
 lazy import would cost just the path that reaches it.
 
 **Compiled binaries** (no source in this repo) are vendored under `backend/native/` instead — downloaded verbatim from

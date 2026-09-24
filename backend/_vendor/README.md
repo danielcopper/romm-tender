@@ -1,15 +1,18 @@
 # Vendored copies
 
 What this directory holds is **upstream code we do not own** — verbatim, or verbatim plus a documented local patch,
-pinned by the provenance below, excluded from our own linters and gates, and redistributed in the release zip, so each
-copy keeps its upstream licence (inside the package directory, or beside it as `<package>.LICENSE` where the copy is
-pinned against upstream's own file manifest). That, and not any one import mechanism, is what puts something here;
+pinned by the provenance below, excluded from our own linters and gates, and redistributed in the release tarball, so
+each copy keeps its upstream licence (inside the package directory, or beside it as `<package>.LICENSE` where the copy
+is pinned against upstream's own file manifest). That, and not any one import mechanism, is what puts something here;
 keeping the copies under one root is what lets a single set of exclusions cover them all. See the `_vendor/` rules in
 [`CLAUDE.md`](../../CLAUDE.md).
 
-Everything here today is a third-party runtime dependency, vendored because Decky Loader has no plugin-level package
-manager and imported as `from _vendor import <package>` — and only adapters import `_vendor.*`. The provenance entries
-below make updating any of them a deliberate diff rather than "diff and pray".
+Everything here today is a third-party runtime dependency, imported as `from _vendor import <package>` — and only
+adapters import `_vendor.*`. They are vendored because Tender runs on the system Python, with no pip and no venv. A venv
+is tied to the Python minor version it was built with, so an OS update that moves the system Python to a new minor
+version would strand one; a pure-Python copy under the program's own code carries no such tie.
+[The runtime a vendored copy has to load in](#the-runtime-a-vendored-copy-has-to-load-in) states the limit that follows.
+The provenance entries below make updating any of them a deliberate diff rather than "diff and pray".
 
 ## Manifests
 
@@ -67,11 +70,7 @@ so a plain checksum sweep would pass a half-copied tree.
 catalogue behind `CoreInfoProvider`, `SystemSupportedExtensionsFn`, `SystemM3uSupportFn` and `SystemKnownFn`), and
 `adapters/atlas_saves.py` (where one ROM's save lives and what it consists of, behind `SaveLocationReader`).
 `tests/test_vendored_atlas.py` additionally imports it and asserts the pinned version, so the copy is proven to resolve
-and not merely to hash correctly even if all three adapters ever stop importing it. That test also imports the tree with
-`xml.etree` blocked at `sys.meta_path`: Decky Loader's PyInstaller runtime does not ship that module, upstream answers
-it with `atlas/_xml.py` (ElementTree's shape on expat directly), and nothing about a release states which parser it
-reaches for — so a version bump that reintroduces `xml.etree` would import cleanly in CI and kill the backend at
-bootstrap on a real Deck.
+and not merely to hash correctly even if all three adapters ever stop importing it.
 
 ### How to update atlas
 
@@ -93,8 +92,8 @@ bootstrap on a real Deck.
 4. Bump the **Version** bullet above and the pinned version in `tests/test_vendored_atlas.py`.
 5. Re-run the gate: `python scripts/check_vendored_trees.py`.
 
-The gate runs in `mise run lint` and in CI (`.github/workflows/ci.yml`), and the release smoke test asserts the tree
-ships in the plugin zip, so both a tampered copy and a dropped one fail the pipeline.
+The gate runs in `mise run lint` and in CI (`.github/workflows/ci.yml`), so both a tampered copy and a dropped one fail
+the pipeline.
 
 ## vdf
 
@@ -134,36 +133,13 @@ licence, and the update procedure below has to put it back by hand for exactly t
 
 ## The runtime a vendored copy has to load in
 
-Decky Loader ships a **frozen Python** (a PyInstaller bundle), and nothing in this repo runs it — the venv,
-`mise run test`, basedpyright and the linters are all ordinary CPython. A vendored package's assumptions about the
-standard library, about its own name, and about the program it is running inside are therefore invisible here and
-surface on a device — at plugin load, or the first time a question reaches the assumption. All three shapes below are
-emu-atlas's own history, and the first one is this plugin's history too: it predates any vendoring at all, and the first
-atlas release vendored here still carried it. The first two are fixed upstream in the release vendored today and ask
-nothing of this host. The third is fixed upstream **only halfway, by design** — the other half is a grant this repo has
-to make, so read that bullet before concluding there is nothing to do here.
+A vendored copy loads under the interpreter the service unit starts — `/usr/bin/python3`, or whatever `TENDER_PYTHON`
+named when `install.sh` wrote the unit — and not under the Python the venv, `mise run test`, basedpyright and the
+linters run. `mise.toml` pins that one to the minor version SteamOS ships, and `install.sh` refuses an interpreter older
+than it, but nothing keeps the two equal: an OS update moves the system Python without a commit here. A vendored
+package's assumptions about the standard library and about its own name are therefore proven only against CI's Python,
+and surface on a device — when the backend starts, or the first time a question reaches the assumption.
 
-- **A frozen build drops the stdlib wrapper and keeps the extension it wraps.** `xml.etree` is Python source over the
-  expat extension, and PyInstaller bundles only the modules its analysis reached: on Decky's bundle
-  `import xml.etree.ElementTree` raises `ModuleNotFoundError: No module named 'xml.etree'` while expat itself sits in
-  the bundle's `lib-dynload`. **This one bit the plugin's own code first.** Per-core BIOS filtering (#57, 2026-02-27)
-  shipped `es_systems.xml` parsing on `xml.etree.ElementTree` and had to rewrite both of its readers onto expat's
-  SAX-style callback API in the same change. That remedy is still load-bearing:
-  [`adapters/es_find_rules.py`](../adapters/es_find_rules.py) parses `es_find_rules.xml` through `xml.parsers.expat` to
-  this day and names the reason. Which readers carry it has shifted — #57's gamelist `<alternativeEmulator>` reader is
-  retired, the find-rules reader arrived later (#1305) already written that way, and the `es_systems.xml` reader left
-  with `adapters/es_de_config.py` (#1840): that file is the vendored resolver's to read now, which is why the same
-  assumption below is the one that matters. It then arrived a second time, vendored: the copy landed at atlas 0.5.0
-  (#1805), whose `installations.py` and `esde.py` imported `xml.etree` at module level, reachable straight from
-  `atlas/__init__.py`. The wiring is where it surfaced — nothing in production imported `_vendor.atlas` until #1807, the
-  change that both wired the resolver in and bumped past it, and on a device that import raised at `installations.py:28`
-  and killed the backend at bootstrap ([emu-atlas#339](https://github.com/danielcopper/emu-atlas/issues/339), filed the
-  day the copy landed). A device test found it; no gate here would have said a word. A checksum-pinned copy cannot be
-  patched around a problem like that, so the assumption had to leave the library — upstream rebuilt the surface it uses
-  directly on expat, importing `xml.parsers.expat` with a `pyexpat` fallback, and released that as 0.5.1 the same
-  evening; #1807 vendored 0.6.0. The vendored [`atlas/_xml.py`](atlas/_xml.py) states the whole account, down to the
-  namespace handling it deliberately does not reproduce; read it before reaching for `xml.etree` anywhere near a
-  vendored tree.
 - **A package named in a string rather than imported.** `importlib.resources.files("atlas")` addresses whatever package
   the host calls `atlas` — not this copy, which imports as `_vendor.atlas`. A string literal is invisible to an import
   rewrite and to every grep for import statements, which is what makes this shape cheap to miss. This one has not
@@ -171,35 +147,18 @@ to make, so read that bullet before concluding there is nothing to do here.
   the copy resolves under whatever parent it is given
   ([emu-atlas#327](https://github.com/danielcopper/emu-atlas/issues/327)); `atlas/_data.py` is the single place every
   packaged table is read through.
-- **A package that spawns `sys.executable`, which on a frozen host is not an interpreter but the application.** atlas
-  answers "what does this core save" by loading the core in a child process — up to 0.13.0 a `subprocess.run` of
-  `sys.executable -m atlas._core_probe <so>`, with `capture_output=True` and a 15-second timeout — which is a probe only
-  where `sys.executable` really is a Python. In the plugin process it is `~/homebrew/services/PluginLoader`, and a
-  PyInstaller bootloader ignores the `-m` arguments: the spawn started a **second Decky Loader, as root**, which
-  restarted `steamwebhelper` — the whole Steam UI went down and came back some twelve seconds later — and reloaded every
-  plugin, whereupon the reloaded backend's startup cleanup deleted the in-flight ROM download's `.tmp` file. Reproduced
-  four times from a script on the device. Both the count and that duration are observations from that device session,
-  timed and counted by hand; nothing in this repo records either, so do not go looking for the artifact.
-  `capture_output=True` is why it left no trace: the second loader's entire output was swallowed, so nothing about any
-  of it reached a log. A device test found it and no gate here would have said a word — under the venv's ordinary
-  CPython that same line is a working probe. **Fixed in 0.14.0, and deliberately only halfway**: atlas now derives an
-  interpreter only where the running program plainly is one, and takes a host-registered path ahead of that, so this
-  host has to name one — which is [`adapters/atlas_host.py`](../adapters/atlas_host.py)'s whole job. Where none is named
-  nothing is spawned and every core atlas is asked about comes back unknown, which is quiet: the answers get poorer — a
-  libretro entry's save answer first, since that is the only question this plugin puts that reaches the probe — and
-  nothing fails.
+
+**Compiled extension modules do not fit this model.** One built for a CPython minor version's own ABI (a wheel tagged
+`cp313`, say) does not load under another, so a copy vendored for today's system Python stops loading when an OS update
+moves it — the very event vendoring exists to survive. The one expected so far is `backports.zstd`; how it ships is
+#1735's decision.
 
 Neither artifact can see any of this, and each says less than it looks like it does. The checksum gate says the copy is
 the bytes we pinned; it never imports anything. What says the copy imports is the test suite — most directly
 [`tests/test_vendored_atlas.py`](../../tests/test_vendored_atlas.py), whose whole job that is, and alongside it every
-test that reaches the firmware adapter — and all of it only under the venv's ordinary CPython. **Vendoring or bumping a
-package is therefore a device test**, and what it guards against runs from a load-time failure to damage done at the
-first question that reaches the assumption. `main.py` reaches the vendored resolver through a chain of module-level
-imports, so an import that raises takes the whole plugin down rather than one feature; the spawn shape above waited for
-the first save question and then took the Steam UI down with it. That matters most for what comes next: #1735 names
-`backports.zstd` as the next package expected here, vendored so that Decky Loader's embedded Python 3.11 gains a zstd
-codec it does not ship. How that one behaves on a frozen interpreter is not known yet — it is worth finding out on a
-device rather than inferring, which is the whole point of the entries above.
+test that reaches the firmware adapter — and all of it only under CI's Python. **Vendoring or bumping a package is
+therefore a device test.** `main.py` reaches the vendored resolver through a chain of module-level imports, so an import
+that raises takes the whole backend down rather than one feature.
 
 ## Formatters and vendored copies
 
