@@ -35,8 +35,8 @@ def meets_min_version(version_str: str | None, minimum: tuple[int, ...]) -> bool
     followed by a RomM pre-release suffix ``-alpha`` or ``-beta`` (case-insensitive)
     with an optional ``.N`` build number (e.g. ``"5.0.0-alpha.1"``, ``"4.9.0-beta"``).
 
-    Pre-releases rank **below** their own release: at floor ``(4, 9, 0)``,
-    ``4.9.0-beta.3`` is rejected while ``4.9.1-beta`` passes because its numeric
+    Pre-releases rank **below** their own release: at floor ``(5, 3, 0)``,
+    ``5.3.0-beta.1`` is rejected while ``5.3.1-beta`` passes because its numeric
     core is genuinely above the floor. When the numeric core is below *minimum*,
     the result is ``False`` regardless of suffix.
 

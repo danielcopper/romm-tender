@@ -22,8 +22,8 @@ nothing.
 
 ## RomM Save API
 
-Requires RomM >= 4.9.0 (release or higher core). Pre-releases at the exact floor (`4.9.0-beta`, `4.9.0-alpha.1`) rank
-below `4.9.0` and are rejected; a higher core with a suffix (`4.9.1-beta`) passes. The plugin rejects servers below the
+Requires RomM >= 5.3.0 (release or higher core). Pre-releases at the exact floor (`5.3.0-beta.1`, `5.3.0-alpha.1`) rank
+below `5.3.0` and are rejected; a higher core with a suffix (`5.3.1-beta`) passes. The plugin rejects servers below the
 floor with `reason: "version_error"`.
 
 | Endpoint                                                 | Method | Notes                                                                                                                                                                                                                                                                                                  |
@@ -1074,7 +1074,7 @@ navigation between the buttons uses `Focusable` with `flow-children="right"` for
 ## Server Capabilities
 
 The capabilities system (`get_server_capabilities` callable) has been removed. Since the plugin now requires RomM >=
-4.9.0, all features (device sync, version history, slot deletion, device management) are unconditionally available. The
+5.3.0, all features (device sync, version history, slot deletion, device management) are unconditionally available. The
 frontend no longer fetches or checks capability flags.
 
 ## Conflict Resolution
@@ -1402,8 +1402,8 @@ proves us current skips the ack, anything else (including a bare PUT body) still
 
 This makes the dedicated `POST /api/saves/{id}/downloaded` ack **redundant on the normal upload path** — the sync engine
 skips it when the upload response already shows this device `is_current` (`_confirm_upload_sync`, #1458), saving one
-round-trip per uploaded file. The historical `v4.8.1` note claiming the PUT did **not** upsert the sync row is obsolete
-at the ≥ 4.9.0 floor.
+round-trip per uploaded file. The historical `v4.8.1` note claiming the PUT did **not** upsert the sync row is obsolete:
+no supported server predates 4.9.0.
 
 **The one exception — `add_save`'s content-dedup early-return.** A named-slot `overwrite=false` POST whose content hash
 matches an existing save in the slot returns that pre-existing save **before** the `device_save_sync` upsert (a stale

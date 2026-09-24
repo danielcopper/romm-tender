@@ -1419,8 +1419,8 @@ early exit so a concurrent `start_download` for the same rom is rejected rather 
 
 **The minimum-version gate is SemVer-aware on `SYSTEM.VERSION`.** `domain.version.meets_min_version` compares the
 numeric core against `_MIN_REQUIRED_VERSION`; when the core equals the floor, a `-alpha` / `-beta` suffix
-(case-insensitive, optional `.N` build number) ranks **below** the release and is rejected — so `4.9.0-beta.3` fails at
-floor `4.9.0` while `4.9.1-beta` passes. `development` and a missing version bypass the gate.
+(case-insensitive, optional `.N` build number) ranks **below** the release and is rejected — so `5.3.0-beta.1` fails at
+floor `5.3.0` while `5.3.1-beta` passes. `development` and a missing version bypass the gate.
 
 **A Client API Token is bound to the server it was minted against.** When the token is minted, the canonical origin of
 `romm_url` (full `scheme://host[:port]`, default ports folded out, path/query dropped — `lib/url_host.normalize_origin`)
@@ -1740,11 +1740,12 @@ Every deletion-authority probe reaches the network through the **JSON-API** entr
 `list_saves` (`request`) behind the save-status, copies and slot-setup reads, and `update_device` (`put_json`) behind
 the device re-registration. The one consumer that branches on a byte-stream 404 is the `url_cover` fallback.
 
-The entity-answer shape is captured from RomM 5.1.0; the supported floor is 4.9.0. If a 4.9.x entity-404 ever carries a
-different body shape (no JSON content type, no `detail` string), every entity-404 on that server degrades to
-`server_unreachable`: the cleanup never confirms a ROM gone, no version is marked vanished, no stale device registration
-is dropped. That is the fail-open direction by design — if a 4.9.x user reports exactly that symptom set, this paragraph
-is the explanation, and the fix is a version-aware entity check, never a return to trusting the bare status.
+The entity-answer shape is captured from RomM 5.1.0, a release below the supported floor of 5.3.0. If a later release's
+entity-404 ever carries a different body shape (no JSON content type, no `detail` string), every entity-404 on that
+server degrades to `server_unreachable`: the cleanup never confirms a ROM gone, no version is marked vanished, no stale
+device registration is dropped. That is the fail-open direction by design — if a user on such a server reports exactly
+that symptom set, this paragraph is the explanation, and the fix is a version-aware entity check, never a return to
+trusting the bare status.
 
 #### PersistenceAdapter notes
 
@@ -2338,7 +2339,7 @@ package, organised topically (consumers always deep-import `from services.protoc
 Protocol names carry a suffix that signals shape (`…Reader`, `…Provider`/`…Fn`, `…Store`, `…Cache`, `…Persister`; bare
 names for pervasive primitives like `Clock`).
 
-`RommApiAdapter` implements `RommApi` over `RommHttpAdapter`, targeting RomM 4.9.0+ endpoints.
+`RommApiAdapter` implements `RommApi` over `RommHttpAdapter`, targeting RomM 5.3.0+ endpoints.
 
 ## Boundary Enforcement
 

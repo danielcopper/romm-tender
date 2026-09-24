@@ -312,13 +312,14 @@ You have two options:
 
 ## RomM Version Compatibility
 
-The plugin requires **RomM >= 4.9.0**. Pre-release builds whose numeric core is **above** that floor pass — for example
-`4.9.1-beta` or `5.0.0-alpha.1`. Tags at the exact floor (`4.9.0-beta`, `4.9.0-alpha`) are rejected because they rank
-below the `4.9.0` release. Servers below 4.9.0 are rejected at connection time with a full error page in both the QAM
-panel and the game detail view. The plugin uses server-side device tracking, content hashing, save slots, and
-`device_syncs` for conflict detection. The 4.9.0 minimum is set because that is the release that ships RomM's Device
-Sync (`negotiate`) save-sync transport — the direction adopted in
-[ADR-0016](../adr/0016-save-sync-hands-detection-to-romm-negotiate.md).
+The plugin requires **RomM >= 5.3.0**. Pre-release builds whose numeric core is **above** that floor pass — for example
+`5.3.1-beta` or `5.4.0-alpha.1`. Tags at the exact floor (`5.3.0-beta.1`, `5.3.0-alpha.1`) are rejected because they
+rank below the `5.3.0` release. Servers below 5.3.0 are rejected at connection time with a full error page in both the
+QAM panel and the game detail view. The plugin uses server-side device tracking, content hashing, save slots, and
+`device_syncs` for conflict detection. Save sync is built on RomM's Device Sync (`negotiate`) save-sync transport, which
+arrived in RomM 4.9.0 — the direction adopted in [ADR-0016](../adr/0016-save-sync-hands-detection-to-romm-negotiate.md).
+Nothing the plugin does needs a newer server than that yet; the minimum is 5.3.0 so that later releases can build on
+what RomM 5.3.0 added without raising it again.
 
 For technical details on how save sync works internally (three-way conflict detection, state schema, session detection),
 see the [Save File Sync Architecture](../architecture/save-file-sync-architecture.md) technical reference.

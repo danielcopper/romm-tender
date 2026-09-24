@@ -93,7 +93,7 @@ class Plugin:
     # skips ``_main``) still tracks tasks.
     _playtime_flush_tasks: set[asyncio.Task[None]]
 
-    _MIN_REQUIRED_VERSION = (4, 9, 0)
+    _MIN_REQUIRED_VERSION = (5, 3, 0)
 
     # -- logging ---------------------------------------------------------------
     #

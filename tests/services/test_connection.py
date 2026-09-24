@@ -26,7 +26,7 @@ from services.connection import (
     ConnectionServiceConfig,
 )
 
-_MIN_VERSION = (4, 9, 0)
+_MIN_VERSION = (5, 3, 0)
 
 
 @pytest.fixture
@@ -44,7 +44,7 @@ def logger() -> logging.Logger:
 @pytest.fixture
 def romm_api() -> MagicMock:
     api = MagicMock()
-    api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.9.0"}}
+    api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0"}}
     api.list_platforms.return_value = [{"id": 1, "slug": "n64"}]
     api.mint_client_token.return_value = {"id": 42, "raw_token": "rmm_minted"}
     api.exchange_pairing_code.return_value = {"id": 99, "raw_token": "rmm_paired"}
@@ -89,18 +89,18 @@ class TestTestConnectionHappyPath:
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
         result = event_loop.run_until_complete(service.test_connection())
         assert result["success"] is True
-        assert result["message"] == "Connected to RomM 4.9.0"
-        assert result["romm_version"] == "4.9.0"
-        romm_api.set_version.assert_called_once_with("4.9.0")
+        assert result["message"] == "Connected to RomM 5.3.0"
+        assert result["romm_version"] == "5.3.0"
+        romm_api.set_version.assert_called_once_with("5.3.0")
 
     def test_version_exact_minimum_succeeds(self, event_loop, romm_api, logger):
         """Version equal to minimum tuple is accepted (>= comparison)."""
         settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
-        romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.9.0"}}
+        romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0"}}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
         result = event_loop.run_until_complete(service.test_connection())
         assert result["success"] is True
-        assert result["romm_version"] == "4.9.0"
+        assert result["romm_version"] == "5.3.0"
 
 
 class TestTestConnectionBadPath:
@@ -176,35 +176,35 @@ class TestTestConnectionVersionGate:
         assert result["success"] is False
         assert result["reason"] == "version_error"
         assert result["romm_version"] == "4.5.0"
-        assert "4.9.0" in result["message"]
+        assert "5.3.0" in result["message"]
         assert "4.5.0" in result["message"]
 
     def test_former_minimum_now_rejected(self, event_loop, romm_api, logger):
-        """4.8.1 (the former minimum) is below 4.9.0 — must now be rejected."""
+        """4.9.0 (the former minimum) is below 5.3.0 — must now be rejected."""
         settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
-        romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.8.1"}}
+        romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.9.0"}}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
         result = event_loop.run_until_complete(service.test_connection())
         assert result["reason"] == "version_error"
 
     def test_prerelease_at_exact_floor_rejected(self, event_loop, romm_api, logger):
-        """4.9.0-beta ranks below 4.9.0 — pre-release tags at the floor are rejected."""
+        """5.3.0-beta ranks below 5.3.0 — pre-release tags at the floor are rejected."""
         settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
-        romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.9.0-beta.3"}}
+        romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0-beta.1"}}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
         result = event_loop.run_until_complete(service.test_connection())
         assert result["success"] is False
         assert result["reason"] == "version_error"
-        assert result["romm_version"] == "4.9.0-beta.3"
+        assert result["romm_version"] == "5.3.0-beta.1"
 
     def test_prerelease_above_floor_accepted(self, event_loop, romm_api, logger):
-        """4.9.1-beta has a core above 4.9.0 and passes the gate."""
+        """5.3.1-beta has a core above 5.3.0 and passes the gate."""
         settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
-        romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.9.1-beta"}}
+        romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.1-beta"}}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
         result = event_loop.run_until_complete(service.test_connection())
         assert result["success"] is True
-        assert result["romm_version"] == "4.9.1-beta"
+        assert result["romm_version"] == "5.3.1-beta"
 
     def test_development_version_bypasses_gate(self, event_loop, romm_api, logger):
         """``development`` version string skips the minimum-version check."""
@@ -267,18 +267,18 @@ class TestTestConnectionEdgeCases:
     def test_min_required_version_injected(self, event_loop, romm_api, logger):
         """Service uses the injected minimum, not a hard-coded tuple."""
         settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
-        romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.0.0"}}
-        # Inject a higher minimum so 5.0.0 is rejected.
+        romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0"}}
+        # Inject a higher minimum so 5.3.0 is rejected.
         service = _make_service(
             settings=settings,
             romm_api=romm_api,
             loop=event_loop,
             logger=logger,
-            min_required_version=(5, 1, 0),
+            min_required_version=(5, 4, 0),
         )
         result = event_loop.run_until_complete(service.test_connection())
         assert result["reason"] == "version_error"
-        assert "5.1.0" in result["message"]
+        assert "5.4.0" in result["message"]
 
 
 class TestEstablishTokenHappyPath:
@@ -293,7 +293,7 @@ class TestEstablishTokenHappyPath:
         )
         result = event_loop.run_until_complete(service.establish_token("http://romm.local", "alice", "secret"))
         assert result["success"] is True
-        assert result["romm_version"] == "4.9.0"
+        assert result["romm_version"] == "5.3.0"
         assert settings["romm_api_token"] == "rmm_minted"
         assert settings["romm_api_token_id"] == 42
         # The token's minting origin is stamped from the trimmed URL.
@@ -734,7 +734,7 @@ class TestEstablishUserTokenHappyPath:
         )
         result = event_loop.run_until_complete(service.establish_user_token("http://romm.local", "rmm_pasted"))
         assert result["success"] is True
-        assert result["romm_version"] == "4.9.0"
+        assert result["romm_version"] == "5.3.0"
         assert settings["romm_api_token"] == "rmm_pasted"
         # A pasted token carries no server-side id.
         assert settings["romm_api_token_id"] is None
@@ -1140,7 +1140,7 @@ class TestEstablishTokenSnapshotRestore:
         def _capture_heartbeat():
             seen["token_during_probe"] = settings.get("romm_api_token")
             seen["origin_during_probe"] = settings.get("romm_api_token_origin")
-            return {"SYSTEM": {"VERSION": "4.9.0"}}
+            return {"SYSTEM": {"VERSION": "5.3.0"}}
 
         romm_api.heartbeat.side_effect = _capture_heartbeat
         settings = _working_settings()
@@ -1312,7 +1312,7 @@ class TestEstablishPairedTokenHappyPath:
         )
         result = event_loop.run_until_complete(service.establish_paired_token("http://romm.local", "ABCD2345"))
         assert result["success"] is True
-        assert result["romm_version"] == "4.9.0"
+        assert result["romm_version"] == "5.3.0"
         # A paired token is persisted exactly like a pasted one: user provenance,
         # no server-side id, and never minted or DELETEd.
         assert settings["romm_api_token"] == "rmm_paired"

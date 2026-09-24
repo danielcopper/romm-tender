@@ -18,13 +18,13 @@ from lib.errors import PairingCodeInvalidError, PairingCodeRateLimitedError
 
 
 async def test_connect_with_pairing_code_happy_path_persists_user_provenance(harness):
-    harness.romm.heartbeat_response = {"SYSTEM": {"VERSION": "4.9.0"}}
+    harness.romm.heartbeat_response = {"SYSTEM": {"VERSION": "5.3.0"}}
     harness.romm.exchange_pairing_code_response = {"id": 3, "raw_token": "rmm_paired"}
 
     result = await harness.plugin.connect_with_pairing_code("http://romm.local", "ABCD2345", False)
 
     assert result["success"] is True
-    assert result["romm_version"] == "4.9.0"
+    assert result["romm_version"] == "5.3.0"
     assert "Connected" in result["message"]
     # Persisted exactly like a pasted token: user provenance, no server-side id;
     # no mint, no DELETE.
@@ -39,7 +39,7 @@ async def test_connect_with_pairing_code_happy_path_persists_user_provenance(har
 
 
 async def test_connect_with_pairing_code_invalid_code_returns_canonical_failure(harness):
-    harness.romm.heartbeat_response = {"SYSTEM": {"VERSION": "4.9.0"}}
+    harness.romm.heartbeat_response = {"SYSTEM": {"VERSION": "5.3.0"}}
     harness.romm.exchange_pairing_code_side_effect = PairingCodeInvalidError("404")
 
     result = await harness.plugin.connect_with_pairing_code("http://romm.local", "BADCODE1", False)
@@ -53,7 +53,7 @@ async def test_connect_with_pairing_code_invalid_code_returns_canonical_failure(
 
 
 async def test_connect_with_pairing_code_rate_limited_returns_rate_limited_reason(harness):
-    harness.romm.heartbeat_response = {"SYSTEM": {"VERSION": "4.9.0"}}
+    harness.romm.heartbeat_response = {"SYSTEM": {"VERSION": "5.3.0"}}
     harness.romm.exchange_pairing_code_side_effect = PairingCodeRateLimitedError("429")
 
     result = await harness.plugin.connect_with_pairing_code("http://romm.local", "ABCD2345", False)

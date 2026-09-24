@@ -879,7 +879,7 @@ describe("SettingsPage", () => {
       vi.mocked(backend.connectWithToken).mockResolvedValue({
         success: true,
         message: "Connected!",
-        romm_version: "4.9.0",
+        romm_version: "5.3.0",
       });
       renderPage();
       await flushAsync();
@@ -967,7 +967,7 @@ describe("SettingsPage", () => {
       vi.mocked(backend.connectWithPairingCode).mockResolvedValue({
         success: true,
         message: "Connected!",
-        romm_version: "4.9.0",
+        romm_version: "5.3.0",
       });
       renderPage();
       await flushAsync();

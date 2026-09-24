@@ -436,11 +436,12 @@ class MatrixExecutor:
         non-head response.
 
         A missing *device_id* refuses the upload outright (raises
-        :class:`DeviceNotRegisteredError` before any server call, #1478): the
-        RomM >= 4.9 floor makes device registration the norm, so a falsy id no
-        longer means "device sync off" — uploading without it would drop the slot
-        field and land a named-slot save in the legacy (``slot:null``) bucket, the
-        migration-005 retirement violation that seeds the #1478 corruption. The
+        :class:`DeviceNotRegisteredError` before any server call, #1478): every
+        supported RomM has Device Sync, so device registration is the norm and a
+        falsy id no longer means "device sync off" — uploading without it would
+        drop the slot field and land a named-slot save in the legacy
+        (``slot:null``) bucket, the migration-005 retirement violation that seeds
+        the #1478 corruption. The
         raise reaches every caller's error funnel (the sync dispatch's per-file
         errors, rollback / version-switch surfaced failures) so the file is
         reported, not silently misfiled.
