@@ -1334,7 +1334,11 @@ class TestSaveSyncContentDirGate:
 
     @pytest.mark.asyncio
     async def test_a_sweep_with_nothing_confirmed_still_names_the_content_directory(self, tmp_path):
-        svc, fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
+        svc, fake = make_service(
+            tmp_path,
+            save_locations=FakeSaveLocationReader(beside_content=True),
+            active_core=FakeActiveCoreResolver(default=("mgba_libretro", "mGBA")),
+        )
         svc._config.settings["save_sync_enabled"] = True
         _set_device_id(svc, "test-device")
         _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
@@ -1348,6 +1352,40 @@ class TestSaveSyncContentDirGate:
         asked = cast("FakeSaveLocationReader", svc._rom_info._save_locations).calls
         assert len(asked) == 1
         assert not any(c[0] in ("list_saves", "upload_save", "download_save_content") for c in fake.call_log)
+
+    @pytest.mark.asyncio
+    async def test_the_probe_passes_a_standalone_emulator_over_for_a_retroarch_game(self, tmp_path):
+        # The lowest rom_id runs a standalone emulator, whose answer says
+        # nothing about RetroArch's content-directory setting.
+        svc, _fake = make_service(
+            tmp_path,
+            save_locations=FakeSaveLocationReader(beside_content=True),
+            active_core=FakeActiveCoreResolver(
+                default=("mgba_libretro", "mGBA"), per_rom={1: (None, "PCSX2 (Standalone)")}
+            ),
+        )
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
+        _install_rom(svc, tmp_path, rom_id=2, system="gba", file_name="game2.gba")
+
+        result = await svc.sync_all_saves()
+
+        assert result["reason"] == "savefiles_in_content_dir"
+        asked = cast("FakeSaveLocationReader", svc._rom_info._save_locations).calls
+        assert [call[1] for call in asked] == [str(tmp_path / "retrodeck" / "roms" / "gba" / "game2.gba")]
+
+    @pytest.mark.asyncio
+    async def test_no_retroarch_game_to_ask_reports_as_before(self, tmp_path):
+        svc, _fake = make_service(tmp_path, save_locations=FakeSaveLocationReader(beside_content=True))
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path, rom_id=1, system="gba", file_name="game1.gba")
+
+        result = await svc.sync_all_saves()
+
+        assert "reason" not in result
+        assert result["message"] == "Synced 0 save(s) across 1 ROM(s)"
 
     @pytest.mark.asyncio
     async def test_a_sweep_with_nothing_confirmed_elsewhere_reports_as_before(self, tmp_path):

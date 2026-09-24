@@ -957,6 +957,10 @@ class SyncEngine:
                 "conflicts": [],
             }
 
+    def _first_retroarch_rom(self, rom_ids: list[int]) -> int | None:
+        """The first of *rom_ids* that launches with a RetroArch core, or ``None``."""
+        return next((rom_id for rom_id in rom_ids if self.resolve_core(rom_id) is not None), None)
+
     def _installed_rom_ids(self) -> list[int]:
         """Read the installed-ROM ids from the rom_installs aggregate (WS3)."""
         with self._uow_factory() as uow:
@@ -1072,13 +1076,16 @@ class SyncEngine:
                         if session_id is not None:
                             await self._close_negotiate_session(session_id, session_counts[0], session_counts[1])
 
-                if not content_dir_tally.answered and rom_ids:
+                if not content_dir_tally.answered:
                     # No ROM had a confirmed slot, so the sweep read none. One
-                    # installed game's reading still says whether saves are
-                    # written beside the content, instead of a bare "Synced 0".
-                    content_dir_tally.count(
-                        await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_ids[0])
-                    )
+                    # RetroArch game's reading still says whether saves are
+                    # written beside the content, instead of a bare "Synced 0";
+                    # a standalone emulator's answer would say nothing about it.
+                    probe = await self._loop.run_in_executor(None, self._first_retroarch_rom, rom_ids)
+                    if probe is not None:
+                        content_dir_tally.count(
+                            await self._loop.run_in_executor(None, live_save_answer, self._rom_info, probe)
+                        )
                 content_dir_skip = content_dir_tally.sweep_skip(roms_checked=rom_count)
                 if content_dir_skip is not None:
                     return content_dir_skip
