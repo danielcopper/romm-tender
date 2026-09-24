@@ -80,6 +80,10 @@ export function shownCollections(
   return searchMembers(members, state.search);
 }
 
+/** The owner switch's key among the targets of `issueValueWrite`; a collection's
+ *  is its `collectionKey`, which always holds a colon, so the two cannot meet. */
+const OWNER_SWITCH = "owner-switch";
+
 export function useCollectionsPage(): CollectionsPageState {
   const [collections, setCollections] = useState<CollectionSyncSetting[]>([]);
   const [load, setLoad] = useState<CollectionsLoad>({ state: "idle" });
@@ -93,12 +97,29 @@ export function useCollectionsPage(): CollectionsPageState {
   // right now, and a render-time snapshot of that could be one read behind.
   const collectionsRead = useRef<CollectionsLoad["state"]>("idle");
   const settingsRead = useRef<"idle" | "loading" | "done" | "failed">("idle");
+
+  // What each control's value is known to be stored as, and the latest write
+  // issued to it — a collection by its key, the owner switch by OWNER_SWITCH.
+  // Touched only in handlers and in answers, never during render.
+  const confirmedSync = useRef(new Map<string, boolean>());
+  const confirmedScope = useRef<CollectionOwnerScope>("all");
+  const latestValueWrite = useRef(new Map<string, number>());
+  const issueValueWrite = useCallback((target: string) => {
+    const seq = (latestValueWrite.current.get(target) ?? 0) + 1;
+    latestValueWrite.current.set(target, seq);
+    return seq;
+  }, []);
+  const isLatestValueWrite = useCallback(
+    (target: string, seq: number) => latestValueWrite.current.get(target) === seq,
+    [],
+  );
   const readCollections = useCallback(() => {
     collectionsRead.current = "loading";
     setLoad({ state: "loading" });
     getCollections()
       .then((result) => {
         if (result.success) {
+          confirmedSync.current = new Map(result.collections.map((c) => [collectionKey(c), c.sync_enabled]));
           setCollections(freezeOrder(result.collections));
           collectionsRead.current = "loaded";
           setLoad({ state: "loaded" });
@@ -117,7 +138,9 @@ export function useCollectionsPage(): CollectionsPageState {
     settingsRead.current = "loading";
     getSettings()
       .then((settings) => {
-        setOwnerScopeState(settings.collection_owner_scope === "own" ? "own" : "all");
+        const scope: CollectionOwnerScope = settings.collection_owner_scope === "own" ? "own" : "all";
+        confirmedScope.current = scope;
+        setOwnerScopeState(scope);
         settingsRead.current = "done";
       })
       .catch(() => {
@@ -127,11 +150,8 @@ export function useCollectionsPage(): CollectionsPageState {
       });
   }, []);
 
-  // Which answer may still speak on each line. Every write takes the next
-  // number for its place when it is issued, and its answer sets or clears that
-  // place's line only while it is still the latest write there, the tab has not
-  // been entered again since, and — in the pane — its kind is still the one
-  // shown. A late answer still puts its row back; it only loses its say.
+  // Which answer may still speak on each line — `docs/architecture/qam-panel.md`
+  // § Library, "Only the latest write speaks".
   const latestWrite = useRef<Record<WritePlace, number>>({ list: 0, pane: 0 });
   const entries = useRef(0);
   const shownKind = useRef<CollectionsKindId>("standard");
@@ -168,33 +188,36 @@ export function useCollectionsPage(): CollectionsPageState {
     setPaneStatus(null);
   }, []);
 
-  // Every write below treats a refusal and a rejection as one outcome: the
-  // write did not take, the optimistic flip goes back, and the reader is told
-  // where the write was made. None of these callables throws to refuse.
+  // The writes are optimistic; what an answer may change on its control and on
+  // its line is `docs/architecture/qam-panel.md` § Library, "Only the latest
+  // write speaks". None of these callables throws to refuse, so a refusal and a
+  // rejection are one outcome.
   const toggleCollection = useCallback(
     (collection: CollectionSyncSetting, enabled: boolean, place: WritePlace) => {
       const key = collectionKey(collection);
-      const flip = (want: boolean) =>
+      const show = (want: boolean) =>
         setCollections((prev) => prev.map((c) => (collectionKey(c) === key ? { ...c, sync_enabled: want } : c)));
+      const seq = issueValueWrite(key);
       const line = lineFor(place);
-      flip(enabled);
+      const failed = (text: string) => {
+        if (isLatestValueWrite(key, seq)) show(confirmedSync.current.get(key) ?? !enabled);
+        line(text);
+      };
+      show(enabled);
       detach(
         saveCollectionSync(collection.id, collection.kind, enabled)
           .then((result) => {
             if (result.success) {
+              confirmedSync.current.set(key, enabled);
               line(null);
               return;
             }
-            flip(!enabled);
-            line(result.message || SYNC_WRITE_FAILED);
+            failed(result.message || SYNC_WRITE_FAILED);
           })
-          .catch(() => {
-            flip(!enabled);
-            line(SYNC_WRITE_FAILED);
-          }),
+          .catch(() => failed(SYNC_WRITE_FAILED)),
       );
     },
-    [lineFor],
+    [isLatestValueWrite, issueValueWrite, lineFor],
   );
 
   const setAllShown = useCallback(
@@ -202,17 +225,20 @@ export function useCollectionsPage(): CollectionsPageState {
       if (selectedKind === "favorites") return;
       const targets = shownCollections({ collections, ownerScope, selectedKind, search });
       if (targets.length === 0) return;
-      const previous = new Map(targets.map((c) => [collectionKey(c), c.sync_enabled]));
-      const put = (value: (key: string, current: boolean) => boolean) =>
+      const seqs = new Map(targets.map((c) => [collectionKey(c), issueValueWrite(collectionKey(c))]));
+      const line = lineFor("pane");
+      const failed = (text: string) => {
         setCollections((prev) =>
           prev.map((c) => {
             const key = collectionKey(c);
-            return previous.has(key) ? { ...c, sync_enabled: value(key, c.sync_enabled) } : c;
+            const seq = seqs.get(key);
+            if (seq === undefined || !isLatestValueWrite(key, seq)) return c;
+            return { ...c, sync_enabled: confirmedSync.current.get(key) ?? c.sync_enabled };
           }),
         );
-      const undo = () => put((key, current) => previous.get(key) ?? current);
-      const line = lineFor("pane");
-      put(() => enabled);
+        line(text);
+      };
+      setCollections((prev) => prev.map((c) => (seqs.has(collectionKey(c)) ? { ...c, sync_enabled: enabled } : c)));
       detach(
         saveCollectionsSync(
           targets.map((c) => c.id),
@@ -221,44 +247,42 @@ export function useCollectionsPage(): CollectionsPageState {
         )
           .then((result) => {
             if (result.success) {
+              for (const key of seqs.keys()) confirmedSync.current.set(key, enabled);
               line(null);
               return;
             }
-            undo();
-            line(result.message || SYNC_WRITE_FAILED);
+            failed(result.message || SYNC_WRITE_FAILED);
           })
-          .catch(() => {
-            undo();
-            line(SYNC_WRITE_FAILED);
-          }),
+          .catch(() => failed(SYNC_WRITE_FAILED)),
       );
     },
-    [collections, lineFor, ownerScope, search, selectedKind],
+    [collections, isLatestValueWrite, issueValueWrite, lineFor, ownerScope, search, selectedKind],
   );
 
   const setOwnerScope = useCallback(
     (scope: CollectionOwnerScope) => {
-      const previous = ownerScope;
-      if (scope === previous) return;
+      if (scope === ownerScope) return;
+      const seq = issueValueWrite(OWNER_SWITCH);
       const line = lineFor("list");
+      const failed = (text: string) => {
+        if (isLatestValueWrite(OWNER_SWITCH, seq)) setOwnerScopeState(confirmedScope.current);
+        line(text);
+      };
       setOwnerScopeState(scope);
       detach(
         setCollectionOwnerScope(scope)
           .then((result) => {
             if (result.success) {
+              confirmedScope.current = scope;
               line(null);
               return;
             }
-            setOwnerScopeState(previous);
-            line(result.message || SYNC_WRITE_FAILED);
+            failed(result.message || SYNC_WRITE_FAILED);
           })
-          .catch(() => {
-            setOwnerScopeState(previous);
-            line(SYNC_WRITE_FAILED);
-          }),
+          .catch(() => failed(SYNC_WRITE_FAILED)),
       );
     },
-    [lineFor, ownerScope],
+    [isLatestValueWrite, issueValueWrite, lineFor, ownerScope],
   );
 
   return {

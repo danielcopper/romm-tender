@@ -162,6 +162,25 @@ function lastModal(): Record<string, unknown> | null {
   return el?.props ?? null;
 }
 
+type WriteAnswer = { success: boolean; message?: string };
+
+/** A write held open until the test answers it. */
+function held(): { promise: Promise<WriteAnswer>; answer: (value: WriteAnswer) => Promise<void> } {
+  let resolve: (value: WriteAnswer) => void = () => {};
+  const promise = new Promise<WriteAnswer>((r) => {
+    resolve = r;
+  });
+  return {
+    promise,
+    answer: async (value: WriteAnswer) => {
+      await act(async () => {
+        resolve(value);
+        for (let i = 0; i < 6; i++) await Promise.resolve();
+      });
+    },
+  };
+}
+
 const listStatus = (c: HTMLElement) => c.querySelector('[data-testid="collections-list-status"]')?.textContent ?? null;
 const paneStatus = (c: HTMLElement) => c.querySelector('[data-testid="collections-pane-status"]')?.textContent ?? null;
 const ownerSwitch = (c: HTMLElement) =>
@@ -350,6 +369,7 @@ describe("Library › Collections", () => {
       expect(row.textContent).toContain("—");
       await selectKind(container, "favorites");
       expect(container.textContent).toContain("Your RomM account has no favorites collection.");
+      expect(container.querySelector('[data-testid="collections-sentence"]')).toBeNull();
     });
 
     it("shows the sentence and the game count on its pane, with no table", async () => {
@@ -535,6 +555,7 @@ describe("Library › Collections", () => {
       expect(vi.mocked(backend.saveCollectionsSync)).not.toHaveBeenCalled();
       const modal = lastModal();
       expect(modal?.strTitle).toBe("Enable all 3 in Collections?");
+      expect(modal?.strOKButtonText).toBe("Enable all");
       expect(String(modal?.strDescription)).toContain("This turns on syncing for all 3 collections");
       expect(String(modal?.strDescription)).toContain("at the next sync, including games on platforms you do not sync");
 
@@ -622,12 +643,27 @@ describe("Library › Collections", () => {
       expect(button(container, "Disable all").disabled).toBe(true);
     });
 
+    it("writes the favorites collections too while the Favorites row is greyed as more than one", async () => {
+      const second = coll({ id: "fav2", name: "Starred", is_favorite: true });
+      const { container } = await openCollections([FAVORITES, second, MINE_ON]);
+      await click(button(container, "Enable all"));
+      await act(async () => {
+        (lastModal()?.onOK as () => void)();
+        for (let i = 0; i < 6; i++) await Promise.resolve();
+      });
+      const [ids] = vi.mocked(backend.saveCollectionsSync).mock.calls[0] ?? [];
+      expect(ids).toEqual(expect.arrayContaining(["fav", "fav2", "10"]));
+      expect(ids).toHaveLength(3);
+    });
+
     it("names the one collection when there is only one", async () => {
       const { container } = await openCollections();
       await selectKind(container, "smart");
       await click(button(container, "Enable all"));
       expect(lastModal()?.strTitle).toBe("Enable the one collection in Smart collections?");
       expect(String(lastModal()?.strDescription)).toContain("This turns on syncing for the one collection");
+      expect(String(lastModal()?.strDescription)).toContain("Its games come to Steam");
+      expect(lastModal()?.strOKButtonText).toBe("Enable");
     });
   });
 
@@ -675,25 +711,8 @@ describe("Library › Collections", () => {
   });
 
   describe("a write that answers late", () => {
-    /** A write held open until the test answers it. */
-    function held<T>(): { promise: Promise<T>; answer: (value: T) => Promise<void> } {
-      let resolve: (value: T) => void = () => {};
-      const promise = new Promise<T>((r) => {
-        resolve = r;
-      });
-      return {
-        promise,
-        answer: async (value: T) => {
-          await act(async () => {
-            resolve(value);
-            for (let i = 0; i < 6; i++) await Promise.resolve();
-          });
-        },
-      };
-    }
-
     it("says nothing in the list column once a later list write has answered", async () => {
-      const favorites = held<{ success: boolean; message?: string }>();
+      const favorites = held();
       vi.mocked(backend.saveCollectionSync).mockReturnValueOnce(favorites.promise);
       const { container } = await openCollections();
       await click(checkbox(kindRow(container, "favorites")));
@@ -706,7 +725,7 @@ describe("Library › Collections", () => {
     });
 
     it("does not take back a later pane refusal's line when an earlier write succeeds", async () => {
-      const first = held<{ success: boolean; message?: string }>();
+      const first = held();
       vi.mocked(backend.saveCollectionSync)
         .mockReturnValueOnce(first.promise)
         .mockResolvedValueOnce({ success: false, message: "Refused" });
@@ -721,7 +740,7 @@ describe("Library › Collections", () => {
     });
 
     it("says nothing in the pane once another kind is selected", async () => {
-      const write = held<{ success: boolean; message?: string }>();
+      const write = held();
       vi.mocked(backend.saveCollectionSync).mockReturnValueOnce(write.promise);
       const { container } = await openCollections();
       await click(checkbox(tableRow(container, "Finished")));
@@ -736,7 +755,7 @@ describe("Library › Collections", () => {
     });
 
     it("says nothing once the tab has been left and entered again", async () => {
-      const write = held<{ success: boolean; message?: string }>();
+      const write = held();
       vi.mocked(backend.saveCollectionSync).mockReturnValueOnce(write.promise);
       const { container } = await openCollections();
       await click(checkbox(kindRow(container, "favorites")));
@@ -747,6 +766,126 @@ describe("Library › Collections", () => {
 
       expect(listStatus(container)).toBeNull();
       expect(checkbox(kindRow(container, "favorites")).checked).toBe(true);
+    });
+  });
+
+  describe("a control whose writes answer late", () => {
+    const REFUSED = { success: false, message: "Migration pending" };
+
+    it("shows what is stored after a row is switched twice and both writes are refused", async () => {
+      const on = held();
+      const off = held();
+      vi.mocked(backend.saveCollectionSync).mockReturnValueOnce(on.promise).mockReturnValueOnce(off.promise);
+      const { container } = await openCollections();
+      await click(checkbox(tableRow(container, "Finished")));
+      await click(checkbox(tableRow(container, "Finished")));
+
+      await on.answer(REFUSED);
+      await off.answer(REFUSED);
+
+      expect(checkbox(tableRow(container, "Finished")).checked).toBe(false);
+    });
+
+    it("keeps a row's newest value when an older write is refused, and shows it once the newest is stored", async () => {
+      const first = held();
+      const second = held();
+      const third = held();
+      vi.mocked(backend.saveCollectionSync)
+        .mockReturnValueOnce(first.promise)
+        .mockReturnValueOnce(second.promise)
+        .mockReturnValueOnce(third.promise);
+      const { container } = await openCollections();
+      for (let i = 0; i < 3; i++) await click(checkbox(tableRow(container, "Finished")));
+
+      await first.answer(REFUSED);
+      expect(checkbox(tableRow(container, "Finished")).checked).toBe(true);
+      await second.answer({ success: true });
+      await third.answer({ success: true });
+
+      expect(checkbox(tableRow(container, "Finished")).checked).toBe(true);
+    });
+
+    it("shows the stored scope after the owner switch is turned twice and both writes fail", async () => {
+      const off = held();
+      const on = held();
+      vi.mocked(backend.setCollectionOwnerScope).mockReturnValueOnce(off.promise).mockReturnValueOnce(on.promise);
+      const { container } = await openCollections();
+      await click(ownerSwitch(container));
+      await click(ownerSwitch(container));
+
+      await off.answer(REFUSED);
+      await on.answer(REFUSED);
+
+      expect(ownerSwitch(container).checked).toBe(true);
+    });
+
+    it("keeps the owner switch's newest value when an older write is refused", async () => {
+      const first = held();
+      const second = held();
+      const third = held();
+      vi.mocked(backend.setCollectionOwnerScope)
+        .mockReturnValueOnce(first.promise)
+        .mockReturnValueOnce(second.promise)
+        .mockReturnValueOnce(third.promise);
+      const { container } = await openCollections();
+      for (let i = 0; i < 3; i++) await click(ownerSwitch(container));
+
+      await first.answer(REFUSED);
+      expect(ownerSwitch(container).checked).toBe(false);
+      await second.answer({ success: true });
+      await third.answer({ success: true });
+
+      expect(ownerSwitch(container).checked).toBe(false);
+    });
+
+    it("leaves a row switched on its own since alone when an earlier Enable all is refused", async () => {
+      const batch = held();
+      const single = held();
+      vi.mocked(backend.saveCollectionsSync).mockReturnValueOnce(batch.promise);
+      vi.mocked(backend.saveCollectionSync).mockReturnValueOnce(single.promise);
+      const { container } = await openCollections();
+      await typeSearch(container, "i");
+      await click(button(container, "Enable all"));
+      // Kids was on before the batch, and is switched off on its own after it.
+      await click(checkbox(tableRow(container, "Kids")));
+
+      await batch.answer(REFUSED);
+      expect(checkbox(tableRow(container, "Kids")).checked).toBe(false);
+      expect(checkbox(tableRow(container, "Finished")).checked).toBe(false);
+
+      await single.answer({ success: true });
+      expect(checkbox(tableRow(container, "Kids")).checked).toBe(false);
+    });
+  });
+
+  describe("a refused write after one that was stored", () => {
+    const REFUSED = { success: false, message: "Migration pending" };
+
+    it("puts a row back to what its last stored write set", async () => {
+      vi.mocked(backend.saveCollectionSync).mockResolvedValueOnce({ success: true }).mockResolvedValueOnce(REFUSED);
+      const { container } = await openCollections();
+      await click(checkbox(tableRow(container, "Finished")));
+      await click(checkbox(tableRow(container, "Finished")));
+      expect(checkbox(tableRow(container, "Finished")).checked).toBe(true);
+    });
+
+    it("puts the owner switch back to what its last stored write set", async () => {
+      vi.mocked(backend.setCollectionOwnerScope)
+        .mockResolvedValueOnce({ success: true })
+        .mockResolvedValueOnce(REFUSED);
+      const { container } = await openCollections();
+      await click(ownerSwitch(container));
+      await click(ownerSwitch(container));
+      expect(ownerSwitch(container).checked).toBe(false);
+    });
+
+    it("puts a row back to what a stored Enable all set", async () => {
+      vi.mocked(backend.saveCollectionSync).mockResolvedValueOnce(REFUSED);
+      const { container } = await openCollections();
+      await typeSearch(container, "i");
+      await click(button(container, "Enable all"));
+      await click(checkbox(tableRow(container, "Finished")));
+      expect(checkbox(tableRow(container, "Finished")).checked).toBe(true);
     });
   });
 

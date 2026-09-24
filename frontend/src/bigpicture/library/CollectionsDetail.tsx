@@ -88,7 +88,9 @@ const FavoritesPane: FC<{ state: CollectionsPageState; favorites: FavoritesAnswe
   return (
     <>
       <Title kind="favorites" />
-      <Sentence text={kindSentence("favorites")} />
+      {/* Only where the row stands for a collection: the sentence is about
+          turning one on, and a greyed row has none to turn on. */}
+      {favorites.state === "one" && <Sentence text={kindSentence("favorites")} />}
       {body}
     </>
   );
@@ -133,14 +135,16 @@ function confirmSetAll(state: CollectionsPageState, kind: CollectionsKindId, cou
   const which = count === 1 ? "the one collection" : `all ${count} collections`;
   const past =
     count > COLLECTION_RENDER_CAP ? `, including those past the first ${COLLECTION_RENDER_CAP} the table shows` : "";
+  const whose = count === 1 ? "Its" : "Their";
   const effect = enabled
-    ? "Their games come to Steam at the next sync, including games on platforms you do not sync."
+    ? `${whose} games come to Steam at the next sync, including games on platforms you do not sync.`
     : "It takes effect at the next sync.";
+  const ok = count === 1 ? verb : `${verb} all`;
   showModal(
     <ConfirmModal
       strTitle={count === 1 ? `${verb} the one collection in ${name}?` : `${verb} all ${count} in ${name}?`}
       strDescription={`This turns ${enabled ? "on" : "off"} syncing for ${which} listed under ${name}${past}. ${effect}`}
-      strOKButtonText={enabled ? "Enable all" : "Disable all"}
+      strOKButtonText={ok}
       strCancelButtonText="Cancel"
       onOK={() => state.setAllShown(enabled)}
     />,
