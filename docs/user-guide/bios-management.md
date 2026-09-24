@@ -417,10 +417,8 @@ source for moves it from a finished answer to **unknown**, which is the truth ab
 anything having gone wrong with the old one.
 
 A **file** reads unknown when no emulator RetroDECK offers for the system was found to ask for it and the emulator you
-launch with could not be asked — a RetroArch core shipping without its description file, a standalone emulator with no
-packaged card or whose card named no file, an emulator whose declaration the plugin could not follow to a location — or
-when the plugin cannot tell which emulator that is, or cannot read RetroDECK's configuration at all. A file another
-emulator does ask for keeps that answer — needed or optional — whichever emulator you launch with.
+launch with could not be asked, for any of the reasons listed below. A file another emulator does ask for keeps that
+answer — needed or optional — whichever emulator you launch with.
 
 A whole **system** reads unknown, showing a neutral grey status and a sentence naming the emulator that could not be
 asked — **"Nothing could be established about what PCSX2 needs"** — instead of a green all-clear, in either of two
@@ -436,7 +434,8 @@ empty list means "nothing here wants anything" only when the emulator was asked;
 and reporting it as ready would be an all-clear over firmware nobody checked. The system keeps its place in the platform
 list for the same reason — dropping it would say there is nothing to manage.
 
-What reaches these shapes is the launching emulator not having been asked, and that has more than one cause:
+Both shapes, and a file reading unknown, come from the launching emulator not having been asked, and that has more than
+one cause:
 
 - a standalone emulator with no packaged card, or one whose card named no file
 - a RetroArch core that ships without a description file — on a stock RetroDECK that is rare, since only a handful of
@@ -444,14 +443,14 @@ What reaches these shapes is the launching emulator not having been asked, and t
 - an emulator whose declaration the plugin could not follow to a location
 - a launching emulator the plugin cannot name — a configuration it could not read at all leaves it unable to name one in
   the first place
-- no answer at all: no emulator installation found to ask, or the question failing when it was put
+- no answer at all: no emulator installation found to ask, or the reading of the installation itself failing
 
-Under that headline the page names the emulator it could not get an answer out of — _Nothing could be established about
-what PCSX2 needs_ — and, where the plugin could not settle on an emulator to name for that system, says that instead:
-_Nothing could be established about what the launching emulator needs_. Your games still launch either way: where the
-plugin names no emulator, it hands the launch to RetroDECK and RetroDECK picks one. Either way the sentence is about
-**one** emulator, the one your games on that system launch with. Others you have installed may have answered perfectly
-well, and their answers are in the rows below.
+Under that headline the page names the emulator your games on that system launch with — _Nothing could be established
+about what PCSX2 needs_ — and, where the plugin could not settle on an emulator to name for that system, says that
+instead: _Nothing could be established about what the launching emulator needs_. Your games still launch either way:
+where the plugin names no emulator, it hands the launch to RetroDECK and RetroDECK picks one. Either way the sentence is
+about **one** emulator. Others you have installed may have answered perfectly well, and where they did, their answers
+are in the rows below.
 
 This is informational, not an error: your files may be perfectly fine, the plugin simply can't confirm what is needed.
 Genuinely BIOS-free systems (such as the NES) are unaffected — the emulator answers, it wants nothing, and the system
