@@ -36,7 +36,7 @@ const listeners = new Map<string, Set<AnyListener>>();
 
 /**
  * Stand-in for `api/host`'s `addEventListener`. Registers `listener` under
- * `name` and returns it unchanged — matching the upstream signature, which
+ * `name` and returns it unchanged — matching `api/host`'s signature, which
  * returns the listener so callers can hand it straight to `removeEventListener`.
  */
 export function mockAddEventListener<Payload = unknown>(
@@ -54,7 +54,7 @@ export function mockAddEventListener<Payload = unknown>(
 
 /**
  * Stand-in for `api/host`'s `removeEventListener`. No-op if the listener
- * was never registered (matches upstream tolerance).
+ * was never registered (as `api/host` tolerates it).
  */
 export function mockRemoveEventListener<Payload = unknown>(
   name: string,

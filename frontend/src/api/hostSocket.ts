@@ -21,9 +21,8 @@
  *
  * **There is no timeout, deliberately.** A call issued while the socket is down
  * waits for it to come back rather than failing, and `index.tsx` races its own
- * deadline around the calls that must not wait — which is the contract
- * `@decky/api`'s `callable` had, and 150 call sites are written against it.
- * Adding one here would change behaviour at every one of them silently.
+ * deadline around the calls that must not wait. Adding one here would change
+ * what every call does when the socket is down, at once and silently.
  */
 
 /** The reason a call fails when the socket goes before its reply comes back.
@@ -157,7 +156,7 @@ export class HostSocket {
     return answer;
   }
 
-  /** Register *listener* for the event *name*, and answer with it unchanged. */
+  /** Register *listener* for the event *name*. */
   on(name: string, listener: Listener): void {
     let bucket = this.listeners.get(name);
     if (!bucket) {
@@ -327,7 +326,7 @@ export class HostSocket {
     // A snapshot, because a listener may remove ANOTHER listener while it runs
     // — and a live walk would then skip that one, silently, with no throw to
     // catch. Removing only itself is harmless: the walk is already standing on
-    // it and the peers still run. Measured, both directions.
+    // it and the peers still run.
     const registered = [...bucket];
     for (const listener of registered) {
       try {

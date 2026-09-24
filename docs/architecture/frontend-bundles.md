@@ -315,9 +315,8 @@ Three properties are worth knowing before changing anything there:
   `{success, reason,
   message}`. The frontend keeps them apart by throwing `HostTransportError` for the first, so it
   cannot reach a reader of the second.
-- **There is no timeout.** A call made while the socket is down waits for it to come back. That is the contract
-  `@decky/api`'s `callable` had and 150 call sites are written against it — `index.tsx` races its own deadline around
-  the calls that must not wait.
+- **There is no timeout, deliberately** — what a call does while the socket is down, and why adding one is not a local
+  change, is stated at the top of `frontend/src/api/hostSocket.ts`.
 - **A dropped connection fails the calls that were already sent, and only those.** A frame still queued never left, so
   re-sending it is safe; one already on the wire may have run, and retrying it would repeat whatever it did.
 
