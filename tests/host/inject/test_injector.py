@@ -16,7 +16,7 @@ from host.inject.bootstrap import GLOBALS_INSTALLER, MARKER, STOP_BINDING, STOP_
 from host.inject.bundles import COEXISTENCE_PANEL, GLOBALS_BUNDLE, STANDALONE_PANEL, choose_bundles
 from host.inject.injector import InjectionSetup, PanelInjector
 from host.inject.watchdog import INJECT_FORCE, INJECT_OFF, WATCHDOG_FILENAME, CrashWatchdog, Fingerprint
-from tests.host.conftest import free_port
+from tests.host.conftest import close_listener, free_port
 from tests.host.inject.fake_debugger import FakeDebugger, FakePage, FakeTarget, refuse
 
 LOGGER = logging.getLogger("test_injector")
@@ -229,8 +229,7 @@ class TestInstallingTheGlobals:
             await wait_until(lambda: running.page.bootstraps)
             assert carried_facts(running.page.bootstraps[0])["globals_at"] is None
         finally:
-            loader.close()
-            await loader.wait_closed()
+            await close_listener(loader)
 
 
 class TestTheCardsOneButton:
@@ -361,8 +360,7 @@ class TestBesideDeckyLoader:
             assert COEXISTENCE_PANEL in carried
             assert GLOBALS_BUNDLE not in carried
         finally:
-            loader.close()
-            await loader.wait_closed()
+            await close_listener(loader)
 
 
 class TestWhenSteamRebuildsItsContext:

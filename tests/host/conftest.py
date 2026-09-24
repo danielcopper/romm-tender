@@ -114,6 +114,21 @@ async def squat_run(count: int) -> tuple[int, list[asyncio.Server]]:
     raise AssertionError(f"no run of {count + 1} consecutive free loopback ports")
 
 
+async def close_listener(server: asyncio.Server) -> None:
+    """Close a server something may still be connecting to, and every connection it holds.
+
+    A connection accepted in the last tick is still a pending task. It has to
+    build its transport before the server closes: built after, asyncio abandons
+    it half-made (``Server._attach`` asserts the server is open), and on Python
+    3.13 its ``__del__`` later detaches it from the closed server and raises an
+    unraisable ``TypeError`` in whichever test the collector happens to run in.
+    """
+    await asyncio.sleep(0)
+    server.close()
+    server.close_clients()
+    await server.wait_closed()
+
+
 async def close_all(servers: list[asyncio.Server]) -> None:
     """Close every server and wait for it, so the next test finds the ports free."""
     for server in servers:

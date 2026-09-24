@@ -23,7 +23,7 @@ from host.inject.bundles import COEXISTENCE_PANEL, GLOBALS_BUNDLE, STANDALONE_PA
 from host.runtime import AlreadyRunningError, BackendBuild, _where_the_running_one_is, run_backend
 from host.single_instance import PortFile, SingleInstanceLock
 from host.status import HostStatus
-from tests.host.conftest import FakePlugin, free_port
+from tests.host.conftest import FakePlugin, close_listener, free_port
 from tests.host.inject.fake_debugger import FakeDebugger, FakePage, FakeTarget
 from tests.host.ws_client import http_get
 
@@ -205,8 +205,7 @@ class TestWhatTheRefusalTells:
         try:
             assert f"already running on 127.0.0.1:{port}" in _where_the_running_one_is(note)
         finally:
-            listener.close()
-            await listener.wait_closed()
+            await close_listener(listener)
 
     def test_a_port_nobody_answers_on_is_reported_as_a_leftover(self, tmp_path):
         """The file is a hint; connecting is the proof."""

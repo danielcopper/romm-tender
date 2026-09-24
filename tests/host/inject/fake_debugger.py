@@ -31,6 +31,7 @@ from lib.websocket_frames import (
     header_length,
     parse_frame_header,
 )
+from tests.host.conftest import close_listener
 
 
 @dataclass
@@ -128,9 +129,8 @@ class FakeDebugger:
         """Close every connection and stop listening."""
         await self.drop_connections()
         if self._server is not None:
-            self._server.close()
             with contextlib.suppress(Exception):
-                await self._server.wait_closed()
+                await close_listener(self._server)
             self._server = None
 
     async def drop_connections(self) -> None:

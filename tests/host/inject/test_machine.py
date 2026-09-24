@@ -11,7 +11,7 @@ import pytest
 
 from host.inject import machine
 from host.inject.machine import decky_loader_is_serving, read_steam_build
-from tests.host.conftest import free_port
+from tests.host.conftest import close_listener, free_port
 
 MANIFEST = '"ubuntu12"\n{\n\t"version"\t\t"1788652215"\n\t"tenfoot_images_all"\n\t{\n\t}\n}\n'
 
@@ -90,8 +90,7 @@ class TestAskingWhetherDeckyIsServing:
         try:
             assert await decky_loader_is_serving(port) is True
         finally:
-            server.close()
-            await server.wait_closed()
+            await close_listener(server)
 
     async def test_the_question_does_not_block_the_event_loop(self, monkeypatch):
         """The connect is synchronous; on the loop thread it would stall everything."""
