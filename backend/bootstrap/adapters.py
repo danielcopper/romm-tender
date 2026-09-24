@@ -24,8 +24,7 @@ from adapters.adoption_move import AdoptionMoveAdapter
 from adapters.asyncio_sleeper import AsyncioSleeper
 from adapters.atlas_catalogue import AtlasCatalogueAdapter, first_detected_installation
 from adapters.atlas_firmware import AtlasFirmwareAdapter, AtlasPlatformFirmwareAdapter
-from adapters.atlas_host import grant_core_probe_interpreter
-from adapters.atlas_saves import AtlasSaveLocationAdapter
+from adapters.atlas_saves import AtlasSaveLocationAdapter, describe_core_probe_interpreter
 from adapters.cover_art_file_store import CoverArtFileStoreAdapter
 from adapters.debug_logger import SettingsAwareDebugLogger
 from adapters.download_file import DownloadFileAdapter
@@ -434,20 +433,7 @@ def bootstrap(
     sleeper = AsyncioSleeper()
     hostname_provider = HostnameAdapter()
     machine_id_provider = MachineIdAdapter()
-    # The grant is conditional and answers for both runtimes. Running as its own
-    # process this program IS an interpreter, so atlas takes ``sys.executable``
-    # and nothing is registered over it; frozen, there is none to take and the
-    # registered path is the only offer. Where neither yields one the resolver
-    # probes no core, every core it is asked about answers unknown, and a
-    # libretro save answer usually establishes nothing — which fails nothing and
-    # no test notices, and is why the answer is logged rather than discarded.
-    # Granted before the first atlas adapter:
-    # any question one of them puts can probe. The call stands on its own line
-    # because it is the grant, not the diagnostic: nested inside the log it
-    # would leave with a demoted or deleted log line, and everything would stay
-    # green.
-    core_probe_report = grant_core_probe_interpreter()
-    logger.info(core_probe_report)
+    logger.info(describe_core_probe_interpreter())
     # Built after the debug logger because the resolver never logs on its own:
     # its caveats are the whole degradation channel and reach the log through
     # this seam or not at all. That holds for both firmware questions and for

@@ -43,7 +43,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from _vendor.atlas import Unresolved
+from _vendor.atlas import Unresolved, core_probe_interpreter
 
 from domain.save_answer import (
     UNESTABLISHED_NOT_ASKED,
@@ -190,3 +190,28 @@ def _translate(placement: Any, emulator_label: str, content_installed: bool) -> 
         caveats=tuple(caveat.code for caveat in placement.caveats),
         content_installed=content_installed,
     )
+
+
+def describe_core_probe_interpreter() -> str:
+    """Name the interpreter atlas would run a core probe under here, as a log line.
+
+    The probe loads a core's ``.so`` in a child Python process to ask what the
+    core saves, and atlas derives that interpreter from the running program
+    alone. Where it derives none, no core is probed, every core answers unknown
+    and a libretro entry's save answer loses the core's recorded behaviour. The
+    caveats that loss leaves reach the debug log and the wire, but they read the
+    same as a core that would not load; this line is the only place the cause
+    is named.
+
+    Nothing registers an interpreter over atlas's own: running under the system
+    interpreter, ``sys.executable`` already is the one this backend runs, and a
+    registered path could only be a guess about the machine.
+
+    A string rather than the resolver's own ``CoreProbeInterpreter``, because
+    the one reader is the log at the wiring site in ``bootstrap/``, which may
+    not hold a ``_vendor`` type.
+    """
+    derived = core_probe_interpreter()
+    if derived is None:
+        return "atlas core probe: no interpreter to run under — every core answers unknown"
+    return f"atlas core probe: {derived.path} (atlas's own, from the running program)"

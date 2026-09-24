@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import os
 import pwd
+import sys
 from typing import Any, cast
 
 import pytest
@@ -56,7 +57,7 @@ from _vendor.atlas.placement import (
 )
 
 from adapters.atlas_catalogue import first_detected_installation
-from adapters.atlas_saves import AtlasSaveLocationAdapter
+from adapters.atlas_saves import AtlasSaveLocationAdapter, describe_core_probe_interpreter
 from domain.save_answer import (
     CONFIGURATION_ROLES,
     SAVE_STATE_HOLE,
@@ -561,6 +562,31 @@ class TestWhatTheAnswerCarries:
 
         assert [component.name for component in answer.components] == ["Game Title.srm", "Game Title.rtc"]
         assert all(component.role is None for component in answer.components)
+
+
+class TestTheCoreProbeLine:
+    """The one place the cause of every core answering unknown is named.
+
+    Read through the resolver's own derivation rather than a stand-in, because
+    what is under test is that the line reports what a probe would actually
+    start.
+    """
+
+    def test_a_running_interpreter_is_named_as_atlas_own(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(sys, "executable", "/opt/cpython/bin/python3")
+
+        line = describe_core_probe_interpreter()
+
+        assert line == "atlas core probe: /opt/cpython/bin/python3 (atlas's own, from the running program)"
+
+    def test_a_program_that_is_not_an_interpreter_is_reported_as_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # atlas spawns ``sys.executable`` only where it is plainly a Python, so a
+        # program under any other name leaves it nothing to run a probe under.
+        monkeypatch.setattr(sys, "executable", "/opt/tender/tender")
+
+        line = describe_core_probe_interpreter()
+
+        assert line == "atlas core probe: no interpreter to run under — every core answers unknown"
 
 
 class TestTheVocabularyIsTheResolversOwn:
