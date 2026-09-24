@@ -1007,24 +1007,54 @@ class TestMigrateRetroDeckFiles:
         assert await service.get_migration_status() == {"pending": False}
 
     @pytest.mark.asyncio
-    async def test_the_status_during_the_re_record_keeps_the_counts_the_run_started_with(self, plugin, tmp_path):
-        # Counted again after the move there is nothing left to move, and the
-        # blocked page would read "0 ROM(s), 0 BIOS, 0 save(s) to migrate".
-        self._conflicting_rom(plugin, tmp_path)
+    async def test_the_status_keeps_the_counts_the_run_started_with_for_the_whole_run(self, plugin, tmp_path):
+        # Counted again once a file has moved, the blocked page would read fewer
+        # files, and after the run has cleared the markers "0 ROM(s), 0 BIOS,
+        # 0 save(s) to migrate". Asked twice: after the files moved while the
+        # markers still stand, and during the re-record once they are gone.
+        old_home = str(tmp_path / "old")
+        new_home = str(tmp_path / "new")
+        old_rom = os.path.join(old_home, "roms", "n64", "zelda.z64")
+        old_save = os.path.join(old_home, "saves", "n64", "zelda.srm")
+        for path in (old_rom, old_save):
+            os.makedirs(os.path.dirname(path))
+            with open(path, "w") as f:
+                f.write("data")
+        with plugin._uow as uow:
+            uow.kv_config.set("retrodeck_home_path_previous", old_home)
+            uow.kv_config.set("retrodeck_home_path", new_home)
+        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64")
         service = plugin._migration_service
+        service._retrodeck_paths = FakeRetroDeckPaths(
+            home=new_home,
+            saves=os.path.join(new_home, "saves"),
+            roms=os.path.join(new_home, "roms"),
+            bios=os.path.join(new_home, "bios"),
+        )
         before = await service.get_migration_status()
+        loop = asyncio.get_running_loop()
         seen: list[dict[str, Any]] = []
+        apply_relocations = service._apply_relocations
+
+        def _asking_after_the_moves(*args: Any, **kwargs: Any) -> None:
+            status = asyncio.run_coroutine_threadsafe(service.get_migration_status(), loop)
+            seen.append(status.result(timeout=5))
+            apply_relocations(*args, **kwargs)
 
         class _Watching(RecordingSaveDirectories):
             async def __call__(self) -> None:
                 seen.append(await service.get_migration_status())
 
+        service._apply_relocations = _asking_after_the_moves
         service._save_directories = _Watching().provide
 
-        await plugin.migrate_retrodeck_files("skip")
+        result = await plugin.migrate_retrodeck_files("skip")
 
-        assert before["roms_count"] == 1
-        assert seen == [before]
+        assert result["success"] is True
+        assert os.path.exists(os.path.join(new_home, "saves", "n64", "zelda.srm"))
+        assert not os.path.exists(old_save)
+        assert (before["roms_count"], before["saves_count"]) == (1, 1)
+        assert seen == [before, before]
 
     @pytest.mark.asyncio
     async def test_nothing_is_recorded_while_the_user_is_still_asked(self, plugin, tmp_path):

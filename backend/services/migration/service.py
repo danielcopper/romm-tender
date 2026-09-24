@@ -763,13 +763,17 @@ class MigrationService:
     async def get_migration_status(self):
         """Return whether a RetroDECK path migration is pending and file counts.
 
-        A run in flight is still pending after it has cleared the markers, until
-        it has re-recorded the save directories — the same answer
+        While a run is in flight it answers with the status that run started
+        from, counts included, for the whole run: counted again while files
+        are moving, or after the run has cleared the markers, the migration
+        would read as having less, or nothing, left to move. It stays pending
+        until the run has re-recorded the save directories — the same answer
         :meth:`is_retrodeck_migration_pending` gives — so the panel does not let
-        go of the migration while syncs are still held off. It answers with the
-        status the run started from, counts included: counted again once the
-        files have moved, the migration would read as having nothing to move.
+        go of the migration while syncs are still held off.
         """
+        if self._status_in_flight is not None:
+            return dict(self._status_in_flight)
+
         with self._uow_factory() as uow:
             stored_pending = self._read_pending_homes(uow)
             stored_home = uow.kv_config.get(_KV_RETRODECK_HOME) or ""
@@ -777,8 +781,6 @@ class MigrationService:
         new_home = self._resolved_home(stored_home)
 
         if not pending or not new_home:
-            if self._status_in_flight is not None:
-                return dict(self._status_in_flight)
             return {"pending": False}
 
         return await self._loop.run_in_executor(None, self._get_migration_status_io, pending, new_home)
