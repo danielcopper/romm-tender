@@ -1,11 +1,5 @@
 /**
- * One kind's pane on the Library page's Collections tab: what the kind is, what
- * turning one of its collections on does, a search with Enable all and Disable
- * all beside it, and the kind's collections as a table.
- *
- * Every row of the table is a toggle, so A works it and the row is reachable
- * through it; the table's header and the line under its last row are text that
- * scrolls with the rows.
+ * One kind's pane on the Library page's Collections tab.
  *
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Library.
  */
@@ -15,12 +9,12 @@ import { ConfirmModal, DialogButton, TextField, ToggleField, showModal } from "@
 import { LoadingRow } from "../LoadingRow";
 import {
   ButtonRow,
-  CELL_CLIP,
   FLAT_BUTTON,
   MUTED,
   Muted,
   PANE_GUTTER,
   PaneTableHeader,
+  PaneTableRow,
   SECONDARY_FONT,
 } from "../layout/pane";
 import {
@@ -41,11 +35,10 @@ import type { CollectionSyncSetting } from "../../types";
  *  and Enable all / Disable all reach past it. */
 export const COLLECTION_RENDER_CAP = 50;
 
-// The label's columns, and the one more the header has over the toggle a row
-// draws at its right edge.
-const OWNED_COLUMNS = "minmax(0, 1fr) 72px 40px 52px";
-const OWNERLESS_COLUMNS = "minmax(0, 1fr) 40px 52px";
-const SYNC_TRACK = "52px";
+// The Sync track holds a label-less toggle; the others are sized for what they
+// print.
+const OWNED_COLUMNS = "minmax(0, 1fr) 72px 40px 52px 56px";
+const OWNERLESS_COLUMNS = "minmax(0, 1fr) 40px 52px 56px";
 
 const NUMBER: CSSProperties = { textAlign: "right" };
 
@@ -80,23 +73,22 @@ const LoadState: FC<{ state: CollectionsPageState }> = ({ state }) => {
 };
 
 const FavoritesPane: FC<{ state: CollectionsPageState; favorites: FavoritesAnswer }> = ({ state, favorites }) => {
-  const name = favorites.state === "one" ? favorites.collection.name : undefined;
   let body;
   if (state.load.state !== "loaded") body = <LoadState state={state} />;
-  else if (favorites.state === "one")
-    body = <Muted>{`Games in it: ${romCountLabel(favorites.collection.rom_count)}`}</Muted>;
+  else if (favorites.state === "one") body = <Muted>{`${romCountLabel(favorites.collection.rom_count)} in it`}</Muted>;
   else if (favorites.state === "several")
     body = (
       <Muted>
-        More than one favorites collection counts as yours, so the Favorites switch cannot stand for them. They are
-        listed under Collections, each with its own switch.
+        More than one favorites collection counts as yours — until Tender knows your RomM account, another user&apos;s
+        public one counts too — so the Favorites switch cannot stand for them. They are listed under Collections, each
+        with its own switch.
       </Muted>
     );
   else body = <Muted>Your RomM account has no favorites collection.</Muted>;
   return (
     <>
       <Title kind="favorites" />
-      <Sentence text={kindSentence("favorites", name)} />
+      <Sentence text={kindSentence("favorites")} />
       {body}
     </>
   );
@@ -107,57 +99,47 @@ const CollectionRow: FC<{ collection: CollectionSyncSetting; owned: boolean; sta
   owned,
   state,
 }) => {
-  const number = { ...CELL_CLIP, ...NUMBER, fontSize: SECONDARY_FONT };
+  const number = { ...NUMBER, fontSize: SECONDARY_FONT };
   return (
-    <div style={{ padding: `0 ${PANE_GUTTER}` }} data-testid="collection-row">
-      <ToggleField
-        label={
-          <span
-            style={{
-              display: "grid",
-              gridTemplateColumns: owned ? OWNED_COLUMNS : OWNERLESS_COLUMNS,
-              gap: "8px",
-              width: "100%",
-              alignItems: "baseline",
-            }}
-          >
-            <span style={CELL_CLIP} title={collection.name}>
-              {collection.name}
-            </span>
-            {owned && (
-              <span style={{ ...CELL_CLIP, fontSize: SECONDARY_FONT, color: MUTED }} data-testid="collection-owner">
-                {ownerLabel(collection)}
-              </span>
-            )}
-            <span style={number} data-testid="collection-roms">
-              {collection.rom_count}
-            </span>
-            <span style={number} data-testid="collection-in-steam">
-              {inSteamLabel(collection)}
-            </span>
-          </span>
-        }
-        checked={collection.sync_enabled}
-        bottomSeparator="none"
-        onChange={(value: boolean) => state.toggleCollection(collection, value, "pane")}
-      />
-    </div>
+    <PaneTableRow
+      columns={owned ? OWNED_COLUMNS : OWNERLESS_COLUMNS}
+      testId="collection-row"
+      // The Sync cell's toggle is the row's stop already.
+      focusStop={false}
+      cells={[
+        { content: collection.name, title: collection.name },
+        ...(owned ? [{ content: ownerLabel(collection), style: { fontSize: SECONDARY_FONT, color: MUTED } }] : []),
+        { content: `${collection.rom_count}`, style: number },
+        { content: inSteamLabel(collection), style: number },
+        {
+          content: (
+            <ToggleField
+              checked={collection.sync_enabled}
+              bottomSeparator="none"
+              onChange={(value: boolean) => state.toggleCollection(collection, value, "pane")}
+            />
+          ),
+          // A control draws its focus ring outside its own box.
+          clip: false,
+        },
+      ]}
+    />
   );
 };
 
 function confirmSetAll(state: CollectionsPageState, kind: CollectionsKindId, count: number, enabled: boolean) {
   const name = KIND_TEXT[kind].name;
+  const verb = enabled ? "Enable" : "Disable";
+  const which = count === 1 ? "the one collection" : `all ${count} collections`;
   const past =
     count > COLLECTION_RENDER_CAP ? `, including those past the first ${COLLECTION_RENDER_CAP} the table shows` : "";
-  const reach = `This switches ${count === 1 ? "the one collection" : `all ${count} collections`} listed under ${name}${past}.`;
+  const effect = enabled
+    ? "Their games come to Steam at the next sync, including games on platforms you do not sync."
+    : "It takes effect at the next sync.";
   showModal(
     <ConfirmModal
-      strTitle={enabled ? `Enable all ${count} in ${name}?` : `Disable all ${count} in ${name}?`}
-      strDescription={
-        enabled
-          ? `${reach} Their games come to Steam with the next sync, including games on platforms you do not sync.`
-          : reach
-      }
+      strTitle={count === 1 ? `${verb} the one collection in ${name}?` : `${verb} all ${count} in ${name}?`}
+      strDescription={`This turns ${enabled ? "on" : "off"} syncing for ${which} listed under ${name}${past}. ${effect}`}
       strOKButtonText={enabled ? "Enable all" : "Disable all"}
       strCancelButtonText="Cancel"
       onOK={() => state.setAllShown(enabled)}
@@ -177,7 +159,7 @@ const KindPane: FC<{
   const overflow = shown.length - rendered.length;
   const canWrite = shown.length > 0;
   // A search is what makes the write a bounded subset the reader can see; with
-  // none it is the whole kind, which is asked about first on every kind.
+  // none it is the whole table, which is asked about first on every kind.
   const setAll = (enabled: boolean) => {
     if (state.search === "") confirmSetAll(state, kind, shown.length, enabled);
     else state.setAllShown(enabled);
@@ -203,7 +185,7 @@ const KindPane: FC<{
     body = (
       <>
         <PaneTableHeader
-          columns={`${owned ? OWNED_COLUMNS : OWNERLESS_COLUMNS} ${SYNC_TRACK}`}
+          columns={owned ? OWNED_COLUMNS : OWNERLESS_COLUMNS}
           cells={[
             "Collection",
             ...(owned ? ["Owner"] : []),

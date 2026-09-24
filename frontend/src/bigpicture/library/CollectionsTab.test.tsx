@@ -23,7 +23,6 @@ import { ENTRY_STOP_ATTR } from "../../utils/entryFocus";
 import type { CollectionSyncSetting, PluginSettings } from "../../types";
 import { COLLECTION_RENDER_CAP } from "./CollectionsDetail";
 
-vi.mock("../../utils/scrollHelpers", () => ({ scrollToTop: vi.fn(), scrollElementToTop: vi.fn() }));
 vi.mock("../../utils/deckyUiInternals", async () => {
   const { createElement: ce } = await import("react");
   type TabShape = { id: string; title: string; content: unknown };
@@ -120,6 +119,11 @@ function tableNames(container: HTMLElement): string[] {
   );
 }
 
+/** A table row's cells in column order — the grid inside PaneTableRow. */
+function cellTexts(row: HTMLElement): string[] {
+  return [...(row.querySelector("div")?.children ?? [])].map((cell) => cell.textContent);
+}
+
 function tableRow(container: HTMLElement, name: string): HTMLElement {
   const row = [...container.querySelectorAll<HTMLElement>('[data-testid="collection-row"]')].find(
     (r) => r.querySelector("span[title]")?.textContent === name,
@@ -179,7 +183,7 @@ describe("Library › Collections", () => {
     vi.mocked(backend.setCollectionOwnerScope).mockResolvedValue({ success: true });
   });
 
-  describe("the read (#1020)", () => {
+  describe("the collections read", () => {
     it("states the backend's message when the read is refused, and asks again when the tab is entered again", async () => {
       vi.mocked(backend.getCollections)
         .mockResolvedValueOnce({ success: false, collections: [], message: "Cannot reach the RomM server" })
@@ -318,9 +322,7 @@ describe("Library › Collections", () => {
       });
       const { container } = await openCollections([FAVORITES, MINE_ON, theirs]);
       expect(tableNames(container)).toEqual(["Kids", "Mara's favourites"]);
-      expect(
-        tableRow(container, "Mara's favourites").querySelector('[data-testid="collection-owner"]')?.textContent,
-      ).toBe("mara");
+      expect(cellTexts(tableRow(container, "Mara's favourites"))[1]).toBe("mara");
       expect(kindRow(container, "favorites").textContent).toContain("14 ROMs");
 
       await click(ownerSwitch(container));
@@ -334,8 +336,6 @@ describe("Library › Collections", () => {
 
       expect(row.textContent).toContain("more than one, listed under Collections");
       expect(row.querySelector('[data-testid="toggle"]')?.getAttribute("data-disabled")).toBe("true");
-      // A disabled switch is no focus stop, so the row is one itself — else its
-      // pane, which says why, could not be reached.
       expect(row.dataset.activate).toBe("true");
       expect(tableNames(container)).toEqual(["Favourites", "Kids", "Starred"]);
 
@@ -356,9 +356,9 @@ describe("Library › Collections", () => {
       const { container } = await openCollections();
       await selectKind(container, "favorites");
       expect(container.querySelector('[data-testid="collections-sentence"]')?.textContent).toContain(
-        "[Favourites (Standard)]",
+        "Turning it on adds all its games to Steam at the next sync",
       );
-      expect(container.textContent).toContain("Games in it: 14 ROMs");
+      expect(container.textContent).toContain("14 ROMs in it");
       expect(container.querySelectorAll('[data-testid="collection-row"]')).toHaveLength(0);
     });
   });
@@ -370,22 +370,28 @@ describe("Library › Collections", () => {
       expect(container.textContent).toContain("Owner");
       expect(tableNames(container)).toEqual(["Kids", "Finished", "Handheld picks"]);
 
-      const kids = tableRow(container, "Kids");
-      expect(kids.querySelector('[data-testid="collection-owner"]')?.textContent).toBe("you");
-      expect(kids.querySelector('[data-testid="collection-roms"]')?.textContent).toBe("17");
-      expect(kids.querySelector('[data-testid="collection-in-steam"]')?.textContent).toBe("17");
-      const theirs = tableRow(container, "Handheld picks");
-      expect(theirs.querySelector('[data-testid="collection-owner"]')?.textContent).toBe("jonas");
-      // Absent is unknown, never zero.
-      expect(theirs.querySelector('[data-testid="collection-in-steam"]')?.textContent).toBe("—");
+      expect(cellTexts(tableRow(container, "Kids")).slice(0, 4)).toEqual(["Kids", "you", "17", "17"]);
+      // In Steam absent is unknown, never zero.
+      expect(cellTexts(tableRow(container, "Handheld picks")).slice(0, 4)).toEqual([
+        "Handheld picks",
+        "jonas",
+        "22",
+        "—",
+      ]);
+      // The Sync cell carries the row's one control, so the row is no stop of its own.
+      expect(tableRow(container, "Kids").dataset.activate).toBeUndefined();
+      expect(checkbox(tableRow(container, "Kids")).checked).toBe(true);
     });
 
     it("has no Owner column on Franchises, and lists that type alone", async () => {
       const { container } = await openCollections();
       await selectKind(container, "franchise");
       expect(tableNames(container)).toEqual(["Final Fantasy"]);
-      expect(container.querySelector('[data-testid="collection-owner"]')).toBeNull();
-      expect(container.querySelector('[data-testid="collections-sentence"]')?.textContent).toContain("synced or not");
+      expect(container.textContent).not.toContain("Owner");
+      expect(cellTexts(tableRow(container, "Final Fantasy")).slice(0, 3)).toEqual(["Final Fantasy", "23", "—"]);
+      expect(container.querySelector('[data-testid="collections-sentence"]')?.textContent).toContain(
+        "every game of that franchise",
+      );
     });
 
     it("keeps the order it opened with while rows are switched", async () => {
@@ -414,7 +420,7 @@ describe("Library › Collections", () => {
       expect(container.textContent).toContain("7 more");
     });
 
-    it("says how many another user's collections the owner switch is hiding from an empty kind", async () => {
+    it("says how many of another user's collections the owner switch is hiding from an empty kind", async () => {
       vi.mocked(backend.getSettings).mockResolvedValue(settings({ collection_owner_scope: "own" }));
       const { container } = await openCollections([THEIRS]);
       expect(container.textContent).toContain("Nothing to list under Collections.");
@@ -529,7 +535,8 @@ describe("Library › Collections", () => {
       expect(vi.mocked(backend.saveCollectionsSync)).not.toHaveBeenCalled();
       const modal = lastModal();
       expect(modal?.strTitle).toBe("Enable all 3 in Collections?");
-      expect(String(modal?.strDescription)).toContain("platforms you do not sync");
+      expect(String(modal?.strDescription)).toContain("This turns on syncing for all 3 collections");
+      expect(String(modal?.strDescription)).toContain("at the next sync, including games on platforms you do not sync");
 
       await act(async () => {
         (modal?.onOK as () => void)();
@@ -547,6 +554,8 @@ describe("Library › Collections", () => {
 
       const modal = lastModal();
       expect(modal?.strTitle).toBe("Disable all 2 in Franchises?");
+      expect(String(modal?.strDescription)).toContain("This turns off syncing for all 2 collections");
+      expect(String(modal?.strDescription)).toContain("at the next sync");
       await act(async () => {
         (modal?.onOK as () => void)();
         for (let i = 0; i < 6; i++) await Promise.resolve();
@@ -611,6 +620,143 @@ describe("Library › Collections", () => {
       await typeSearch(container, "qqq");
       expect(button(container, "Enable all").disabled).toBe(true);
       expect(button(container, "Disable all").disabled).toBe(true);
+    });
+
+    it("names the one collection when there is only one", async () => {
+      const { container } = await openCollections();
+      await selectKind(container, "smart");
+      await click(button(container, "Enable all"));
+      expect(lastModal()?.strTitle).toBe("Enable the one collection in Smart collections?");
+      expect(String(lastModal()?.strDescription)).toContain("This turns on syncing for the one collection");
+    });
+  });
+
+  describe("a refusal that carries no message", () => {
+    const FALLBACK = "Could not save that; the change was undone.";
+
+    it("says the collections read failed in a sentence of its own", async () => {
+      vi.mocked(backend.getCollections).mockResolvedValueOnce({ success: false, collections: [] });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await settle();
+      await showTab(container, "collections");
+      expect(container.querySelector('[data-testid="collections-load-failed"]')?.textContent).toContain(
+        "Could not read your collections from RomM.",
+      );
+    });
+
+    it("says the change was undone, for a table switch", async () => {
+      vi.mocked(backend.saveCollectionSync).mockResolvedValueOnce({ success: false });
+      const { container } = await openCollections();
+      await click(checkbox(tableRow(container, "Finished")));
+      expect(paneStatus(container)).toBe(FALLBACK);
+    });
+
+    it("says the change was undone, for the Favorites switch", async () => {
+      vi.mocked(backend.saveCollectionSync).mockResolvedValueOnce({ success: false });
+      const { container } = await openCollections();
+      await click(checkbox(kindRow(container, "favorites")));
+      expect(listStatus(container)).toBe(FALLBACK);
+    });
+
+    it("says the change was undone, for the owner switch", async () => {
+      vi.mocked(backend.setCollectionOwnerScope).mockResolvedValueOnce({ success: false });
+      const { container } = await openCollections();
+      await click(ownerSwitch(container));
+      expect(listStatus(container)).toBe(FALLBACK);
+    });
+
+    it("says the change was undone, for Enable all", async () => {
+      vi.mocked(backend.saveCollectionsSync).mockResolvedValueOnce({ success: false });
+      const { container } = await openCollections();
+      await typeSearch(container, "i");
+      await click(button(container, "Enable all"));
+      expect(paneStatus(container)).toBe(FALLBACK);
+    });
+  });
+
+  describe("a write that answers late", () => {
+    /** A write held open until the test answers it. */
+    function held<T>(): { promise: Promise<T>; answer: (value: T) => Promise<void> } {
+      let resolve: (value: T) => void = () => {};
+      const promise = new Promise<T>((r) => {
+        resolve = r;
+      });
+      return {
+        promise,
+        answer: async (value: T) => {
+          await act(async () => {
+            resolve(value);
+            for (let i = 0; i < 6; i++) await Promise.resolve();
+          });
+        },
+      };
+    }
+
+    it("says nothing in the list column once a later list write has answered", async () => {
+      const favorites = held<{ success: boolean; message?: string }>();
+      vi.mocked(backend.saveCollectionSync).mockReturnValueOnce(favorites.promise);
+      const { container } = await openCollections();
+      await click(checkbox(kindRow(container, "favorites")));
+      await click(ownerSwitch(container));
+
+      await favorites.answer({ success: false, message: "Too late" });
+
+      expect(listStatus(container)).toBeNull();
+      expect(checkbox(kindRow(container, "favorites")).checked).toBe(true);
+    });
+
+    it("does not take back a later pane refusal's line when an earlier write succeeds", async () => {
+      const first = held<{ success: boolean; message?: string }>();
+      vi.mocked(backend.saveCollectionSync)
+        .mockReturnValueOnce(first.promise)
+        .mockResolvedValueOnce({ success: false, message: "Refused" });
+      const { container } = await openCollections();
+      await click(checkbox(tableRow(container, "Kids")));
+      await click(checkbox(tableRow(container, "Finished")));
+      expect(paneStatus(container)).toBe("Refused");
+
+      await first.answer({ success: true });
+
+      expect(paneStatus(container)).toBe("Refused");
+    });
+
+    it("says nothing in the pane once another kind is selected", async () => {
+      const write = held<{ success: boolean; message?: string }>();
+      vi.mocked(backend.saveCollectionSync).mockReturnValueOnce(write.promise);
+      const { container } = await openCollections();
+      await click(checkbox(tableRow(container, "Finished")));
+      await selectKind(container, "smart");
+
+      await write.answer({ success: false, message: "Too late" });
+      expect(paneStatus(container)).toBeNull();
+
+      await selectKind(container, "standard");
+      expect(paneStatus(container)).toBeNull();
+      expect(checkbox(tableRow(container, "Finished")).checked).toBe(false);
+    });
+
+    it("says nothing once the tab has been left and entered again", async () => {
+      const write = held<{ success: boolean; message?: string }>();
+      vi.mocked(backend.saveCollectionSync).mockReturnValueOnce(write.promise);
+      const { container } = await openCollections();
+      await click(checkbox(kindRow(container, "favorites")));
+      await showTab(container, "platforms");
+      await showTab(container, "collections");
+
+      await write.answer({ success: false, message: "Too late" });
+
+      expect(listStatus(container)).toBeNull();
+      expect(checkbox(kindRow(container, "favorites")).checked).toBe(true);
+    });
+  });
+
+  describe("an owner nothing has established yet", () => {
+    it("names the owner rather than you, and stays listed with the owner switch off", async () => {
+      vi.mocked(backend.getSettings).mockResolvedValue(settings({ collection_owner_scope: "own" }));
+      const shared = coll({ id: "n", name: "Shared", is_own: null, owner_username: "mara" });
+      const { container } = await openCollections([shared]);
+      expect(tableNames(container)).toEqual(["Shared"]);
+      expect(cellTexts(tableRow(container, "Shared"))[1]).toBe("mara");
     });
   });
 });

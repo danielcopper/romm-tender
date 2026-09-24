@@ -61,6 +61,7 @@ import {
 } from "../../utils/pruneLease";
 import { removeShortcutsPaced } from "../../utils/shortcutRemoval";
 import { withTimeout } from "../../utils/withTimeout";
+import { SYNC_WRITE_FAILED } from "./syncWriteFailed";
 
 /** How long the pressed button says `Failed` before everything returns. Two of
  *  the two-to-three seconds the device pass asked for: long enough to read one
@@ -71,12 +72,6 @@ const FAILED_NOTICE_MS = 2000;
 
 const LEASE_OWNER = "library-platforms";
 const REMOVAL_REPORT_TIMEOUT_MS = 15000;
-
-/** What a sync write that did not take says when there is no answer to quote.
- *  A refusal always carries a message (`.claude/rules/callables.md`) and that
- *  message is what the reader gets. A REJECTION has no answer at all — the call
- *  never returned one — and the revert would otherwise happen in silence. */
-export const SYNC_WRITE_FAILED = "Could not save that; the change was undone.";
 
 /** Which group of the detail a status line belongs under, so a failed core
  *  switch is not reported below the removal buttons. */

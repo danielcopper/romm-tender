@@ -11,9 +11,8 @@
  * own settings do. The row's own control keeps A, so this component intercepts
  * it only where a page asks for `selectOnActivate` — for the whole list or for
  * one row — for rows that carry no control; a row that carries a toggle still
- * toggles on press. A control that
- * acts on the whole list goes in `listHeader` rather than in a row, so reaching
- * it reports no selection.
+ * toggles on press. A control that acts on the whole list goes in `listHeader`
+ * rather than in a row, so reaching it reports no selection.
  *
  * Selection is controlled: the page owns `selectedId` and decides what a change
  * means for the rest of it.

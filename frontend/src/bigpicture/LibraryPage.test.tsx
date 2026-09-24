@@ -8,8 +8,6 @@ import { LibraryPage } from "./LibraryPage";
 import * as backend from "../api/backend";
 import type { PluginSettings } from "../types";
 
-vi.mock("../utils/scrollHelpers", () => ({ scrollToTop: vi.fn(), scrollElementToTop: vi.fn() }));
-
 // The wide frame reaches Steam's tabbed page through this module, which is a
 // webpack probe with no answer under happy-dom. The stub renders a button per
 // tab plus the active tab's content, which is what makes a switch drivable.

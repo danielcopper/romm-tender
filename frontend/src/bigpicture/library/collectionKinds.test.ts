@@ -47,19 +47,25 @@ describe("resolveFavorites", () => {
     expect(resolveFavorites([theirs, mine])).toEqual({ state: "one", collection: mine });
   });
 
-  it("names none where more than one counts as yours, including before the user's id is known", () => {
-    // Before the id is known the backend marks every collection own, so another
-    // user's favorites collection reads as a second one of yours.
+  it("names none where more than one counts as yours", () => {
     expect(resolveFavorites([coll({ id: "a", is_favorite: true }), coll({ id: "b", is_favorite: true })])).toEqual({
       state: "several",
       count: 2,
     });
-    const unmarked = { ...coll({ id: "c", is_favorite: true }) };
-    delete unmarked.is_own;
-    expect(resolveFavorites([unmarked, coll({ id: "d", is_favorite: true })]).state).toBe("several");
   });
 
-  it("is a smart or virtual collection's never", () => {
+  it("counts a favorites collection whose owner is not established yet as a candidate", () => {
+    // `is_own: null` is what a standard collection carries before the user's
+    // id is known, another user's included.
+    const unknown = coll({ id: "c", is_favorite: true, is_own: null });
+    expect(resolveFavorites([unknown])).toEqual({ state: "one", collection: unknown });
+    expect(resolveFavorites([unknown, coll({ id: "d", is_favorite: true, is_own: null })])).toEqual({
+      state: "several",
+      count: 2,
+    });
+  });
+
+  it("never takes a smart or virtual collection as the row", () => {
     expect(resolveFavorites([coll({ kind: "smart", is_favorite: true })])).toEqual({ state: "none" });
   });
 });
@@ -74,7 +80,7 @@ describe("kindMembers", () => {
   const igdb = coll({ id: "ig", kind: "virtual", virtual_type: "collection" });
   const all = [favorite, theirFavorite, mine, theirs, smart, franchise, igdb];
 
-  it("lists the favorites row's collection under Collections nowhere, and another user's favorites as ordinary", () => {
+  it("keeps the Favorites row's collection out of Collections, and lists another user's favorites there as ordinary", () => {
     const answer = resolveFavorites(all);
     expect(ids(kindMembers(all, "standard", "all", answer))).toEqual(["standard:g", "standard:1", "standard:2"]);
   });
@@ -94,6 +100,11 @@ describe("kindMembers", () => {
     expect(ids(kindMembers(all, "standard", "own", answer))).toEqual(["standard:1"]);
     const theirSmart = coll({ id: "9", kind: "smart", is_own: false });
     expect(ids(kindMembers([smart, theirSmart], "smart", "own", { state: "none" }))).toEqual(["smart:1"]);
+  });
+
+  it("keeps a collection whose owner is not established yet with the owner switch off, as the sync does", () => {
+    const unknown = coll({ id: "u", is_own: null, owner_username: "jonas" });
+    expect(ids(kindMembers([unknown], "standard", "own", { state: "none" }))).toEqual(["standard:u"]);
   });
 
   it("splits the virtual kind by type, and the owner switch never touches either half", () => {
@@ -149,11 +160,13 @@ describe("searchMembers", () => {
 describe("the columns' words", () => {
   it("names the owner: you, their RomM user name, or a dash where the listing carried none", () => {
     expect(ownerLabel(coll())).toBe("you");
-    const unmarked = { ...coll() };
-    delete unmarked.is_own;
-    expect(ownerLabel(unmarked)).toBe("you");
     expect(ownerLabel(coll({ is_own: false, owner_username: "mara" }))).toBe("mara");
     expect(ownerLabel(coll({ is_own: false, owner_username: null }))).toBe("—");
+  });
+
+  it("says you only where ownership is established, and the owner's name while it is not", () => {
+    expect(ownerLabel(coll({ is_own: null, owner_username: "mara" }))).toBe("mara");
+    expect(ownerLabel(coll({ is_own: null, owner_username: null }))).toBe("—");
   });
 
   it("reads an absent In Steam count as unknown, never as zero", () => {
@@ -169,20 +182,17 @@ describe("the columns' words", () => {
 });
 
 describe("kindSentence", () => {
-  it("says on every kind that the games come from platforms that are not synced too", () => {
+  it("says on every kind what turning one on does, and when", () => {
     for (const kind of KIND_ORDER) {
-      expect(kindSentence(kind)).toMatch(/platforms you do not sync|synced or not/);
+      const sentence = kindSentence(kind);
+      expect(sentence).toContain("to Steam at the next sync");
+      expect(sentence).toContain("including games on platforms you do not sync");
+      expect(sentence).toContain("in a Steam collection named after it");
     }
   });
 
-  it("quotes the suffix the naming setting adds today, per kind", () => {
-    // The table the sync writes is `backend/domain/collection_label.py`'s; a
-    // favorites collection is a standard one there.
-    expect(kindSentence("favorites", "Favourites")).toContain("[Favourites (Standard)]");
-    expect(kindSentence("standard")).toContain("[name (Standard)]");
-    expect(kindSentence("smart")).toContain("[name (Smart)]");
-    expect(kindSentence("franchise")).toContain("[name (Franchise)]");
-    expect(kindSentence("igdb")).toContain("[name (IGDB Collection)]");
+  it("quotes no Steam name, which is the user guide's to state", () => {
+    for (const kind of KIND_ORDER) expect(kindSentence(kind)).not.toContain("RomM: [");
   });
 });
 

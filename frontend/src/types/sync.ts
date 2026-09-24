@@ -14,8 +14,6 @@ export interface PlatformSyncSetting {
 
 export type CollectionKind = "standard" | "smart" | "virtual";
 
-export type CollectionScope = "standard" | "smart" | "virtual";
-
 /**
  * The RomM virtual-collection type carried on a `kind === "virtual"` collection.
  * `"franchise"` = IGDB franchise groupings; `"collection"` = the default IGDB
@@ -56,20 +54,19 @@ export interface CollectionSyncSetting {
   virtual_type?: VirtualCollectionType;
   /**
    * Whether this collection is the signed-in user's own (#1532). Virtual
-   * collections have no owner and are always `true`; when the plugin does not
-   * yet know its own identity every collection is `true` (so the "Own" filter
-   * degrades to "All"). Absent on older backends — treat absent as `true`.
+   * collections have no owner and are always `true`. A standard or smart
+   * collection is `null` while the plugin does not yet know who the user is:
+   * nothing established it either way, and the owner scope hides nothing then.
    */
-  is_own?: boolean;
+  is_own: boolean | null;
   /**
    * How many of the collection's members are in Steam (CONTEXT.md →
-   * Reachable). Absent is unknown, never zero — also on older backends.
+   * Reachable). Absent is unknown, never zero.
    */
   in_steam_count?: number;
   /**
    * The RomM user who owns the collection; `null` where the listing lacks the
-   * field. Absent on virtual collections, which have no owner, and on older
-   * backends.
+   * field. Absent on virtual collections, which have no owner.
    */
   owner_username?: string | null;
 }

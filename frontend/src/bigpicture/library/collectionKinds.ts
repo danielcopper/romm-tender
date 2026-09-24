@@ -27,20 +27,6 @@ export function isKindId(id: string): id is CollectionsKindId {
   return (KIND_ORDER as readonly string[]).includes(id);
 }
 
-/**
- * The suffix the `by_label` naming mode puts after a collection's name in its
- * Steam collection, per kind. What the sync actually writes is
- * `backend/domain/collection_label.py`'s; this is that table as the pane's
- * sentence quotes it, so a change there is a change here.
- */
-const STEAM_NAME_SUFFIX: Record<CollectionsKindId, string> = {
-  favorites: "Standard",
-  standard: "Standard",
-  smart: "Smart",
-  franchise: "Franchise",
-  igdb: "IGDB Collection",
-};
-
 export interface KindText {
   /** The row's name, and the pane's title. */
   name: string;
@@ -51,7 +37,7 @@ export interface KindText {
 }
 
 export const KIND_TEXT: Record<CollectionsKindId, KindText> = {
-  favorites: { name: "Favorites", about: "the games you starred in RomM", owned: true },
+  favorites: { name: "Favorites", about: "the games you marked as favorites in RomM", owned: true },
   standard: { name: "Collections", about: "picked by hand in RomM", owned: true },
   smart: { name: "Smart collections", about: "saved searches in RomM", owned: true },
   franchise: {
@@ -67,27 +53,25 @@ export const KIND_TEXT: Record<CollectionsKindId, KindText> = {
 };
 
 /**
- * One sentence per kind on what turning one of its collections on does.
- *
- * Every one says that the games come to Steam whether or not their platform
- * is synced, and names the Steam collection they are grouped in, with the
- * suffix the naming setting adds.
- * `name` is the favorites collection's own name where the page has one to
- * quote; the other kinds speak about any of theirs.
+ * One sentence per kind on what turning one of its collections on does: every
+ * one says that the games come to Steam whether or not their platform is
+ * synced. What the Steam collection is called exactly is the user guide's to
+ * say, not the pane's.
  */
-export function kindSentence(kind: CollectionsKindId, name = "name"): string {
-  const steamName = `RomM: [${name}] (host) — [${name} (${STEAM_NAME_SUFFIX[kind]})] when Settings › Steam Library distinguishes collection types in Steam names`;
+export function kindSentence(kind: CollectionsKindId): string {
+  const tail =
+    "to Steam at the next sync, including games on platforms you do not sync, and groups them in a Steam collection named after it.";
   switch (kind) {
     case "favorites":
-      return `RomM keeps one favorites collection per account. Turned on, its games come to Steam even from platforms you do not sync, grouped as ${steamName}.`;
+      return `Turning it on adds all its games ${tail}`;
     case "standard":
-      return `Turning one on adds all its games to Steam, including games on platforms you do not sync, and groups them as ${steamName}.`;
+      return `Turning one on adds all its games ${tail}`;
     case "smart":
-      return `Turning one on adds every game its search matches to Steam, including games on platforms you do not sync, and groups them as ${steamName}.`;
+      return `Turning one on adds every game its search matches ${tail}`;
     case "franchise":
-      return `Turning one on adds every game of that franchise to Steam, on any platform, synced or not, and groups them as ${steamName}.`;
+      return `Turning one on adds every game of that franchise ${tail}`;
     case "igdb":
-      return `Turning one on adds every game of that IGDB collection to Steam, on any platform, synced or not, and groups them as ${steamName}.`;
+      return `Turning one on adds every game of that IGDB collection ${tail}`;
   }
 }
 
@@ -103,25 +87,26 @@ export function collectionKey(c: Pick<CollectionSyncSetting, "id" | "kind">): st
   return `${c.kind}:${c.id}`;
 }
 
-/** An absent `is_own` is an older payload's, and reads as own — the same way
- *  the backend degrades while it does not yet know who the user is. */
-const isOwn = (c: CollectionSyncSetting): boolean => c.is_own !== false;
+/** Whether the owner scope keeps a collection: an unestablished owner (`null`)
+ *  is kept, as the sync keeps it while it does not yet know who the user is. */
+const ownOrUnknown = (c: CollectionSyncSetting): boolean => c.is_own !== false;
 
 /**
  * What the Favorites row stands for.
  *
  * Only the signed-in user's OWN favorites collection is the row: another user's
  * public one is an ordinary collection of theirs, listed with its owner and
- * governed by the owner switch like any other. Where more than one still counts
- * as yours — two marked own, which is also what every favorites collection
- * reads as before the user's id is known — a single switch cannot stand for
- * them, so the row names none and they are listed under Collections instead.
+ * governed by the owner switch like any other. A collection whose owner is not
+ * established yet (`is_own: null`, before the user's id is known) is a
+ * candidate. Where more than one is — two marked own, or two not yet
+ * established — a single switch cannot stand for them, so the row names none
+ * and they are listed under Collections instead.
  */
 export type FavoritesAnswer =
   { state: "one"; collection: CollectionSyncSetting } | { state: "none" } | { state: "several"; count: number };
 
 export function resolveFavorites(collections: readonly CollectionSyncSetting[]): FavoritesAnswer {
-  const own = collections.filter((c) => c.kind === "standard" && c.is_favorite && isOwn(c));
+  const own = collections.filter((c) => c.kind === "standard" && c.is_favorite && ownOrUnknown(c));
   if (own.length === 0) return { state: "none" };
   if (own.length > 1) return { state: "several", count: own.length };
   return { state: "one", collection: own[0] as CollectionSyncSetting };
@@ -142,7 +127,7 @@ export function kindMembers(
   ownerScope: CollectionOwnerScope,
   favorites: FavoritesAnswer,
 ): CollectionSyncSetting[] {
-  const shown = (c: CollectionSyncSetting) => ownerScope === "all" || isOwn(c);
+  const shown = (c: CollectionSyncSetting) => ownerScope === "all" || ownOrUnknown(c);
   switch (kind) {
     case "favorites":
       return [];
@@ -174,7 +159,8 @@ export function hiddenForeignCount(
   );
 }
 
-/** The kind row's "N of M on", over exactly what that kind's table lists. */
+/** The kind row's "N of M on", over what that kind's table lists under the
+ *  owner switch, before any search. */
 export function onCount(members: readonly CollectionSyncSetting[]): string {
   return `${members.filter((c) => c.sync_enabled).length} of ${members.length} on`;
 }
@@ -193,7 +179,7 @@ export function freezeOrder(collections: readonly CollectionSyncSetting[]): Coll
 /** The Owner column: "you", or the owner's RomM user name, or a dash where the
  *  listing did not carry one. */
 export function ownerLabel(c: CollectionSyncSetting): string {
-  if (isOwn(c)) return "you";
+  if (c.is_own === true) return "you";
   return c.owner_username ?? "—";
 }
 

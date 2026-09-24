@@ -1,16 +1,6 @@
 /**
  * The Library page's Collections tab: the kinds on the left, the selected
- * kind's collections as a table on the right.
- *
- * The list holds kinds rather than collections because kind is where a reader
- * already navigates, and the two facts worth a column per collection — who owns
- * it, how much of it is already in Steam — fit a row of the kind's table.
- *
- * Two kinds of row share the list. Favorites carries its sync switch, as a
- * platform row does, so A works the switch; the other four carry nothing and
- * are focus stops of their own, so A selects. Where the Favorites switch stands
- * for no single collection it is disabled, and the row becomes a stop like the
- * others so its pane — which says why — can still be reached.
+ * kind's pane on the right.
  *
  * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Library.
  */

@@ -30,7 +30,7 @@ import {
   wireKind,
   type CollectionsKindId,
 } from "./collectionKinds";
-import { SYNC_WRITE_FAILED } from "./usePlatformsPage";
+import { SYNC_WRITE_FAILED } from "./syncWriteFailed";
 
 /** Where the collections read stands. A failure is not final: entering the tab
  *  again asks again, which is what the failure line tells the reader. */
@@ -127,7 +127,30 @@ export function useCollectionsPage(): CollectionsPageState {
       });
   }, []);
 
+  // Which answer may still speak on each line. Every write takes the next
+  // number for its place when it is issued, and its answer sets or clears that
+  // place's line only while it is still the latest write there, the tab has not
+  // been entered again since, and — in the pane — its kind is still the one
+  // shown. A late answer still puts its row back; it only loses its say.
+  const latestWrite = useRef<Record<WritePlace, number>>({ list: 0, pane: 0 });
+  const entries = useRef(0);
+  const shownKind = useRef<CollectionsKindId>("standard");
+
+  const lineFor = useCallback((place: WritePlace) => {
+    latestWrite.current[place] += 1;
+    const ticket = latestWrite.current[place];
+    const entry = entries.current;
+    const kind = shownKind.current;
+    return (text: string | null) => {
+      if (latestWrite.current[place] !== ticket || entries.current !== entry) return;
+      if (place === "pane" && shownKind.current !== kind) return;
+      if (place === "list") setListStatus(text);
+      else setPaneStatus(text);
+    };
+  }, []);
+
   const enter = useCallback(() => {
+    entries.current += 1;
     setSearch("");
     setListStatus(null);
     setPaneStatus(null);
@@ -135,21 +158,14 @@ export function useCollectionsPage(): CollectionsPageState {
     if (collectionsRead.current === "idle" || collectionsRead.current === "failed") readCollections();
   }, [readCollections, readOwnerScope]);
 
-  // A search and a refusal are both about the kind they were made on, so
+  // A search and a pane refusal are both about the kind they were made on, so
   // another kind is entered without either.
-  const select = useCallback(
-    (id: string) => {
-      if (!isKindId(id) || id === selectedKind) return;
-      setSelectedKind(id);
-      setSearch("");
-      setPaneStatus(null);
-    },
-    [selectedKind],
-  );
-
-  const setStatus = useCallback((place: WritePlace, text: string | null) => {
-    if (place === "list") setListStatus(text);
-    else setPaneStatus(text);
+  const select = useCallback((id: string) => {
+    if (!isKindId(id) || id === shownKind.current) return;
+    shownKind.current = id;
+    setSelectedKind(id);
+    setSearch("");
+    setPaneStatus(null);
   }, []);
 
   // Every write below treats a refusal and a rejection as one outcome: the
@@ -160,24 +176,25 @@ export function useCollectionsPage(): CollectionsPageState {
       const key = collectionKey(collection);
       const flip = (want: boolean) =>
         setCollections((prev) => prev.map((c) => (collectionKey(c) === key ? { ...c, sync_enabled: want } : c)));
+      const line = lineFor(place);
       flip(enabled);
       detach(
         saveCollectionSync(collection.id, collection.kind, enabled)
           .then((result) => {
             if (result.success) {
-              setStatus(place, null);
+              line(null);
               return;
             }
             flip(!enabled);
-            setStatus(place, result.message || SYNC_WRITE_FAILED);
+            line(result.message || SYNC_WRITE_FAILED);
           })
           .catch(() => {
             flip(!enabled);
-            setStatus(place, SYNC_WRITE_FAILED);
+            line(SYNC_WRITE_FAILED);
           }),
       );
     },
-    [setStatus],
+    [lineFor],
   );
 
   const setAllShown = useCallback(
@@ -193,13 +210,9 @@ export function useCollectionsPage(): CollectionsPageState {
             return previous.has(key) ? { ...c, sync_enabled: value(key, c.sync_enabled) } : c;
           }),
         );
-      put(() => enabled);
       const undo = () => put((key, current) => previous.get(key) ?? current);
-      // The batch write over exactly these ids, never the whole-kind one: that
-      // re-fetches the kind from RomM and writes what it finds, which is both
-      // virtual types at once, every user's collections whatever the owner
-      // switch says, and never a favorites collection — none of which is the
-      // table the reader is looking at.
+      const line = lineFor("pane");
+      put(() => enabled);
       detach(
         saveCollectionsSync(
           targets.map((c) => c.id),
@@ -208,43 +221,44 @@ export function useCollectionsPage(): CollectionsPageState {
         )
           .then((result) => {
             if (result.success) {
-              setPaneStatus(null);
+              line(null);
               return;
             }
             undo();
-            setPaneStatus(result.message || SYNC_WRITE_FAILED);
+            line(result.message || SYNC_WRITE_FAILED);
           })
           .catch(() => {
             undo();
-            setPaneStatus(SYNC_WRITE_FAILED);
+            line(SYNC_WRITE_FAILED);
           }),
       );
     },
-    [collections, ownerScope, search, selectedKind],
+    [collections, lineFor, ownerScope, search, selectedKind],
   );
 
   const setOwnerScope = useCallback(
     (scope: CollectionOwnerScope) => {
       const previous = ownerScope;
       if (scope === previous) return;
+      const line = lineFor("list");
       setOwnerScopeState(scope);
       detach(
         setCollectionOwnerScope(scope)
           .then((result) => {
             if (result.success) {
-              setListStatus(null);
+              line(null);
               return;
             }
             setOwnerScopeState(previous);
-            setListStatus(result.message || SYNC_WRITE_FAILED);
+            line(result.message || SYNC_WRITE_FAILED);
           })
           .catch(() => {
             setOwnerScopeState(previous);
-            setListStatus(SYNC_WRITE_FAILED);
+            line(SYNC_WRITE_FAILED);
           }),
       );
     },
-    [ownerScope],
+    [lineFor, ownerScope],
   );
 
   return {
