@@ -76,8 +76,11 @@ python -m pytest tests/ -q --cov=backend --cov-report=term --cov-branch
 ```
 
 Tests mirror the source layout (`tests/services/`, `tests/adapters/`, `tests/domain/`, `tests/models/`, `tests/lib/`),
-with each test file mapping 1:1 to a source module. Shared mocks live in `tests/conftest.py`, which also provides a mock
-`decky` module so tests run without Decky Loader.
+with each test file mapping 1:1 to a source module. Shared fixtures live in `tests/conftest.py`. Every test runs under a
+fresh, empty `HOME` with no `XDG_*` or `TENDER_*` variable set, so no test reaches your real Steam, RetroDECK or
+settings tree except the one read-only tier `tests/conftest.py` names, and every test gets its own event sink (`emit`)
+and logger (`logger`) to build services with. `.claude/rules/testing-backend.md` has the rules for writing a test
+against them.
 
 Frontend component tests run with `mise run test:frontend` (`pnpm -C frontend test`); see
 `.claude/rules/testing-frontend.md` for the backend-event harness, and for what that suite cannot see — `api/host` is

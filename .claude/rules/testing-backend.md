@@ -10,6 +10,18 @@ input, missing data, API errors, network failures), and **edge cases** (empty st
 boundaries). Tests mirror the source structure (`tests/services/`, `tests/adapters/`, …), one test file per source
 module. Shared mocks live in `tests/conftest.py`.
 
+## The seams a test builds a service with, and the home it sees
+
+A service under test takes its `emit` and `logger` from the fixtures of those names in `tests/conftest.py`. Each test
+gets its own, so what a test reads off `emit.call_args_list` is only what that test caused. Never build a module-level
+sink and reset it between tests.
+
+Every test runs under a fresh, empty `HOME` (the `home` fixture), with every `XDG_*` and `TENDER_*` variable removed.
+Anything home-relative (a `SteamConfigAdapter`'s `user_home`, the launcher at `<home>/.local/bin/tender-rom-launcher`)
+is built from `home`, or from `tmp_path` where the test is about a directory of its own. A test that needs files under
+the home seeds them there. It never points back at a real path. The one named exception to the rule is stated in the
+isolation fixture's docstring, and `tests/test_conftest_isolation.py` holds every other test to it.
+
 ## The loop a test hands a service
 
 A service takes its event loop in a frozen `*ServiceConfig`, and `asyncio.get_event_loop()` is banned (ruff TID251) —
