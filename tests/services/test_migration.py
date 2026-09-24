@@ -3,7 +3,7 @@ import json
 import logging
 import os
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Self
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -48,6 +48,26 @@ class RecordingEmitter:
 
     async def __call__(self, event: str, payload: object, /) -> None:
         self.calls.append((event, payload))
+
+
+class RecordingSaveDirectories:
+    """Stands in for ``SaveService.rerecord_save_directories`` and counts its calls.
+
+    Called through ``provide`` the way the composition root's ``LateBinding``
+    hands the live recorder over. *error* makes the call raise.
+    """
+
+    def __init__(self, error: Exception | None = None) -> None:
+        self.calls = 0
+        self._error = error
+
+    def provide(self) -> Self:
+        return self
+
+    async def __call__(self) -> None:
+        self.calls += 1
+        if self._error is not None:
+            raise self._error
 
 
 @pytest.fixture
@@ -135,6 +155,7 @@ def plugin(tmp_path, fake_romm_api, emit, logger, home):
     )
 
     firmware_resolver = FakeFirmwareResolver()
+    p._save_directories = RecordingSaveDirectories()
     p._migration_service = MigrationService(
         config=MigrationServiceConfig(
             migration_file_store=MigrationFileAdapter(),
@@ -146,6 +167,7 @@ def plugin(tmp_path, fake_romm_api, emit, logger, home):
             firmware_resolver=firmware_resolver,
             retrodeck_paths=FakeRetroDeckPaths(),
             relaunch_options=relaunch_options,
+            save_directories=p._save_directories.provide,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
         ),
     )
@@ -918,6 +940,52 @@ class TestMigrateRetroDeckFiles:
         with plugin._uow as uow:
             assert uow.rom_installs.get(1).file_path == new_rom
 
+    @staticmethod
+    def _conflicting_rom(plugin, tmp_path) -> None:
+        """A pending home move whose one ROM exists at both ends."""
+        old_home = str(tmp_path / "old")
+        new_home = str(tmp_path / "new")
+        old_rom = os.path.join(old_home, "roms", "n64", "zelda.z64")
+        new_rom = os.path.join(new_home, "roms", "n64", "zelda.z64")
+        for path, data in ((old_rom, "old data"), (new_rom, "new data")):
+            os.makedirs(os.path.dirname(path))
+            with open(path, "w") as f:
+                f.write(data)
+        with plugin._uow as uow:
+            uow.kv_config.set("retrodeck_home_path_previous", old_home)
+            uow.kv_config.set("retrodeck_home_path", new_home)
+        _seed_install(plugin._uow, 1, file_path=old_rom, system="n64")
+
+    @pytest.mark.asyncio
+    async def test_the_save_directories_are_recorded_again_once_the_files_moved(self, plugin, tmp_path):
+        self._conflicting_rom(plugin, tmp_path)
+
+        result = await plugin.migrate_retrodeck_files("skip")
+
+        assert result["success"] is True
+        assert plugin._save_directories.calls == 1
+
+    @pytest.mark.asyncio
+    async def test_nothing_is_recorded_while_the_user_is_still_asked(self, plugin, tmp_path):
+        self._conflicting_rom(plugin, tmp_path)
+
+        result = await plugin.migrate_retrodeck_files(None)
+
+        assert result["reason"] == "needs_confirmation"
+        assert plugin._save_directories.calls == 0
+
+    @pytest.mark.asyncio
+    async def test_a_failed_recording_leaves_the_finished_migration_standing(self, plugin, tmp_path, caplog):
+        self._conflicting_rom(plugin, tmp_path)
+        failing = RecordingSaveDirectories(error=RuntimeError("database gone"))
+        plugin._migration_service._save_directories = failing.provide
+
+        result = await plugin.migrate_retrodeck_files("skip")
+
+        assert result["success"] is True
+        assert failing.calls == 1
+        assert any("save directories after the home migration failed" in r.message for r in caplog.records)
+
     @pytest.mark.asyncio
     async def test_migrate_source_missing(self, plugin, tmp_path, logger):
         """Source file gone — skip silently."""
@@ -1523,6 +1591,7 @@ class TestMigrationFailureInjection:
             "firmware_resolver": FakeFirmwareResolver(),
             "retrodeck_paths": FakeRetroDeckPaths(),
             "relaunch_options": FakeRelaunchOptionsResolver(),
+            "save_directories": RecordingSaveDirectories().provide,
             "uow_factory": FakeUnitOfWorkFactory(uow=uow),
         }
         defaults.update(overrides)

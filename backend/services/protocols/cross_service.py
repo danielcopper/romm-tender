@@ -385,6 +385,29 @@ class RomRemoverProvider(Protocol):
     def __call__(self) -> InstalledRomRemoverFn: ...
 
 
+class SaveDirectoriesRecorderFn(Protocol):
+    """Re-recording of every installed ROM's answered save directory, consumed by MigrationService.
+
+    The composition root satisfies this with ``SaveService.rerecord_save_directories``.
+    The RetroDECK home migration calls it once the files are moved: it owns the new
+    location, and a record left naming the old home would have the next sync follow
+    a copy the user chose to leave there back over the one they kept.
+    """
+
+    async def __call__(self) -> None: ...
+
+
+class SaveDirectoriesRecorderProvider(Protocol):
+    """Deferred access to :class:`SaveDirectoriesRecorderFn`, consumed by MigrationService.
+
+    MigrationService is built before SaveService, which is handed its migration
+    gate, so the composition root binds the recorder once both exist and hands
+    MigrationService this getter (a ``LateBinding``).
+    """
+
+    def __call__(self) -> SaveDirectoriesRecorderFn: ...
+
+
 class ActiveDownloadRomIdsFn(Protocol):
     """Active-download rom-id snapshot consumed by VersionSwitchService (#1298 F1).
 

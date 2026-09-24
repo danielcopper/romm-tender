@@ -53,7 +53,7 @@ if TYPE_CHECKING:
     from models.shortcut_launcher import ShortcutLauncher
 
     from domain.app_directories import AppDirectories
-    from services.protocols import InstalledRomRemoverFn, SiblingSupersedeFn
+    from services.protocols import InstalledRomRemoverFn, SaveDirectoriesRecorderFn, SiblingSupersedeFn
 
     from .adapters import AdapterBundle, CallbackBundle, RuntimeBundle, StateBundle
 
@@ -132,6 +132,10 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
     # DownloadService needs the adoption service's occupancy gate — the same
     # shape of cycle, bound after both exist.
     sibling_supersede_binding: LateBinding[SiblingSupersedeFn] = LateBinding("sibling_supersede")
+    # MigrationService re-records the save directories once a home migration has
+    # moved the files, but SaveService is built after it (it takes the migration
+    # gate) — bound once both exist.
+    save_directories_binding: LateBinding[SaveDirectoriesRecorderFn] = LateBinding("save_directories")
 
     # The single read-path core resolver (B1): folds the per-game
     # emulator_override pin over the system-layer ES-DE resolution. Built first
@@ -189,6 +193,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
             firmware_resolver=cfg.adapters.firmware_resolver,
             retrodeck_paths=cfg.callbacks.retrodeck_paths,
             relaunch_options=relaunch_options_resolver,
+            save_directories=save_directories_binding.get,
             uow_factory=cfg.callbacks.uow_factory,
         ),
     )
@@ -216,6 +221,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         uow_factory=cfg.callbacks.uow_factory,
     )
     save_sync_service = SaveService(config=save_service_config)
+    save_directories_binding.set(lambda: save_sync_service.rerecord_save_directories)
 
     playtime_service = PlaytimeService(
         config=PlaytimeServiceConfig(

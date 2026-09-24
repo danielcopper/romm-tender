@@ -567,3 +567,57 @@ class TestTheOneTimeBackfill:
         with _uow(svc) as uow:
             assert uow.kv_config.get("save_directories_recorded") is None
         assert any("save directories failed" in record.message for record in caplog.records)
+
+
+class TestRecordingAgainAfterAHomeMigration:
+    """The home migration moved the files, so what the resolver answers now is recorded over the old record."""
+
+    @pytest.mark.asyncio
+    async def test_every_installed_rom_is_recorded_as_answered_now(self, tmp_path):
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path, rom_id=1, file_name="one.gba")
+        _install_rom(svc, tmp_path, rom_id=2, file_name="two.gba")
+        _record(svc, "/old/home/saves/gba", rom_id=2)
+
+        await svc.rerecord_save_directories()
+
+        assert _recorded(svc, 1) == str(tmp_path / "saves" / "gba")
+        assert _recorded(svc, 2) == str(tmp_path / "saves" / "gba")
+
+    @pytest.mark.asyncio
+    async def test_the_next_follow_carries_nothing(self, tmp_path, dirs):
+        # The old copy the user chose to leave behind stays where it is.
+        old, new = dirs
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        left_behind = _create_save(tmp_path, content=b"left behind")
+        _seed_answer(svc, _answer(str(new)))
+
+        await svc.rerecord_save_directories()
+        _follow(svc, _answer(str(new)))
+
+        assert left_behind.read_bytes() == b"left behind"
+        assert not new.exists()
+        assert _recorded(svc) == str(new)
+
+    @pytest.mark.asyncio
+    async def test_an_answer_the_follow_would_not_act_on_keeps_the_record(self, tmp_path, dirs):
+        old, _new = dirs
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        _seed_answer(svc, _answer(str(tmp_path / "retrodeck" / "roms" / "gba"), root_kind="content_directory"))
+
+        await svc.rerecord_save_directories()
+
+        assert _recorded(svc) == str(old)
+
+    @pytest.mark.asyncio
+    async def test_a_rom_with_no_usable_install_row_is_passed_over(self, tmp_path):
+        svc, _ = make_service(tmp_path)
+        _seed_install(svc, _ROM, file_path="", system="", platform_slug="gba", allow_empty=True)
+
+        await svc.rerecord_save_directories()
+
+        assert _recorded(svc) is None

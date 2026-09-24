@@ -72,7 +72,7 @@ from services.saves.sync_engine.rollback import RollbackOrchestrator
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from domain.save_answer import SaveAnswer
     from services.protocols import (
@@ -483,15 +483,22 @@ class SyncEngine:
             await self._loop.run_in_executor(None, self._follower.do_follow, rom_id, answer)
 
     async def record_save_directories(self) -> None:
-        """Record the answered save directory of every installed ROM that has none.
+        """Record the answered save directory of every installed ROM that has none — the one-time backfill."""
+        await self._record_each_installed_rom(self._follower.do_record_if_absent)
 
-        The one-time backfill. Serial and one ROM at a time under its own lock,
-        each reading offloaded to the executor, so it never holds the event
-        loop and never races a sync of the same ROM.
+    async def rerecord_save_directories(self) -> None:
+        """Record the answered save directory of every installed ROM afresh, replacing what is recorded."""
+        await self._record_each_installed_rom(self._follower.do_rerecord)
+
+    async def _record_each_installed_rom(self, record: Callable[[int], None]) -> None:
+        """Run *record* for each installed ROM, serially, each under its own lock.
+
+        Each call is offloaded to the executor, so the pass never holds the
+        event loop, and the lock keeps it from racing a follow of the same ROM.
         """
         for rom_id in await self._loop.run_in_executor(None, self._installed_rom_ids):
             async with self.rom_lock(rom_id):
-                await self._loop.run_in_executor(None, self._follower.do_record_if_absent, rom_id)
+                await self._loop.run_in_executor(None, record, rom_id)
 
     async def content_dir_blocked(self, rom_id: int, where: str) -> bool:
         """Whether this ROM's emulator writes its save beside the game's content.

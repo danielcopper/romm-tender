@@ -33,6 +33,7 @@ if TYPE_CHECKING:
         MigrationFileStore,
         RelaunchOptionsReader,
         RetroDeckPaths,
+        SaveDirectoriesRecorderProvider,
         SettingsPersister,
         UnitOfWorkFactory,
     )
@@ -60,8 +61,10 @@ class MigrationServiceConfig:
     Steam ``launch_options`` (active core + selected disc) from its moved path
     so the pick survives the home migration. ``firmware_resolver`` names which
     files in a pending home are firmware at all, so the untracked-BIOS sweep
-    moves those and leaves everything else alone. Relational migration state (ROM installs,
-    BIOS records, change markers) is read through the injected ``uow_factory``.
+    moves those and leaves everything else alone. ``save_directories`` re-records
+    every installed ROM's answered save directory once the files are moved.
+    Relational migration state (ROM installs, BIOS records, change markers) is
+    read through the injected ``uow_factory``.
     """
 
     migration_file_store: MigrationFileStore
@@ -73,6 +76,7 @@ class MigrationServiceConfig:
     firmware_resolver: FirmwareResolver
     retrodeck_paths: RetroDeckPaths
     relaunch_options: RelaunchOptionsReader
+    save_directories: SaveDirectoriesRecorderProvider
     uow_factory: UnitOfWorkFactory
 
 
@@ -89,6 +93,7 @@ class MigrationService:
         self._firmware_resolver = config.firmware_resolver
         self._retrodeck_paths = config.retrodeck_paths
         self._relaunch_options = config.relaunch_options
+        self._save_directories = config.save_directories
         self._uow_factory = config.uow_factory
         self._mover = FileMover(file_store=config.migration_file_store, logger=config.logger)
         # Strong refs to in-flight background tasks. ``loop.create_task``
@@ -669,7 +674,24 @@ class MigrationService:
             # next sync skips the now-correct shortcut instead of re-touching it
             # (delta apply, #1383). Fifth of the six recorded-state writer sites.
             await self._loop.run_in_executor(None, self._record_migration_applied_io, relaunch_items)
+            await self._rerecord_save_directories()
         return result
+
+    async def _rerecord_save_directories(self) -> None:
+        """Record every installed ROM's save directory as the new home answers it.
+
+        A save the ``skip`` strategy kept at the destination leaves the old copy
+        in the old home, and a record still naming that home would have the next
+        sync carry the old copy over the kept one. Runs whether or not every
+        file moved: the moves that happened are the new home's either way.
+        """
+        try:
+            await self._save_directories()()
+        except Exception:
+            # The files are already moved. A failed re-record leaves the old
+            # records standing, which is what it exists to prevent, but it must
+            # not turn a finished migration into a failed callable.
+            self._logger.exception("Recording the save directories after the home migration failed")
 
     def _record_migration_applied_io(self, items: list[dict[str, Any]]) -> None:
         """Record each relaunch item's ``launch_options`` as its ROM's applied state.
