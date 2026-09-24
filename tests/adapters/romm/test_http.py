@@ -1024,14 +1024,15 @@ class TestPlatformMap:
         assert adapter.resolve_system("philips-cd-i") == "cdimono1"
         assert adapter.resolve_system("unknown-slug", "cdi") == "cdimono1"
 
-    def test_the_shipped_map_is_read_from_where_the_program_is_installed(self, tmp_path):
+    def test_the_shipped_map_is_read_from_the_code_directory(self, tmp_path):
         """The adapter reads ``defaults/config.json`` under the code directory the program resolves for itself.
 
         A wrong path fails in silence: the map degrades to ``{}`` and every slug
         passes through verbatim, so only a slug the shipped file maps to a
         different name can tell the two apart. The directory comes from
-        ``resolve_directories`` over ``main``'s own fallback, as ``Plugin.run``
-        resolves it, rather than from the test setup.
+        ``resolve_directories`` over ``main``'s own fallback — the checkout rung,
+        which an installed start reaches through ``TENDER_CODE_DIR`` instead —
+        rather than from the test setup.
         """
         import logging
 
