@@ -1,10 +1,10 @@
 """Per-ROM save answers and local save-file discovery.
 
-Asks the resolver where an installed ROM's emulator keeps its save and what
-the save consists of, and enumerates the matching local save files. The
+The one place the saves package asks the resolver where a ROM's emulator keeps
+its save and what the save consists of, and probes for the files it names. The
 directory is the resolver's answer and nothing else: this module holds no
 knowledge of how any emulator lays its saves out. No RomM I/O, no state
-mutation. Shared by SlotsService, SyncEngine, and StatusService.
+mutation.
 """
 
 from __future__ import annotations

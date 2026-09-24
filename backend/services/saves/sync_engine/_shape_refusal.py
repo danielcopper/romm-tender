@@ -1,10 +1,11 @@
-"""The refusal a per-ROM sync entry point performs before it does anything else.
+"""The refusal a per-ROM sync entry point performs before it syncs.
 
 Two things refuse a sync outright, and both are read off one live answer: four
 of the five save states (:mod:`domain.save_answer`), and a save the emulator
 writes beside the game's content. The three per-ROM entry points all handle
-them identically: take one live reading of the machine, and where either holds,
-return the benign-skip shape instead of syncing.
+them identically: take one live reading of the machine, follow a moved save
+directory with it, and where either holds, return the benign-skip shape instead
+of syncing.
 
 It lives beside the engine rather than inside it because the engine is already at
 its decomposition ceiling, and because these are the whole refusal: one reading
@@ -150,4 +151,4 @@ class ContentDirTally:
         """*message*, with the count of ROMs held back where some were and others synced."""
         if not self.beside_content:
             return message
-        return f"{message}; {self.beside_content} game(s) skipped — {SAVE_SYNC_IN_CONTENT_DIR}"
+        return f"{message}; {self.beside_content} game(s) skipped — their saves are written beside the game file"

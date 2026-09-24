@@ -93,9 +93,11 @@ _INSIDE_CONTENT_CAVEATS = frozenset({"save-inside-content", "save-inside-image"}
 # The caveat for a directory that is known while the names inside it are not.
 _FILE_NAMES_UNESTABLISHED = "file-names-unestablished"
 
-# The caveat for a sorted directory RetroArch has not created yet. It creates it
-# on the first save and silently falls back to the unsorted root when it cannot,
-# so a caller about to move files into ``directory`` creates it first.
+# The caveat for a sorted directory RetroArch has not created yet. RetroArch
+# creates it on the game's first save and silently reverts to the unsorted root
+# when creation fails (``runloop.c:8844``, as the vendored resolver's
+# ``placement.py`` cites it); that root is the answer's ``fallback_directory``.
+# A caller about to move files into ``directory`` creates it first.
 SORTED_DIR_MISSING = "sorted-dir-missing"
 
 # The root kind of a placement anchored in the directory the game's content file
@@ -197,10 +199,9 @@ class SaveAnswer:
 
     ``root_kind`` is the anchor ``directory`` hangs off, in the resolver's own
     vocabulary; :attr:`in_content_directory` is the one reading of it a sync
-    path acts on. ``fallback_directory`` is the unsorted root RetroArch reverts
-    to when ``directory`` does not exist yet and it cannot create it on the
-    first save (the resolver's ``fallback_dir``). Both are ``None`` wherever no
-    placement was resolved.
+    path acts on. ``fallback_directory`` is the unsorted root of the
+    :data:`SORTED_DIR_MISSING` note (the resolver's ``fallback_dir``). Both are
+    ``None`` wherever no placement was resolved.
 
     ``content_installed`` says whether this ROM's content is on disk. It is
     ``False`` for a ROM the library holds but has not installed — the question

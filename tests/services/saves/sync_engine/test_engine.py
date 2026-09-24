@@ -1425,8 +1425,7 @@ class TestSaveSyncContentDirGate:
         assert result["success"] is True
         assert "reason" not in result
         assert result["synced"] == 1
-        assert "1 game(s) skipped" in result["message"]
-        assert "content directory" in result["message"]
+        assert result["message"].endswith("; 1 game(s) skipped — their saves are written beside the game file")
         uploads = [c for c in fake.call_log if c[0] == "upload_save"]
         assert len(uploads) == 1
 

@@ -61,8 +61,8 @@ class MigrationServiceConfig:
     Steam ``launch_options`` (active core + selected disc) from its moved path
     so the pick survives the home migration. ``firmware_resolver`` names which
     files in a pending home are firmware at all, so the untracked-BIOS sweep
-    moves those and leaves everything else alone. ``save_directories`` re-records
-    every installed ROM's answered save directory once the files are moved.
+    moves those and leaves everything else alone. ``save_directories`` records
+    the installed ROMs' answered save directories afresh once the files are moved.
     Relational migration state (ROM installs, BIOS records, change markers) is
     read through the injected ``uow_factory``.
     """
@@ -697,7 +697,7 @@ class MigrationService:
         return result
 
     async def _rerecord_save_directories(self) -> None:
-        """Record every installed ROM's save directory as the new home answers it.
+        """Record the installed ROMs' save directories afresh, as the new home answers them.
 
         A save the ``skip`` strategy kept at the destination leaves the old copy
         in the old home, and a record still naming that home would have the next

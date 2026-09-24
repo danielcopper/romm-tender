@@ -494,7 +494,7 @@ class SyncEngine:
         await self._record_each_installed_rom(self._follower.do_record_if_absent)
 
     async def rerecord_save_directories(self) -> None:
-        """Record the answered save directory of each installed ROM afresh, replacing what is recorded."""
+        """Replace each installed ROM's record with today's answer, or drop it where that is not followable."""
         await self._record_each_installed_rom(self._follower.do_rerecord)
 
     async def _record_each_installed_rom(self, record: Callable[[int], None]) -> None:

@@ -8,8 +8,7 @@ emulator no longer looks there. This module notices per game and carries them.
 It notices by comparison, never by computation: each ROM's
 ``AnsweredSaveDirectory`` holds the directory the resolver last answered for it,
 and a later answer that differs is the whole signal. The recorded directory is
-read only as the source of that one move — it is never where a save is looked
-for.
+read only as the source of that one move — never where a sync or a probe looks.
 
 **Nothing is overwritten or removed here.** A name present in both directories
 is a collision, and the older copy goes through the save-backup funnel. The
@@ -142,9 +141,8 @@ class SaveDirectoryFollower:
             return True
         self._logger.info("Save directory for rom %d moved: %s -> %s; carrying %s", rom_id, recorded, answered, present)
         try:
-            # RetroArch creates a sorted directory only on the game's first save
-            # and falls back to the unsorted root when it cannot; creating it
-            # here is what keeps the carried files where it will look.
+            # Created here, or RetroArch may later revert to the unsorted root
+            # and not look where the carried files are (see SORTED_DIR_MISSING).
             if SORTED_DIR_MISSING in answer.caveats or not self._save_file_store.is_dir(answered):
                 self._save_file_store.make_dirs(answered)
         except OSError as e:

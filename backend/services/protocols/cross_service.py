@@ -386,12 +386,14 @@ class RomRemoverProvider(Protocol):
 
 
 class SaveDirectoriesRecorderFn(Protocol):
-    """Re-recording of every installed ROM's answered save directory, consumed by MigrationService.
+    """Recording the installed ROMs' answered save directories afresh, consumed by MigrationService.
 
     The composition root satisfies this with ``SaveService.rerecord_save_directories``.
     The RetroDECK home migration calls it once the files are moved: it owns the new
     location, and a record left naming the old home would have the next sync follow
-    a copy the user chose to leave there back over the one they kept.
+    a copy the user chose to leave there back over the one they kept. Each record is
+    replaced by today's answer, or dropped where that answer is one the follow does
+    not act on.
     """
 
     async def __call__(self) -> None: ...

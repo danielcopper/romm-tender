@@ -340,11 +340,12 @@ class SaveService:
         await self._loop.run_in_executor(None, self._set_kv_marker, _KV_SAVE_DIRECTORIES_RECORDED)
 
     async def rerecord_save_directories(self) -> None:
-        """Record every installed ROM's answered save directory afresh.
+        """Record each installed ROM's answered save directory afresh.
 
         Satisfies ``SaveDirectoriesRecorderFn``: the RetroDECK home migration
         calls it once it has moved the files, so no record is left naming the
-        old home.
+        old home — each is replaced by today's answer, or dropped where the
+        follow would not act on that answer.
         """
         await self._sync_engine.rerecord_save_directories()
 

@@ -6,11 +6,7 @@
 --   * answered_save_directories — per ROM, the directory the resolver last
 --     answered for its save. Compared with today's answer to notice that the
 --     directory moved, and read as the source of the move that follows; never
---     where a save is looked for.
---
--- A table of its own rather than a column on rom_save_sync_states: a row there
--- means "this ROM has been tracked for save sync", and readers take its absence
--- as "never tracked". This record is written for games that were never synced.
+--     where a sync or a probe looks. Why a table of its own: ADR-0040.
 --
 -- Created empty. No value can be derived here: the answer is a live reading of
 -- the machine, so the plugin records it after this migration.
