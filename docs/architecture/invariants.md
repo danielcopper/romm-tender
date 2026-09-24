@@ -94,7 +94,7 @@ Format: **invariant** — tier — enforced by.
   reading is taken anywhere else in the package
 - **A module declared read-only calls no repository write — `services/library/local_library_reader.py` to start** —
   check — `scripts/check_read_only_module.py` (AST over the declared file's own calls, matching the two-attribute
-  `<...>.<repo>.<method>` shape against the eleven repositories the UoW exposes). Read or write is decided **by the
+  `<...>.<repo>.<method>` shape against the twelve repositories the UoW exposes). Read or write is decided **by the
   name's shape** — `get` / `get_*` / `iter_*` / `count` plus the explicitly listed reads — and
   `tests/scripts/test_check_read_only_module.py` re-derives every method name from `services/protocols/repositories.py`
   and pins its classification, so a new repository method fails there until it is classified. **The two directions are
@@ -387,27 +387,28 @@ Format: **invariant** — tier — enforced by.
   opens each candidate in a declared folder and reads it the way the emulator does — 64-318 ms per system on the
   reference machine) and its whole-machine sibling `FirmwareResolver`, the save answer — `resolve_save_answer` and the
   saves package's own `save_answer` wrapper, 170 ms warm and 490 ms cold per ROM, which makes it the most expensive
-  entry in the list — the two path resolvers — `MigrationFileStore.realpath` (one walk per stored RetroDECK-home marker,
-  a directory that may sit on the SD card the marker is pending a migration away from) and `ResolvedPathFn` (the same
-  walk, but on **both** sides of a comparison, so a call site costs what the rows it checks cost, not what it checks
-  them against) — and the `RetroDeckPaths` getters that answer with a root: `bios_path`, `roms_path`, `saves_path`,
-  `states_path` and `retrodeck_home`, five of the Protocol's six path getters, each resolving on every call. The sixth,
-  `config_path`, stays out because it resolves nothing — it is `os.path.join` over the user home, so calling it costs no
-  I/O. Those two timings are the only entries a cost was measured for; every other one is listed from reading its
-  implementation. One other real I/O seam was weighed and kept out — the reason is in the script's docstring, and it is
-  not an exemption; nor is it an inventory of what else touches the disk. **"It's only a read" is the reasoning this
-  rule exists to refuse**: `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so even a read-only UoW takes the
-  write lock. The database is in WAL, so readers are unaffected — but every other **writer** waits on the lock for up to
-  `busy_timeout=5000` and fails with `SQLITE_BUSY` if it is still held then, and `FakeUnitOfWork` shares no connection,
-  so no unit test notices. Six call sites had drifted across the rule before anything looked (#1779), for the reason the
-  check exists: nothing at a call site reveals that an injected seam touches the disk. **The rule and the gate come from
-  reading code — no measurement of how long any of those transactions actually held the lock exists, and nothing here
-  should be read as one.** What the check sees is the deadlock rule's matcher unchanged — an **attribute** call naming a
-  listed seam, lexically inside a `with <...>uow_factory()` block in the same function scope — so it inherits every
-  blind spot of that half: a seam behind a helper one level down, an alias to a local, a factory attribute whose name
-  does not end in `uow_factory`, a nested `def`/`lambda` (which resets the scope by design), a seam **passed as a bound
-  method** (`run_in_executor(None, self._disc_resolver.enumerate_discs, install)` — an attribute, not a call, and
-  `run_in_executor` is exactly how `disc.py` and `cores.py` reach their `_io` bodies; the same shape
+  entry in the list — the savestate question put to the same catalogue entry (`resolve_savestate_location`) and the
+  seam's detection question (`installation_detected`), the two path resolvers — `MigrationFileStore.realpath` (one walk
+  per stored RetroDECK-home marker, a directory that may sit on the SD card the marker is pending a migration away from)
+  and `ResolvedPathFn` (the same walk, but on **both** sides of a comparison, so a call site costs what the rows it
+  checks cost, not what it checks them against) — and the `RetroDeckPaths` getters that answer with a root: `bios_path`,
+  `roms_path`, `saves_path` and `retrodeck_home`, four of the Protocol's five path getters, each resolving on every
+  call. The fifth, `config_path`, stays out because it resolves nothing — it is `os.path.join` over the user home, so
+  calling it costs no I/O. Those two timings are the only entries a cost was measured for; every other one is listed
+  from reading its implementation. One other real I/O seam was weighed and kept out — the reason is in the script's
+  docstring, and it is not an exemption; nor is it an inventory of what else touches the disk. **"It's only a read" is
+  the reasoning this rule exists to refuse**: `SqliteUnitOfWork.__enter__` issues `BEGIN IMMEDIATE`, so even a read-only
+  UoW takes the write lock. The database is in WAL, so readers are unaffected — but every other **writer** waits on the
+  lock for up to `busy_timeout=5000` and fails with `SQLITE_BUSY` if it is still held then, and `FakeUnitOfWork` shares
+  no connection, so no unit test notices. Six call sites had drifted across the rule before anything looked (#1779), for
+  the reason the check exists: nothing at a call site reveals that an injected seam touches the disk. **The rule and the
+  gate come from reading code — no measurement of how long any of those transactions actually held the lock exists, and
+  nothing here should be read as one.** What the check sees is the deadlock rule's matcher unchanged — an **attribute**
+  call naming a listed seam, lexically inside a `with <...>uow_factory()` block in the same function scope — so it
+  inherits every blind spot of that half: a seam behind a helper one level down, an alias to a local, a factory
+  attribute whose name does not end in `uow_factory`, a nested `def`/`lambda` (which resets the scope by design), a seam
+  **passed as a bound method** (`run_in_executor(None, self._disc_resolver.enumerate_discs, install)` — an attribute,
+  not a call, and `run_in_executor` is exactly how `disc.py` and `cores.py` reach their `_io` bodies; the same shape
   `check_read_only_module.py` records for its own gate), and the hand-maintained list itself, which cannot notice a seam
   whose implementation _grows_ a file read later. Matching only attribute calls is deliberate: the pure
   `domain.disc_selection.enumerate_discs` shares a name with the seam and does no I/O — it is safe because its call site
@@ -868,7 +869,9 @@ Format: **invariant** — tier — enforced by.
   leg through the same `MatrixExecutor.quarantine_local_file` — every argument ADR-0028 gives for not quarantining a ROM
   (gigabytes, no sensible retention, re-fetchable from RomM) inverts for a save, and a savestate is synced nowhere at
   all. It is the first caller to hand that funnel a directory outside the saves root: it takes the directory it is
-  given, so a savestate's backup lands in `<states>/.romm-backup/`
+  given, so a savestate's backup lands in `<states>/.romm-backup/`. Following a moved save directory
+  (`services/saves/save_directory.py`) takes the same **backup** leg on a collision — detail:
+  [Following a Moved Save Directory](save-file-sync-architecture.md#following-a-moved-save-directory)
 - **A BIOS file is deleted only where a `downloaded_bios` record names it under one of the platform's firmware slugs,
   and only at the path that record holds** — test + prompt-only —
   `tests/services/test_firmware.py::TestDeletePlatformBios` and `::TestDeleteOneBiosFile` pin every direction
@@ -909,18 +912,31 @@ Format: **invariant** — tier — enforced by.
   and every way the question cannot be put, `tests/domain/test_save_answer.py` pins the precedence that makes "exactly
   one" well defined, and `tests/services/saves/test_save_shape_gate.py` pins the absences **each beside a control that
   asserts the same probe DOES happen for a syncable answer** — without those controls a service that had stopped probing
-  entirely would pass. The rule spans seven modules and no diff-scoped review sees it whole: `AtlasSaveLocationAdapter`
-  reads the machine, `domain/save_answer.py` decides what the reading means, `RomInfoService.save_answer` turns it into
-  names, `SyncEngine`'s three per-ROM entry points refuse on it through `sync_engine/_shape_refusal.py`, which holds the
+  entirely would pass. The answered save directory is not sync state: it lives in its own table
+  (`answered_save_directories`) and may be recorded for a refusing answer, whose files are then followed when that
+  directory moves — a move, not a sync
+  ([Following a Moved Save Directory](save-file-sync-architecture.md#following-a-moved-save-directory)). The rule spans
+  seven modules and no diff-scoped review sees it whole: `AtlasSaveLocationAdapter` reads the machine,
+  `domain/save_answer.py` decides what the reading means, `RomInfoService.save_answer` turns it into names,
+  `SyncEngine`'s three per-ROM entry points refuse on it through `sync_engine/_shape_refusal.py`, which holds the
   reading and the skip shape, `MatrixExecutor.sync_rom_saves` is the backstop every sync path crosses, and
   `services/saves/status/service.py` puts it on the wire. **Four halves have no mechanical check at all.** (1) The
   refusal is enforced at four call sites — the three per-ROM entry points, which report the skip via
-  `sync_engine/_shape_refusal.py`'s `live_save_answer` / `save_shape_skip`, and `MatrixExecutor.sync_rom_saves` (reached
+  `sync_engine/_shape_refusal.py`'s `live_save_answer` / `sync_refusal`, and `MatrixExecutor.sync_rom_saves` (reached
   through `SyncEngine.do_sync_rom_saves`), the backstop that covers the whole-library sweep, whose single result has no
   room to name the ROM it passed over. A fifth entry point added without either goes green, and its failure is silent
   because a per-game probe for a shared card finds nothing and reports "no saves". The backstop is pinned by the ABSENCE
   of a server round-trip, because everything downstream of it is redundantly safe — a refusing answer carries no names,
-  so nothing is probed or grouped even without it. (2) A configuration-role file is excluded by
+  so nothing is probed or grouped even without it. The five write paths refuse for themselves, each on the same answer's
+  `sync_directory` — empty for every answer a sync would not carry, a shared card with a known directory included — and
+  with `save_shape_message` beside the reason: `switch_slot` (`slots/switching.py`), `copy_save_to_slot` (`copies.py`),
+  `rollback_to_version` (`versions.py`), `confirm_slot_choice` with migration (`slots/setup.py`) and
+  `resolve_sync_conflict` (`sync_engine/rollback.py`). `test_save_shape_gate.py` pins those five and nothing pins the
+  list: a sixth write path that keys its refusal on `saves_dir` instead writes into a directory the answer never offered
+  a sync. The same holds for following a moved directory first: `SyncEngine.follow_save_directory` is called before any
+  local file is looked at by the four sync paths, the five write paths, the two deletes and the two counting reads
+  (`count_platform_saves`, `get_save_status`), and a new reader of local save files that skips it looks in the directory
+  the files have just left — nothing mechanical finds such a reader. (2) A configuration-role file is excluded by
   `SaveAnswer.synced_files` and included by `owned_files`, which is what a directory move must carry — a caller reading
   `components` directly gets neither rule, and syncing Saturn's `.smpc` overwrites the console settings the user chose
   on the other device. Saturn is the only example that actually reaches the rule on a stock RetroDECK: MAME states a
@@ -942,17 +958,17 @@ Format: **invariant** — tier — enforced by.
   `.hdf`; Genesis Plus GX answers a shared `scd_*.brm` for a Sega CD `.chd` and a per-game `.srm` for a `.bin`. Within
   `RomInfoService` the system and the path are decided in exactly two places — `_installed_answer` for a ROM on disk and
   `_uninstalled_answer` for one the library only knows about — so ADR-0010's slug leak has two sites to guard there
-  rather than one per caller. A **third** site exists outside it: `services/migration/save_sort.py` asks the resolver
-  directly for each ROM its walk sees, taking both the system and the path off the install record, which is the source
-  ADR-0010 says to use — so it cannot leak the slug, and it is a site the same rule has to hold at. A synthetic stem
-  passed anywhere else answers a different question in a shape that looks like an answer to this one, and nothing would
-  say so. It is also why every per-system pin in `tests/adapters/test_atlas_saves.py` is keyed by `(system, extension)`:
-  a pin that does not name the extension it asked with is pinning nothing, which is how two independent measurements of
-  the same systems produced contradictory fact lists. **Every path asks live and nothing caches an answer** — only the
-  installation handle is memoised — because the user changes a core's options in the emulator's own quick menu between a
-  launch and the next sync; a display cache added without invalidating it on every sync entry is the one change that
-  makes this rule fail silently and expensively. Detail: `docs/architecture/save-sync-coverage.md`, CONTEXT.md → Save
-  state / Save scope
+  rather than one per caller. A **third** site exists outside it: `services/rom_adoption/renamer.py` asks the resolver
+  directly for the save and the savestate directory of both launch paths of a rename, taking the system off the adoption
+  target the service resolved — so it cannot leak the slug, and it is a site the same rule has to hold at. A synthetic
+  stem passed anywhere else answers a different question in a shape that looks like an answer to this one, and nothing
+  would say so. It is also why every per-system pin in `tests/adapters/test_atlas_saves.py` is keyed by
+  `(system, extension)`: a pin that does not name the extension it asked with is pinning nothing, which is how two
+  independent measurements of the same systems produced contradictory fact lists. **Every path asks live and nothing
+  caches an answer** — only the installation handle is memoised — because the user changes a core's options in the
+  emulator's own quick menu between a launch and the next sync; a display cache added without invalidating it on every
+  sync entry is the one change that makes this rule fail silently and expensively. Detail:
+  `docs/architecture/save-sync-coverage.md`, CONTEXT.md → Save state / Save scope
 - **Per-slot server reads/deletes go through `domain/save_slot.py` (legacy omits `&slot=`, client-filters)** —
   prompt-only — `get_slot_saves` / `get_slot_delete_info` / `delete_slot` / `list_file_versions` / `rollback_to_version`
   use `slot_query_param` + `save_in_slot`; RomM can't address `slot:null` via the param, so legacy MUST omit it + filter
@@ -1095,9 +1111,9 @@ Format: **invariant** — tier — enforced by.
   row and forgets the mark selects its first row instead, and every test still passes. **The end to end is unreachable
   here**: happy-dom performs no layout and does not reproduce Steam's focus resolution, so what the suite pins is the
   declaration and the finder, never the press. Only a controller confirms it. **What hid this for a whole review round
-  is the shape of the failure, not its size**: Main has three notices that name a section, and the one naming the FIRST
-  section keeps working, so a reader checking Open Connections sees the feature working while Open Controller and Open
-  Save Sync both land on Connections. A check that exercises the first row proves nothing about the rule. The mark sits
-  on a `display: contents` wrapper AROUND each row rather than on the row, and that is load-bearing rather than
-  stylistic: `pageEntryStop` calls `firstBodyStop(declared)`, which searches DESCENDANTS — a mark on the row itself
-  finds no candidate inside it, falls back to the first row, and ships the defect under a comment saying it does not
+  is the shape of the failure, not its size**: Main's notices name sections, and the one naming the FIRST section keeps
+  working, so a reader checking Open Connections sees the feature working while Open Controller lands on Connections. A
+  check that exercises the first row proves nothing about the rule. The mark sits on a `display: contents` wrapper
+  AROUND each row rather than on the row, and that is load-bearing rather than stylistic: `pageEntryStop` calls
+  `firstBodyStop(declared)`, which searches DESCENDANTS — a mark on the row itself finds no candidate inside it, falls
+  back to the first row, and ships the defect under a comment saying it does not

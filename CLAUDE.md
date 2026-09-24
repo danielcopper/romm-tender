@@ -595,8 +595,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   claimed variant is `PruneSaveSupport.quarantine_prune_saves`); every other delete path carries the rule unmechanized.
   Two deletes take the confirm leg: the removed-game cleanup's unselected installed ROM content (per-candidate opt-in
   stated in the dialog; the row goes only after a fresh 404), and the adopt dialog's **replace** exit for the ROM (both
-  sides shown, a content check offered, a second confirmation); an adoption's Overwrite of save and savestate files
-  takes the backup leg through the same funnel
+  sides shown, a content check offered, a second confirmation); an adoption's Overwrite of save and savestate files, and
+  a collision while following a moved save directory (`services/saves/save_directory.py`), take the backup leg through
+  the same funnel
 - **A BIOS file is deleted only where a `downloaded_bios` record names it under one of the platform's firmware slugs,
   and only at the path that record holds** — test + prompt-only —
   `tests/services/test_firmware.py::TestDeletePlatformBios`, `::TestDeleteOneBiosFile` and
@@ -611,12 +612,16 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   sync — no probe, no state written** — test + prompt-only — `tests/adapters/test_atlas_saves.py`,
   `tests/domain/test_save_answer.py` and `tests/services/saves/test_save_shape_gate.py`, where each absence test stands
   beside a control that asserts the probe does happen, and every per-system pin names the extension it asked with
-  (`(system, extension)`). Prompt-only: every per-ROM entry point refuses through `sync_engine/_shape_refusal.py` and
-  every sync path crosses the `MatrixExecutor.sync_rom_saves` backstop; configuration-role files are held back through
-  `SaveAnswer.synced_files` by the denial `CONFIGURATION_ROLES`, never an allow-list, a directory move carries
-  `owned_files`, and nothing reads `components` directly; a rendering reads `unestablished`'s shape and
-  `content_installed` beside the state; the question carries the ROM's real content path, and system and path are
-  decided only at `RomInfoService._installed_answer`, `._uninstalled_answer` and `services/migration/save_sort.py`;
+  (`(system, extension)`). The answered save directory is not sync state: its own table (`answered_save_directories`)
+  may record it for a refusing answer. Prompt-only: every per-ROM entry point refuses through
+  `sync_engine/_shape_refusal.py` and every sync path crosses the `MatrixExecutor.sync_rom_saves` backstop; the five
+  write paths (`slots/switching.py`, `copies.py`, `versions.py`, `slots/setup.py`, `sync_engine/rollback.py`) each
+  refuse on the answer's `sync_directory`, never on `saves_dir` — `test_save_shape_gate.py` pins those five, not the
+  list; every reader of local save files calls `SyncEngine.follow_save_directory` before it looks; configuration-role
+  files are held back through `SaveAnswer.synced_files` by the denial `CONFIGURATION_ROLES`, never an allow-list, a
+  directory move carries `owned_files`, and nothing reads `components` directly; a rendering reads `unestablished`'s
+  shape and `content_installed` beside the state; the question carries the ROM's real content path, and system and path
+  are decided only at `RomInfoService._installed_answer`, `._uninstalled_answer` and `services/rom_adoption/renamer.py`;
   nothing caches an answer
 - **Per-slot server reads/deletes go through `domain/save_slot.py` (legacy omits `&slot=`, client-filters)** —
   prompt-only — `get_slot_saves` / `get_slot_delete_info` / `delete_slot` / `list_file_versions` / `rollback_to_version`
