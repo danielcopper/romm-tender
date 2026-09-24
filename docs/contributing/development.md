@@ -260,9 +260,10 @@ without `--check` for a report-mode inventory.
 
 `mise run lint` (and CI) also runs `scripts/check_callable_manifest.py`, which pins the frontend↔backend callable
 surface to one source of truth: it derives the frontend names + arities from every `callable<[Args], Return>("name")` in
-`frontend/src/**/*.ts` and the backend surface from the public `async def` methods on the `Plugin` class in `main.py`,
-then fails if they diverge — a callable declared on only one side (either direction) or a matching name whose arity
-(positional param count) differs. Arg types stay out of scope (Python signatures carry no hints), so arity is the only
+`frontend/src/**/*.ts` and the backend surface from the endpoints on the `Plugin` class in `main.py` — the public
+methods whose first decorator is `@route` — then fails if they diverge — a callable declared on only one side (either
+direction) or a matching name whose arity (positional param count) differs. A `@route` below another decorator or on an
+underscored name fails on its own. Arg types stay out of scope (Python signatures carry no hints), so arity is the only
 mechanically checkable shape. The same parity assertion is surfaced inside the pytest run by
 `tests/contract/test_callable_manifest.py`.
 

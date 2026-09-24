@@ -298,7 +298,6 @@ class Plugin:
         await asyncio.gather(*tasks, return_exceptions=True)
 
     # ── Endpoints ──────────────────────────────────────────────────────
-    # S7503 warnings are suppressed in sonar-project.properties (fp1).
 
     @route
     @prune_active_blocked

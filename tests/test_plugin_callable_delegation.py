@@ -451,7 +451,7 @@ class TestArtworkCallableDelegation:
     @pytest.mark.asyncio
     async def test_refresh_cover_artwork_coerces_string_rom_id(self, plugin):
         plugin._artwork_service.refresh_cover = AsyncMock(return_value={"success": True, "message": "ok"})
-        # Decky callables receive args as JSON — defensive int() coercion guards
+        # Endpoints receive args as JSON — defensive int() coercion guards
         # against the frontend accidentally sending a string.
         await plugin.refresh_cover_artwork("42")
         plugin._artwork_service.refresh_cover.assert_awaited_once_with(42)

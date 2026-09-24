@@ -49,8 +49,8 @@ SLACK_ADVISORY = 50
 
 # Trees the threshold governs — every first-party backend tree. What is absent
 # is absent on purpose, not by oversight:
-#   ``main.py`` owns the Decky lifecycle plus one ``async def`` per callable,
-#     so it grows with the callable surface by design (CLAUDE.md, "Process
+#   ``main.py`` owns the lifecycle plus one method per endpoint, so it grows
+#     with the endpoints by design (.claude/rules/bootstrap-wiring.md, "Process
 #     boundaries").
 #   ``backend/_vendor`` holds checksum-pinned upstream copies; their size
 #     is upstream's decision (.claude/rules/vendored-assets.md).

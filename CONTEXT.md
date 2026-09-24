@@ -243,6 +243,15 @@ run — in each of those there was no collapse to observe.
 _Avoid_: **crash counter**, which is what this replaced — the crash leaves the marker standing, so within one Steam
 session it can happen at most once and counting inside a session counts to one for ever.
 
+### Endpoint (Tender) vs endpoint (RomM)
+
+Two programs use the word, for two different things:
+
+- **Tender endpoint** — a method the panel reaches over the host's socket, and nothing else is reachable that way. What
+  makes a method one is being marked `@route`; its name is the name the panel calls it by. The panel reaches one through
+  its `callable()` function, and older text calls the endpoint itself a **callable**.
+- **RomM endpoint** — an HTTP route of the RomM server (`/api/roms`, …). RomM's own word, used as RomM uses it.
+
 ### Persistence boundary (settings.json / SQLite)
 
 Where a piece of persisted state lives is a deliberate decision driven by what the data _is_, not which file it

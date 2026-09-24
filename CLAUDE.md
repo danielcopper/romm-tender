@@ -185,12 +185,11 @@ locally with `mise run docs`.
   `plugin_loader.service` active and enabled, `127.0.0.1:1337` listening), so that borrowing would show up there rather
   than hide. `definePlugin` is no longer inert beside them: `index.tsx` hands the factory it answers with to
   `qam/installEntry.tsx`, which calls it once and mounts the panel behind Tender's own Quick Access entry.
-- **A callable must be `async def`**: even where the body is synchronous. The set a caller can reach is exactly the
-  public `async def` on `Plugin` — `host.dispatch.reachable_methods` resolves it off the loaded class,
-  `scripts/check_callable_manifest.py` derives the same set from the source, and `tests/host/test_dispatch.py` asserts
-  the two are equal. Two consequences, both silent: dropping `async` makes a callable unreachable, and giving `Plugin` a
-  public `async def` that was never meant as wire surface publishes it. `Plugin.run`, the process entry point, is
-  synchronous for exactly that reason.
+- **An endpoint is what `@route` marks**, `def` or `async def` alike: the set a caller can reach is the public methods
+  on `Plugin` carrying it, `@route` topmost above any gate; `async` has no bearing on reachability.
+  `scripts/check_callable_manifest.py` catches a missing or stray `@route` only as a name the frontend's declarations
+  disagree with, so the one judge of whether a method should be reachable is that list; the dispatcher's reading is held
+  equal to the gate's by `tests/host/test_dispatch.py`.
 - **RomM API quirks**: Filter param is `platform_ids` (plural). Cover URLs have unencoded spaces (must URL-encode).
   Paginated: `{"items": [...], "total": N}`. List calls page via `lib/romm_paging.py` and append
   `&with_char_index=false&with_filter_values=false` to skip aggregations the server otherwise computes on every request.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Failure-shape dialect gate — canonical-response enforcement.
 
-Decky callables that return a plain ``dict`` and can fail use the canonical
+Endpoints that return a plain ``dict`` and can fail use the canonical
 failure shape ``{"success": False, "reason": ErrorCode | str, "message": str}``
 (plus per-callable payload extras). The convention — documented in
 ``backend/lib/list_result.py`` and ``CLAUDE.md`` → "Callable response shapes"
