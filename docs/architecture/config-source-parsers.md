@@ -123,8 +123,9 @@ as new questions are added — treat this table as part of the contract, not a p
 
 New parsers follow a strict domain-plus-adapter split, matching the broader service/adapter architecture documented in
 [Backend Architecture](backend-architecture.md): a pure parse function in `domain/`, all I/O in an `adapters/` class,
-and a callback Protocol that services depend on. The `.info` parser below (`domain/retroarch_core_info.py` +
-`adapters/retroarch_core_info.py`) is the reference shape.
+and a callback Protocol that services depend on. The examples below are written for a RetroArch `.info` parser; the
+plugin has none of its own — the vendored resolver reads `.info` files — so they illustrate the shape rather than name
+code in the tree.
 
 ```text
 ┌──────────────────────────────────────┐
@@ -154,7 +155,7 @@ A module of pure functions. No I/O, no logging, no filesystem access. Takes text
 returns a structured representation.
 
 ```python
-# domain/retroarch_core_info.py
+# domain/<source>.py — illustration: a RetroArch .info parser
 
 def parse_core_info(text: str) -> dict[str, str]:
     """Parse a RetroArch .info file's content into a key-value dict.
@@ -176,7 +177,7 @@ A class with a single responsibility: resolve the right file path(s), read bytes
 cache the result, handle I/O errors.
 
 ```python
-# adapters/retroarch_core_info.py
+# adapters/<source>.py — illustration: a RetroArch .info adapter
 
 class RetroArchCoreInfoAdapter:
     _SYSTEM_CORES_DIR = "/var/lib/flatpak/app/net.retrodeck.retrodeck/current/active/files/..."
@@ -214,7 +215,8 @@ the callables a given test exercises.
 ### 4. Wiring in `backend/bootstrap/`
 
 Adapter instance is created in `bootstrap/adapters.py`, and `bootstrap/services.py` threads its method into services
-that need it:
+that need it. Illustration — `RetroArchCoreInfoAdapter` is the hypothetical adapter from step 2, and `SomeService` is a
+placeholder:
 
 ```python
 retroarch_core_info = RetroArchCoreInfoAdapter(user_home=user_home, logger=logger)
@@ -243,21 +245,21 @@ services independent of any single parser and makes them straightforward to test
 
 ## Current parsers
 
-| Source                         | Format                  | Parser location                                                     | Layer status                                                   | What it answers                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ------------------------------ | ----------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `retrodeck.json`               | JSON                    | `adapters/retrodeck_paths.py` — `RetroDeckPathsAdapter`             | ✅ adapter (correct layering)                                  | Where RetroDECK puts saves, ROMs, BIOS, and its home directory.                                                                                                                                                                                                                                                                                                                                                                                                |
-| `retroarch.cfg`                | INI-ish `key = "value"` | _none — read by the vendored resolver_                              | ⛔ no longer read by the plugin                                | **Removed.** The plugin used to read the save-sorting flags from it to build save paths; the save answer now carries the directory those flags produce ([ADR-0040](../adr/0040-the-save-directory-is-the-resolvers-answer.md)).                                                                                                                                                                                                                                |
-| `es_systems.xml`               | XML                     | `_vendor/atlas`, through `adapters/atlas_catalogue.py`              | ✅ adapter (correct layering)                                  | The **sole** core/emulator source (#1210): every `<command>` per system, the default emulator, the libretro active core for the BIOS filter, and the `<extension>` accept-list. The resolver applies ES-DE's `custom_systems` overlay and states its entries in EFFECTIVE order; the adapter re-sorts on the shipped `declared_index` so document order decides the default (ADR-0030). The pure classifier `domain/emulator_commands.py` decides bake-safety. |
-| `es_find_rules.xml`            | XML                     | `adapters/es_find_rules.py` — `EsFindRulesAdapter`                  | ✅ adapter (correct layering)                                  | Where an emulator's **binary** is, which the catalogue never states. Two questions: whether a standalone emulator is installed in RetroDECK (a bakeable one that is absent is downgraded to `needs_setup`/`not_installed`, ADR-0020 §2 — absence-only, so `systempath`-only / unreadable cases assume installed), and the sandbox component launcher the folder-boot bake execs (ADR-0019). Mtime-cached parse; the on-disk probes run per call.               |
-| `gamelist.xml`                 | XML                     | _none — dropped in #947_                                            | ⛔ no longer read or written                                   | **Removed.** The plugin used to read the system-level `<alternativeEmulator>` and write it from the retired System page; it now neither reads nor writes the gamelist. Core deviations are the plugin's own state — per-platform in `settings.json` `platform_cores`, per-game in the DB (see [Core and Emulator Selection](core-emulator-selection.md)).                                                                                                      |
-| `core_defaults.json` (bundled) | JSON                    | _none — dropped in #1210_                                           | ⛔ no longer read (file + generator deleted)                   | **Removed.** Was a bundled snapshot generated _from_ `es_systems.xml` (via `scripts/generate_core_defaults.py`) as an offline default/standalone-curation fallback. Deleted because the live file is a strict superset and RetroDECK is a hard prerequisite, so the fallback could never help a launch (see [ADR-0020](../adr/0020-live-es-systems-emulator-resolution.md)).                                                                                   |
-| RetroArch `.info`              | INI-ish `key = "value"` | `adapters/retroarch_core_info.py` + `domain/retroarch_core_info.py` | ✅ adapter + pure-domain parse (correct layering), no consumer | `corename` plus the full metadata dict. Its one consumer, the per-core save subfolder, is now part of the save answer, so nothing reads it today.                                                                                                                                                                                                                                                                                                              |
+| Source                         | Format                  | Parser location                                         | Layer status                                 | What it answers                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------ | ----------------------- | ------------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `retrodeck.json`               | JSON                    | `adapters/retrodeck_paths.py` — `RetroDeckPathsAdapter` | ✅ adapter (correct layering)                | Where RetroDECK puts saves, ROMs, BIOS, and its home directory.                                                                                                                                                                                                                                                                                                                                                                                                |
+| `retroarch.cfg`                | INI-ish `key = "value"` | _none — read by the vendored resolver_                  | ⛔ no longer read by the plugin              | **Removed.** The plugin used to read the save-sorting flags from it to build save paths; the save answer now carries the directory those flags produce ([ADR-0040](../adr/0040-the-save-directory-is-the-resolvers-answer.md)).                                                                                                                                                                                                                                |
+| `es_systems.xml`               | XML                     | `_vendor/atlas`, through `adapters/atlas_catalogue.py`  | ✅ adapter (correct layering)                | The **sole** core/emulator source (#1210): every `<command>` per system, the default emulator, the libretro active core for the BIOS filter, and the `<extension>` accept-list. The resolver applies ES-DE's `custom_systems` overlay and states its entries in EFFECTIVE order; the adapter re-sorts on the shipped `declared_index` so document order decides the default (ADR-0030). The pure classifier `domain/emulator_commands.py` decides bake-safety. |
+| `es_find_rules.xml`            | XML                     | `adapters/es_find_rules.py` — `EsFindRulesAdapter`      | ✅ adapter (correct layering)                | Where an emulator's **binary** is, which the catalogue never states. Two questions: whether a standalone emulator is installed in RetroDECK (a bakeable one that is absent is downgraded to `needs_setup`/`not_installed`, ADR-0020 §2 — absence-only, so `systempath`-only / unreadable cases assume installed), and the sandbox component launcher the folder-boot bake execs (ADR-0019). Mtime-cached parse; the on-disk probes run per call.               |
+| `gamelist.xml`                 | XML                     | _none — dropped in #947_                                | ⛔ no longer read or written                 | **Removed.** The plugin used to read the system-level `<alternativeEmulator>` and write it from the retired System page; it now neither reads nor writes the gamelist. Core deviations are the plugin's own state — per-platform in `settings.json` `platform_cores`, per-game in the DB (see [Core and Emulator Selection](core-emulator-selection.md)).                                                                                                      |
+| `core_defaults.json` (bundled) | JSON                    | _none — dropped in #1210_                               | ⛔ no longer read (file + generator deleted) | **Removed.** Was a bundled snapshot generated _from_ `es_systems.xml` (via `scripts/generate_core_defaults.py`) as an offline default/standalone-curation fallback. Deleted because the live file is a strict superset and RetroDECK is a hard prerequisite, so the fallback could never help a launch (see [ADR-0020](../adr/0020-live-es-systems-emulator-resolution.md)).                                                                                   |
+| RetroArch `.info`              | INI-ish `key = "value"` | _none — read by the vendored resolver_                  | ⛔ no longer read by the plugin              | **Removed.** The plugin's own parser answered only a core's `corename`, for per-core save subfolders; the save answer now carries that directory, so the parser and its adapter were deleted with nothing reading them.                                                                                                                                                                                                                                        |
 
-`es_systems.xml` is the one source with no parser of the plugin's own: the vendored emu-atlas resolver reads it, and
-`adapters/atlas_catalogue.py` is the seam that turns its answers into plugin vocabulary — no atlas type reaches a
-service. `adapters/es_find_rules.py` keeps its XML parsing inline rather than in a separate pure-domain module; that is
-acceptable because the adapter owns its I/O. New `.info`-style sources that warrant a pure-parse split should follow the
-[parser layout template](#parser-layout-template) above (pure parse in `domain/`, I/O in `adapters/`).
+`es_systems.xml` and RetroArch's `.info` files have no parser of the plugin's own: the vendored emu-atlas resolver reads
+them, and `adapters/atlas_catalogue.py` is the seam that turns its answers into plugin vocabulary — no atlas type
+reaches a service. `adapters/es_find_rules.py` keeps its XML parsing inline rather than in a separate pure-domain
+module; that is acceptable because the adapter owns its I/O. A new source that warrants a pure-parse split should follow
+the [parser layout template](#parser-layout-template) above (pure parse in `domain/`, I/O in `adapters/`).
 
 ### Best-effort fallback and config health (`retrodeck.json`)
 
@@ -395,10 +397,9 @@ above exists to catch the second shoe before it drops in production.
 
 ## Planned / future unlocks
 
-The RetroArch `.info` parser, introduced by #208, shipped with only the `corename` field hooked up, for per-core save
-subfolders — a question the save answer now carries, so nothing reads the parser today. But `.info` files contain much
-more, and the parser returns the full dict internally. The following unlocks are natural follow-ups; each should land in
-its own issue and its own PR so we can pace them against real need rather than speculatively building ahead.
+The plugin has no `.info` parser of its own: the vendored resolver reads `.info` files for every answer the plugin puts
+to it. The files carry more than the plugin asks about today, and the capabilities below would each read one of those
+fields. Each should land in its own issue and its own PR, paced against real need rather than built ahead of it.
 
 | Capability                    | `.info` field(s)       | Replaces today's                                                        | Value                                                                                                     |
 | ----------------------------- | ---------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -409,20 +410,13 @@ its own issue and its own PR so we can pace them against real need rather than s
 
 Per-core **firmware requirements** used to head that list — the same `.info` fields (`firmware_count`,
 `firmware<N>_desc`, `firmware<N>_path`, `firmware<N>_opt`) against the manual BIOS registry in `FirmwareService`. It is
-done, and it did not land as another accessor on this parser: reading those fields is only half the job, and the other
-half (resolving each declared path against the live firmware root, following symlinks, keeping "this core declares
-nothing" apart from "this core's declaration could not be read") is what the vendored resolver already does. It reaches
+done, and it did not land as a parser of the plugin's own: reading those fields is only half the job, and the other half
+(resolving each declared path against the live firmware root, following symlinks, keeping "this core declares nothing"
+apart from "this core's declaration could not be read") is what the vendored resolver already does. It reaches
 `FirmwareService` through the `FirmwareResolver` seam — see
-[Backend Architecture](backend-architecture.md#firmwareservice-notes-the-live-firmware-resolver).
-
-None of the rest are in scope for #208. They are listed here so that, when the time comes, contributors know:
-
-- The parser already exists — no new adapter needed.
-- The right way to extend it is a new callback protocol in `services/protocols/` (the `paths.py` module) plus a new
-  accessor method on the adapter (e.g. `get_supported_extensions(core_so)`).
-- The underlying `get_core_info` already returns the full dict, so each new accessor is a few lines wrapping
-  `info.get(field)`.
-- The new accessor gets wired into `bootstrap/` the way `get_corename` was while it had a consumer.
+[Backend Architecture](backend-architecture.md#firmwareservice-notes-the-live-firmware-resolver). A capability above is
+asked of the resolver the same way first; a parser of the plugin's own, built by the
+[parser layout template](#parser-layout-template), is the fallback for a field the resolver does not answer.
 
 ## How to add a new source
 
@@ -449,19 +443,12 @@ When the plugin needs to read a new external config/metadata source, the checkli
 
 Non-obvious design choices worth preserving:
 
-- **Sibling adapters for RetroDECK/RetroArch-side config, not one bundle.** The plugin has `RetroDeckPathsAdapter`
-  (reads `retrodeck.json`) and `RetroArchCoreInfoAdapter` (reads `.info` files) as independent adapters; `retroarch.cfg`
-  is read by the vendored resolver and by no adapter of the plugin's. A single combined "RetroDECK/RetroArch config"
-  adapter would conflate different owners (RetroDECK team vs libretro core maintainers), different change triggers (user
-  configurator edits vs Flatpak core releases), and different file layouts (user home for `retrodeck.json`, Flatpak
-  install tree for `.info`). Splitting them keeps each adapter small, testable, and cleanly scoped to one source. This
-  is the applied form of the "one parser per source" principle for the RetroDECK/RetroArch-side of the codebase.
-
-- **No TTL cache for `.info` reads.** `RetroDeckPathsAdapter` uses a 30-second TTL cache for `retrodeck.json` because
-  that file can be edited by the user at runtime via RetroDECK's configurator. `.info` files live inside a read-only
-  Flatpak install and only change when the Flatpak is updated, which in practice tears down the plugin process anyway. A
-  simple per-instance dict cache (keyed by `core_so`, no expiry) is sufficient — plugin restart picks up any real
-  change.
+- **Sibling adapters for RetroDECK/RetroArch-side config, not one bundle.** `RetroDeckPathsAdapter` reads
+  `retrodeck.json` and nothing else; `retroarch.cfg` and the `.info` files are read by the vendored resolver and by no
+  adapter of the plugin's. A single combined "RetroDECK/RetroArch config" adapter would conflate different owners
+  (RetroDECK team vs libretro core maintainers), different change triggers (user configurator edits vs Flatpak core
+  releases), and different file layouts (user home for `retrodeck.json`, Flatpak install tree for `.info`). This is the
+  applied form of the "one parser per source" principle for the RetroDECK/RetroArch-side of the codebase.
 
 - **`core_so` is the full `.so` basename including `_libretro`, and without the `.so`.**
   `AtlasCatalogueAdapter.get_active_core` returns `(core_so, label)` where `core_so` is e.g. `"snes9x_libretro"`, not

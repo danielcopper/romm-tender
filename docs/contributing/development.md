@@ -417,7 +417,7 @@ backend/
                                      #    bios_file, firmware_cache, sync_run, kv_config)
     sqlite_migrations.py / machine_id.py  # schema migration runner (PRAGMA user_version) + machine-id reader
     download_file.py / firmware_file.py / migration_file.py / rom_files.py / save_file.py
-    retrodeck_paths.py / retroarch_core_info.py / es_find_rules.py
+    retrodeck_paths.py / es_find_rules.py
     atlas_catalogue.py / atlas_firmware.py / atlas_saves.py  # the adapters over the vendored emu-atlas resolver
     system_clock.py / system_uuid_gen.py / asyncio_sleeper.py / hostname.py / path_probe.py / debug_logger.py
   db/
@@ -429,7 +429,7 @@ backend/
     sync_action.py / sync_diff.py / preview_delta.py / work_unit.py
     save_path.py / save_status*.py / save_attribution.py / save_answer.py / savestate_location.py
     firmware_paths.py / bios.py / achievements.py / shortcut_data.py / steam_categories.py
-    sgdb_artwork.py / installed_roms.py / rom_files.py / retroarch_core_info.py
+    sgdb_artwork.py / installed_roms.py / rom_files.py
     state_migrations.py / sync_state.py / emulator_tag.py / version.py
   models/                            # Data shapes (TypedDicts/dataclasses) — independent of other layers
   lib/                               # Cross-cutting utilities (errors, list_result, iso_time, path_safety, late_binding, ...)
