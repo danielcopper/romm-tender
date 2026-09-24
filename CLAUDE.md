@@ -552,11 +552,12 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   path builder; new call sites are prompt-only
 - **A firmware row's presence comes from the resolver wherever the resolver declared it; the plugin's own filesystem
   probe covers only three leftovers** — prompt-only — `services/firmware/demand.py::FirmwareDemand.is_downloaded` is the
-  single crossing point, and nothing enforces it. The three leftovers: a library file no core declares, a placement the
-  plugin cannot honour, and the download batch's already-there skip. `present is None` reads as absent. A withheld
-  verdict is not an absence: its cause is read off the row's caveat codes and a declared file's `checked`, never off the
-  verdict, and nothing checks that a consumer keeps `checked`'s values apart — a file the emulator read and did not
-  recognise is never worded "could not be checked", and `refused` is not a withheld verdict
+  single crossing point, and nothing enforces it. The three leftovers: a library file with no placement in the
+  platform's catalogue, a placement the plugin cannot honour, and the already-there check before a download (the batch
+  and the per-row fetch). `present is None` reads as absent. A withheld verdict is not an absence: its cause is read off
+  the row's caveat codes and a declared file's `checked`, never off the verdict, and nothing checks that a consumer
+  keeps `checked`'s values apart — a file the emulator read and did not recognise is never worded "could not be
+  checked", and `refused` is not a withheld verdict
 - **A firmware row's verdict is `BiosFileEntry.satisfied`, and for a folder declaration it is what the folder HOLDS —
   never that the folder is there** — test + prompt-only —
   `tests/services/test_firmware.py::TestAFolderRequirementIsAnsweredByItsContents`,
