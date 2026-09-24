@@ -406,7 +406,7 @@ describe("VersionHistoryPanel", () => {
       expect(onRestored).not.toHaveBeenCalled();
     });
 
-    it("status 'unsupported' toasts the version requirement", async () => {
+    it("status 'unsupported' with no reason toasts the multi-file refusal", async () => {
       vi.mocked(backend.savesRollbackToVersion).mockResolvedValue({
         status: "unsupported",
       });
@@ -415,7 +415,7 @@ describe("VersionHistoryPanel", () => {
       await flushAsync();
       await flushAsync();
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(
-        expect.objectContaining({ body: "Version history requires RomM 4.7+" }),
+        expect.objectContaining({ body: "Restoring isn't available for multi-file saves yet." }),
       );
     });
 
@@ -440,7 +440,7 @@ describe("VersionHistoryPanel", () => {
       await flushAsync();
       expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body }));
       expect(vi.mocked(toaster.toast)).not.toHaveBeenCalledWith(
-        expect.objectContaining({ body: "Version history requires RomM 4.7+" }),
+        expect.objectContaining({ body: "Restoring isn't available for multi-file saves yet." }),
       );
     });
 

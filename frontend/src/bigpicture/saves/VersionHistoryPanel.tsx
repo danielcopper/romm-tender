@@ -159,7 +159,7 @@ export const VersionHistoryPanel: FC<VersionHistoryPanelProps> = ({
         } else if (result.reason === "save_shape_unsupported" && result.message) {
           showToast(result.message);
         } else {
-          showToast("Version history requires RomM 4.7+");
+          showToast("Restoring isn't available for multi-file saves yet.");
         }
       }
     } catch (e) {

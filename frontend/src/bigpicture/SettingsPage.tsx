@@ -259,7 +259,7 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
           "They are stored in your RetroArch/RetroDECK saves directory.\n\n" +
           "Save sync follows RetroArch's own save sorting, so no setting is required: when you " +
           "change how RetroArch sorts saves into folders, each game's save files are moved to " +
-          "the new folder the next time that game syncs. Saves RetroArch writes next to the " +
+          "the new folder the next time the plugin touches that game's saves. Saves RetroArch writes next to the " +
           'game file ("Write Saves to Content Directory") are not synced.\n\n' +
           "Also make sure you are not using this on a shared RomM account " +
           "(e.g. admin, romm, guest) - unless you know what you are doing. " +
