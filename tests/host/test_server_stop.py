@@ -43,7 +43,9 @@ class TestStop:
         finally:
             client.close()
 
-    async def test_a_connection_accepted_in_the_tick_before_the_stop_is_closed_rather_than_abandoned(self, tmp_path):
+    async def test_a_connection_accepted_in_the_tick_before_the_stop_is_closed_rather_than_abandoned(
+        self, tmp_path, monkeypatch
+    ):
         """Rests on the scheduling order ``HostServer.stop()`` states at its yield.
 
         Two yields after the connect land the accept in the tick before the stop,
@@ -52,21 +54,17 @@ class TestStop:
         test's name rather than at the end of the session.
         """
         unraisable: list[sys.UnraisableHookArgs] = []
-        previous_hook = sys.unraisablehook
-        sys.unraisablehook = unraisable.append
+        monkeypatch.setattr(sys, "unraisablehook", unraisable.append)
+        server = _server(str(tmp_path))
+        await server.start()
+        client = socket.create_connection(("127.0.0.1", server.port))
         try:
-            server = _server(str(tmp_path))
-            await server.start()
-            client = socket.create_connection(("127.0.0.1", server.port))
-            try:
-                await asyncio.sleep(0)
-                await asyncio.sleep(0)
-                await asyncio.wait_for(server.stop(), STOP_BOUND_SECONDS)
-            finally:
-                client.close()
             await asyncio.sleep(0)
-            gc.collect()
+            await asyncio.sleep(0)
+            await asyncio.wait_for(server.stop(), STOP_BOUND_SECONDS)
         finally:
-            sys.unraisablehook = previous_hook
+            client.close()
+        await asyncio.sleep(0)
+        gc.collect()
 
         assert [repr(entry.exc_value) for entry in unraisable] == []
