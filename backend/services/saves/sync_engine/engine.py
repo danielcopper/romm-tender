@@ -505,8 +505,13 @@ class SyncEngine:
     async def rerecord_save_directories(self) -> bool:
         """Replace each installed ROM's record with today's answer, or drop it where that is not followable.
 
-        Returns whether every ROM was recorded without a failure.
+        Returns whether every ROM was recorded without a failure. Asks once
+        whether an emulator installation is detected, and touches no record
+        where none is.
         """
+        if not await self._loop.run_in_executor(None, self._rom_info.installation_detected):
+            self._logger.info("No emulator installation detected; the save directories are left as recorded")
+            return True
         return await self._record_each_installed_rom(self._follower.do_rerecord)
 
     async def _record_each_installed_rom(self, record: Callable[[int], None]) -> bool:

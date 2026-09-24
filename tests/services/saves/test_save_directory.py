@@ -892,8 +892,20 @@ class TestRecordingAgainAfterAHomeMigration:
         svc, _ = make_service(tmp_path)
         _install_rom(svc, tmp_path)
         _record(svc, str(old))
-        cast("FakeSaveLocationReader", svc._rom_info._save_locations).installation = False
+        save_locations = cast("FakeSaveLocationReader", svc._rom_info._save_locations)
+        save_locations.installation = False
+        asked: list[int] = []
+        real = save_locations.installation_detected
+
+        def counted() -> bool:
+            asked.append(1)
+            return real()
+
+        save_locations.installation_detected = counted
+        _install_rom(svc, tmp_path, rom_id=7, file_name="seven.gba")
 
         await svc.rerecord_save_directories()
 
         assert _recorded(svc) == str(old)
+        # Asked once for the pass, not once per ROM.
+        assert asked == [1]
