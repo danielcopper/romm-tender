@@ -24,7 +24,6 @@ class FakeAnsweredSaveDirectoryRepository:
         self._records[record.rom_id] = copy.deepcopy(record)
 
     def delete(self, rom_id: int) -> None:
-        """Drop *rom_id*'s record — the fake unit's model of the ``roms`` cascade, not a Protocol method."""
         self._records.pop(rom_id, None)
 
     def _snapshot(self) -> dict[int, AnsweredSaveDirectory]:

@@ -269,6 +269,10 @@ class AnsweredSaveDirectoryRepository(Protocol):
         """Upsert *record* under its ``rom_id``."""
         ...
 
+    def delete(self, rom_id: int) -> None:
+        """Drop *rom_id*'s record, so its next answer is a first sight. A no-op when none exists."""
+        ...
+
 
 class BiosFileRepository(Protocol):
     """Persistence seam for the ``BiosFile`` aggregate (downloaded BIOS records).

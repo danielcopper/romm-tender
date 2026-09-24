@@ -96,18 +96,23 @@ class SaveDirectoryFollower:
             self._record(rom_id, answered)
 
     def do_rerecord(self, rom_id: int) -> None:
-        """Record this ROM's answered save directory as the resolver answers it now, replacing any record.
+        """Replace this ROM's record with the directory the resolver answers now.
 
         The home migration's step, once it has moved the files: it owns the new
         location, and the record it replaces names a home the user may have
-        chosen to leave files behind in. An answer the follow would not act on
-        leaves the record as it is.
+        chosen to leave files behind in. Where the answer is one the follow
+        would not act on, the record is deleted instead — kept, it would still
+        name the old home, and a later answer would carry the left-behind copy
+        from there; gone, that later answer is a first sight and moves nothing.
         """
         if not self._rom_info.is_content_installed(rom_id):
             return
         answered = _followable_directory(self._rom_info.save_answer(rom_id))
-        if answered is not None:
-            self._record(rom_id, answered)
+        if answered is None:
+            with self._uow_factory() as uow:
+                uow.answered_save_directories.delete(rom_id)
+            return
+        self._record(rom_id, answered)
 
     def _recorded(self, rom_id: int) -> str | None:
         with self._uow_factory() as uow:

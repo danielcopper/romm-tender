@@ -721,16 +721,23 @@ class TestRecordingAgainAfterAHomeMigration:
         assert _recorded(svc) == str(new)
 
     @pytest.mark.asyncio
-    async def test_an_answer_the_follow_would_not_act_on_keeps_the_record(self, tmp_path, dirs):
-        old, _new = dirs
+    async def test_an_answer_the_follow_would_not_act_on_drops_the_old_homes_record(self, tmp_path, dirs):
+        # Kept, the record would name the old home, and the next answer would
+        # carry the copy left there; dropped, the next answer is a first sight.
+        old, new = dirs
         svc, _ = make_service(tmp_path)
         _install_rom(svc, tmp_path)
         _record(svc, str(old))
+        left_behind = _create_save(tmp_path, content=b"left behind")
         _seed_answer(svc, _answer(str(tmp_path / "retrodeck" / "roms" / "gba"), root_kind="content_directory"))
 
         await svc.rerecord_save_directories()
+        assert _recorded(svc) is None
+        _follow(svc, _answer(str(new)))
 
-        assert _recorded(svc) == str(old)
+        assert left_behind.read_bytes() == b"left behind"
+        assert not new.exists()
+        assert _recorded(svc) == str(new)
 
     @pytest.mark.asyncio
     async def test_a_rom_with_no_usable_install_row_is_passed_over(self, tmp_path):

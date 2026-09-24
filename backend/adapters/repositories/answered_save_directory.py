@@ -1,7 +1,7 @@
 """SQLite adapter for the ``AnsweredSaveDirectory`` aggregate over ``answered_save_directories``.
 
-One row per ROM, keyed by ``rom_id``. A leaf table whose rows go with their
-``roms`` row (``ON DELETE CASCADE``), so ``save`` upserts and nothing here deletes.
+One row per ROM, keyed by ``rom_id``. A leaf table whose rows also go with their
+``roms`` row (``ON DELETE CASCADE``); ``save`` upserts and ``delete`` drops one.
 """
 
 from __future__ import annotations
@@ -35,3 +35,6 @@ class SqliteAnsweredSaveDirectoryRepository(BaseRepository):
             "ON CONFLICT(rom_id) DO UPDATE SET directory = excluded.directory",
             (record.rom_id, record.directory),
         )
+
+    def delete(self, rom_id: int) -> None:
+        self._conn.execute("DELETE FROM answered_save_directories WHERE rom_id = ?", (rom_id,))

@@ -61,3 +61,21 @@ class TestTheRecordGoesWithItsRom:
             uow.roms.delete(5)
         with SqliteUnitOfWork(db) as uow:
             assert uow.answered_save_directories.get(5) is None
+
+
+class TestDelete:
+    def test_delete_drops_only_the_named_rom(self, uow: SqliteUnitOfWork):
+        _seed_rom(uow, 5)
+        _seed_rom(uow, 6)
+        uow.answered_save_directories.save(AnsweredSaveDirectory.record(rom_id=5, directory="/saves/snes"))
+        uow.answered_save_directories.save(AnsweredSaveDirectory.record(rom_id=6, directory="/saves/gba"))
+
+        uow.answered_save_directories.delete(5)
+
+        assert uow.answered_save_directories.get(5) is None
+        assert uow.answered_save_directories.get(6) is not None
+
+    def test_deleting_nothing_is_a_no_op(self, uow: SqliteUnitOfWork):
+        uow.answered_save_directories.delete(5)
+
+        assert uow.answered_save_directories.get(5) is None

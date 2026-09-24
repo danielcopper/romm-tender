@@ -282,6 +282,8 @@ class TestFakeAnsweredSaveDirectoryRepository:
         repo.save(AnsweredSaveDirectory.record(rom_id=1, directory="/saves/gba/mGBA"))
         assert repo.get(1) == AnsweredSaveDirectory(rom_id=1, directory="/saves/gba/mGBA")
         assert repo.get(2) is None
+        repo.delete(1)
+        assert repo.get(1) is None
 
 
 class TestFakeBiosFileRepository:
