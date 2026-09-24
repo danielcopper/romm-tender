@@ -416,8 +416,7 @@ class MigrationFileStore(Protocol):
 
     ``move`` is the cross-device-safe shutil-style relocation a home
     change needs (e.g., internal SSD to SD card); it falls back to
-    copy+delete on ``EXDEV``. ``rename`` is the same-filesystem atomic
-    ``os.replace``.
+    copy+delete on ``EXDEV``.
 
     Implementations are synchronous — services that call from an async
     context offload via ``loop.run_in_executor``.
@@ -450,13 +449,6 @@ class MigrationFileStore(Protocol):
         possible, falling back to copy+delete on ``EXDEV``. Use this
         for RetroDECK home migrations where source and destination may
         live on different filesystems.
-        """
-        ...
-
-    def rename(self, src: str, dst: str) -> None:
-        """Atomically rename *src* to *dst*, replacing any existing file at *dst*.
-
-        Uses ``os.replace`` semantics — same-filesystem only.
         """
         ...
 

@@ -15,7 +15,7 @@ class FakeMigrationFileStore:
     created via ``make_dirs``.
 
     Failure-injection seams support partial-failure tests:
-    - ``move_failures``, ``rename_failures``, ``remove_failures``,
+    - ``move_failures``, ``remove_failures``,
       ``get_mtime_failures`` — sets of paths that should raise
       ``OSError`` on the respective operation even when the path is
       otherwise present in ``files``.
@@ -34,14 +34,12 @@ class FakeMigrationFileStore:
         self.files: dict[str, bytes] = dict(files) if files else {}
         self.dirs: set[str] = set()
         self.move_failures: set[str] = set()
-        self.rename_failures: set[str] = set()
         self.remove_failures: set[str] = set()
         self.get_mtime_failures: set[str] = set()
         self.mtimes: dict[str, float] = {}
         self.walk_returns: dict[str, list[tuple[str, list[str], list[str]]]] | None = None
         self.links: dict[str, str] = {}
         self.move_calls: list[tuple[str, str]] = []
-        self.rename_calls: list[tuple[str, str]] = []
 
     def exists(self, path: str) -> bool:
         return path in self.files or self.is_dir(path)
@@ -74,14 +72,6 @@ class FakeMigrationFileStore:
         self.move_calls.append((src, dst))
         if src in self.move_failures:
             raise OSError(f"simulated move failure: {src}")
-        if src not in self.files:
-            raise FileNotFoundError(src)
-        self.files[dst] = self.files.pop(src)
-
-    def rename(self, src: str, dst: str) -> None:
-        self.rename_calls.append((src, dst))
-        if src in self.rename_failures:
-            raise OSError(f"simulated rename failure: {src}")
         if src not in self.files:
             raise FileNotFoundError(src)
         self.files[dst] = self.files.pop(src)

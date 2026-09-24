@@ -1574,7 +1574,7 @@ class TestMigrationFailureInjection:
     """Adapter-level failure injection tests using FakeMigrationFileStore.
 
     These tests exercise paths the tmp_path-based integration tests cannot
-    reach: simulated ``OSError`` during ``move`` / ``rename`` / ``remove``
+    reach: simulated ``OSError`` during ``move`` / ``remove``
     must be caught by the service, appended to the ``errors`` list, and
     must not abort the rest of the migration loop. The previous path
     marker is also retained on partial failure so the user can retry.

@@ -52,13 +52,6 @@ class MigrationFileAdapter:
         """
         shutil.move(src, dst)
 
-    def rename(self, src: str, dst: str) -> None:
-        """Atomically rename *src* to *dst*, replacing any existing file at *dst*.
-
-        Uses ``os.replace`` — same-filesystem only.
-        """
-        os.replace(src, dst)
-
     def get_mtime(self, path: str) -> float:
         """Return the mtime of *path* as a Unix timestamp."""
         return os.path.getmtime(path)
