@@ -231,10 +231,9 @@ class EsFindRulesAdapter:
         """Parse ``es_find_rules.xml`` into ``{EMULATOR_NAME: (staticpath, ...)}``.
 
         What is kept and why is :class:`_StaticPathCollector`'s; this method owns
-        the I/O and the three ways it can fail. Uses ``xml.parsers.expat``
-        because Decky's PyInstaller-frozen Python does not bundle ``xml.etree``.
-        Returns ``{}`` if the file cannot be read or parsed, which the probe
-        reads as "cannot disprove" and so assumes every emulator installed.
+        the I/O and the three ways it can fail. Returns ``{}`` if the file cannot
+        be read or parsed, which the probe reads as "cannot disprove" and so
+        assumes every emulator installed.
         """
         try:
             from xml.parsers import expat
