@@ -1,4 +1,9 @@
-"""The root conftest keeps every test away from the developer's real home and directory variables."""
+"""The root conftest's isolation, pinned.
+
+A test sees a fresh, empty home instead of the developer's real one, no
+``XDG_*`` or ``TENDER_*`` variable reaches it, and the password database is
+read only by the named exception and by this file.
+"""
 
 import os
 import pwd

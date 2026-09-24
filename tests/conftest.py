@@ -27,7 +27,7 @@ settings.load_profile("ci")
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _tests_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_project_root, "backend"))
-# Add tests/ root so subdirectory tests can still import from fakes/ and conftest
+# `tests/` itself, so a test in any subdirectory can import `fakes/` and `_factories`.
 sys.path.insert(0, _tests_root)
 
 
@@ -36,8 +36,11 @@ def _drop_directory_variables(delete: Callable[[str], object]) -> None:
         delete(name)
 
 
-# What runs before any test's own fixtures — collection, module- and
-# session-scoped fixtures — runs under this home, for the reason
+# Importing this conftest moves the process's HOME to a suite home and drops
+# every XDG_* and TENDER_* variable; the process itself starts under the real
+# ones. So what runs before a test's own `_isolated_environment` — collection,
+# and every fixture scoped above function (class, module, package, session) —
+# sees the suite home rather than the real one, for the reason
 # `_isolated_environment` gives.
 _suite_home = tempfile.mkdtemp(prefix="tests-home-")
 atexit.register(shutil.rmtree, _suite_home, True)
@@ -63,21 +66,27 @@ def _isolated_environment(home: Path) -> Iterator[None]:
     """Point ``HOME`` at the test's own home and drop every ``XDG_*`` and ``TENDER_*`` variable.
 
     ``HOME`` is what ``os.path.expanduser`` and ``Path.home()`` answer from, so
-    nothing a test runs can reach the developer's real Steam, RetroDECK or
-    settings tree. ``TENDER_*`` and the XDG base directories are the rungs
+    nothing a test runs reaches the developer's real home through them.
+    ``TENDER_*`` and the XDG base directories are the rungs
     ``domain/app_directories.py`` reads before the home, so one inherited from
     the shell would point a test back at a real directory; the rest of the
     ``XDG_*`` family goes with them, because a test has no business reading the
-    desktop session it was started from either. The process itself starts under
-    a home of its own too (``_suite_home``), so the same holds for everything
-    that runs before this fixture.
+    desktop session it was started from either.
 
-    **One named exception:** ``TestTheRealMachineAnswers`` in
-    ``tests/adapters/test_atlas_saves.py`` reads the real home, because it pins
-    what the real resolver answers over the RetroDECK installed on this machine
-    and no fabricated tree can stand in. It takes that home from the password
+    Only paths under the home are covered. RetroDECK's system Flatpak root
+    (``/var/lib/flatpak``) lies outside it: a test whose code can reach that
+    root through the plugin's or the vendored resolver's constant for it
+    repoints the constant itself, and ``_isolate_system_flatpak_root`` in
+    ``tests/contract/conftest.py`` names both.
+
+    **The named exception:** ``TestTheRealMachineAnswers`` in
+    ``tests/adapters/test_atlas_saves.py`` reads the real home, for the reason
+    that module's docstring gives. It takes that home from the password
     database, never from ``HOME``, and only reads.
-    ``tests/test_conftest_isolation.py`` holds every other test to the rule.
+    ``tests/test_conftest_isolation.py`` pins, by searching the source text for
+    the ``pwd`` module's lookups, that nothing else in ``tests/`` but that check
+    itself reads the password database; a literal home path or a ``~user``
+    expansion passes it.
 
     A ``MonkeyPatch`` of its own rather than the ``monkeypatch`` fixture: an
     autouse fixture that requested it would set it up before the test's

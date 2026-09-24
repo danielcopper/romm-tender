@@ -76,10 +76,10 @@ python -m pytest tests/ -q --cov=backend --cov-report=term --cov-branch
 ```
 
 Tests mirror the source layout (`tests/services/`, `tests/adapters/`, `tests/domain/`, `tests/models/`, `tests/lib/`),
-with each test file mapping 1:1 to a source module. Shared fixtures live in `tests/conftest.py`. Every test runs under a
-fresh, empty `HOME` with no `XDG_*` or `TENDER_*` variable set, so no test reaches your real Steam, RetroDECK or
-settings tree except the one read-only tier `tests/conftest.py` names, and every test gets its own event sink (`emit`)
-and logger (`logger`) to build services with. `.claude/rules/testing-backend.md` has the rules for writing a test
+with each test file mapping 1:1 to a source module. Shared fixtures live in `tests/conftest.py`: among them the fresh
+`HOME` every test runs under, and the per-test `emit` and `logger` a service is built with. `_isolated_environment`'s
+docstring there says what the isolation covers and what it does not, and states the named exception, a test class that
+reads files under your real home and only reads. `.claude/rules/testing-backend.md` has the rules for writing a test
 against them.
 
 Frontend component tests run with `mise run test:frontend` (`pnpm -C frontend test`); see

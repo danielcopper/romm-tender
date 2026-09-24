@@ -3,9 +3,10 @@
 These live outside ``conftest.py`` on purpose. A conftest is imported by
 pytest under its own module name; importing it a second time by plain name
 (`from conftest import ...`) creates a *separate* module object that re-runs
-the module body — which would move the process's ``HOME`` to a second suite
-home.
-Anything a test module needs to import belongs here instead.
+the module body: a second suite home with ``HOME`` moved to it, ``backend/``
+and ``tests/`` inserted into ``sys.path`` again, and the hypothesis profile
+registered and loaded again. Anything a test module needs to import belongs
+here instead.
 
 Import as ``from _factories import _make_retry`` — ``tests/`` is on the path
 via the root conftest, the same way ``fakes/`` is reached.
