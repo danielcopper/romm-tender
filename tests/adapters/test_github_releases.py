@@ -14,7 +14,8 @@ from domain.update_release import LatestRelease, ReleaseTarball
 
 _API = "http://fake-github.test/repos/danielcopper/romm-tender/releases/latest"
 _PINNED_URL = "https://github.com/danielcopper/romm-tender/releases/download/tender-v0.34.0/romm-tender-0.34.0.tar.gz"
-_TARBALL = {"name": "romm-tender-0.34.0.tar.gz", "digest": "sha256:ab34cd", "browser_download_url": _PINNED_URL}
+_HEX = "ab34" * 16
+_TARBALL = {"name": "romm-tender-0.34.0.tar.gz", "digest": f"sha256:{_HEX}", "browser_download_url": _PINNED_URL}
 
 
 def _payload(tag="tender-v0.34.0", assets=None):
@@ -49,7 +50,7 @@ class TestGetLatestRelease:
     def test_reads_the_version_the_tarball_address_and_its_digest(self, adapter):
         with _answering(_payload()):
             assert adapter.get_latest_release() == LatestRelease(
-                version="0.34.0", tarball=ReleaseTarball(url=_PINNED_URL, digest="ab34cd")
+                version="0.34.0", tarball=ReleaseTarball(url=_PINNED_URL, digest=_HEX)
             )
 
     def test_asks_the_configured_address_with_the_program_user_agent(self, adapter):
@@ -80,7 +81,7 @@ class TestGetLatestRelease:
         with _answering(_payload(assets=assets)):
             release = adapter.get_latest_release()
         assert release is not None
-        assert release.tarball == ReleaseTarball(url=_PINNED_URL, digest="ab34cd")
+        assert release.tarball == ReleaseTarball(url=_PINNED_URL, digest=_HEX)
 
     def test_a_tarball_of_another_version_is_not_this_release_s(self, adapter):
         assets = [{**_TARBALL, "name": "romm-tender-0.33.0.tar.gz"}]
@@ -103,7 +104,7 @@ class TestGetLatestRelease:
         with _answering(_payload(assets=assets)):
             assert adapter.get_latest_release() == LatestRelease(version="0.34.0", tarball=None)
 
-    @pytest.mark.parametrize("digest", [None, "", "ab34cd", "sha512:ab34cd", "sha256:"])
+    @pytest.mark.parametrize("digest", [None, "", _HEX, f"sha512:{_HEX}", "sha256:", "sha256:ab34cd"])
     def test_a_digest_that_is_not_a_sha256_is_carried_as_none(self, adapter, digest):
         """An address with no established sha256 is still an address; the verdict on it is the installer's."""
         assets = [{**_TARBALL, "digest": digest}]
@@ -139,7 +140,7 @@ class TestEveryFailureIsSilent:
             assert adapter.get_latest_release() is None
         assert log
 
-    @pytest.mark.parametrize("tag", [None, "", "tender-v", 42, "0.34.0", "v0.34.0", "other-v0.34.0"])
+    @pytest.mark.parametrize("tag", [None, "", "tender-v", "tender-vnext", 42, "0.34.0", "v0.34.0", "other-v0.34.0"])
     def test_an_answer_naming_no_tender_release_answers_nothing(self, adapter, log, tag):
         """The installer refuses any tag but ``tender-v…`` as not a Tender release, and so does this."""
         with _answering(_payload(tag=tag)):

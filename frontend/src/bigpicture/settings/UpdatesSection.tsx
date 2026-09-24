@@ -8,7 +8,7 @@ import { FC } from "react";
 import { PanelSection, PanelSectionRow, ButtonItem, Field, ToggleField } from "@decky/ui";
 import type { UpdateNoticeState } from "../../utils/updateNoticeStore";
 
-/** Said where the install button stands in the installed program, for a run from a checkout. */
+/** Shown only to a run from a checkout, which is never offered an install. */
 export const NOT_INSTALLED_PROGRAM = "Updates install only into the installed program.";
 
 interface UpdatesSectionProps {
@@ -50,7 +50,7 @@ export const UpdatesSection: FC<UpdatesSectionProps> = ({ update, checking, resu
     <PanelSectionRow>
       <ToggleField
         label="Check for updates daily"
-        description="Asks GitHub once a day whether a newer Tender release is out."
+        description="Asks GitHub at most once a day, when Tender loads, whether a newer release is out."
         checked={update.enabled}
         onChange={onEnabledChange}
       />

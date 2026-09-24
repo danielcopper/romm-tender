@@ -554,9 +554,8 @@ const tender = definePlugin(() => {
     })(),
   );
 
-  // Whether a newer release is out. Never awaited by a surface: on the one day
-  // the check is due this call sits on a GitHub request, and the panel has to
-  // open at its usual speed whichever day that is.
+  // Whether a newer release is out. Detached, never awaited — why is at
+  // fetchUpdateNotice.
   detach(
     (async () => {
       try {

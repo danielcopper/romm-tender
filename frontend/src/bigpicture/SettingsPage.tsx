@@ -98,12 +98,14 @@ const SECTION_LABELS: Record<SettingsSection, string> = {
   advanced: "Advanced",
 };
 
-// What a Check now found, as the line under the button says it. A press a later
-// one overtook reports nothing, and leaves the line to the press that won.
+// What a Check now found, as the line under the button says it. A check that a
+// later switch press overtook — the only store write this page can issue while
+// one is in flight — reports nothing: its answer was never written, and the
+// press already emptied the line.
 const CHECK_OUTCOME_LINES: Record<Exclude<UpdateCheckOutcome, "superseded">, (latest: string | null) => string> = {
   found: (latest) => (latest === null ? "A newer release is available." : `Tender ${latest} is available.`),
   none: () => "You have the newest release.",
-  unreachable: () => "GitHub could not be reached. Try again later.",
+  unreachable: () => "GitHub gave no usable answer. Try again later.",
   off: () => "The daily check is off, so nothing was asked.",
 };
 

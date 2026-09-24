@@ -10,6 +10,7 @@ answer is spelled live in ``domain/update_release.py``.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -17,7 +18,6 @@ from domain.update_release import UpdateCheck, decode_update_check, encode_updat
 from domain.version import is_newer_version
 
 if TYPE_CHECKING:
-    import asyncio
     from typing import Any
 
     from domain.update_release import LatestRelease
@@ -84,14 +84,20 @@ class UpdateCheckService:
         self._settings_persister = config.settings_persister
         self._loop = config.loop
         self._log_debug = config.log_debug
+        # One check at a time, from reading the stored answer to recording the
+        # new one: the panel-load read and a Check now can overlap, and the one
+        # that finishes last would otherwise record an answer built on a stored
+        # one the other had already replaced — a slow failed read stamping a
+        # stale release over a fresh one.
+        self._check_lock = asyncio.Lock()
 
     async def get_update_notice(self) -> dict[str, Any]:
-        """Report the newest available release and whether the card should say so.
+        """Report the last available release a check saw, and whether the card should say so.
 
         Returns ``{"available", "newer", "latest_version", "current_version",
-        "enabled", "installed_program"}``. ``latest_version`` is the newest
-        release any check found with its tarball attached, ``None`` where none
-        was established. ``newer`` says it is strictly newer than the running
+        "enabled", "installed_program"}``. ``latest_version`` is the last
+        available release a check saw — the release GitHub called latest, with
+        its tarball attached — ``None`` where none was established. ``newer`` says it is strictly newer than the running
         version. ``available`` is the card: newer, not the dismissed version,
         and the check switched on.
 
@@ -106,9 +112,10 @@ class UpdateCheckService:
         """
         if not self._enabled():
             return self._notice(None, enabled=False)
-        check = await self._loop.run_in_executor(None, self._read_last_check_io)
-        if self._is_due(check):
-            check, _ = await self._check_now(check)
+        async with self._check_lock:
+            check = await self._loop.run_in_executor(None, self._read_last_check_io)
+            if self._is_due(check):
+                check, _ = await self._check_now(check)
         return self._notice(check, enabled=True)
 
     async def check_for_update_now(self) -> dict[str, Any]:
@@ -128,8 +135,9 @@ class UpdateCheckService:
         if not self._enabled():
             return {**self._notice(None, enabled=False), "reached": False}
         self._forget_dismissal()
-        previous = await self._loop.run_in_executor(None, self._read_last_check_io)
-        check, reached = await self._check_now(previous)
+        async with self._check_lock:
+            previous = await self._loop.run_in_executor(None, self._read_last_check_io)
+            check, reached = await self._check_now(previous)
         return {**self._notice(check, enabled=True), "reached": reached}
 
     def dismiss_update_notice(self, version: object) -> dict[str, Any]:

@@ -1916,7 +1916,7 @@ describe("SettingsPage", () => {
       [{ available: false, newer: false, latest_version: "0.33.0" }, "You have the newest release."],
       [
         { reached: false, available: false, newer: false, latest_version: null },
-        "GitHub could not be reached. Try again later.",
+        "GitHub gave no usable answer. Try again later.",
       ],
       [
         { enabled: false, reached: false, available: false, newer: false },

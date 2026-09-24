@@ -1203,11 +1203,14 @@ export interface UpdateCheckNow extends UpdateNotice {
 /** Ask now, past the daily throttle and past a dismissal; never past the switch. */
 export const checkForUpdateNow = callable<[], UpdateCheckNow>("check_for_update_now");
 
+/** A settings write the backend accepted, or the reason it refused one. */
+export type UpdateSettingWrite = { success: true } | { success: false; reason: string; message: string };
+
 /** Wave the card away for one release version; the next release raises it again. */
-export const dismissUpdateNotice = callable<[string], { success: boolean }>("dismiss_update_notice");
+export const dismissUpdateNotice = callable<[string], UpdateSettingWrite>("dismiss_update_notice");
 
 /** Switch the daily release check on or off. On by default. */
-export const setUpdateCheckEnabled = callable<[boolean], { success: boolean }>("set_update_check_enabled");
+export const setUpdateCheckEnabled = callable<[boolean], UpdateSettingWrite>("set_update_check_enabled");
 
 // End-of-session orchestration — collapses recordSessionEnd + syncAchievementsAfterSession
 // + postExitSync + refreshMigrationState into a single backend round-trip.

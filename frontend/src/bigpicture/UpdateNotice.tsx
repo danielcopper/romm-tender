@@ -44,9 +44,7 @@ export const UpdateNotice: FC<{ onOpenUpdates: () => void }> = ({ onOpenUpdates 
         </Focusable>
       </PanelSectionRow>
       <PanelSectionRow>
-        {/* Two buttons on one row rather than two full-width rows: Main is the
-            narrow page, and a notice costing three rows pushes what sits below
-            it off the screen. */}
+        {/* One row, like the playtime notice's pair — docs/architecture/qam-panel.md, Notices and homes. */}
         <Focusable flow-children="horizontal" style={{ display: "flex", gap: "8px" }}>
           <DialogButton style={{ flex: "1 1 auto", minWidth: 0 }} onClick={onOpenUpdates}>
             Open Updates

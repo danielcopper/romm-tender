@@ -1216,7 +1216,7 @@ class Plugin:
 
     @route
     async def get_update_notice(self):
-        """Report the newest available release and whether the card should say so.
+        """Report the last available release a check saw, and whether the card should say so.
 
         Returns ``{"available", "newer", "latest_version", "current_version",
         "enabled", "installed_program"}``. ``available`` is the card itself: a

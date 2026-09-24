@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -26,12 +27,14 @@ if TYPE_CHECKING:
 ENV_RELEASE_API = "TENDER_RELEASE_API"
 DEFAULT_RELEASE_API = "https://api.github.com/repos/danielcopper/romm-tender/releases/latest"
 
-# release-please's configured tag shape; ``install.sh``'s ``resolve_tag`` refuses
-# any other as "not a Tender release", and so does this module.
-_TAG_PREFIX = "tender-v"
+# release-please's configured tag shape. ``install.sh``'s ``resolve_tag`` accepts
+# exactly ``tender-v[0-9]*`` and refuses any other as "not a Tender release", and
+# so does this module.
+_TAG_RE = re.compile(r"tender-v([0-9].*)")
 
 # GitHub reports an asset digest as ``<algorithm>:<hex>``.
 _SHA256_PREFIX = "sha256:"
+_SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}")
 
 
 @dataclass(frozen=True)
@@ -97,8 +100,8 @@ class UpdateCheck:
     """What the checks have established, and when the last one ran.
 
     ``checked_at`` stamps the ATTEMPT, so a check that reached nothing still
-    holds the next one off. ``release`` is the newest AVAILABLE release any
-    check has seen — always one with a tarball — and a check that reached
+    holds the next one off. ``release`` is the last AVAILABLE release a check
+    saw — always one with a tarball — and a check that reached
     nothing, or found a release without one, carries it forward unchanged.
     """
 
@@ -107,13 +110,11 @@ class UpdateCheck:
 
 
 def version_from_tag(tag: object) -> str | None:
-    """Return the bare version a ``tender-v<version>`` *tag* names, or ``None``."""
+    """Return the bare version a ``tender-v<digit>…`` *tag* names, or ``None``."""
     if not isinstance(tag, str):
         return None
-    stripped = tag.strip()
-    if not stripped.startswith(_TAG_PREFIX):
-        return None
-    return stripped[len(_TAG_PREFIX) :] or None
+    match = _TAG_RE.fullmatch(tag.strip())
+    return match.group(1) if match is not None else None
 
 
 def tarball_name(version: str) -> str:
@@ -127,17 +128,19 @@ def tarball_name(version: str) -> str:
 
 
 def sha256_hex(digest: object) -> str | None:
-    """Return the bare hex of a ``sha256:<hex>`` *digest*, or ``None`` when it is not one.
+    """Return the lowercase hex of a ``sha256:<64 hex digits>`` *digest*, or ``None``.
 
-    A digest under another algorithm, or one whose algorithm nothing states,
-    answers ``None`` rather than travelling on as a sha256 nobody established.
+    A digest under another algorithm, one whose algorithm nothing states, and
+    one that is not 64 hex digits all answer ``None`` rather than travelling on
+    as a sha256 nobody established.
     """
     if not isinstance(digest, str):
         return None
     stripped = digest.strip()
     if not stripped.startswith(_SHA256_PREFIX):
         return None
-    return stripped[len(_SHA256_PREFIX) :] or None
+    hex_digits = stripped[len(_SHA256_PREFIX) :].lower()
+    return hex_digits if _SHA256_HEX_RE.fullmatch(hex_digits) else None
 
 
 def encode_update_check(check: UpdateCheck) -> str:

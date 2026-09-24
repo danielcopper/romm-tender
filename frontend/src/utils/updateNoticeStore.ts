@@ -26,6 +26,7 @@ import {
   getUpdateNotice,
   setUpdateCheckEnabled,
   type UpdateNotice,
+  type UpdateSettingWrite,
 } from "../api/backend";
 
 export interface UpdateNoticeState {
@@ -118,9 +119,10 @@ function stateFromNotice(notice: UpdateNotice): UpdateNoticeState {
 /**
  * Ask the backend what it knows about a newer release and update the store.
  *
- * On the one day the check is due this sits on a GitHub request, so no surface
- * may await it before rendering. A read that a later read or press overtook
- * writes nothing — see {@link _seq}.
+ * Whenever the daily check is due this sits on a GitHub request for up to its
+ * timeout, so no surface may await it before rendering — the panel-load caller
+ * detaches it. A read that a later read or press overtook writes nothing — see
+ * {@link _seq}.
  */
 export async function fetchUpdateNotice(): Promise<void> {
   const seq = ++_seq;
@@ -151,20 +153,28 @@ export async function runUpdateCheckNow(): Promise<UpdateCheckOutcome> {
   return answer.newer ? "found" : "none";
 }
 
+/** Throws the backend's refusal, so the caller's log names it. */
+function requireAccepted(write: UpdateSettingWrite): void {
+  if (!write.success) throw new Error(`${write.reason}: ${write.message}`);
+}
+
 /**
- * Wave the card away for one release, then take it down here — only after the
- * backend accepted it, so a dismissal that did not persist leaves the card up
- * rather than bringing it back at the next start.
+ * Wave the card away for one release, then take it down here — only once the
+ * backend answered that it persisted the dismissal. A refused or failed write
+ * rejects and leaves the card up, rather than hiding it until the next start
+ * brings it back.
  */
 export async function dismissUpdateForVersion(version: string): Promise<void> {
   const seq = ++_seq;
-  await dismissUpdateNotice(version);
+  const write = await dismissUpdateNotice(version);
   if (seq !== _seq) return;
+  requireAccepted(write);
   setUpdateNoticeState({ ..._state, available: false });
 }
 
 /**
- * Persist the switch, then reflect it here.
+ * Persist the switch, then reflect it here — only once the backend answered
+ * that it persisted it. A refused or failed write rejects and changes nothing.
  *
  * Off drops what the backend drops for a switched-off check — the card and the
  * version. On cannot restore them from anything held here, so a fresh read is
@@ -173,8 +183,9 @@ export async function dismissUpdateForVersion(version: string): Promise<void> {
  */
 export async function setUpdateCheckSwitch(enabled: boolean): Promise<void> {
   const seq = ++_seq;
-  await setUpdateCheckEnabled(enabled);
+  const write = await setUpdateCheckEnabled(enabled);
   if (seq !== _seq) return;
+  requireAccepted(write);
   if (enabled) {
     setUpdateNoticeState({ ..._state, enabled });
     detach(fetchUpdateNotice());

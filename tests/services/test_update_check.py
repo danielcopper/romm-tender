@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import threading
 from typing import Any
 
 import pytest
@@ -467,3 +469,79 @@ class TestCheckingNow:
         notice = await _make(latest=_release("0.34.0"))[0].check_for_update_now()
 
         assert set(notice) == _NOTICE_KEYS | {"reached"}
+
+
+class _GatedRelease:
+    """A release seam whose first answer is held until the test lets it go.
+
+    Answers run on executor threads, so the gate is a thread event: the first
+    call waits on it, every later call answers at once.
+    """
+
+    def __init__(self, first: LatestRelease | None, later: LatestRelease | None) -> None:
+        self.first = first
+        self.later = later
+        self.calls = 0
+        self.first_started = threading.Event()
+        self.release_first = threading.Event()
+
+    def __call__(self) -> LatestRelease | None:
+        self.calls += 1
+        if self.calls == 1:
+            self.first_started.set()
+            self.release_first.wait(timeout=5)
+            return self.first
+        return self.later
+
+
+class TestOverlappingChecks:
+    """The panel-load read and a Check now can overlap; one runs at a time."""
+
+    def _make_gated(self, seam: _GatedRelease, uow_factory: FakeUnitOfWorkFactory) -> UpdateCheckService:
+        return UpdateCheckService(
+            config=UpdateCheckServiceConfig(
+                latest_release=seam,
+                current_version="0.33.0",
+                installed_program=True,
+                clock=FakeClock(),
+                uow_factory=uow_factory,
+                settings={},
+                settings_persister=FakeSettingsPersister(),
+                loop=running_loop(),
+                log_debug=lambda msg: None,
+            ),
+        )
+
+    async def test_a_slow_failed_read_does_not_stamp_over_a_fresh_answer(self):
+        """Without the lock the panel-load read, finishing last, recorded its stale previous answer."""
+        uow_factory = FakeUnitOfWorkFactory()
+        seam = _GatedRelease(first=None, later=_release("0.35.0"))
+        service = self._make_gated(seam, uow_factory)
+
+        panel_load = asyncio.ensure_future(service.get_update_notice())
+        await asyncio.to_thread(seam.first_started.wait, 5)
+        check_now = asyncio.ensure_future(service.check_for_update_now())
+        # Room for an unserialised Check now to finish first, which is the
+        # ordering that lost the fresh answer; with the lock it waits instead.
+        await asyncio.sleep(0.2)
+        seam.release_first.set()
+        await asyncio.gather(panel_load, check_now)
+
+        assert _stored(uow_factory)["version"] == "0.35.0"
+        assert (await service.get_update_notice())["latest_version"] == "0.35.0"
+
+    async def test_two_throttled_reads_at_once_ask_github_once(self):
+        """The second re-reads the stamp the first just wrote, and finds it not due."""
+        uow_factory = FakeUnitOfWorkFactory()
+        seam = _GatedRelease(first=_release("0.34.0"), later=_release("0.34.0"))
+        service = self._make_gated(seam, uow_factory)
+
+        first = asyncio.ensure_future(service.get_update_notice())
+        await asyncio.to_thread(seam.first_started.wait, 5)
+        second = asyncio.ensure_future(service.get_update_notice())
+        await asyncio.sleep(0)
+        seam.release_first.set()
+        answers = await asyncio.gather(first, second)
+
+        assert seam.calls == 1
+        assert [a["latest_version"] for a in answers] == ["0.34.0", "0.34.0"]

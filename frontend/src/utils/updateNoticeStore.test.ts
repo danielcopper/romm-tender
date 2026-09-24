@@ -6,6 +6,7 @@ import {
   setUpdateCheckEnabled,
   type UpdateCheckNow,
   type UpdateNotice,
+  type UpdateSettingWrite,
 } from "../api/backend";
 import {
   dismissUpdateForVersion,
@@ -89,7 +90,7 @@ describe("updateNoticeStore", () => {
     it("takes the card down only after the backend accepted it", async () => {
       vi.mocked(getUpdateNotice).mockResolvedValue(NOTICE);
       await fetchUpdateNotice();
-      const persist = deferred<{ success: boolean }>();
+      const persist = deferred<UpdateSettingWrite>();
       vi.mocked(dismissUpdateNotice).mockReturnValue(persist.promise);
 
       const pending = dismissUpdateForVersion("0.34.0");
@@ -100,6 +101,20 @@ describe("updateNoticeStore", () => {
       expect(dismissUpdateNotice).toHaveBeenCalledWith("0.34.0");
       expect(getUpdateNoticeState().available).toBe(false);
       expect(getUpdateNoticeState().newer).toBe(true);
+    });
+
+    it("leaves the card up and rejects when the backend refuses the write", async () => {
+      vi.mocked(getUpdateNotice).mockResolvedValue(NOTICE);
+      await fetchUpdateNotice();
+      vi.mocked(dismissUpdateNotice).mockResolvedValue({
+        success: false,
+        reason: "invalid_value",
+        message: "Invalid version",
+      });
+
+      await expect(dismissUpdateForVersion("0.34.0")).rejects.toThrow("invalid_value: Invalid version");
+
+      expect(getUpdateNoticeState().available).toBe(true);
     });
 
     it("leaves the card up when the write fails", async () => {
@@ -141,6 +156,21 @@ describe("updateNoticeStore", () => {
       expect(getUpdateNotice).toHaveBeenCalledTimes(2);
     });
 
+    it("a refused switch rejects and changes nothing", async () => {
+      vi.mocked(getUpdateNotice).mockResolvedValue(NOTICE);
+      await fetchUpdateNotice();
+      vi.mocked(setUpdateCheckEnabled).mockResolvedValue({
+        success: false,
+        reason: "invalid_value",
+        message: "Invalid value",
+      });
+
+      await expect(setUpdateCheckSwitch(false)).rejects.toThrow("invalid_value: Invalid value");
+
+      expect(getUpdateNoticeState()).toMatchObject({ enabled: true, available: true, latestVersion: "0.34.0" });
+      expect(getUpdateNotice).toHaveBeenCalledTimes(1);
+    });
+
     it("a read issued before the switch went off does not put the card back", async () => {
       const read = deferred<UpdateNotice>();
       vi.mocked(getUpdateNotice).mockReturnValue(read.promise);
@@ -154,7 +184,7 @@ describe("updateNoticeStore", () => {
     });
 
     it("of two presses in flight, the later one wins", async () => {
-      const first = deferred<{ success: boolean }>();
+      const first = deferred<UpdateSettingWrite>();
       vi.mocked(setUpdateCheckEnabled).mockReturnValueOnce(first.promise).mockResolvedValueOnce({ success: true });
 
       const on = setUpdateCheckSwitch(true);

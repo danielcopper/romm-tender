@@ -21,6 +21,7 @@ from domain.update_release import (
 )
 
 _CODE = "/home/deck/.local/lib/romm-tender"
+_HEX = "ab34" * 16
 
 
 class TestResolveUpdateSource:
@@ -71,9 +72,23 @@ class TestVersionFromTag:
         assert version_from_tag("  tender-v0.34.0\n") == "0.34.0"
 
     @pytest.mark.parametrize(
-        "unusable", ["", "   ", "tender-v", "0.34.0", "v0.34.0", "other-v1.0.0", None, 3, ["tender-v0.34.0"]]
+        "unusable",
+        [
+            "",
+            "   ",
+            "tender-v",
+            "tender-vnext",
+            "tender-v.1",
+            "0.34.0",
+            "v0.34.0",
+            "other-v1.0.0",
+            None,
+            3,
+            ["tender-v0"],
+        ],
     )
     def test_names_no_tender_release(self, unusable):
+        """The installer takes ``tender-v[0-9]*`` and nothing else, and so does this."""
         assert version_from_tag(unusable) is None
 
 
@@ -84,9 +99,26 @@ class TestTarballName:
 
 class TestSha256Hex:
     def test_strips_the_algorithm_prefix(self):
-        assert sha256_hex("sha256:ab34cd") == "ab34cd"
+        assert sha256_hex(f"sha256:{_HEX}") == _HEX
 
-    @pytest.mark.parametrize("unusable", ["sha512:ab34cd", "ab34cd", "sha256:", "", None, 42, {"sha256": "ab"}])
+    def test_uppercase_hex_is_lowercased(self):
+        assert sha256_hex(f"sha256:{_HEX.upper()}") == _HEX
+
+    @pytest.mark.parametrize(
+        "unusable",
+        [
+            f"sha512:{_HEX}",
+            _HEX,
+            "sha256:",
+            "sha256:ab34cd",
+            f"sha256:{_HEX}0",
+            f"sha256:{_HEX[:-1]}g",
+            "",
+            None,
+            42,
+            {"sha256": _HEX},
+        ],
+    )
     def test_is_not_a_digest_we_can_vouch_for(self, unusable):
         assert sha256_hex(unusable) is None
 
