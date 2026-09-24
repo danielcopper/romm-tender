@@ -27,7 +27,7 @@ export type VirtualCollectionType = "franchise" | "collection";
 /**
  * QAM collection owner-scope. `"all"` (default) syncs every collection the
  * server lists; `"own"` restricts sync + display to the signed-in user's own
- * collections. Independent of the kind sub-tab — it filters by owner, not kind.
+ * collections. Independent of the collection kind — it decides by owner, not kind.
  */
 export type CollectionOwnerScope = "own" | "all";
 
@@ -49,9 +49,9 @@ export interface CollectionSyncSetting {
   kind: CollectionKind;
   is_favorite: boolean;
   /**
-   * The virtual-collection type — present only when `kind === "virtual"`, used
-   * to label the row ("Franchise" / "IGDB Collection"). Absent on standard/smart
-   * collections and on older backends.
+   * The virtual-collection type — present only when `kind === "virtual"`, and
+   * what decides whether the Collections tab lists it under Franchises or IGDB
+   * collections. Absent on standard/smart collections.
    */
   virtual_type?: VirtualCollectionType;
   /**

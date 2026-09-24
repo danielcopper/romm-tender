@@ -28,7 +28,7 @@ without restating it. The width mechanism's decision record is
 | `frontend/src/bigpicture/SettingsPage.tsx`, `frontend/src/bigpicture/settings/`      | Settings and its sections                                                                                                                                           |
 | `frontend/src/bigpicture/DataManagementPage.tsx`, `data/`, `RemovedGamesCleanup.tsx` | Data Management — the inventory rows, their panes and the page's state                                                                                              |
 | `frontend/src/bigpicture/DownloadQueue.tsx`                                          | Downloads                                                                                                                                                           |
-| `frontend/src/bigpicture/library/`                                                   | The Library page's tabs: `usePlatformsPage` (its reads and actions), `PlatformsTab`, `PlatformDetail`                                                               |
+| `frontend/src/bigpicture/library/`                                                   | The Library tabs: `usePlatformsPage`, `PlatformsTab`, `PlatformDetail`; `useCollectionsPage`, `collectionKinds`, `CollectionsTab`, `CollectionsDetail`              |
 | `frontend/src/utils/deckyUiInternals.ts`                                             | Honest typing for `@decky/ui` values that come from a webpack probe: the frame's class names, `Tabs`, `ScrollPanel`, the controller glyph                           |
 | `frontend/src/utils/qamExpansion.ts`                                                 | The panel's width: the expand and hide messages, the injected `max-width` rule, and the four paths that clear both                                                  |
 | `frontend/src/bigpicture/layout/`                                                    | The wide-page frame: `WidePage` (the Back/title line, tabs, measured height, entry focus), `ScrollRegion`, `Columns`, `ListDetail`, `pane`                          |
@@ -370,16 +370,16 @@ scrolled past them Steam has no reason to bring them back — it scrolls only fa
 `ScrollRegion` therefore scrolls itself to the top when focus reaches the first stop in it, and to its end when focus
 reaches the last. Every region **built with `ScrollRegion`** gets that, which is not the same as every region on every
 wide page: a tabbed page's own tab content sits in Steam's `ScrollingTab`, so a tab that does not build its own regions
-— Collections today — is not covered. Two properties make it safe rather than a fight with Steam's own scrolling. The
-triggers are **"nothing focusable is above me"** and **"nothing focusable is below me"**, never "I am the first match"
-or "the last" — a container `Focusable` that declares a stop, or is promoted to one by an activate handler, renders
-`tabindex="0"` of its own and precedes in document order every row it wraps, so it is never the last match and a wrapped
-row is never the first, and an equality test against either end would silently never fire wherever a page wraps its
-rows, which `ListDetail` does for every row. So the first rule discounts the focused element's own ancestors and the
-second its own descendants. And each acts only where the focused element still fits in the region at the offset it would
-move to: where the content beyond it is taller than the region there is no offset showing both, Steam would scroll the
-element straight back, so nothing is done at all. A stop at both ends at once reveals the top where the top fits, and
-otherwise the end where that fits.
+is not covered — none does today, since both of Library's tabs are list and detail. Two properties make it safe rather
+than a fight with Steam's own scrolling. The triggers are **"nothing focusable is above me"** and **"nothing focusable
+is below me"**, never "I am the first match" or "the last" — a container `Focusable` that declares a stop, or is
+promoted to one by an activate handler, renders `tabindex="0"` of its own and precedes in document order every row it
+wraps, so it is never the last match and a wrapped row is never the first, and an equality test against either end would
+silently never fire wherever a page wraps its rows, which `ListDetail` does for every row. So the first rule discounts
+the focused element's own ancestors and the second its own descendants. And each acts only where the focused element
+still fits in the region at the offset it would move to: where the content beyond it is taller than the region there is
+no offset showing both, Steam would scroll the element straight back, so nothing is done at all. A stop at both ends at
+once reveals the top where the top fits, and otherwise the end where that fits.
 
 The set of shapes it counts as a focus stop is measured in the running QAM, not assumed: Steam's own components render
 `div[tabindex="0"]` — the symptom Steam writes for a declared stop, never what makes one (above) — and a `DialogButton`
@@ -407,14 +407,14 @@ does not say it owns its regions. A tabbed body gets none from the frame, and ne
 
 ## Pages
 
-| Page            | Width | Holds                                                                                                                                          | Today                                                                             |
-| --------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Main            | 348   | notices, status, the conditional slot, the download summary, the menu                                                                          | as described                                                                      |
-| Sync            | 854   | preview as a table, the run as a plan, Skip preview, Force Full Sync, Steam memory, session budget, last runs                                  | as described; the import choice (#1364) is the one thing still to come            |
-| Library         | 854   | Platforms as list and detail (sync, core, BIOS files, removal); Collections as list and detail — the kinds, each kind's collections as a table | Platforms is built; Collections still carries the narrow page's controls and list |
-| Settings        | 854   | five sections, list and detail                                                                                                                 | as described; RetroAchievements has no sign-in to hold yet (#1627)                |
-| Data Management | 854   | six populations as list and detail — what this device holds, and what can be taken back                                                        | as described                                                                      |
-| Downloads       | 348   | the queue with its controls                                                                                                                    | unchanged                                                                         |
+| Page            | Width | Holds                                                                                                                                          | Today                                                                  |
+| --------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Main            | 348   | notices, status, the conditional slot, the download summary, the menu                                                                          | as described                                                           |
+| Sync            | 854   | preview as a table, the run as a plan, Skip preview, Force Full Sync, Steam memory, session budget, last runs                                  | as described; the import choice (#1364) is the one thing still to come |
+| Library         | 854   | Platforms as list and detail (sync, core, BIOS files, removal); Collections as list and detail — the kinds, each kind's collections as a table | as described; the kinds' new names are not yet the Steam-name suffixes |
+| Settings        | 854   | five sections, list and detail                                                                                                                 | as described; RetroAchievements has no sign-in to hold yet (#1627)     |
+| Data Management | 854   | six populations as list and detail — what this device holds, and what can be taken back                                                        | as described                                                           |
+| Downloads       | 348   | the queue with its controls                                                                                                                    | unchanged                                                              |
 
 `Page` is `"main" | "sync" | "library" | "settings" | "data" | "downloads"`. **System is gone** — its core picker and
 BIOS files are in Library › Platforms, and the value, the router branch and the menu entry left with it.
@@ -576,22 +576,21 @@ branches — and one page depends on it: the Sync page's unit list stands in its
 sideways. That consequence is read from the code, not observed.
 
 **Every region built with `ScrollRegion` gets it, and on the wide pages every region that holds a full-width focus stop
-is one**: both columns of a list-and-detail page (Settings, Data Management, Library › Platforms), both columns of the
-Sync page — the preview table's rows in the left one, the option, memory and last-run rows in the controls column — the
-run view's own unit list, and the frame's region around an untabbed body that builds none of its own, which no page uses
-today. One region sits inside another: the unit list is a region within the Sync page's run column, and on the panel
-branch its rows' rings are drawn from its own ring root and clipped at its own box, so the room it needs is its own. It
-stands in its column's room with a negative side margin of the same 4 px, so the unit table starts where the section
-title over it does rather than a second room further in. What the room moves everywhere else is the same 4 px on every
-side of a column's content, which moves a column's rows, headers, titles and button rows together; a column drawn at a
-fixed width (the list's 264 px, the Sync controls' 270 px) keeps that width for the box and gives its content 8 px less.
-Entry focus reads the DOM for stops and is untouched by it.
+is one**: both columns of a list-and-detail page (Settings, Data Management, Library › Platforms and Collections), both
+columns of the Sync page — the preview table's rows in the left one, the option, memory and last-run rows in the
+controls column — the run view's own unit list, and the frame's region around an untabbed body that builds none of its
+own, which no page uses today. One region sits inside another: the unit list is a region within the Sync page's run
+column, and on the panel branch its rows' rings are drawn from its own ring root and clipped at its own box, so the room
+it needs is its own. It stands in its column's room with a negative side margin of the same 4 px, so the unit table
+starts where the section title over it does rather than a second room further in. What the room moves everywhere else is
+the same 4 px on every side of a column's content, which moves a column's rows, headers, titles and button rows
+together; a column drawn at a fixed width (the list's 264 px, the Sync controls' 270 px) keeps that width for the box
+and gives its content 8 px less. Entry focus reads the DOM for stops and is untouched by it.
 
-**What is not a `ScrollRegion` gets none.** A tab that builds no region of its own sits in Steam's `ScrollingTab`
-(Library › Collections today), and the narrow pages sit in the Quick Access panel's own scroller. The removed-games
-cleanup dialog has two scrollers of its own — the dialog body and its details region
-(`bigpicture/RemovedGamesCleanup.tsx`). Whether a full-width row in any of these loses the edges of its ring has not
-been looked at.
+**What is not a `ScrollRegion` gets none.** A tab that builds no region of its own sits in Steam's `ScrollingTab` (no
+tab does today), and the narrow pages sit in the Quick Access panel's own scroller. The removed-games cleanup dialog has
+two scrollers of its own — the dialog body and its details region (`bigpicture/RemovedGamesCleanup.tsx`). Whether a
+full-width row in any of these loses the edges of its ring has not been looked at.
 
 ### Columns
 
@@ -624,7 +623,9 @@ detail pane is built from focusable rows, not from paragraphs.
 A list whose rows carry no control of their own — a label and nothing else, which is what Settings and Data Management
 have — asks for `selectOnActivate`, and every row wrapper takes an activate handler that selects it. That handler is
 what makes the wrapper a focus stop rather than a container, so without it those rows are unreachable and the list
-cannot be scrolled. It is off by default, because a row that does carry a control must leave A to it.
+cannot be scrolled. It is off by default, because a row that does carry a control must leave A to it. **A row may name
+its own answer, overriding the list's**, for a list whose rows differ — Library › Collections, where one row carries a
+switch among rows that carry nothing. A row that names none follows the list.
 
 A list that is grouped or sorted by state computes its order when the page mounts and keeps it while the page is open,
 so toggling a row does not move it out from under the focus. The next mount shows the new order.
@@ -1442,33 +1443,58 @@ chosen from is [collections-layouts.html](../assets/collections-layouts.html). F
   head of the column rather than a segmented control beside the search because it is a sync setting that applies to two
   of the kinds, and a control shaped like a filter said otherwise.
 - **Favorites**, a row with its sync switch in it, as a platform row has. Its count is the favorites collection's ROM
-  count. With no favorites collection the row stays, greyed, with a dash for the count.
-- **Collections** — the standard kind, the favorites collection left out — and **Smart collections**.
+  count.
+- **Collections** — the standard kind, the Favorites row's collection left out — and **Smart collections**.
 - **Autogenerated**, a group heading over two rows, **Franchises** and **IGDB collections**.
 
 Collections, Smart collections and Autogenerated follow RomM's own headings — "Collections", "Smart Collections" and
 "Autogenerated collections"; Favorites, Franchises and IGDB collections are this page's.
 
-A kind row states "N of M on": how many of its collections are switched on. Every one of those counts comes from the one
-`get_collections` answer, so no row costs a read, and focus selecting holds nothing back behind a press here.
+**The Favorites row is the signed-in user's own favorites collection** — a standard one marked favorite and own. Another
+user's public favorites collection is not a candidate for it: it is an ordinary row under Collections, its Owner cell
+names that user, and it follows the owner toggle like any other of theirs. Where more than one favorites collection
+counts as the reader's own, a single switch cannot stand for them, so the row stays, greyed, with "more than one, listed
+under Collections" in place of the count, and they are rows of the Collections table. That happens with two marked own,
+and also before the plugin knows the user's id, when every collection reads as own and another user's public favorites
+collection is enough. With none at all the row stays, greyed, with a dash. Either way the greyed row's switch is
+disabled, so the row itself becomes the focus stop and A selects it: its pane, which says why, has to stay reachable.
+
+**Two kinds of row share the list**, each naming its own `selectOnActivate` (§ List and detail): the four kind rows
+carry nothing, so each is a focus stop and A selects it, while the Favorites row carries its switch and leaves A to it.
+The Autogenerated heading is a slot of its own in the list that holds text and no stop, so focus never lands on it and
+it selects nothing.
+
+A kind row states "N of M on": how many of its collections are switched on, **counted over what that kind's table shows
+under the owner toggle** — with the toggle off, another user's collection that is stored as on is neither listed nor
+counted. Every one of those counts comes from the one `get_collections` answer, so no row costs a read, and focus
+selecting holds nothing back behind a press here. While the answer is out a row states nothing, and where the read
+failed it states a dash.
+
+The page opens with **Collections** selected, and its row carries the entry-stop mark (§ List and detail). On this page
+the mark is not what places focus: Steam's tabbed page does that itself (§ Tabs), and the first stop of the list column
+is the owner toggle, which reports no selection — so where Steam takes the first stop, the page stays on Collections.
+Which stop Steam takes is a device observation, not something a test here can see. The selection is kept across a switch
+to Platforms and back.
 
 A kind's pane holds, in order:
 
 1. the kind's name with a short description;
 2. **one sentence, worded for that kind, on what turning one of its collections on does**: it adds all of that
    collection's games to Steam, **including games on platforms the reader does not sync**, and groups them in a Steam
-   collection named after it (`RomM: [name] (host)`, with the kind's suffix, none on Collections or Favorites, when the
-   Steam Library setting distinguishes collection types). The narrow tab says neither;
-3. one line with the fuzzy search and Enable all / Disable all;
-4. a table drawn with § Tables' shared one — Collection, Owner, ROMs, In Steam, Sync on Collections and Smart
-   collections, and Collection, ROMs, In Steam, Sync on Franchises and IGDB collections, which have no owner. Owner
-   reads _you_ or the owner's RomM user name. Collections that are on sit above those that are off, and the order is
-   frozen while the page is open, as on Platforms. The 50-row render cap stays; in practice only the autogenerated kinds
-   reach it.
+   collection named after it — `RomM: [name] (host)`, with the kind's suffix when the Steam Library setting
+   distinguishes collection types. The sentence quotes the suffixes as the sync writes them today (below);
+3. one line with the fuzzy search and Enable all / Disable all, as flat buttons;
+4. a table under § Tables' shared header — Collection, Owner, ROMs, In Steam, Sync on Collections and Smart collections,
+   and Collection, ROMs, In Steam, Sync on Franchises and IGDB collections, which have no owner. Each row is a toggle
+   whose label holds the cells, so A switches the collection and the row is reachable through its switch. Owner reads
+   _you_ where the collection is the reader's own and the owner's RomM user name otherwise, a dash where the listing
+   carried none. Before the plugin knows the user's id every collection reads as the reader's own, so Owner reads _you_
+   on all of them until it does. In Steam reads the count, and a dash where it is absent, which is unknown rather than
+   zero. Collections that are on sit above those that are off, and the order is frozen while the page is open, as on
+   Platforms. The 50-row render cap stays, with a line under the last row saying how many more there are; in practice
+   only the autogenerated kinds reach it.
 
-The Favorites pane has no table: the sentence and the game count. What the Favorites row does when the listing holds
-more than one favorites collection is left for the build: today the tab then disables its favorites toggle and lists
-them all under Standard, and another user's public favorites collection is enough to cause it.
+The Favorites pane has no table: the sentence and the game count, or why the row is greyed.
 
 **In Steam counts how many of a collection's ROMs are already in Steam** (CONTEXT.md → Reachable). It costs no RomM
 request of its own. RomM's collection listings carry each collection's member ROM ids, on all three kinds, and the count
@@ -1480,9 +1506,9 @@ recorded — until a sync fills that in. ROMs minus In Steam is still only rough
 collection on adds, because several new versions of one game become one shortcut. The same listings carry the owner's
 user name on standard and smart collections, which is what the Owner column shows. `get_collections` forwards both —
 `in_steam_count` on all three kinds, absent when Tender could not read its own record, and `owner_username` on standard
-and smart, `null` where the listing lacks the field — and the member ids do not cross the wire. The page does not show
-either yet. It costs the four RomM requests `get_collections` makes — one each for standard and smart, and one for each
-of the two virtual types the plugin syncs — and one read of Tender's own database after them.
+and smart, `null` where the listing lacks the field — and the member ids do not cross the wire. It costs the four RomM
+requests `get_collections` makes — one each for standard and smart, and one for each of the two virtual types the plugin
+syncs — and one read of Tender's own database after them.
 
 **Those two columns are why a kind is the pane and a collection a row.** A pane per collection would show the owner and
 how many of its ROMs are already in Steam, and both fit as a column of the kind's table, so such a pane spends the whole
@@ -1490,10 +1516,14 @@ detail on what one row already says.
 
 **Enable all / Disable all ask first whenever no search narrows the list, on every kind** — Franchises and IGDB
 collections included, which a confirmation reserved for a whole RomM kind would otherwise leave unasked now that each is
-half of the virtual kind. Where a search narrows the list they write every collection the search leaves, those past the
-50-row render cap included, in one batch. The standard write leaves the favorites collection out, and with Other users'
-collections off no write reaches a collection of another user. On Franchises and on IGDB collections they write that
-type alone.
+half of the virtual kind. **They write exactly the collections the table lists, in one batch** (`save_collections_sync`
+over their ids): with a search, every collection the search leaves, those past the 50-row render cap included; with
+none, the whole table. So on Franchises and on IGDB collections they write that type alone, the Favorites row's
+collection is left out of the Collections write, and with Other users' collections off no write reaches a collection of
+another user. The whole-kind write (`set_all_collections_sync`) is no longer used by the page: it re-fetches the kind
+from RomM and stamps what it finds, which is both virtual types at once, every user's collections whatever the owner
+toggle says, and no favorites collection at all — including another user's public one, which this page lists as an
+ordinary collection. None of those is the set the reader was shown.
 
 **The kinds' names come from the words listed above wherever a reader meets them** — this page, the Steam names the
 `by_label` naming mode builds (CONTEXT.md → Collection naming mode), the description of the Steam Library setting that
@@ -1501,12 +1531,13 @@ turns that mode on, and the user guide. Under `by_label` a standard collection c
 carries `(Smart)`, a franchise `(Franchise)` and an IGDB collection `(IGDB Collection)`, each a short singular of its
 row's name; a virtual collection of no known type carries `(Autogenerated)`, its group heading's word as it stands.
 `(IGDB Collection)` keeps its capital because Steam tells collections apart without regard to case, and Tender finds an
-existing one the same way, so a change of case alone would not rename a collection that already exists. Today the
-suffixes read `(Standard)`, `(Smart)`, `(Franchise)`, `(IGDB Collection)` and `(Virtual)`.
+existing one the same way, so a change of case alone would not rename a collection that already exists. **That change is
+not made yet**: the suffixes still read `(Standard)`, `(Smart)`, `(Franchise)`, `(IGDB Collection)` and `(Virtual)` — a
+favorites collection is a standard one and takes `(Standard)` — and each pane's sentence quotes them as they are.
 [steam-non-steam-shortcuts.md](steam-non-steam-shortcuts.md) § Collection naming mode lists the four a known type gets
 and requires them to match the frontend's collection-type words, and the code and tests around
 `domain/collection_label.py` say the same; against the page's new plural words a singular suffix, or none, cannot meet
-that requirement, so the build replaces it wherever it is stated with the rule stated here. It also rewords the
+that requirement, so the change replaces it wherever it is stated with the rule stated here. It also rewords the
 "different types stay separate" claim wherever it is made, since it no longer holds without exception: CONTEXT.md →
 Collection naming mode, the user guide, the Steam Library setting's description, and the backend and frontend comments,
 docstrings and test docstrings that repeat it. They word it more than one way ("stay separate", "land in separate Steam
@@ -1516,17 +1547,20 @@ and merge into one; that is accepted, since it takes a name spelling out another
 and replacing `(Virtual)` renames those Steam collections in a `by_label` library; that is accepted, and the old-named
 ones must not be left behind. The keys on the wire and in `settings.json` stay `standard` / `smart` / `virtual`.
 
-**A failed read is answered, and asked again** (#1020). Today the tab marks its collections read as done before the
-fetch and never clears the mark, so one transient failure leaves the error card up for as long as the page is open, and
-the card says "Check your connection" whatever the backend answered. The card states the backend's message, and leaving
-the tab and coming back asks again.
+**A failed read is answered, and asked again** (#1020). Where `get_collections` fails, every pane states the backend's
+message in place of its table — or a sentence of its own where the failure carried none — with a line saying that
+leaving the tab and coming back asks again, and the kind rows state a dash. Entering the tab asks again for a read that
+failed, and for the owner toggle's setting where that read failed; a read that answered is kept, with its frozen order,
+for as long as the page is open, and a read still out is not asked twice. While the collections read is out the list and
+the owner toggle are already standing, and each pane shows a spinner where its table goes.
 
-**The four writes are optimistic, and this is already so on the tab as it stands.** A row's toggle, the whole-kind
-Enable all / Disable all, the batch write a search narrows them to, and the owner scope each answer a refusal the way
-the Platforms list does. The control goes back where it was and a line says why, taken back by the next collection write
-that succeeds and by leaving the view it is about. On the narrow tab that line sits under Enable all / Disable all, and
-entering the tab and switching kind both reset it along with the search and the filter; where it sits on the new page,
-and what resets it there, the build decides.
+**The four writes are optimistic** — a table row's switch, the Favorites switch, Enable all / Disable all, and the owner
+toggle. Each answers a refusal or a rejection the way the Platforms list does: the control goes back where it was, and a
+line says why **where the write was made, and only then**, taking no space otherwise. A refused owner toggle or
+Favorites switch is reported in the list column, under the owner toggle; a refused table switch or Enable all / Disable
+all in the pane, under the search line. Each line is taken back by the next write in the same place that succeeds. The
+pane's line also goes when another kind is selected, and both go when the tab is entered again. Selecting another kind
+also clears the search, since a search is about the kind it was typed on.
 
 ## Settings
 
@@ -1725,8 +1759,9 @@ The pages land in this order under #1808, each with the open work that already s
    and the Data Management platform modal retire. Carries #164, #1803's column, #1016's frontend half, #1020's
    collections fix. Lands as two PRs, Platforms then Collections. Second on purpose: the emu-atlas work under #1735
    renders its BIOS and core changes into the new Platforms detail instead of the retired System page. **Platforms has
-   landed**; Collections keeps the narrow page's controls and list until its own PR
-   ([#1833](https://github.com/danielcopper/romm-tender/issues/1833)), which makes it list and detail over the kinds.
+   landed, and so has Collections** as list and detail over the kinds
+   ([#1833](https://github.com/danielcopper/romm-tender/issues/1833)); the Steam-name suffixes that follow the kinds'
+   new names are that issue's remaining part.
 3. **Sync** ([#1814](https://github.com/danielcopper/romm-tender/issues/1814)) — the new page, Main's reduction to
    status rows and one conditional slot, Skip preview persisted, the run-list read, the per-platform preview breakdown.
    Carries #886's presentation half. **Landed**, in two PRs: the backend half, then the page and Main's reduction. The
@@ -1763,8 +1798,9 @@ store screenshots (#830) are taken after.
   layouts at the Deck's real size: one wide table under a strip of filters, a collection per pane (the Platforms shape),
   and the kinds as the list with each kind's collections as a table in its pane. The third is what this page describes,
   and the section above says why the second lost. Its closing list settles what that section states: the owner toggle's
-  wording, the kind names, the In Steam and Owner columns, when Enable all asks first, the order and #1020's fix. Like
-  the studies below it is a record of a choice, not a description of the page.
+  wording, the kind names, the In Steam and Owner columns, when Enable all asks first, the order and #1020's fix. It
+  draws In Steam as _all_ where every ROM is already in Steam; the page prints the count. Like the studies below it is a
+  record of a choice, not a description of the page.
 - The layout study Main's navigation was chosen from: [main-layouts.html](../assets/main-layouts.html) — four layouts at
   the panel's real 348 px (status as the card, the menu as the card, menu first, and the chosen one), each drawn quiet
   and with a preview waiting; a closing **Heute** section shows Main as it stood when the study was drawn, and its own

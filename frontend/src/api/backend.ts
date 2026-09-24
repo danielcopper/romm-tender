@@ -395,9 +395,11 @@ export const getCollections = callable<
 export const saveCollectionSync = callable<[string, CollectionKind, boolean], { success: boolean; message?: string }>(
   "save_collection_sync",
 );
-// Batch stamp for a bounded, filtered subset of collections (search / per-type
-// filter active). The whole-kind Enable/Disable All keeps setAllCollectionsSync
-// so a huge id list never crosses the wire.
+// One settings write stamping exactly these ids into one kind's bucket — what
+// the Collections tab's Enable all / Disable all send, since they write the set
+// the table shows. The whole-kind write below re-fetches the kind from RomM and
+// stamps what it finds instead, so the panel does not call it; it is declared
+// because the backend still offers it (scripts/check_callable_manifest.py).
 export const saveCollectionsSync = callable<
   [string[], CollectionKind, boolean],
   { success: boolean; reason?: string; message?: string }

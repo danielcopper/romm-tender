@@ -4,8 +4,9 @@
 // `usePlatformsPage` only exist together — the tab renders what the hook holds
 // and the detail acts through it — so they are exercised as one here rather
 // than against a hand-built state object, which would pin the seam instead of
-// the behaviour. The frame around the two tabs, and the Collections tab, are in
-// `frontend/src/bigpicture/LibraryPage.test.tsx`.
+// the behaviour. The frame around the two tabs is in
+// `frontend/src/bigpicture/LibraryPage.test.tsx`, the Collections tab in
+// `CollectionsTab.test.tsx` beside this file.
 //
 // CATCH-REJECTION ASSERTION RULE: every catch with a state side effect is
 // asserted through what the user then sees — the reverted toggle, the surfaced
