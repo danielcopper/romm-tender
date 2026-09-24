@@ -281,11 +281,11 @@ export interface RegistryPlatform {
   /**
    * How many of the platform's ROMs are reachable from Steam: every member of a
    * sibling group that holds a binding, because one shortcut serves the whole
-   * group and the game's page switches versions across it. The two need not
-   * agree; a group with no binding contributes to neither number, which is
-   * exactly a partly-synced platform. A version the platform's last completed fetch did not return is
-   * excluded: the picker refuses a switch to it, so no reader reaches it. It is
-   * therefore not bounded by `count` either — a BOUND row the fetch did not
+   * group and the game's page switches versions across it. It need not equal
+   * `count`, and a group with no binding raises neither. A version the
+   * platform's last completed fetch did not return is excluded: the picker
+   * refuses a switch to it, so no reader reaches it. It is therefore not
+   * bounded below by `count` — a BOUND row the fetch did not
    * return raises `count` without raising this, so a pane can read fewer here
    * than it has shortcuts.
    *
