@@ -33,7 +33,6 @@ import type { CoreInfo, FirmwarePlatformExt, PlatformSyncSetting, SystemCoreInfo
 // below renders that tab beside the pane to compare what the two say.
 vi.mock("../../utils/scrollHelpers", () => ({
   scrollToTop: vi.fn(),
-  scrollElementToTop: vi.fn(),
   scrollFocusedToCenter: vi.fn(),
 }));
 vi.mock("../../utils/steamShortcuts", () => ({
