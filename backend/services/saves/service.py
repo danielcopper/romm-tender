@@ -315,14 +315,15 @@ class SaveService:
         """Record the installed ROMs' answered save directories, once per database.
 
         The first start after the record existed has no record for any game, so
-        a directory that moved before its next sync would be taken for a first
-        sight and its files left behind. This pass closes that: it asks the
-        resolver about each installed ROM, serially, and records the answer
-        where nothing is recorded yet and the follow would act on it. The
-        ``kv_config`` marker is written only once the pass finished over a
-        detected emulator installation with no ROM failing, so a pass cut short
-        by a shutdown, one with nothing to ask yet, or one in which a ROM
-        failed runs again; recording where nothing is recorded is safe to repeat.
+        a directory that moved before the plugin next touched that game's saves
+        would be taken for a first sight and its files left behind. This pass
+        closes that: it asks the resolver about each installed ROM, serially,
+        and records the answer where nothing is recorded yet and the follow
+        would act on it. The ``kv_config`` marker is written only once the pass
+        finished over a detected emulator installation with no ROM failing, so
+        a pass cut short by a shutdown, one with nothing to ask yet, or one in
+        which a ROM failed runs again; recording where nothing is recorded is
+        safe to repeat.
         """
         if await self._loop.run_in_executor(None, self._kv_marker_set, _KV_SAVE_DIRECTORIES_RECORDED):
             return
