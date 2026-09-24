@@ -21,9 +21,9 @@ Two hard properties follow, and they define the entire coverage envelope:
 1. **The filename must be the ROM stem.** A file named anything else — a fixed card name (`pcsx-card2.mcd`,
    `vmu_save_A1.bin`), or a name with a slot/unit infix (`game.1.mcr`) — is never probed.
 2. **The file must live in the directory the answer names.** That directory is the emulator's own answer too, so a
-   per-emulator subfolder is looked in exactly when the emulator writes there. A save the answer places next to the ROM,
-   as a file beside it (read off the answer's `root_kind`), is never synced; one inside the ROM file is the
-   inside-content refusal below.
+   per-emulator subfolder is looked in exactly when the emulator writes there. A save the answer places next to the ROM
+   (read off the answer's `root_kind`) is never synced: a per-game file set there gets the content-directory skip, and
+   any other answer anchored there its own refusal below.
 
 The explicit removed-game cleanup starts with this exact-path projection and adds path-safe filenames already persisted
 for that ROM in `RomSaveSyncState.files`. This is an identity-backed exception to the filename rule, not directory

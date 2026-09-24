@@ -64,7 +64,7 @@ The principle has three parts:
    service method, and the service is responsible for asking each one at the right parser. Do not invent a
    parser-of-parsers to hide the choice.
 
-### Worked example: ES-DE label vs RetroArch corename
+### Worked example: ES-DE label vs RetroArch library name
 
 The concrete case that motivated this principle, and the bug in
 [#208](https://github.com/danielcopper/romm-tender/issues/208):
@@ -75,24 +75,23 @@ The concrete case that motivated this principle, and the bug in
 - RetroArch, when `sort_savefiles_enable = true`, writes saves into subdirectories named by the **`library_name`** the
   core itself reports through `retro_get_system_info` — e.g. `"Snes9x"` (`runloop.c:8822-8888`, as the vendored
   resolver's `placement.py` cites it). It is set by the core's maintainer and baked into RetroArch's runtime path logic.
-  The plugin used to take that name from the `corename` field of the core's `.info` file instead.
 
 These two values **are not redundant representations of the same thing**. They answer different questions at different
 layers:
 
-| Core            | ES-DE label        | RetroArch `corename` |
-| --------------- | ------------------ | -------------------- |
-| Snes9x          | `Snes9x - Current` | `Snes9x`             |
-| mGBA            | `mGBA`             | `mGBA`               |
-| Beetle PSX HW   | `Beetle PSX HW`    | `Beetle PSX HW`      |
-| SwanStation     | `SwanStation`      | `SwanStation`        |
-| Genesis Plus GX | `Genesis Plus GX`  | `Genesis Plus GX`    |
+| Core            | ES-DE label        | RetroArch `library_name` |
+| --------------- | ------------------ | ------------------------ |
+| Snes9x          | `Snes9x - Current` | `Snes9x`                 |
+| mGBA            | `mGBA`             | `mGBA`                   |
+| Beetle PSX HW   | `Beetle PSX HW`    | `Beetle PSX HW`          |
+| SwanStation     | `SwanStation`      | `SwanStation`            |
+| Genesis Plus GX | `Genesis Plus GX`  | `Genesis Plus GX`        |
 
 Four out of five happen to match textually. Snes9x does not — ES-DE added `" - Current"` to disambiguate from the older
 `Snes9x 2010` variant. The match is **incidental**, not structural. Future cores, future ES-DE redesigns, and future
 RetroDECK re-labelings will introduce new mismatches.
 
-Reconciling by whitelist — a table of "ES-DE label → RetroArch corename" mappings — would be a perpetual maintenance
+Reconciling by whitelist — a table of "ES-DE label → RetroArch library name" mappings — would be a perpetual maintenance
 burden. Every new core, every label change, every RetroDECK release shifts the table. The correct answer is to not
 reconcile at all: when you need the save directory name, ask RetroArch; when you need the UI label, ask ES-DE. The
 lookup is O(1) per source, caching is local, and drift is impossible because neither parser pretends to speak for the
@@ -342,9 +341,9 @@ consumers, not about that code.
 
 [#208](https://github.com/danielcopper/romm-tender/issues/208) introduced the `RetroArchCoreInfoAdapter` precisely to
 fix the "ES-DE label leaks into RetroArch save path" bug described in the
-[Worked example](#worked-example-es-de-label-vs-retroarch-corename) above. That PR correctly updated `MigrationService`
-to ask ES-DE which core is active and then ask the RetroArch `.info` parser for the canonical `corename`. The parser was
-written, the protocol was defined, and the migration flow was fixed.
+[Worked example](#worked-example-es-de-label-vs-retroarch-library-name) above. That PR correctly updated
+`MigrationService` to ask ES-DE which core is active and then ask the RetroArch `.info` parser for the canonical
+`corename`. The parser was written, the protocol was defined, and the migration flow was fixed.
 
 It was not until PR #227 had already merged, during live testing on hardware, that the second shoe dropped:
 `SaveService._get_rom_save_info` — which every save-sync flow on every game launch routes through — was still calling

@@ -820,20 +820,21 @@ slot switch, the slot-choice migration and conflict resolution refuse with `save
 
 An answer anchored in the directory of the ROM itself says so through its `root_kind` (`content_directory`). RetroArch's
 **Write Saves to Content Directory** is the usual cause, not the only one: RetroArch reaches the same root through
-`systemfiles_in_content_dir` too. Where the save is a file **beside** the content, the plugin keeps save sync off for
-that ROM whatever the answer's state is — syncing saves beside the content is a separate decision this one does not
-make. A save written **inside** the content file (`inside_content` — PUAE on an `.adf`, Hatari on a `.st`) sits in the
-same directory and is not this case: `SaveAnswer.in_content_directory` leaves it out, and it gets its own save-shape
-refusal and its own explanation on the status read. The single-ROM sync entry points return the benign skip
-(`{success: false, reason: "savefiles_in_content_dir", …}` — the game still launches, no error); the whole-library sweep
-passes such a ROM over inside its run and, where every ROM it read saves beside its content, returns the same skip, or
-otherwise counts the ROMs it held back in its message. A sweep that read no ROM at all, because none has a confirmed
-slot, asks the resolver about the first installed ROM (in `rom_id` order) that launches with a RetroArch core, and
-returns the skip where that one saves beside its content; with no such ROM it reports as before. The secondary write
-callables (rollback, slot switch, conflict resolve, slot-choice migration, copy to slot) refuse with the same reason.
-`get_save_status` carries the additive `savefiles_in_content_dir: true` flag, so the game-detail play section shows a
-banner saying the saves are written beside the game file, and naming RetroArch's setting only as the usual cause — only
-while save sync is enabled, since the banner is about getting save sync to work.
+`systemfiles_in_content_dir` too, and a core's own recorded behaviour can anchor it there whatever RetroArch is set to —
+EasyRPG writes its save slots beside the game's files. Where the answer names a per-game file set a sync could otherwise
+carry, the plugin keeps save sync off for that ROM — syncing saves beside the content is a separate decision this one
+does not make. Every other answer anchored there (a save **inside** the content file — PUAE on an `.adf`, Hatari on a
+`.st` — writes discarded, nothing named) is not this case: `SaveAnswer.in_content_directory` reads the syncable rule
+itself, so such an answer gets its own save-shape refusal and its own explanation on the status read. The single-ROM
+sync entry points return the benign skip (`{success: false, reason: "savefiles_in_content_dir", …}` — the game still
+launches, no error); the whole-library sweep passes such a ROM over inside its run and, where every ROM it read saves
+beside its content, returns the same skip, or otherwise counts the ROMs it held back in its message. A sweep that read
+no ROM at all, because none has a confirmed slot, asks the resolver about the first installed ROM (in `rom_id` order)
+that launches with a RetroArch core, and returns the skip where that one saves beside its content; with no such ROM it
+reports as before. The secondary write callables (rollback, slot switch, conflict resolve, slot-choice migration, copy
+to slot) refuse with the same reason. `get_save_status` carries the additive `savefiles_in_content_dir: true` flag, so
+the game-detail play section shows a banner saying the saves are written beside the game file, and naming RetroArch's
+setting only as the usual cause — only while save sync is enabled, since the banner is about getting save sync to work.
 
 **Why this is easy to confuse**: "Write Saves to **Content Directory**" controls the **destination** (next to the ROM vs
 the saves directory), while "Sort Saves **Into Folders by Content Directory**" controls the **layout within** the saves
@@ -879,13 +880,17 @@ live reading the caller already took, before the caller looks at any local file:
   step for a ROM whose slot is confirmed — after the gates each checks first (save sync switched off; a pending
   RetroDECK home migration; `post_exit_sync`'s own setting; the sweep's device check and its confirmed-slot filter) and
   before the refusal that reads the same answer, so a game whose save the plugin cannot sync is still followed;
-- by the five write paths that touch local saves — `switch_slot`, `rollback_to_version`, `copy_save_to_slot`,
-  `confirm_slot_choice` with migration, and `resolve_sync_conflict` — so that, for one, `switch_slot`'s pending-changes
-  guard looks where the files are after a sort flip.
+- by the five write paths — `switch_slot`, `rollback_to_version`, `copy_save_to_slot`, `confirm_slot_choice` with
+  migration, and `resolve_sync_conflict` — so that, for one, `switch_slot`'s pending-changes guard looks where the files
+  are after a sort flip;
+- by the two deletes and the two reads that count local saves — `delete_local_saves`, `delete_platform_saves`,
+  `count_platform_saves` and `get_save_status` (for an installed ROM) — so a delete after a sort flip takes the old
+  folder's files too, and nothing is carried back in by the next sync.
 
-It does nothing while save sync is off: with save sync off the plugin leaves save files alone, and a changed sort
-setting is followed once it is on again. A failure — a listing refused, the database busy — is logged and leaves the
-record as it was; the operation that called it goes on. Against the record:
+The follow belongs to the sync, so it does nothing while save sync is off; a sorting change made meanwhile is followed
+once save sync is on again, for a game whose directory was recorded. (Other things move save files regardless of the
+setting: the RetroDECK home migration and the adoption rename.) A failure — a listing refused, the database busy — is
+logged and leaves the record as it was; the operation that called it goes on. Against the record:
 
 - an answer with no directory, or one anchored in the content's own directory (beside the content file or inside it) →
   nothing moves and nothing is recorded;
@@ -911,10 +916,11 @@ reading.
 (`SaveService.record_save_directories_once`, started from `main.py`, cancelled at unload) walks the installed ROMs one
 at a time under each ROM's lock and records today's answer where none is recorded — subject to the first rule above. The
 `save_directories_recorded` marker in `kv_config` makes it one-time. It is written only once the pass has finished over
-a detected emulator installation: a pass cut short, or one that found no installation to ask, runs again at the next
-start. A save-sort migration left pending by an older version cannot be followed: nothing records the directory its
-files are still in. Saves that were synced can be downloaded again at the game's next sync; a save that exists only on
-the device stays in the old folder.
+a detected emulator installation with no ROM failing: a pass cut short, one that found no installation to ask, or one in
+which a ROM's recording failed (logged, and the pass goes on to the rest) runs again at the next start. A save-sort
+migration left pending by an older version cannot be followed: nothing records the directory its files are still in.
+Saves that were synced can be downloaded again at the game's next sync; a save that exists only on the device stays in
+the old folder.
 
 ### Relationship to `retrodeck_path_migration`
 
@@ -925,10 +931,12 @@ home's saves root rather than any game's answer. Once it has run, including with
 each installed ROM's record with the resolver's answer from the new home, and drops the record where that answer is one
 the follow does not act on (`SaveService.rerecord_save_directories`, reached through a late binding). So the follow
 finds the record equal to the answer, or finds none and records a first sight: with `skip`, the copy left in the old
-home stays there and is never carried over the one the user kept. The migration gate reports the migration as still
-pending until that re-record has finished, although the run clears its markers before it, so no sync meets a record
-still naming the old home. See [RetroDECK Path Migration](../user-guide/retrodeck-path-migration.md) for the user-facing
-side.
+home stays there and is never carried over the one the user kept. The migration gate and `get_migration_status` report
+the migration as still pending until that re-record has finished, although the run clears its markers before it, so no
+sync meets a record still naming the old home. Two limits: the re-record deletes nothing while no emulator installation
+is detected, and a ROM whose re-record fails keeps its old record (the failure is logged, the rest are recorded), so for
+that ROM the next sync can still follow the copy left in the old home. See
+[RetroDECK Path Migration](../user-guide/retrodeck-path-migration.md) for the user-facing side.
 
 ### Detecting a home change
 

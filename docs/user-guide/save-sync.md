@@ -291,13 +291,15 @@ On a fresh RetroDECK install the first row is what you have.
 ### When you change the sorting
 
 RetroArch does not move existing saves when you change these settings, so after a change your saves sit in a folder it
-no longer reads. The plugin notices the next time it touches that game's saves — at launch; at exit, when **Sync after
-exit** is on; when you sync the game by hand; before a slot switch, a restore of an older version, or a copy to another
-slot; or, for games whose save slot you have set up, when you use **Sync All Saves Now** — and moves that game's save
-files into the new folder first. There is nothing to confirm and no notice to act on; each game follows on its own.
+no longer reads. The plugin notices the next time it touches that game's saves — at launch, when the server can be
+reached; at exit, when **Sync after exit** is on; when you sync the game by hand; when the game page shows its saves;
+before a slot switch, a restore of an older version, a copy to another slot or a conflict resolution; before **Delete
+Local Saves**; or, for games whose save slot you have set up, when you use **Sync All Saves Now** — and moves that
+game's save files into the new folder first. There is nothing to confirm and no notice to act on; each game follows on
+its own.
 
-With save sync off, Tender neither syncs nor moves save files. A sorting change made while it is off is followed once
-save sync is on again, at each game's next sync.
+Following a game's saves into the new folder is part of save sync: with save sync off, neither happens. A sorting change
+made while it is off is followed once save sync is on again, the next time the plugin touches that game's saves.
 
 If the new folder already holds a file with the same name, nothing is overwritten: the older of the two copies is moved
 into a `.romm-backup` folder beside it, and the newer one is kept where RetroArch looks.
@@ -308,7 +310,7 @@ When a game's saves are written beside the game file instead of in the saves fol
 **Write Saves to Content Directory** is on — save sync stays off for that game. The game still launches, and the game
 page says why its saves are not synced. Turning that setting on moves no save into the game's folder, and turning it
 back off finds the saves where they were. A save the emulator writes into the game file itself (an Amiga `.adf`, an
-Atari ST `.st`) is a different case: the game page says so instead.
+Atari ST `.st`) is a different case, and syncing that game by hand says so.
 
 ### Updating from a version with the save-sorting migration
 

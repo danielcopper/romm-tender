@@ -707,10 +707,10 @@ It replaced a per-system extension table the plugin maintained by hand. Its **di
 adoption rename and the [directory follow](#answered-save-directory) look; an answer with no directory is never given
 one by a guess.
 
-The answer also says which anchor that directory hangs off (`root_kind`). A save written as a file **beside the game's
-content** is read off it (RetroArch's "Write Saves to Content Directory" is the usual cause), and save sync stays off
-for that ROM whatever its state says. A save written **inside** the content file is anchored there too, and is not this
-case: it is the **inside the content** state below.
+The answer also says which anchor that directory hangs off (`root_kind`). Where an answer that would otherwise be
+syncable is anchored **beside the game's content** (RetroArch's "Write Saves to Content Directory" is the usual cause),
+save sync stays off for that ROM. Any other answer anchored there — a save **inside** the content file, writes discarded
+— refuses for its own reason, by the **save state** below.
 
 An answer is about one **ROM** and one **emulator**, never a platform (see
 [Save scope](#save-scope-per-rom-and-per-emulator-never-per-platform)), and it names the files, their directory, their

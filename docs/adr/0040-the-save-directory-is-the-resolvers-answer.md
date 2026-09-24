@@ -31,21 +31,22 @@ computing the old path from the old flags.
 
 **1. The save directory is the resolver's.** `get_rom_save_info`'s `saves_dir` is `SaveAnswer.directory`, and nothing is
 joined onto it; a sync, a probe, the adoption rename and the directory follow all use it. An answer with no directory is
-never given one: each reader takes its existing refusal or skip. Saves written as a file beside the content are read off
-the answer's `root_kind` rather than off `retroarch.cfg`, and stay gated off, now per ROM. A save written inside the
-content file is anchored in the same directory and keeps its own save-shape refusal, as before. The adoption rename asks
-the resolver for the save and the savestate directory of both launch paths; the new one need not exist.
+never given one: each reader takes its existing refusal or skip. Saves beside the content are read off the answer's
+`root_kind` rather than off `retroarch.cfg`, and stay gated off, now per ROM — but only an answer that would otherwise
+be syncable is refused for sitting there; any other answer anchored there keeps its own save-shape refusal, as before.
+The adoption rename asks the resolver for the save and the savestate directory of both launch paths; the new one need
+not exist.
 
 **2. A moved directory is followed per game, from a recorded answer.** A table of its own, `answered_save_directories`,
 holds the directory the resolver last answered for each ROM. It is compared with today's answer and read as the source
-of the move, never where a sync or a probe looks. At the sync entry points, and on the write paths that touch local
-saves, before either looks at a local file, today's answer is compared with it: nothing recorded — record it; the same —
-nothing; different — move the game's files from the recorded directory to the answered one, then record the new one. An
-answer anchored in the content's directory is neither followed nor recorded. A name present in both directories is never
-overwritten: the older copy goes through the save-backup funnel. A one-time background pass on the first start records
-the answer for each installed ROM that has no record yet, and the RetroDECK home migration replaces each installed ROM's
-record with today's answer once it has moved the files, or drops the record where that answer cannot be followed. The
-mechanics are in
+of the move, never where a sync or a probe looks. At the sync entry points, the five write paths, the two deletes and
+the two reads that count local saves — each before it looks at a local file — today's answer is compared with it:
+nothing recorded — record it; the same — nothing; different — move the game's files from the recorded directory to the
+answered one, then record the new one. An answer anchored in the content's directory is neither followed nor recorded. A
+name present in both directories is never overwritten: the older copy goes through the save-backup funnel. A one-time
+background pass on the first start records the answer for each installed ROM that has no record yet, and the RetroDECK
+home migration replaces each installed ROM's record with today's answer once it has moved the files, or drops the record
+where that answer cannot be followed. The mechanics are in
 [Following a moved save directory](../architecture/save-file-sync-architecture.md#following-a-moved-save-directory).
 
 **3. What went.** `resolve_save_dir`, `domain/save_layout.py`, `adapters/retroarch_config.py`, the save-sort migrator
