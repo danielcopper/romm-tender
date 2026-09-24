@@ -419,6 +419,31 @@ describe("VersionHistoryPanel", () => {
       );
     });
 
+    it.each([
+      {
+        result: {
+          status: "unsupported" as const,
+          reason: "save_shape_unsupported",
+          message: "Save sync is unavailable: this emulator writes saves inside the game file itself.",
+        },
+        body: "Save sync is unavailable: this emulator writes saves inside the game file itself.",
+      },
+      {
+        result: { status: "unsupported" as const, reason: "savefiles_in_content_dir" },
+        body: "Save sync is off for this game: its saves are written beside the game file.",
+      },
+    ])("a refusal with reason $result.reason toasts its own explanation", async ({ result, body }) => {
+      vi.mocked(backend.savesRollbackToVersion).mockResolvedValue(result);
+      const { getByText } = await expand();
+      fireEvent.click(getByText("Restore"));
+      await flushAsync();
+      await flushAsync();
+      expect(vi.mocked(toaster.toast)).toHaveBeenCalledWith(expect.objectContaining({ body }));
+      expect(vi.mocked(toaster.toast)).not.toHaveBeenCalledWith(
+        expect.objectContaining({ body: "Version history requires RomM 4.7+" }),
+      );
+    });
+
     it("swallows thrown errors from the rollback call (logged via debugLog, no toast)", async () => {
       vi.mocked(backend.savesRollbackToVersion).mockRejectedValue(new Error("boom"));
       const { getByText } = await expand();

@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
+from domain.save_answer import save_shape_message, unestablished_answer
 from lib.errors import RommNotFoundError
 from tests.services.saves._helpers import (
     _create_save,
@@ -360,7 +361,11 @@ class TestCopySaveToSlotRefusals:
 
         result = await svc.copy_save_to_slot(42, 50, TARGET)
 
-        assert result == {"status": "unsupported", "reason": "save_shape_unsupported"}
+        assert result == {
+            "status": "unsupported",
+            "reason": "save_shape_unsupported",
+            "message": save_shape_message(unestablished_answer()),
+        }
         assert not any(c[0] in ("upload_save", "download_save_content", "list_saves") for c in fake.call_log)
 
     @pytest.mark.asyncio

@@ -69,11 +69,7 @@ async function handleResult(result: CopySaveToSlotStatus, target: string, romId:
       showToast("ROM is no longer installed locally. Reinstall and try again.");
       return;
     case "unsupported":
-      showToast(
-        result.reason === "savefiles_in_content_dir"
-          ? "Save sync is off for this game (RetroArch writes saves next to the ROM)."
-          : "Copying isn't available for multi-file saves yet.",
-      );
+      showToast(unsupportedCopyMessage(result));
       return;
     case "not_configured":
       showToast("Set up save slots for this game first, then copy.");
@@ -85,6 +81,17 @@ async function handleResult(result: CopySaveToSlotStatus, target: string, romId:
       showToast("Enter a valid slot name.");
       return;
   }
+}
+
+/** The toast for a copy refused as unsupported — the backend's own explanation where it gave one. */
+function unsupportedCopyMessage(result: Extract<CopySaveToSlotStatus, { status: "unsupported" }>): string {
+  if (result.reason === "savefiles_in_content_dir") {
+    return "Save sync is off for this game: its saves are written beside the game file.";
+  }
+  if (result.reason === "save_shape_unsupported" && result.message) {
+    return result.message;
+  }
+  return "Copying isn't available for multi-file saves yet.";
 }
 
 /** Returns an opener `openCopyModal(saveId, sourceSlot)` for the copy-to-slot flow. */

@@ -175,7 +175,14 @@ export interface SlotSavesResponse {
 
 export interface SwitchSlotResponse {
   success: boolean;
-  reason?: "pending_uploads" | "server_unreachable" | "sync_disabled" | "not_installed" | "switch_incomplete";
+  reason?:
+    | "pending_uploads"
+    | "server_unreachable"
+    | "sync_disabled"
+    | "not_installed"
+    | "switch_incomplete"
+    | "savefiles_in_content_dir"
+    | "save_shape_unsupported";
   message?: string;
   files?: string[];
   save_status?: SaveStatus;
@@ -263,7 +270,10 @@ export type RollbackStatus =
   | { status: "ok" }
   | { status: "rom_not_installed" }
   | { status: "version_deleted" }
-  | { status: "unsupported" }
+  // ``reason`` names why where the save is not one a sync carries — beside the
+  // game file, or refused for its shape with that answer's own ``message``; a
+  // multi-file slot carries neither.
+  | { status: "unsupported"; reason?: string; message?: string }
   | { status: "server_unreachable"; message: string }
   // The server ANSWERED 404 — no such ROM or device id. Distinct from
   // `server_unreachable` (retryable) and `version_deleted` (one save missing
@@ -290,7 +300,7 @@ export type CopySaveToSlotStatus =
   | { status: "invalid_slot_name" }
   | { status: "rom_not_installed" }
   | { status: "version_deleted" }
-  | { status: "unsupported"; reason?: string }
+  | { status: "unsupported"; reason?: string; message?: string }
   | { status: "server_unreachable"; message: string }
   // See RollbackStatus — the server answered, it just has no such entry.
   | { status: "not_found"; message: string }

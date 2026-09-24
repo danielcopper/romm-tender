@@ -203,6 +203,10 @@ export const SlotPanel: FC<SlotPanelProps> = ({
           msg = "Can't switch — RomM server is not reachable";
         } else if (result.reason === "not_installed") {
           msg = "Can't switch — download the game first";
+        } else if (result.reason === "savefiles_in_content_dir") {
+          msg = "Can't switch — this game's saves are written beside the game file";
+        } else if (result.reason === "save_shape_unsupported" && result.message) {
+          msg = result.message;
         }
         setSwitchError(msg);
         if (switchErrorTimerRef.current) clearTimeout(switchErrorTimerRef.current);

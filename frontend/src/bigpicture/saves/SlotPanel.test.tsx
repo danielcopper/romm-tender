@@ -413,6 +413,40 @@ describe("SlotPanel", () => {
       }
     });
 
+    it.each([
+      {
+        reason: "save_shape_unsupported" as const,
+        message: "Save sync is unavailable: this emulator writes saves inside the game file itself.",
+        shown: "Save sync is unavailable: this emulator writes saves inside the game file itself.",
+      },
+      {
+        reason: "savefiles_in_content_dir" as const,
+        message: "anything",
+        shown: "Can't switch — this game's saves are written beside the game file",
+      },
+    ])("a $reason refusal shows its own explanation, not the generic failure", async ({ reason, message, shown }) => {
+      vi.useFakeTimers();
+      try {
+        vi.mocked(backend.getSlotSaves).mockResolvedValue({ success: true, slot: "default", saves: [] });
+        vi.mocked(backend.switchSlot).mockResolvedValue({ success: false, reason, message });
+
+        const { container, getByText } = render(<SlotPanel {...defaultProps()} />);
+        fireEvent.click(container.querySelector("button")!);
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        fireEvent.click(getByText("Activate Slot"));
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(0);
+          await vi.advanceTimersByTimeAsync(0);
+        });
+        expect(container.textContent).toContain(shown);
+        expect(container.textContent).not.toContain("Failed to switch slot");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("auto-clears the switchError after 5 seconds", async () => {
       vi.useFakeTimers();
       try {

@@ -549,12 +549,20 @@ class TestAWritePathRefusesWhatASyncWouldNotCarry:
             ),
             pytest.param(
                 lambda svc: svc.copy_save_to_slot(42, 100, "other"),
-                lambda result: result == {"status": "unsupported", "reason": SAVE_SHAPE_UNSUPPORTED_REASON},
+                lambda result: (
+                    result["status"] == "unsupported"
+                    and result["reason"] == SAVE_SHAPE_UNSUPPORTED_REASON
+                    and "inside the game file" in result["message"]
+                ),
                 id="copy-to-slot",
             ),
             pytest.param(
                 lambda svc: svc.rollback_to_version(42, "default", 100),
-                lambda result: result == {"status": "unsupported", "reason": SAVE_SHAPE_UNSUPPORTED_REASON},
+                lambda result: (
+                    result["status"] == "unsupported"
+                    and result["reason"] == SAVE_SHAPE_UNSUPPORTED_REASON
+                    and "inside the game file" in result["message"]
+                ),
                 id="rollback",
             ),
             pytest.param(

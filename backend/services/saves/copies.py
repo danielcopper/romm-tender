@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from domain.rom_save_sync_state import RomSaveSyncState
-from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON, SAVE_SYNC_CONTENT_DIR_REASON
+from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON, SAVE_SYNC_CONTENT_DIR_REASON, save_shape_message
 from domain.save_slot import save_in_slot
 from domain.save_status import compute_multi_file_slot
 from lib.errors import RommConflictError, RommNotFoundError
@@ -318,7 +318,11 @@ class SaveCopyService:
             # own folder.
             if info["save_answer"].sync_directory is None:
                 self._log_debug(f"copy_save_to_slot: rom {rom_id} has no save a sync could carry; refusing")
-                return {"status": "unsupported", "reason": SAVE_SHAPE_UNSUPPORTED_REASON}
+                return {
+                    "status": "unsupported",
+                    "reason": SAVE_SHAPE_UNSUPPORTED_REASON,
+                    "message": save_shape_message(info["save_answer"]),
+                }
 
             core_so = await self._loop.run_in_executor(None, self._resolve_core, rom_id)
             default_slot = resolve_default_slot(self._settings)
