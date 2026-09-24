@@ -5,8 +5,8 @@ used to interleave into one round-trip: end-of-session playtime
 record, fire-and-forget achievement refresh, post-exit save sync, and
 the migration-state refresh. Returns a typed ``SessionFinalizeResult``
 carrying the playtime delta plus the per-direction transfer counts and
-the migration-status payloads the frontend feeds into its in-memory
-stores. The playtime-display update (Steam's ``appStore`` mutation)
+the migration-status payload the frontend feeds into its in-memory
+store. The playtime-display update (Steam's ``appStore`` mutation)
 stays on the frontend because it touches Steam IPC; everything else
 about the end-of-session flow is now a backend decision.
 
@@ -85,7 +85,7 @@ class SessionFinalizeSyncResult:
 
 @dataclass(frozen=True)
 class SessionFinalizeMigration:
-    """Migration-status payloads returned from ``MigrationService.refresh_state``.
+    """The migration-status payload returned from ``MigrationService.refresh_state``.
 
     Repacked into a typed aggregate so the frontend feeds it into its
     dedicated store (``migrationStore``) without re-deriving it from a loose
@@ -105,7 +105,7 @@ class SessionFinalizeResult:
     present; its fields encode whatever action the frontend still
     needs to take (toast, event dispatch). ``migration`` is ``None``
     when the migration-state refresh raised — the frontend then leaves
-    the migration stores untouched (any stale ``pending`` badge keeps
+    the migration store untouched (any stale ``pending`` badge keeps
     showing) and logs the failure backend-side. When the refresh
     succeeds, ``migration`` carries the typed status payload the frontend
     feeds into its store.
@@ -221,7 +221,7 @@ class SessionLifecycleService:
             ``failure_toast`` / ``conflicts_toast`` strings, and the raw
             offline / success flags the frontend still needs for the
             ``romm_data_changed`` event dispatch. ``migration`` carries
-            the two migration-status payloads.
+            the RetroDECK home migration's status payload.
         """
         total_seconds = await self._record_playtime(rom_id)
         self._schedule_achievement_sync(rom_id)
@@ -366,7 +366,7 @@ class SessionLifecycleService:
         """Re-detect migration state and return its typed status.
 
         Returns ``None`` on refresh failure (exception or non-dict
-        payload) — the frontend then leaves the migration stores
+        payload) — the frontend then leaves the migration store
         untouched (any stale ``pending`` badge keeps showing) and the
         failure is logged backend-side.
         """

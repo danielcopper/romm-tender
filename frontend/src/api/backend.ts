@@ -1207,9 +1207,8 @@ export interface SessionFinalizeResult {
   total_seconds: number | null;
   sync: SessionFinalizeSyncResult;
   // ``null`` when the backend's migration-state refresh raised — the
-  // frontend then leaves the migration stores untouched (any stale
-  // ``pending`` badge keeps showing), matching the pre-PR behavior
-  // where ``refreshMigrationState().catch`` logged without clearing.
+  // frontend then leaves the migration store untouched: a failed refresh
+  // must not clear a stale ``pending`` badge it could not re-check.
   migration: SessionFinalizeMigration | null;
 }
 
