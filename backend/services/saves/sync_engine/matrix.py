@@ -439,7 +439,7 @@ class MatrixExecutor:
         :class:`DeviceNotRegisteredError` (which states why) before any server
         call. The raise reaches every caller's error funnel (the sync dispatch's
         per-file errors, rollback / version-switch surfaced failures) so the
-        file is reported, not silently misfiled.
+        file is reported rather than uploaded without its device.
         """
         if not device_id:
             raise DeviceNotRegisteredError(DEVICE_NOT_REGISTERED)

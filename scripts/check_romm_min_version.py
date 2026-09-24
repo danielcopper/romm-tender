@@ -6,8 +6,6 @@ it is the floor ``test_connection()`` rejects servers against, so the plugin is
 inert below it. Several places restate that number for humans — a badge, the
 requirements list, the trap note in CLAUDE.md — and a restated number drifts.
 
-The constant is read with ``ast``.
-
 Frozen history is deliberately out of scope: ADRs record the floor as it stood
 when the decision was taken and must not be rewritten.
 
