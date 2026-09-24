@@ -1,8 +1,4 @@
-"""Standalone HTTP client for the RomM API.
-
-All external dependencies (settings, code_dir, logger) are injected via the
-constructor.
-"""
+"""Standalone HTTP client for the RomM API."""
 
 import base64
 import json
@@ -113,11 +109,10 @@ class RommHttpAdapter:
     def load_platform_map(self) -> dict[str, str]:
         """Load the platform slug -> RetroDECK system mapping from ``defaults/config.json``.
 
-        Degrades to an empty map on a missing or corrupt config.json — the same
-        default-safe direction every other config reader here takes — so
+        Degrades to an empty map on a missing or corrupt config.json, so
         ``resolve_system`` falls back to its verbatim pass-through (ADR-0010 §5)
-        instead of raising into callers, several of which (the synchronous
-        game-detail builder) have no surrounding guard.
+        instead of raising into callers such as the synchronous game-detail
+        builder, which guards that call against a path-traversal refusal only.
         """
         config_path = os.path.join(self._code_dir, "defaults", "config.json")
         try:
