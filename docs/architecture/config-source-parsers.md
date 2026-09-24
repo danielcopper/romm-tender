@@ -397,12 +397,12 @@ fix the save-sort migration bug. But `.info` files contain much more, and the pa
 The following unlocks are natural follow-ups; each should land in its own issue and its own PR so we can pace them
 against real need rather than speculatively building ahead.
 
-| Capability                    | `.info` field(s)       | Replaces today's                                                        | Value                                                                                       |
-| ----------------------------- | ---------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Per-core supported extensions | `supported_extensions` | ES-DE's per-system `<extension>` list, read off the installed catalogue | Narrows the accept-list to the core that launches rather than every core the system offers. |
-| Core switching validation     | `supported_extensions` | (no check today)                                                        | Prevent assigning a core to a system whose ROM extensions it can't load.                    |
-| DAT/database identification   | `database`             | (no use today)                                                          | Match ROM headers against the right datfile for integrity checks.                           |
-| Core display names            | `display_name`         | ES-DE label only                                                        | Secondary source when an ES-DE label is unavailable (rare); never used to override ES-DE.   |
+| Capability                    | `.info` field(s)       | Replaces today's                                                        | Value                                                                                                     |
+| ----------------------------- | ---------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Per-core supported extensions | `supported_extensions` | ES-DE's per-system `<extension>` list, read off the installed catalogue | Narrows the accept-list to the core that launches rather than the list ES-DE writes for the whole system. |
+| Core switching validation     | `supported_extensions` | (no check today)                                                        | Prevent assigning a core to a system whose ROM extensions it can't load.                                  |
+| DAT/database identification   | `database`             | (no use today)                                                          | Match ROM headers against the right datfile for integrity checks.                                         |
+| Core display names            | `display_name`         | ES-DE label only                                                        | Secondary source when an ES-DE label is unavailable (rare); never used to override ES-DE.                 |
 
 Per-core **firmware requirements** used to head that list — the same `.info` fields (`firmware_count`,
 `firmware<N>_desc`, `firmware<N>_path`, `firmware<N>_opt`) against the manual BIOS registry in `FirmwareService`. It is

@@ -1030,9 +1030,9 @@ class TestPlatformMap:
         A wrong path fails in silence: the map degrades to ``{}`` and every slug
         passes through verbatim, so only a slug the shipped file maps to a
         different name can tell the two apart. The directory comes from
-        ``resolve_directories`` over ``main``'s own fallback — the checkout rung,
-        which an installed start reaches through ``TENDER_CODE_DIR`` instead —
-        rather than from the test setup.
+        ``resolve_directories`` over ``main``'s own fallback — the checkout rung;
+        an installed start takes ``TENDER_CODE_DIR`` instead — rather than from
+        the test setup.
         """
         import logging
 
