@@ -20,12 +20,12 @@ one of the files below. Most update automatically (Renovate); a few are pinned b
 A handful of **toolchain** versions appear in more than one file, because each tool reads its own config location and
 all copies must agree:
 
-| Tool           | Appears in                                               | Must match because                                                 |
-| -------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
-| `pnpm`         | `mise.toml` + `frontend/package.json` `packageManager`   | the package manager you run must be one version                    |
-| `python`       | `mise.toml` + workflow `setup-python` + `pyproject.toml` | the Python SteamOS ships; Tender runs on the system interpreter    |
-| `uv`           | `mise.toml` + workflow `setup-uv`                        | the local resolver must equal the lock author (reproducible locks) |
-| `node`, `deno` | `mise.toml` + workflows                                  | local == CI                                                        |
+| Tool           | Appears in                                                                            | Must match because                                                                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm`         | `mise.toml` + `frontend/package.json` `packageManager`                                | the package manager you run must be one version                                                                                                                                     |
+| `python`       | `mise.toml` + workflow `setup-python` + `pyproject.toml` + `sonar-project.properties` | Tender runs on the system interpreter, and SteamOS ships Python 3.13: 3.13.1 in SteamOS 3.7 and 3.13.5 in 3.8, the current stable (Valve's package mirror, `core-3.7` / `core-3.8`) |
+| `uv`           | `mise.toml` + workflow `setup-uv`                                                     | the local resolver must equal the lock author (reproducible locks)                                                                                                                  |
+| `node`, `deno` | `mise.toml` + workflows                                                               | local == CI                                                                                                                                                                         |
 
 These are the only real duplicates, and **Renovate is configured to never touch them** (excluded by dependency name in
 `renovate.json`). So a bot can't bump one copy and desync the rest — they only move when **you** move them, together.
