@@ -618,7 +618,7 @@ Format: **invariant** — tier — enforced by.
   around it, so `--fix` can rewrite it in place — and fails both when a named statement says another number and when it
   no longer matches at all, because a regex that silently stopped matching would read as a claim that holds. **What it
   cannot see is a restatement nobody added to that list**: a new page stating the floor is unchecked until its sentence
-  is listed there. The examples beside the listed statements split three ways. The ones above the floor (`5.3.1-beta`,
+  is listed there. The worked examples of the floor split three ways. The ones above the floor (`5.3.1-beta`,
   `5.4.0-alpha.1`) are unchecked, because no equality test fits them, and a floor raise makes them false, so they are
   rewritten by hand. The ones at the floor (`5.3.0-beta.1`, `5.3.0-alpha.1`) are listed and checked where a page calls
   them the floor's own tags, as both save-sync pages do. The conditional one in the ConnectionService notes of
