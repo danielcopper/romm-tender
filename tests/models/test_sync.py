@@ -1,8 +1,9 @@
 """Tests for the RomM Device Sync wire schemas (models/sync.py).
 
-These TypedDicts mirror the live 4.9.2 OpenAPI; the checks pin the field set
-of each wire shape (a typo'd or dropped key would break negotiate parity) and
-confirm they stay plain dicts at runtime.
+These TypedDicts mirror RomM's schemas (read at 5.3.0), less the one response
+field nothing reads; the checks pin the field set of each wire shape (a typo'd
+or dropped key would break negotiate parity) and confirm they stay plain dicts
+at runtime.
 """
 
 from __future__ import annotations

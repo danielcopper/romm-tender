@@ -37,7 +37,7 @@ floor with `reason: "version_error"`.
 | `/api/devices`                                           | POST   | Register a device. Accepts hostname, platform, client info. Returns `device_id` (UUID).                                                                                                                                                                                                                |
 | `/api/devices/{id}`                                      | DELETE | Remove a device registration. Returns 204 No Content. PATCH (rename) is not supported (405).                                                                                                                                                                                                           |
 | `/api/saves/delete`                                      | POST   | Bulk delete saves by ID. Body: `{"saves": [id1, id2, ...]}`. Returns result dict.                                                                                                                                                                                                                      |
-| `/api/sync/negotiate`                                    | POST   | Open a 4.9 sync session. Body: `{device_id, saves: ClientSaveState[]}`. Returns `{session_id, operations[], total_*}` — the server's `upload`/`download`/`conflict`/`no_op` verdicts (+ a `reason`). Detects but never resolves; opening cancels this device's prior sessions.                         |
+| `/api/sync/negotiate`                                    | POST   | Open a Device Sync session. Body: `{device_id, saves: ClientSaveState[]}`. Returns `{session_id, operations[], total_*}` — the server's `upload`/`download`/`conflict`/`no_op` verdicts (+ a `reason`). Detects but never resolves; opening cancels this device's prior sessions.                      |
 | `/api/sync/sessions/{id}/complete`                       | POST   | Close a negotiated session. Body: `{operations_completed, operations_failed}`. Returns `{session}`.                                                                                                                                                                                                    |
 | `/api/play-sessions`                                     | POST   | Ingest a batch (max 100) of `{rom_id, start_time, end_time, duration_ms}` under a top-level `device_id`. Additive per-device union; dedup on `(user_id, device_id, rom_id, start_time)`. Playtime, decoupled from save-sync ([ADR-0018](../adr/0018-native-play-session-tracking-additive-ingest.md)). |
 | `/api/play-sessions?rom_id={id}`                         | GET    | List a ROM's stored play sessions (needs the `roms.user.read` scope). Summed by `duration_ms` for the reconcile `max()`; degrades to local-only without the scope.                                                                                                                                     |
@@ -1073,9 +1073,9 @@ navigation between the buttons uses `Focusable` with `flow-children="right"` for
 
 ## Server Capabilities
 
-The capabilities system (`get_server_capabilities` callable) has been removed. Since the plugin now requires RomM >=
-5.3.0, all features (device sync, version history, slot deletion, device management) are unconditionally available. The
-frontend no longer fetches or checks capability flags.
+The capabilities system (`get_server_capabilities` callable) has been removed. Every RomM the plugin accepts has device
+sync, version history, slot deletion and device management, so all of them are unconditionally available. The frontend
+no longer fetches or checks capability flags.
 
 ## Conflict Resolution
 
@@ -1393,17 +1393,16 @@ backstop for its automatic-upload conflict path (see
 
 ### POST and PUT both upsert the calling device's sync row
 
-Re-verified against RomM 4.9.0 / 4.9.1 / 4.9.2 / 5.0.0: both `POST /api/saves` (`add_save`) and `PUT /api/saves/{id}`
-(`update_save`) bump `save.updated_at` to the server's NOW **and** upsert the calling device's
-`device_save_sync.last_synced_at = updated_at`. The POST additionally builds its response **after** that upsert, so the
-body's `device_syncs` shows us `is_current = true` (equality counts) the moment it returns. Whether the PUT response
-body carries `device_syncs` the same way is **unverified** — the skip logic is fail-open either way: a response that
-proves us current skips the ack, anything else (including a bare PUT body) still sends the idempotent ack.
+Read in RomM's source at 5.3.0: both `POST /api/saves` (`add_save`) and `PUT /api/saves/{id}` (`update_save`) bump
+`save.updated_at` to the server's NOW **and** upsert the calling device's
+`device_save_sync.last_synced_at = updated_at`. Both build their response **after** that upsert, so the body's
+`device_syncs` shows us `is_current = true` (equality counts) the moment it returns. The skip logic is fail-open
+regardless: a response that proves us current skips the ack, anything else (including a bare body) still sends the
+idempotent ack.
 
 This makes the dedicated `POST /api/saves/{id}/downloaded` ack **redundant on the normal upload path** — the sync engine
 skips it when the upload response already shows this device `is_current` (`_confirm_upload_sync`, #1458), saving one
-round-trip per uploaded file. The historical `v4.8.1` note claiming the PUT did **not** upsert the sync row is obsolete:
-no supported server predates 4.9.0.
+round-trip per uploaded file.
 
 **The one exception — `add_save`'s content-dedup early-return.** A named-slot `overwrite=false` POST whose content hash
 matches an existing save in the slot returns that pre-existing save **before** the `device_save_sync` upsert (a stale
@@ -2020,8 +2019,8 @@ argument.
 
 ## Native play-session ingest (ADR-0018)
 
-Playtime uses RomM 4.9's first-party play-session store, not a storage hack. Two round-trips, both best-effort and off
-the hot path:
+Playtime uses RomM's first-party play-session store (since 4.9.0), not a storage hack. Two round-trips, both best-effort
+and off the hot path:
 
 - **Ingest (`POST /api/play-sessions`).** On game-exit the closed session `(rom_id, start_time, end_time, duration_ms)`
   is enqueued into the `rom_playtime_sessions` outbox and POSTed under this device's `device_id` (batch, max 100). The
@@ -2093,11 +2092,11 @@ saves". Offering to switch a core off its shared card is separate work, tracked 
 
 ### No aggregate playtime field in RomM (yet)
 
-RomM 4.9 stores raw play-session rows and renders `last_played`, but has **no aggregate playtime number** and no
-frontend playtime surface yet. The plugin's local `Playtime` total is therefore still the display read-model; the native
-store is forward-compatible with a future RomM playtime UI (#903). Under the no-backfill cutover (option B1) the server
-under-reports the true historical total until it re-accumulates — `max()` protects the local display; a
-synthetic-session backfill is deferred to #868. See
+RomM (read at 5.3.0) stores raw play-session rows and renders `last_played`, but exposes **no aggregate playtime
+number** and has no frontend playtime surface — it sums sessions internally only to rank recommendations. The plugin's
+local `Playtime` total is therefore still the display read-model; the native store is forward-compatible with a future
+RomM playtime UI (#903). Under the no-backfill cutover (option B1) the server under-reports the true historical total
+until it re-accumulates — `max()` protects the local display; a synthetic-session backfill is deferred to #868. See
 [Native play-session ingest (ADR-0018)](#native-play-session-ingest-adr-0018) above.
 
 ### Emulator save states not synced

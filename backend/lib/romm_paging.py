@@ -11,7 +11,7 @@ lives here in ``lib``, importable by both.
 from __future__ import annotations
 
 # RomM's list endpoint bounds ``limit`` at ``Query(50, ge=1, le=10_000)``
-# (the same at the 5.3.0 floor), so a page of 500 is well within range.
+# (read at 5.3.0), so a page of 500 is well within range.
 # Fetch cost is dominated by per-request overhead, not payload size, so a large
 # page collapses a multi-thousand-ROM library into a handful of requests — one
 # request for a typical platform, seven for a ~3000-ROM one.

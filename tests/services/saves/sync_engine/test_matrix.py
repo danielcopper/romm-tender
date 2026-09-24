@@ -591,9 +591,6 @@ class TestConfirmDownloadAfterSync:
     def test_do_upload_save_refuses_without_device_id(self, tmp_path):
         """No registered device → upload is refused before any server call (#1478).
 
-        A missing device_id can no longer disable device sync (RomM >= 4.9 makes
-        registration the norm). Uploading without it would drop the slot field and
-        misfile a named-slot save into the legacy (slot:null) bucket, so
         ``do_upload_save`` raises ``DeviceNotRegisteredError`` before
         ``upload_save`` — neither the upload nor the confirm round-trip is issued.
         """

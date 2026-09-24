@@ -179,8 +179,8 @@ class TestTestConnectionVersionGate:
         assert "5.3.0" in result["message"]
         assert "4.5.0" in result["message"]
 
-    def test_former_minimum_now_rejected(self, event_loop, romm_api, logger):
-        """4.9.0 (the former minimum) is below 5.3.0 — must now be rejected."""
+    def test_49_version_rejected(self, event_loop, romm_api, logger):
+        """4.9.0, below the 5.3.0 floor, is rejected."""
         settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
         romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.9.0"}}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)
@@ -188,7 +188,7 @@ class TestTestConnectionVersionGate:
         assert result["reason"] == "version_error"
 
     def test_prerelease_at_exact_floor_rejected(self, event_loop, romm_api, logger):
-        """5.3.0-beta ranks below 5.3.0 — pre-release tags at the floor are rejected."""
+        """5.3.0-beta.1 ranks below 5.3.0 — pre-release tags at the floor are rejected."""
         settings = {"romm_url": "http://romm.local", "romm_api_token": "rmm_token"}
         romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "5.3.0-beta.1"}}
         service = _make_service(settings=settings, romm_api=romm_api, loop=event_loop, logger=logger)

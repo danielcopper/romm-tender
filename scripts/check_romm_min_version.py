@@ -52,7 +52,7 @@ CLAIMS = [
 
 
 def enforced_version() -> str:
-    """The floor as ``main.py`` states it, e.g. ``4.9.0``."""
+    """The floor as ``main.py`` states it, e.g. ``5.3.0``."""
     tree = ast.parse(SOURCE.read_text(encoding="utf-8"), filename=str(SOURCE))
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign):

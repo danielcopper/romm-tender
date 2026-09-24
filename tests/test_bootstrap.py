@@ -48,6 +48,7 @@ from adapters.steam_config import SteamConfigAdapter
 from domain.app_directories import AppDirectories
 from domain.identity import PACKAGE_NAME, VERSION
 from domain.save_layout import InSaveDir
+from main import Plugin
 from services.achievements import AchievementsService
 from services.cores import CoreService
 from services.data_inventory import DataInventoryService
@@ -258,7 +259,7 @@ class TestTheCacheRootAndTheDataRootStayApart:
                     machine_id_provider=result.runtime_adapters.machine_id_provider,
                 ),
                 callbacks=result.callbacks,
-                min_required_version=(4, 9, 0),
+                min_required_version=Plugin._MIN_REQUIRED_VERSION,
                 directories=directories,
                 launcher=result.launcher,
             )
@@ -430,7 +431,7 @@ class TestWireServices:
             "sleeper": FakeSleeper(),
             "hostname_provider": FakeHostnameReader(),
             "machine_id_provider": FakeMachineIdReader(),
-            "min_required_version": (4, 9, 0),
+            "min_required_version": Plugin._MIN_REQUIRED_VERSION,
             "retrodeck_paths": FakeRetroDeckPaths(
                 saves=str(tmp_path / "saves"),
                 roms=str(tmp_path / "retrodeck" / "roms"),

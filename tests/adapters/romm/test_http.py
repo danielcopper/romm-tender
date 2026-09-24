@@ -1697,8 +1697,8 @@ class TestVersionDetection:
         assert result["success"] is True
 
     @pytest.mark.asyncio
-    async def test_former_minimum_now_rejected(self, plugin):
-        """RomM 4.9.0 (the former minimum) is below 5.3.0 and is now rejected."""
+    async def test_49_version_rejected(self, plugin):
+        """RomM 4.9.0, below the 5.3.0 floor, is rejected."""
         _setup_plugin(plugin)
         plugin.loop = asyncio.get_running_loop()
         plugin._romm_api.heartbeat.return_value = {"SYSTEM": {"VERSION": "4.9.0"}}

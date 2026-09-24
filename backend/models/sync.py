@@ -1,12 +1,14 @@
-"""TypedDicts for RomM's 4.9 Device Sync (negotiate) wire protocol.
+"""TypedDicts for RomM's Device Sync (negotiate) wire protocol.
 
 The dict shapes exchanged with ``POST /api/sync/negotiate`` and
 ``POST /api/sync/sessions/{id}/complete``: the client's per-save inventory
 (``ClientSaveState``), the server's planned operations (``SyncOperation`` /
-``SyncNegotiateResponse``), and the session-completion records. Mirrors the
-shipped RomM 4.9.2 OpenAPI schema field-for-field — required keys are plain,
-server-optional / nullable keys are ``NotRequired[... | None]``. Runtime dicts;
-these describe the wire contract without changing their identity.
+``SyncNegotiateResponse``), and the session-completion records. Mirrors
+RomM's schemas (read at 5.3.0) field for field, except that
+``SyncCompleteResponse`` leaves out the server's ``play_session_ingest``, which
+nothing here reads — required keys are plain, server-optional / nullable keys
+are ``NotRequired[... | None]``. Runtime dicts; these describe the wire
+contract without changing their identity.
 
 Note (ADR-0017): ``negotiate`` is kept only as a session **transport**. The
 save-sync engine reads its response solely for ``session_id`` (the session

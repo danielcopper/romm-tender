@@ -1,4 +1,4 @@
-"""RomM API adapter — requires RomM >= 5.3.0.
+"""RomM API adapter.
 
 Single adapter covering the full RomM REST surface. All methods map
 directly to HTTP endpoints via RommHttpAdapter.
@@ -59,7 +59,7 @@ _PAIRING_CODE_ENDPOINT = "/api/client-tokens/exchange"
 # code was minted for was deleted between pairing and exchange — distinct from the
 # invalid/expired/used-code 404, which the two share only by their FastAPI
 # ``detail`` string. Source string "Token no longer exists": RomM backend
-# ``client_tokens.py`` (verified against RomM 4.9.0 and 4.9.2). Matched by
+# ``utils/client_tokens.py`` (read at 5.3.0). Matched by
 # case-insensitive substring containment so a wording/casing/punctuation tweak on
 # the server doesn't silently reroute it to the invalid-code branch.
 _PAIRING_TOKEN_GONE_NEEDLE = "token no longer exists"
@@ -85,7 +85,7 @@ _TOKEN_SCOPES = [
 
 
 class RommApiAdapter:
-    """Concrete RomM API adapter for RomM >= 5.3.0."""
+    """Concrete RomM API adapter."""
 
     def __init__(self, client: RommHttpAdapter) -> None:
         self._client = client
