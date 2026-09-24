@@ -9,7 +9,7 @@ SQLite database whose tables back a set of Cosmic Python aggregates.
 The migration **and its teardown are complete**. The **enforcement infrastructure** (the decorator, the linters, and the
 type-check rule that keep aggregates honest, [#788](https://github.com/danielcopper/romm-tender/issues/788)), the full
 **aggregate set** (the 11 aggregate roots, their fields, and their mutation methods — 8 from #788 plus
-`PlatformSyncState` (ADR-0023), `CollectionSyncState` (#742) and `AnsweredSaveDirectory` (ADR-0040)), the **SQLite
+`PlatformSyncState` (ADR-0023), `CollectionSyncState` (#742) and `AnsweredSaveDirectory` (ADR-0041)), the **SQLite
 schema** (the migration framework + `001_initial.sql`,
 [#780](https://github.com/danielcopper/romm-tender/issues/780)/[#781](https://github.com/danielcopper/romm-tender/issues/781)),
 the per-aggregate **Repository Protocols** ([#782](https://github.com/danielcopper/romm-tender/issues/782)), and the
@@ -202,7 +202,7 @@ ones.
 ## The aggregate set
 
 Eleven aggregate roots model the persisted domain (eight from #788, plus `PlatformSyncState` added by ADR-0023,
-`CollectionSyncState` added by #742 and `AnsweredSaveDirectory` added by ADR-0040). Each lives in its own
+`CollectionSyncState` added by #742 and `AnsweredSaveDirectory` added by ADR-0041). Each lives in its own
 `domain/<name>.py` module, is declared with `@cosmic_aggregate`, and mutates only through verb-named methods. Per
 [ADR-0003](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0003-json-sqlite-persistence-boundary.md) the
 former `SyncSettings` knobs and `device_name` move to `settings.json`
@@ -625,7 +625,7 @@ a proven verdict, never the absence of one — the same reason the aggregate fie
 both default to launchable.
 
 `024_add_answered_save_directories.sql` (`user_version = 24`) creates `answered_save_directories` — one row per ROM, the
-save directory the resolver last answered for it ([ADR-0040](../adr/0040-the-save-directory-is-the-resolvers-answer.md);
+save directory the resolver last answered for it ([ADR-0041](../adr/0041-the-save-directory-is-the-resolvers-answer.md);
 what reads it is [Following a moved save directory](save-file-sync-architecture.md#following-a-moved-save-directory)).
 It is created empty: no value can be derived in DDL, because the answer is a live reading of the machine. It is a table
 of its own rather than a column on `rom_save_sync_states`, because it is recorded for games that were never synced and a

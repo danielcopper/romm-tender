@@ -3,7 +3,7 @@
 Compared with today's answer to notice that a game's save directory moved, and
 read only as the source of the move that follows (``services/saves/save_directory.py``);
 never where a sync or a probe looks. Why it is an aggregate of its own rather
-than a field of ``RomSaveSyncState`` is ADR-0040's.
+than a field of ``RomSaveSyncState`` is ADR-0041's.
 
 Keyed by ``rom_id``. A thin record built whole and upserted, so it carries a
 single ``record`` constructor and no verb-named mutators.

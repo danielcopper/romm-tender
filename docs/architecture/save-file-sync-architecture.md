@@ -868,12 +868,12 @@ The per-state picture, and which systems land where on a stock RetroDECK, is in
 
 RetroArch does not move existing saves when its sort settings change, so after a change the files sit where the old
 answer put them and the emulator looks elsewhere. The plugin follows them per game, by comparison rather than by
-computing where the old directory was ([ADR-0040](../adr/0040-the-save-directory-is-the-resolvers-answer.md)).
+computing where the old directory was ([ADR-0041](../adr/0041-the-save-directory-is-the-resolvers-answer.md)).
 
 **The record.** Each ROM's `AnsweredSaveDirectory` (`answered_save_directories`, keyed by `rom_id`) holds the directory
 the resolver last answered for its save. It is compared with today's answer and read as the source of the move below; it
 is never where a sync or a probe looks. Why it is a table of its own is
-[ADR-0040](../adr/0040-the-save-directory-is-the-resolvers-answer.md)'s.
+[ADR-0041](../adr/0041-the-save-directory-is-the-resolvers-answer.md)'s.
 
 **When it is compared.** `SyncEngine.follow_save_directory` (`services/saves/sync_engine/engine.py`, over
 `SaveDirectoryFollower.do_follow` in `services/saves/save_directory.py`) is called under the ROM's `rom_lock`, with the
