@@ -1007,6 +1007,26 @@ class TestMigrateRetroDeckFiles:
         assert await service.get_migration_status() == {"pending": False}
 
     @pytest.mark.asyncio
+    async def test_the_status_during_the_re_record_keeps_the_counts_the_run_started_with(self, plugin, tmp_path):
+        # Counted again after the move there is nothing left to move, and the
+        # blocked page would read "0 ROM(s), 0 BIOS, 0 save(s) to migrate".
+        self._conflicting_rom(plugin, tmp_path)
+        service = plugin._migration_service
+        before = await service.get_migration_status()
+        seen: list[dict[str, Any]] = []
+
+        class _Watching(RecordingSaveDirectories):
+            async def __call__(self) -> None:
+                seen.append(await service.get_migration_status())
+
+        service._save_directories = _Watching().provide
+
+        await plugin.migrate_retrodeck_files("skip")
+
+        assert before["roms_count"] == 1
+        assert seen == [before]
+
+    @pytest.mark.asyncio
     async def test_nothing_is_recorded_while_the_user_is_still_asked(self, plugin, tmp_path):
         self._conflicting_rom(plugin, tmp_path)
 

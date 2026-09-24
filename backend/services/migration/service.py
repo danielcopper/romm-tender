@@ -105,9 +105,10 @@ class MigrationService:
         # write as the relocations, before it re-records the save directories;
         # the gate has to hold until that has finished.
         self._migrations_in_flight = 0
-        # The move the latest run in flight is making, oldest pending home to
-        # the new one, so the status can still name it once the markers are gone.
-        self._move_in_flight: tuple[str, str] | None = None
+        # The status the latest run in flight started from — its move and its
+        # counts — so the status can still answer with it once the markers are
+        # gone and the files have moved.
+        self._status_in_flight: dict[str, Any] | None = None
 
     def _spawn_background_task(self, coro) -> asyncio.Task[Any]:
         """Schedule ``coro`` on the plugin loop and track the task for shutdown.
@@ -673,13 +674,15 @@ class MigrationService:
             return {"success": False, "reason": "no_migration_needed", "message": "No path migration needed"}
 
         self._migrations_in_flight += 1
-        self._move_in_flight = (pending[0], new_home)
         try:
+            self._status_in_flight = await self._loop.run_in_executor(
+                None, self._get_migration_status_io, pending, new_home
+            )
             return await self._run_migration(pending, new_home, conflict_strategy)
         finally:
             self._migrations_in_flight -= 1
             if not self._migrations_in_flight:
-                self._move_in_flight = None
+                self._status_in_flight = None
 
     async def _run_migration(self, pending, new_home, conflict_strategy):
         """Move the files, re-bake the shortcuts and re-record the save directories, in that order."""
@@ -763,7 +766,9 @@ class MigrationService:
         A run in flight is still pending after it has cleared the markers, until
         it has re-recorded the save directories — the same answer
         :meth:`is_retrodeck_migration_pending` gives — so the panel does not let
-        go of the migration while syncs are still held off.
+        go of the migration while syncs are still held off. It answers with the
+        status the run started from, counts included: counted again once the
+        files have moved, the migration would read as having nothing to move.
         """
         with self._uow_factory() as uow:
             stored_pending = self._read_pending_homes(uow)
@@ -772,9 +777,8 @@ class MigrationService:
         new_home = self._resolved_home(stored_home)
 
         if not pending or not new_home:
-            if self._move_in_flight is not None:
-                old_path, new_path = self._move_in_flight
-                return {"pending": True, "old_path": old_path, "new_path": new_path}
+            if self._status_in_flight is not None:
+                return dict(self._status_in_flight)
             return {"pending": False}
 
         return await self._loop.run_in_executor(None, self._get_migration_status_io, pending, new_home)
