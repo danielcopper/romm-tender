@@ -436,10 +436,15 @@ empty list means "nothing here wants anything" only when the emulator was asked;
 and reporting it as ready would be an all-clear over firmware nobody checked. The system keeps its place in the platform
 list for the same reason — dropping it would say there is nothing to manage.
 
-Three causes reach these shapes. A system whose launching emulator is a standalone one with no packaged card. A system
-whose launching RetroArch core ships without a description file; on a stock RetroDECK that is rare, since only a handful
-of bundled cores are in that state. And a configuration the plugin could not read at all, which leaves it unable to name
-the launching emulator in the first place.
+What reaches these shapes is the launching emulator not having been asked, and that has more than one cause:
+
+- a standalone emulator with no packaged card, or one whose card named no file
+- a RetroArch core that ships without a description file — on a stock RetroDECK that is rare, since only a handful of
+  bundled cores are in that state
+- an emulator whose declaration the plugin could not follow to a location
+- a launching emulator the plugin cannot name — a configuration it could not read at all leaves it unable to name one in
+  the first place
+- no answer at all: no emulator installation found to ask, or the question failing when it was put
 
 Under that headline the page names the emulator it could not get an answer out of — _Nothing could be established about
 what PCSX2 needs_ — and, where the plugin could not settle on an emulator to name for that system, says that instead:
