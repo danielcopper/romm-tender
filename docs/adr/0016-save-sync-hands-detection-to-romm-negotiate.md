@@ -2,6 +2,9 @@
 
 ## Status
 
+**Superseded in part by [ADR-0040](0040-1-0-raises-the-romm-floor-to-5-3.md): the RomM floor.** From 1.0 on
+`_MIN_REQUIRED_VERSION` is 5.3.0, not the 4.9.0 this record sets; the negotiate transport it adopts is unaffected.
+
 Proposed. Part of [#829](https://github.com/danielcopper/decky-romm-sync/issues/829) (evaluate adopting RomM's
 first-party Device Sync Protocol) and tracked for implementation by
 [#1234](https://github.com/danielcopper/decky-romm-sync/issues/1234). Auth prerequisite is

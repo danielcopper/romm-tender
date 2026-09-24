@@ -2,6 +2,9 @@
 
 ## Status
 
+**Superseded in part by [ADR-0040](0040-1-0-raises-the-romm-floor-to-5-3.md): the RomM floor.** From 1.0 on
+`_MIN_REQUIRED_VERSION` is 5.3.0, not the 4.9.0 this record says stands.
+
 Proposed. Part of [#1234](https://github.com/danielcopper/decky-romm-sync/issues/1234) (adopt RomM's Device Sync
 protocol); implements [#1276](https://github.com/danielcopper/decky-romm-sync/issues/1276) (save-sync conflict safety,
 Phase G). **Supersedes the detection-authority decision of

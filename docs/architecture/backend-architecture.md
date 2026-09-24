@@ -1420,7 +1420,8 @@ early exit so a concurrent `start_download` for the same rom is rejected rather 
 **The minimum-version gate is SemVer-aware on `SYSTEM.VERSION`.** `domain.version.meets_min_version` compares the
 numeric core against `_MIN_REQUIRED_VERSION`; when the core equals the floor, a `-alpha` / `-beta` suffix
 (case-insensitive, optional `.N` build number) ranks **below** the release and is rejected — so `5.3.0-beta.1` fails at
-floor `5.3.0` while `5.3.1-beta` passes. `development` and a missing version bypass the gate.
+floor `5.3.0` while `5.3.1-beta` passes. `development` and a missing version bypass the gate. Why the floor is 5.3.0
+when no code path needs more than 4.9.0 is [ADR-0040](../adr/0040-1-0-raises-the-romm-floor-to-5-3.md).
 
 **A Client API Token is bound to the server it was minted against.** When the token is minted, the canonical origin of
 `romm_url` (full `scheme://host[:port]`, default ports folded out, path/query dropped — `lib/url_host.normalize_origin`)
