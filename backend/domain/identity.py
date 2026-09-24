@@ -9,13 +9,15 @@ this program.
 - :data:`PACKAGE_NAME` is what a MACHINE reads about who is calling — the
   outgoing User-Agent, and the name of the recovery root a bundle is written
   into.
-- :data:`VERSION` is which RELEASE this is. Three consumers today, and the list
+- :data:`VERSION` is which RELEASE this is. Five consumers today, and the list
   is meant as one: the other half of that User-Agent, the ``plugin_version``
-  recorded in a recovery bundle's manifest, and the ``client_version`` a
-  registered device carries on the user's own RomM server
-  (``services/saves/service.py`` hands it to ``DeviceRegistry``). The first two
-  are reached from ``bootstrap/``; the third is not, which is why it is easy to
-  miss when reading the composition root alone.
+  recorded in a recovery bundle's manifest, the running version the update check
+  compares the newest release against, the ``client_version`` a registered
+  device carries on the user's own RomM server (``services/saves/service.py``
+  hands it to ``DeviceRegistry``), and the injection's crash-record fingerprint
+  (``main.py``). The first three are reached from ``bootstrap/``; the last two
+  are not, which is why they are easy to miss when reading the composition root
+  alone.
 
 The identifier — ``romm-tender`` — is kept in three separate places rather than
 one, because it answers three questions that have to stay free to disagree:

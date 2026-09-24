@@ -55,6 +55,7 @@ import { setDownloads } from "../utils/downloadStore";
 import { resetConnectionProbeForTests } from "../utils/connectionProbe";
 import { resetSyncStatsStoreForTests } from "../utils/syncStatsStore";
 import { setPlaytimeScopeState } from "../utils/playtimeScopeStore";
+import { resetUpdateNoticeStoreForTests, setUpdateNoticeState } from "../utils/updateNoticeStore";
 import { resetPendingPreviewStoreForTests, adoptPreview, clearPendingPreview } from "../utils/pendingPreviewStore";
 import * as syncManager from "../utils/syncManager";
 import * as connectionState from "../utils/connectionState";
@@ -339,6 +340,7 @@ describe("MainPage", () => {
     // that raises the condition would leave the notice standing over every test
     // after it.
     setPlaytimeScopeState({ pending: false });
+    resetUpdateNoticeStoreForTests();
 
     // Default backend mocks — tests override per case.
     vi.mocked(backend.refreshMigrationState).mockResolvedValue({
@@ -2568,6 +2570,29 @@ describe("MainPage", () => {
       expect(buttonByExactText(container, "Dismiss")).not.toBeNull();
       fireEvent.click(buttonByExactText(container, "Open Connections")!);
       expect(onNavigate).toHaveBeenCalledWith({ page: "settings", section: "connections" });
+    });
+
+    it("the update notice's Open Updates lands on Settings › Updates", async () => {
+      setUpdateNoticeState({
+        available: true,
+        newer: true,
+        latestVersion: "0.34.0",
+        currentVersion: "0.33.0",
+        enabled: true,
+        installedProgram: true,
+      });
+      const onNavigate = vi.fn();
+      const { container, getByTestId } = render(<MainPage onNavigate={onNavigate} />);
+      await flushAsync();
+      expect(getByTestId("update-notice").textContent).toContain("Tender 0.34.0 is available");
+      fireEvent.click(buttonByExactText(container, "Open Updates")!);
+      expect(onNavigate).toHaveBeenCalledWith({ page: "settings", section: "updates" });
+    });
+
+    it("shows no update notice while none is available", async () => {
+      const { queryByTestId } = render(<MainPage onNavigate={vi.fn()} />);
+      await flushAsync();
+      expect(queryByTestId("update-notice")).toBeNull();
     });
 
     it("clicking 'View All' (Downloads section) invokes onNavigate('downloads')", async () => {

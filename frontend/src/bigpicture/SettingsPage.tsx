@@ -1,5 +1,5 @@
 /**
- * The Settings page: five sections on the left, the focused section's controls
+ * The Settings page: six sections on the left, the focused section's controls
  * on the right.
  *
  * Every section's state and every handler lives here rather than in the section
@@ -48,6 +48,13 @@ import type {
 } from "../types";
 import { SETTINGS_SECTIONS } from "../types";
 import { detach } from "../utils/detach";
+import {
+  getUpdateNoticeState,
+  runUpdateCheckNow,
+  setUpdateCheckSwitch,
+  useUpdateNoticeState,
+  type UpdateCheckOutcome,
+} from "../utils/updateNoticeStore";
 import { trimServerUrl, isValidServerUrl } from "../utils/serverUrl";
 import { WidePage } from "./layout/WidePage";
 import { ListDetail, type ListDetailItem } from "./layout/ListDetail";
@@ -59,6 +66,7 @@ import { SaveSyncSection } from "./settings/SaveSyncSection";
 import { RegisteredDevicesSection } from "./settings/RegisteredDevicesSection";
 import { ControllerSection } from "./settings/ControllerSection";
 import { AdvancedSection } from "./settings/AdvancedSection";
+import { UpdatesSection } from "./settings/UpdatesSection";
 import { LibrarySection, AUTO_REGION, DEFAULT_REGION_LABEL } from "./settings/LibrarySection";
 import { showPreferredRegionModal } from "./settings/PreferredRegionModal";
 
@@ -86,7 +94,17 @@ const SECTION_LABELS: Record<SettingsSection, string> = {
   "save-sync": "Save Sync",
   controller: "Controller",
   "steam-library": "Steam Library",
+  updates: "Updates",
   advanced: "Advanced",
+};
+
+// What a Check now found, as the line under the button says it. A press a later
+// one overtook reports nothing, and leaves the line to the press that won.
+const CHECK_OUTCOME_LINES: Record<Exclude<UpdateCheckOutcome, "superseded">, (latest: string | null) => string> = {
+  found: (latest) => (latest === null ? "A newer release is available." : `Tender ${latest} is available.`),
+  none: () => "You have the newest release.",
+  unreachable: () => "GitHub could not be reached. Try again later.",
+  off: () => "The daily check is off, so nothing was asked.",
 };
 
 /** The list hands its ids back as plain strings; this is where one becomes a
@@ -130,6 +148,12 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
 
   // Advanced state
   const [logLevel, setLogLevel] = useState("warn");
+
+  // Updates state — the answer itself lives in the module store, which panel
+  // load fills and Main's notice reads too.
+  const update = useUpdateNoticeState();
+  const [checkingForUpdate, setCheckingForUpdate] = useState(false);
+  const [updateCheckResult, setUpdateCheckResult] = useState("");
 
   // Library state (preferred sibling-group region, ADR-0021)
   const [preferredRegion, setPreferredRegion] = useState(AUTO_REGION);
@@ -467,6 +491,30 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
     detach(saveLogLevel(level));
   };
 
+  // --- Updates handlers ---
+  const handleCheckForUpdateNow = async () => {
+    // Refused rather than queued, and in the handler rather than only on the
+    // button: a disabled control still reports a press on the device.
+    if (checkingForUpdate) return;
+    setCheckingForUpdate(true);
+    setUpdateCheckResult("");
+    try {
+      const outcome = await runUpdateCheckNow();
+      if (outcome !== "superseded") {
+        setUpdateCheckResult(CHECK_OUTCOME_LINES[outcome](getUpdateNoticeState().latestVersion));
+      }
+    } catch (e) {
+      logError(`Failed to check for updates: ${e}`);
+      setUpdateCheckResult("The check failed.");
+    } finally {
+      setCheckingForUpdate(false);
+    }
+  };
+  const handleUpdateCheckEnabledChange = (enabled: boolean) => {
+    setUpdateCheckResult("");
+    setUpdateCheckSwitch(enabled).catch((e) => logError(`Failed to save the update check switch: ${e}`));
+  };
+
   // --- Library handlers ---
   const regionLabel = (value: string) => (value === AUTO_REGION ? DEFAULT_REGION_LABEL : value);
 
@@ -596,6 +644,18 @@ export const SettingsPage: FC<SettingsPageProps> = ({ onBack, section }) => {
             onPlatformGroupsChange={handlePlatformGroupsChange}
             namingMode={namingMode}
             onNamingModeChange={handleNamingModeChange}
+          />
+        );
+      case "updates":
+        return (
+          <UpdatesSection
+            update={update}
+            checking={checkingForUpdate}
+            result={updateCheckResult}
+            onEnabledChange={handleUpdateCheckEnabledChange}
+            onCheckNow={() => {
+              detach(handleCheckForUpdateNow());
+            }}
           />
         );
       case "advanced":

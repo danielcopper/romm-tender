@@ -15,6 +15,7 @@ import type { RegisteredDevice, SettingsSection } from "../types";
 import { showModal } from "@decky/ui";
 import { toaster } from "../api/host";
 import { pendingEdits } from "./settings/TextInputModal";
+import { resetUpdateNoticeStoreForTests, setUpdateNoticeState } from "../utils/updateNoticeStore";
 
 // Type-only imports — vi.mock(...) below replaces the runtime implementations,
 // but capturing props off the real prop interfaces keeps assertions in sync as
@@ -25,6 +26,7 @@ import type { SaveSyncSection } from "./settings/SaveSyncSection";
 import type { RegisteredDevicesSection } from "./settings/RegisteredDevicesSection";
 import type { ControllerSection } from "./settings/ControllerSection";
 import type { AdvancedSection } from "./settings/AdvancedSection";
+import type { UpdatesSection } from "./settings/UpdatesSection";
 import type { LibrarySection } from "./settings/LibrarySection";
 import { showPreferredRegionModal } from "./settings/PreferredRegionModal";
 
@@ -34,6 +36,7 @@ type SaveSyncProps = ComponentProps<typeof SaveSyncSection>;
 type RegisteredDevicesProps = ComponentProps<typeof RegisteredDevicesSection>;
 type ControllerProps = ComponentProps<typeof ControllerSection>;
 type AdvancedProps = ComponentProps<typeof AdvancedSection>;
+type UpdatesProps = ComponentProps<typeof UpdatesSection>;
 type LibraryProps = ComponentProps<typeof LibrarySection>;
 
 // Captured props arrays — reset in beforeEach. Each child mock pushes the
@@ -45,6 +48,7 @@ const capturedSaveSync: SaveSyncProps[] = [];
 const capturedDevices: RegisteredDevicesProps[] = [];
 const capturedController: ControllerProps[] = [];
 const capturedAdvanced: AdvancedProps[] = [];
+const capturedUpdates: UpdatesProps[] = [];
 const capturedLibrary: LibraryProps[] = [];
 
 vi.mock("./settings/ConnectionSection", () => ({
@@ -81,6 +85,12 @@ vi.mock("./settings/AdvancedSection", () => ({
   AdvancedSection: (p: AdvancedProps) => {
     capturedAdvanced.push(p);
     return createElement("div", { "data-testid": "advanced-section" });
+  },
+}));
+vi.mock("./settings/UpdatesSection", () => ({
+  UpdatesSection: (p: UpdatesProps) => {
+    capturedUpdates.push(p);
+    return createElement("div", { "data-testid": "updates-section" });
   },
 }));
 vi.mock("./settings/LibrarySection", async (importOriginal) => {
@@ -213,6 +223,8 @@ describe("SettingsPage", () => {
     capturedDevices.length = 0;
     capturedController.length = 0;
     capturedAdvanced.length = 0;
+    capturedUpdates.length = 0;
+    resetUpdateNoticeStoreForTests();
     capturedLibrary.length = 0;
     for (const k of Object.keys(pendingEdits) as Array<keyof typeof pendingEdits>) {
       delete pendingEdits[k];
@@ -1772,11 +1784,11 @@ describe("SettingsPage", () => {
   });
 
   describe("the section list", () => {
-    it("shows exactly the five sections, in order", async () => {
+    it("shows exactly the six sections, in order", async () => {
       const { getAllByTestId } = renderPage();
       await flushAsync();
       const labels = getAllByTestId("field").map((el) => el.textContent);
-      expect(labels).toEqual(["Connections", "Save Sync", "Controller", "Steam Library", "Advanced"]);
+      expect(labels).toEqual(["Connections", "Save Sync", "Controller", "Steam Library", "Updates", "Advanced"]);
     });
 
     it("opens on the section a navigation names", async () => {
@@ -1802,6 +1814,19 @@ describe("SettingsPage", () => {
       await flushAsync();
 
       expect(getByTestId("settings-section-controller").closest(`[${ENTRY_STOP_ATTR}]`)).not.toBeNull();
+      expect(getByTestId("settings-section-connections").closest(`[${ENTRY_STOP_ATTR}]`)).toBeNull();
+    });
+
+    it("Main's update notice lands on Updates, and marks that row for entry focus", async () => {
+      // Updates is not the first row, which is the only way this pins the rule:
+      // a notice naming the first section would pass with the mark missing.
+      openOn = "updates";
+      const { getByTestId } = renderPage();
+      await flushAsync();
+
+      expect(capturedUpdates.length).toBeGreaterThan(0);
+      expect(capturedConnection).toHaveLength(0);
+      expect(getByTestId("settings-section-updates").closest(`[${ENTRY_STOP_ATTR}]`)).not.toBeNull();
       expect(getByTestId("settings-section-connections").closest(`[${ENTRY_STOP_ATTR}]`)).toBeNull();
     });
 
@@ -1847,6 +1872,149 @@ describe("SettingsPage", () => {
       const { queryByTestId } = renderPage();
       await flushAsync();
       expect(queryByTestId("sgdb-section")).not.toBeNull();
+    });
+  });
+
+  describe("Updates", () => {
+    beforeEach(() => {
+      openOn = "updates";
+    });
+
+    const lastUpdates = () => capturedUpdates[capturedUpdates.length - 1]!;
+
+    const checkNowAnswering = (over: Partial<backend.UpdateCheckNow>) =>
+      vi.mocked(backend.checkForUpdateNow).mockResolvedValue({
+        available: true,
+        newer: true,
+        latest_version: "0.34.0",
+        current_version: "0.33.0",
+        enabled: true,
+        installed_program: true,
+        reached: true,
+        ...over,
+      });
+
+    it("hands the section what the store holds", async () => {
+      setUpdateNoticeState({
+        available: false,
+        newer: true,
+        latestVersion: "0.34.0",
+        currentVersion: "0.33.0",
+        enabled: true,
+        installedProgram: false,
+      });
+      renderPage();
+      await flushAsync();
+
+      expect(lastUpdates().update).toMatchObject({ latestVersion: "0.34.0", installedProgram: false });
+      expect(lastUpdates().checking).toBe(false);
+      expect(lastUpdates().result).toBe("");
+    });
+
+    it.each([
+      [{}, "Tender 0.34.0 is available."],
+      [{ available: false, newer: false, latest_version: "0.33.0" }, "You have the newest release."],
+      [
+        { reached: false, available: false, newer: false, latest_version: null },
+        "GitHub could not be reached. Try again later.",
+      ],
+      [
+        { enabled: false, reached: false, available: false, newer: false },
+        "The daily check is off, so nothing was asked.",
+      ],
+    ])("Check now says what it found: %o", async (answer, line) => {
+      checkNowAnswering(answer);
+      renderPage();
+      await flushAsync();
+
+      await act(async () => {
+        lastUpdates().onCheckNow();
+      });
+      await flushAsync();
+
+      expect(backend.checkForUpdateNow).toHaveBeenCalledTimes(1);
+      expect(lastUpdates().result).toBe(line);
+      expect(lastUpdates().checking).toBe(false);
+    });
+
+    it("a second press while a check is in flight is refused", async () => {
+      let answer!: (v: backend.UpdateCheckNow) => void;
+      vi.mocked(backend.checkForUpdateNow).mockReturnValue(
+        new Promise((r) => {
+          answer = r;
+        }),
+      );
+      renderPage();
+      await flushAsync();
+
+      await act(async () => {
+        lastUpdates().onCheckNow();
+      });
+      expect(lastUpdates().checking).toBe(true);
+      await act(async () => {
+        lastUpdates().onCheckNow();
+      });
+      expect(backend.checkForUpdateNow).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        answer({
+          available: false,
+          newer: false,
+          latest_version: "0.33.0",
+          current_version: "0.33.0",
+          enabled: true,
+          installed_program: true,
+          reached: true,
+        });
+      });
+      await flushAsync();
+      expect(lastUpdates().checking).toBe(false);
+    });
+
+    it("a check whose call failed is logged and says so", async () => {
+      vi.mocked(backend.checkForUpdateNow).mockRejectedValue(new Error("socket closed"));
+      const logError = vi.spyOn(backend, "logError").mockImplementation(() => undefined);
+      renderPage();
+      await flushAsync();
+
+      await act(async () => {
+        lastUpdates().onCheckNow();
+      });
+      await flushAsync();
+
+      expect(lastUpdates().result).toBe("The check failed.");
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to check for updates"));
+      logError.mockRestore();
+    });
+
+    it("the switch persists through the backend", async () => {
+      vi.mocked(backend.setUpdateCheckEnabled).mockResolvedValue({ success: true });
+      renderPage();
+      await flushAsync();
+
+      await act(async () => {
+        lastUpdates().onEnabledChange(false);
+      });
+      await flushAsync();
+
+      expect(backend.setUpdateCheckEnabled).toHaveBeenCalledWith(false);
+      expect(lastUpdates().update.enabled).toBe(false);
+    });
+
+    it("a switch whose write failed is logged", async () => {
+      vi.mocked(backend.setUpdateCheckEnabled).mockRejectedValue(new Error("socket closed"));
+      const logError = vi.spyOn(backend, "logError").mockImplementation(() => undefined);
+      renderPage();
+      await flushAsync();
+
+      await act(async () => {
+        lastUpdates().onEnabledChange(false);
+      });
+      await flushAsync();
+
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to save the update check switch"));
+      expect(lastUpdates().update.enabled).toBe(true);
+      logError.mockRestore();
     });
   });
 });

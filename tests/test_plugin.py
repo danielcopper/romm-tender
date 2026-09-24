@@ -790,6 +790,15 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
     # and a shortcut left naming a file inside the plugin folder is the
     # condition the relocation exists to end.
     "get_shortcut_relocation",
+    # The release check: whether a newer release exists, the card's per-version
+    # Dismiss, the daily-check switch and the reader's own Check now. None of
+    # the four touches RetroDECK state — the reads talk to GitHub and one
+    # kv_config row, the writes are settings keys — and the read is fired at
+    # panel load whatever page the panel is showing.
+    "get_update_notice",
+    "check_for_update_now",
+    "dismiss_update_notice",
+    "set_update_check_enabled",
     # What the hosting process knows about its own run — the port it bound, the
     # start-up repairs that failed, the protocol messages it could not act on.
     # Touches no RetroDECK state and reads nothing from disk. It has to answer
@@ -1027,6 +1036,7 @@ class TestMainStartupOrdering:
         from models.shortcut_launcher import ShortcutLauncher
 
         from domain.app_directories import AppDirectories
+        from domain.update_release import UpdateSource
         from main import Plugin
 
         plugin = Plugin()
@@ -1087,6 +1097,7 @@ class TestMainStartupOrdering:
             "connection_service": connection_service,
             "startup_healing_service": startup_healing_service,
             "shortcut_relocation_service": MagicMock(),
+            "update_check_service": MagicMock(),
             "launch_gate_service": MagicMock(),
             "session_lifecycle_service": MagicMock(),
             "game_process_service": MagicMock(),
@@ -1122,6 +1133,7 @@ class TestMainStartupOrdering:
                 recovery_inventory=MagicMock(),
                 prune_artifacts=MagicMock(),
                 steam_recovery=MagicMock(),
+                latest_release=MagicMock(),
             ),
             stores=StateBundle(
                 settings={},
@@ -1165,6 +1177,7 @@ class TestMainStartupOrdering:
         ):
             await plugin._main(
                 directories=bootstrap_result.directories,
+                update_source=UpdateSource(release_api="http://127.0.0.1:9/", installed_program=False),
                 user_home="/fake/home",
                 logger=logging.getLogger("test_startup_order"),
                 events=FakeEventSink(),
