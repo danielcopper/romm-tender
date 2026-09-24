@@ -1481,9 +1481,9 @@ read, and focus selecting holds nothing back behind a press here. While the answ
 where the read failed it states a dash.
 
 The page opens with **Collections** selected, and its row carries the entry-stop mark, which goes unread here because
-the page is tabbed (§ List and detail). The first stop of the list column is the owner toggle, which reports no
-selection — so where Steam takes the first stop, the page stays on Collections. Only the device shows which stop Steam
-takes; no test here can. The selection is kept across a switch to Platforms and back.
+the page is tabbed (§ Tabs). The first stop of the list column is the owner toggle, which reports no selection — so
+where Steam takes the first stop, the page stays on Collections. Only the device shows which stop Steam takes; no test
+here can. The selection is kept across a switch to Platforms and back.
 
 A kind's pane holds, in order:
 
