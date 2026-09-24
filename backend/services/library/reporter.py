@@ -1055,11 +1055,12 @@ class SyncReporter:
 
 
 def _reachable_row_count(rows: list[Rom], dropped: set[int]) -> int:
-    """How many of *rows* a reader can reach from Steam, less *dropped*.
+    """How many of *rows* a binding reaches, less *dropped*.
 
     What a binding reaches is :func:`domain.sibling_resolution.reachable_rom_ids`.
     *dropped* is the rows the last completed fetch of their platform did not
-    return, and they are not reachable: **the picker refuses a switch to one**
+    return. A binding still reaches them, but the count leaves them out: **the
+    picker refuses a switch to one**
     (``VersionPicker``'s ``handleSwitch``). It is a refusal rather than a
     disabling — such a row still renders enabled, so it can open the cleanup
     that removes it. They are excluded from the count

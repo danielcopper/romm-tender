@@ -250,8 +250,8 @@ def reachable_rom_ids(rows: Iterable[Rom]) -> set[int]:
 
     A sibling group is one game and gets one shortcut (ADR-0021 §2), so every
     row of a group holding a binding is reached through it — the game's page
-    offers **Switch version** across the whole group, and the sync files each
-    collection member under its group's binding. Grouping is :func:`group_rows`,
+    offers **Switch version** across the whole group, and the sync files an
+    unbound collection member under its group's binding. Grouping is :func:`group_rows`,
     so a NULL-keyed row is reached only through a binding of its own: one
     binding among rows that merely share an absent key must not speak for the
     others.

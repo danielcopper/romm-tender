@@ -830,9 +830,9 @@ ConnectionService lazy-identity note), then activates — no re-login required.
 **Each collection row states how many of its members are already in Steam, and who owns it (#1833).** `get_collections`
 adds two fields to its rows. `in_steam_count`, on all three kinds, counts the collection's member ROM ids (RomM's
 listings carry `rom_ids` on each) that the sync's collection filing resolves to a shortcut (CONTEXT.md → Reachable,
-which owns the rule and how it differs from the platform count). It counts members, not shortcuts: two versions of one
-game both count although they share one. It is absent, never `0`, when it is unknown — the local read failed, which does
-not fail the listing and is logged as a warning. The fetcher asks its inward pair
+which says how it differs from the platform count). It counts members, not shortcuts: two versions of one game both
+count although they share one. It is absent, never `0`, when it is unknown — the local read failed, which does not fail
+the listing and is logged as a warning. The fetcher asks its inward pair
 (`LocalLibraryReader.do_read_reachable_rom_ids`) in one short read UoW once all the listing requests have returned,
 never across one; the per-row count is `domain/collection_listing.py`'s. `owner_username` is RomM's own field on the
 standard and smart listings (`CollectionSchema` / `SmartCollectionSchema` in every RomM version the plugin accepts),
