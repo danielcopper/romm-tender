@@ -63,8 +63,7 @@ fallback; provenance and the update procedure live in [`native/README.md`](../..
 
 **Vendored data** used to be a third category — `defaults/bios_registry.json`, a firmware snapshot copied from an
 emu-atlas release under its own checksum. It is gone with the swap to the live resolver, and nothing in `defaults/` is
-vendored today; `config.json` is maintained in this repo. `defaults/README.md` records what left and why, so the next
-person to reach for a snapshot there finds the reason it was not the answer.
+vendored today; `config.json` is maintained in this repo.
 
 The shared rule across the categories that remain: **the artifact is an upstream copy pinned by checksum** — verbatim,
 or verbatim plus the local patch its provenance entry documents. Editing one in place to fix a problem is always wrong —
