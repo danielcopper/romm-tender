@@ -537,9 +537,10 @@ async function handleSaveSyncSettingsChange(
   detail: Extract<RommDataChangedDetail, { type: "save_sync_settings" }>,
 ): Promise<void> {
   if (!detail.save_sync_enabled) {
-    // Only the sync-derived display is cleared. `savefilesInContentDir` stays as    // read: it describes where the emulator writes this game's saves, which the
-    // setting does not change, and each surface decides for itself whether the fact is worth
-    // showing while sync is off.
+    // Only the sync-derived display is cleared. `savefilesInContentDir` stays as
+    // read: it describes where the emulator writes this game's saves, which the
+    // setting does not change, and each surface decides for itself whether the
+    // fact is worth showing while sync is off.
     writerFor(
       entry,
       entry.generation,

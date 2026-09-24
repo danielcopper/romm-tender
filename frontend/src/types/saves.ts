@@ -16,8 +16,8 @@ export interface SaveSyncSettings {
 
 /** The `reason` slug the sync callables return when save sync is blocked because
  *  a save the plugin could otherwise sync is written beside the game file —
- *  RetroArch's "Write Saves to Content Directory" is the usual cause (#239). A BENIGN SKIP — the
- *  game still launches and no error is surfaced. Mirrors the backend
+ *  RetroArch's "Write Saves to Content Directory" is the usual cause (#239).
+ *  A BENIGN SKIP — the game still launches and no error is surfaced. Mirrors the backend
  *  `SAVE_SYNC_IN_CONTENT_DIR_REASON`. */
 export const SAVEFILES_IN_CONTENT_DIR_REASON = "savefiles_in_content_dir";
 

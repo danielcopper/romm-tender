@@ -200,7 +200,8 @@ class SaveAnswer:
 
     ``root_kind`` is the anchor ``directory`` hangs off, in the resolver's own
     vocabulary; :attr:`in_content_directory` reads it together with
-    :attr:`syncable`, and the directory follow reads it alone. ``fallback_directory`` is the unsorted root of the
+    :attr:`syncable`, and the directory follow reads it alone.
+    ``fallback_directory`` is the unsorted root of the
     :data:`SORTED_DIR_MISSING` note (the resolver's ``fallback_dir``). Both are
     ``None`` wherever no placement was resolved.
 

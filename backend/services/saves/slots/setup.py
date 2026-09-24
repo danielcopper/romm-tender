@@ -289,10 +289,11 @@ class SetupWizard:
         bucket (#1478).
 
         When a migration is requested but the save is written beside the game
-        file (#239), or is one a sync would not carry at all, the migration is refused before any download; the slot
-        confirmation itself — a non-destructive metadata flip — is still
-        persisted (``reason="savefiles_in_content_dir"``). The non-migration path
-        is never gated (no file write).
+        file (#239, ``reason="savefiles_in_content_dir"``), or is any other
+        answer a sync would not carry (``reason="save_shape_unsupported"``),
+        the migration is refused before any download; the slot confirmation
+        itself — a non-destructive metadata flip — is still persisted. The
+        non-migration path is never gated (no file write).
         """
         rom_id = int(rom_id)
         # Legacy ``slot:null`` confirmation is retired (#1276): a slot must carry
