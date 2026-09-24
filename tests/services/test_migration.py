@@ -54,18 +54,23 @@ class RecordingSaveDirectories:
     """Stands in for ``SaveService.rerecord_save_directories`` and counts its calls.
 
     Called through ``provide`` the way the composition root's ``LateBinding``
-    hands the live recorder over. *error* makes the call raise.
+    hands the live recorder over. *error* makes the call raise. *gate*, when
+    given, is asked at call time — what a sync arriving mid-re-record would ask.
     """
 
-    def __init__(self, error: Exception | None = None) -> None:
+    def __init__(self, error: Exception | None = None, gate: Any = None) -> None:
         self.calls = 0
         self._error = error
+        self._gate = gate
+        self.pending_while_recording: list[bool] = []
 
     def provide(self) -> Self:
         return self
 
     async def __call__(self) -> None:
         self.calls += 1
+        if self._gate is not None:
+            self.pending_while_recording.append(self._gate())
         if self._error is not None:
             raise self._error
 
@@ -964,6 +969,21 @@ class TestMigrateRetroDeckFiles:
 
         assert result["success"] is True
         assert plugin._save_directories.calls == 1
+
+    @pytest.mark.asyncio
+    async def test_a_sync_during_the_re_record_still_finds_the_migration_pending(self, plugin, tmp_path):
+        # The markers clear with the relocations, before the re-record: without
+        # holding the gate, a sync in that window meets the old home's record.
+        self._conflicting_rom(plugin, tmp_path)
+        service = plugin._migration_service
+        watching = RecordingSaveDirectories(gate=service.is_retrodeck_migration_pending)
+        service._save_directories = watching.provide
+
+        result = await plugin.migrate_retrodeck_files("skip")
+
+        assert result["success"] is True
+        assert watching.pending_while_recording == [True]
+        assert service.is_retrodeck_migration_pending() is False
 
     @pytest.mark.asyncio
     async def test_nothing_is_recorded_while_the_user_is_still_asked(self, plugin, tmp_path):

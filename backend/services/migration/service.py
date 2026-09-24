@@ -101,6 +101,10 @@ class MigrationService:
         # garbage-collect the task before it completes. ``add_done_callback``
         # prunes finished entries to keep the set bounded.
         self._background_tasks: set[asyncio.Task[Any]] = set()
+        # Migration runs in flight. A run clears the pending markers in the same
+        # write as the relocations, before it re-records the save directories;
+        # the gate has to hold until that has finished.
+        self._migrations_in_flight = 0
 
     def _spawn_background_task(self, coro) -> asyncio.Task[Any]:
         """Schedule ``coro`` on the plugin loop and track the task for shutdown.
@@ -267,7 +271,14 @@ class MigrationService:
             uow.kv_config.delete(_KV_RETRODECK_HOME_HOPS)
 
     def is_retrodeck_migration_pending(self) -> bool:
-        """Return True if a RetroDECK home path migration is pending."""
+        """Return True while a RetroDECK home path migration is pending or still running.
+
+        A run in flight counts as pending until it has re-recorded the save
+        directories: a sync let through between the markers clearing and that
+        re-record would meet a record still naming the old home.
+        """
+        if self._migrations_in_flight:
+            return True
         with self._uow_factory() as uow:
             return bool(uow.kv_config.get(_KV_RETRODECK_HOME_PREVIOUS))
 
@@ -658,6 +669,14 @@ class MigrationService:
         if not pending or not new_home:
             return {"success": False, "reason": "no_migration_needed", "message": "No path migration needed"}
 
+        self._migrations_in_flight += 1
+        try:
+            return await self._run_migration(pending, new_home, conflict_strategy)
+        finally:
+            self._migrations_in_flight -= 1
+
+    async def _run_migration(self, pending, new_home, conflict_strategy):
+        """Move the files, re-bake the shortcuts and re-record the save directories, in that order."""
         result = await self._loop.run_in_executor(
             None, self._migrate_retrodeck_files_io, pending, new_home, conflict_strategy
         )
