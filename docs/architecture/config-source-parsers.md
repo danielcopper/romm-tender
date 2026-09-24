@@ -72,9 +72,10 @@ The concrete case that motivated this principle, and the bug in
 - `AtlasCatalogueAdapter` (asks the resolver, which reads ES-DE) returns a tuple `(core_so, label)` for "which core is
   active?". `label` is ES-DE's **display string** — e.g. `"Snes9x - Current"`. It is a UI-level name, chosen by the
   ES-DE/RetroDECK team to disambiguate in the core picker UI.
-- RetroArch, when `sort_savefiles_enable = true`, writes saves into subdirectories named by the **`corename`** field of
-  the core's `.info` file — e.g. `"Snes9x"`. It is RetroArch's canonical internal name, set by the core's maintainer,
-  baked into RetroArch's runtime path logic.
+- RetroArch, when `sort_savefiles_enable = true`, writes saves into subdirectories named by the **`library_name`** the
+  core itself reports through `retro_get_system_info` — e.g. `"Snes9x"` (`runloop.c:8822-8888`, as the vendored
+  resolver's `placement.py` cites it). It is set by the core's maintainer and baked into RetroArch's runtime path logic.
+  The plugin used to take that name from the `corename` field of the core's `.info` file instead.
 
 These two values **are not redundant representations of the same thing**. They answer different questions at different
 layers:
@@ -98,9 +99,9 @@ lookup is O(1) per source, caching is local, and drift is impossible because nei
 other.
 
 The plugin no longer puts the save-directory question itself: where a game's save sits, a sort-by-core subfolder
-included, is the resolver's answer, which reads RetroArch's own configuration and the core's `corename` the way
-RetroArch does ([ADR-0040](../adr/0040-the-save-directory-is-the-resolvers-answer.md)). The example stays because it is
-the clearest case of the rule.
+included, is the resolver's answer, which reads RetroArch's own configuration and probes the core for its `library_name`
+the way RetroArch does ([ADR-0040](../adr/0040-the-save-directory-is-the-resolvers-answer.md)). The example stays
+because it is the clearest case of the rule.
 
 ## Question-to-source mapping
 
@@ -111,7 +112,7 @@ the clearest case of the rule.
 | Which core is active for **ROM Y** (per-game)?                                 | Plugin DB (`roms.emulator_override`), layered on the platform and system layers                         | The per-game override is the plugin's own state, not ES-DE's. See [Core and Emulator Selection](core-emulator-selection.md).                                                         |
 | Which emulator will **ROM Y actually launch with** (active core)?              | `ActiveCoreResolver`: per-game DB → per-platform `settings.json` → live es_systems.xml default → `None` | One resolver folds the plugin's two deviations over the live ES-DE default; the launched emulator is baked from the same answer (libretro or standalone).                            |
 | What's the ES-DE display label for a core?                                     | ES-DE                                                                                                   | Label is an ES-DE/RetroDECK UI concern, chosen at the ES-DE config level.                                                                                                            |
-| Where does an emulator keep one game's save (sort-by-core subfolder included)? | The save answer — the vendored resolver                                                                 | The resolver reads `retroarch.cfg` and the core's `.info` `corename` the way RetroArch does, so the plugin reads neither for a save path (ADR-0040).                                 |
+| Where does an emulator keep one game's save (sort-by-core subfolder included)? | The save answer — the vendored resolver                                                                 | The resolver reads `retroarch.cfg` and probes the core for its `library_name` the way RetroArch does, so the plugin reads neither for a save path (ADR-0040).                        |
 | What ROM extensions does a core support?                                       | RetroArch `.info` `supported_extensions` field                                                          | libretro-maintainer-authoritative, updated with every core release.                                                                                                                  |
 | What firmware files does a core need?                                          | RetroArch `.info` `firmware_count` + `firmwareN_*` fields                                               | libretro-maintainer-authoritative; optional flags included.                                                                                                                          |
 | What datfile database matches a core's ROMs?                                   | RetroArch `.info` `database` field                                                                      | libretro-maintainer-authoritative.                                                                                                                                                   |
@@ -444,13 +445,13 @@ When the plugin needs to read a new external config/metadata source, the checkli
 
 Non-obvious design choices worth preserving:
 
-- **Sibling adapters for RetroDECK/RetroArch-side config, not one bundle.** `RetroDeckPathsAdapter` reads
-  `retrodeck.json` and nothing else; the `.info` files are read by the vendored resolver, and so is `retroarch.cfg` but
-  for the one `input_driver` key the controller check in `SteamConfigAdapter` reads. A single combined
-  "RetroDECK/RetroArch config" adapter would conflate different owners (RetroDECK team vs libretro core maintainers),
-  different change triggers (user configurator edits vs Flatpak core releases), and different file layouts (user home
-  for `retrodeck.json`, Flatpak install tree for `.info`). This is the applied form of the "one parser per source"
-  principle for the RetroDECK/RetroArch-side of the codebase.
+- **No combined RetroDECK/RetroArch config adapter.** `RetroDeckPathsAdapter` reads `retrodeck.json` and nothing else.
+  The one `retroarch.cfg` key the plugin reads itself, `input_driver`, is read by `SteamConfigAdapter` beside the
+  controller check it serves; the rest of `retroarch.cfg`, and the `.info` files, are the vendored resolver's. Folding
+  these into one "RetroDECK/RetroArch config" adapter would conflate different owners (the RetroDECK team vs RetroArch
+  and the libretro core maintainers), different change triggers (user configurator edits vs RetroArch's own settings and
+  Flatpak core releases) and different file layouts. This is the applied form of the "one parser per source" principle
+  for the RetroDECK/RetroArch side of the codebase.
 
 - **`core_so` is the full `.so` basename including `_libretro`, and without the `.so`.**
   `AtlasCatalogueAdapter.get_active_core` returns `(core_so, label)` where `core_so` is e.g. `"snes9x_libretro"`, not

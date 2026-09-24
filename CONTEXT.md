@@ -278,8 +278,8 @@ key.
 Residents (per [ADR-0003](docs/adr/0003-json-sqlite-persistence-boundary.md)): the RetroDECK home path marker
 (`retrodeck_home_path` + its pending-migration `_previous`), `device_id` (server-issued identity), `platform_names`
 (platform_slug → display_name cache), and `save_directories_recorded`, the marker that the one-time pass recording the
-installed ROMs' [answered save directories](#answered-save-directory) has finished. The schema version is **not** a
-`kv_config` key — it lives in `PRAGMA user_version`.
+installed ROMs' [answered save directories](#answered-save-directory) has finished over a detected emulator
+installation. The schema version is **not** a `kv_config` key — it lives in `PRAGMA user_version`.
 
 **Not** a dumping ground: anything with its own lifecycle, invariants, or repeat-row potential gets its own aggregate.
 `kv_config` is for the truly small, the truly singleton, and the truly miscellaneous.
@@ -707,9 +707,10 @@ It replaced a per-system extension table the plugin maintained by hand. Its **di
 adoption rename and the [directory follow](#answered-save-directory) look; an answer with no directory is never given
 one by a guess.
 
-The answer also says which anchor that directory hangs off (`root_kind`). A save written **beside the game's content**
-(RetroArch's "Write Saves to Content Directory") is read off it, and save sync stays off for that ROM whatever its state
-says.
+The answer also says which anchor that directory hangs off (`root_kind`). A save written as a file **beside the game's
+content** is read off it (RetroArch's "Write Saves to Content Directory" is the usual cause), and save sync stays off
+for that ROM whatever its state says. A save written **inside** the content file is anchored there too, and is not this
+case: it is the **inside the content** state below.
 
 An answer is about one **ROM** and one **emulator**, never a platform (see
 [Save scope](#save-scope-per-rom-and-per-emulator-never-per-platform)), and it names the files, their directory, their
@@ -727,8 +728,8 @@ their uninstalled game already has save files.
 ### Save state: per-game files / shared / inside the content / hole / not established
 
 The five values a save answer classifies a ROM into, **exactly one of which holds**. Only the first is a save this
-plugin can carry; the other four **refuse** — no path is probed, no sync state is written, and the sync returns the
-benign-skip shape rather than a failure. A refusing answer that names a directory still has it recorded as the
+plugin can carry; the other four **refuse** — the sync probes no path, writes no sync state, and returns the benign-skip
+shape rather than a failure. A refusing answer can still have its directory recorded as the
 [answered save directory](#answered-save-directory), which is not sync state.
 
 - **per-game files** — the answer names concrete files with no hole. Sync as usual, any number of files.
@@ -768,8 +769,7 @@ answers for itself.
 
 The directory the resolver last answered for one ROM's save — `AnsweredSaveDirectory`, one row per ROM in
 `answered_save_directories`. It is compared with today's answer to notice that the game's save directory moved, and read
-as the source of the move that follows; it is never where a save is looked for, read or written — that is always today's
-answer. It is kept apart from the ROM's save-sync state, because it is recorded for games that were never synced. How a
+as the source of the move that follows; it is never where a sync or a probe looks — that is always today's answer. How a
 moved directory is followed:
 [Following a moved save directory](docs/architecture/save-file-sync-architecture.md#following-a-moved-save-directory).
 

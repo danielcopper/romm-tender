@@ -9,8 +9,8 @@ files the per-game model can and cannot reach — and the strategy for the gaps.
 
 Save discovery is **exact-name probing**, not a directory scan. For an installed ROM whose file stem is `rom_name`, the
 sync looks for exactly the files the save answer names for this ROM's emulator, and uploads the ones that exist. The
-sync has no glob, no `listdir`, no pattern match; the one listing is the directory follow's, which carries a refusing
-game's `<stem>.*` files when its directory moves.
+sync has no glob, no `listdir`, no pattern match. (The directory follow does list the old directory, for a refusing
+game's `<stem>.*` files, when that directory moves — a move, not a sync.)
 
 This is a deliberate bijection: **one ROM → one set of `<rom_name>.<ext>` files in the save folder.** It maps perfectly
 onto libretro's own SRAM convention, where the save file mirrors the ROM name. Everything that doesn't fit that shape is
@@ -21,8 +21,9 @@ Two hard properties follow, and they define the entire coverage envelope:
 1. **The filename must be the ROM stem.** A file named anything else — a fixed card name (`pcsx-card2.mcd`,
    `vmu_save_A1.bin`), or a name with a slot/unit infix (`game.1.mcr`) — is never probed.
 2. **The file must live in the directory the answer names.** That directory is the emulator's own answer too, so a
-   per-emulator subfolder is looked in exactly when the emulator writes there. A save the answer places next to the ROM
-   (`savefiles_in_content_dir`, read off the answer's `root_kind`) is never synced.
+   per-emulator subfolder is looked in exactly when the emulator writes there. A save the answer places next to the ROM,
+   as a file beside it (read off the answer's `root_kind`), is never synced; one inside the ROM file is the
+   inside-content refusal below.
 
 The explicit removed-game cleanup starts with this exact-path projection and adds path-safe filenames already persisted
 for that ROM in `RomSaveSyncState.files`. This is an identity-backed exception to the filename rule, not directory
@@ -96,8 +97,8 @@ removes.
 The answer classifies every ROM into **exactly one** of five states. Only the first is a save this plugin can carry; the
 other four are refusals, and each says something different about why. A refusal syncs nothing: no path is probed, no
 sync state is written, and the sync returns the benign-skip shape (`reason: "save_shape_unsupported"`) rather than a
-failure — the same shape the `savefiles_in_content_dir` skip returns. A refusing answer that names a directory is still
-recorded and followed when that directory moves, because the files are on the disk either way
+failure — the same shape the `savefiles_in_content_dir` skip returns. A refusing answer that names a directory outside
+the content's own is still recorded and followed when that directory moves, because the files are on the disk either way
 ([Following a moved save directory](save-file-sync-architecture.md#following-a-moved-save-directory)).
 
 | State                  | What it means                                                                 | Example on a stock RetroDECK        |

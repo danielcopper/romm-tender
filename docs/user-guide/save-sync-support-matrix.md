@@ -17,9 +17,8 @@ Two things still matter when you read a row:
   you change a core option — the rows below say which. Turning that on is not yet something the plugin does for you, but
   it does now **notice**: change the option and the next sync reads the new answer.
 - **Rows are stated for each platform's _default_ core.** You can override the core per system and per game, and a
-  different core can behave differently — which is exactly why the plugin asks per game. RetroArch's
-  `savefiles_in_content_dir` puts saves beside the game file, where save sync stays off, and that is reported
-  separately.
+  different core can behave differently — which is exactly why the plugin asks per game. A save written beside the game
+  file (usually RetroArch's `savefiles_in_content_dir`) keeps save sync off, and that is reported separately.
 
 Most of this table is derived from libretro's documentation and from reading core source, not from watching each core
 write a save. Where the [emu-atlas](https://github.com/danielcopper/emu-atlas) audit has corrected an earlier

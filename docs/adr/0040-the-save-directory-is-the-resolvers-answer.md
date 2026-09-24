@@ -31,18 +31,20 @@ computing the old path from the old flags.
 
 **1. The save directory is the resolver's.** `get_rom_save_info`'s `saves_dir` is `SaveAnswer.directory`, and nothing is
 joined onto it; a sync, a probe, the adoption rename and the directory follow all use it. An answer with no directory is
-never given one: each reader takes its existing refusal or skip. Saves written beside the content are read off the
-answer's `root_kind` rather than off `retroarch.cfg`, and stay gated off, now per ROM. The adoption rename asks the
-resolver for the save and the savestate directory of both launch paths; the new one need not exist.
+never given one: each reader takes its existing refusal or skip. Saves written as a file beside the content are read off
+the answer's `root_kind` rather than off `retroarch.cfg`, and stay gated off, now per ROM. A save written inside the
+content file is anchored in the same directory and keeps its own save-shape refusal, as before. The adoption rename asks
+the resolver for the save and the savestate directory of both launch paths; the new one need not exist.
 
 **2. A moved directory is followed per game, from a recorded answer.** A table of its own, `answered_save_directories`,
 holds the directory the resolver last answered for each ROM. It is compared with today's answer and read as the source
-of the move, never as where a save is looked for. At the sync entry points, before the refusal that reads the same
-answer, today's answer is compared with it: nothing recorded — record it; the same — nothing; different — move the
-game's files from the recorded directory to the answered one, then record the new one. An answer beside the content is
-neither followed nor recorded. A name present in both directories is never overwritten: the older copy goes through the
-save-backup funnel. A one-time background pass on the first start records the answer for each installed ROM that has no
-record yet, and the RetroDECK home migration records each installed ROM's answer afresh once it has moved the files. The
+of the move, never where a sync or a probe looks. At the sync entry points, and on the write paths that touch local
+saves, before either looks at a local file, today's answer is compared with it: nothing recorded — record it; the same —
+nothing; different — move the game's files from the recorded directory to the answered one, then record the new one. An
+answer anchored in the content's directory is neither followed nor recorded. A name present in both directories is never
+overwritten: the older copy goes through the save-backup funnel. A one-time background pass on the first start records
+the answer for each installed ROM that has no record yet, and the RetroDECK home migration replaces each installed ROM's
+record with today's answer once it has moved the files, or drops the record where that answer cannot be followed. The
 mechanics are in
 [Following a moved save directory](../architecture/save-file-sync-architecture.md#following-a-moved-save-directory).
 
@@ -74,10 +76,11 @@ one-time pass pays that once, to fill the record in.
   guide.
 - **The content-directory gate is per ROM.** The whole-library sweep no longer has a machine-wide verdict; it passes
   such a ROM over inside its run and still reports the content-directory skip, or counts the ROMs it held back. With no
-  confirmed slot at all it asks about one installed ROM, so that skip is still reported.
+  confirmed slot at all it asks about the first installed ROM that launches with a RetroArch core, so that skip is still
+  reported.
 - **Nothing is followed into the content's own folder.** For a multi-file game that folder is removed whole on
-  uninstall, so an answer beside the content leaves the record as it is. This holds until the content-directory gate is
-  lifted.
+  uninstall, so an answer anchored there — beside the content file or inside it — leaves the record as it is. This holds
+  until the content-directory gate is lifted.
 - **A refusal may be recorded.** A refusing answer can still name a directory, and first sight records it — in
   `answered_save_directories`, which is not sync state; a refusal still writes none.
 - **The record has its own table**, because a `rom_save_sync_states` row means "tracked for save sync" and the record is
