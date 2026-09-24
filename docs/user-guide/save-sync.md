@@ -140,6 +140,10 @@ The button is unavailable while RomM is offline. If the game's current slot has 
 (you'll be prompted). If the destination slot has newer changes from another device, sync that slot first, then copy
 again.
 
+A game whose save the plugin does not sync is refused here too, and so are switching its slot and restoring an older
+version: a memory card every game shares (standalone PCSX2's, for example, even though the plugin knows its folder), a
+save written into the game file itself, or saves written beside it. The message says which of these it is.
+
 ## Core Switch Warning
 
 When you switch the emulator core for a game (e.g., from mGBA to gpSP for GBA), the plugin detects the change and shows
@@ -294,12 +298,16 @@ RetroArch does not move existing saves when you change these settings, so after 
 no longer reads. The plugin notices the next time it touches that game's saves — at launch, when the server can be
 reached; at exit, when **Sync after exit** is on; when you sync the game by hand; when the game page shows its saves;
 before a slot switch, a restore of an older version, a copy to another slot or a conflict resolution; before **Delete
-Local Saves**; or, for games whose save slot you have set up, when you use **Sync All Saves Now** — and moves that
-game's save files into the new folder first. There is nothing to confirm and no notice to act on; each game follows on
-its own.
+Local Saves**; when **Library › Platforms** counts a platform's save files as you pick it, or before its **Delete _N_
+save files**; or, for games whose save slot you have set up, when you use **Sync All Saves Now** — and moves that game's
+save files into the new folder first. There is nothing to confirm and no notice to act on; each game follows on its own.
 
 Following a game's saves into the new folder is part of save sync: with save sync off, neither happens. A sorting change
-made while it is off is followed once save sync is on again, the next time the plugin touches that game's saves.
+made while it is off is followed once save sync is on again, the next time the plugin touches that game's saves — for a
+game whose save folder the plugin had already noted before the change. It notes every installed game's folder once, on
+the first start of this version, and each game's again whenever it follows it; a game it had never noted starts from
+where RetroArch looks now. While a [RetroDECK home migration](retrodeck-path-migration.md) is waiting or running,
+nothing is followed: those files are the migration's to move.
 
 If the new folder already holds a file with the same name, nothing is overwritten: the older of the two copies is moved
 into a `.romm-backup` folder beside it, and the newer one is kept where RetroArch looks.

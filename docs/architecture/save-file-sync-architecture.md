@@ -812,9 +812,12 @@ resolves to and answers identity questions only.
 A sorted directory RetroArch has not created yet comes back with the `sorted-dir-missing` caveat and a
 `fallback_directory`, the unsorted root RetroArch falls back to (the rule and its source are at `SORTED_DIR_MISSING` in
 `domain/save_answer.py`). A probe there finds nothing, which is the truth; moving files there creates the directory
-first. An answer that names no directory at all — no emulator resolved, nothing the resolver could establish — is never
-given one by a guess: the sync backstop, the status probe and the prune projection skip, and copy-to-slot, rollback,
-slot switch, the slot-choice migration and conflict resolution refuse with `save_shape_unsupported`.
+first. Any answer a sync would not carry — no emulator resolved, nothing the resolver could establish, a shared card
+even where its directory is known, a save inside the content file, one written beside it — gives no directory to sync in
+(`SaveAnswer.sync_directory` is empty), and none is supplied by a guess: the sync backstop, the status probe and the
+prune projection skip, and copy-to-slot, rollback, slot switch, the slot-choice migration and conflict resolution refuse
+— with `savefiles_in_content_dir` for an answer beside the content (next section), otherwise with
+`save_shape_unsupported` and the answer's own explanation.
 
 ### Saves written next to the content (`savefiles_in_content_dir`)
 
@@ -888,9 +891,12 @@ live reading the caller already took, before the caller looks at any local file:
   folder's files too, and nothing is carried back in by the next sync.
 
 The follow belongs to the sync, so it does nothing while save sync is off; a sorting change made meanwhile is followed
-once save sync is on again, for a game whose directory was recorded. (Other things move save files regardless of the
-setting: the RetroDECK home migration and the adoption rename.) A failure — a listing refused, the database busy — is
-logged and leaves the record as it was; the operation that called it goes on. Against the record:
+once save sync is on again, for a game whose directory was recorded. It also does nothing while a RetroDECK home
+migration is pending or still running, its re-record included: `follow_save_directory` checks that itself, so the gate
+holds for every caller — the status and count reads among them, which the migration gate does not otherwise stop — and
+the files stay the migration's to move until it has finished. (Other things move save files regardless of the setting:
+the RetroDECK home migration and the adoption rename.) A failure — a listing refused, the database busy — is logged and
+leaves the record as it was; the operation that called it goes on. Against the record:
 
 - an answer with no directory, or one anchored in the content's own directory (beside the content file or inside it) →
   nothing moves and nothing is recorded;
@@ -933,9 +939,9 @@ the follow does not act on (`SaveService.rerecord_save_directories`, reached thr
 finds the record equal to the answer, or finds none and records a first sight: with `skip`, the copy left in the old
 home stays there and is never carried over the one the user kept. The migration gate and `get_migration_status` report
 the migration as still pending until that re-record has finished, although the run clears its markers before it, so no
-sync meets a record still naming the old home. Two limits: the re-record deletes nothing while no emulator installation
-is detected, and a ROM whose re-record fails keeps its old record (the failure is logged, the rest are recorded), so for
-that ROM the next sync can still follow the copy left in the old home. See
+sync meets a record still naming the old home. Two limits: while no emulator installation is detected the re-record
+leaves every record as it was, and a ROM whose re-record fails keeps its old record (the failure is logged, the rest are
+recorded), so for that ROM the next sync can still follow the copy left in the old home. See
 [RetroDECK Path Migration](../user-guide/retrodeck-path-migration.md) for the user-facing side.
 
 ### Detecting a home change

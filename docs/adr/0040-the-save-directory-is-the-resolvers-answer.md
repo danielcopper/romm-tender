@@ -44,9 +44,11 @@ the two reads that count local saves — each before it looks at a local file �
 nothing recorded — record it; the same — nothing; different — move the game's files from the recorded directory to the
 answered one, then record the new one. An answer anchored in the content's directory is neither followed nor recorded. A
 name present in both directories is never overwritten: the older copy goes through the save-backup funnel. A one-time
-background pass on the first start records the answer for each installed ROM that has no record yet, and the RetroDECK
-home migration replaces each installed ROM's record with today's answer once it has moved the files, or drops the record
-where that answer cannot be followed. The mechanics are in
+background pass on the first start records the answer for each installed ROM that has no record yet. The RetroDECK home
+migration moves save files itself, so the follow does nothing while one is pending or running, whichever path calls it;
+once the migration has moved the files it replaces each installed ROM's record with today's answer, or drops the record
+where that answer cannot be followed, and changes no record where no emulator installation is detected. The mechanics
+are in
 [Following a moved save directory](../architecture/save-file-sync-architecture.md#following-a-moved-save-directory).
 
 **3. What went.** `resolve_save_dir`, `domain/save_layout.py`, `adapters/retroarch_config.py`, the save-sort migrator

@@ -1414,13 +1414,19 @@ not when the reader opens its pane, and never at all for a platform the page has
 ES-DE options read and a `settings.json` lookup, and opens no database transaction. `count_platform_saves` answers how
 many save files the platform holds, for the Delete _N_ save files button: nothing else knows the number, because the
 delete finds its files through the platform's installed ROMs and counts only what it removed, afterwards. It walks that
-same path without deleting, and **that path is 2N+1 short `BEGIN IMMEDIATE` transactions**, not one. The platform's id
-read opens one (`SaveService._installed_rom_ids_on_platform`), and `find_save_files` → `RomInfo.get_rom_save_info` opens
-two more per ROM: `rom_installs.get`, then the save answer's `ActiveCoreResolver.active_emulator_for_rom`, which opens
-its own for the ROM and its install and then resolves through `get_emulator_options(system)` — the heavy read, which
-globs each option's emulator install through the find rules — before the resolver reads the machine for the answer
-itself. On a 128-ROM platform that is 257 lock acquisitions. That cost is deliberate and is not the read's to fix: it
-must walk exactly what the delete walks, or the number offered stops being the number taken. What keeps it out of the
+same path without deleting — and like the delete it first follows each ROM's moved save directory, so it can move files,
+back up a collision and write a ROM's record before it counts. **That path is 6N+1 short `BEGIN IMMEDIATE`
+transactions** for N installed ROMs, not one: 7N+1 where no ROM's directory is recorded yet, 4N+1 with save sync off,
+when nothing is followed. Counting rule: `SqliteUnitOfWork.__enter__` calls during one `count_platform_saves` call, over
+the contract harness's real wiring — the real `ActiveCoreResolver`, no per-game pin — with only the save resolver's
+reading of the machine faked. The platform's id read opens one (`SaveService._installed_rom_ids_on_platform`); then, per
+ROM and under its lock, the live reading opens three — `RomInfo.is_content_installed`'s install row, the save answer's
+own install row, and `ActiveCoreResolver.active_emulator_for_rom`'s read of the ROM and its install, after which it
+resolves through `get_emulator_options(system)` (the heavy read, which globs each option's emulator install through the
+find rules) and the resolver reads the machine for the answer itself; the follow opens two — the pending-home-migration
+check and the record's read, plus the record's write at first sight; and `find_save_files` opens one more for the
+install row. On a 128-ROM platform that is 769 lock acquisitions. That cost is deliberate and is not the read's to fix:
+it must walk exactly what the delete walks, or the number offered stops being the number taken. What keeps it out of the
 way is that it is offloaded off the event loop and asked once per selection, and that a failure — `SQLITE_BUSY` among
 them — degrades to a line saying the count could not be read rather than to a wrong number — and that failure forgets
 the slug, so re-selecting the platform asks again, which is what the line says and is the only failure on this pane that

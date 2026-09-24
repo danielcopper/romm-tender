@@ -279,11 +279,11 @@ full live `kv_config` key set is `device_id` (the server-issued device identity)
 is changed _again_ before the migration runs — a `_hops` JSON array of the additional pending homes, oldest→newest, so
 files under an intermediate home are never stranded, [#1042](https://github.com/danielcopper/romm-tender/issues/1042)),
 and `save_directories_recorded` (present once the one-time pass that records the answered save directories of the
-installed ROMs has finished over a detected emulator installation) — the truly miscellaneous singleton scalars. The
-`platform_names` cache is a single JSON blob the library sync refreshes every run so two reads need no RomM: the
-game-detail platform name, and a platform removal's answer, whose name the frontend finds that platform's Steam
-collection by. The schema version is **not** a `kv_config` key — it is tracked in `PRAGMA user_version` by the
-[migration runner](#the-migration-framework) ([#781](https://github.com/danielcopper/romm-tender/issues/781)).
+installed ROMs has finished over a detected emulator installation with no ROM failing) — the truly miscellaneous
+singleton scalars. The `platform_names` cache is a single JSON blob the library sync refreshes every run so two reads
+need no RomM: the game-detail platform name, and a platform removal's answer, whose name the frontend finds that
+platform's Steam collection by. The schema version is **not** a `kv_config` key — it is tracked in `PRAGMA user_version`
+by the [migration runner](#the-migration-framework) ([#781](https://github.com/danielcopper/romm-tender/issues/781)).
 
 `SyncRun` is a **history** table, not a single "last run" row: a 1-row table would let a newly-started run
 (`status='running'`, no stats yet) erase the last completed run's displayable stats. "Last successful sync" is the

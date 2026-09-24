@@ -73,7 +73,8 @@ observed on a device. An answer that names no directory — every not-establishe
 given one by a guess; each reader takes its refusal.
 
 When a game's answered directory moves — the user flipped one of RetroArch's sort flags, or anything else changed it —
-its files are followed per game at its next sync; how is
+its files are followed per game the next time the plugin touches them — a sync, a write to its slots, a delete, or a
+read that counts them; when, and how, is
 [Following a moved save directory](save-file-sync-architecture.md#following-a-moved-save-directory).
 
 **Cost.** A live reading is roughly 170 ms warm and 490 ms cold per ROM on the reference device. A single-ROM sync and a
@@ -116,8 +117,9 @@ path, which is what the state is about.
 **The last state has three shapes and they are kept apart**, because they are three different sentences to a reader.
 `nothing_established` — nobody has established what this emulator writes. `directory_known` — the directory is known and
 the file names in it are not, and telling a user "nothing is known" about a folder we can point at would be wrong.
-`not_asked` — no question ever reached the resolver, because RetroArch writes saves to the content directory or no
-emulator resolved for this ROM at all; the emulator is not implicated, and saying it is would be wrong too.
+`not_asked` — no question reached the resolver: no emulator resolved for this ROM, no installation or catalogue entry to
+ask, or no content name to ask with. The status read reports a save the plugin could otherwise sync, sitting beside the
+content, the same way, since no sync runs there. The emulator is not implicated, and saying it is would be wrong too.
 
 **Scope is the emulator, never the platform.** PS2 is not unsupported — standalone PCSX2 is, and a libretro core for the
 same platform can answer differently. Every state the payload carries names the emulator it is about.

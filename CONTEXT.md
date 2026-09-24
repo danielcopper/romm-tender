@@ -278,8 +278,8 @@ key.
 Residents (per [ADR-0003](docs/adr/0003-json-sqlite-persistence-boundary.md)): the RetroDECK home path marker
 (`retrodeck_home_path` + its pending-migration `_previous`), `device_id` (server-issued identity), `platform_names`
 (platform_slug → display_name cache), and `save_directories_recorded`, the marker that the one-time pass recording the
-installed ROMs' [answered save directories](#answered-save-directory) has finished over a detected emulator
-installation. The schema version is **not** a `kv_config` key — it lives in `PRAGMA user_version`.
+installed ROMs' [answered save directories](#answered-save-directory) has finished over a detected emulator installation
+with no ROM failing. The schema version is **not** a `kv_config` key — it lives in `PRAGMA user_version`.
 
 **Not** a dumping ground: anything with its own lifecycle, invariants, or repeat-row potential gets its own aggregate.
 `kv_config` is for the truly small, the truly singleton, and the truly miscellaneous.
