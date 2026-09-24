@@ -79,7 +79,7 @@ Tests mirror the source layout (`tests/services/`, `tests/adapters/`, `tests/dom
 with each test file mapping 1:1 to a source module. Shared fixtures live in `tests/conftest.py`: among them the fresh
 `HOME` every test runs under, and the per-test `emit` and `logger` a service is built with. `_isolated_environment`'s
 docstring there says what the isolation covers and what it does not, and states the named exception, a test class that
-reads files under your real home and only reads. `.claude/rules/testing-backend.md` has the rules for writing a test
+reads your real RetroDECK install and only reads. `.claude/rules/testing-backend.md` has the rules for writing a test
 against them.
 
 Frontend component tests run with `mise run test:frontend` (`pnpm -C frontend test`); see

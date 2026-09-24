@@ -73,16 +73,17 @@ def _isolated_environment(home: Path) -> Iterator[None]:
     ``XDG_*`` family goes with them, because a test has no business reading the
     desktop session it was started from either.
 
-    Only paths under the home are covered. RetroDECK's system Flatpak root
-    (``/var/lib/flatpak``) lies outside it: a test whose code can reach that
-    root through the plugin's or the vendored resolver's constant for it
+    Only paths under the home are covered. The system Flatpak root
+    (``/var/lib/flatpak``) lies outside it: any other test whose code can reach
+    that root through the plugin's or the vendored resolver's constant for it
     repoints the constant itself, and ``_isolate_system_flatpak_root`` in
     ``tests/contract/conftest.py`` names both.
 
     **The named exception:** ``TestTheRealMachineAnswers`` in
-    ``tests/adapters/test_atlas_saves.py`` reads the real home, for the reason
-    that module's docstring gives. It takes that home from the password
-    database, never from ``HOME``, and only reads.
+    ``tests/adapters/test_atlas_saves.py`` reads the real home and the system
+    Flatpak root, repointing neither, for the reason that module's docstring
+    gives. It takes that home from the password database, never from ``HOME``,
+    and only reads.
     ``tests/test_conftest_isolation.py`` pins, by searching the source text for
     the ``pwd`` module's lookups, that nothing else in ``tests/`` but that check
     itself reads the password database; a literal home path or a ``~user``
