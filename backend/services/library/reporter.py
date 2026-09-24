@@ -1059,13 +1059,12 @@ def _reachable_row_count(rows: list[Rom], dropped: set[int]) -> int:
 
     What a binding reaches is :func:`domain.sibling_resolution.reachable_rom_ids`.
     *dropped* is the rows the last completed fetch of their platform did not
-    return. A binding still reaches them, but the count leaves them out: **the
-    picker refuses a switch to one**
-    (``VersionPicker``'s ``handleSwitch``). It is a refusal rather than a
-    disabling — such a row still renders enabled, so it can open the cleanup
-    that removes it. They are excluded from the count
-    and not from the GROUPING, because the group's membership and its binding
-    are facts about every row: a group whose binding sits on a dropped row
-    still reaches its surviving versions through that shortcut.
+    return, and the count leaves them out even where a binding reaches them:
+    **the picker refuses a switch to one** (``VersionPicker``'s
+    ``handleSwitch``). It is a refusal rather than a disabling — such a row
+    still renders enabled, so it can open the cleanup that removes it. They are
+    left out of the count and not the GROUPING, because the group's membership
+    and its binding are facts about every row: a group whose binding sits on a
+    dropped row still reaches its surviving versions through that shortcut.
     """
     return len(reachable_rom_ids(rows) - dropped)

@@ -327,9 +327,8 @@ solo groups). Key derivation: `domain/sibling_group.py`, persisted as `roms.sibl
 - **Reachable** — a version a reader can get to from Steam: any member of a group that holds a binding, since the
   group's one shortcut opens the game's page and **Switch version** reaches the rest from there. Distinct from
   **bound**, which is the active version alone. A count of reachable ROMs is what a surface states about how much of a
-  platform or of a collection arrived in Steam; a count of bindings is what it states about shortcuts. For a platform
-  the two differ wherever a group **that holds a binding** has more than one version, or a version the last fetch did
-  not return — a group with no binding raises neither count (`reachable_count` vs. `count`,
+  platform or of a collection arrived in Steam; a count of bindings is what it states about shortcuts. The two answer
+  different questions and need not agree; a group with no binding raises neither (`reachable_count` vs. `count`,
   `services/library/reporter.py`). The platform count (`reachable_count`) also leaves out the versions the platform's
   last fetch did not return, because the picker refuses a switch to them; the collection count (`in_steam_count`) does
   not, because it follows the sync's collection filing, and that filing does not exclude them. Both start from one
