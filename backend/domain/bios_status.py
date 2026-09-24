@@ -189,10 +189,10 @@ class BiosStatus:
     required_count: int | None
     required_downloaded: int | None
     files: tuple[BiosFileEntry, ...]
-    # Server files the machine has an answer about (``needed`` or ``optional``).
-    # ``None`` means the caller did not supply it, so the "unknown" decision is
-    # not made; ``0`` alongside ``unknown_count`` means nothing about this
-    # platform's firmware could be established at all.
+    # Server files some emulator asks for (``needed`` or ``optional``) —
+    # :func:`count_wanted`, which says what the pair is and is not read for.
+    # ``None`` means the caller did not supply the counts, so the "unknown"
+    # decision is not made (:func:`_nothing_established`).
     known_count: int | None = None
     unknown_count: int = 0
     # Whether an absence from this platform's file list may be read as "nothing
