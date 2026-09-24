@@ -56,7 +56,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from domain.sibling_resolution import group_rows
+from domain.sibling_resolution import reachable_rom_ids
 from domain.sync_diff import select_stale_removals
 
 if TYPE_CHECKING:
@@ -188,17 +188,12 @@ class LocalLibraryReader:
     def do_read_reachable_rom_ids(self) -> set[int]:
         """Every ``rom_id`` the sync's collection filing resolves to a shortcut.
 
-        The same set ``SyncReporter._member_app_id`` answers, member by member
-        (CONTEXT.md → Reachable). One short read UoW.
+        :func:`domain.sibling_resolution.reachable_rom_ids` over every row — the
+        same set ``SyncReporter._member_app_id`` answers, member by member. One
+        short read UoW.
         """
         with self._uow_factory() as uow:
-            rows = list(uow.roms.iter_all())
-        return {
-            rom.rom_id
-            for group in group_rows(rows)
-            if any(member.shortcut_app_id is not None for member in group)
-            for rom in group
-        }
+            return reachable_rom_ids(list(uow.roms.iter_all()))
 
     def do_scan_stale_roms(self, synced_rom_ids: set[int], synced_app_ids: set[int]) -> list[tuple[int, int]]:
         """Return ``(rom_id, app_id)`` for bound ROMs not synced this run.

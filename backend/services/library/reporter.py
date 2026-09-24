@@ -28,7 +28,7 @@ from domain.fetch_generation import prune_candidate_ids
 from domain.platform_names import decode_platform_names
 from domain.rom import Rom
 from domain.rom_metadata_mapping import build_rom_metadata
-from domain.sibling_resolution import group_rows
+from domain.sibling_resolution import reachable_rom_ids
 from domain.sync_diff import BIND_ROM_ID_KEY, should_include_in_platform_collection
 from domain.sync_stage import SyncStage
 from domain.version_metadata import VersionMetadata
@@ -1055,14 +1055,9 @@ class SyncReporter:
 
 
 def _reachable_row_count(rows: list[Rom], dropped: set[int]) -> int:
-    """How many of *rows* a reader can reach from Steam.
+    """How many of *rows* a reader can reach from Steam, less *dropped*.
 
-    A sibling group is one game and gets one shortcut (ADR-0021 §2), so the
-    versions that did not win the binding are reached through the one that
-    did — the game's page offers **Switch version** across the whole group.
-    Counting bindings instead would report those versions as absent from
-    Steam, which is what the header line used to do.
-
+    What a binding reaches is :func:`domain.sibling_resolution.reachable_rom_ids`.
     *dropped* is the rows the last completed fetch of their platform did not
     return, and they are not reachable: **the picker refuses a switch to one**
     (``VersionPicker``'s ``handleSwitch``). It is a refusal rather than a
@@ -1071,15 +1066,5 @@ def _reachable_row_count(rows: list[Rom], dropped: set[int]) -> int:
     and not from the GROUPING, because the group's membership and its binding
     are facts about every row: a group whose binding sits on a dropped row
     still reaches its surviving versions through that shortcut.
-
-    Grouping is :func:`domain.sibling_resolution.group_rows`, so the
-    convention that a NULL ``sibling_group_key`` is its own group is stated
-    once rather than re-derived here: such a key was never computed, so it
-    relates no rows, and folding those rows together would make one binding
-    among them speak for all the others.
     """
-    return sum(
-        sum(1 for rom in group if rom.rom_id not in dropped)
-        for group in group_rows(rows)
-        if any(rom.shortcut_app_id is not None for rom in group)
-    )
+    return len(reachable_rom_ids(rows) - dropped)

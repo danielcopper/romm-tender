@@ -5,8 +5,9 @@ revision variants). :func:`group_rows` is the partition of a **row list** — wh
 rows in it form a group, and the rule that a NULL key is a singleton. It is not
 the only route to a group: a caller that wants one group by its key queries the
 repository for it (``uow.roms.iter_by_group_key``) and guards the NULL case
-itself, which several do. The rest answers two questions about a group, both a
-pure, shuffle-stable compute over its fetched members:
+itself, which several do. :func:`reachable_rom_ids` reads that partition for
+which rows a group's binding reaches. The rest answers two questions about a
+group, both a pure, shuffle-stable compute over its fetched members:
 
 * **Which version does the group bind to** — :func:`resolve_group_representative`.
   The resolution chain::
@@ -242,6 +243,25 @@ def group_rows(rows: Iterable[Rom]) -> list[list[Rom]]:
     groups = [sorted(group, key=lambda row: row.rom_id) for group in grouped.values()]
     groups.extend(singletons)
     return sorted(groups, key=lambda group: group[0].rom_id)
+
+
+def reachable_rom_ids(rows: Iterable[Rom]) -> set[int]:
+    """Every ``rom_id`` among *rows* a Steam shortcut reaches (CONTEXT.md → Reachable).
+
+    A sibling group is one game and gets one shortcut (ADR-0021 §2), so every
+    row of a group holding a binding is reached through it — the game's page
+    offers **Switch version** across the whole group, and the sync files each
+    collection member under its group's binding. Grouping is :func:`group_rows`,
+    so a NULL-keyed row is reached only through a binding of its own: one
+    binding among rows that merely share an absent key must not speak for the
+    others.
+    """
+    return {
+        row.rom_id
+        for group in group_rows(rows)
+        if any(member.shortcut_app_id is not None for member in group)
+        for row in group
+    }
 
 
 def resolve_group_representative(

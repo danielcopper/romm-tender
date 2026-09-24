@@ -5,7 +5,12 @@ from __future__ import annotations
 import pytest
 
 from domain.rom import Rom
-from domain.sibling_resolution import canonical_group_name, group_rows, resolve_group_representative
+from domain.sibling_resolution import (
+    canonical_group_name,
+    group_rows,
+    reachable_rom_ids,
+    resolve_group_representative,
+)
 from domain.version_metadata import VersionMetadata
 
 
@@ -464,3 +469,39 @@ def test_null_group_keys_are_independent_singletons():
         [_grouped_row(3, None), _grouped_row(2, "same"), _grouped_row(1, None), _grouped_row(4, "same")]
     )
     assert [[row.rom_id for row in group] for group in groups] == [[1], [2, 4], [3]]
+
+
+def _row(rom_id: int, group: str | None, *, app_id: int | None = None) -> Rom:
+    return Rom.synced(
+        rom_id=rom_id,
+        platform_slug="dc",
+        name=str(rom_id),
+        fs_name=f"{rom_id}.gdi",
+        shortcut_app_id=app_id,
+        synced_at="now",
+        version=VersionMetadata(sibling_group_key=group),
+    )
+
+
+class TestReachableRomIds:
+    def test_a_row_bound_itself_is_reached(self):
+        assert reachable_rom_ids([_row(1, None, app_id=100)]) == {1}
+
+    def test_every_row_of_a_group_holding_a_binding_is_reached(self):
+        rows = [_row(1, "g", app_id=100), _row(2, "g"), _row(3, "g")]
+
+        assert reachable_rom_ids(rows) == {1, 2, 3}
+
+    def test_a_group_without_a_binding_is_not_reached(self):
+        rows = [_row(1, "g"), _row(2, "g"), _row(3, "h", app_id=300)]
+
+        assert reachable_rom_ids(rows) == {3}
+
+    def test_null_keyed_rows_are_not_folded_into_one_group(self):
+        """A binding on one NULL-keyed row does not reach another NULL-keyed row."""
+        rows = [_row(1, None, app_id=100), _row(2, None)]
+
+        assert reachable_rom_ids(rows) == {1}
+
+    def test_no_rows_reach_nothing(self):
+        assert reachable_rom_ids([]) == set()
