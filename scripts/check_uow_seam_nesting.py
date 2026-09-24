@@ -209,7 +209,8 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # the machine as the save answer, taken twice per adoption rename.
         "resolve_savestate_location",
         # SaveLocationReader's detection question — whether any installation
-        # was found, which on its first answer runs the resolver's detection.
+        # was found. A found installation is memoised; until one is, every call
+        # runs the resolver's detection again.
         "installation_detected",
         # RomInfoService.save_answer (services/saves/rom_info.py) — the saves
         # package's own wrapper around that seam, listed because it is what the

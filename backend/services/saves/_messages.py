@@ -31,10 +31,10 @@ DEVICE_SYNC_DISABLED = "Save sync is disabled for this device on the RomM server
 # (#1625). Never collapse it onto ``server_unreachable``.
 SAVE_SYNC_BUSY_REASON = "sync_busy"
 SAVE_SYNC_BUSY = "Another save sync is still running"
-# The save answer's root is the content's own directory (RetroArch's
-# ``savefiles_in_content_dir``, or any emulator the resolver answers that way):
-# saves sit next to the ROM, outside what the plugin syncs. Neutral phrasing
-# that names no emulator — the frontend treats this as a benign skip.
+# A save the plugin could otherwise sync sits beside the content file
+# (``SaveAnswer.in_content_directory``; RetroArch's ``savefiles_in_content_dir``
+# is the usual cause), outside what the plugin syncs. Neutral phrasing that
+# names no emulator — the frontend treats this as a benign skip.
 SAVE_SYNC_IN_CONTENT_DIR = "Save sync is unavailable: saves are written to the game's content directory."
 # ``reason`` slug on the sync-gate failure shape; the frontend routes on this to
 # treat the result as a skip (no error, launch proceeds), not a failure. Single

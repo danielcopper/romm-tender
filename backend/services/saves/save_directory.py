@@ -62,8 +62,8 @@ class SaveDirectoryFollower:
     def do_follow(self, rom_id: int, answer: SaveAnswer) -> None:
         """Bring this ROM's save files to *answer*'s directory, then record it.
 
-        An answer that places no directory, or places it beside the content,
-        moves nothing and records nothing (:func:`_followable_directory`). No
+        An answer that places no directory, or anchors it in the content's own
+        directory, moves nothing and records nothing (:func:`_followable_directory`). No
         record yet: this is the first sight, so the answer is recorded and
         nothing moves. The same directory: nothing to do.
         """
@@ -225,8 +225,8 @@ def _followable_directory(answer: SaveAnswer) -> str | None:
     a multi-file game that is the game's own folder, which an uninstall removes
     whole, so nothing is carried into it or recorded for it — the old record
     stays, and switching the option back finds it unchanged. The root is read
-    here rather than :attr:`SaveAnswer.in_content_directory`, which leaves out a
-    save inside the content file.
+    here rather than :attr:`SaveAnswer.in_content_directory`, which is true only
+    for a syncable answer beside the content file.
     """
     if answer.root_kind == ROOT_CONTENT_DIRECTORY:
         # Holds until the content-directory gate is lifted.

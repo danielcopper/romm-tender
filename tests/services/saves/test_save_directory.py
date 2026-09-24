@@ -421,7 +421,12 @@ class TestNeverIntoTheContentDirectory:
 
 
 class TestTheSecondaryWritePathsFollowFirst:
-    """A write path that looks at local files follows a moved directory first, with the reading it took."""
+    """The write, delete and count paths follow a moved directory first, with the reading they took.
+
+    switch_slot, copy_save_to_slot, rollback_to_version, confirm_slot_choice's
+    migration, resolve_sync_conflict, delete_local_saves, delete_platform_saves,
+    count_platform_saves and get_save_status.
+    """
 
     @pytest.mark.asyncio
     async def test_a_switch_after_a_sort_flip_sees_the_unsynced_change(self, tmp_path, dirs):

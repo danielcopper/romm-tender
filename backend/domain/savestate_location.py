@@ -24,9 +24,10 @@ class SavestateLocation:
 
     ``root_kind`` is the anchor ``directory`` hangs off, in the resolver's own
     vocabulary — ``content_directory`` for states written beside the game.
-    ``fallback_directory`` is the unsorted root of the
-    :data:`domain.save_answer.SORTED_DIR_MISSING` note, ``None`` where the
-    placement is not conditional.
+    ``fallback_directory`` is the unsorted root RetroArch reverts to when it
+    cannot create a sorted savestate directory (``runloop.c:8878-8887``, as the
+    vendored resolver's ``placement.py`` cites it), ``None`` where the placement
+    is not conditional.
     """
 
     directory: str

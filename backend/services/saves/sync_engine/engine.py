@@ -477,10 +477,10 @@ class SyncEngine:
 
         The caller holds ``rom_lock`` and hands over the reading it already
         took, and calls this before it looks at any local file. Public
-        (peer-called): the secondary write paths follow first as well. Nothing
-        happens while save sync is off — the plugin then leaves save files
-        alone. A failure is logged and leaves the record as it was, so the
-        caller goes on and the next caller tries again.
+        (peer-called): the write, delete and count paths follow first as well.
+        The follow belongs to the sync, so it does nothing while save sync is
+        off. A failure is logged and leaves the record as it was, so the caller
+        goes on and the next caller tries again.
         """
         if answer is None or not self.is_save_sync_enabled():
             return

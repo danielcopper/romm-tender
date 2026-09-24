@@ -1116,8 +1116,8 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
   // a fact about the emulator's answer, not about our setting); the banner is
   // about getting save sync to work, so it is only worth showing to someone who
   // has save sync on. It names RetroArch's setting only as the usual cause: the
-  // answer can reach the content's directory by another route, so the setting
-  // being off is not something the banner may assume.
+  // answer can reach the content's directory by another route, so the banner may
+  // not assume the setting is on.
   //
   // The banner is a keyed sibling under a Fragment, never a branch returning a
   // different root: the flag lands a moment after the row first paints, and a
