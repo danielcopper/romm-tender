@@ -138,6 +138,36 @@ class TestApplyMask:
 
         assert apply_mask(masked, b"\x01\x02\x03\x04") == b"some payload"
 
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            b"",
+            b"\x37\xfa\x21\x3dx",
+            b"\x37\xfa\x21\x3d" * 2,
+            b"\xff" * 7,
+            b"\x00abc\xff",
+            bytes(range(256)) * 3 + b"\x01\x02",
+        ],
+        ids=[
+            "empty",
+            "result begins with zero bytes",
+            "result is all zero bytes",
+            "all ones",
+            "mixed",
+            "every byte value",
+        ],
+    )
+    def test_it_equals_the_bytewise_xor_the_rfc_defines(self, payload):
+        """RFC 6455 §5.3: octet i XORs with mask octet i mod 4.
+
+        A payload that starts with the mask unmasks to leading zero bytes, which
+        an integer-based XOR drops unless it keeps the length.
+        """
+        mask = b"\x37\xfa\x21\x3d"
+        bytewise = bytes(byte ^ mask[index % 4] for index, byte in enumerate(payload))
+
+        assert apply_mask(payload, mask) == bytewise
+
     def test_an_empty_mask_is_the_identity(self):
         assert apply_mask(b"unmasked", b"") == b"unmasked"
 
