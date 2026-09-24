@@ -479,10 +479,16 @@ class SyncEngine:
         took, and calls this before it looks at any local file. Public
         (peer-called): the write, delete and count paths follow first as well.
         The follow belongs to the sync, so it does nothing while save sync is
-        off. A failure is logged and leaves the record as it was, so the caller
-        goes on and the next caller tries again.
+        off, and nothing while a RetroDECK home migration is pending or still
+        running: the files are that migration's to move, and a follow then would
+        get past the user's overwrite-or-skip choice. A failure is logged and
+        leaves the record as it was, so the caller goes on and the next caller
+        tries again.
         """
         if answer is None or not self.is_save_sync_enabled():
+            return
+        if await self._loop.run_in_executor(None, self._is_retrodeck_migration_pending):
+            self._log_debug(f"follow_save_directory: rom {rom_id}: a home migration is pending; not following")
             return
         try:
             await self._loop.run_in_executor(None, self._follower.do_follow, rom_id, answer)

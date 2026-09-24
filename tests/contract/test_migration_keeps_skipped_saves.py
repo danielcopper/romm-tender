@@ -117,3 +117,44 @@ async def test_a_save_kept_by_skip_is_neither_replaced_nor_backed_up(harness):
     with harness.uow_factory() as uow:
         record = uow.answered_save_directories.get(_ROM)
     assert record == AnsweredSaveDirectory(rom_id=_ROM, directory=new_saves)
+
+
+async def test_a_status_read_during_a_running_migration_moves_nothing(harness):
+    # While a run is in flight — its markers already cleared, its re-record not
+    # finished — the gate still reports the migration, and the follow holds off.
+    old_saves = os.path.join(str(harness.tmp_path / "old"), "saves", "gba")
+    new_saves = os.path.join(str(harness.tmp_path / "new"), "saves", "gba")
+    _write(os.path.join(old_saves, "pokemon.srm"), b"old home", 1_000)
+    rom_path = os.path.join(str(harness.tmp_path / "new"), "roms", "gba", "pokemon.gba")
+    _write(rom_path, b"rom", 1_000)
+    with harness.uow_factory() as uow:
+        uow.roms.save(
+            Rom.synced(
+                rom_id=_ROM,
+                platform_slug="gba",
+                name="Pokemon",
+                fs_name="pokemon.gba",
+                shortcut_app_id=4242,
+                synced_at="2026-01-01T00:00:00",
+            )
+        )
+        uow.rom_installs.save(
+            RomInstall.mark_installed(
+                rom_id=_ROM,
+                file_path=rom_path,
+                rom_dir=None,
+                platform_slug="gba",
+                system="gba",
+                installed_at="2026-01-01T00:00:00",
+            )
+        )
+        uow.answered_save_directories.save(AnsweredSaveDirectory.record(rom_id=_ROM, directory=old_saves))
+    save_locations = cast("FakeSaveLocationReader", harness.plugin._save_sync_service._rom_info._save_locations)
+    save_locations.answer_with("gba", _answer(new_saves))
+    harness.plugin.settings["save_sync_enabled"] = True
+    harness.plugin._migration_service._migrations_in_flight = 1
+
+    await harness.plugin.get_save_status(_ROM)
+
+    assert _read(os.path.join(old_saves, "pokemon.srm")) == b"old home"
+    assert not os.path.exists(os.path.join(new_saves, "pokemon.srm"))

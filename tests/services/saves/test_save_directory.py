@@ -534,6 +534,45 @@ class TestTheSecondaryWritePathsFollowFirst:
         assert (new / "pokemon.srm").read_bytes() == b"progress"
 
     @pytest.mark.asyncio
+    async def test_the_status_read_alone_carries_the_files(self, tmp_path, dirs):
+        old, new = dirs
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        _create_save(tmp_path, content=b"progress")
+        _seed_answer(svc, _answer(str(new)))
+
+        status = await svc.get_save_status(_ROM)
+
+        assert [row["filename"] for row in status["files"]] == ["pokemon.srm"]
+        assert (new / "pokemon.srm").read_bytes() == b"progress"
+        assert _recorded(svc) == str(new)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "read",
+        [lambda svc: svc.get_save_status(_ROM), lambda svc: svc.count_platform_saves("gba")],
+        ids=["status", "count"],
+    )
+    async def test_nothing_is_followed_while_a_home_migration_is_pending(self, tmp_path, dirs, read):
+        # Those files are the home migration's to move; a follow would get past
+        # the user's overwrite-or-skip choice.
+        old, new = dirs
+        svc, _ = make_service(tmp_path, is_retrodeck_migration_pending=lambda: True)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        save = _create_save(tmp_path, content=b"progress")
+        _seed_answer(svc, _answer(str(new)))
+
+        await read(svc)
+
+        assert save.read_bytes() == b"progress"
+        assert not new.exists()
+        assert _recorded(svc) == str(old)
+
+    @pytest.mark.asyncio
     async def test_nothing_is_followed_while_save_sync_is_off(self, tmp_path, dirs):
         old, new = dirs
         svc, _ = make_service(tmp_path)
