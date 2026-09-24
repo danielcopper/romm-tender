@@ -167,12 +167,21 @@ class HostServer:
         ) from last_error
 
     async def stop(self) -> None:
-        """Stop accepting, and close the connection that is open."""
+        """Stop accepting, and close every connection the server holds, upgraded or not."""
         if self._connection is not None:
             await self._connection.close(1001, "server shutting down")
             self._connection = None
         if self._server is not None:
+            # A connection accepted in the previous tick is still a pending task
+            # building its transport; the yield lets it attach, so close_clients()
+            # reaches it. One whose accept lands in this same iteration can still
+            # be abandoned half-made, and CPython 3.13 then raises one harmless
+            # unraisable ``TypeError`` when the collector reaches that transport.
+            await asyncio.sleep(0)
             self._server.close()
+            # On 3.13 ``wait_closed`` waits for every client, so an accepted
+            # connection that never sends its request head would hold it open.
+            self._server.close_clients()
             with contextlib.suppress(Exception):
                 await self._server.wait_closed()
             self._server = None
