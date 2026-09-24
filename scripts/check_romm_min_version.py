@@ -30,7 +30,11 @@ CONSTANT = "_MIN_REQUIRED_VERSION"
 
 # Each claim site: file, a regex with the version as group 1, and a label.
 # The regexes are deliberately narrow — a loose one would rewrite unrelated
-# version numbers.
+# version numbers. Every claim but the two on the README's badge line sits in
+# Markdown prose that the formatter rewraps (``proseWrap: always`` in
+# ``deno.json``, list items included), so words there are separated by ``\s``
+# rather than a space: a statement broken across a line still matches instead
+# of reading as missing.
 CLAIMS = [
     (
         "README.md",
@@ -39,7 +43,7 @@ CLAIMS = [
     ),
     (
         "README.md",
-        re.compile(r"(?<=\*\*version )(\d+\.\d+\.\d+)(?= or newer\*\*)"),
+        re.compile(r"(?<=\*\*version\s)(\d+\.\d+\.\d+)(?=\sor\snewer\*\*)"),
         "readme requirements",
     ),
     (
@@ -49,12 +53,9 @@ CLAIMS = [
     ),
     (
         "CLAUDE.md",
-        re.compile(r"(?<=Requires RomM >= )(\d+\.\d+\.\d+)"),
+        re.compile(r"(?<=Requires\sRomM\s>=\s)(\d+\.\d+\.\d+)"),
         "claude.md trap note",
     ),
-    # The two pages below are reflowed by the Markdown formatter, so words are
-    # separated by ``\s`` rather than a space: a claim broken across a line then
-    # still matches instead of reading as missing.
     (
         "docs/user-guide/save-sync.md",
         re.compile(r"(?<=requires\s\*\*RomM\s>=\s)(\d+\.\d+\.\d+)(?=\*\*)"),

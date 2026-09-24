@@ -124,6 +124,12 @@ def test_a_claim_that_no_longer_matches_fails_rather_than_passing(
     assert f"{filename}: no RomM version found for the {label}" in capsys.readouterr().err
 
 
-def test_a_statement_reflowed_across_a_line_still_matches() -> None:
-    pattern = next(p for _, p, label in check.CLAIMS if label == "user guide rejection")
-    assert pattern.findall("Servers below\n5.3.0 are rejected at connection time") == ["5.3.0"]
+_REFLOWABLE_CLAIMS = [claim for claim in check.CLAIMS if "badge" not in claim[2]]
+
+
+@pytest.mark.parametrize("claim", _REFLOWABLE_CLAIMS, ids=[label for _, _, label in _REFLOWABLE_CLAIMS])
+def test_a_statement_reflowed_across_lines_still_matches(claim: tuple[str, re.Pattern[str], str]) -> None:
+    # The formatter may break a line at any space; the worst case is every one.
+    filename, pattern, _ = claim
+    reflowed = (_REPO_ROOT / filename).read_text(encoding="utf-8").replace(" ", "\n")
+    assert pattern.findall(reflowed) == [check.enforced_version()]
