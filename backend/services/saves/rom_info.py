@@ -109,6 +109,10 @@ class RomInfoService:
         """
         return self._install_row(rom_id) is not None
 
+    def installation_detected(self) -> bool:
+        """Whether an emulator installation was found for the save answers to come from."""
+        return self._save_locations.installation_detected()
+
     def save_answer(self, rom_id: int) -> SaveAnswer:
         """What this ROM's save consists of and whether it may be synced at all.
 

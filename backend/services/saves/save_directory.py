@@ -103,8 +103,11 @@ class SaveDirectoryFollower:
         would not act on, the record is deleted instead — kept, it would still
         name the old home, and a later answer would carry the left-behind copy
         from there; gone, that later answer is a first sight and moves nothing.
+        Nothing is deleted while no emulator installation is detected: every
+        answer then refuses for that reason alone, which says nothing about
+        where this game's saves are.
         """
-        if not self._rom_info.is_content_installed(rom_id):
+        if not self._rom_info.is_content_installed(rom_id) or not self._rom_info.installation_detected():
             return
         answered = _followable_directory(self._rom_info.save_answer(rom_id))
         if answered is None:

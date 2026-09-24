@@ -332,11 +332,14 @@ class SaveService:
             self._config.logger.info("No emulator installation detected; recording the save directories next start")
             return
         try:
-            await self._sync_engine.record_save_directories()
+            all_recorded = await self._sync_engine.record_save_directories()
         except Exception:
             # A background task nobody awaits: an exception left on it is never
             # reported. The next start runs the pass again.
             self._config.logger.exception("Recording the answered save directories failed; retrying next start")
+            return
+        if not all_recorded:
+            self._config.logger.warning("Recording some save directories failed; retrying next start")
             return
         await self._loop.run_in_executor(None, self._set_kv_marker, _KV_SAVE_DIRECTORIES_RECORDED)
 

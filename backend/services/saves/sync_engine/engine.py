@@ -489,23 +489,37 @@ class SyncEngine:
         except Exception:
             self._logger.exception("Following the save directory of rom %d failed; its record stays", rom_id)
 
-    async def record_save_directories(self) -> None:
-        """Record the answered save directory of each installed ROM that has none — the one-time backfill."""
-        await self._record_each_installed_rom(self._follower.do_record_if_absent)
+    async def record_save_directories(self) -> bool:
+        """Record the answered save directory of each installed ROM that has none — the one-time backfill.
 
-    async def rerecord_save_directories(self) -> None:
-        """Replace each installed ROM's record with today's answer, or drop it where that is not followable."""
-        await self._record_each_installed_rom(self._follower.do_rerecord)
+        Returns whether every ROM was recorded without a failure.
+        """
+        return await self._record_each_installed_rom(self._follower.do_record_if_absent)
 
-    async def _record_each_installed_rom(self, record: Callable[[int], None]) -> None:
+    async def rerecord_save_directories(self) -> bool:
+        """Replace each installed ROM's record with today's answer, or drop it where that is not followable.
+
+        Returns whether every ROM was recorded without a failure.
+        """
+        return await self._record_each_installed_rom(self._follower.do_rerecord)
+
+    async def _record_each_installed_rom(self, record: Callable[[int], None]) -> bool:
         """Run *record* for each installed ROM, serially, each under its own lock.
 
         Each call is offloaded to the executor, so the pass never holds the
         event loop, and the lock keeps it from racing a follow of the same ROM.
+        One ROM's failure is logged and the pass goes on to the rest; the
+        answer says whether any failed.
         """
+        all_recorded = True
         for rom_id in await self._loop.run_in_executor(None, self._installed_rom_ids):
             async with self.rom_lock(rom_id):
-                await self._loop.run_in_executor(None, record, rom_id)
+                try:
+                    await self._loop.run_in_executor(None, record, rom_id)
+                except Exception:
+                    all_recorded = False
+                    self._logger.exception("Recording the save directory of rom %d failed", rom_id)
+        return all_recorded
 
     async def read_save_answer(self, rom_id: int) -> SaveAnswer | None:
         """This ROM's save answer, read live, or ``None`` when it is not installed.

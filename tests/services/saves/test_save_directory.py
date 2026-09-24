@@ -741,6 +741,29 @@ class TestTheOneTimeBackfill:
         assert _recorded(svc) == str(tmp_path / "saves" / "gba")
 
     @pytest.mark.asyncio
+    async def test_one_failing_rom_does_not_stop_the_others(self, tmp_path):
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path, rom_id=1, file_name="one.gba")
+        _install_rom(svc, tmp_path, rom_id=2, file_name="two.gba")
+        follower = svc._sync_engine._follower
+        real = follower.do_record_if_absent
+
+        def fail_the_first(rom_id: int) -> None:
+            if rom_id == 1:
+                raise sqlite3.OperationalError("database is locked")
+            real(rom_id)
+
+        follower.do_record_if_absent = fail_the_first
+
+        await svc.record_save_directories_once()
+
+        assert _recorded(svc, 1) is None
+        assert _recorded(svc, 2) == str(tmp_path / "saves" / "gba")
+        with _uow(svc) as uow:
+            # The failed ROM is recorded at the next start, not never.
+            assert uow.kv_config.get("save_directories_recorded") is None
+
+    @pytest.mark.asyncio
     async def test_a_failed_pass_is_not_marked_done(self, tmp_path, caplog):
         svc, _ = make_service(tmp_path)
         _install_rom(svc, tmp_path)
@@ -816,3 +839,17 @@ class TestRecordingAgainAfterAHomeMigration:
         await svc.rerecord_save_directories()
 
         assert _recorded(svc) is None
+
+    @pytest.mark.asyncio
+    async def test_no_installation_detected_deletes_no_record(self, tmp_path, dirs):
+        # Every answer then refuses for that reason alone, which says nothing
+        # about where the saves are; a transient miss must not wipe the table.
+        old, _new = dirs
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        cast("FakeSaveLocationReader", svc._rom_info._save_locations).installation = False
+
+        await svc.rerecord_save_directories()
+
+        assert _recorded(svc) == str(old)
