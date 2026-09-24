@@ -262,7 +262,7 @@ describe("CustomPlayButton — download_failed listener", () => {
         platform_name: "PSX",
         error_message: "disk full",
       };
-      emitHostEvent<[DownloadFailedEvent]>("download_failed", event);
+      emitHostEvent<DownloadFailedEvent>("download_failed", event);
     });
 
     // Reset path: setState("download"), so the Download label appears and
@@ -277,7 +277,7 @@ describe("CustomPlayButton — download_failed listener", () => {
     await findByText("Play");
 
     act(() => {
-      emitHostEvent<[DownloadFailedEvent]>("download_failed", {
+      emitHostEvent<DownloadFailedEvent>("download_failed", {
         rom_id: 999, // mismatched — listener no-ops
         rom_name: "Other",
         platform_name: "PSX",
@@ -327,7 +327,7 @@ describe("CustomPlayButton — download_progress cancelled listener (#1017)", ()
         bytes_downloaded: 300,
         total_bytes: 1000,
       };
-      emitHostEvent<[DownloadProgressEvent]>("download_progress", event);
+      emitHostEvent<DownloadProgressEvent>("download_progress", event);
     });
 
     // Post-state: the Download label is shown and Play is gone — the visible
@@ -342,7 +342,7 @@ describe("CustomPlayButton — download_progress cancelled listener (#1017)", ()
     await findByText("Play");
 
     act(() => {
-      emitHostEvent<[DownloadProgressEvent]>("download_progress", {
+      emitHostEvent<DownloadProgressEvent>("download_progress", {
         rom_id: 999, // mismatched — listener no-ops
         rom_name: "Other",
         platform_name: "PSX",
@@ -397,7 +397,7 @@ describe("CustomPlayButton — cancel X on active download (#1049)", () => {
         bytes_downloaded: 300,
         total_bytes: 1000,
       };
-      emitHostEvent<[DownloadProgressEvent]>("download_progress", event);
+      emitHostEvent<DownloadProgressEvent>("download_progress", event);
     });
 
     return utils;
@@ -490,7 +490,7 @@ describe("CustomPlayButton — pause/resume on active download (#1124)", () => {
         total_bytes: 1000,
         ...(frame.resumable === undefined ? {} : { resumable: frame.resumable }),
       };
-      emitHostEvent<[DownloadProgressEvent]>("download_progress", event);
+      emitHostEvent<DownloadProgressEvent>("download_progress", event);
     });
 
     return utils;
@@ -736,7 +736,7 @@ describe("CustomPlayButton — extraction phase on a multi-file download", () =>
 
     for (const frame of frames) {
       act(() => {
-        emitHostEvent<[DownloadProgressEvent]>("download_progress", frame);
+        emitHostEvent<DownloadProgressEvent>("download_progress", frame);
       });
     }
 
@@ -1267,7 +1267,7 @@ describe("CustomPlayButton — completion flashes (#1677)", () => {
     vi.useFakeTimers();
     try {
       act(() => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", completeEvent());
+        emitHostEvent<DownloadCompleteEvent>("download_complete", completeEvent());
       });
       expect(getByText("Ready!")).toBeInTheDocument();
 
@@ -1360,7 +1360,7 @@ describe("CustomPlayButton — completion flashes (#1677)", () => {
     vi.useFakeTimers();
     try {
       act(() => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", completeEvent());
+        emitHostEvent<DownloadCompleteEvent>("download_complete", completeEvent());
       });
       expect(getByText("Ready!")).toBeInTheDocument();
       expect(vi.getTimerCount()).toBe(1);
@@ -1386,7 +1386,7 @@ describe("CustomPlayButton — completion flashes (#1677)", () => {
     vi.useFakeTimers();
     try {
       act(() => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", completeEvent());
+        emitHostEvent<DownloadCompleteEvent>("download_complete", completeEvent());
       });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(400);
@@ -1520,7 +1520,7 @@ describe("CustomPlayButton — completion flashes (#1677)", () => {
     vi.useFakeTimers();
     try {
       act(() => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", completeEvent());
+        emitHostEvent<DownloadCompleteEvent>("download_complete", completeEvent());
       });
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1100);
@@ -1540,7 +1540,7 @@ describe("CustomPlayButton — completion flashes (#1677)", () => {
     vi.useFakeTimers();
     try {
       act(() => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", completeEvent());
+        emitHostEvent<DownloadCompleteEvent>("download_complete", completeEvent());
       });
       act(() => {
         announceConflict(true);
@@ -3548,7 +3548,7 @@ describe("CustomPlayButton — active-download button never takes the idle blue 
       await Promise.resolve();
     });
     act(() => {
-      emitHostEvent<[DownloadProgressEvent]>("download_progress", {
+      emitHostEvent<DownloadProgressEvent>("download_progress", {
         rom_id: 42,
         rom_name: "Test ROM",
         platform_name: "PSP",
@@ -3676,7 +3676,7 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
     expect(await utils.findByText("Use Existing Files")).toBeTruthy();
 
     act(() => {
-      emitHostEvent<[DownloadProgressEvent]>("download_progress", {
+      emitHostEvent<DownloadProgressEvent>("download_progress", {
         rom_id: 42,
         rom_name: "Test ROM",
         platform_name: "PSX",
@@ -3697,7 +3697,7 @@ describe("CustomPlayButton — content already on disk (#260)", () => {
     expect(await utils.findByText("Use Existing Files")).toBeTruthy();
 
     act(() => {
-      emitHostEvent<[DownloadFailedEvent]>("download_failed", {
+      emitHostEvent<DownloadFailedEvent>("download_failed", {
         rom_id: 42,
         rom_name: "Test ROM",
         platform_name: "PSX",

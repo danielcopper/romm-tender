@@ -137,22 +137,19 @@ export const callable =
  *
  * Returning it is what lets a caller hand the same reference straight to
  * `removeEventListener`, which is how every teardown in `index.tsx` is written.
- *
- * An event carries exactly one payload (`backend/host/events.py` refuses more),
- * so the listener is called with exactly one argument.
  */
-export const addEventListener = <Args extends unknown[] = []>(
+export const addEventListener = <Payload = unknown>(
   event: string,
-  listener: (...args: Args) => unknown,
-): ((...args: Args) => unknown) => {
+  listener: (payload: Payload) => unknown,
+): ((payload: Payload) => unknown) => {
   socket().on(event, listener);
   return listener;
 };
 
 /** Drop a listener. Silent when it was never registered. */
-export const removeEventListener = <Args extends unknown[] = []>(
+export const removeEventListener = <Payload = unknown>(
   event: string,
-  listener: (...args: Args) => unknown,
+  listener: (payload: Payload) => unknown,
 ): void => {
   socket().off(event, listener);
 };

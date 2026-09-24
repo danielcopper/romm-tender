@@ -713,7 +713,7 @@ function attachListeners(appId: number, entry: Entry): () => void {
   // `installed` + `fs_size_bytes`, so the cached detail is dropped first and the
   // whole entry re-derived — reading it back inside the 3s TTL would return the
   // pre-change state.
-  const onDownloadComplete = addEventListener<[DownloadCompleteEvent]>("download_complete", (evt) => {
+  const onDownloadComplete = addEventListener<DownloadCompleteEvent>("download_complete", (evt) => {
     if (!reloadTriggeredBy(entry, evt.rom_id)) return;
     detach(reloadDetail(appId, entry));
   });

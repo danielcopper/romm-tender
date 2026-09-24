@@ -80,7 +80,7 @@ describe("syncManager — existing-shortcut update uses confirm-poll", () => {
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-confirm"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-confirm"));
       // One shortcut + the 50ms inter-item delay; give the async loop room.
       await flush(120);
     });
@@ -157,7 +157,7 @@ describe("syncManager — group-aware emit: one Steam shortcut per game (ADR-002
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", data);
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", data);
       await flush(150);
     });
 
@@ -195,7 +195,7 @@ describe("syncManager — group-aware emit: one Steam shortcut per game (ADR-002
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", data);
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", data);
       await flush(250);
     });
 
@@ -273,7 +273,7 @@ describe("syncManager — registers resolved appIds as RomM-owned at ack time (#
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>(
+      emitHostEvent<SyncApplyUnitData>(
         "sync_apply_unit",
         unitOf([item({ rom_id: 42, name: "Test ROM" })], "run-reg-create"),
       );
@@ -289,7 +289,7 @@ describe("syncManager — registers resolved appIds as RomM-owned at ack time (#
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>(
+      emitHostEvent<SyncApplyUnitData>(
         "sync_apply_unit",
         unitOf([item({ rom_id: 42, name: "Test ROM" })], "run-reg-update"),
       );
@@ -310,7 +310,7 @@ describe("syncManager — registers resolved appIds as RomM-owned at ack time (#
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>(
+      emitHostEvent<SyncApplyUnitData>(
         "sync_apply_unit",
         unitOf([item({ rom_id: 1, name: "Zelda (USA)" })], "run-reg-rebind"),
       );
@@ -343,7 +343,7 @@ describe("syncManager — does not ack a cancelled unit (#1041)", () => {
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-cancel-1041"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-cancel-1041"));
       await flush(120);
     });
 
@@ -367,11 +367,11 @@ describe("syncManager — once-per-run existing-shortcut scan cache", () => {
     initUnitSyncManager();
 
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-same"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-same"));
       await flush(120);
     });
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-same"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-same"));
       await flush(120);
     });
 
@@ -384,11 +384,11 @@ describe("syncManager — once-per-run existing-shortcut scan cache", () => {
     initUnitSyncManager();
 
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-diff-a"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-diff-a"));
       await flush(120);
     });
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-diff-b"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-diff-b"));
       await flush(120);
     });
 
@@ -442,7 +442,7 @@ describe("syncManager — records created shortcuts into the per-run delta store
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-create"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-create"));
       await flush(120);
     });
 
@@ -457,7 +457,7 @@ describe("syncManager — records created shortcuts into the per-run delta store
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-update"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-update"));
       await flush(120);
     });
 
@@ -472,7 +472,7 @@ describe("syncManager — records created shortcuts into the per-run delta store
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-create-fail"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-create-fail"));
       await flush(120);
     });
 
@@ -513,7 +513,7 @@ describe("syncManager — every frame it writes names the chunk's run", () => {
     try {
       initUnitSyncManager();
       await act(async () => {
-        emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", {
+        emitHostEvent<SyncApplyUnitData>("sync_apply_unit", {
           ...unit("", "run-now"),
           cover_refreshes: [{ rom_id: 7, app_id: 5007 }],
         });
@@ -607,14 +607,14 @@ describe("syncManager — chunked apply (#1025)", () => {
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>(
+      emitHostEvent<SyncApplyUnitData>(
         "sync_apply_unit",
         chunkOf([sc(1), sc(2)], { chunkIndex: 0, chunkOffset: 0, chunkCount: 2, unitTotal: 3, runId: "run-chunked" }),
       );
       await flush(180);
     });
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>(
+      emitHostEvent<SyncApplyUnitData>(
         "sync_apply_unit",
         chunkOf([sc(3)], { chunkIndex: 1, chunkOffset: 2, chunkCount: 2, unitTotal: 3, runId: "run-chunked" }),
       );
@@ -655,7 +655,7 @@ describe("syncManager — chunked apply (#1025)", () => {
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>(
+      emitHostEvent<SyncApplyUnitData>(
         "sync_apply_unit",
         chunkOf([sc(1), sc(2)], { chunkIndex: 0, chunkOffset: 0, chunkCount: 1, unitTotal: 2, runId: "run-selfheal" }),
       );
@@ -681,14 +681,14 @@ describe("syncManager — chunked apply (#1025)", () => {
   it("acks each chunk with its own chunk_index", async () => {
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>(
+      emitHostEvent<SyncApplyUnitData>(
         "sync_apply_unit",
         chunkOf([sc(1), sc(2)], { chunkIndex: 0, chunkOffset: 0, chunkCount: 2, unitTotal: 3, runId: "run-ack" }),
       );
       await flush(180);
     });
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>(
+      emitHostEvent<SyncApplyUnitData>(
         "sync_apply_unit",
         chunkOf([sc(3)], { chunkIndex: 1, chunkOffset: 2, chunkCount: 2, unitTotal: 3, runId: "run-ack" }),
       );
@@ -718,7 +718,7 @@ describe("syncManager — chunked apply (#1025)", () => {
 
     // Event 1: starts, suspends on the hung scan (in-flight guard now set).
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>(
+      emitHostEvent<SyncApplyUnitData>(
         "sync_apply_unit",
         chunkOf([sc(1)], { chunkIndex: 0, chunkOffset: 0, chunkCount: 1, unitTotal: 1, runId: "run-guard-1" }),
       );
@@ -728,7 +728,7 @@ describe("syncManager — chunked apply (#1025)", () => {
     // Event 2: arrives while event 1 is still hung → dropped by the guard before
     // it can scan or process anything.
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>(
+      emitHostEvent<SyncApplyUnitData>(
         "sync_apply_unit",
         chunkOf([sc(2)], { chunkIndex: 0, chunkOffset: 0, chunkCount: 1, unitTotal: 1, runId: "run-guard-2" }),
       );
@@ -826,7 +826,7 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", chunkOf([sc(42)], "run-cover-create"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", chunkOf([sc(42)], "run-cover-create"));
       await flush(120);
     });
 
@@ -842,7 +842,7 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", chunkOf([sc(42)], "run-cover-update"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", chunkOf([sc(42)], "run-cover-update"));
       await flush(120);
     });
 
@@ -859,7 +859,7 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", chunkOf([sc(42)], "run-cover-null"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", chunkOf([sc(42)], "run-cover-null"));
       await flush(120);
     });
 
@@ -879,7 +879,7 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", chunkOf([sc(42)], "run-cover-fail"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", chunkOf([sc(42)], "run-cover-fail"));
       await flush(120);
     });
 
@@ -908,7 +908,7 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", data);
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", data);
       await flush(300);
     });
 
@@ -942,7 +942,7 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", data);
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", data);
       await flush(300);
     });
 
@@ -976,7 +976,7 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", data);
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", data);
       await flush(300);
     });
     unsub();
@@ -1017,7 +1017,7 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", data);
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", data);
       await flush(400);
     });
     unsub();
@@ -1044,7 +1044,7 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", data);
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", data);
       await flush(250);
     });
 
@@ -1070,7 +1070,7 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", data);
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", data);
       await flush(250);
     });
 
@@ -1088,7 +1088,7 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", chunkOf([sc(42)], "run-no-refresh-field"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", chunkOf([sc(42)], "run-no-refresh-field"));
       await flush(120);
     });
 
@@ -1113,7 +1113,7 @@ describe("syncManager — applies cover artwork to created shortcuts via the API
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", chunkOf([sc(10), sc(20)], "run-cover-cancel"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", chunkOf([sc(10), sc(20)], "run-cover-cancel"));
       await flush(200);
     });
 
@@ -1216,7 +1216,7 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-adopt-happy"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-happy"));
       await flush(150);
     });
 
@@ -1249,7 +1249,7 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-adopt-nomatch"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-nomatch"));
       await flush(150);
     });
 
@@ -1270,7 +1270,7 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-adopt-null"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-null"));
       await flush(150);
     });
 
@@ -1289,7 +1289,7 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>(
+      emitHostEvent<SyncApplyUnitData>(
         "sync_apply_unit",
         unitOf([item({ rom_id: 10, name: "Dup" }), item({ rom_id: 20, name: "Dup" })], "run-adopt-twice"),
       );
@@ -1324,7 +1324,7 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-adopt-onescan"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-onescan"));
       await flush(150);
     });
 
@@ -1347,7 +1347,7 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-adopt-lazy"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-lazy"));
       await flush(150);
     });
 
@@ -1372,7 +1372,7 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>(
+      emitHostEvent<SyncApplyUnitData>(
         "sync_apply_unit",
         unitOf([item({ rom_id: 42, name: "Bound Game" }), item({ rom_id: 43, name: "Bound Game" })], "run-adopt-bound"),
       );
@@ -1402,7 +1402,7 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-adopt-noappstore"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-noappstore"));
       await flush(150);
     });
 
@@ -1426,7 +1426,7 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-adopt-noname"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-noname"));
       await flush(150);
     });
 
@@ -1446,11 +1446,11 @@ describe("syncManager — adopts orphan shortcuts instead of creating duplicates
 
     initUnitSyncManager();
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-adopt-cacheA"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-cacheA"));
       await flush(150);
     });
     await act(async () => {
-      emitHostEvent<[SyncApplyUnitData]>("sync_apply_unit", unit(cmd, "run-adopt-cacheB"));
+      emitHostEvent<SyncApplyUnitData>("sync_apply_unit", unit(cmd, "run-adopt-cacheB"));
       await flush(150);
     });
 

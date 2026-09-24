@@ -4550,7 +4550,7 @@ describe("RomMPlaySection", () => {
         fs_size_bytes: 123456,
       });
       await act(async () => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(1395));
+        emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(1395));
         await Promise.resolve();
       });
       await flushAsync();
@@ -4586,7 +4586,7 @@ describe("RomMPlaySection", () => {
       // Event for another ROM → the rom_id guard no-ops; no cache re-read.
       vi.mocked(cachedStore.getCachedGameDetail).mockClear();
       await act(async () => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999999));
+        emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(999999));
         await Promise.resolve();
       });
       await flushAsync();

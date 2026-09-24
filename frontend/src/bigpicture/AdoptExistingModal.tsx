@@ -159,7 +159,7 @@ export const AdoptExistingModal: FC<AdoptExistingModalProps> = ({
   const [confirmingReplace, setConfirmingReplace] = useState(false);
 
   useEffect(() => {
-    const listener = addEventListener<[VerifyProgressEvent]>("verify_progress", (payload) => {
+    const listener = addEventListener<VerifyProgressEvent>("verify_progress", (payload) => {
       if (payload.rom_id !== romId || !payload.bytes_total) return;
       setVerifyProgress(payload.bytes_done / payload.bytes_total);
     });

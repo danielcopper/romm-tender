@@ -1125,7 +1125,7 @@ describe("gameDetailStore", () => {
 
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true, fs_size_bytes: 8192 }));
       await act(async () => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(42));
+        emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(42));
         await Promise.resolve();
       });
       await flush();
@@ -1165,7 +1165,7 @@ describe("gameDetailStore", () => {
         found({ installed: true, ra_id: 7, stale_fields: ["achievements"] }),
       );
       await act(async () => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(42));
+        emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(42));
         await Promise.resolve();
       });
       await flush();
@@ -1285,7 +1285,7 @@ describe("gameDetailStore", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true }));
 
       await act(async () => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(42));
+        emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(42));
         await Promise.resolve();
       });
       await flush();
@@ -1334,7 +1334,7 @@ describe("gameDetailStore", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockClear();
 
       await act(async () => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
+        emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(999));
         globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: 999 } }));
         globalThis.dispatchEvent(
           new CustomEvent("romm_data_changed", { detail: { type: "rom_adopted", rom_id: 999 } }),
@@ -1366,7 +1366,7 @@ describe("gameDetailStore", () => {
       await act(async () => {
         // Another game's download: with no identity the entry cannot tell whose
         // event this is, and the read it needs is about its own appId either way.
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
+        emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(999));
         await Promise.resolve();
       });
       await flush();
@@ -1436,7 +1436,7 @@ describe("gameDetailStore", () => {
 
         vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true }));
         await act(async () => {
-          emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
+          emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(999));
           await Promise.resolve();
         });
         await flush();
@@ -1518,7 +1518,7 @@ describe("gameDetailStore", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockClear();
 
       await act(async () => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
+        emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(999));
         globalThis.dispatchEvent(new CustomEvent("romm_rom_uninstalled", { detail: { rom_id: 998 } }));
         await Promise.resolve();
       });
@@ -1540,14 +1540,14 @@ describe("gameDetailStore", () => {
       // and this entry has none to install.
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({ found: false });
       await act(async () => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
+        emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(999));
         await Promise.resolve();
       });
       await flush();
       vi.mocked(cachedStore.getCachedGameDetail).mockClear();
 
       await act(async () => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
+        emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(999));
         await Promise.resolve();
       });
       await flush();
@@ -1562,7 +1562,7 @@ describe("gameDetailStore", () => {
 
       vi.mocked(cachedStore.getCachedGameDetail).mockRejectedValueOnce(new Error("bridge down"));
       await act(async () => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(42));
+        emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(42));
         await Promise.resolve();
       });
       await flush();
@@ -1573,14 +1573,14 @@ describe("gameDetailStore", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue(found({ installed: true }));
       vi.mocked(cachedStore.getCachedGameDetail).mockClear();
       await act(async () => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
+        emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(999));
         await Promise.resolve();
       });
       await flush();
       expect(vi.mocked(cachedStore.getCachedGameDetail)).not.toHaveBeenCalled();
 
       await act(async () => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(42));
+        emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(42));
         await Promise.resolve();
       });
       await flush();
@@ -1626,7 +1626,7 @@ describe("gameDetailStore", () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockClear();
 
       await act(async () => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", downloadComplete(999));
+        emitHostEvent<DownloadCompleteEvent>("download_complete", downloadComplete(999));
         await Promise.resolve();
       });
       await flush();

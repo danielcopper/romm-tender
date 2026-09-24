@@ -225,10 +225,10 @@ export const VersionPicker: FC<VersionPickerProps> = ({ appId }) => {
     const onInstallChanged = (romId: number) => {
       if (memberIdsRef.current.has(romId)) detach(load());
     };
-    const dlComplete = addEventListener<[DownloadCompleteEvent]>("download_complete", (evt) =>
+    const dlComplete = addEventListener<DownloadCompleteEvent>("download_complete", (evt) =>
       onInstallChanged(evt.rom_id),
     );
-    const dlFailed = addEventListener<[DownloadFailedEvent]>("download_failed", (evt) => onInstallChanged(evt.rom_id));
+    const dlFailed = addEventListener<DownloadFailedEvent>("download_failed", (evt) => onInstallChanged(evt.rom_id));
     const onUninstalled = (e: Event) => onInstallChanged((e as CustomEvent<RommRomUninstalledDetail>).detail.rom_id);
     globalThis.addEventListener("romm_rom_uninstalled", onUninstalled);
 

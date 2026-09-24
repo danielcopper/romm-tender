@@ -12,7 +12,7 @@
  *   import { emitHostEvent } from "../test-utils/host-event-bus";
  *
  *   act(() => {
- *     emitHostEvent<[DownloadFailedEvent]>("download_failed", {
+ *     emitHostEvent<DownloadFailedEvent>("download_failed", {
  *       rom_id: 1, rom_name: "X", platform_name: "PSX", error_message: "boom",
  *     });
  *   });
@@ -30,7 +30,7 @@
 
 // Listeners are stored untyped — each test reifies the payload via the
 // generic on `emitHostEvent` / `mockAddEventListener`.
-type AnyListener = (...args: unknown[]) => unknown;
+type AnyListener = (payload: unknown) => unknown;
 
 const listeners = new Map<string, Set<AnyListener>>();
 
@@ -39,10 +39,10 @@ const listeners = new Map<string, Set<AnyListener>>();
  * `name` and returns it unchanged — matching the upstream signature, which
  * returns the listener so callers can hand it straight to `removeEventListener`.
  */
-export function mockAddEventListener<Args extends unknown[] = []>(
+export function mockAddEventListener<Payload = unknown>(
   name: string,
-  listener: (...args: Args) => unknown,
-): (...args: Args) => unknown {
+  listener: (payload: Payload) => unknown,
+): (payload: Payload) => unknown {
   let bucket = listeners.get(name);
   if (!bucket) {
     bucket = new Set();
@@ -56,9 +56,9 @@ export function mockAddEventListener<Args extends unknown[] = []>(
  * Stand-in for `api/host`'s `removeEventListener`. No-op if the listener
  * was never registered (matches upstream tolerance).
  */
-export function mockRemoveEventListener<Args extends unknown[] = []>(
+export function mockRemoveEventListener<Payload = unknown>(
   name: string,
-  listener: (...args: Args) => unknown,
+  listener: (payload: Payload) => unknown,
 ): void {
   const bucket = listeners.get(name);
   if (!bucket) return;
@@ -67,14 +67,14 @@ export function mockRemoveEventListener<Args extends unknown[] = []>(
 }
 
 /**
- * Synchronously invokes every listener registered for `name` with `args`.
+ * Synchronously invokes every listener registered for `name` with `payload`.
  * Use inside a React Testing Library `act(async () => { ... })` block when
  * the listener updates state so the resulting render flushes before assertions.
  *
  * Listener exceptions propagate — a test that wants to assert on error
  * handling should arrange for the listener to swallow its own throw.
  */
-export function emitHostEvent<Args extends unknown[] = []>(name: string, ...args: Args): void {
+export function emitHostEvent<Payload = unknown>(name: string, payload: Payload): void {
   const bucket = listeners.get(name);
   if (!bucket) return;
   // A snapshot, because a listener may remove ANOTHER listener while it runs —
@@ -82,7 +82,7 @@ export function emitHostEvent<Args extends unknown[] = []>(name: string, ...args
   // harmless. Mirrors `api/hostSocket.ts`'s dispatch, and is pinned the same.
   const registered = [...bucket];
   for (const listener of registered) {
-    listener(...args);
+    listener(payload);
   }
 }
 

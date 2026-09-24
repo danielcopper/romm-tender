@@ -726,7 +726,7 @@ describe("RomMGameInfoPanel", () => {
       // Download finishes for this rom → installed flips true + installedRom
       // populates → section (with the local path) appears live.
       await act(async () => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", {
+        emitHostEvent<DownloadCompleteEvent>("download_complete", {
           rom_id: 100,
           rom_name: "Test",
           platform_name: "Super Nintendo",
@@ -821,7 +821,7 @@ describe("RomMGameInfoPanel", () => {
       await flushAsync();
       expect(queryByText("ROM File")).toBeNull();
       await act(async () => {
-        emitHostEvent<[DownloadCompleteEvent]>("download_complete", {
+        emitHostEvent<DownloadCompleteEvent>("download_complete", {
           rom_id: 999,
           rom_name: "Other",
           platform_name: "Super Nintendo",

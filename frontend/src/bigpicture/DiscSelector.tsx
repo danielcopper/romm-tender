@@ -113,7 +113,7 @@ export const DiscSelector: FC<DiscSelectorProps> = ({ appId }) => {
   // Re-fetch on download_complete (a newly installed ROM may now be multi-disc);
   // hide on uninstall.
   useEffect(() => {
-    const completeListener = addEventListener<[DownloadCompleteEvent]>(
+    const completeListener = addEventListener<DownloadCompleteEvent>(
       "download_complete",
       (evt: DownloadCompleteEvent) => {
         if (evt.rom_id !== romIdRef.current) return;

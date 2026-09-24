@@ -330,7 +330,7 @@ describe("DiscSelector — event-driven re-fetch + cleanup", () => {
         app_id: 100,
         launch_options: "cmd",
       };
-      emitHostEvent<[DownloadCompleteEvent]>("download_complete", event);
+      emitHostEvent<DownloadCompleteEvent>("download_complete", event);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -347,7 +347,7 @@ describe("DiscSelector — event-driven re-fetch + cleanup", () => {
     await waitFor(() => expect(vi.mocked(backend.getDiscSelection)).toHaveBeenCalledTimes(1));
 
     await act(async () => {
-      emitHostEvent<[DownloadCompleteEvent]>("download_complete", {
+      emitHostEvent<DownloadCompleteEvent>("download_complete", {
         rom_id: 999,
         rom_name: "Other",
         platform_name: "PSX",

@@ -703,7 +703,7 @@ describe("index.tsx — download_complete launch-options sync", () => {
       launch_options: 'flatpak run net.retrodeck.retrodeck "/games/test.bin"',
     };
     act(() => {
-      emitHostEvent<[DownloadCompleteEvent]>("download_complete", event);
+      emitHostEvent<DownloadCompleteEvent>("download_complete", event);
     });
     await flush();
 
@@ -718,7 +718,7 @@ describe("index.tsx — download_complete launch-options sync", () => {
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[DownloadCompleteEvent]>("download_complete", {
+      emitHostEvent<DownloadCompleteEvent>("download_complete", {
         rom_id: 999,
         rom_name: "Unsynced",
         platform_name: "PSX",
@@ -738,7 +738,7 @@ describe("index.tsx — download_complete launch-options sync", () => {
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[DownloadCompleteEvent]>("download_complete", {
+      emitHostEvent<DownloadCompleteEvent>("download_complete", {
         rom_id: 42,
         rom_name: "Test ROM",
         platform_name: "PSX",
@@ -774,7 +774,7 @@ describe("index.tsx — download_progress cancelled eviction (#149 downloads-rou
     ]);
 
     act(() => {
-      emitHostEvent<[DownloadProgressEvent]>("download_progress", {
+      emitHostEvent<DownloadProgressEvent>("download_progress", {
         rom_id: 42,
         rom_name: "Paused",
         platform_name: "N64",
@@ -798,7 +798,7 @@ describe("index.tsx — download_progress cancelled eviction (#149 downloads-rou
     setDownloads([]);
 
     act(() => {
-      emitHostEvent<[DownloadProgressEvent]>("download_progress", {
+      emitHostEvent<DownloadProgressEvent>("download_progress", {
         rom_id: 7,
         rom_name: "Live",
         platform_name: "N64",
@@ -829,7 +829,7 @@ describe("index.tsx — sync_stale listener", () => {
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncStaleData]>("sync_stale", {
+      emitHostEvent<SyncStaleData>("sync_stale", {
         remove: [
           { rom_id: 99, app_id: 9900 },
           { rom_id: 77, app_id: 7700 },
@@ -848,7 +848,7 @@ describe("index.tsx — sync_stale listener", () => {
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncStaleData]>("sync_stale", { remove: [] });
+      emitHostEvent<SyncStaleData>("sync_stale", { remove: [] });
     });
     await flush();
 
@@ -869,7 +869,7 @@ describe("index.tsx — sync_stale listener", () => {
     vi.useFakeTimers();
     try {
       act(() => {
-        emitHostEvent<[SyncStaleData]>("sync_stale", { remove });
+        emitHostEvent<SyncStaleData>("sync_stale", { remove });
       });
       await act(async () => {
         for (let i = 0; i < 40; i++) await Promise.resolve();
@@ -899,7 +899,7 @@ describe("index.tsx — sync_stale listener", () => {
     vi.useFakeTimers();
     try {
       act(() => {
-        emitHostEvent<[SyncStaleData]>("sync_stale", { remove, prune_lease_token: "standalone-stale-lease" });
+        emitHostEvent<SyncStaleData>("sync_stale", { remove, prune_lease_token: "standalone-stale-lease" });
       });
       await act(async () => {
         for (let i = 0; i < 40; i++) await Promise.resolve();
@@ -931,7 +931,7 @@ describe("index.tsx — sync_stale listener", () => {
       // so the stored promise REJECTS — the shape L20 is about.
       await releaseAllPruneLeases();
       act(() => {
-        emitHostEvent<[SyncStaleData]>("sync_stale", {
+        emitHostEvent<SyncStaleData>("sync_stale", {
           remove: [{ rom_id: 1, app_id: 3000 }],
           prune_lease_token: "rejecting-stale-lease",
         });
@@ -949,7 +949,7 @@ describe("index.tsx — sync_stale listener", () => {
       // The completion continuation awaits that same tail and still runs its
       // sibling reconciles to the end instead of being aborted by it.
       act(() => {
-        emitHostEvent<[SyncCompleteAfterStaleFailure]>("sync_complete", {
+        emitHostEvent<SyncCompleteAfterStaleFailure>("sync_complete", {
           platform_app_ids: { gba: [3000] },
           total_games: 1,
           prune_lease_token: "completion-after-failed-tail",
@@ -983,7 +983,7 @@ describe("index.tsx — migration_relaunch_options listener", () => {
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[{ items: { app_id: number; launch_options: string }[] }]>("migration_relaunch_options", {
+      emitHostEvent<{ items: { app_id: number; launch_options: string }[] }>("migration_relaunch_options", {
         items: [
           { app_id: 100, launch_options: 'flatpak run net.retrodeck.retrodeck "/new/a.bin"' },
           { app_id: 200, launch_options: 'flatpak run net.retrodeck.retrodeck "/new/b.bin"' },
@@ -1001,7 +1001,7 @@ describe("index.tsx — migration_relaunch_options listener", () => {
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[{ items: { app_id: number; launch_options: string }[] }]>("migration_relaunch_options", {
+      emitHostEvent<{ items: { app_id: number; launch_options: string }[] }>("migration_relaunch_options", {
         items: [],
       });
     });
@@ -1016,7 +1016,7 @@ describe("index.tsx — migration_relaunch_options listener", () => {
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[{ items: { app_id: number; launch_options: string }[] }]>("migration_relaunch_options", {
+      emitHostEvent<{ items: { app_id: number; launch_options: string }[] }>("migration_relaunch_options", {
         items: [{ app_id: 100, launch_options: 'flatpak run net.retrodeck.retrodeck "/new/a.bin"' }],
       });
     });
@@ -1146,7 +1146,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     );
 
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", {
+      emitHostEvent<SyncCompletePayload>("sync_complete", {
         platform_app_ids: {},
         total_games: 0,
         cancelled: false,
@@ -1170,7 +1170,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     );
 
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", {
+      emitHostEvent<SyncCompletePayload>("sync_complete", {
         platform_app_ids: {},
         total_games: 0,
         cancelled: true,
@@ -1191,7 +1191,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     vi.mocked(getInstalledRelaunchOptions).mockRejectedValue(new Error("pull failed"));
 
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", {
+      emitHostEvent<SyncCompletePayload>("sync_complete", {
         platform_app_ids: {},
         total_games: 0,
         cancelled: false,
@@ -1219,7 +1219,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     vi.mocked(releasePruneConflictLease).mockClear();
 
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", {
+      emitHostEvent<SyncCompletePayload>("sync_complete", {
         platform_app_ids: { SNES: [100] },
         total_games: 1,
         prune_lease_token: "sync-complete-lease",
@@ -1249,7 +1249,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     createOrUpdateRomMCollections.mockClear();
 
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", {
+      emitHostEvent<SyncCompletePayload>("sync_complete", {
         platform_app_ids: { SNES: [100] },
         romm_collection_app_ids: { Favorites: [100] },
         total_games: 1,
@@ -1281,7 +1281,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     );
 
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", {
+      emitHostEvent<SyncCompletePayload>("sync_complete", {
         platform_app_ids: {},
         total_games: 0,
         prune_lease_token: "outer-sync-lease",
@@ -1309,7 +1309,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
     vi.useFakeTimers();
     try {
       act(() => {
-        emitHostEvent<[SyncStaleData]>("sync_stale", { remove, prune_lease_token: "stale-event-lease" });
+        emitHostEvent<SyncStaleData>("sync_stale", { remove, prune_lease_token: "stale-event-lease" });
       });
       await act(async () => {
         for (let index = 0; index < 40; index++) await Promise.resolve();
@@ -1318,7 +1318,7 @@ describe("index.tsx — sync_complete launch-options reconcile (#1151)", () => {
       expect(releasePruneConflictLease).not.toHaveBeenCalledWith("stale-event-lease");
 
       act(() => {
-        emitHostEvent<[SyncCompletePayload]>("sync_complete", {
+        emitHostEvent<SyncCompletePayload>("sync_complete", {
           platform_app_ids: {},
           total_games: 0,
           prune_lease_token: "stale-tail-lease",
@@ -1355,7 +1355,7 @@ describe("index.tsx — sync_complete registers RomM appIds (#1205)", () => {
 
   function emitSyncComplete(payload: SyncCompletePayload): void {
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", payload);
+      emitHostEvent<SyncCompletePayload>("sync_complete", payload);
     });
   }
 
@@ -1489,7 +1489,7 @@ describe("index.tsx — sync_complete stale-collection cleanup (#1040)", () => {
 
   function emitSyncComplete(payload: SyncCompletePayload): void {
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", payload);
+      emitHostEvent<SyncCompletePayload>("sync_complete", payload);
     });
   }
 
@@ -1663,7 +1663,7 @@ describe("index.tsx — sync_complete re-applies overview metadata (#1207)", () 
     vi.mocked(getAppIdRomIdMap).mockResolvedValue({ "100": 55 });
 
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", { platform_app_ids: {}, total_games: 1 });
+      emitHostEvent<SyncCompletePayload>("sync_complete", { platform_app_ids: {}, total_games: 1 });
     });
     await flush();
 
@@ -1686,7 +1686,7 @@ describe("index.tsx — sync_complete re-applies overview metadata (#1207)", () 
     vi.mocked(getAppIdRomIdMap).mockResolvedValue({ "7": 9 });
 
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", { platform_app_ids: {}, total_games: 3, cancelled: true });
+      emitHostEvent<SyncCompletePayload>("sync_complete", { platform_app_ids: {}, total_games: 3, cancelled: true });
     });
     await flush();
 
@@ -1705,7 +1705,7 @@ describe("index.tsx — sync_complete re-applies overview metadata (#1207)", () 
     vi.mocked(getMetadataCachePage).mockRejectedValue(new Error("boom"));
 
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", { platform_app_ids: {}, total_games: 1 });
+      emitHostEvent<SyncCompletePayload>("sync_complete", { platform_app_ids: {}, total_games: 1 });
     });
     await flush();
 
@@ -1756,7 +1756,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     vi.mocked(resetSyncCancel).mockClear();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", { run_id: "run-xyz", units: [], total_units: 1, total_roms: 1 });
+      emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-xyz", units: [], total_units: 1, total_roms: 1 });
     });
 
     // The listener clears the per-run cancel flag once per run, before any unit
@@ -1775,7 +1775,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     setSyncProgress({ running: true, stage: "applying", message: "Applying changes..." });
 
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", { platform_app_ids: {}, total_games: 42 });
+      emitHostEvent<SyncCompletePayload>("sync_complete", { platform_app_ids: {}, total_games: 42 });
     });
     await flush();
 
@@ -1789,7 +1789,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     setSyncProgress({ running: true, stage: "applying", message: "Applying changes..." });
 
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", { platform_app_ids: {}, total_games: 5, cancelled: true });
+      emitHostEvent<SyncCompletePayload>("sync_complete", { platform_app_ids: {}, total_games: 5, cancelled: true });
     });
     await flush();
 
@@ -1802,19 +1802,19 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", { run_id: "run-1", units: [], total_units: 2, total_roms: 2 });
+      emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 2, total_roms: 2 });
     });
     // Two distinct shortcuts created this run (what the syncManager create path records).
     recordSyncCreated(100);
     recordSyncCreated(200);
     // One shortcut removed via the real sync_stale listener.
     act(() => {
-      emitHostEvent<[SyncStaleData]>("sync_stale", { remove: [{ rom_id: 7, app_id: 700 }] });
+      emitHostEvent<SyncStaleData>("sync_stale", { remove: [{ rom_id: 7, app_id: 700 }] });
     });
 
     // total_games=53 is the misleading total — the toast must NOT use it.
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", { platform_app_ids: {}, total_games: 53 });
+      emitHostEvent<SyncCompletePayload>("sync_complete", { platform_app_ids: {}, total_games: 53 });
     });
     await flush();
 
@@ -1826,10 +1826,10 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", { run_id: "run-1", units: [], total_units: 1, total_roms: 0 });
+      emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 1, total_roms: 0 });
     });
     act(() => {
-      emitHostEvent<[SyncStaleData]>("sync_stale", {
+      emitHostEvent<SyncStaleData>("sync_stale", {
         remove: [
           { rom_id: 7, app_id: 700 },
           { rom_id: 8, app_id: 800 },
@@ -1837,7 +1837,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
       });
     });
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", { platform_app_ids: {}, total_games: 53 });
+      emitHostEvent<SyncCompletePayload>("sync_complete", { platform_app_ids: {}, total_games: 53 });
     });
     await flush();
 
@@ -1849,12 +1849,12 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", { run_id: "run-1", units: [], total_units: 1, total_roms: 53 });
+      emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 1, total_roms: 53 });
     });
     // No creates, no removes — but total_games=53 (the old toast wrongly said
     // "53 games added"). The fixed toast must say the library is up to date.
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", { platform_app_ids: {}, total_games: 53 });
+      emitHostEvent<SyncCompletePayload>("sync_complete", { platform_app_ids: {}, total_games: 53 });
     });
     await flush();
 
@@ -1866,14 +1866,14 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", { run_id: "run-1", units: [], total_units: 2, total_roms: 1 });
+      emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 2, total_roms: 1 });
     });
     // Same appId surfaces in its platform unit and a collection unit; the Set
     // in the store collapses it to one "added".
     recordSyncCreated(100);
     recordSyncCreated(100);
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", { platform_app_ids: {}, total_games: 1 });
+      emitHostEvent<SyncCompletePayload>("sync_complete", { platform_app_ids: {}, total_games: 1 });
     });
     await flush();
 
@@ -1885,13 +1885,13 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
+      emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
     });
     recordSyncCreated(100);
     recordSyncCreated(200);
     recordSyncCreated(300);
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", {
+      emitHostEvent<SyncCompletePayload>("sync_complete", {
         platform_app_ids: {},
         total_games: 53,
         cancelled: true,
@@ -1907,10 +1907,10 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
+      emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
     });
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", {
+      emitHostEvent<SyncCompletePayload>("sync_complete", {
         platform_app_ids: {},
         total_games: 53,
         cancelled: true,
@@ -1926,7 +1926,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
+      emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
     });
     recordSyncCreated(100);
     recordSyncCreated(200);
@@ -1935,7 +1935,7 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     // flags. The additive `interrupted` must win the wording: the run died
     // externally (frontend crash/reload), the user never pressed Cancel.
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", {
+      emitHostEvent<SyncCompletePayload>("sync_complete", {
         platform_app_ids: {},
         total_games: 53,
         cancelled: true,
@@ -1952,10 +1952,10 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
+      emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
     });
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", {
+      emitHostEvent<SyncCompletePayload>("sync_complete", {
         platform_app_ids: {},
         total_games: 53,
         cancelled: true,
@@ -1972,12 +1972,12 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
+      emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
     });
     recordSyncCreated(100);
     recordSyncCreated(200);
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", {
+      emitHostEvent<SyncCompletePayload>("sync_complete", {
         platform_app_ids: {},
         total_games: 53,
         cancelled: true,
@@ -2003,11 +2003,11 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
   it("a non-pause completion toast carries no custom duration (default lifetime)", async () => {
     const plugin = pluginFactory();
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", { run_id: "run-1", units: [], total_units: 1, total_roms: 1 });
+      emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 1, total_roms: 1 });
     });
     recordSyncCreated(100);
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", { platform_app_ids: {}, total_games: 1 });
+      emitHostEvent<SyncCompletePayload>("sync_complete", { platform_app_ids: {}, total_games: 1 });
     });
     await flush();
     const toastCalls = vi.mocked(toaster.toast).mock.calls;
@@ -2020,10 +2020,10 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
+      emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 3, total_roms: 10 });
     });
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", {
+      emitHostEvent<SyncCompletePayload>("sync_complete", {
         platform_app_ids: {},
         total_games: 53,
         cancelled: true,
@@ -2043,11 +2043,11 @@ describe("index.tsx — sync_complete toast shows the true delta (#744)", () => 
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", { run_id: "run-1", units: [], total_units: 1, total_roms: 1 });
+      emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-1", units: [], total_units: 1, total_roms: 1 });
     });
     recordSyncCreated(100);
     act(() => {
-      emitHostEvent<[SyncCompletePayload]>("sync_complete", {
+      emitHostEvent<SyncCompletePayload>("sync_complete", {
         platform_app_ids: {},
         total_games: 1,
         restart_recommended: true,
@@ -2065,7 +2065,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", {
+      emitHostEvent<SyncPlanData>("sync_plan", {
         run_id: "run-eta",
         units: [{ type: "platform", id: 1, name: "N64", slug: "n64", rom_count: 120, bound_count: 0 }],
         total_units: 3,
@@ -2083,7 +2083,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", {
+      emitHostEvent<SyncPlanData>("sync_plan", {
         run_id: "run-eta",
         units: [
           // A fully-mirrored platform re-syncing: every row already carries a
@@ -2114,7 +2114,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", {
+      emitHostEvent<SyncPlanData>("sync_plan", {
         run_id: "run-eta",
         units: [
           // A Force Full Sync clears the completion stamps, so collapsed_count is
@@ -2146,7 +2146,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", {
+      emitHostEvent<SyncPlanData>("sync_plan", {
         run_id: "run-eta",
         units: [{ type: "platform", id: 1, name: "N64", slug: "n64", rom_count: 200, bound_count: 0 }],
         total_units: 1,
@@ -2155,7 +2155,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
     });
     // A backend frame carries no etaSeconds — the listener must not wipe it.
     act(() => {
-      emitHostEvent<[SyncProgress]>("sync_progress", {
+      emitHostEvent<SyncProgress>("sync_progress", {
         running: true,
         stage: "applying",
         step: 1,
@@ -2179,7 +2179,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
     const previewSeed = 321;
     setSyncProgress({ running: true, stage: "applying", message: "Applying changes...", etaSeconds: previewSeed });
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", { run_id: "run-eta", units: [], total_units: 3, total_roms: 5400 });
+      emitHostEvent<SyncPlanData>("sync_plan", { run_id: "run-eta", units: [], total_units: 3, total_roms: 5400 });
     });
 
     // The crude estimateApplySeconds(5400, 0) bound must NOT overwrite the preview seed.
@@ -2195,7 +2195,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
     // the etaSeconds-undefined gate.
     expect(getSyncProgress().etaSeconds).toBeUndefined();
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", {
+      emitHostEvent<SyncPlanData>("sync_plan", {
         run_id: "run-eta",
         units: [{ type: "platform", id: 1, name: "N64", slug: "n64", rom_count: 80, bound_count: 0 }],
         total_units: 2,
@@ -2211,7 +2211,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", {
+      emitHostEvent<SyncPlanData>("sync_plan", {
         run_id: "run-eta",
         units: [
           {
@@ -2242,7 +2242,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", {
+      emitHostEvent<SyncPlanData>("sync_plan", {
         run_id: "run-eta",
         units: [
           // Predicted skip: weight 0 even though counts are known.
@@ -2288,7 +2288,7 @@ describe("index.tsx — sync_plan seeds the applying-phase ETA (always-on estima
     const plugin = pluginFactory();
 
     act(() => {
-      emitHostEvent<[SyncPlanData]>("sync_plan", {
+      emitHostEvent<SyncPlanData>("sync_plan", {
         run_id: "run-eta",
         units: [
           { type: "platform", id: 1, name: "N64", slug: "n64", rom_count: 60 },

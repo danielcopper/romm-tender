@@ -24,7 +24,7 @@ describe("one emitted backend event", () => {
     mockAddEventListener("sync_progress", first);
     mockAddEventListener("sync_progress", second);
 
-    emitHostEvent("sync_progress");
+    emitHostEvent("sync_progress", {});
 
     // A Set iterator walks the LIVE set, so an entry deleted before it is
     // reached is skipped in silence — no throw, `second` simply never runs.
@@ -33,7 +33,7 @@ describe("one emitted backend event", () => {
     expect(heard).toEqual(["first", "second"]);
 
     expect(hostEventListenerCount("sync_progress")).toBe(0);
-    emitHostEvent("sync_progress");
+    emitHostEvent("sync_progress", {});
     // The removals did take effect — for the NEXT emit, not the one they ran in.
     expect(heard).toEqual(["first", "second"]);
   });

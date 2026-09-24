@@ -1784,7 +1784,7 @@ describe("VersionPicker — event refresh", () => {
     expect(vi.mocked(backend.getVersionList)).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      emitHostEvent<[DownloadCompleteEvent]>("download_complete", { rom_id: 2 } as DownloadCompleteEvent);
+      emitHostEvent<DownloadCompleteEvent>("download_complete", { rom_id: 2 } as DownloadCompleteEvent);
       await Promise.resolve();
     });
     expect(vi.mocked(backend.getVersionList)).toHaveBeenCalledTimes(2);
@@ -1808,7 +1808,7 @@ describe("VersionPicker — event refresh", () => {
     expect(vi.mocked(backend.getVersionList)).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      emitHostEvent<[DownloadCompleteEvent]>("download_complete", { rom_id: 999 } as DownloadCompleteEvent);
+      emitHostEvent<DownloadCompleteEvent>("download_complete", { rom_id: 999 } as DownloadCompleteEvent);
       await Promise.resolve();
     });
 

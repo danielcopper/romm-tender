@@ -339,7 +339,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     // timer.
     let lastAnnouncedState: { romId: number | null; state: PlayButtonState } | null = null;
 
-    const progressListener = addEventListener<[DownloadProgressEvent]>(
+    const progressListener = addEventListener<DownloadProgressEvent>(
       "download_progress",
       (evt: DownloadProgressEvent) => {
         if (evt.rom_id !== romIdRef.current) return;
@@ -366,7 +366,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
       },
     );
 
-    const completeListener = addEventListener<[DownloadCompleteEvent]>(
+    const completeListener = addEventListener<DownloadCompleteEvent>(
       "download_complete",
       (evt: DownloadCompleteEvent) => {
         if (evt.rom_id !== romIdRef.current) return;
@@ -383,7 +383,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
     );
 
     /* istanbul ignore next -- delegation line; end-to-end wiring tested in CustomPlayButton.test.tsx */
-    const failedListener = addEventListener<[DownloadFailedEvent]>(
+    const failedListener = addEventListener<DownloadFailedEvent>(
       "download_failed",
       // The global listener in index.tsx owns the failure toast; here we only
       // reset local UI so the user can retry.
@@ -395,7 +395,7 @@ export const CustomPlayButton: FC<CustomPlayButtonProps> = ({ appId }) => { // N
         }),
     );
 
-    const uninstallProgressListener = addEventListener<[UninstallProgressEvent]>(
+    const uninstallProgressListener = addEventListener<UninstallProgressEvent>(
       "uninstall_progress",
       (evt: UninstallProgressEvent) => {
         if (evt.rom_id !== romIdRef.current) return;

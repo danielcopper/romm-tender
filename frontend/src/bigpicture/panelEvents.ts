@@ -388,7 +388,7 @@ export function wirePanelEvents(ctx: PanelEventContext): () => void {
   // download must flip both so the section (with the local path) appears
   // without a detail-page re-mount (#1340). A backend event (`api/host`),
   // not a DOM CustomEvent — mirrors DiscSelector's download_complete wiring.
-  const onDownloadComplete = addEventListener<[DownloadCompleteEvent]>(
+  const onDownloadComplete = addEventListener<DownloadCompleteEvent>(
     "download_complete",
     (evt: DownloadCompleteEvent) => {
       if (evt.rom_id !== ctx.romIdRef.current) return;

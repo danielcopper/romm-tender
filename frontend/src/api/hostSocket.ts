@@ -86,11 +86,11 @@ export function addressFromBundleUrl(bundleUrl: string): HostAddress {
 
 /** A listener registered for one event name.
  *
- *  `never[]` rather than `unknown[]`: the parameters of a function type are
+ *  `never` rather than `unknown`: the parameters of a function type are
  *  contravariant, so this is the shape every concrete listener is assignable TO,
  *  which is what lets the registry hold listeners of different payload types
  *  without a cast through `unknown` at each call. */
-export type Listener = (...args: never[]) => unknown;
+export type Listener = (payload: never) => unknown;
 
 interface PendingCall {
   resolve: (value: unknown) => void;

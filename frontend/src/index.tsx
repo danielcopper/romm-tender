@@ -749,15 +749,11 @@ const tender = definePlugin(() => {
     );
   };
 
-  const syncCompleteListener = addEventListener<
-    [
-      {
-        platform_app_ids: Record<string, number[]>;
-        romm_collection_app_ids?: Record<string, number[]>;
-        total_games: number;
-      },
-    ]
-  >("sync_complete", onSyncComplete);
+  const syncCompleteListener = addEventListener<{
+    platform_app_ids: Record<string, number[]>;
+    romm_collection_app_ids?: Record<string, number[]>;
+    total_games: number;
+  }>("sync_complete", onSyncComplete);
 
   const syncApplyUnitListener = initUnitSyncManager();
   // Mirror the run's frames into its per-unit rows for as long as the plugin is
@@ -767,7 +763,7 @@ const tender = definePlugin(() => {
   // Per-unit pipeline: planning + stale + collections events.
   // ``sync_plan`` arrives once per run with the full work queue: the per-run
   // resets below and the run's per-unit rows both key off it.
-  const syncPlanListener = addEventListener<[SyncPlanData]>("sync_plan", (data: SyncPlanData) => {
+  const syncPlanListener = addEventListener<SyncPlanData>("sync_plan", (data: SyncPlanData) => {
     syncContinuationController.abort();
     syncContinuationController = new AbortController();
     // sync_plan fires once per run, before any unit — reset the per-run delta
@@ -835,7 +831,7 @@ const tender = definePlugin(() => {
   // shortcut by the ``app_id`` the backend captured BEFORE unbinding the
   // row. Resolving rom_id→app_id here (via getExistingRomMShortcuts) would
   // race the backend unbind and find nothing, orphaning the shortcut.
-  const syncStaleListener = addEventListener<[SyncStaleData]>("sync_stale", (data: SyncStaleData) => {
+  const syncStaleListener = addEventListener<SyncStaleData>("sync_stale", (data: SyncStaleData) => {
     if (!Array.isArray(data.remove) || data.remove.length === 0) return;
     // Collect the valid app_ids and record the "removed" delta for each UP FRONT —
     // synchronously, before the first paced breather. recordSyncRemoved is a cheap,
@@ -880,7 +876,7 @@ const tender = definePlugin(() => {
   // routes these through ``sync_complete``; the per-unit path emits them
   // separately so the frontend can apply collection updates before the
   // terminal "done" toast.
-  const syncCollectionsListener = addEventListener<[SyncCollectionsData]>(
+  const syncCollectionsListener = addEventListener<SyncCollectionsData>(
     "sync_collections",
     (data: SyncCollectionsData) => {
       logInfo(`sync_collections received: ${Object.keys(data.platform_app_ids).length} platforms`);
@@ -891,12 +887,12 @@ const tender = definePlugin(() => {
   // module-level store. The backend frame carries no etaSeconds (that ceiling is
   // frontend-computed from sync_plan), so carry the current value across each
   // frame rather than letting the full-object replace wipe it.
-  const syncProgressListener = addEventListener<[SyncProgress]>("sync_progress", (progress: SyncProgress) => {
+  const syncProgressListener = addEventListener<SyncProgress>("sync_progress", (progress: SyncProgress) => {
     const { etaSeconds } = getSyncProgress();
     setSyncProgress(etaSeconds !== undefined ? { ...progress, etaSeconds } : progress);
   });
 
-  const downloadProgressListener = addEventListener<[DownloadProgressEvent]>(
+  const downloadProgressListener = addEventListener<DownloadProgressEvent>(
     "download_progress",
     (data: DownloadProgressEvent) => {
       // A cancel is an explicit discard — drop the entry entirely so no
@@ -925,7 +921,7 @@ const tender = definePlugin(() => {
     },
   );
 
-  const downloadCompleteListener = addEventListener<[DownloadCompleteEvent]>(
+  const downloadCompleteListener = addEventListener<DownloadCompleteEvent>(
     "download_complete",
     (data: DownloadCompleteEvent) => {
       const prev = getDownloadState().find((d) => d.rom_id === data.rom_id);
@@ -969,12 +965,11 @@ const tender = definePlugin(() => {
     },
   );
 
-  const downloadFailedListener = addEventListener<[DownloadFailedEvent]>(
-    "download_failed",
-    (data: DownloadFailedEvent) => handleGlobalDownloadFailure(data, { getDownloadState, updateDownload }, toaster),
+  const downloadFailedListener = addEventListener<DownloadFailedEvent>("download_failed", (data: DownloadFailedEvent) =>
+    handleGlobalDownloadFailure(data, { getDownloadState, updateDownload }, toaster),
   );
 
-  const pathChangedListener = addEventListener<[{ old_path: string; new_path: string; cleared?: boolean }]>(
+  const pathChangedListener = addEventListener<{ old_path: string; new_path: string; cleared?: boolean }>(
     "retrodeck_path_changed",
     (data) => {
       // Backend auto-clears the migration when the new path matches a previous
@@ -991,18 +986,14 @@ const tender = definePlugin(() => {
     },
   );
 
-  const saveSortChangedListener = addEventListener<
-    [
-      {
-        old_settings: { sort_by_content: boolean; sort_by_core: boolean };
-        new_settings: { sort_by_content: boolean; sort_by_core: boolean };
-      },
-    ]
-  >("save_sort_changed", () => {
+  const saveSortChangedListener = addEventListener<{
+    old_settings: { sort_by_content: boolean; sort_by_core: boolean };
+    new_settings: { sort_by_content: boolean; sort_by_core: boolean };
+  }>("save_sort_changed", () => {
     showToast("RetroArch save sorting changed. Go to Settings to migrate save files.");
   });
 
-  const saveStatusListener = addEventListener<[SaveStatus]>("save_status_updated", (data: SaveStatus) => {
+  const saveStatusListener = addEventListener<SaveStatus>("save_status_updated", (data: SaveStatus) => {
     const hasConflict = hasAnySaveConflict(data);
     globalThis.dispatchEvent(
       new CustomEvent("romm_data_changed", {
@@ -1014,9 +1005,10 @@ const tender = definePlugin(() => {
   // After a RetroDECK-home migration the backend rewrites each installed ROM's
   // launch command to the new path and emits the new command per shortcut.
   // Confirm-set each so existing shortcuts launch from the migrated location.
-  const migrationRelaunchListener = addEventListener<
-    [{ items: { app_id: number; launch_options: string }[]; prune_lease_token?: string }]
-  >("migration_relaunch_options", (data) => {
+  const migrationRelaunchListener = addEventListener<{
+    items: { app_id: number; launch_options: string }[];
+    prune_lease_token?: string;
+  }>("migration_relaunch_options", (data) => {
     detach(
       withPruneLease(data.prune_lease_token, "RetroDECK migration", (signal) =>
         batchConfirmLaunchOptions(data.items, "migration_relaunch_options", signal),
@@ -1028,7 +1020,7 @@ const tender = definePlugin(() => {
   // retry so the saves surfaces can show "Connecting to RomM… (attempt N/M)".
   // The consuming surface clears the store once its own load settles — the
   // ladder itself emits no terminal "done" frame.
-  const serverRetryListener = addEventListener<[ServerRetryProgressEvent]>(
+  const serverRetryListener = addEventListener<ServerRetryProgressEvent>(
     "server_retry_progress",
     (data: ServerRetryProgressEvent) => {
       setServerRetryProgress({ attempt: data.attempt, maxAttempts: data.max_attempts });
@@ -1073,7 +1065,7 @@ const tender = definePlugin(() => {
     );
   };
 
-  const pruneActionListener = addEventListener<[PruneActionRequired]>(
+  const pruneActionListener = addEventListener<PruneActionRequired>(
     "prune_action_required",
     (action: PruneActionRequired) => {
       if (!admitPruneFrame(action.preview_id, action.run_id)) return;
@@ -1081,11 +1073,11 @@ const tender = definePlugin(() => {
     },
   );
 
-  const pruneProgressListener = addEventListener<[PruneProgress]>("prune_progress", (progress: PruneProgress) =>
+  const pruneProgressListener = addEventListener<PruneProgress>("prune_progress", (progress: PruneProgress) =>
     setPruneProgress(progress),
   );
 
-  const pruneCompleteListener = addEventListener<[PruneComplete]>("prune_complete", (result: PruneComplete) => {
+  const pruneCompleteListener = addEventListener<PruneComplete>("prune_complete", (result: PruneComplete) => {
     const completed = setPruneComplete(result);
     if (!completed) return;
     for (const appId of completed.affected_app_ids) invalidateCachedGameDetail(appId);

@@ -455,7 +455,7 @@ export async function reconcileStaleShortcuts(): Promise<void> {
  * the backend can advance the work queue and durably commit the chunk.
  */
 export function initUnitSyncManager(): (data: SyncApplyUnitData) => unknown {
-  return addEventListener<[SyncApplyUnitData]>("sync_apply_unit", async (data: SyncApplyUnitData) => {
+  return addEventListener<SyncApplyUnitData>("sync_apply_unit", async (data: SyncApplyUnitData) => {
     if (_isUnitRunning) {
       logInfo(`sync_apply_unit: already processing a unit, dropping duplicate for ${data.unit_name}`);
       return;

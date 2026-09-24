@@ -314,7 +314,7 @@ describe("AdoptExistingModal — the content check", () => {
     await waitFor(() => expect(container.textContent).toContain("Checking the files…"));
 
     act(() => {
-      emitHostEvent<[VerifyProgressEvent]>("verify_progress", {
+      emitHostEvent<VerifyProgressEvent>("verify_progress", {
         rom_id: ROM_ID,
         bytes_done: 50,
         bytes_total: 200,
@@ -340,7 +340,7 @@ describe("AdoptExistingModal — the content check", () => {
     await waitFor(() => expect(container.textContent).toContain("Checking the files…"));
 
     act(() => {
-      emitHostEvent<[VerifyProgressEvent]>("verify_progress", { rom_id: 999, bytes_done: 50, bytes_total: 200 });
+      emitHostEvent<VerifyProgressEvent>("verify_progress", { rom_id: 999, bytes_done: 50, bytes_total: 200 });
     });
     expect(container.textContent).not.toContain("25%");
 

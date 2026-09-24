@@ -3,7 +3,7 @@
 
 The realtime event channel is declared twice: the backend emits a named event
 via ``self._emit("name", payload)`` (Python) and the frontend subscribes to it
-via ``addEventListener<[Payload]>("name", handler)`` (TypeScript). Nothing ties
+via ``addEventListener<Payload>("name", handler)`` (TypeScript). Nothing ties
 the two together at build time — a renamed/added/removed event on either side
 only surfaces at runtime as an event that fires into the void (emit with no
 listener) or a listener that never wakes (listener with no emitter).
@@ -127,7 +127,7 @@ def _skip_generic(text: str, lt_index: int) -> int | None:
     """Return the index just past the balanced ``<...>`` opening at *lt_index*.
 
     *lt_index* must index a ``<``. Depth-counts ``<``/``>`` so a nested generic
-    (``addEventListener<[{ a: number }]>``) balances correctly; string literals
+    (``addEventListener<Record<string, number>>``) balances correctly; string literals
     inside are skipped so brackets/quotes within them never affect the count.
     Returns None if the angle brackets never balance (truncated source).
     """
