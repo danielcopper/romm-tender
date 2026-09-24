@@ -1470,14 +1470,19 @@ The Favorites pane has no table: the sentence and the game count. What the Favor
 more than one favorites collection is left for the build: today the tab then disables its favorites toggle and lists
 them all under Standard, and another user's public favorites collection is enough to cause it.
 
-**In Steam counts how many of a collection's games already have a shortcut**, so its distance from ROMs is roughly what
-turning the collection on adds. It costs no request. RomM's collection listings carry each collection's member ROM ids,
-on all three kinds, and the count is those ids looked up against the shortcuts Tender made (`roms.shortcut_app_id`). It
-is approximate where several versions of one game share a shortcut. The same listings carry the owner's user name on
-standard and smart collections, which is what the Owner column shows. The backend computes the count and forwards it
-with the owner's name; the member ids do not cross the wire. `get_collections` receives the member ids and the owner's
-name today and forwards neither, and the page still costs the four RomM requests `get_collections` makes: one each for
-standard and smart, and one for each of the two virtual types the plugin syncs.
+**In Steam counts how many of a collection's games a reader can already reach from Steam** (CONTEXT.md → Reachable): a
+member counts when it has a shortcut of its own or a version of the same game does. It costs no RomM request of its own.
+RomM's collection listings carry each collection's member ROM ids, on all three kinds, and the count is those ids looked
+up against the rows Tender keeps — the test the sync uses when it files a collection member under a shortcut, so the
+count is what turning the collection on does with each member. It counts members, not shortcuts: two versions of one
+game in a collection count twice. It falls short only for a member Tender has never fetched, whose version group is
+unknown until a sync fetches it. ROMs minus In Steam is still only roughly how many shortcuts turning the collection on
+adds, because several new versions of one game become one shortcut. The same listings carry the owner's user name on
+standard and smart collections, which is what the Owner column shows. `get_collections` forwards both — `in_steam_count`
+on all three kinds, absent when Tender could not read its own record, and `owner_username` on standard and smart, `null`
+when RomM names no owner — and the member ids do not cross the wire. The page does not show either yet. It costs the
+four RomM requests `get_collections` makes — one each for standard and smart, and one for each of the two virtual types
+the plugin syncs — and one read of Tender's own database after them.
 
 **Those two columns are why a kind is the pane and a collection a row.** A pane per collection would show the owner and
 how many of its games are already in Steam, and both fit as a column of the kind's table, so such a pane spends the

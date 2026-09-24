@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, NamedTuple
 
+from domain.collection_listing import collection_entry
 from domain.collection_owner import is_own_collection
 from domain.fetch_generation import backfill_needed, count_rows_for_skip
 from domain.platform_prefs import materialize_enabled_platforms, resolve_sync_enabled
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
 
     from domain.collection_sync_state import CollectionSyncState
     from services.library._state import LibrarySyncStateBox
+    from services.library.local_library_reader import LocalLibraryReader
     from services.protocols import (
         DebugLogger,
         RommLibraryApi,
@@ -105,8 +107,10 @@ class LibraryFetcherConfig:
     Holds the Protocol-typed RomM adapter, the live settings dict,
     runtime infrastructure (loop, logger), settings persistence callback,
     debug-logger seam, the shared ``LibrarySyncStateBox`` (read for the
-    cancel signal), and an ``_emit_progress`` callback the fetcher uses
-    to surface long paginated fetches to the frontend.
+    cancel signal), an ``_emit_progress`` callback the fetcher uses
+    to surface long paginated fetches to the frontend, and the
+    ``LocalLibraryReader`` peer the collections listing asks which ROMs
+    are reachable from Steam.
     """
 
     romm_api: RommLibraryApi
@@ -118,6 +122,7 @@ class LibraryFetcherConfig:
     uow_factory: UnitOfWorkFactory
     sync_state_box: LibrarySyncStateBox
     emit_progress: EmitProgressFn
+    local_library_reader: LocalLibraryReader
 
 
 class LibraryFetcher:
@@ -133,6 +138,7 @@ class LibraryFetcher:
         self._uow_factory = config.uow_factory
         self._sync_state = config.sync_state_box
         self._emit_progress = config.emit_progress
+        self._local_library_reader = config.local_library_reader
 
     # ── Platform metadata callables ──────────────────────────────
 
@@ -241,49 +247,46 @@ class LibraryFetcher:
         # degrades to "All" rather than filtering wrongly (the non-breaking
         # fallback).
         own_user_id = self._settings.get("romm_user_id")
-        result = []
-        for c in standard_collections:
-            cid = str(c["id"])
-            result.append(
-                {
-                    "id": cid,
-                    "name": c.get("name", ""),
-                    "rom_count": c.get("rom_count", len(c.get("rom_ids", []))),
-                    "sync_enabled": enabled["standard"].get(cid, False),
-                    "kind": "standard",
-                    "is_favorite": bool(c.get("is_favorite", False)),
-                    "is_own": is_own_collection(c.get("user_id"), own_user_id, kind="standard"),
-                }
+        # One short read UoW for every collection at once — after the listing
+        # fetches, never across them. Fail-open: ``in_steam_count`` is a
+        # secondary column, so a failed read lists the collections without it.
+        try:
+            reachable = await self._loop.run_in_executor(None, self._local_library_reader.do_read_reachable_rom_ids)
+        except Exception as e:
+            self._logger.warning(f"Collection in-Steam count read failed, listing without it: {e}")
+            reachable = None
+        result = [
+            collection_entry(
+                c,
+                "standard",
+                enabled,
+                reachable,
+                is_favorite=bool(c.get("is_favorite", False)),
+                is_own=is_own_collection(c.get("user_id"), own_user_id, kind="standard"),
+                owner_username=c.get("owner_username"),
             )
-        for c in smart_collections:
-            cid = str(c["id"])
-            result.append(
-                {
-                    "id": cid,
-                    "name": c.get("name", ""),
-                    "rom_count": c.get("rom_count", len(c.get("rom_ids", []))),
-                    "sync_enabled": enabled["smart"].get(cid, False),
-                    "kind": "smart",
-                    "is_favorite": False,
-                    "is_own": is_own_collection(c.get("user_id"), own_user_id, kind="smart"),
-                }
+            for c in standard_collections
+        ]
+        result.extend(
+            collection_entry(
+                c,
+                "smart",
+                enabled,
+                reachable,
+                is_favorite=False,
+                is_own=is_own_collection(c.get("user_id"), own_user_id, kind="smart"),
+                owner_username=c.get("owner_username"),
             )
-        for virtual_type, items in virtual_by_type:
-            for c in items:
-                cid = str(c["id"])
-                result.append(
-                    {
-                        "id": cid,
-                        "name": c.get("name", ""),
-                        "rom_count": c.get("rom_count", len(c.get("rom_ids", []))),
-                        "sync_enabled": enabled["virtual"].get(cid, False),
-                        "kind": "virtual",
-                        "virtual_type": virtual_type,
-                        "is_favorite": False,
-                        # Virtual collections have no owner — always own.
-                        "is_own": True,
-                    }
-                )
+            for c in smart_collections
+        )
+        # Virtual collections have no owner — always own, and no owner name.
+        result.extend(
+            collection_entry(
+                c, "virtual", enabled, reachable, virtual_type=virtual_type, is_favorite=False, is_own=True
+            )
+            for virtual_type, items in virtual_by_type
+            for c in items
+        )
 
         _kind_order = {"standard": 0, "smart": 1, "virtual": 2}
         result.sort(key=lambda x: (_kind_order.get(x["kind"], 99), x["name"].lower()))

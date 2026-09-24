@@ -23,9 +23,9 @@ def rebind_loop(library_service, loop):
     session-budget monitor) hold their own ctor-bound ``_loop``. Tests that
     swap in a mock loop must propagate it to all four so async calls land on
     the override. ``ShortcutLaunchResolver``, ``LocalLibraryReader`` and
-    ``ChunkDispatcher`` hold none — the first two are synchronous workers the
-    orchestrator offloads through *its* loop, and the dispatcher offloads
-    nothing at all.
+    ``ChunkDispatcher`` hold none — the first two are synchronous workers their
+    holders offload through *their* loops (the orchestrator's, and the fetcher's
+    for the reachable set), and the dispatcher offloads nothing at all.
     """
     library_service._fetcher._loop = loop
     library_service._orchestrator._loop = loop
@@ -63,11 +63,23 @@ def _make_collections_loop(user=None, smart=None, virtual=None):
     ``virtual`` is returned for the FIRST supported virtual type and ``[]`` for
     every other, so the whole virtual set is exactly ``virtual`` (tagged as the
     first type) — robust to the supported-type tuple growing.
+
+    Every call after the listings runs the offloaded function for real:
+    ``get_collections`` then reads the reachable set from the plugin's own fake
+    UoW, so its ``in_steam_count`` answers from whatever rows the test seeded.
     """
-    values = [list(user or []), list(smart or [])]
-    values.extend(list(virtual or []) if idx == 0 else [] for idx in range(len(_SUPPORTED_VIRTUAL_TYPES)))
+    listings = iter(
+        [list(user or []), list(smart or [])]
+        + [list(virtual or []) if idx == 0 else [] for idx in range(len(_SUPPORTED_VIRTUAL_TYPES))]
+    )
+    exhausted = object()
+
+    async def _executor(_executor_arg, fn, *args):
+        listing = next(listings, exhausted)
+        return fn(*args) if listing is exhausted else listing
+
     mock_loop = MagicMock()
-    mock_loop.run_in_executor = AsyncMock(side_effect=values)
+    mock_loop.run_in_executor = AsyncMock(side_effect=_executor)
     return mock_loop
 
 

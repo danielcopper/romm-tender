@@ -62,3 +62,34 @@ class TestResidentGroupKeys:
         keys = plugin._sync_service._local_library_reader.do_read_resident_group_keys()
 
         assert keys == {1: "igdb:5:1"}
+
+
+class TestReachableRomIds:
+    """Which ROMs a reader can reach from Steam — CONTEXT.md → Reachable."""
+
+    def test_a_bound_row_is_reachable(self, plugin):
+        _seed_rom_row(plugin, 1, app_id=100, platform_slug="n64", sibling_group_key=None)
+
+        assert plugin._sync_service._local_library_reader.do_read_reachable_rom_ids() == {1}
+
+    def test_an_unbound_row_is_reachable_through_its_groups_binding(self, plugin):
+        _seed_rom_row(plugin, 1, app_id=100, platform_slug="n64", sibling_group_key="igdb:5:1")
+        _seed_rom_row(plugin, 2, app_id=None, platform_slug="n64", sibling_group_key="igdb:5:1")
+
+        assert plugin._sync_service._local_library_reader.do_read_reachable_rom_ids() == {1, 2}
+
+    def test_a_group_with_no_binding_reaches_nothing(self, plugin):
+        _seed_rom_row(plugin, 1, app_id=None, platform_slug="n64", sibling_group_key="igdb:5:1")
+        _seed_rom_row(plugin, 2, app_id=None, platform_slug="n64", sibling_group_key="igdb:5:1")
+
+        assert plugin._sync_service._local_library_reader.do_read_reachable_rom_ids() == set()
+
+    def test_null_keyed_unbound_rows_are_not_folded_into_a_bound_null_keyed_row(self, plugin):
+        """A NULL key relates a row to nothing, so another NULL-keyed binding reaches it not."""
+        _seed_rom_row(plugin, 1, app_id=100, platform_slug="n64", sibling_group_key=None)
+        _seed_rom_row(plugin, 2, app_id=None, platform_slug="n64", sibling_group_key=None)
+
+        assert plugin._sync_service._local_library_reader.do_read_reachable_rom_ids() == {1}
+
+    def test_no_rows_reach_nothing(self, plugin):
+        assert plugin._sync_service._local_library_reader.do_read_reachable_rom_ids() == set()

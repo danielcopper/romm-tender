@@ -15,6 +15,7 @@ from tests.services.library._helpers import (
     _make_loop_raising,
     _make_loop_with_executor,
     _make_registry_entry,
+    _seed_rom_row,
     rebind_loop,
 )
 
@@ -498,6 +499,123 @@ class TestGetCollectionsOwnerScope:
         result = await plugin._sync_service.get_collections()
 
         assert result["collections"][0]["is_own"] is True
+
+
+class TestGetCollectionsInSteamCount:
+    """Each collection states how many of its members are reachable from Steam.
+
+    Reachable is the test the sync files a collection member under: its own
+    binding, else its sibling group's (CONTEXT.md → Reachable).
+    """
+
+    async def _in_steam_count(self, plugin, rom_ids, *, kind="standard"):
+        listing = [{"id": 1, "name": "C", "rom_ids": rom_ids}]
+        loop_arg = {"standard": "user", "smart": "smart", "virtual": "virtual"}[kind]
+        rebind_loop(plugin._sync_service, _make_collections_loop(**{loop_arg: listing}))
+        result = await plugin._sync_service.get_collections()
+        assert result["success"] is True
+        return result["collections"][0]["in_steam_count"]
+
+    @pytest.mark.asyncio
+    async def test_a_member_bound_on_its_own_row_counts(self, plugin):
+        _seed_rom_row(plugin, 10, app_id=1010, platform_slug="n64", sibling_group_key=None)
+
+        assert await self._in_steam_count(plugin, [10]) == 1
+
+    @pytest.mark.asyncio
+    async def test_an_unbound_member_counts_through_its_groups_binding(self, plugin):
+        _seed_rom_row(plugin, 10, app_id=1010, platform_slug="n64", sibling_group_key="igdb:5:1")
+        _seed_rom_row(plugin, 11, app_id=None, platform_slug="n64", sibling_group_key="igdb:5:1")
+
+        # Only the unbound version is in the collection; its sibling's shortcut reaches it.
+        assert await self._in_steam_count(plugin, [11]) == 1
+
+    @pytest.mark.asyncio
+    async def test_a_member_with_no_local_row_does_not_count(self, plugin):
+        _seed_rom_row(plugin, 10, app_id=1010, platform_slug="n64", sibling_group_key=None)
+
+        assert await self._in_steam_count(plugin, [10, 99]) == 1
+
+    @pytest.mark.asyncio
+    async def test_an_unbound_member_with_no_group_key_does_not_count(self, plugin):
+        _seed_rom_row(plugin, 10, app_id=1010, platform_slug="n64", sibling_group_key=None)
+        _seed_rom_row(plugin, 11, app_id=None, platform_slug="n64", sibling_group_key=None)
+
+        assert await self._in_steam_count(plugin, [11]) == 0
+
+    @pytest.mark.asyncio
+    async def test_two_versions_of_one_bound_game_both_count(self, plugin):
+        _seed_rom_row(plugin, 10, app_id=1010, platform_slug="n64", sibling_group_key="igdb:5:1")
+        _seed_rom_row(plugin, 11, app_id=None, platform_slug="n64", sibling_group_key="igdb:5:1")
+
+        assert await self._in_steam_count(plugin, [10, 11]) == 2
+
+    @pytest.mark.asyncio
+    async def test_smart_and_virtual_collections_carry_the_count_too(self, plugin):
+        _seed_rom_row(plugin, 10, app_id=1010, platform_slug="n64", sibling_group_key=None)
+
+        assert await self._in_steam_count(plugin, [10, 11], kind="smart") == 1
+        assert await self._in_steam_count(plugin, [10, 11], kind="virtual") == 1
+
+    @pytest.mark.asyncio
+    async def test_a_failed_local_read_lists_every_collection_without_the_count(self, plugin, monkeypatch, caplog):
+        import logging
+
+        def _raise():
+            raise RuntimeError("database is locked")
+
+        monkeypatch.setattr(plugin._sync_service._local_library_reader, "do_read_reachable_rom_ids", _raise)
+        user = [{"id": 1, "name": "U", "rom_ids": [10], "owner_username": "alice"}]
+        smart = [{"id": 2, "name": "S", "rom_ids": [10]}]
+        franchise = [{"id": "fr-1", "name": "F", "rom_ids": [10]}]
+        rebind_loop(plugin._sync_service, _make_collections_loop(user, smart, franchise))
+
+        with caplog.at_level(logging.WARNING):
+            result = await plugin._sync_service.get_collections()
+
+        assert result["success"] is True
+        assert [c["name"] for c in result["collections"]] == ["U", "S", "F"]
+        assert all("in_steam_count" not in c for c in result["collections"])
+        assert result["collections"][0]["owner_username"] == "alice"
+        assert "in-Steam count read failed" in caplog.text
+        assert "database is locked" in caplog.text
+
+
+class TestGetCollectionsOwnerUsername:
+    """Standard and smart collections forward RomM's ``owner_username``; virtual ones have no owner."""
+
+    @pytest.mark.asyncio
+    async def test_standard_and_smart_forward_the_owner_name(self, plugin):
+        user = [{"id": 1, "name": "U", "rom_count": 1, "owner_username": "alice"}]
+        smart = [{"id": 2, "name": "S", "rom_count": 1, "owner_username": "bob"}]
+        rebind_loop(plugin._sync_service, _make_collections_loop(user=user, smart=smart))
+
+        result = await plugin._sync_service.get_collections()
+
+        by_kind = {c["kind"]: c for c in result["collections"]}
+        assert by_kind["standard"]["owner_username"] == "alice"
+        assert by_kind["smart"]["owner_username"] == "bob"
+
+    @pytest.mark.asyncio
+    async def test_a_listing_without_the_owner_name_forwards_none(self, plugin):
+        user = [{"id": 1, "name": "U", "rom_count": 1}]
+        smart = [{"id": 2, "name": "S", "rom_count": 1}]
+        rebind_loop(plugin._sync_service, _make_collections_loop(user=user, smart=smart))
+
+        result = await plugin._sync_service.get_collections()
+
+        for c in result["collections"]:
+            assert "owner_username" in c
+            assert c["owner_username"] is None
+
+    @pytest.mark.asyncio
+    async def test_virtual_collections_carry_no_owner_name(self, plugin):
+        franchise = [{"id": "fr-1", "name": "F", "rom_count": 1, "owner_username": "alice"}]
+        rebind_loop(plugin._sync_service, _make_collections_loop(virtual=franchise))
+
+        result = await plugin._sync_service.get_collections()
+
+        assert "owner_username" not in result["collections"][0]
 
 
 # ---------------------------------------------------------------------------

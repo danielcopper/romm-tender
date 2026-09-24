@@ -122,7 +122,14 @@ class LibraryService:
         self._logger = config.logger
         self._box = LibrarySyncStateBox()
 
-        # Sub-service: fetcher. Constructed first because the orchestrator
+        # Sub-service: LocalLibraryReader — the fetcher's inward pair, reading
+        # the local database where the fetcher reads RomM. Constructed first:
+        # the fetcher holds it for the collections listing's reachable set, and
+        # the orchestrator holds it and offloads every other read through its
+        # own executor.
+        self._local_library_reader = LocalLibraryReader(config=LocalLibraryReaderConfig(uow_factory=config.uow_factory))
+
+        # Sub-service: fetcher. Constructed before the orchestrator, which
         # holds a reference to it for the per-unit fetch pipeline. The
         # progress-emit proxy late-binds to ``self._orchestrator`` so it
         # can be threaded into the fetcher's config before the
@@ -138,6 +145,7 @@ class LibraryService:
                 uow_factory=config.uow_factory,
                 sync_state_box=self._box,
                 emit_progress=self._emit_progress_proxy,
+                local_library_reader=self._local_library_reader,
             )
         )
 
@@ -152,12 +160,6 @@ class LibraryService:
                 disc_resolver=config.disc_resolver,
             )
         )
-
-        # Sub-service: LocalLibraryReader — the fetcher's inward pair, reading
-        # the local database where the fetcher reads RomM. Constructed before the
-        # orchestrator, which holds it and offloads every one of its reads
-        # through its own executor.
-        self._local_library_reader = LocalLibraryReader(config=LocalLibraryReaderConfig(uow_factory=config.uow_factory))
 
         # Sub-service: session-budget monitor. Constructed before both holders:
         # the chunk dispatcher asks it at every chunk boundary, the orchestrator

@@ -7,7 +7,7 @@ delegation. Covered here:
 
 - ``get_sync_status`` / ``sync_heartbeat`` / ``get_sync_stats`` / ``get_sync_runs``
 - ``get_platforms`` (happy + server-failure)
-- ``get_collections`` (happy + server-failure)
+- ``get_collections`` (happy + server-failure, and each collection's in-Steam count and owner)
 - ``get_registry_platforms``
 
 Note on the failure shape: ``get_platforms`` / ``get_collections`` now return
@@ -23,7 +23,7 @@ from __future__ import annotations
 from domain.sync_run_kind import SyncRunKind
 from lib.errors import RommConnectionError
 
-from ._seed import seed_platform_stamp, seed_rom, seed_sync_run
+from ._seed import seed_group_member, seed_platform_stamp, seed_rom, seed_sync_run
 
 # ── get_sync_status ──────────────────────────────────────────────────────
 
@@ -308,6 +308,36 @@ async def test_get_collections_happy_shape(harness):
     assert isinstance(c["sync_enabled"], bool)
     # Owner-scope tag (#1532): no stored identity → treated as own (degrade to "All").
     assert c["is_own"] is True
+
+
+async def test_get_collections_states_each_collections_reach_into_steam_and_its_owner(harness):
+    """``in_steam_count`` counts members reachable from Steam; ``owner_username`` is RomM's.
+
+    A member counts through its own binding or its sibling group's, over the real
+    SQLite rows: 30 is bound, 31 is an unbound version of the same game, 40 is an
+    unbound version of a game nobody bound, and 50 has no row at all.
+    """
+    seed_group_member(harness, 30, group_key="igdb:9:gba", shortcut_app_id=3030)
+    seed_group_member(harness, 31, group_key="igdb:9:gba")
+    seed_group_member(harness, 40, group_key="igdb:8:gba")
+    harness.romm.collections = [
+        {"id": 7, "name": "Mine", "rom_count": 4, "rom_ids": [30, 31, 40, 50], "owner_username": "alice"},
+    ]
+    harness.romm.smart_collections = [{"id": 8, "name": "Smart", "rom_count": 1, "rom_ids": [31]}]
+    harness.romm.virtual_collections = {
+        "franchise": [{"id": "fr-1", "name": "Franchise", "rom_count": 2, "rom_ids": [40, 31]}],
+    }
+
+    result = await harness.plugin.get_collections()
+
+    assert result["success"] is True
+    by_id = {c["id"]: c for c in result["collections"]}
+    assert by_id["7"]["in_steam_count"] == 2
+    assert by_id["7"]["owner_username"] == "alice"
+    assert by_id["8"]["in_steam_count"] == 1
+    assert by_id["8"]["owner_username"] is None
+    assert by_id["fr-1"]["in_steam_count"] == 1
+    assert "owner_username" not in by_id["fr-1"]
 
 
 async def test_get_collections_virtual_shape(harness):

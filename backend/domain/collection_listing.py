@@ -1,0 +1,41 @@
+"""One row of the collections listing the panel reads (``get_collections``).
+
+Shaped from one item of a RomM collection listing — standard, smart or virtual,
+which all carry ``id``, ``name``, ``rom_count`` and ``rom_ids`` — plus what only
+this device knows about it: whether its sync is enabled, and how many of its
+members are reachable from Steam (CONTEXT.md → Reachable). No I/O: the listing
+item, the enabled bucket and the reachable set come in as arguments.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+
+def collection_entry(
+    listing: dict[str, Any],
+    kind: str,
+    enabled: dict[str, dict[str, bool]],
+    reachable: set[int] | None,
+    **fields: Any,
+) -> dict[str, Any]:
+    """The listing row for *listing*, with the kind-specific *fields* after the shared ones.
+
+    ``in_steam_count`` counts the member ids in *reachable*, so two versions of
+    one game both count although they share one shortcut. It is absent, never
+    ``0``, when *reachable* is ``None`` — nothing was established, and a zero
+    would claim that none of the collection is in Steam.
+    """
+    cid = str(listing["id"])
+    member_ids = listing.get("rom_ids", [])
+    entry = {
+        "id": cid,
+        "name": listing.get("name", ""),
+        "rom_count": listing.get("rom_count", len(member_ids)),
+        "sync_enabled": enabled[kind].get(cid, False),
+        "kind": kind,
+        **fields,
+    }
+    if reachable is not None:
+        entry["in_steam_count"] = sum(1 for rom_id in member_ids if rom_id in reachable)
+    return entry

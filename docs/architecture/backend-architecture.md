@@ -369,7 +369,7 @@ The library sync subsystem is a façade over nine sub-services that coordinate t
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `service.py`                  | `LibraryService` façade — public callable surface; wires the sub-services and delegates                                                                                                                                                                                                                                                                                                                            |
 | `fetcher.py`                  | `LibraryFetcher` — read-only RomM roundtrips: list platforms/collections, the incremental/full pagination loop, per-unit work-queue construction. The outward half of the read pair below                                                                                                                                                                                                                          |
-| `local_library_reader.py`     | `LocalLibraryReader` — the inward pair of `fetcher.py`: what THIS DEVICE recorded about the library, read back out of SQLite (the bound `Rom` rows, the completion stamps, the persisted sibling keys, the last finished run), shaped into the projections a run decides against. Declared read-only (`scripts/check_read_only_module.py`)                                                                         |
+| `local_library_reader.py`     | `LocalLibraryReader` — the inward pair of `fetcher.py`: what THIS DEVICE recorded about the library, read back out of SQLite (the bound `Rom` rows, the completion stamps, the persisted sibling keys, the last finished run), shaped into the projections a run decides against and the reachable set the collections listing counts against. Declared read-only (`scripts/check_read_only_module.py`)            |
 | `sync_orchestrator.py`        | `SyncOrchestrator` — preview (read-only), the per-unit apply pipeline (fetch → collapse → delta, then hand the delta to the dispatcher), cancel, the heartbeat clock, progress emission, and which terminal status a stopped run earns. Holds no `ArtworkManager` at all — the run's artwork seam is `cover_preparer.py`'s and `reporter.py`'s                                                                     |
 | `chunk_dispatcher.py`         | `ChunkDispatcher` — one unit's apply as durable chunk round-trips: emit `sync_apply_unit`, wait out the heartbeat clock for the ack, commit the chunk through the reporter, and stash or discard a chunk whose ack never came. It opens no transaction, and the run's `try_begin_run` / `finish_run` stay with the orchestrator                                                                                    |
 | `cover_preparer.py`           | `CoverPreparer` — one unit's covers, readied before its shortcuts are emitted: the `refresh_changed_covers` invalidation pass, the download for the ROMs getting a shortcut, and each emitted entry's `cover_path`. Delegated to `ArtworkService` through the `ArtworkManager` seam, with the run's progress and cancel signals bound in                                                                           |
@@ -826,6 +826,19 @@ synced — while virtual units and every unit under `"all"` pass through unchang
 per-kind enable state without mutating it, so switching back to `"all"` restores the prior enables. Because an **unknown
 identity never filters**, the feature is non-breaking: it silently no-ops until `romm_user_id` is stamped (see the
 ConnectionService lazy-identity note), then activates — no re-login required.
+
+**Each collection row states how much of it Steam already reaches, and who owns it (#1833).** `get_collections` adds two
+fields to its rows. `in_steam_count`, on all three kinds, counts the collection's member ROM ids (RomM's listings carry
+`rom_ids` on each) that are **reachable** (CONTEXT.md → Reachable): the member's own row is bound, or a row in its
+sibling group is — the same test `SyncReporter._member_app_id` applies when it files a member under a Steam collection.
+A member with no local row, and an unbound one with no group key, does not count; the count is over member ids, so two
+versions of one bound game both count. The fetcher reads the reachable set through its inward pair
+(`LocalLibraryReader.do_read_reachable_rom_ids`) in one short read UoW after every listing request, never across them,
+and the per-row count is `domain/collection_listing.py`'s. The count is a secondary column, so the read is fail-open: if
+it raises, the listing is still returned, every row omits `in_steam_count` (absent, never `0`) and a warning is logged.
+`owner_username` is RomM's own field on the standard and smart listings (`CollectionSchema` / `SmartCollectionSchema` in
+every RomM version the plugin accepts), forwarded as `null` where a listing lacks it; virtual rows carry no such key,
+since they have no owner.
 
 **Incremental skip — the per-platform completion stamp is the sole authority.** A platform unit skips only when its
 `PlatformSyncState` stamp exists
