@@ -23,7 +23,7 @@ import os
 from typing import TYPE_CHECKING
 
 from domain.answered_save_directory import AnsweredSaveDirectory
-from domain.save_answer import SORTED_DIR_MISSING
+from domain.save_answer import ROOT_CONTENT_DIRECTORY, SORTED_DIR_MISSING
 
 if TYPE_CHECKING:
     import logging
@@ -214,13 +214,15 @@ class SaveDirectoryFollower:
 def _followable_directory(answer: SaveAnswer) -> str | None:
     """The directory a follow compares and carries into, or ``None`` where it may do neither.
 
-    ``None`` where the answer places no directory, and where it places the save
-    beside the content: for a multi-file game that is the game's own folder,
-    which an uninstall removes whole, so nothing is carried into it or recorded
-    for it — the old record stays, and switching the option back finds it
-    unchanged.
+    ``None`` where the answer places no directory, and where it anchors the save
+    in the content's own directory — beside the content file or inside it: for
+    a multi-file game that is the game's own folder, which an uninstall removes
+    whole, so nothing is carried into it or recorded for it — the old record
+    stays, and switching the option back finds it unchanged. The root is read
+    here rather than :attr:`SaveAnswer.in_content_directory`, which leaves out a
+    save inside the content file.
     """
-    if answer.in_content_directory:
+    if answer.root_kind == ROOT_CONTENT_DIRECTORY:
         # Holds until the content-directory gate is lifted.
         return None
     return answer.directory

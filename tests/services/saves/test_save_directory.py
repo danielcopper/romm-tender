@@ -364,6 +364,28 @@ class TestNeverIntoTheContentDirectory:
         assert save.read_bytes() == b"progress"
         assert _recorded(svc) == str(old)
 
+    def test_a_save_inside_the_content_file_is_neither_followed_nor_recorded(self, tmp_path, dirs, rom_dir):
+        # Not "beside" the content, but anchored in the same folder all the same.
+        old, _new = dirs
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        save = _create_save(tmp_path, content=b"progress")
+
+        _follow(
+            svc,
+            _answer(
+                str(rom_dir),
+                names=(),
+                state="inside_content",
+                caveats=("save-inside-content",),
+                root_kind="content_directory",
+            ),
+        )
+
+        assert save.read_bytes() == b"progress"
+        assert _recorded(svc) == str(old)
+
     def test_a_first_sight_beside_the_content_records_nothing(self, tmp_path, rom_dir):
         svc, _ = make_service(tmp_path)
         _install_rom(svc, tmp_path)

@@ -19,6 +19,7 @@ from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import RomSaveSyncState
+from domain.save_answer import SaveAnswer
 from lib.errors import (
     RommApiError,
     RommAuthError,
@@ -1276,6 +1277,60 @@ class TestSaveSyncContentDirGate:
         self._assert_benign_skip({**result, "roms_checked": 0}, all_saves=True)
         assert result["roms_checked"] == 1
         assert not any(c[0] in ("list_saves", "upload_save", "download_save_content") for c in fake.call_log)
+
+    @staticmethod
+    def _inside_the_content(tmp_path, caveat: str, emulator: str) -> SaveAnswer:
+        """A save written INTO the game file — anchored in its directory, as the resolver answers it."""
+        return SaveAnswer(
+            state="inside_content",
+            unestablished=None,
+            emulator=emulator,
+            directory=str(tmp_path / "retrodeck" / "roms" / "gba"),
+            backing_directory=None,
+            granularity=None,
+            needs=(),
+            components=(),
+            caveats=(caveat,),
+            content_installed=True,
+            root_kind="content_directory",
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("caveat", "emulator"),
+        [("save-inside-content", "PUAE"), ("save-inside-image", "Hatari")],
+        ids=["amiga-adf", "atari-st"],
+    )
+    async def test_a_save_inside_the_game_file_gets_the_save_shape_refusal(self, tmp_path, caveat, emulator):
+        svc, fake = make_service(tmp_path)
+        cast("FakeSaveLocationReader", svc._rom_info._save_locations).answer_with(
+            "gba", self._inside_the_content(tmp_path, caveat, emulator)
+        )
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path)
+
+        result = await svc.sync_rom_saves(42)
+
+        assert result["reason"] == "save_shape_unsupported"
+        assert "inside the game file" in result["message"]
+        assert not any(c[0] in ("upload_save", "download_save_content") for c in fake.call_log)
+
+    @pytest.mark.asyncio
+    async def test_a_sweep_over_saves_inside_the_game_file_is_not_the_content_directory_skip(self, tmp_path):
+        svc, _fake = make_service(tmp_path)
+        cast("FakeSaveLocationReader", svc._rom_info._save_locations).answer_with(
+            "gba", self._inside_the_content(tmp_path, "save-inside-content", "PUAE")
+        )
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "test-device")
+        _install_rom(svc, tmp_path)
+        _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True})
+
+        result = await svc.sync_all_saves()
+
+        assert result.get("reason") != "savefiles_in_content_dir"
+        assert "skipped" not in result["message"]
 
     @pytest.mark.asyncio
     async def test_a_sweep_with_nothing_confirmed_still_names_the_content_directory(self, tmp_path):

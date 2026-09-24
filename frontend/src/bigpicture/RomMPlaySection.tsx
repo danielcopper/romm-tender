@@ -1109,13 +1109,15 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
     </Focusable>
   );
 
-  // Content-dir warning (#239) — prominent banner above the play row when
-  // RetroArch writes saves to the content directory. The play row still renders
-  // below it: the game remains fully playable, only save sync is unavailable.
-  // The store holds the flag whether or not save sync is on (it is a fact about
-  // the local RetroArch config, not about our setting); the banner asks the user
-  // to change that config to re-enable save sync, so it is only worth showing to
-  // someone who has save sync on.
+  // Content-dir warning (#239) — prominent banner above the play row when the
+  // emulator writes this game's saves beside the game file. The play row still
+  // renders below it: the game remains fully playable, only save sync is
+  // unavailable. The store holds the flag whether or not save sync is on (it is
+  // a fact about the emulator's answer, not about our setting); the banner is
+  // about getting save sync to work, so it is only worth showing to someone who
+  // has save sync on. It names RetroArch's setting only as the usual cause: the
+  // answer can reach the content's directory by another route, so the setting
+  // being off is not something the banner may assume.
   //
   // The banner is a keyed sibling under a Fragment, never a branch returning a
   // different root: the flag lands a moment after the row first paints, and a
@@ -1128,7 +1130,7 @@ export const RomMPlaySection: FC<RomMPlaySectionProps> = ({ appId }) => { // NOS
         <WarningCard
           key="savefiles-content-dir-warning"
           title="Save sync off"
-          message="RetroArch's 'Write Saves to Content Directory' is enabled, so saves go next to the ROM and can't be synced. Turn it off in RetroArch → Settings → Saving to re-enable save sync."
+          message="This game's saves are written beside the game file, so they can't be synced. The usual cause is RetroArch's 'Write Saves to Content Directory' (RetroArch → Settings → Saving); if it is on, turning it off lets save sync work again."
         />
       ) : null}
       {playSectionRow}

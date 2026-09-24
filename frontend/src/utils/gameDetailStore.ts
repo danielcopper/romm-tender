@@ -73,9 +73,9 @@ export interface GameDetailState extends BiosInfoFields, CoreInfoFields {
   saveStatus: SaveStatus | null;
   saveSyncStatus: "synced" | "pending" | "conflict" | "none" | null; // NOSONAR(typescript:S4323) — inline union inside GameDetailState; extracting an alias adds indirection for no reuse benefit.
   saveSyncLabel: string;
-  /** RetroArch `savefiles_in_content_dir=true` — saves go next to the ROM and
-   *  can't be synced (#239). Derived from a LOCAL retroarch.cfg read, so it is
-   *  populated even while RomM is unreachable. */
+  /** The emulator writes this game's saves beside the game file, so they can't
+   *  be synced. Read off the local machine, so it is populated even while RomM
+   *  is unreachable. */
   savefilesInContentDir: boolean;
   activeSlot: string | null;
   raId: number | null;

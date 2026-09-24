@@ -128,12 +128,12 @@ export interface SaveStatus {
   /** False when per-version rollback is unavailable for the slot — currently
    *  only for multi-file saves (mirrors `!multi_file`). */
   rollback_supported?: boolean;
-  /** True when RetroArch's `savefiles_in_content_dir=true` — saves are written
-   *  next to the ROM, outside the saves tree the plugin syncs, so save sync is
-   *  unsupported. Derived from a LOCAL retroarch.cfg read, so it is correct even
-   *  when the server is unreachable (independent of `server_query_failed`). In
-   *  this case `files` is `[]` and `save_sync_display` reports the "off" state
-   *  (#239). */
+  /** True when the emulator's answer puts this game's saves beside the game
+   *  file, outside what the plugin syncs, so save sync is unsupported (a save
+   *  INSIDE the game file is not this case: it arrives as its own refusal in
+   *  `save_resolution`). Read off the local machine, so it is correct even when
+   *  the server is unreachable (independent of `server_query_failed`). In this
+   *  case `files` is `[]` and `save_sync_display` reports the "off" state. */
   savefiles_in_content_dir?: boolean;
 }
 

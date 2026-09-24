@@ -98,8 +98,9 @@ _FILE_NAMES_UNESTABLISHED = "file-names-unestablished"
 # so a caller about to move files into ``directory`` creates it first.
 SORTED_DIR_MISSING = "sorted-dir-missing"
 
-# The root kind of a save written next to the game's own content file, which
-# is what RetroArch's ``savefiles_in_content_dir`` produces.
+# The root kind of a placement anchored in the directory the game's content file
+# sits in. A save written beside that file is one reading of it; a save written
+# INSIDE the file (``inside_content``) is anchored there too.
 ROOT_CONTENT_DIRECTORY = "content_directory"
 
 # Canonical ``reason`` slugs for the two benign-skip outcomes a save answer
@@ -232,13 +233,15 @@ class SaveAnswer:
 
     @property
     def in_content_directory(self) -> bool:
-        """Whether the emulator writes this game's save next to its content file.
+        """Whether the emulator writes this game's save as a file beside its content file.
 
         Save sync stays off there whatever the state says: the directory is the
         ROM's own, outside what the plugin syncs, and syncing it is a decision
-        this answer does not make.
+        this answer does not make. A save written INSIDE the content file is
+        anchored in the same directory and is not beside it: its own refusal,
+        ``inside_content``, is the one that applies.
         """
-        return self.root_kind == ROOT_CONTENT_DIRECTORY
+        return self.root_kind == ROOT_CONTENT_DIRECTORY and self.state != SAVE_STATE_INSIDE_CONTENT
 
     @property
     def sync_directory(self) -> str | None:

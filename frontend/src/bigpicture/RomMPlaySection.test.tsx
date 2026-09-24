@@ -4290,7 +4290,7 @@ describe("RomMPlaySection", () => {
       // Non-vacuous: assert the visible banner copy, not just a flag.
       expect(container.textContent).toContain("Save sync off");
       expect(container.textContent).toContain(
-        "RetroArch's 'Write Saves to Content Directory' is enabled, so saves go next to the ROM and can't be synced.",
+        "This game's saves are written beside the game file, so they can't be synced.",
       );
       expect(container.textContent).toContain("RetroArch → Settings → Saving");
     });
@@ -4333,9 +4333,8 @@ describe("RomMPlaySection", () => {
     // The store keeps the content-dir fact whether or not save sync is on, so a
     // save_sync notification can fold it in for a game whose sync is off — e.g.
     // after "Delete Local Saves" from this page's own RomM Actions menu, which is
-    // not gated on the setting. The banner asks the user to change a RetroArch
-    // setting in order to re-enable save sync, so it has nothing to say to
-    // someone who has save sync switched off.
+    // not gated on the setting. The banner is about getting save sync to work,
+    // so it has nothing to say to someone who has save sync switched off.
     it("does NOT render the banner while save sync is disabled, even once the flag is known", async () => {
       vi.mocked(cachedStore.getCachedGameDetail).mockResolvedValue({
         found: true,

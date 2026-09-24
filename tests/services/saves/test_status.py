@@ -2,11 +2,13 @@
 
 import asyncio
 import threading
+from typing import cast
 
 import pytest
 from fakes.fake_save_location_reader import FakeSaveLocationReader
 
 from domain.rom_save_sync_state import RomSaveSyncState
+from domain.save_answer import SaveAnswer
 from lib.errors import RommConnectionError, RommNotFoundError
 from tests.services.saves._helpers import (
     _create_save,
@@ -221,6 +223,34 @@ class TestSaveStatusContentDir:
         result = await svc.get_save_status(42)
 
         assert result["save_resolution"]["content_installed"] is False
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("caveat", ["save-inside-content", "save-inside-image"], ids=["amiga-adf", "atari-st"])
+    async def test_a_save_inside_the_game_file_keeps_its_own_explanation(self, tmp_path, caveat):
+        # Anchored in the content's directory, but inside the file rather than
+        # beside it: the answer stays the resolver's, not a fabricated not_asked.
+        svc, _ = make_service(tmp_path)
+        answer = SaveAnswer(
+            state="inside_content",
+            unestablished=None,
+            emulator="PUAE",
+            directory=str(tmp_path / "retrodeck" / "roms" / "gba"),
+            backing_directory=None,
+            granularity=None,
+            needs=(),
+            components=(),
+            caveats=(caveat,),
+            content_installed=True,
+            root_kind="content_directory",
+        )
+        cast("FakeSaveLocationReader", svc._rom_info._save_locations).answer_with("gba", answer)
+        _install_rom(svc, tmp_path)
+
+        result = await svc.get_save_status(42)
+
+        assert result["savefiles_in_content_dir"] is False
+        assert result["save_resolution"]["state"] == "inside_content"
+        assert result["save_resolution"]["caveats"] == [caveat]
 
     @pytest.mark.asyncio
     async def test_in_save_dir_rollback_supported_true(self, tmp_path):
