@@ -9,8 +9,9 @@
  *
  * Focus selects — moving through the list changes the detail at once, as Steam's
  * own settings do. The row's own control keeps A, so this component intercepts
- * it only where a page asks for `selectOnActivate`, for rows that carry no
- * control; a row that carries a toggle still toggles on press. A control that
+ * it only where a page asks for `selectOnActivate` — for the whole list or for
+ * one row — for rows that carry no control; a row that carries a toggle still
+ * toggles on press. A control that
  * acts on the whole list goes in `listHeader` rather than in a row, so reaching
  * it reports no selection.
  *
@@ -31,6 +32,13 @@ import { Columns } from "./Columns";
 export interface ListDetailItem {
   id: string;
   render: (selected: boolean) => ReactNode;
+  /**
+   * This row's answer to {@link ListDetailProps.selectOnActivate}, for a list
+   * whose rows differ: a row carrying a control leaves A to it, and a row beside
+   * it that carries none still has to be a focus stop. Left off, the row follows
+   * the list's.
+   */
+  selectOnActivate?: boolean;
 }
 
 export interface ListDetailProps {
@@ -105,7 +113,7 @@ export const ListDetail: FC<ListDetailProps> = ({
                   // `exactOptionalPropertyTypes` an explicit `undefined` is not
                   // the same as an absent prop, and `FocusableProps` declares the
                   // handler without it.
-                  {...(selectOnActivate ? { onActivate: () => onSelect(item.id) } : {})}
+                  {...((item.selectOnActivate ?? selectOnActivate) ? { onActivate: () => onSelect(item.id) } : {})}
                 >
                   {item.render(item.id === selectedId)}
                 </Focusable>

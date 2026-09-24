@@ -265,6 +265,70 @@ describe("ListDetail", () => {
     expect((row as HTMLElement).dataset.activate).toBeUndefined();
   });
 
+  describe("a row's own selectOnActivate", () => {
+    const rowOf = (label: string) => screen.getByText(label).closest("[data-testid='focusable']") as HTMLElement;
+    const mixed = (flag: boolean | undefined): ListDetailItem[] => [
+      {
+        id: "toggle",
+        render: () => <span>With toggle</span>,
+        ...(flag === undefined ? {} : { selectOnActivate: flag }),
+      },
+      { id: "plain", render: () => <span>Plain</span> },
+    ];
+
+    it("makes that one row a stop in a list that asks for none, and selects it on press", () => {
+      // A list of toggle rows with one label-only row among them: the label row
+      // must be reachable, the toggle rows must keep A.
+      const onSelect = vi.fn();
+      render(<ListDetail items={mixed(true)} selectedId="plain" onSelect={onSelect} renderDetail={() => <div />} />);
+
+      expect(rowOf("With toggle").dataset.activate).toBe("true");
+      expect(rowOf("Plain").dataset.activate).toBeUndefined();
+
+      fireEvent(rowOf("With toggle"), new CustomEvent("decky-button-down", { detail: { button: 1 }, bubbles: true }));
+      expect(onSelect).toHaveBeenCalledWith("toggle");
+    });
+
+    it("takes A back for that one row in a list that asks for it everywhere", () => {
+      render(
+        <ListDetail
+          items={mixed(false)}
+          selectedId="plain"
+          onSelect={vi.fn()}
+          renderDetail={() => <div />}
+          selectOnActivate
+        />,
+      );
+
+      expect(rowOf("With toggle").dataset.activate).toBeUndefined();
+      expect(rowOf("Plain").dataset.activate).toBe("true");
+    });
+
+    it("leaves every row without its own flag on the list's answer, in both directions", () => {
+      // Platforms (no list-level flag, toggle rows) and Settings / Data
+      // Management (list-level flag, label rows) name no per-row flag at all, so
+      // this is what they get.
+      const { unmount } = render(
+        <ListDetail items={mixed(undefined)} selectedId="plain" onSelect={vi.fn()} renderDetail={() => <div />} />,
+      );
+      expect(rowOf("With toggle").dataset.activate).toBeUndefined();
+      expect(rowOf("Plain").dataset.activate).toBeUndefined();
+      unmount();
+
+      render(
+        <ListDetail
+          items={mixed(undefined)}
+          selectedId="plain"
+          onSelect={vi.fn()}
+          renderDetail={() => <div />}
+          selectOnActivate
+        />,
+      );
+      expect(rowOf("With toggle").dataset.activate).toBe("true");
+      expect(rowOf("Plain").dataset.activate).toBe("true");
+    });
+  });
+
   it("declares the selected row the area entry focus belongs in, and moves the mark with it", () => {
     // Focus selects here, so a page opened on a section other than its first
     // would have that section overwritten by entry focus landing on row one.
