@@ -220,11 +220,9 @@ class EventSink:
     def __init__(self) -> None:
         self.events: list[tuple[str, dict[str, Any]]] = []
 
-    async def __call__(self, event: str, /, *args: object) -> None:
-        assert len(args) == 1
-        assert isinstance(args[0], dict)
-        payload = cast("dict[str, Any]", args[0])
-        self.events.append((event, payload))
+    async def __call__(self, event: str, payload: object, /) -> None:
+        assert isinstance(payload, dict)
+        self.events.append((event, cast("dict[str, Any]", payload)))
 
 
 @dataclass

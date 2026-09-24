@@ -17,9 +17,9 @@ if TYPE_CHECKING:
 
 
 class EventEmitter(Protocol):
-    """Emit named events with a data payload to the frontend."""
+    """Emit a named event carrying one payload to the frontend."""
 
-    async def __call__(self, event: str, /, *args: object) -> None: ...
+    async def __call__(self, event: str, payload: object, /) -> None: ...
 
 
 class ResolveUploadConflictFn(Protocol):

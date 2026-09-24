@@ -814,8 +814,8 @@ class TestCheckSaveStatusBackground:
         """Background check runs full status and emits result."""
         emitted = []
 
-        async def fake_emit(event, *args):
-            emitted.append((event, args))
+        async def fake_emit(event, payload):
+            emitted.append((event, payload))
 
         svc, _fake = make_service(tmp_path, emit=fake_emit)
         _install_rom(svc, tmp_path)
@@ -825,7 +825,7 @@ class TestCheckSaveStatusBackground:
 
         assert len(emitted) == 1
         assert emitted[0][0] == "save_status_updated"
-        result = emitted[0][1][0]
+        result = emitted[0][1]
         assert result["rom_id"] == 42
         assert len(result["files"]) >= 1
 

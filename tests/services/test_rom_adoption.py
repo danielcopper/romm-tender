@@ -224,8 +224,8 @@ class Harness:
             ),
         )
 
-    async def _emit(self, event: str, /, *args: object) -> None:
-        self.events.append((event, args[0] if args else None))
+    async def _emit(self, event: str, payload: object, /) -> None:
+        self.events.append((event, payload))
 
     async def _supersede(self, rom_id: int) -> dict[str, Any] | None:
         self.superseded.append(rom_id)

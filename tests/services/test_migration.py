@@ -40,17 +40,17 @@ from services.relaunch_options_resolver import RelaunchOptionsResolver, Relaunch
 class RecordingEmitter:
     """Append-only emit recorder usable as an ``EventEmitter``.
 
-    Stores ``(event_name, args)`` tuples in ``calls`` so tests can assert
+    Stores ``(event_name, payload)`` pairs in ``calls`` so tests can assert
     on the observable emit contract without resorting to ``MagicMock``.
     The call signature mirrors the ``EventEmitter`` Protocol exactly so
     basedpyright accepts the fake wherever ``EventEmitter`` is expected.
     """
 
     def __init__(self) -> None:
-        self.calls: list[tuple[str, tuple[object, ...]]] = []
+        self.calls: list[tuple[str, object]] = []
 
-    async def __call__(self, event: str, /, *args: object) -> None:
-        self.calls.append((event, args))
+    async def __call__(self, event: str, payload: object, /) -> None:
+        self.calls.append((event, payload))
 
 
 @pytest.fixture
@@ -411,10 +411,10 @@ class TestPathChangeDetection:
             # What is recorded as pending is the directory the marker named,
             # not the spelling it was stored under.
             assert uow.kv_config.get("retrodeck_home_path_previous") == resolved_gone
-        event, args = plugin._migration_service._emit.calls[0]
+        event, payload = plugin._migration_service._emit.calls[0]
         assert event == "retrodeck_path_changed"
-        assert args[0]["old_path"] == resolved_gone
-        assert args[0]["new_path"] == new_home
+        assert payload["old_path"] == resolved_gone
+        assert payload["new_path"] == new_home
 
     async def test_path_change_emits_event(self, plugin, tmp_path, logger):
         """Path changed — stores both old and new, emits event."""
@@ -441,9 +441,8 @@ class TestPathChangeDetection:
 
         emit_calls = plugin._migration_service._emit.calls
         assert len(emit_calls) == 1
-        event, args = emit_calls[0]
+        event, payload = emit_calls[0]
         assert event == "retrodeck_path_changed"
-        payload = args[0]
         assert isinstance(payload, dict)
         assert payload["old_path"] == old_home
         assert payload["new_path"] == new_home
@@ -490,9 +489,8 @@ class TestPathChangeDetection:
 
         emit_calls = plugin._migration_service._emit.calls
         assert len(emit_calls) == 1
-        event, args = emit_calls[0]
+        event, payload = emit_calls[0]
         assert event == "retrodeck_path_changed"
-        payload = args[0]
         assert isinstance(payload, dict)
         assert payload["cleared"] is True
         assert payload["old_path"] == old_home
@@ -521,9 +519,8 @@ class TestPathChangeDetection:
 
         emit_calls = plugin._migration_service._emit.calls
         assert len(emit_calls) == 1
-        event, args = emit_calls[0]
+        event, payload = emit_calls[0]
         assert event == "retrodeck_path_changed"
-        payload = args[0]
         assert isinstance(payload, dict)
         assert payload["cleared"] is True
         assert payload["old_path"] == old_home
@@ -702,7 +699,7 @@ class TestMigrateRetroDeckFiles:
 
         # The emitted migration_relaunch_options item and the recorded applied match.
         relaunch = [
-            args[0] for event, args in plugin._migration_service._emit.calls if event == "migration_relaunch_options"
+            payload for event, payload in plugin._migration_service._emit.calls if event == "migration_relaunch_options"
         ]
         assert len(relaunch) == 1
         item = next(i for i in relaunch[0]["items"] if i["app_id"] == 9001)
@@ -1208,9 +1205,9 @@ class TestMigrationRelaunchOptions:
     @staticmethod
     def _relaunch_emit(plugin):
         """Return the single ``migration_relaunch_options`` payload, or ``None``."""
-        for event, args in plugin._migration_service._emit.calls:
+        for event, payload in plugin._migration_service._emit.calls:
             if event == "migration_relaunch_options":
-                return args[0]
+                return payload
         return None
 
     @staticmethod
@@ -1976,10 +1973,10 @@ class TestChainedPathChangeDetection:
         assert previous == a
         assert hops == [b]
         # The re-emit still points the banner at the ORIGINAL home → current.
-        event, args = plugin._migration_service._emit.calls[-1]
+        event, payload = plugin._migration_service._emit.calls[-1]
         assert event == "retrodeck_path_changed"
-        assert (args[0]["old_path"], args[0]["new_path"]) == (a, c)
-        assert "cleared" not in args[0]
+        assert (payload["old_path"], payload["new_path"]) == (a, c)
+        assert "cleared" not in payload
 
     async def test_triple_chain_accumulates_all_homes(self, plugin, tmp_path):
         """A→B→C→D: previous stays A, hops = [B, C]."""
@@ -2017,7 +2014,7 @@ class TestChainedPathChangeDetection:
             previous, hops = _read_pending(uow)
         assert previous == ""
         assert hops == []
-        assert plugin._migration_service._emit.calls[-1][1][0]["cleared"] is True
+        assert plugin._migration_service._emit.calls[-1][1]["cleared"] is True
 
     async def test_chained_revert_keeps_pending(self, plugin, tmp_path):
         """A→B→C then back to A while B remains a hop → NOT cleared; pending = [B, C]."""
@@ -2037,7 +2034,7 @@ class TestChainedPathChangeDetection:
             previous, hops = _read_pending(uow)
         assert previous == b
         assert hops == [c]
-        assert "cleared" not in plugin._migration_service._emit.calls[-1][1][0]
+        assert "cleared" not in plugin._migration_service._emit.calls[-1][1]
 
     async def test_move_back_to_hop_removes_it(self, plugin, tmp_path):
         """A→B→C then back to B: B leaves the pending set, pending = [A, C]."""
@@ -2064,9 +2061,9 @@ class TestChainedMigration:
 
     @staticmethod
     def _relaunch_emit(plugin):
-        for event, args in plugin._migration_service._emit.calls:
+        for event, payload in plugin._migration_service._emit.calls:
             if event == "migration_relaunch_options":
-                return args[0]
+                return payload
         return None
 
     @staticmethod

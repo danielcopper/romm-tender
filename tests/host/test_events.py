@@ -45,14 +45,6 @@ class TestWithAPanelAttached:
 
         assert await sink.emit("sync_complete", {}) is True
 
-    async def test_an_event_with_no_payload_carries_null(self, sink):
-        sender = RecordingSender()
-        sink.attach(sender)
-
-        await sink.emit("sync_complete")
-
-        assert sender.sent[0]["payload"] is None
-
     async def test_a_connection_that_went_mid_send_reports_a_miss(self, sink):
         sink.attach(RecordingSender(delivers=False))
 
@@ -120,13 +112,24 @@ class TestAttachAndDetach:
 
 
 class TestOnePayload:
+    """The type says one payload; this is what stands behind it for a caller that reaches the sink untyped."""
+
     async def test_a_second_argument_is_refused(self, sink):
         """A wire form for two payloads is a decision nobody has taken."""
-        sink.attach(RecordingSender())
+        sender = RecordingSender()
+        sink.attach(sender)
 
-        with pytest.raises(TypeError, match="one payload"):
-            await sink.emit("sync_complete", {"a": 1}, {"b": 2})
+        with pytest.raises(TypeError):
+            await sink.emit("sync_complete", {"a": 1}, {"b": 2})  # pyright: ignore[reportCallIssue]
 
-    async def test_the_refusal_names_the_event(self, sink):
-        with pytest.raises(TypeError, match="sync_complete"):
-            await sink.emit("sync_complete", 1, 2)
+        assert sender.sent == []
+
+    async def test_a_missing_payload_is_refused(self, sink):
+        """A message always carries a ``payload``; none is not quietly sent as ``null``."""
+        sender = RecordingSender()
+        sink.attach(sender)
+
+        with pytest.raises(TypeError):
+            await sink.emit("sync_complete")  # pyright: ignore[reportCallIssue]
+
+        assert sender.sent == []

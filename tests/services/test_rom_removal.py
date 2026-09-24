@@ -52,8 +52,8 @@ class RecordingEmitter:
     def __init__(self) -> None:
         self.events: list[tuple[str, object]] = []
 
-    async def __call__(self, event: str, /, *args: object) -> None:
-        self.events.append((event, args[0] if args else None))
+    async def __call__(self, event: str, payload: object, /) -> None:
+        self.events.append((event, payload))
 
     def payloads(self, event: str) -> list[object]:
         return [payload for name, payload in self.events if name == event]

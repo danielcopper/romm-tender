@@ -61,7 +61,7 @@ class PluginEventSink(Protocol):
     because the seam is an object it was handed rather than a call it makes.
     """
 
-    async def emit(self, name: str, /, *args: Any) -> bool: ...
+    async def emit(self, name: str, payload: object, /) -> bool: ...
 
 
 class Plugin:
@@ -125,24 +125,24 @@ class Plugin:
         """
         self._debug_logger(msg)
 
-    async def _emit_with_prune_continuation(self, event, /, *args):
+    async def _emit_with_prune_continuation(self, event: str, payload: object, /) -> None:
         """Attach a prune lease to events whose Steam writes outlive backend work."""
-        payload = cast("dict[str, Any]", args[0]) if args and isinstance(args[0], dict) else None
-        needs_lease = payload is not None and (
+        fields = cast("dict[str, Any]", payload) if isinstance(payload, dict) else None
+        needs_lease = fields is not None and (
             event == "sync_complete"
-            or (event == "sync_stale" and bool(payload.get("remove")))
-            or (event == "prune_complete" and payload.get("final") is not False and payload.get("publication_required"))
-            or (event == "download_complete" and payload.get("app_id") is not None)
-            or (event == "migration_relaunch_options" and bool(payload.get("items")))
+            or (event == "sync_stale" and bool(fields.get("remove")))
+            or (event == "prune_complete" and fields.get("final") is not False and fields.get("publication_required"))
+            or (event == "download_complete" and fields.get("app_id") is not None)
+            or (event == "migration_relaunch_options" and bool(fields.get("items")))
         )
         lease_token = None
-        if needs_lease and payload is not None:
-            payload = dict(payload)
+        if needs_lease and fields is not None:
+            fields = dict(fields)
             lease_token = await acquire_prune_conflict_lease(self, event)
-            payload["prune_lease_token"] = lease_token
-            args = (payload, *args[1:])
+            fields["prune_lease_token"] = lease_token
+            payload = fields
         try:
-            delivered = await self._event_sink.emit(event, *args)
+            delivered = await self._event_sink.emit(event, payload)
         except BaseException:
             if lease_token is not None:
                 await release_prune_gate_lease(self, lease_token)

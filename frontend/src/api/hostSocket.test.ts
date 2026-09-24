@@ -312,8 +312,6 @@ describe("events arriving from the backend", () => {
 
     latest().deliver({ type: "event", name: "sync_progress", payload: { running: true } });
 
-    // `backend/host/events.py` refuses more than one argument, so one payload is
-    // the whole of what a listener can be handed.
     expect(heard).toEqual([{ running: true }, { running: true }]);
   });
 

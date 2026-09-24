@@ -365,8 +365,8 @@ class TestSaveSlots:
         """set_active_slot fires a background save status check task."""
         emitted = []
 
-        async def fake_emit(event, *args):
-            emitted.append((event, args))
+        async def fake_emit(event, payload):
+            emitted.append((event, payload))
 
         svc, _ = make_service(tmp_path, emit=fake_emit)
         _install_rom(svc, tmp_path)
