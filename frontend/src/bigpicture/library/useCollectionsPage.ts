@@ -87,7 +87,7 @@ const OWNER_SWITCH = "owner-switch";
 export function useCollectionsPage(): CollectionsPageState {
   const [collections, setCollections] = useState<CollectionSyncSetting[]>([]);
   const [load, setLoad] = useState<CollectionsLoad>({ state: "idle" });
-  const [ownerScope, setOwnerScopeState] = useState<CollectionOwnerScope>("all");
+  const [shownScope, setShownScope] = useState<CollectionOwnerScope>("all");
   const [selectedKind, setSelectedKind] = useState<CollectionsKindId>("standard");
   const [search, setSearch] = useState("");
   const [listStatus, setListStatus] = useState<string | null>(null);
@@ -143,7 +143,7 @@ export function useCollectionsPage(): CollectionsPageState {
         confirmedScope.current = scope;
         // A switch written since the read was issued shows what the reader
         // chose; the read is older than that and must not put it back.
-        if ((latestValueWrite.current.get(OWNER_SWITCH) ?? 0) === since) setOwnerScopeState(scope);
+        if ((latestValueWrite.current.get(OWNER_SWITCH) ?? 0) === since) setShownScope(scope);
         settingsRead.current = "done";
       })
       .catch(() => {
@@ -226,7 +226,7 @@ export function useCollectionsPage(): CollectionsPageState {
   const setAllShown = useCallback(
     (enabled: boolean) => {
       if (selectedKind === "favorites") return;
-      const targets = shownCollections({ collections, ownerScope, selectedKind, search });
+      const targets = shownCollections({ collections, ownerScope: shownScope, selectedKind, search });
       if (targets.length === 0) return;
       const seqs = new Map(targets.map((c) => [collectionKey(c), issueValueWrite(collectionKey(c))]));
       const line = lineFor("pane");
@@ -259,19 +259,19 @@ export function useCollectionsPage(): CollectionsPageState {
           .catch(() => failed(SYNC_WRITE_FAILED)),
       );
     },
-    [collections, isLatestValueWrite, issueValueWrite, lineFor, ownerScope, search, selectedKind],
+    [collections, isLatestValueWrite, issueValueWrite, lineFor, search, selectedKind, shownScope],
   );
 
   const setOwnerScope = useCallback(
     (scope: CollectionOwnerScope) => {
-      if (scope === ownerScope) return;
+      if (scope === shownScope) return;
       const seq = issueValueWrite(OWNER_SWITCH);
       const line = lineFor("list");
       const failed = (text: string) => {
-        if (isLatestValueWrite(OWNER_SWITCH, seq)) setOwnerScopeState(confirmedScope.current);
+        if (isLatestValueWrite(OWNER_SWITCH, seq)) setShownScope(confirmedScope.current);
         line(text);
       };
-      setOwnerScopeState(scope);
+      setShownScope(scope);
       detach(
         setCollectionOwnerScope(scope)
           .then((result) => {
@@ -285,13 +285,13 @@ export function useCollectionsPage(): CollectionsPageState {
           .catch(() => failed(SYNC_WRITE_FAILED)),
       );
     },
-    [isLatestValueWrite, issueValueWrite, lineFor, ownerScope],
+    [isLatestValueWrite, issueValueWrite, lineFor, shownScope],
   );
 
   return {
     load,
     collections,
-    ownerScope,
+    ownerScope: shownScope,
     selectedKind,
     select,
     search,

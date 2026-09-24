@@ -59,10 +59,8 @@ describe("LibraryPage", () => {
   });
 
   const showTab = async (container: HTMLElement, id: string) => {
-    await act(async () => {
-      fireEvent.click(container.querySelector(`[data-testid="tab-${id}"]`) as HTMLElement);
-      for (let i = 0; i < 6; i++) await Promise.resolve();
-    });
+    fireEvent.click(container.querySelector(`[data-testid="tab-${id}"]`) as HTMLElement);
+    await flushAsync();
   };
 
   it("renders as a wide page titled Library with a Back row", async () => {

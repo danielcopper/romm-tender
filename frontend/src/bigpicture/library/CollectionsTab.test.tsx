@@ -85,10 +85,8 @@ const settle = () =>
   });
 
 async function showTab(container: HTMLElement, id: "collections" | "platforms") {
-  await act(async () => {
-    fireEvent.click(container.querySelector(`[data-testid="tab-${id}"]`) as HTMLElement);
-    for (let i = 0; i < 8; i++) await Promise.resolve();
-  });
+  fireEvent.click(container.querySelector(`[data-testid="tab-${id}"]`) as HTMLElement);
+  await settle();
 }
 
 async function openCollections(collections: CollectionSyncSetting[] = LIBRARY) {
@@ -107,10 +105,8 @@ function kindRow(container: HTMLElement, kind: string): HTMLElement {
 }
 
 async function selectKind(container: HTMLElement, kind: string) {
-  await act(async () => {
-    fireEvent.focusIn(kindRow(container, kind));
-    for (let i = 0; i < 4; i++) await Promise.resolve();
-  });
+  fireEvent.focusIn(kindRow(container, kind));
+  await settle();
 }
 
 function tableNames(container: HTMLElement): string[] {
@@ -142,17 +138,13 @@ function button(container: HTMLElement, text: string): HTMLButtonElement {
 }
 
 async function click(el: HTMLElement) {
-  await act(async () => {
-    fireEvent.click(el);
-    for (let i = 0; i < 8; i++) await Promise.resolve();
-  });
+  fireEvent.click(el);
+  await settle();
 }
 
-async function typeSearch(container: HTMLElement, value: string) {
-  await act(async () => {
-    fireEvent.change(container.querySelector('[data-testid="text-field"]') as HTMLInputElement, {
-      target: { value },
-    });
+function typeSearch(container: HTMLElement, value: string) {
+  fireEvent.change(container.querySelector('[data-testid="text-field"]') as HTMLInputElement, {
+    target: { value },
   });
 }
 
@@ -322,10 +314,7 @@ describe("Library › Collections", () => {
       const row = kindRow(container, "favorites");
       expect(checkbox(row).checked).toBe(true);
 
-      await act(async () => {
-        fireEvent.click(checkbox(row));
-        for (let i = 0; i < 6; i++) await Promise.resolve();
-      });
+      await click(checkbox(row));
 
       expect(vi.mocked(backend.saveCollectionSync)).toHaveBeenCalledWith("fav", "standard", false);
       expect(tableNames(container)).not.toContain("Favourites");
@@ -422,7 +411,7 @@ describe("Library › Collections", () => {
 
     it("narrows by a loose search, and enters another kind without it", async () => {
       const { container } = await openCollections();
-      await typeSearch(container, "fnsh");
+      typeSearch(container, "fnsh");
       expect(tableNames(container)).toEqual(["Finished"]);
 
       await selectKind(container, "smart");
@@ -594,7 +583,7 @@ describe("Library › Collections", () => {
         coll({ id: "x", name: "Other", kind: "virtual", virtual_type: "collection" }),
       ]);
       await selectKind(container, "igdb");
-      await typeSearch(container, "Series");
+      typeSearch(container, "Series");
       await click(button(container, "Enable all"));
 
       expect(vi.mocked(showModal)).not.toHaveBeenCalled();
@@ -618,7 +607,7 @@ describe("Library › Collections", () => {
     it("puts every row back and says why in the pane when the write is refused", async () => {
       vi.mocked(backend.saveCollectionsSync).mockResolvedValueOnce({ success: false, message: "Migration pending" });
       const { container } = await openCollections();
-      await typeSearch(container, "i");
+      typeSearch(container, "i");
       await click(button(container, "Enable all"));
 
       expect(tableNames(container).map((n) => checkbox(tableRow(container, n)).checked)).toEqual([true, false, false]);
@@ -629,7 +618,7 @@ describe("Library › Collections", () => {
     it("puts every row back when the write is rejected", async () => {
       vi.mocked(backend.saveCollectionsSync).mockRejectedValueOnce(new Error("gone"));
       const { container } = await openCollections();
-      await typeSearch(container, "i");
+      typeSearch(container, "i");
       await click(button(container, "Disable all"));
 
       expect(checkbox(tableRow(container, "Kids")).checked).toBe(true);
@@ -638,7 +627,7 @@ describe("Library › Collections", () => {
 
     it("stays disabled while nothing is listed", async () => {
       const { container } = await openCollections([MINE_ON]);
-      await typeSearch(container, "qqq");
+      typeSearch(container, "qqq");
       expect(button(container, "Enable all").disabled).toBe(true);
       expect(button(container, "Disable all").disabled).toBe(true);
     });
@@ -704,7 +693,7 @@ describe("Library › Collections", () => {
     it("says the change was undone, for Enable all", async () => {
       vi.mocked(backend.saveCollectionsSync).mockResolvedValueOnce({ success: false });
       const { container } = await openCollections();
-      await typeSearch(container, "i");
+      typeSearch(container, "i");
       await click(button(container, "Enable all"));
       expect(paneStatus(container)).toBe(FALLBACK);
     });
@@ -844,7 +833,7 @@ describe("Library › Collections", () => {
       vi.mocked(backend.saveCollectionsSync).mockReturnValueOnce(batch.promise);
       vi.mocked(backend.saveCollectionSync).mockReturnValueOnce(single.promise);
       const { container } = await openCollections();
-      await typeSearch(container, "i");
+      typeSearch(container, "i");
       await click(button(container, "Enable all"));
       // Kids was on before the batch, and is switched off on its own after it.
       await click(checkbox(tableRow(container, "Kids")));
@@ -882,6 +871,27 @@ describe("Library › Collections", () => {
       expect(ownerSwitch(container).checked).toBe(false);
     });
 
+    it("goes back to the scope a settings read found while the refused write was in flight", async () => {
+      let answerRead: (value: PluginSettings) => void = () => {};
+      vi.mocked(backend.getSettings).mockReturnValueOnce(
+        new Promise<PluginSettings>((r) => {
+          answerRead = r;
+        }),
+      );
+      const write = held();
+      vi.mocked(backend.setCollectionOwnerScope).mockReturnValueOnce(write.promise);
+      const { container } = await openCollections();
+      await click(ownerSwitch(container));
+
+      await act(async () => {
+        answerRead(settings({ collection_owner_scope: "own" }));
+        for (let i = 0; i < 6; i++) await Promise.resolve();
+      });
+      await write.answer({ success: false, message: "No" });
+
+      expect(ownerSwitch(container).checked).toBe(false);
+    });
+
     it("goes back to the scope the settings read found when a write is refused", async () => {
       vi.mocked(backend.getSettings).mockResolvedValue(settings({ collection_owner_scope: "own" }));
       vi.mocked(backend.setCollectionOwnerScope).mockResolvedValueOnce({ success: false, message: "No" });
@@ -905,7 +915,7 @@ describe("Library › Collections", () => {
       const { container } = await openCollections();
       // Finished is off in the read; switched on on its own, then Enable all.
       await click(checkbox(tableRow(container, "Finished")));
-      await typeSearch(container, "i");
+      typeSearch(container, "i");
       await click(button(container, "Enable all"));
 
       await single.answer({ success: false, message: "Migration pending" });
@@ -938,7 +948,7 @@ describe("Library › Collections", () => {
     it("puts a row back to what a stored Enable all set", async () => {
       vi.mocked(backend.saveCollectionSync).mockResolvedValueOnce(REFUSED);
       const { container } = await openCollections();
-      await typeSearch(container, "i");
+      typeSearch(container, "i");
       await click(button(container, "Enable all"));
       await click(checkbox(tableRow(container, "Finished")));
       expect(checkbox(tableRow(container, "Finished")).checked).toBe(true);

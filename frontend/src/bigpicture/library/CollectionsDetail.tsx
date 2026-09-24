@@ -88,7 +88,6 @@ const FavoritesPane: FC<{ state: CollectionsPageState; favorites: FavoritesAnswe
   return (
     <>
       <Title kind="favorites" />
-      {/* `docs/architecture/qam-panel.md` § Library, the Favorites pane. */}
       {favorites.state === "one" && <Sentence text={kindSentence("favorites")} />}
       {body}
     </>
