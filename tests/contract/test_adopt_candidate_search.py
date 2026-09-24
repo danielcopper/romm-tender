@@ -47,7 +47,7 @@ def _saves_dir(harness) -> Path:
 
 def _states_dir(harness) -> Path:
     # savestates: not sorted at all, so they sit directly under the states root.
-    path = Path(harness.retrodeck_paths.states_path())
+    path = Path(harness.retrodeck_paths.retrodeck_home()) / "states"
     path.mkdir(parents=True, exist_ok=True)
     return path
 

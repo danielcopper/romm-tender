@@ -205,9 +205,7 @@ def plugin(emit, logger, home):
             # ``None`` is "es_systems.xml could not answer", which the search
             # reads as permission to proceed — the behaviour these tests predate.
             system_known=lambda system_name: None,
-            save_locations=FakeSaveLocationReader(
-                saves_root=retrodeck_paths.saves_path(), states_root=retrodeck_paths.states_path()
-            ),
+            save_locations=FakeSaveLocationReader(saves_root=retrodeck_paths.saves_path()),
             active_core=p._active_core,
             # Late-bound like production: DownloadService is constructed below.
             sibling_supersede=lambda: p._download_service.supersede_sibling_installs,

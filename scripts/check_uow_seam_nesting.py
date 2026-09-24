@@ -289,7 +289,6 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         "bios_path",
         "roms_path",
         "saves_path",
-        "states_path",
         "retrodeck_home",
         # RecoveryBundleInventoryReader (services/protocols/files.py) — lists the
         # recovery root and measures every bundle under it, one descriptor walk

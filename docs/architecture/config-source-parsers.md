@@ -271,12 +271,12 @@ never raise**: when the file is missing, unreadable, or malformed, each getter f
 but **wrong** for an SD-card install where the user pointed RetroDECK at external storage.
 
 Every root is returned **symlink-resolved**, whichever of the two sources answered. The content roots (`roms_path`,
-`saves_path`, `bios_path`, `states_path`) are handed to the path guards as safe roots, and the ROM paths those guards
-are asked about are recorded resolved wherever `lib/path_safety.safe_join` built them — so a root left as
-`retrodeck.json` spells it makes one directory look like two on any system where `/home` is a link to `/var/home`
-(Bazzite, Silverblue, and the other image-based distributions), and uninstalling a downloaded ROM fails with
-`Path is outside its safe root` ([#1838](https://github.com/danielcopper/romm-tender/issues/1838)). `realpath` on a path
-that is not on disk resolves as far as it can instead of raising, so the getters stay best-effort.
+`saves_path`, `bios_path`) are handed to the path guards as safe roots, and the ROM paths those guards are asked about
+are recorded resolved wherever `lib/path_safety.safe_join` built them — so a root left as `retrodeck.json` spells it
+makes one directory look like two on any system where `/home` is a link to `/var/home` (Bazzite, Silverblue, and the
+other image-based distributions), and uninstalling a downloaded ROM fails with `Path is outside its safe root`
+([#1838](https://github.com/danielcopper/romm-tender/issues/1838)). `realpath` on a path that is not on disk resolves as
+far as it can instead of raising, so the getters stay best-effort.
 
 `retrodeck_home()` is not a safe root, and it is resolved for a different reason: `MigrationService` stores it and diffs
 the stored value against the live one on every startup to decide whether RetroDECK moved. Resolving one side is not

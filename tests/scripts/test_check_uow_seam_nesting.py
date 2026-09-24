@@ -274,7 +274,7 @@ class TestIoSeamsViolations:
         assert len(findings) == 1
         assert "enumerate_discs" in findings[0]
 
-    @pytest.mark.parametrize("getter", ["bios_path", "roms_path", "saves_path", "states_path", "retrodeck_home"])
+    @pytest.mark.parametrize("getter", ["bios_path", "roms_path", "saves_path", "retrodeck_home"])
     def test_every_retrodeck_root_getter_inside_uow_is_flagged(self, getter: str):
         # Each getter resolves its answer, so a call walks the path even on a
         # config-cache hit — the reason they stopped being an exclusion.

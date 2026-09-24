@@ -173,7 +173,7 @@ class Harness:
                 disc_resolver=FakeDiscResolver(),
             ),
         )
-        self.paths = FakeRetroDeckPaths(roms=_ROMS, saves=_SAVES, states=_STATES)
+        self.paths = FakeRetroDeckPaths(roms=_ROMS, saves=_SAVES)
         self.move = FakeAdoptionMoveStore(self.store)
         self.quarantine = FakeSaveQuarantine(self.store)
         # What a stock RetroDECK install answers: savefiles content-sorted,

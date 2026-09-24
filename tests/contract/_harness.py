@@ -36,6 +36,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
+import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock
@@ -222,7 +223,7 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
         game_process=fake_game_process,
         save_locations=FakeSaveLocationReader(
             saves_root=result.callbacks.retrodeck_paths.saves_path(),
-            states_root=result.callbacks.retrodeck_paths.states_path(),
+            states_root=os.path.join(result.callbacks.retrodeck_paths.retrodeck_home(), "states"),
         ),
     )
 
