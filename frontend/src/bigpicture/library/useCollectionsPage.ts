@@ -1,0 +1,265 @@
+/**
+ * Everything the Library page's Collections tab knows and does: the one
+ * collections read, the owner switch, which kind is selected, the search over
+ * its table, and the four writes.
+ *
+ * It lives above the tab boundary for the reason `usePlatformsPage` does:
+ * Steam's tabbed page renders only the active tab, so a tab owning its state
+ * would re-read on every switch back and thaw the order it froze.
+ *
+ * Structure and vocabulary: `docs/architecture/qam-panel.md`, section Library.
+ */
+
+import { useCallback, useRef, useState } from "react";
+import {
+  getCollections,
+  getSettings,
+  saveCollectionSync,
+  saveCollectionsSync,
+  setCollectionOwnerScope,
+} from "../../api/backend";
+import type { CollectionOwnerScope, CollectionSyncSetting } from "../../types";
+import { detach } from "../../utils/detach";
+import {
+  collectionKey,
+  freezeOrder,
+  isKindId,
+  kindMembers,
+  resolveFavorites,
+  searchMembers,
+  wireKind,
+  type CollectionsKindId,
+} from "./collectionKinds";
+import { SYNC_WRITE_FAILED } from "./usePlatformsPage";
+
+/** Where the collections read stands. A failure is not final: entering the tab
+ *  again asks again, which is what the failure line tells the reader. */
+export type CollectionsLoad =
+  { state: "idle" } | { state: "loading" } | { state: "loaded" } | { state: "failed"; message: string | null };
+
+/**
+ * Which column a refused write is reported in — where it was made. The owner
+ * switch and the Favorites switch are in the list column, a table row and
+ * Enable all / Disable all in the pane.
+ */
+export type WritePlace = "list" | "pane";
+
+export interface CollectionsPageState {
+  load: CollectionsLoad;
+  /** The listing, in the order frozen when it arrived; writes change values in
+   *  place and never the order. */
+  collections: CollectionSyncSetting[];
+  ownerScope: CollectionOwnerScope;
+  selectedKind: CollectionsKindId;
+  select: (id: string) => void;
+  search: string;
+  setSearch: (value: string) => void;
+  /** Why the last list-column write did not take, or `null`. */
+  listStatus: string | null;
+  /** Why the last pane write did not take, or `null`. */
+  paneStatus: string | null;
+  /** The tab was entered: ask for what is not held, and start from a clean view. */
+  enter: () => void;
+  setOwnerScope: (scope: CollectionOwnerScope) => void;
+  toggleCollection: (collection: CollectionSyncSetting, enabled: boolean, place: WritePlace) => void;
+  /** Switch every collection the selected kind's table lists — the search
+   *  included, the render cap not — in one write. */
+  setAllShown: (enabled: boolean) => void;
+}
+
+/** The selected kind's table, as `setAllShown` writes it and the pane lists it. */
+export function shownCollections(
+  state: Pick<CollectionsPageState, "collections" | "ownerScope" | "selectedKind" | "search">,
+): CollectionSyncSetting[] {
+  const members = kindMembers(
+    state.collections,
+    state.selectedKind,
+    state.ownerScope,
+    resolveFavorites(state.collections),
+  );
+  return searchMembers(members, state.search);
+}
+
+export function useCollectionsPage(): CollectionsPageState {
+  const [collections, setCollections] = useState<CollectionSyncSetting[]>([]);
+  const [load, setLoad] = useState<CollectionsLoad>({ state: "idle" });
+  const [ownerScope, setOwnerScopeState] = useState<CollectionOwnerScope>("all");
+  const [selectedKind, setSelectedKind] = useState<CollectionsKindId>("standard");
+  const [search, setSearch] = useState("");
+  const [listStatus, setListStatus] = useState<string | null>(null);
+  const [paneStatus, setPaneStatus] = useState<string | null>(null);
+
+  // Refs, not state: `enter` decides whether to ask from what is in flight
+  // right now, and a render-time snapshot of that could be one read behind.
+  const collectionsRead = useRef<CollectionsLoad["state"]>("idle");
+  const settingsRead = useRef<"idle" | "loading" | "done" | "failed">("idle");
+  const readCollections = useCallback(() => {
+    collectionsRead.current = "loading";
+    setLoad({ state: "loading" });
+    getCollections()
+      .then((result) => {
+        if (result.success) {
+          setCollections(freezeOrder(result.collections));
+          collectionsRead.current = "loaded";
+          setLoad({ state: "loaded" });
+          return;
+        }
+        collectionsRead.current = "failed";
+        setLoad({ state: "failed", message: result.message || null });
+      })
+      .catch(() => {
+        collectionsRead.current = "failed";
+        setLoad({ state: "failed", message: null });
+      });
+  }, []);
+
+  const readOwnerScope = useCallback(() => {
+    settingsRead.current = "loading";
+    getSettings()
+      .then((settings) => {
+        setOwnerScopeState(settings.collection_owner_scope === "own" ? "own" : "all");
+        settingsRead.current = "done";
+      })
+      .catch(() => {
+        // The switch stays at its default and says nothing about the stored
+        // value; entering the tab again asks again.
+        settingsRead.current = "failed";
+      });
+  }, []);
+
+  const enter = useCallback(() => {
+    setSearch("");
+    setListStatus(null);
+    setPaneStatus(null);
+    if (settingsRead.current === "idle" || settingsRead.current === "failed") readOwnerScope();
+    if (collectionsRead.current === "idle" || collectionsRead.current === "failed") readCollections();
+  }, [readCollections, readOwnerScope]);
+
+  // A search and a refusal are both about the kind they were made on, so
+  // another kind is entered without either.
+  const select = useCallback(
+    (id: string) => {
+      if (!isKindId(id) || id === selectedKind) return;
+      setSelectedKind(id);
+      setSearch("");
+      setPaneStatus(null);
+    },
+    [selectedKind],
+  );
+
+  const setStatus = useCallback((place: WritePlace, text: string | null) => {
+    if (place === "list") setListStatus(text);
+    else setPaneStatus(text);
+  }, []);
+
+  // Every write below treats a refusal and a rejection as one outcome: the
+  // write did not take, the optimistic flip goes back, and the reader is told
+  // where the write was made. None of these callables throws to refuse.
+  const toggleCollection = useCallback(
+    (collection: CollectionSyncSetting, enabled: boolean, place: WritePlace) => {
+      const key = collectionKey(collection);
+      const flip = (want: boolean) =>
+        setCollections((prev) => prev.map((c) => (collectionKey(c) === key ? { ...c, sync_enabled: want } : c)));
+      flip(enabled);
+      detach(
+        saveCollectionSync(collection.id, collection.kind, enabled)
+          .then((result) => {
+            if (result.success) {
+              setStatus(place, null);
+              return;
+            }
+            flip(!enabled);
+            setStatus(place, result.message || SYNC_WRITE_FAILED);
+          })
+          .catch(() => {
+            flip(!enabled);
+            setStatus(place, SYNC_WRITE_FAILED);
+          }),
+      );
+    },
+    [setStatus],
+  );
+
+  const setAllShown = useCallback(
+    (enabled: boolean) => {
+      if (selectedKind === "favorites") return;
+      const targets = shownCollections({ collections, ownerScope, selectedKind, search });
+      if (targets.length === 0) return;
+      const previous = new Map(targets.map((c) => [collectionKey(c), c.sync_enabled]));
+      const put = (value: (key: string, current: boolean) => boolean) =>
+        setCollections((prev) =>
+          prev.map((c) => {
+            const key = collectionKey(c);
+            return previous.has(key) ? { ...c, sync_enabled: value(key, c.sync_enabled) } : c;
+          }),
+        );
+      put(() => enabled);
+      const undo = () => put((key, current) => previous.get(key) ?? current);
+      // The batch write over exactly these ids, never the whole-kind one: that
+      // re-fetches the kind from RomM and writes what it finds, which is both
+      // virtual types at once, every user's collections whatever the owner
+      // switch says, and never a favorites collection — none of which is the
+      // table the reader is looking at.
+      detach(
+        saveCollectionsSync(
+          targets.map((c) => c.id),
+          wireKind(selectedKind),
+          enabled,
+        )
+          .then((result) => {
+            if (result.success) {
+              setPaneStatus(null);
+              return;
+            }
+            undo();
+            setPaneStatus(result.message || SYNC_WRITE_FAILED);
+          })
+          .catch(() => {
+            undo();
+            setPaneStatus(SYNC_WRITE_FAILED);
+          }),
+      );
+    },
+    [collections, ownerScope, search, selectedKind],
+  );
+
+  const setOwnerScope = useCallback(
+    (scope: CollectionOwnerScope) => {
+      const previous = ownerScope;
+      if (scope === previous) return;
+      setOwnerScopeState(scope);
+      detach(
+        setCollectionOwnerScope(scope)
+          .then((result) => {
+            if (result.success) {
+              setListStatus(null);
+              return;
+            }
+            setOwnerScopeState(previous);
+            setListStatus(result.message || SYNC_WRITE_FAILED);
+          })
+          .catch(() => {
+            setOwnerScopeState(previous);
+            setListStatus(SYNC_WRITE_FAILED);
+          }),
+      );
+    },
+    [ownerScope],
+  );
+
+  return {
+    load,
+    collections,
+    ownerScope,
+    selectedKind,
+    select,
+    search,
+    setSearch,
+    listStatus,
+    paneStatus,
+    enter,
+    setOwnerScope,
+    toggleCollection,
+    setAllShown,
+  };
+}

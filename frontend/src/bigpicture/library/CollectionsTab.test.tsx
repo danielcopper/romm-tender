@@ -1,0 +1,616 @@
+// The Library page's Collections tab, driven through the page it lives on: the
+// kinds in the list column, the selected kind's pane, the read behind them and
+// the four writes. `CollectionsTab`, `CollectionsDetail` and
+// `useCollectionsPage` only exist together, so they are exercised as one here;
+// the rules they compute from are pinned on their own in
+// `collectionKinds.test.ts`.
+//
+// CATCH-REJECTION ASSERTION RULE: every write's refusal and rejection is
+// asserted through what the reader then sees — the control back where it was,
+// and the line that says why, in the column the write was made in.
+//
+// Focus selects, so a kind is selected by firing focusin on its row, which is
+// what Steam's navigation does; the @decky/ui stub in `frontend/src/test-setup.ts`
+// forwards `onFocus` on a Focusable for exactly that reason.
+
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { render, fireEvent, act } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { showModal } from "@decky/ui";
+import { LibraryPage } from "../LibraryPage";
+import * as backend from "../../api/backend";
+import { ENTRY_STOP_ATTR } from "../../utils/entryFocus";
+import type { CollectionSyncSetting, PluginSettings } from "../../types";
+import { COLLECTION_RENDER_CAP } from "./CollectionsDetail";
+
+vi.mock("../../utils/scrollHelpers", () => ({ scrollToTop: vi.fn(), scrollElementToTop: vi.fn() }));
+vi.mock("../../utils/deckyUiInternals", async () => {
+  const { createElement: ce } = await import("react");
+  type TabShape = { id: string; title: string; content: unknown };
+  return {
+    quickAccessMenuClasses: undefined,
+    ScrollPanel: undefined,
+    findSP: () => undefined,
+    ControllerGlyph: undefined,
+    GLYPH_BUTTON_B: 1,
+    Tabs: ({ tabs, activeTab, onShowTab }: { tabs: TabShape[]; activeTab: string; onShowTab: (id: string) => void }) =>
+      ce(
+        "div",
+        { "data-testid": "steam-tabs" },
+        ...tabs.map((tab) =>
+          ce("button", { key: tab.id, "data-testid": `tab-${tab.id}`, onClick: () => onShowTab(tab.id) }, tab.title),
+        ),
+        ce("div", { key: "content" }, tabs.find((tab) => tab.id === activeTab)?.content as never),
+      ),
+  };
+});
+
+function settings(overrides: Partial<PluginSettings> = {}): PluginSettings {
+  return {
+    romm_url: "",
+    has_token: true,
+    steam_input_mode: "default",
+    sgdb_api_key_masked: "",
+    log_level: "warn",
+    romm_allow_insecure_ssl: false,
+    ...overrides,
+  };
+}
+
+function coll(overrides: Partial<CollectionSyncSetting> = {}): CollectionSyncSetting {
+  return {
+    id: "1",
+    name: "Couch co-op",
+    rom_count: 10,
+    sync_enabled: false,
+    kind: "standard",
+    is_favorite: false,
+    is_own: true,
+    ...overrides,
+  };
+}
+
+const FAVORITES = coll({ id: "fav", name: "Favourites", is_favorite: true, rom_count: 14, sync_enabled: true });
+const MINE_ON = coll({ id: "10", name: "Kids", sync_enabled: true, in_steam_count: 17, rom_count: 17 });
+const MINE_OFF = coll({ id: "11", name: "Finished", in_steam_count: 41, rom_count: 58 });
+const THEIRS = coll({ id: "12", name: "Handheld picks", is_own: false, owner_username: "jonas", rom_count: 22 });
+const SMART = coll({ id: "10", name: "Unplayed RPGs", kind: "smart", rom_count: 31 });
+const FRANCHISE = coll({ id: "ff", name: "Final Fantasy", kind: "virtual", virtual_type: "franchise", rom_count: 23 });
+const IGDB = coll({ id: "zz", name: "Zelda series", kind: "virtual", virtual_type: "collection", rom_count: 12 });
+
+const LIBRARY = [FAVORITES, MINE_ON, MINE_OFF, THEIRS, SMART, FRANCHISE, IGDB];
+
+const settle = () =>
+  act(async () => {
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+  });
+
+async function showTab(container: HTMLElement, id: "collections" | "platforms") {
+  await act(async () => {
+    fireEvent.click(container.querySelector(`[data-testid="tab-${id}"]`) as HTMLElement);
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+  });
+}
+
+async function openCollections(collections: CollectionSyncSetting[] = LIBRARY) {
+  vi.mocked(backend.getCollections).mockResolvedValue({ success: true, collections });
+  const view = render(<LibraryPage onBack={vi.fn()} />);
+  await settle();
+  await showTab(view.container, "collections");
+  return view;
+}
+
+/** The list row a kind renders — the Focusable ListDetail wraps it in. */
+function kindRow(container: HTMLElement, kind: string): HTMLElement {
+  const inner = container.querySelector(`[data-testid="kind-row-${kind}"]`);
+  if (!inner) throw new Error(`no row for ${kind}`);
+  return inner.closest('[data-testid="focusable"]') as HTMLElement;
+}
+
+async function selectKind(container: HTMLElement, kind: string) {
+  await act(async () => {
+    fireEvent.focusIn(kindRow(container, kind));
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+  });
+}
+
+function tableNames(container: HTMLElement): string[] {
+  return [...container.querySelectorAll('[data-testid="collection-row"]')].map(
+    (row) => row.querySelector("span[title]")?.textContent ?? "",
+  );
+}
+
+function tableRow(container: HTMLElement, name: string): HTMLElement {
+  const row = [...container.querySelectorAll<HTMLElement>('[data-testid="collection-row"]')].find(
+    (r) => r.querySelector("span[title]")?.textContent === name,
+  );
+  if (!row) throw new Error(`no table row for ${name}`);
+  return row;
+}
+
+const checkbox = (el: HTMLElement) =>
+  el.querySelector<HTMLInputElement>('[data-testid="toggle-input"]') as HTMLInputElement;
+
+function button(container: HTMLElement, text: string): HTMLButtonElement {
+  const found = [...container.querySelectorAll("button")].find((b) => b.textContent === text);
+  if (!found) throw new Error(`no button ${text}`);
+  return found;
+}
+
+async function click(el: HTMLElement) {
+  await act(async () => {
+    fireEvent.click(el);
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+  });
+}
+
+async function typeSearch(container: HTMLElement, value: string) {
+  await act(async () => {
+    fireEvent.change(container.querySelector('[data-testid="text-field"]') as HTMLInputElement, {
+      target: { value },
+    });
+  });
+}
+
+function lastModal(): Record<string, unknown> | null {
+  const calls = vi.mocked(showModal).mock.calls;
+  const el = calls[calls.length - 1]?.[0] as ReactElement<Record<string, unknown>> | undefined;
+  return el?.props ?? null;
+}
+
+const listStatus = (c: HTMLElement) => c.querySelector('[data-testid="collections-list-status"]')?.textContent ?? null;
+const paneStatus = (c: HTMLElement) => c.querySelector('[data-testid="collections-pane-status"]')?.textContent ?? null;
+const ownerSwitch = (c: HTMLElement) =>
+  checkbox(
+    [...c.querySelectorAll<HTMLElement>('[data-testid="toggle"]')].find((t) =>
+      t.textContent.includes("Other users' collections"),
+    ) as HTMLElement,
+  );
+
+describe("Library › Collections", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: [] });
+    vi.mocked(backend.getFirmwareStatus).mockResolvedValue({ success: true, platforms: [] });
+    vi.mocked(backend.getRegistryPlatforms).mockResolvedValue({ platforms: [] });
+    vi.mocked(backend.getSettings).mockResolvedValue(settings());
+    vi.mocked(backend.saveCollectionSync).mockResolvedValue({ success: true });
+    vi.mocked(backend.saveCollectionsSync).mockResolvedValue({ success: true });
+    vi.mocked(backend.setCollectionOwnerScope).mockResolvedValue({ success: true });
+  });
+
+  describe("the read (#1020)", () => {
+    it("states the backend's message when the read is refused, and asks again when the tab is entered again", async () => {
+      vi.mocked(backend.getCollections)
+        .mockResolvedValueOnce({ success: false, collections: [], message: "Cannot reach the RomM server" })
+        .mockResolvedValueOnce({ success: true, collections: LIBRARY });
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await settle();
+      await showTab(container, "collections");
+
+      const failed = container.querySelector('[data-testid="collections-load-failed"]');
+      expect(failed?.textContent).toContain("Cannot reach the RomM server");
+      expect(failed?.textContent).toContain("come back to ask again");
+      expect(kindRow(container, "standard").textContent).toContain("—");
+
+      await showTab(container, "platforms");
+      await showTab(container, "collections");
+
+      expect(vi.mocked(backend.getCollections)).toHaveBeenCalledTimes(2);
+      expect(container.querySelector('[data-testid="collections-load-failed"]')).toBeNull();
+      expect(tableNames(container)).toEqual(["Kids", "Finished", "Handheld picks"]);
+    });
+
+    it("falls back to a sentence of its own when the read is rejected with nothing to quote", async () => {
+      vi.mocked(backend.getCollections).mockRejectedValueOnce(new Error("socket closed"));
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await settle();
+      await showTab(container, "collections");
+
+      expect(container.querySelector('[data-testid="collections-load-failed"]')?.textContent).toContain(
+        "Could not read your collections from RomM.",
+      );
+    });
+
+    it("does not ask twice when the tab is entered again while the read is still out", async () => {
+      vi.mocked(backend.getCollections).mockReturnValue(new Promise(() => {}));
+      const { container } = render(<LibraryPage onBack={vi.fn()} />);
+      await settle();
+      await showTab(container, "collections");
+      await showTab(container, "platforms");
+      await showTab(container, "collections");
+      expect(vi.mocked(backend.getCollections)).toHaveBeenCalledTimes(1);
+    });
+
+    it("asks for the owner switch's setting again after a failed settings read", async () => {
+      vi.mocked(backend.getSettings)
+        .mockRejectedValueOnce(new Error("boom"))
+        .mockResolvedValueOnce(settings({ collection_owner_scope: "own" }));
+      const { container } = await openCollections();
+      expect(ownerSwitch(container).checked).toBe(true);
+
+      await showTab(container, "platforms");
+      await showTab(container, "collections");
+
+      expect(vi.mocked(backend.getSettings)).toHaveBeenCalledTimes(2);
+      expect(ownerSwitch(container).checked).toBe(false);
+    });
+  });
+
+  describe("the list of kinds", () => {
+    it("lists the kinds in order, the two autogenerated ones under their own heading, each with what it has on", async () => {
+      const { container } = await openCollections();
+      // The list column: the row's ListDetail wrapper, then the list around it.
+      const text = kindRow(container, "favorites").parentElement?.parentElement?.textContent ?? "";
+      const order = [
+        "Favorites",
+        "Collections",
+        "Smart collections",
+        "AUTOGENERATED",
+        "Franchises",
+        "IGDB collections",
+      ];
+      const positions = order.map((word) => text.indexOf(word));
+      expect(positions.every((p) => p >= 0)).toBe(true);
+      expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+
+      expect(kindRow(container, "standard").textContent).toContain("1 of 3 on");
+      expect(kindRow(container, "smart").textContent).toContain("0 of 1 on");
+      expect(kindRow(container, "franchise").textContent).toContain("0 of 1 on");
+      expect(kindRow(container, "igdb").textContent).toContain("0 of 1 on");
+      expect(kindRow(container, "favorites").textContent).toContain("14 ROMs");
+    });
+
+    it("leaves a hidden foreign collection stored as on out of its kind's count", async () => {
+      vi.mocked(backend.getSettings).mockResolvedValue(settings({ collection_owner_scope: "own" }));
+      const { container } = await openCollections([MINE_ON, MINE_OFF, { ...THEIRS, sync_enabled: true }]);
+      expect(kindRow(container, "standard").textContent).toContain("1 of 2 on");
+    });
+
+    it("makes the four kind rows focus stops that A selects, and leaves A to the Favorites switch", async () => {
+      const { container } = await openCollections();
+      for (const kind of ["standard", "smart", "franchise", "igdb"]) {
+        expect(kindRow(container, kind).dataset.activate).toBe("true");
+      }
+      expect(kindRow(container, "favorites").dataset.activate).toBeUndefined();
+
+      fireEvent(
+        kindRow(container, "smart"),
+        new CustomEvent("decky-button-down", { detail: { button: 1 }, bubbles: true }),
+      );
+      await settle();
+      expect(tableNames(container)).toEqual(["Unplayed RPGs"]);
+    });
+
+    it("opens on Collections, whose row carries the entry-stop mark, and moves the mark with the selection", async () => {
+      const { container } = await openCollections();
+      const marked = () => [...container.querySelectorAll(`[${ENTRY_STOP_ATTR}]`)];
+      expect(marked()).toHaveLength(1);
+      expect(marked()[0]?.querySelector('[data-testid="kind-row-standard"]')).not.toBeNull();
+
+      await selectKind(container, "franchise");
+      expect(marked()[0]?.querySelector('[data-testid="kind-row-franchise"]')).not.toBeNull();
+    });
+  });
+
+  describe("Favorites", () => {
+    it("is the signed-in user's own favorites collection, switched from its row", async () => {
+      const { container } = await openCollections();
+      const row = kindRow(container, "favorites");
+      expect(checkbox(row).checked).toBe(true);
+
+      await act(async () => {
+        fireEvent.click(checkbox(row));
+        for (let i = 0; i < 6; i++) await Promise.resolve();
+      });
+
+      expect(vi.mocked(backend.saveCollectionSync)).toHaveBeenCalledWith("fav", "standard", false);
+      expect(tableNames(container)).not.toContain("Favourites");
+    });
+
+    it("lists another user's public favorites collection under Collections with its owner, and follows the owner switch", async () => {
+      const theirs = coll({
+        id: "tf",
+        name: "Mara's favourites",
+        is_favorite: true,
+        is_own: false,
+        owner_username: "mara",
+      });
+      const { container } = await openCollections([FAVORITES, MINE_ON, theirs]);
+      expect(tableNames(container)).toEqual(["Kids", "Mara's favourites"]);
+      expect(
+        tableRow(container, "Mara's favourites").querySelector('[data-testid="collection-owner"]')?.textContent,
+      ).toBe("mara");
+      expect(kindRow(container, "favorites").textContent).toContain("14 ROMs");
+
+      await click(ownerSwitch(container));
+      expect(tableNames(container)).toEqual(["Kids"]);
+    });
+
+    it("stays greyed, says more than one, and lists them under Collections where two count as yours", async () => {
+      const second = coll({ id: "fav2", name: "Starred", is_favorite: true });
+      const { container } = await openCollections([FAVORITES, second, MINE_ON]);
+      const row = kindRow(container, "favorites");
+
+      expect(row.textContent).toContain("more than one, listed under Collections");
+      expect(row.querySelector('[data-testid="toggle"]')?.getAttribute("data-disabled")).toBe("true");
+      // A disabled switch is no focus stop, so the row is one itself — else its
+      // pane, which says why, could not be reached.
+      expect(row.dataset.activate).toBe("true");
+      expect(tableNames(container)).toEqual(["Favourites", "Kids", "Starred"]);
+
+      await selectKind(container, "favorites");
+      expect(container.textContent).toContain("More than one favorites collection counts as yours");
+    });
+
+    it("stays greyed with a dash where the account has none", async () => {
+      const { container } = await openCollections([MINE_ON]);
+      const row = kindRow(container, "favorites");
+      expect(row.querySelector('[data-testid="toggle"]')?.getAttribute("data-disabled")).toBe("true");
+      expect(row.textContent).toContain("—");
+      await selectKind(container, "favorites");
+      expect(container.textContent).toContain("Your RomM account has no favorites collection.");
+    });
+
+    it("shows the sentence and the game count on its pane, with no table", async () => {
+      const { container } = await openCollections();
+      await selectKind(container, "favorites");
+      expect(container.querySelector('[data-testid="collections-sentence"]')?.textContent).toContain(
+        "[Favourites (Standard)]",
+      );
+      expect(container.textContent).toContain("Games in it: 14 ROMs");
+      expect(container.querySelectorAll('[data-testid="collection-row"]')).toHaveLength(0);
+    });
+  });
+
+  describe("a kind's pane", () => {
+    it("draws Collections as Collection, Owner, ROMs, In Steam and Sync, on above off", async () => {
+      const { container } = await openCollections();
+      expect(container.textContent).toContain("Collection");
+      expect(container.textContent).toContain("Owner");
+      expect(tableNames(container)).toEqual(["Kids", "Finished", "Handheld picks"]);
+
+      const kids = tableRow(container, "Kids");
+      expect(kids.querySelector('[data-testid="collection-owner"]')?.textContent).toBe("you");
+      expect(kids.querySelector('[data-testid="collection-roms"]')?.textContent).toBe("17");
+      expect(kids.querySelector('[data-testid="collection-in-steam"]')?.textContent).toBe("17");
+      const theirs = tableRow(container, "Handheld picks");
+      expect(theirs.querySelector('[data-testid="collection-owner"]')?.textContent).toBe("jonas");
+      // Absent is unknown, never zero.
+      expect(theirs.querySelector('[data-testid="collection-in-steam"]')?.textContent).toBe("—");
+    });
+
+    it("has no Owner column on Franchises, and lists that type alone", async () => {
+      const { container } = await openCollections();
+      await selectKind(container, "franchise");
+      expect(tableNames(container)).toEqual(["Final Fantasy"]);
+      expect(container.querySelector('[data-testid="collection-owner"]')).toBeNull();
+      expect(container.querySelector('[data-testid="collections-sentence"]')?.textContent).toContain("synced or not");
+    });
+
+    it("keeps the order it opened with while rows are switched", async () => {
+      const { container } = await openCollections();
+      await click(checkbox(tableRow(container, "Handheld picks")));
+      expect(tableNames(container)).toEqual(["Kids", "Finished", "Handheld picks"]);
+    });
+
+    it("narrows by a loose search, and enters another kind without it", async () => {
+      const { container } = await openCollections();
+      await typeSearch(container, "fnsh");
+      expect(tableNames(container)).toEqual(["Finished"]);
+
+      await selectKind(container, "smart");
+      expect((container.querySelector('[data-testid="text-field"]') as HTMLInputElement).value).toBe("");
+      expect(tableNames(container)).toEqual(["Unplayed RPGs"]);
+    });
+
+    it(`paints at most ${COLLECTION_RENDER_CAP} rows and says how many more there are`, async () => {
+      const many = Array.from({ length: COLLECTION_RENDER_CAP + 7 }, (_, i) =>
+        coll({ id: `v${i}`, name: `Franchise ${i}`, kind: "virtual", virtual_type: "franchise" }),
+      );
+      const { container } = await openCollections(many);
+      await selectKind(container, "franchise");
+      expect(container.querySelectorAll('[data-testid="collection-row"]')).toHaveLength(COLLECTION_RENDER_CAP);
+      expect(container.textContent).toContain("7 more");
+    });
+
+    it("says how many another user's collections the owner switch is hiding from an empty kind", async () => {
+      vi.mocked(backend.getSettings).mockResolvedValue(settings({ collection_owner_scope: "own" }));
+      const { container } = await openCollections([THEIRS]);
+      expect(container.textContent).toContain("Nothing to list under Collections.");
+      expect(container.textContent).toContain("1 from other users is hidden");
+    });
+  });
+
+  describe("switching one collection", () => {
+    it("flips at once and writes that one collection", async () => {
+      const { container } = await openCollections();
+      await click(checkbox(tableRow(container, "Finished")));
+      expect(checkbox(tableRow(container, "Finished")).checked).toBe(true);
+      expect(vi.mocked(backend.saveCollectionSync)).toHaveBeenCalledWith("11", "standard", true);
+    });
+
+    it("puts a refused row back and says why in the pane, not the list column", async () => {
+      vi.mocked(backend.saveCollectionSync).mockResolvedValueOnce({ success: false, message: "Migration pending" });
+      const { container } = await openCollections();
+      await click(checkbox(tableRow(container, "Finished")));
+
+      expect(checkbox(tableRow(container, "Finished")).checked).toBe(false);
+      expect(paneStatus(container)).toBe("Migration pending");
+      expect(listStatus(container)).toBeNull();
+    });
+
+    it("puts a rejected row back and says the write was undone", async () => {
+      vi.mocked(backend.saveCollectionSync).mockRejectedValueOnce(new Error("gone"));
+      const { container } = await openCollections();
+      await click(checkbox(tableRow(container, "Kids")));
+      expect(checkbox(tableRow(container, "Kids")).checked).toBe(true);
+      expect(paneStatus(container)).toBe("Could not save that; the change was undone.");
+    });
+
+    it("takes the pane's line back at the next pane write that succeeds, at another kind, and on leaving the tab", async () => {
+      vi.mocked(backend.saveCollectionSync).mockResolvedValue({ success: false, message: "No" });
+      const { container } = await openCollections();
+      const fail = async () => click(checkbox(tableRow(container, "Finished")));
+
+      await fail();
+      expect(paneStatus(container)).toBe("No");
+      vi.mocked(backend.saveCollectionSync).mockResolvedValueOnce({ success: true });
+      await click(checkbox(tableRow(container, "Kids")));
+      expect(paneStatus(container)).toBeNull();
+
+      await fail();
+      await selectKind(container, "smart");
+      expect(paneStatus(container)).toBeNull();
+
+      await selectKind(container, "standard");
+      await fail();
+      await showTab(container, "platforms");
+      await showTab(container, "collections");
+      expect(paneStatus(container)).toBeNull();
+    });
+
+    it("says a refused Favorites switch under the owner switch, not in the pane", async () => {
+      vi.mocked(backend.saveCollectionSync).mockResolvedValueOnce({ success: false, message: "Migration pending" });
+      const { container } = await openCollections();
+      await click(checkbox(kindRow(container, "favorites")));
+
+      expect(checkbox(kindRow(container, "favorites")).checked).toBe(true);
+      expect(listStatus(container)).toBe("Migration pending");
+      expect(paneStatus(container)).toBeNull();
+
+      // Taken back by the next list-column write that succeeds.
+      await click(checkbox(kindRow(container, "favorites")));
+      expect(listStatus(container)).toBeNull();
+    });
+  });
+
+  describe("the owner switch", () => {
+    it("starts from the stored setting, and turning it off hides another user's collections and writes the scope", async () => {
+      const { container } = await openCollections();
+      expect(ownerSwitch(container).checked).toBe(true);
+
+      await click(ownerSwitch(container));
+
+      expect(vi.mocked(backend.setCollectionOwnerScope)).toHaveBeenCalledWith("own");
+      expect(tableNames(container)).toEqual(["Kids", "Finished"]);
+      expect(kindRow(container, "standard").textContent).toContain("1 of 2 on");
+    });
+
+    it("goes back and says why in the list column when the write is refused", async () => {
+      vi.mocked(backend.setCollectionOwnerScope).mockResolvedValueOnce({ success: false, message: "Unknown scope" });
+      const { container } = await openCollections();
+      await click(ownerSwitch(container));
+
+      expect(ownerSwitch(container).checked).toBe(true);
+      expect(tableNames(container)).toContain("Handheld picks");
+      expect(listStatus(container)).toBe("Unknown scope");
+      expect(paneStatus(container)).toBeNull();
+    });
+
+    it("goes back when the write is rejected, and the line leaves with the tab", async () => {
+      vi.mocked(backend.setCollectionOwnerScope).mockRejectedValueOnce(new Error("gone"));
+      const { container } = await openCollections();
+      await click(ownerSwitch(container));
+      expect(ownerSwitch(container).checked).toBe(true);
+      expect(listStatus(container)).toBe("Could not save that; the change was undone.");
+
+      await showTab(container, "platforms");
+      await showTab(container, "collections");
+      expect(listStatus(container)).toBeNull();
+    });
+  });
+
+  describe("Enable all and Disable all", () => {
+    it("asks first with no search, and writes only on OK", async () => {
+      const { container } = await openCollections();
+      await click(button(container, "Enable all"));
+
+      expect(vi.mocked(backend.saveCollectionsSync)).not.toHaveBeenCalled();
+      const modal = lastModal();
+      expect(modal?.strTitle).toBe("Enable all 3 in Collections?");
+      expect(String(modal?.strDescription)).toContain("platforms you do not sync");
+
+      await act(async () => {
+        (modal?.onOK as () => void)();
+        for (let i = 0; i < 6; i++) await Promise.resolve();
+      });
+      expect(vi.mocked(backend.saveCollectionsSync)).toHaveBeenCalledWith(["10", "11", "12"], "standard", true);
+      expect(tableNames(container).map((n) => checkbox(tableRow(container, n)).checked)).toEqual([true, true, true]);
+    });
+
+    it("asks first on an autogenerated kind too, and writes that type alone", async () => {
+      const second = coll({ id: "mm", name: "Mega Man", kind: "virtual", virtual_type: "franchise" });
+      const { container } = await openCollections([...LIBRARY, second]);
+      await selectKind(container, "franchise");
+      await click(button(container, "Disable all"));
+
+      const modal = lastModal();
+      expect(modal?.strTitle).toBe("Disable all 2 in Franchises?");
+      await act(async () => {
+        (modal?.onOK as () => void)();
+        for (let i = 0; i < 6; i++) await Promise.resolve();
+      });
+      // The IGDB collection shares the virtual bucket and is not written.
+      expect(vi.mocked(backend.saveCollectionsSync)).toHaveBeenCalledWith(["ff", "mm"], "virtual", false);
+    });
+
+    it("writes every collection a search leaves, past the render cap too, without asking", async () => {
+      const many = Array.from({ length: COLLECTION_RENDER_CAP + 5 }, (_, i) =>
+        coll({ id: `v${i}`, name: `Series ${i}`, kind: "virtual", virtual_type: "collection" }),
+      );
+      const { container } = await openCollections([
+        ...many,
+        coll({ id: "x", name: "Other", kind: "virtual", virtual_type: "collection" }),
+      ]);
+      await selectKind(container, "igdb");
+      await typeSearch(container, "Series");
+      await click(button(container, "Enable all"));
+
+      expect(vi.mocked(showModal)).not.toHaveBeenCalled();
+      const [ids, kind, enabled] = vi.mocked(backend.saveCollectionsSync).mock.calls[0] ?? [];
+      expect(ids).toHaveLength(COLLECTION_RENDER_CAP + 5);
+      expect(ids).not.toContain("x");
+      expect([kind, enabled]).toEqual(["virtual", true]);
+    });
+
+    it("leaves the favorites collection out and, with the owner switch off, every other user's", async () => {
+      vi.mocked(backend.getSettings).mockResolvedValue(settings({ collection_owner_scope: "own" }));
+      const { container } = await openCollections();
+      await click(button(container, "Disable all"));
+      await act(async () => {
+        (lastModal()?.onOK as () => void)();
+        for (let i = 0; i < 6; i++) await Promise.resolve();
+      });
+      expect(vi.mocked(backend.saveCollectionsSync)).toHaveBeenCalledWith(["10", "11"], "standard", false);
+    });
+
+    it("puts every row back and says why in the pane when the write is refused", async () => {
+      vi.mocked(backend.saveCollectionsSync).mockResolvedValueOnce({ success: false, message: "Migration pending" });
+      const { container } = await openCollections();
+      await typeSearch(container, "i");
+      await click(button(container, "Enable all"));
+
+      expect(tableNames(container).map((n) => checkbox(tableRow(container, n)).checked)).toEqual([true, false, false]);
+      expect(paneStatus(container)).toBe("Migration pending");
+      expect(listStatus(container)).toBeNull();
+    });
+
+    it("puts every row back when the write is rejected", async () => {
+      vi.mocked(backend.saveCollectionsSync).mockRejectedValueOnce(new Error("gone"));
+      const { container } = await openCollections();
+      await typeSearch(container, "i");
+      await click(button(container, "Disable all"));
+
+      expect(checkbox(tableRow(container, "Kids")).checked).toBe(true);
+      expect(paneStatus(container)).toBe("Could not save that; the change was undone.");
+    });
+
+    it("stays disabled while nothing is listed", async () => {
+      const { container } = await openCollections([MINE_ON]);
+      await typeSearch(container, "qqq");
+      expect(button(container, "Enable all").disabled).toBe(true);
+      expect(button(container, "Disable all").disabled).toBe(true);
+    });
+  });
+});
