@@ -539,7 +539,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `scripts/check_markdown_links.py`
 - **Every RomM minimum stated for a reader matches the enforced `Plugin._MIN_REQUIRED_VERSION`** — check —
   `scripts/check_romm_min_version.py`, over the statements its `CLAIMS` list names; unchecked: a restatement not yet
-  added there, and the worked examples beside those statements. ADRs are out of scope: frozen history
+  added there, and the examples above the floor (`5.3.1-beta`, `5.4.0-alpha.1`) beside those statements. ADRs are out of
+  scope: frozen history
 - **Every tree under `backend/_vendor/` is pinned by the `<pkg>.SHA256SUMS` beside it: every manifest entry under
   `<pkg>/` matches the vendored file's digest, the vendored file set EQUALS the manifest's set restricted to that
   prefix, and a package directory with NO manifest is a failure** — check — `scripts/check_vendored_trees.py`;
