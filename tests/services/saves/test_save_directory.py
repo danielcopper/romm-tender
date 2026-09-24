@@ -477,6 +477,58 @@ class TestTheSecondaryWritePathsFollowFirst:
         assert asked
 
     @pytest.mark.asyncio
+    async def test_delete_local_saves_after_a_sort_flip_takes_the_old_folders_files_too(self, tmp_path, dirs):
+        # Without the follow the delete looks in the new folder, finds nothing,
+        # and the next sync carries the old file back in.
+        old, new = dirs
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        save = _create_save(tmp_path, content=b"to be deleted")
+        _seed_answer(svc, _answer(str(new)))
+
+        result = await svc.delete_local_saves(_ROM)
+        await svc.sync_rom_saves(_ROM)
+
+        assert result["deleted_count"] == 1
+        assert not save.exists()
+        assert not (new / "pokemon.srm").exists()
+
+    @pytest.mark.asyncio
+    async def test_delete_platform_saves_follows_each_rom_first(self, tmp_path, dirs):
+        old, new = dirs
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        save = _create_save(tmp_path, content=b"to be deleted")
+        _seed_answer(svc, _answer(str(new)))
+
+        result = await svc.delete_platform_saves("gba")
+
+        assert result["deleted_count"] == 1
+        assert not save.exists()
+        assert not (new / "pokemon.srm").exists()
+
+    @pytest.mark.asyncio
+    async def test_the_counts_see_the_old_folders_files(self, tmp_path, dirs):
+        old, new = dirs
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        _create_save(tmp_path, content=b"progress")
+        _seed_answer(svc, _answer(str(new)))
+
+        count = await svc.count_platform_saves("gba")
+        status = await svc.get_save_status(_ROM)
+
+        assert count == {"count": 1}
+        assert [row["filename"] for row in status["files"]] == ["pokemon.srm"]
+        assert (new / "pokemon.srm").read_bytes() == b"progress"
+
+    @pytest.mark.asyncio
     async def test_nothing_is_followed_while_save_sync_is_off(self, tmp_path, dirs):
         old, new = dirs
         svc, _ = make_service(tmp_path)

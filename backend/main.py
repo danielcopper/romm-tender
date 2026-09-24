@@ -902,7 +902,7 @@ class Plugin:
     @migration_blocked
     @prune_active_blocked
     async def delete_local_saves(self, rom_id):
-        return self._save_sync_service.delete_local_saves(rom_id)
+        return await self._save_sync_service.delete_local_saves(rom_id)
 
     async def count_platform_saves(self, platform_slug):
         return await self._save_sync_service.count_platform_saves(platform_slug)
@@ -910,7 +910,7 @@ class Plugin:
     @migration_blocked
     @prune_active_blocked
     async def delete_platform_saves(self, platform_slug):
-        return self._save_sync_service.delete_platform_saves(platform_slug)
+        return await self._save_sync_service.delete_platform_saves(platform_slug)
 
     async def saves_list_file_versions(self, rom_id, slot, filename):
         return await self._save_sync_service.list_file_versions(rom_id, slot, filename)

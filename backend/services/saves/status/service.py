@@ -174,6 +174,7 @@ class StatusService:
         *,
         server_query_failed: bool = False,
         server_query_reason: str | None = None,
+        save_answer: SaveAnswer | None = None,
     ) -> dict[str, Any]:
         """Sync helper for get_save_status — runs in executor.
 
@@ -216,7 +217,8 @@ class StatusService:
         # content, which the sync leaves alone: no ``info`` means no local probe
         # and no baseline-adopt write, so nothing is looked for and nothing is
         # recorded. Playtime / device_id / last_sync_check_at stay intact.
-        save_answer = self._rom_info.save_answer(rom_id)
+        if save_answer is None:
+            save_answer = self._rom_info.save_answer(rom_id)
         savefiles_in_content_dir = save_answer.in_content_directory
         if savefiles_in_content_dir:
             # The wire says the question was not put, as it always has for this
@@ -396,6 +398,12 @@ class StatusService:
             server_query_reason, _message = classify_error(e)
 
         async with self._sync_engine.rom_lock(rom_id):
+            save_answer = await self._loop.run_in_executor(None, self._rom_info.save_answer, rom_id)
+            # A moved directory is followed before the status probes for files,
+            # or the status would report the old folder's saves as missing. An
+            # uninstalled ROM's answer is a prediction, never followed.
+            if save_answer.content_installed:
+                await self._sync_engine.follow_save_directory(rom_id, save_answer)
             return await self._loop.run_in_executor(
                 None,
                 lambda: self._get_save_status_io(
@@ -403,6 +411,7 @@ class StatusService:
                     server_saves,
                     server_query_failed=server_query_failed,
                     server_query_reason=server_query_reason,
+                    save_answer=save_answer,
                 ),
             )
 

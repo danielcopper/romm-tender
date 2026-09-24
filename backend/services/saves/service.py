@@ -12,6 +12,7 @@ single-sub-service logic does not.
 
 from __future__ import annotations
 
+import functools
 from typing import TYPE_CHECKING, Any
 
 from domain.identity import VERSION
@@ -574,48 +575,69 @@ class SaveService:
     # Bulk local-save deletion
     # ------------------------------------------------------------------
 
-    def _delete_saves_for_roms(self, rom_ids: list[int]) -> tuple[int, list[str]]:
+    async def _read_and_follow(self, rom_id: int) -> SaveAnswer | None:
+        """This ROM's live reading, after a moved save directory has been followed with it.
+
+        The caller holds ``rom_lock``; the same reading is then handed on, so the
+        files a delete or a count sees are where the emulator now looks.
+        """
+        answer = await self._sync_engine.read_save_answer(rom_id)
+        await self._sync_engine.follow_save_directory(rom_id, answer)
+        return answer
+
+    async def _delete_saves_for_roms(self, rom_ids: list[int]) -> tuple[int, list[str]]:
         """Delete local save files for the given ROM IDs and clear file tracking state.
 
-        For each ROM ID, enumerates files via ``RomInfoService.find_save_files``,
-        removes them on disk (counting successes and collecting per-file error
-        strings), and clears the ROM's per-file tracking dict via the aggregate's
-        ``clear_baselines`` verb. Slot config (``active_slot``, ``slot_confirmed``,
-        ``emulator``, ``last_synced_core``, ``own_upload_ids``, ``slots``,
-        ``system``) is preserved. Each ROM's state is persisted in its own short
-        write UoW.
+        For each ROM ID, under its ``rom_lock``, follows a moved save directory
+        first and then removes the files the answer names on disk (counting
+        successes and collecting per-file error strings), and clears the ROM's
+        per-file tracking dict via the aggregate's ``clear_baselines`` verb.
+        Slot config (``active_slot``, ``slot_confirmed``, ``emulator``,
+        ``last_synced_core``, ``own_upload_ids``, ``slots``, ``system``) is
+        preserved. Each ROM's state is persisted in its own short write UoW.
 
         Returns a ``(total_deleted, errors)`` tuple.
         """
         total_deleted = 0
         errors: list[str] = []
         for rom_id in rom_ids:
-            files = self._rom_info.find_save_files(rom_id)
-            for f in files:
-                try:
-                    self._save_file_store.remove_file(f["path"])
-                    total_deleted += 1
-                except Exception as e:
-                    errors.append(f"{f['filename']}: {e}")
-            with self._uow_factory() as uow:
-                save_state = uow.rom_save_sync_states.get(rom_id)
-                # Nothing to clear when the ROM has neither tracked save state
-                # nor any local save files (e.g. a non-installed ROM with no
-                # roms row — persisting an empty aggregate would violate the FK).
-                if save_state is None and not files:
-                    continue
-                if save_state is None:
-                    save_state = RomSaveSyncState()
-                save_state.clear_baselines()
-                uow.rom_save_sync_states.save(rom_id, save_state)
-
+            async with self._sync_engine.rom_lock(rom_id):
+                answer = await self._read_and_follow(rom_id)
+                deleted, rom_errors = await self._loop.run_in_executor(
+                    None, self._delete_saves_for_rom_io, rom_id, answer
+                )
+            total_deleted += deleted
+            errors.extend(rom_errors)
         return total_deleted, errors
 
-    def delete_local_saves(self, rom_id: int) -> dict[str, Any]:
+    def _delete_saves_for_rom_io(self, rom_id: int, answer: SaveAnswer | None) -> tuple[int, list[str]]:
+        deleted = 0
+        errors: list[str] = []
+        files = self._rom_info.find_save_files(rom_id, save_answer=answer)
+        for f in files:
+            try:
+                self._save_file_store.remove_file(f["path"])
+                deleted += 1
+            except Exception as e:
+                errors.append(f"{f['filename']}: {e}")
+        with self._uow_factory() as uow:
+            save_state = uow.rom_save_sync_states.get(rom_id)
+            # Nothing to clear when the ROM has neither tracked save state
+            # nor any local save files (e.g. a non-installed ROM with no
+            # roms row — persisting an empty aggregate would violate the FK).
+            if save_state is None and not files:
+                return deleted, errors
+            if save_state is None:
+                save_state = RomSaveSyncState()
+            save_state.clear_baselines()
+            uow.rom_save_sync_states.save(rom_id, save_state)
+        return deleted, errors
+
+    async def delete_local_saves(self, rom_id: int) -> dict[str, Any]:
         """Delete local save files (.srm, .rtc) for a ROM."""
         rom_id = int(rom_id)
 
-        deleted, errors = self._delete_saves_for_roms([rom_id])
+        deleted, errors = await self._delete_saves_for_roms([rom_id])
 
         if deleted == 0 and not errors:
             return {"success": True, "deleted_count": 0, "message": "No local save files found"}
@@ -660,20 +682,26 @@ class SaveService:
         caching one side of that pair breaks the guarantee the sentence above
         makes. A cached answer on a destructive path is worse than a slow one.
         """
-        return await self._loop.run_in_executor(None, self._count_platform_saves_io, platform_slug)
-
-    def _count_platform_saves_io(self, platform_slug: str) -> dict[str, Any]:
-        rom_ids = self._installed_rom_ids_on_platform(platform_slug)
+        rom_ids = await self._loop.run_in_executor(None, self._installed_rom_ids_on_platform, platform_slug)
         # The file walk runs after the id read's UoW has closed, for the reason
-        # the delete does the same: a Unit of Work never spans file I/O.
-        return {"count": sum(len(self._rom_info.find_save_files(rom_id)) for rom_id in rom_ids)}
+        # the delete does the same: a Unit of Work never spans file I/O. Each ROM
+        # follows a moved directory first, as the delete does, so the two agree.
+        count = 0
+        for rom_id in rom_ids:
+            async with self._sync_engine.rom_lock(rom_id):
+                answer = await self._read_and_follow(rom_id)
+                files = await self._loop.run_in_executor(
+                    None, functools.partial(self._rom_info.find_save_files, rom_id, save_answer=answer)
+                )
+            count += len(files)
+        return {"count": count}
 
-    def delete_platform_saves(self, platform_slug: str) -> dict[str, Any]:
+    async def delete_platform_saves(self, platform_slug: str) -> dict[str, Any]:
         """Delete local save files for all installed ROMs on a platform."""
-        rom_ids = self._installed_rom_ids_on_platform(platform_slug)
+        rom_ids = await self._loop.run_in_executor(None, self._installed_rom_ids_on_platform, platform_slug)
 
         rom_count = len(rom_ids)
-        total_deleted, total_errors = self._delete_saves_for_roms(rom_ids)
+        total_deleted, total_errors = await self._delete_saves_for_roms(rom_ids)
 
         if total_errors:
             return {

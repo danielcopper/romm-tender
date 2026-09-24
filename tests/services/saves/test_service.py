@@ -552,7 +552,7 @@ class TestDeleteSaves:
             svc, 42, RomSaveSyncState(files={"pokemon.srm": FileSyncState(tracked_save_id=1, last_sync_hash="abc")})
         )
 
-        result = svc.delete_local_saves(42)
+        result = await svc.delete_local_saves(42)
         assert result["success"] is True
         assert result["deleted_count"] == 1
         assert not save_path.exists()
@@ -584,7 +584,7 @@ class TestDeleteSaves:
             ),
         )
 
-        result = svc.delete_local_saves(42)
+        result = await svc.delete_local_saves(42)
         assert result["success"] is True
         assert result["deleted_count"] == 1
         assert not save_path.exists()
@@ -610,7 +610,7 @@ class TestDeleteSaves:
         # No save state entry for rom 42 yet.
         assert _get_save_state(svc, 42) is None
 
-        result = svc.delete_local_saves(42)
+        result = await svc.delete_local_saves(42)
         assert result["success"] is True
         assert result["deleted_count"] == 1
         assert not save_path.exists()
@@ -624,7 +624,7 @@ class TestDeleteSaves:
         svc, _ = make_service(tmp_path)
         _install_rom(svc, tmp_path)
 
-        result = svc.delete_local_saves(42)
+        result = await svc.delete_local_saves(42)
         assert result["success"] is True
         assert result["deleted_count"] == 0
 
@@ -649,7 +649,7 @@ class TestPlatformSaves:
 
         assert (await svc.count_platform_saves("gba"))["count"] == 2
 
-        assert svc.delete_platform_saves("gba")["deleted_count"] == 2
+        assert (await svc.delete_platform_saves("gba"))["deleted_count"] == 2
         # Counting again after the delete answers zero — it looked, it did not
         # remember.
         assert (await svc.count_platform_saves("gba"))["count"] == 0
@@ -691,7 +691,7 @@ class TestPlatformSaves:
         _create_save(tmp_path, system="gba", rom_name="game1")
         _create_save(tmp_path, system="gba", rom_name="game2")
 
-        result = svc.delete_platform_saves("gba")
+        result = await svc.delete_platform_saves("gba")
         assert result["success"] is True
         assert result["deleted_count"] == 2
 
@@ -727,7 +727,7 @@ class TestPlatformSaves:
             ),
         )
 
-        result = svc.delete_platform_saves("gba")
+        result = await svc.delete_platform_saves("gba")
         assert result["success"] is True
         assert result["deleted_count"] == 2
 
@@ -765,7 +765,7 @@ class TestPlatformSaves:
             platform_slug="snes",
         )
 
-        svc.delete_platform_saves("gba")
+        await svc.delete_platform_saves("gba")
         assert snes_save.exists()
         # Other-platform entry must be entirely untouched.
         snes_entry = _get_save_state(svc, 2)
@@ -1332,7 +1332,7 @@ class TestBadPathDeleteSavesPartialFailure:
             remove_failures={bad_path},
         )
 
-        result = svc.delete_local_saves(42)
+        result = await svc.delete_local_saves(42)
 
         assert result["success"] is False
         # The successful remove still counts.
@@ -1358,7 +1358,7 @@ class TestBadPathDeleteSavesPartialFailure:
             remove_failures={bad_path},
         )
 
-        result = svc.delete_platform_saves("gba")
+        result = await svc.delete_platform_saves("gba")
 
         assert result["success"] is False
         assert result["deleted_count"] == 1
