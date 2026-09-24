@@ -14,33 +14,37 @@ core's `.info` file when saves were sorted by core. The same math, with a differ
 migration where a game's save had been before the user flipped a flag.
 
 That kept two readings of one machine alive side by side, and they disagreed wherever an emulator keeps its saves in a
-folder of its own: the 3DO and Neo Geo cores write below `saves/3do/opera/per_game` and `saves/neogeo/fbneo`, and the
-plugin, looking in `saves/3do` and `saves/neogeo`, found nothing. It also kept the migration's own state: two
-`kv_config` markers holding the last-seen flags and the flags before an unmigrated change, a notice asking the user to
-migrate, and a rule that every sync honoured the OLD layout while a migration was pending.
+folder of its own: the resolver places 3DO's Opera saves below `saves/3do/opera/per_game` and Neo Geo's FinalBurn Neo
+saves below `saves/neogeo/fbneo`, while the plugin's math looked in `saves/3do` and `saves/neogeo`. It also kept the
+migration's own state: two `kv_config` markers holding the last-seen flags and the flags before an unmigrated change, a
+notice asking the user to migrate, and a rule that every sync honoured the OLD layout while a migration was pending.
 
 The resolver reproduces RetroArch's own path rule, sort flags included, so its directory already carries whatever
-sorting is in force. Measured on the reference machine before the change: every syncable answer for an installed game
-named the directory the plugin's math produced, byte for byte, so moving to the resolver's directory moves no path the
-plugin synced.
+sorting is in force. Measured on the reference machine before the change, over the platforms its RomM library holds: all
+245 syncable answers named the directory the plugin's math produced, byte for byte, so moving to the resolver's
+directory moves no path the plugin synced there. 3DO and Neo Geo were not among those platforms.
 
 What a directory answer alone cannot tell is where a game's save WAS. That is the question the migration answered by
 computing the old path from the old flags.
 
 ## Decision
 
-**1. The directory every sync, probe, rename and move uses is the resolver's.** `get_rom_save_info`'s `saves_dir` is
-`SaveAnswer.directory`, and nothing is joined onto it. An answer with no directory is never given one: each reader takes
-its existing refusal or skip. Saves written beside the content are read off the answer's `root_kind` rather than off
-`retroarch.cfg`, and stay gated off exactly as before. The adoption rename asks the resolver for the save and the
-savestate directory of both launch paths; the new one need not exist.
+**1. The save directory is the resolver's.** `get_rom_save_info`'s `saves_dir` is `SaveAnswer.directory`, and nothing is
+joined onto it; a sync, a probe, the adoption rename and the directory follow all use it. An answer with no directory is
+never given one: each reader takes its existing refusal or skip. Saves written beside the content are read off the
+answer's `root_kind` rather than off `retroarch.cfg`, and stay gated off, now per ROM. The adoption rename asks the
+resolver for the save and the savestate directory of both launch paths; the new one need not exist.
 
-**2. A moved directory is followed per game, from a recorded answer.** `rom_save_sync_states.answered_save_dir` holds
-the directory the resolver last answered for that ROM. It is compared, never used as a location. At every sync entry
-point, before any refusal, today's answer is compared with it: nothing recorded — record it; the same — nothing;
-different — move the game's files from the recorded directory to the answered one, then record the new one. A name
-present in both directories is never overwritten: the older copy goes through the save-backup funnel. A one-time
-background pass on the first start records every installed ROM that has no record yet.
+**2. A moved directory is followed per game, from a recorded answer.** A table of its own, `answered_save_directories`,
+holds the directory the resolver last answered for each ROM. It is compared with today's answer and read as the source
+of the move, never as where a save is looked for. At the sync entry points, before the refusal that reads the same
+answer, today's answer is compared with it: nothing recorded — record it; the same — nothing; different — move the
+game's files from the recorded directory to the answered one, then record the new one. An answer beside the content is
+neither followed nor recorded. A name present in both directories is never overwritten: the older copy goes through the
+save-backup funnel. A one-time background pass on the first start records the answer for each installed ROM that has no
+record yet, and the RetroDECK home migration records each installed ROM's answer afresh once it has moved the files. The
+mechanics are in
+[Following a moved save directory](../architecture/save-file-sync-architecture.md#following-a-moved-save-directory).
 
 **3. What went.** `resolve_save_dir`, `domain/save_layout.py`, `adapters/retroarch_config.py`, the save-sort migrator
 and its two `kv_config` markers (deleted by migration 024), the start-up detection step, the notice, the Settings
@@ -57,10 +61,10 @@ somewhere — the markers this decision removes. A recorded directory is the sam
 it.
 
 **A library-wide sweep at every start.** Comparing every installed game's answer with its record at start-up would
-follow a moved directory before the first launch, at one live reading per game: a median of 137 ms and a p90 of 393 ms
-per ROM on the reference machine, on one core. For a library of hundreds that is minutes of background I/O on every
-start to catch a change that is rare and that the next sync of each game catches anyway. The one-time pass pays that
-once, to fill the record in.
+follow a moved directory before the first launch, at one live reading per game: 186 answers took 36 s on the reference
+machine, on one core (a median of 137 ms and a p90 of 393 ms per ROM). For a library of a few hundred games that is
+about a minute of background I/O on every start to catch a change that the next sync of each game catches anyway. The
+one-time pass pays that once, to fill the record in.
 
 ## Consequences
 
@@ -69,8 +73,14 @@ once, to fill the record in.
   the server recover them at their next sync; a save only on the device stays in the old folder. Stated in the user
   guide.
 - **The content-directory gate is per ROM.** The whole-library sweep no longer has a machine-wide verdict; it passes
-  such a ROM over inside its run and still reports the content-directory skip, or names the ROMs it held back.
-- **A refusal may write one field.** A refusing answer still names a directory, and first sight records it, so a refused
-  ROM can carry an `answered_save_dir` and no other sync state.
-- **3DO and Neo Geo saves are found**, because the plugin now looks where their cores write.
-- **The record lives on the save-sync state, not the install**, so it survives an uninstall and a re-download.
+  such a ROM over inside its run and still reports the content-directory skip, or counts the ROMs it held back. With no
+  confirmed slot at all it asks about one installed ROM, so that skip is still reported.
+- **Nothing is followed into the content's own folder.** For a multi-file game that folder is removed whole on
+  uninstall, so an answer beside the content leaves the record as it is. This holds until the content-directory gate is
+  lifted.
+- **A refusal may be recorded.** A refusing answer can still name a directory, and first sight records it — in
+  `answered_save_directories`, which is not sync state; a refusal still writes none.
+- **The record has its own table**, because a `rom_save_sync_states` row means "tracked for save sync" and the record is
+  written for games that never were. It hangs off `roms` rather than the install, so it survives an uninstall and a
+  re-download.
+- **3DO and Neo Geo saves are now looked for where their cores write**; that has not yet been observed on a device.

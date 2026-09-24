@@ -271,7 +271,8 @@ that says which files the save consists of. On a stock RetroDECK install that is
 - **SD card**: `/run/media/deck/Emulation/retrodeck/saves/{system}/{rom_name}.srm`
 
 Some cores keep their saves in a folder of their own below that — the 3DO core, for example, writes to
-`saves/3do/opera/per_game` — and the plugin looks there, because that is where the core looks.
+`saves/3do/opera/per_game` — and the plugin now looks there, because that is where the answer points. That has not yet
+been observed on a device.
 
 ## RetroArch Save Sorting
 
@@ -294,6 +295,9 @@ no longer reads. The plugin notices at each game's next sync — at launch, at e
 for games whose save slot you have set up, when you use **Sync All Saves Now** — and moves that game's save files into
 the new folder before it syncs. There is nothing to confirm and no notice to act on; each game follows on its own.
 
+With save sync off, Tender neither syncs nor moves save files. A sorting change made while it is off is followed once
+save sync is on again, at each game's next sync.
+
 If the new folder already holds a file with the same name, nothing is overwritten: the older of the two copies is moved
 into a `.romm-backup` folder beside it, and the newer one is kept where RetroArch looks.
 
@@ -301,6 +305,7 @@ into a `.romm-backup` folder beside it, and the newer one is kept where RetroArc
 
 RetroArch's **Write Saves to Content Directory** puts a game's save beside the game file instead of in the saves folder.
 Save sync stays off for those games — the game still launches, and the game page says why its saves are not synced.
+Turning this setting on moves no save into the game's folder, and turning it back off finds the saves where they were.
 
 ### Updating from a version with the save-sorting migration
 

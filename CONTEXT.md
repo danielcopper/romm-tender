@@ -277,8 +277,8 @@ key.
 
 Residents (per [ADR-0003](docs/adr/0003-json-sqlite-persistence-boundary.md)): the RetroDECK home path marker
 (`retrodeck_home_path` + its pending-migration `_previous`), `device_id` (server-issued identity), `platform_names`
-(platform_slug → display_name cache), and `save_directories_recorded`, the marker that the one-time pass recording every
-installed ROM's [answered save directory](#answered-save-directory) has finished. The schema version is **not** a
+(platform_slug → display_name cache), and `save_directories_recorded`, the marker that the one-time pass recording the
+installed ROMs' [answered save directories](#answered-save-directory) has finished. The schema version is **not** a
 `kv_config` key — it lives in `PRAGMA user_version`.
 
 **Not** a dumping ground: anything with its own lifecycle, invariants, or repeat-row potential gets its own aggregate.
@@ -703,9 +703,9 @@ disc no longer present) degrades to the default with a WARNING, never fatal.
 
 What one ROM's save consists of, where the emulator keeps it, and whether this plugin may carry it —
 `domain.save_answer.SaveAnswer`, read live off the machine by the vendored resolver through `adapters/atlas_saves.py`.
-It replaced a per-system extension table the plugin maintained by hand, and its **directory** replaced the plugin's own
-RetroArch path math: every sync, probe, rename and move uses the directory the answer names and no other. An answer with
-no directory is never given one by a guess.
+It replaced a per-system extension table the plugin maintained by hand. Its **directory** is where a sync, a probe, the
+adoption rename and the [directory follow](#answered-save-directory) look; an answer with no directory is never given
+one by a guess.
 
 The answer also says which anchor that directory hangs off (`root_kind`). A save written **beside the game's content**
 (RetroArch's "Write Saves to Content Directory") is read off it, and save sync stays off for that ROM whatever its state
@@ -728,8 +728,8 @@ their uninstalled game already has save files.
 
 The five values a save answer classifies a ROM into, **exactly one of which holds**. Only the first is a save this
 plugin can carry; the other four **refuse** — no path is probed, no sync state is written, and the sync returns the
-benign-skip shape rather than a failure. The one field a refusal may record is the
-[answered save directory](#answered-save-directory), where the answer names one.
+benign-skip shape rather than a failure. A refusing answer that names a directory still has it recorded as the
+[answered save directory](#answered-save-directory), which is not sync state.
 
 - **per-game files** — the answer names concrete files with no hole. Sync as usual, any number of files.
 - **shared** — the emulator's granularity is a shared card or a shared file, so one file holds many games' progress and
@@ -766,19 +766,15 @@ answers for itself.
 
 ### Answered save directory
 
-The directory the resolver last answered for one ROM's save — `RomSaveSyncState.answered_save_dir`, written only by
-`record_answered_save_dir`. **It compares; it never locates.** A sync compares it with today's answer: the same, nothing
-happens; different, the game's files are carried from the recorded directory to the answered one and the record moves
-on; nothing recorded, today's answer is recorded. It is never where a save is looked for, read or written — that is
-always today's answer.
+The directory the resolver last answered for one ROM's save — `AnsweredSaveDirectory`, one row per ROM in
+`answered_save_directories`. It is compared with today's answer to notice that the game's save directory moved, and read
+as the source of the move that follows; it is never where a save is looked for, read or written — that is always today's
+answer. It is kept apart from the ROM's save-sync state, because it is recorded for games that were never synced. How a
+moved directory is followed:
+[Following a moved save directory](docs/architecture/save-file-sync-architecture.md#following-a-moved-save-directory).
 
-A different answer is how a changed RetroArch save sorting reaches the plugin, and it is followed **per game, at that
-game's next sync**, never library-wide: nothing re-derives where a save used to be. A name present in both directories
-is never overwritten — the older copy goes to the save-backup folder. A one-time pass on the first start with the record
-fills it in for every installed ROM, so a game whose saves predate the record is covered from then on.
-
-Avoid "recorded save directory" as a location, and "save-sort migration": the markers and the migration that read them
-are gone.
+_Avoid_: "recorded save directory" as a location, and "save-sort migration" — nothing migrates a layout; each game's
+files are followed.
 
 ### Save-sync slot
 

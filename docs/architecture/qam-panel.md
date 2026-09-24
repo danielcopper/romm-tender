@@ -1788,7 +1788,8 @@ store screenshots (#830) are taken after.
   not a description of the page.
 - The static prototype the decisions were made on: [qam-prototype.html](../assets/qam-prototype.html), a single
   self-contained page kept in `docs/assets/`. Every page at device size with numbered notes; its example data is
-  invented, and it reflects the decisions as of this page's first version. Redrawn to the Deck's real 854 × 534 CSS px —
-  Steam's 80 px top bar over a 454 px panel — once the device round had measured them.
+  invented, and it reflects the decisions as of this page's first version — the save-sort notice and its Settings home
+  it draws no longer exist, and the device-list study above draws the same notice. Redrawn to the Deck's real 854 × 534
+  CSS px — Steam's 80 px top bar over a 454 px panel — once the device round had measured them.
 - [ADR-0029](../adr/0029-wide-qam-pages-drive-steams-friends-expansion.md) — why the panel widens through Steam's
   Friends expansion and not a full-screen route, and what that rests on.

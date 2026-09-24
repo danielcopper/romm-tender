@@ -58,7 +58,8 @@ appears with three choices:
 
 - **Overwrite** — Replace the existing files at the destination with the ones being migrated
 - **Skip** — Keep the existing files at the destination and just update the plugin's internal path references to point
-  to them
+  to them. The copy left at the old location stays there, and later save syncs leave it alone: they never carry it over
+  the one you kept.
 - **Cancel** — Abort the migration entirely; no files are moved and no paths are updated
 
 ## What Gets Migrated
