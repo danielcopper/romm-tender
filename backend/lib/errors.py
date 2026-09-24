@@ -158,10 +158,13 @@ class DeviceNotRegisteredError(Exception):
     A client-side precondition failure, not a RomM HTTP error (hence a plain
     ``Exception``, outside the :class:`RommApiError` hierarchy). Every RomM the
     plugin accepts has Device Sync, so a registered device is the norm and a
-    missing id is a fault: a POST without one drops the slot field and would
-    misfile a named-slot save into the legacy ``slot:null`` bucket, so the
-    upload is refused rather than sent. Save-sync funnels catch it and surface
-    the ``device_not_registered`` reason slug — they own the slug/message (a
+    missing id is a fault. RomM runs ``add_save``'s write-time 409 gates, and
+    records the calling device's sync row on ``add_save`` and ``update_save``,
+    only when a device is named (``endpoints/saves.py``, read at 5.3.0), so a
+    device-less upload would skip the conflict backstop the save sync relies on
+    and leave this device's sync row unwritten; the upload is refused rather
+    than sent. Save-sync funnels catch it and surface the
+    ``device_not_registered`` reason slug — they own the slug/message (a
     save-sync concern) since ``lib`` cannot import the service-layer message
     constants.
     """

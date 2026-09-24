@@ -316,9 +316,9 @@ The plugin requires **RomM >= 5.3.0**. Pre-release builds whose numeric core is 
 `5.3.1-beta` or `5.4.0-alpha.1`. Tags at the exact floor (`5.3.0-beta.1`, `5.3.0-alpha.1`) are rejected because they
 rank below the `5.3.0` release. Servers below 5.3.0 are rejected at connection time with a full error page in both the
 QAM panel and the game detail view. The plugin uses server-side device tracking, content hashing, save slots, and
-`device_syncs` for conflict detection. Save sync is built on RomM's Device Sync (`negotiate`) save-sync transport, which
-arrived in RomM 4.9.0. Nothing the plugin does needs a newer server than that yet; the minimum is 5.3.0 so that coming
-updates can use what RomM 5.3.0 added without having to raise it first.
+`device_syncs` for conflict detection. Save sync is built on RomM's Device Sync, which arrived in RomM 4.9.0. Nothing
+the plugin does needs a newer server than that yet; the minimum is 5.3.0 so that coming updates can use what RomM 5.3.0
+added without having to raise it first.
 
 For technical details on how save sync works internally (three-way conflict detection, state schema, session detection),
 see the [Save File Sync Architecture](../architecture/save-file-sync-architecture.md) technical reference.
