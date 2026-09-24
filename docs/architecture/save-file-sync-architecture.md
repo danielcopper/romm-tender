@@ -913,6 +913,21 @@ each installed ROM's directory afresh from the resolver, subject to the follow's
 answer: with `skip`, the copy left in the old home stays there and is never carried over the one the user kept. See
 [RetroDECK Path Migration](../user-guide/retrodeck-path-migration.md) for the user-facing side.
 
+### Detecting a home change
+
+All five trigger points run the same idempotent detection, `MigrationService.detect_retrodeck_path_change()`: the three
+frontend ones through the `refresh_migration_state` callable, the post-exit one through `MigrationService.refresh_state`
+directly, and backend start by calling it as a start-up step. Running on every trigger is cheap: it has an early-return
+guard that exits when the home has not changed since the last call.
+
+| When             | Where (code location)                                                  | Why                                                                                    |
+| ---------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Backend start    | `_main()` in `main.py`, as a start-up step                             | Catches changes that occurred while the backend was not running                        |
+| QAM open         | `MainPage.tsx` mount `useEffect`                                       | User navigating via QAM sees current state when Settings is one tap away               |
+| Game-detail open | `RomMGameInfoPanel.tsx` `useEffect([appId])`                           | Per-game navigation refreshes state when the user browses without launching            |
+| Pre-game-launch  | `launchInterceptor.ts`                                                 | Catches a home moved since the prior session, before the launch it would affect        |
+| Post-game-exit   | `SessionLifecycleService.finalize` (backend, after the post-exit sync) | Refreshes the pending state after every session; the payload rides the finalize result |
+
 ## Slot Deletion
 
 Users can delete save slots from the game detail SAVES tab. Deletion removes the slot from local state and bulk-deletes
