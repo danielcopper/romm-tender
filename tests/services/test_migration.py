@@ -1057,6 +1057,25 @@ class TestMigrateRetroDeckFiles:
         assert seen == [before, before]
 
     @pytest.mark.asyncio
+    async def test_a_run_that_raises_leaves_nothing_in_flight(self, plugin, tmp_path):
+        # Left behind, the counter would hold every sync off and the status would
+        # report a migration nobody is running, until the process restarts.
+        self._conflicting_rom(plugin, tmp_path)
+        service = plugin._migration_service
+
+        async def _failing_run(*_args: Any) -> dict[str, Any]:
+            assert service.is_retrodeck_migration_pending() is True
+            raise RuntimeError("boom")
+
+        service._run_migration = _failing_run
+
+        with pytest.raises(RuntimeError, match="boom"):
+            await plugin.migrate_retrodeck_files("skip")
+
+        assert service._migrations_in_flight == 0
+        assert service._status_in_flight is None
+
+    @pytest.mark.asyncio
     async def test_nothing_is_recorded_while_the_user_is_still_asked(self, plugin, tmp_path):
         self._conflicting_rom(plugin, tmp_path)
 
