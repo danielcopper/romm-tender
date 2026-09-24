@@ -1007,7 +1007,7 @@ y="$(reader)"
 
 
 class TestTheBlindSpots:
-    """Named in the script's docstring and in the register's long form. They pass; that is the point."""
+    """Named in the script's docstring, their one home. They pass; that is the point."""
 
     def test_a_function_reached_through_a_variable_is_missed(self, check, tmp_path):
         assert (

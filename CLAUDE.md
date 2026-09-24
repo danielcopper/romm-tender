@@ -363,8 +363,8 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   fetch's opt-out is prompt-only — `.claude/rules/romm-http.md`
 - **Every RomM request goes out through `RommHttpAdapter._urlopen`, the single point that clears the known-unreachable
   state** — check — `scripts/check_urlopen_choke_point.py` (AST call sites: an aliased `urlopen` or a `getattr` slips
-  past it); which requests may skip the retry ladder, and which pass `romm_origin=False` because they do not talk to
-  RomM, stays prompt-only in `.claude/rules/romm-http.md`
+  past it); unchecked: which requests may skip the retry ladder, and which pass `romm_origin=False` because they do not
+  talk to RomM (`.claude/rules/romm-http.md`)
 - **Frontend↔backend callable parity (names + arity)** — check — `scripts/check_callable_manifest.py`
 - **Every backend `emit` event name has a frontend listener, and vice versa** — check — `scripts/check_event_parity.py`
 - **`settings.json` is written only by its owner (`adapters/persistence.py`)** — check —
@@ -402,9 +402,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **The KIND of run a `sync_progress` frame belongs to is stated on it (`runKind`), never inferred from it — and a frame
   that states none is rendered as neither of the two answers** — test + prompt-only — `tests/services/library/`'s
   `test_sync_orchestrator.py::TestRunKindOnTheWire` and `test_state.py::TestRunKind`,
-  `frontend/src/utils/syncRunView.test.ts` and `frontend/src/bigpicture/MainPage.test.tsx`. Prompt-only, since each test
-  pins one half: every frame builder carries the key, every start path stamps the kind it is, and no reader treats a
-  missing `runKind` as `preview` or `apply`
+  `frontend/src/utils/syncRunView.test.ts` and `frontend/src/bigpicture/MainPage.test.tsx`. Prompt-only: every frame
+  builder carries the key, every start path stamps the kind it is, and no reader treats a missing `runKind` as `preview`
+  or `apply`
 - **A press that starts a run clears the previous run's per-unit rows — unless that press is a RESUME, the one start
   they are still true for** — test + prompt-only — `frontend/src/bigpicture/SyncPage.test.tsx` ("a previous run's rows
   at the next press") and `frontend/src/utils/runUnitsStore.test.ts`; prompt-only: every start path in `useSyncPage`
@@ -459,13 +459,14 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **Tender's section reaches Steam's game page through the ROUTE component's `renderFunc`, and never through the page
   component's own `type`** — test + prompt-only — `frontend/src/bigpicture/patches/gamePageSeam.test.ts`; the install
   (`installGamePagePatch.ts`) is device-only. Prompt-only: the install patches every memo export whose `type` is a
-  function, and the start-up check's `AppDetailsRoute` and `appDetailsClasses` cost `feature`, never `panel` — while
-  moving a panel name to `feature` beside them renders a hole
+  function, and the start-up check's `AppDetailsRoute` and `appDetailsClasses` cost `feature`, never `panel`, and no
+  panel name moves to `feature` beside them (that renders a hole)
 - **Aggregate state mutated only via verb-named methods (no field assignment)** — check —
   `scripts/check_aggregate_field_assignment.py`
 - **No UoW-opening seam (ActiveCoreResolver, RelaunchOptionsResolver, uow_factory) is called while a UoW is open on the
   same path** — check — `scripts/check_uow_seam_nesting.py`, first seam family (a seam reached as a bound method,
-  through a helper or a local alias, or a `__call__`-only seam slips past it)
+  through a helper, a local alias or a nested `def`/`lambda`, inside a UoW opened through a factory attribute not ending
+  in `uow_factory`, a `__call__`-only seam, and a seam whose implementation later grows a UoW open slip past it)
 - **No file-I/O seam is called while a UoW is open — a Unit of Work wraps database reads and writes, never file or
   server I/O** — check — `scripts/check_uow_seam_nesting.py`, second seam family (`IO_SEAM_METHODS`, which carries each
   `__call__`-only seam's bound attribute); one `# pragma: no uow-check` suppresses the line for both families.
@@ -512,9 +513,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   required), `frontend/src/index.test.tsx`, and `frontend/src/boot/steamModules.test.ts`, which requires a non-blocking
   name `@decky/ui` does not export to be one Tender resolves itself (so the `SP_*` globals stay blocking). Prompt-only:
   `checkSteamModules` derives `panelMayMount`, and `index.tsx` gates the fallback page on it and otherwise logs
-  `describeSurvivedMiss`, which names no repair of its own; `absenceCost` is read only as `!== "panel"`; the toast
-  notice comes from `notificationsMissing` over `NOTIFICATION_LOOKUPS` names, never from a `feature` cost; a name leaves
-  `panel` only once its every consumer is read
+  `describeSurvivedMiss`, which names no repair of its own; `absenceCost` is read only as `!== "panel"`; the notice on
+  Main that toasts are unavailable comes from `notificationsMissing` over `NOTIFICATION_LOOKUPS` names, never from a
+  `feature` cost; a name leaves `panel` only once its every consumer is read
 - **The start-up failure page names the copy of `@decky/ui` that actually ran the search that missed, and the repair
   that follows from it** — check + test + prompt-only — `frontend/scripts/check-bundle-shape.mjs` checks the stamp the
   build puts on each bundle (`BUNDLE_KIND`, standalone or coexistence) and that `globals.js` carries none; every
@@ -568,17 +569,18 @@ entry — why the rule exists, what breaks without it, and where it lives — is
 - **The console's own firmware demand is a value of its own (`system_image`) and is never folded into a count, and the
   resolver's `system_firmware: null` reaches it as a claim about nothing** — test + prompt-only —
   `tests/domain/test_bios_status.py` (`TestClassifySystemImage`, `TestTheVerdictOverTheSystemImage`),
-  `tests/services/test_firmware.py::TestTheConsolesOwnFirmwareDemand`, `bigpicture/BiosTab.test.tsx`,
-  `bigpicture/library/PlatformsTab.test.tsx`, and the wording locks `biosSummary.test.ts` / `biosHeldRatio.test.ts` over
-  `test-utils/componentSources.ts`. Prompt-only: demand comes from the resolver's packaged table (`system_firmware`),
-  presence from our rows, never from `requirements_met`; every surface words these states through
+  `tests/services/test_firmware.py::TestTheConsolesOwnFirmwareDemand`, `frontend/src/bigpicture/BiosTab.test.tsx`,
+  `frontend/src/bigpicture/library/PlatformsTab.test.tsx`, and the wording locks
+  `frontend/src/utils/biosSummary.test.ts` / `frontend/src/utils/biosHeldRatio.test.ts` over
+  `frontend/src/test-utils/componentSources.ts`. Prompt-only: demand comes from the resolver's packaged table
+  (`system_firmware`), presence from our rows, never from `requirements_met`; every surface words these states through
   `frontend/src/utils/biosSummary.ts`, sole holder of their order (`"absent"` before `bios_level` `unknown`; given
   `required_withheld` and `"unsettled"` both, the withheld row); `PlatformDetail`'s `nothingEstablished` excludes
   `"unsettled"` as it does `required_withheld`, and decides wording alone; the play-row badge
-  (`playSection.ts::extractBiosInfo`) rises on `"absent"`, never on `"unsettled"`; a new wording, or one in a `.ts`
-  helper (`panelState.ts`), escapes the locks. Per core, `required` and `needs_one_of` are two speakers, never rewritten
-  into or folded onto each other; `needs_one_of` only where the core marks nothing required; `system_image_candidate`
-  stays a strict subset of the rows `classify_system_image` weighs
+  (`frontend/src/utils/playSection.ts::extractBiosInfo`) rises on `"absent"`, never on `"unsettled"`; a new wording, or
+  one in a `.ts` helper (`frontend/src/bigpicture/panelState.ts`), escapes the locks. Per core, `required` and
+  `needs_one_of` are two speakers, never rewritten into or folded onto each other; `needs_one_of` only where the core
+  marks nothing required; `system_image_candidate` stays a strict subset of the rows `classify_system_image` weighs
 - **Which emulator a set of answers is about is ONE pick per scope — a platform's, and a ROM's — and every answer in
   that scope is a projection of it** — test + prompt-only — `tests/services/test_firmware.py`
   (`TestOnePlatformOneEmulator`,
@@ -687,25 +689,28 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   prompt-only — prune service namespace-race tests; new destructive RomM proof paths are prompt-only
 - **Every write into per-rom detail state that crosses an `await` is bound to a rom identity — the store
   (`frontend/src/utils/gameDetailStore.ts`) via `writerForRom`, or the answer's own `rom_id` in `applySaveStatus`; the
-  panel's modules `bigpicture/panelState.ts`, `panelEvents.ts` and `panelTabContent.tsx` via `RomBinding` (`bindRom`,
-  `bindRomInState`); `AchievementsTab.tsx` by its rom-id key. Two answers for the SAME rom are ordered by a sequence
-  taken at issue (`loadSeq`, `takeReadTicket`). Ordered but unbound: the two identity writes (the store's `loadDetail`,
-  the panel's `loadData`) and the panel's lazy lane; neither bound nor ordered: the store's `cached.bios_status` fold
-  and `handleBiosChange`. The play button is NOT covered** — test + prompt-only — the panel's bound sites each carry a
-  version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`); the store side and every new write site
-  are prompt-only
+  panel's modules `frontend/src/bigpicture/panelState.ts`, `frontend/src/bigpicture/panelEvents.ts` and
+  `frontend/src/bigpicture/panelTabContent.tsx` via `RomBinding` (`bindRom`, `bindRomInState`);
+  `frontend/src/bigpicture/AchievementsTab.tsx` by its rom-id key. Two answers for the SAME rom are ordered by a
+  sequence taken at issue (`loadSeq`, `takeReadTicket`). Ordered but unbound: the two identity writes (the store's
+  `loadDetail`, the panel's `loadData`) and the panel's lazy SAVES-tab slot load
+  (`frontend/src/bigpicture/panelSlotsLoad.ts`, raw setter, `slots` ticket); neither bound nor ordered: the store's
+  `cached.bios_status` fold and `handleBiosChange`. The play button is NOT covered** — test + prompt-only — the panel's
+  bound sites each carry a version-switch test (`frontend/src/bigpicture/RomMGameInfoPanel.test.tsx`); the store side
+  and every new write site are prompt-only
 - **Every row a reader must be able to reach on a QAM page is a row Steam can focus — a toggle, a button, or a
   `Focusable` declaring a stop of its own, including a table row with no action of its own** — check + prompt-only —
-  `tender/qam-focusable-row` for the syntactic slice — it passes a row with any opaque child or a browser-focusable
-  descendant (`tabIndex`, `button`), so those rows are prompt-only too; prompt-only: focus order, runtime reachability,
-  edge revelation (`ScrollRegion`'s `revealEdge`, whose decision `frontend/src/bigpicture/layout/ScrollRegion.test.tsx`
-  pins), scrolling geometry and controller behaviour, and that a page's controls sit above its long focusable lists, not
-  below
+  `tender/qam-focusable-row` for the syntactic slice — it passes a row with an unknown spread, any opaque child, or a
+  browser-focusable descendant (`tabIndex`, `button`), so those rows are prompt-only too; prompt-only: focus order,
+  runtime reachability, edge revelation (`ScrollRegion`'s `revealEdge`, whose decision
+  `frontend/src/bigpicture/layout/ScrollRegion.test.tsx` pins), scrolling geometry and controller behaviour, and that a
+  page's controls sit above its long focusable lists, not below
 - **A list-and-detail page opens on the row it was opened WITH, not on its first row** — test + prompt-only —
   `ListDetail.test.tsx` and `WidePage.test.tsx`, each over a non-first row, as any test of it must be; the press itself
   is device-only. Prompt-only: `bigpicture/layout/WidePage.tsx` places entry focus through `pageEntryStop`
-  (`utils/entryFocus.ts`), never `firstBodyStop`; `bigpicture/layout/ListDetail.tsx` and every page passing a starting
-  selection put the `ENTRY_STOP_ATTR` mark on the `display: contents` wrapper around the selected row, never on the row
+  (`utils/entryFocus.ts`), never `firstBodyStop`; `bigpicture/layout/ListDetail.tsx` puts the `ENTRY_STOP_ATTR` mark on
+  the `display: contents` wrapper around the selected row, never on the row; a wide page that opens on a non-first row
+  without `ListDetail` places the mark itself, the same way
 
 When a change applies a guard / sanitize / backup / grouping pattern, sweep for sibling sites of the same pattern — the
 register is what that sweep checks against.
