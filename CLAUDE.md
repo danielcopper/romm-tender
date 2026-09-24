@@ -537,8 +537,10 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `docs/requirements.*` beside the docs)** — check — `scripts/check_lock_sync.py`
 - **Every local markdown link in tracked docs resolves (file target + heading/attr-list anchor)** — check —
   `scripts/check_markdown_links.py`
-- **Every stated RomM minimum version matches the enforced `Plugin._MIN_REQUIRED_VERSION`** — check —
-  `scripts/check_romm_min_version.py` (ADRs excluded: frozen history)
+- **Every RomM minimum stated for a reader matches the enforced `Plugin._MIN_REQUIRED_VERSION`** — check + prompt-only —
+  `scripts/check_romm_min_version.py`, over the statements its `CLAIMS` list names; a new restatement is checked only
+  once it is added there, and the examples of a version above the floor that sit beside those statements are not checked
+  at all (ADRs excluded: frozen history)
 - **Every tree under `backend/_vendor/` is pinned by the `<pkg>.SHA256SUMS` beside it: every manifest entry under
   `<pkg>/` matches the vendored file's digest, the vendored file set EQUALS the manifest's set restricted to that
   prefix, and a package directory with NO manifest is a failure** — check — `scripts/check_vendored_trees.py`;
