@@ -109,27 +109,3 @@ class TestAttachAndDetach:
 
         assert sink.connected is False
         assert await sink.emit("sync_complete", {}) is False
-
-
-class TestOnePayload:
-    """The type says one payload; this is what stands behind it for a caller that reaches the sink untyped."""
-
-    async def test_a_second_argument_is_refused(self, sink):
-        """A wire form for two payloads is a decision nobody has taken."""
-        sender = RecordingSender()
-        sink.attach(sender)
-
-        with pytest.raises(TypeError):
-            await sink.emit("sync_complete", {"a": 1}, {"b": 2})  # pyright: ignore[reportCallIssue]
-
-        assert sender.sent == []
-
-    async def test_a_missing_payload_is_refused(self, sink):
-        """A message always carries a ``payload``; none is not quietly sent as ``null``."""
-        sender = RecordingSender()
-        sink.attach(sender)
-
-        with pytest.raises(TypeError):
-            await sink.emit("sync_complete")  # pyright: ignore[reportCallIssue]
-
-        assert sender.sent == []

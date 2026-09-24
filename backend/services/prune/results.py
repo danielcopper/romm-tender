@@ -9,9 +9,8 @@ from typing import TYPE_CHECKING, Any
 from lib.list_result import ErrorCode
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
-
     from domain.rom import Rom
+    from services.protocols import EventEmitter
     from services.prune._models import RecoveryHandle
 
 _COMPLETION_IDS_PER_GROUP = 50
@@ -106,7 +105,7 @@ def _needs_publication(result: dict[str, Any]) -> bool:
 class PruneResultReporterConfig:
     """Event dependency for one cleanup run's published frames."""
 
-    emit: Callable[..., Awaitable[None]]
+    emit: EventEmitter
 
 
 class PruneResultReporter:

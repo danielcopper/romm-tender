@@ -74,8 +74,9 @@ def _executor(rows: list[Rom], settings: dict[str, Any], emitted: list[tuple[str
         for row in rows:
             uow.roms.save(row)
 
-    async def emit(event: str, payload: dict[str, Any]) -> None:
-        emitted.append((event, payload))
+    async def emit(event: str, payload: object, /) -> None:
+        assert isinstance(payload, dict)
+        emitted.append((event, cast("dict[str, Any]", payload)))
 
     async def unusable_request(*_args: Any) -> dict[str, Any]:
         raise AssertionError("no Steam action may be requested by these flows")

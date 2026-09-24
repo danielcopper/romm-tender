@@ -154,7 +154,7 @@ class Plugin:
         if lease_token is not None and not delivered:
             await release_prune_gate_lease(self, lease_token)
 
-    async def _main(self, *, directories, user_home, logger, events, status):
+    async def _main(self, *, directories, user_home, logger, events: PluginEventSink, status):
         """Bring the backend up: adapters, services, then the start-up repairs.
 
         Everything here must be through before the port is bound, which is what

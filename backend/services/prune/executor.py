@@ -35,11 +35,11 @@ from services.prune.steam_actions import SteamActionRunner, SteamActionRunnerCon
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Awaitable, Callable
 
     from domain.rom import Rom
     from services.protocols import (
         ActiveDownloadRomIdsFn,
+        EventEmitter,
         InstalledRomFilesRemoverFn,
         PruneArtifactStore,
         PruneSaveCoordinator,
@@ -69,7 +69,7 @@ class PruneExecutorConfig:
 
     loop: asyncio.AbstractEventLoop
     logger: logging.Logger
-    emit: Callable[..., Awaitable[None]]
+    emit: EventEmitter
     romm_api: RommLivenessApi
     recovery_store: RecoveryBundleStore
     prune_artifacts: PruneArtifactStore
