@@ -170,6 +170,10 @@ class AtlasSaveLocationAdapter:
             self._log_debug(f"[saves] {system}: the catalogue offers no entry labelled {emulator_label!r}")
         return entry
 
+    def installation_detected(self) -> bool:
+        """Whether an emulator installation was found to put questions to."""
+        return self._installation_handle() is not None
+
     def _installation_handle(self) -> Any:
         """The chosen installation, memoised, or ``None`` when nothing was detected.
 

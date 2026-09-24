@@ -208,6 +208,9 @@ IO_SEAM_METHODS: frozenset[str] = frozenset(
         # asked where it keeps one game's savestates. The same live reading of
         # the machine as the save answer, taken twice per adoption rename.
         "resolve_savestate_location",
+        # SaveLocationReader's detection question — whether any installation
+        # was found, which on its first answer runs the resolver's detection.
+        "installation_detected",
         # RomInfoService.save_answer (services/saves/rom_info.py) — the saves
         # package's own wrapper around that seam, listed because it is what the
         # peers in services/saves/ actually call. Without this entry the rule

@@ -70,6 +70,9 @@ class FakeSaveLocationReader:
         self._saves_root = saves_root
         self._states_root = states_root
         self.beside_content = beside_content
+        # Whether an installation was found; a test flips it to model a
+        # machine with no RetroDECK yet, and every answer then refuses.
+        self.installation = True
         self._by_system: dict[str, SaveAnswer] = {}
         self._states_by_system: dict[str, SavestateLocation | NoSavestates | None] = {}
         self.calls: list[tuple[str, str, str | None]] = []
@@ -88,6 +91,9 @@ class FakeSaveLocationReader:
         """
         self._by_system[system] = unestablished_answer()
 
+    def installation_detected(self) -> bool:
+        return self.installation
+
     def savestates_with(self, system: str, answer: SavestateLocation | NoSavestates | None) -> None:
         """Seed the savestate answer *system* gives, whatever the ROM or the emulator."""
         self._states_by_system[system] = answer
@@ -96,6 +102,9 @@ class FakeSaveLocationReader:
         self, *, system: str, content_path: str, emulator_label: str | None, content_installed: bool = True
     ) -> SaveAnswer:
         self.calls.append((system, content_path, emulator_label))
+        if not self.installation:
+            # What the real adapter answers with nothing detected to ask.
+            return unestablished_answer(content_installed=content_installed)
         seeded = self._by_system.get(system)
         if seeded is not None:
             # ``content_installed`` describes the QUESTION, so it comes from the

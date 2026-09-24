@@ -410,6 +410,10 @@ class TestEveryWayTheQuestionCannotBePut:
         )
         assert any("no emulator installation detected" in line for line in traces)
 
+    def test_detection_is_reported_both_ways(self, traces):
+        assert _adapter(None, traces).installation_detected() is False
+        assert _adapter(_Installation(()), traces).installation_detected() is True
+
     def test_the_catalogue_offers_no_entry_under_that_label(self, traces):
         answer = _ask(_placement(), traces, label="Beetle Saturn", emulator="mGBA")
 

@@ -305,7 +305,9 @@ class TestIoSeamsViolations:
         assert "realpath" in findings[0]
         assert "file-I/O seam" in findings[0]
 
-    @pytest.mark.parametrize("method", ["resolve_save_answer", "resolve_savestate_location", "save_answer"])
+    @pytest.mark.parametrize(
+        "method", ["resolve_save_answer", "resolve_savestate_location", "installation_detected", "save_answer"]
+    )
     def test_the_save_answer_inside_uow_is_flagged(self, method: str):
         # The seam's two questions and the saves package's own wrapper around
         # the first. All are listed: the seam is reached directly from two

@@ -318,11 +318,17 @@ class SaveService:
         sight and its files left behind. This pass closes that: it asks the
         resolver about each installed ROM, serially, and records the answer
         where nothing is recorded yet and the follow would act on it. The
-        ``kv_config`` marker is written only once the pass finished, so one cut
-        short by a shutdown runs again, and recording where nothing is recorded
-        is safe to repeat.
+        ``kv_config`` marker is written only once the pass finished over a
+        detected emulator installation, so a pass cut short by a shutdown, or
+        one with nothing to ask yet, runs again; recording where nothing is
+        recorded is safe to repeat.
         """
         if await self._loop.run_in_executor(None, self._kv_marker_set, _KV_SAVE_DIRECTORIES_RECORDED):
+            return
+        if not await self._loop.run_in_executor(None, self._config.save_locations.installation_detected):
+            # Every answer would refuse, so the pass would record nothing and
+            # its marker would stop it running once there is something to ask.
+            self._config.logger.info("No emulator installation detected; recording the save directories next start")
             return
         try:
             await self._sync_engine.record_save_directories()

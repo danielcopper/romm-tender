@@ -672,6 +672,23 @@ class TestTheOneTimeBackfill:
         assert _recorded(svc) is None
 
     @pytest.mark.asyncio
+    async def test_no_installation_leaves_the_pass_to_run_again(self, tmp_path):
+        # Without an installation every answer refuses, so a marker set now
+        # would stop the pass from ever recording what the next start can ask.
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        save_locations = cast("FakeSaveLocationReader", svc._rom_info._save_locations)
+        save_locations.installation = False
+
+        await svc.record_save_directories_once()
+        save_locations.installation = True
+        await svc.record_save_directories_once()
+
+        with _uow(svc) as uow:
+            assert uow.kv_config.get("save_directories_recorded") == "1"
+        assert _recorded(svc) == str(tmp_path / "saves" / "gba")
+
+    @pytest.mark.asyncio
     async def test_a_failed_pass_is_not_marked_done(self, tmp_path, caplog):
         svc, _ = make_service(tmp_path)
         _install_rom(svc, tmp_path)

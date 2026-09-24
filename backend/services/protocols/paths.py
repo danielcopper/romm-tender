@@ -169,6 +169,10 @@ class SaveLocationReader(Protocol):
     apart from :class:`domain.savestate_location.NoSavestates`, which is the
     resolver stating that the emulator has none.
 
+    ``installation_detected`` says whether any emulator installation was found
+    to ask at all, so a caller can tell "every answer refused" apart from "there
+    was nothing to ask yet".
+
     The named methods are load-bearing: `scripts/check_uow_seam_nesting.py`
     matches this seam by them, where a call-shaped seam is matchable only by
     whatever attribute a consumer happens to bind it to.
@@ -181,6 +185,8 @@ class SaveLocationReader(Protocol):
     def resolve_savestate_location(
         self, *, system: str, content_path: str, emulator_label: str | None
     ) -> SavestateLocation | NoSavestates | None: ...
+
+    def installation_detected(self) -> bool: ...
 
 
 class SandboxLauncherFn(Protocol):
