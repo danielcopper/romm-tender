@@ -69,9 +69,9 @@ export const KIND_TEXT: Record<CollectionsKindId, KindText> = {
 /**
  * One sentence per kind on what turning one of its collections on does.
  *
- * Every one says the thing the page used to leave out — the games come to
- * Steam whether or not their platform is synced — and names the Steam
- * collection they are grouped in, with the suffix the naming setting adds.
+ * Every one says that the games come to Steam whether or not their platform
+ * is synced, and names the Steam collection they are grouped in, with the
+ * suffix the naming setting adds.
  * `name` is the favorites collection's own name where the page has one to
  * quote; the other kinds speak about any of theirs.
  */
@@ -97,8 +97,8 @@ export function wireKind(kind: Exclude<CollectionsKindId, "favorites">): Collect
   return "virtual";
 }
 
-/** A collection's identity on this page. RomM numbers standard and smart
- *  collections in separate tables, so an id alone is not unique across kinds. */
+/** A collection's identity on this page. Each kind comes from its own RomM
+ *  listing with its own ids, so an id alone is not unique across kinds. */
 export function collectionKey(c: Pick<CollectionSyncSetting, "id" | "kind">): string {
   return `${c.kind}:${c.id}`;
 }
@@ -159,7 +159,8 @@ export function kindMembers(
   }
 }
 
-/** How many of those another user owns — what the owner switch is hiding. */
+/** How many of a kind's collections the owner switch is hiding: another
+ *  user's, while it is off. */
 export function hiddenForeignCount(
   collections: readonly CollectionSyncSetting[],
   kind: CollectionsKindId,
@@ -182,8 +183,8 @@ export function searchMembers(members: readonly CollectionSyncSetting[], search:
   return search === "" ? [...members] : members.filter((c) => fuzzyMatch(search, c.name));
 }
 
-/** Those that are on above those that are off, each in the order RomM's
- *  listing gave them. Applied once, when the listing arrives, and never
+/** Those that are on above those that are off, each in the order
+ *  `get_collections` answered in. Applied once, when the listing arrives, and never
  *  again while the page is open, so a switched row stays where the focus is. */
 export function freezeOrder(collections: readonly CollectionSyncSetting[]): CollectionSyncSetting[] {
   return [...collections.filter((c) => c.sync_enabled), ...collections.filter((c) => !c.sync_enabled)];
