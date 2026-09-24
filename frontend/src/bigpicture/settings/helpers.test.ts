@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { formatRelativeTime, sortLabel } from "./helpers";
+import { formatRelativeTime } from "./helpers";
 
 describe("formatRelativeTime", () => {
   beforeEach(() => {
@@ -36,23 +36,5 @@ describe("formatRelativeTime", () => {
     // 10 days back puts us in early June; only the day + month tokens matter.
     const out = formatRelativeTime("2025-06-05T12:00:00Z");
     expect(out).toBe("5 Jun");
-  });
-});
-
-describe("sortLabel", () => {
-  it("formats both ON", () => {
-    expect(sortLabel({ sort_by_content: true, sort_by_core: true })).toBe("Sort by content: ON, Sort by core: ON");
-  });
-
-  it("formats both OFF", () => {
-    expect(sortLabel({ sort_by_content: false, sort_by_core: false })).toBe("Sort by content: OFF, Sort by core: OFF");
-  });
-
-  it("formats content ON, core OFF (RetroDECK default)", () => {
-    expect(sortLabel({ sort_by_content: true, sort_by_core: false })).toBe("Sort by content: ON, Sort by core: OFF");
-  });
-
-  it("formats content OFF, core ON", () => {
-    expect(sortLabel({ sort_by_content: false, sort_by_core: true })).toBe("Sort by content: OFF, Sort by core: ON");
   });
 });

@@ -18,8 +18,3 @@ export function formatRelativeTime(isoStr: string | null): string {
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   return `${d} ${months[date.getMonth()]}`;
 }
-
-/** Format a one-line summary of the RetroArch save-sort flags. */
-export function sortLabel(settings: { sort_by_content: boolean; sort_by_core: boolean }): string {
-  return `Sort by content: ${settings.sort_by_content ? "ON" : "OFF"}, Sort by core: ${settings.sort_by_core ? "ON" : "OFF"}`;
-}
