@@ -220,6 +220,9 @@ class SlotSwitcher:
         # critical section — never around the tail ``get_save_status`` below,
         # which re-acquires the same non-reentrant lock (see SyncEngine.rom_lock).
         async with self._sync_engine.rom_lock(rom_id):
+            # A moved save directory is followed before the pending-changes
+            # check, or that check would look where the files no longer are.
+            await self._sync_engine.follow_save_directory(rom_id, save_answer)
             save_state, device_id = await self._loop.run_in_executor(None, self._read_inputs, rom_id)
 
             # 4. Check for pending local changes (hashing — run in executor)

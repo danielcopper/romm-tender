@@ -472,16 +472,22 @@ class SyncEngine:
     # Public sync orchestration callables
     # ------------------------------------------------------------------
 
-    async def _follow_save_directory(self, rom_id: int, answer: SaveAnswer | None) -> None:
+    async def follow_save_directory(self, rom_id: int, answer: SaveAnswer | None) -> None:
         """Carry this ROM's save files to the directory *answer* names, where it moved.
 
-        Runs under the caller's ``rom_lock`` and before the refusal that reads
-        the same answer: a moved directory is followed whether or not this ROM
-        may be synced, because the files are the user's and the emulator now
-        looks elsewhere for them.
+        The caller holds ``rom_lock`` and hands over the reading it already
+        took, and calls this before it looks at any local file. Public
+        (peer-called): the secondary write paths follow first as well. Nothing
+        happens while save sync is off — the plugin then leaves save files
+        alone. A failure is logged and leaves the record as it was, so the
+        caller goes on and the next caller tries again.
         """
-        if answer is not None:
+        if answer is None or not self.is_save_sync_enabled():
+            return
+        try:
             await self._loop.run_in_executor(None, self._follower.do_follow, rom_id, answer)
+        except Exception:
+            self._logger.exception("Following the save directory of rom %d failed; its record stays", rom_id)
 
     async def record_save_directories(self) -> None:
         """Record the answered save directory of each installed ROM that has none — the one-time backfill."""
@@ -616,7 +622,7 @@ class SyncEngine:
             # The whole-library sweep's per-ROM step: its one reading follows a
             # moved directory and is then handed down.
             save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
-            await self._follow_save_directory(rom_id, save_answer)
+            await self.follow_save_directory(rom_id, save_answer)
             if content_dir_tally is not None:
                 content_dir_tally.count(save_answer)
         core_so = await self._loop.run_in_executor(None, self.resolve_core, rom_id)
@@ -740,7 +746,7 @@ class SyncEngine:
                     }
 
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
-                await self._follow_save_directory(rom_id, save_answer)
+                await self.follow_save_directory(rom_id, save_answer)
                 refusal = sync_refusal(save_answer)
                 if refusal is not None:
                     return refusal
@@ -826,7 +832,7 @@ class SyncEngine:
                     return {"success": True, "message": "Post-exit sync disabled", "synced": 0}
 
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
-                await self._follow_save_directory(rom_id, save_answer)
+                await self.follow_save_directory(rom_id, save_answer)
                 refusal = sync_refusal(save_answer)
                 if refusal is not None:
                     self._logger.info("post_exit_sync skipped: %s", refusal["reason"])
@@ -905,7 +911,7 @@ class SyncEngine:
         try:
             async with self._device_gate.bounded_run(max_wait=SYNC_ROM_GATE_TIMEOUT), self.rom_lock(rom_id):
                 save_answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
-                await self._follow_save_directory(rom_id, save_answer)
+                await self.follow_save_directory(rom_id, save_answer)
                 refusal = sync_refusal(save_answer)
                 if refusal is not None:
                     return refusal
@@ -1156,6 +1162,7 @@ class SyncEngine:
             # leaves alone. Refuse before the orchestrator does any server fetch
             # or file write.
             save_answer = await self.read_save_answer(rom_id_int)
+            await self.follow_save_directory(rom_id_int, save_answer)
             if self.content_dir_blocked(rom_id_int, save_answer, "resolve_sync_conflict"):
                 return {
                     "success": False,

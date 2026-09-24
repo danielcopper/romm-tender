@@ -295,6 +295,7 @@ class SaveCopyService:
             info = await self._loop.run_in_executor(None, self._rom_info.get_rom_save_info, rom_id)
             if not info:
                 return {"status": "rom_not_installed"}
+            await self._sync_engine.follow_save_directory(rom_id, info["save_answer"])
 
             # Interim #908 guard: a multi-file slot (e.g. Saturn .bkr/.bcr/.smpc)
             # is one game state across N files — copying a single save into a slot

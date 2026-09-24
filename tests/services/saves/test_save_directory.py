@@ -11,6 +11,7 @@ refuse.
 from __future__ import annotations
 
 import os
+import sqlite3
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
@@ -417,6 +418,102 @@ class TestNeverIntoTheContentDirectory:
         await svc.record_save_directories_once()
 
         assert _recorded(svc) is None
+
+
+class TestTheSecondaryWritePathsFollowFirst:
+    """A write path that looks at local files follows a moved directory first, with the reading it took."""
+
+    @pytest.mark.asyncio
+    async def test_a_switch_after_a_sort_flip_sees_the_unsynced_change(self, tmp_path, dirs):
+        # Without the follow the pending-changes guard looks in the new folder,
+        # finds nothing, and lets the switch through over an unsynced save.
+        old, new = dirs
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        state = RomSaveSyncState()
+        state.confirm_slot("default")
+        state.adopt_baseline("pokemon.srm", tracked_save_id=1, last_sync_hash="hash-of-the-synced-save")
+        _seed_save_state(svc, _ROM, state)
+        _record(svc, str(old))
+        _create_save(tmp_path, content=b"played since the last sync")
+        _seed_answer(svc, _answer(str(new)))
+
+        result = await svc.switch_slot(_ROM, "other")
+
+        assert result["reason"] == "pending_uploads"
+        assert result["files"] == ["pokemon.srm"]
+        assert (new / "pokemon.srm").read_bytes() == b"played since the last sync"
+        assert _recorded(svc) == str(new)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "call",
+        [
+            lambda svc: svc.rollback_to_version(_ROM, "default", 1),
+            lambda svc: svc.copy_save_to_slot(_ROM, 1, "other"),
+            lambda svc: svc.confirm_slot_choice(_ROM, "default", True, None),
+            lambda svc: svc.resolve_sync_conflict(_ROM, "pokemon.srm", 1, "keep_local"),
+        ],
+        ids=["rollback", "copy", "confirm-migrate", "resolve-conflict"],
+    )
+    async def test_each_write_path_carries_the_files_before_it_looks(self, tmp_path, dirs, call):
+        old, new = dirs
+        svc, _ = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        state = RomSaveSyncState()
+        state.confirm_slot("default")
+        _seed_save_state(svc, _ROM, state)
+        _record(svc, str(old))
+        _create_save(tmp_path, content=b"progress")
+        _seed_answer(svc, _answer(str(new)))
+        asked = cast("FakeSaveLocationReader", svc._rom_info._save_locations).calls
+
+        await call(svc)
+
+        assert (new / "pokemon.srm").read_bytes() == b"progress"
+        assert _recorded(svc) == str(new)
+        assert asked
+
+    @pytest.mark.asyncio
+    async def test_nothing_is_followed_while_save_sync_is_off(self, tmp_path, dirs):
+        old, new = dirs
+        svc, _ = make_service(tmp_path)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        save = _create_save(tmp_path, content=b"progress")
+
+        await svc._sync_engine.follow_save_directory(_ROM, _answer(str(new)))
+
+        assert save.read_bytes() == b"progress"
+        assert _recorded(svc) == str(old)
+
+
+class TestAFailedFollowDoesNotStopTheSync:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "error", [PermissionError("listdir refused"), sqlite3.OperationalError("database is locked")]
+    )
+    async def test_the_sync_goes_on_and_the_record_stays(self, tmp_path, dirs, caplog, error):
+        old, new = dirs
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _record(svc, str(old))
+        _seed_answer(svc, _answer(str(new)))
+
+        def boom(rom_id: int, answer: SaveAnswer) -> None:
+            raise error
+
+        svc._sync_engine._follower.do_follow = boom
+
+        result = await svc.post_exit_sync(_ROM)
+
+        assert "reason" not in result or result["reason"] != "save_shape_unsupported"
+        assert any(call[0] == "heartbeat" for call in fake.call_log)
+        assert _recorded(svc) == str(old)
+        assert any("Following the save directory of rom 42 failed" in r.getMessage() for r in caplog.records)
 
 
 class _WatchedStore:

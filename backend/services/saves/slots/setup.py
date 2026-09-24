@@ -334,6 +334,7 @@ class SetupWizard:
             # Refuse before any download; the slot itself is still confirmed (a
             # non-destructive metadata flip).
             save_answer = await self._sync_engine.read_save_answer(rom_id)
+            await self._sync_engine.follow_save_directory(rom_id, save_answer)
             if self._sync_engine.content_dir_blocked(rom_id, save_answer, "confirm_slot_choice"):
                 self._log_debug(f"confirm_slot_choice: rom {rom_id} saves beside its content; skipping migration")
                 save_state.confirm_slot(normalized_slot)
