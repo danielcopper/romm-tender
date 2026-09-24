@@ -2303,10 +2303,11 @@ peers are threaded via `LateBinding`.
 
 `bootstrap()` also logs, at info rather than behind the debug toggle, which interpreter the vendored resolver would run
 its core probe under: `describe_core_probe_interpreter()` (`adapters/atlas_saves.py`). The resolver derives it from the
-running program, which is the system interpreter the service unit starts, and nothing registers one over it. Where it
-derives none it spawns nothing and answers unknown for every core it is asked about; the one question this program puts
-that reaches the probe is a libretro entry's save answer, which then usually establishes nothing at all. Nothing fails
-when that happens, which is why the answer is logged: the caveats the loss leaves (`core-unqueryable`,
+running program — `sys.executable` is a real CPython here, the system one the service unit starts, or the venv's under
+`mise run dev` — and nothing registers one over it, because a registered path could only be a guess about the machine.
+Where it derives none it spawns nothing and answers unknown for every core it is asked about; the one question this
+program puts that reaches the probe is a libretro entry's save answer, which then usually establishes nothing at all.
+Nothing fails when that happens, which is why the answer is logged: the caveats the loss leaves (`core-unqueryable`,
 `core-generation-unestablished`) do reach the debug log and the wire, but that line is the only place their cause is
 named.
 

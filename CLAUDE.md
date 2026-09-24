@@ -224,11 +224,8 @@ locally with `mise run docs`.
   the constructor from the node — `el.ownerDocument.defaultView` — as `WidePage` and `ScrollRegion` do. **The frontend
   suite cannot see this**: happy-dom has one realm, so the wrong global and the right one are the same object and every
   test passes.
-- **The Python CI tests is not the one a device runs**: CI and the venv run the version `mise.toml` pins, while a device
-  runs the system interpreter the service unit starts, which an OS update moves without a commit here. So vendoring or
-  bumping anything under `_vendor/` is a device-test trigger — a green gate proves the copy imports under CI's Python
-  and says nothing about the Deck's — and the rule that owns it arrives only once a file under `_vendor/` is read:
-  [`.claude/rules/vendored-assets.md`](.claude/rules/vendored-assets.md).
+- **The Python CI runs is not the Python a device runs** — what that makes of a change under `_vendor/` is
+  [`.claude/rules/vendored-assets.md`](.claude/rules/vendored-assets.md)'s, which loads only once a file there is read.
 - **An empty collection in a resolver answer is a statement about PROVENANCE, never about need** — and Python spells it
   the same as an absence, which is what makes this the trap it is. The verdict on a catalogue entry is
   `requirements_met`, three-valued: `True`, `False`, `None` for "could not be established". It narrows only and is never

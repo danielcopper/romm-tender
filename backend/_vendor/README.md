@@ -135,30 +135,23 @@ licence, and the update procedure below has to put it back by hand for exactly t
 
 A vendored copy loads under the interpreter the service unit starts — `/usr/bin/python3`, or whatever `TENDER_PYTHON`
 named when `install.sh` wrote the unit — and not under the Python the venv, `mise run test`, basedpyright and the
-linters run. `mise.toml` pins that one to the minor version SteamOS ships, and `install.sh` refuses an interpreter older
-than it, but nothing keeps the two equal: an OS update moves the system Python without a commit here. A vendored
-package's assumptions about the standard library and about its own name are therefore proven only against CI's Python,
-and surface on a device — when the backend starts, or the first time a question reaches the assumption.
+linters run, which is the version the toolchain pins (`mise.toml`, and the workflows' `setup-python` beside it).
+`install.sh` refuses an interpreter older than that one, but nothing keeps the two equal: an OS update moves the system
+Python without a commit here. A vendored package's assumptions about the standard library are therefore proven only
+against CI's Python, and surface on a device — when the backend starts, or the first time a question reaches the
+assumption.
 
-- **A package named in a string rather than imported.** `importlib.resources.files("atlas")` addresses whatever package
-  the host calls `atlas` — not this copy, which imports as `_vendor.atlas`. A string literal is invisible to an import
-  rewrite and to every grep for import statements, which is what makes this shape cheap to miss. This one has not
-  happened here: upstream anchored the read to the reading module's own `__package__` before the first copy landed, so
-  the copy resolves under whatever parent it is given
-  ([emu-atlas#327](https://github.com/danielcopper/emu-atlas/issues/327)); `atlas/_data.py` is the single place every
-  packaged table is read through.
-
-**Compiled extension modules do not fit this model.** One built for a CPython minor version's own ABI (a wheel tagged
-`cp313`, say) does not load under another, so a copy vendored for today's system Python stops loading when an OS update
-moves it — the very event vendoring exists to survive. The one expected so far is `backports.zstd`; how it ships is
-#1735's decision.
+A compiled extension module built for one CPython minor version's ABI does not fit this model — a `cp313-cp313` wheel
+does not load under 3.14, so a copy vendored for today's system Python stops loading when an OS update moves it, the
+very event vendoring exists to survive. A stable-ABI (`abi3`) build is the exception. The one expected so far is
+`backports.zstd`, which ships per-version builds only (1.7.0: cp310–cp313, no abi3, no cp314); how it ships is #1735's
+decision.
 
 Neither artifact can see any of this, and each says less than it looks like it does. The checksum gate says the copy is
 the bytes we pinned; it never imports anything. What says the copy imports is the test suite — most directly
 [`tests/test_vendored_atlas.py`](../../tests/test_vendored_atlas.py), whose whole job that is, and alongside it every
-test that reaches the firmware adapter — and all of it only under CI's Python. **Vendoring or bumping a package is
-therefore a device test.** `main.py` reaches the vendored resolver through a chain of module-level imports, so an import
-that raises takes the whole backend down rather than one feature.
+test that reaches the firmware adapter — and all of it only under CI's Python. What that makes of vendoring or bumping a
+package is [`.claude/rules/vendored-assets.md`](../../.claude/rules/vendored-assets.md)'s.
 
 ## Formatters and vendored copies
 

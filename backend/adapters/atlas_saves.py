@@ -195,17 +195,9 @@ def _translate(placement: Any, emulator_label: str, content_installed: bool) -> 
 def describe_core_probe_interpreter() -> str:
     """Name the interpreter atlas would run a core probe under here, as a log line.
 
-    The probe loads a core's ``.so`` in a child Python process to ask what the
-    core saves, and atlas derives that interpreter from the running program
-    alone. Where it derives none, no core is probed, every core answers unknown
-    and a libretro entry's save answer loses the core's recorded behaviour. The
-    caveats that loss leaves reach the debug log and the wire, but they read the
-    same as a core that would not load; this line is the only place the cause
-    is named.
-
-    Nothing registers an interpreter over atlas's own: running under the system
-    interpreter, ``sys.executable`` already is the one this backend runs, and a
-    registered path could only be a guess about the machine.
+    Why the line exists, and why nothing registers an interpreter over atlas's
+    own, is ``docs/architecture/backend-architecture.md``'s, under "Composition
+    Root".
 
     A string rather than the resolver's own ``CoreProbeInterpreter``, because
     the one reader is the log at the wiring site in ``bootstrap/``, which may
