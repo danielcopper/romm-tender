@@ -11,6 +11,7 @@ operation's own narrow Unit of Work (ADR-0006).
 from __future__ import annotations
 
 import contextlib
+import functools
 import os
 from typing import TYPE_CHECKING, Any
 
@@ -317,7 +318,7 @@ class SetupWizard:
 
         # The read→confirm→(migrate)→write of the RomSaveSyncState aggregate must
         # serialise against every other path that touches this ROM's state.
-        # content_dir_blocked and _migrate_slot_saves_io do NOT acquire rom_lock,
+        # read_save_answer and _migrate_slot_saves_io do NOT acquire rom_lock,
         # so calling them inside the held lock is safe (no re-entry).
         async with self._sync_engine.rom_lock(rom_id):
             save_state = await self._loop.run_in_executor(None, self._read_save_state, rom_id) or RomSaveSyncState()
@@ -332,7 +333,8 @@ class SetupWizard:
             # sync leaves alone, so the migration's writes could not take effect.
             # Refuse before any download; the slot itself is still confirmed (a
             # non-destructive metadata flip).
-            if await self._sync_engine.content_dir_blocked(rom_id, "confirm_slot_choice"):
+            save_answer = await self._sync_engine.read_save_answer(rom_id)
+            if self._sync_engine.content_dir_blocked(rom_id, save_answer, "confirm_slot_choice"):
                 self._log_debug(f"confirm_slot_choice: rom {rom_id} saves beside its content; skipping migration")
                 save_state.confirm_slot(normalized_slot)
                 await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
@@ -356,7 +358,9 @@ class SetupWizard:
                     "needs_conflict_resolution": False,
                     "message": MIGRATION_DEVICE_NOT_REGISTERED,
                 }
-            info = await self._loop.run_in_executor(None, self._rom_info.get_rom_save_info, rom_id)
+            info = await self._loop.run_in_executor(
+                None, functools.partial(self._rom_info.get_rom_save_info, rom_id, save_answer=save_answer)
+            )
             if not info:
                 return {
                     "success": False,

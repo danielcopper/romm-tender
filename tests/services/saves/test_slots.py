@@ -824,6 +824,22 @@ class TestConfirmSlotChoice:
         assert _require_save_state(svc, 42).slot_confirmed is True
 
     @pytest.mark.asyncio
+    async def test_confirm_migration_reads_the_answer_once(self, tmp_path):
+        # The content-directory gate's reading is the one the migration uses.
+        svc, fake = make_service(tmp_path)
+        svc._config.settings["save_sync_enabled"] = True
+        _set_device_id(svc, "dev-1")
+        _install_rom(svc, tmp_path)
+        fake.saves[1] = _server_save(save_id=1, filename="pokemon.srm", slot=None)
+        fake.set_server_save_content(1, b"S" * 1024)
+        save_locations = cast("FakeSaveLocationReader", svc._rom_info._save_locations)
+
+        result = await svc.confirm_slot_choice(42, "default", True, None)
+
+        assert result["success"] is True
+        assert len(save_locations.calls) == 1
+
+    @pytest.mark.asyncio
     async def test_confirm_migration_no_local_file_writes_content(self, tmp_path):
         """No local file → server content is written to disk and copied into the slot."""
         svc, fake = make_service(tmp_path)

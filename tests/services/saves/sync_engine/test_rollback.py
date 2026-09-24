@@ -282,6 +282,25 @@ class TestResolveSyncConflict:
         assert file_state.last_sync_hash == _file_md5(str(save_path))
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("action", ["use_server", "keep_local"])
+    async def test_the_entry_gates_reading_is_the_only_one(self, tmp_path, action):
+        svc, fake = make_service(tmp_path)
+        _enable_sync_with_device(svc)
+        _install_rom(svc, tmp_path)
+        _create_save(tmp_path, content=b"local")
+        server_content = tmp_path / "server-content.bin"
+        server_content.write_bytes(b"server")
+        fake.saves[100] = _server_save_with_syncs(device_syncs=[{"device_id": "device-1", "is_current": False}])
+        fake.uploaded_files[100] = str(server_content)
+        save_locations = svc._rom_info._save_locations
+        assert isinstance(save_locations, FakeSaveLocationReader)
+
+        result = await svc.resolve_sync_conflict(rom_id=42, filename="pokemon.srm", server_save_id=100, action=action)
+
+        assert result["success"] is True
+        assert len(save_locations.calls) == 1
+
+    @pytest.mark.asyncio
     async def test_resolve_invalid_action_returns_error(self, tmp_path):
         svc, _ = make_service(tmp_path)
         _enable_sync_with_device(svc)

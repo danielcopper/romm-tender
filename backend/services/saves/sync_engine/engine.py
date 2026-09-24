@@ -500,20 +500,22 @@ class SyncEngine:
             async with self.rom_lock(rom_id):
                 await self._loop.run_in_executor(None, record, rom_id)
 
-    async def content_dir_blocked(self, rom_id: int, where: str) -> bool:
-        """Whether this ROM's emulator writes its save beside the game's content.
+    async def read_save_answer(self, rom_id: int) -> SaveAnswer | None:
+        """This ROM's save answer, read live, or ``None`` when it is not installed.
 
-        The shared gate every secondary save-WRITE callable consults at its
-        entry — rollback, slot switch, conflict resolve, slot-choice migration,
-        copy to slot — so a write is never attempted into a directory the sync
-        leaves alone. The four sync entry points refuse through
-        :func:`~services.saves.sync_engine._shape_refusal.sync_refusal` instead.
-        Public (peer-called): the slots / versions / copies sub-services invoke it
-        across the saves bounded context. Read live, like every save answer; an
-        uninstalled ROM is not blocked here, its caller's not-installed branch
-        owns that case.
+        Public (peer-called): an entry gate takes the one reading its whole
+        operation uses, and hands it on rather than reading again.
         """
-        answer = await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+        return await self._loop.run_in_executor(None, live_save_answer, self._rom_info, rom_id)
+
+    def content_dir_blocked(self, rom_id: int, answer: SaveAnswer | None, where: str) -> bool:
+        """Whether *answer* places this ROM's save beside the game's content.
+
+        The entry gate of the conflict resolution and the slot-choice migration,
+        so neither writes into a directory the sync leaves alone. Public
+        (peer-called by the slot setup). An uninstalled ROM (``None``) is not
+        blocked here; its caller's not-installed branch owns that case.
+        """
         blocked = answer is not None and answer.in_content_directory
         if blocked:
             self._log_debug(f"{where}: rom {rom_id} saves beside its content; refusing")
@@ -1152,7 +1154,8 @@ class SyncEngine:
             # (download into the save directory) act on a directory the sync
             # leaves alone. Refuse before the orchestrator does any server fetch
             # or file write.
-            if await self.content_dir_blocked(rom_id_int, "resolve_sync_conflict"):
+            save_answer = await self.read_save_answer(rom_id_int)
+            if self.content_dir_blocked(rom_id_int, save_answer, "resolve_sync_conflict"):
                 return {
                     "success": False,
                     "reason": SAVE_SYNC_IN_CONTENT_DIR_REASON,
@@ -1164,4 +1167,5 @@ class SyncEngine:
                 server_save_id,
                 action,
                 loop=self._loop,
+                save_answer=save_answer,
             )

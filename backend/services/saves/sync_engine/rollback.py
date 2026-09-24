@@ -18,6 +18,7 @@ rollback flow (older save versions) lives in
 
 from __future__ import annotations
 
+import functools
 import os
 from typing import TYPE_CHECKING, Any
 
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable
 
+    from domain.save_answer import SaveAnswer
     from services.protocols import (
         Clock,
         DebugLogger,
@@ -110,6 +112,7 @@ class RollbackOrchestrator:
         action: str,
         *,
         loop: asyncio.AbstractEventLoop,
+        save_answer: SaveAnswer | None,
     ) -> dict[str, Any]:
         """Drive the post-lock conflict-resolution flow.
 
@@ -117,7 +120,8 @@ class RollbackOrchestrator:
         live (test-rebindable) ``_loop`` attribute through without this
         orchestrator caching a stale reference. The rom-level lock must
         be held by the caller — every save-sync entry point serialises
-        through ``SyncEngine.rom_lock(rom_id)``.
+        through ``SyncEngine.rom_lock(rom_id)``. *save_answer* is the reading
+        the caller's entry gate took, used here instead of a second one.
         """
         rom_id = int(rom_id)
 
@@ -128,7 +132,9 @@ class RollbackOrchestrator:
         if validation_error:
             return validation_error
 
-        info = await loop.run_in_executor(None, self._rom_info.get_rom_save_info, rom_id)
+        info = await loop.run_in_executor(
+            None, functools.partial(self._rom_info.get_rom_save_info, rom_id, save_answer=save_answer)
+        )
         if not info:
             return {"success": False, "reason": "not_installed", "message": "ROM not installed"}
         system = info["system"]
