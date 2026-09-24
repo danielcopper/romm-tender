@@ -400,10 +400,15 @@ reads **unknown** (below), never "not needed".
 
 Each file on your server therefore gets one of four answers:
 
-- **Needed** — the emulator this system launches with will not run without it
-- **Optional** — that emulator can use it but does not require it
-- **Not needed** — the emulator was asked, and it does not want this file
-- **Unknown** — the plugin could not work out an answer (see below)
+- **Needed** — an emulator RetroDECK offers for this system marks it required
+- **Optional** — an emulator RetroDECK offers for this system asks for it, and none of them marks it required
+- **Not needed** — no emulator RetroDECK offers for this system was found to ask for it, and the one this system
+  launches with was asked
+- **Unknown** — no emulator RetroDECK offers for this system was found to ask for it, and the one this system launches
+  with could not be asked (see below)
+
+Needed and optional describe the file across every emulator the system offers, not the one you launch with. Whether that
+emulator requires the file is a separate question, and it is the one the readiness line answers.
 
 ### When the requirement is unknown
 

@@ -1238,10 +1238,11 @@ it, for the focused platform:
   `✗`), muted where it does not (pale green `✓`, grey `✗`), keyed on `required_by_active` so the table and the summary
   above it cannot mean different things by "required". Two states have no place in that four-way scheme and are **not**
   folded into it, and they are **not the same state either**. A verdict nothing could establish is an amber `?` — the
-  glyph channel has nothing to say. A row no installed emulator could be asked about keeps its verdict, which IS
-  established, and goes amber on the colour channel alone: an amber `✓` or `✗`. Reading the need axis first would spend
-  the glyph on a need-axis fact and throw the verdict away, on exactly the platform made entirely of such rows.
-  `optional` and `not_needed` do share the muted branch: for the core about to launch, neither is a gap.
+  glyph channel has nothing to say. A `wanted: "unknown"` row — no placement in the platform's catalogue, and the
+  launching emulator's reading incomplete (`reading_complete_for`) — keeps its verdict, which IS established, and goes
+  amber on the colour channel alone: an amber `✓` or `✗`. Reading the need axis first would spend the glyph on a
+  need-axis fact and throw the verdict away, on exactly the platform made entirely of such rows. `optional` and
+  `not_needed` do share the muted branch: for the core about to launch, neither is a gap.
 
   **A fifth state replaces the muted answer where the row is one of several images any one of which starts the console**
   (`BiosFileEntry.system_image_candidate`). Such a row is never `required_by_active` — its core marks every one of them
