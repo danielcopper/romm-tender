@@ -167,7 +167,7 @@ async def test_a_same_named_folder_refuses_a_single_file_download(harness):
     # The point of the refusal: no transfer started behind the user's back.
     await _drain_download(harness)
     assert not (_platform_dir(harness) / _CANONICAL).exists()
-    assert await harness.plugin.get_installed_rom(_ROM_ID) is None
+    assert harness.plugin.get_installed_rom(_ROM_ID) is None
 
 
 async def test_a_same_named_file_refuses_a_folder_download(harness):
@@ -286,7 +286,7 @@ async def test_adopting_a_candidate_renames_it_and_records_the_install(harness):
     assert result["file_path"] == str(canonical)
     assert canonical.read_bytes() == b"my own dump"
     assert not candidate.exists()
-    installed = await harness.plugin.get_installed_rom(_ROM_ID)
+    installed = harness.plugin.get_installed_rom(_ROM_ID)
     assert installed is not None
     assert installed["file_path"] == str(canonical)
     assert installed["system"] == "gba"
@@ -354,7 +354,7 @@ async def test_a_candidate_outside_this_game_s_platform_folder_is_refused(harnes
     assert result["message"]
     assert "error" not in result
     assert intruder.read_bytes() == b"different platform"
-    assert await harness.plugin.get_installed_rom(_ROM_ID) is None
+    assert harness.plugin.get_installed_rom(_ROM_ID) is None
 
 
 # ── the collision decision ───────────────────────────────────────────────
@@ -394,7 +394,7 @@ async def test_an_unanswered_collision_leaves_the_filesystem_byte_identical(harn
 
     assert {path: path.read_bytes() for path in (candidate, mine, theirs)} == before
     assert not (_platform_dir(harness) / _CANONICAL).exists()
-    assert await harness.plugin.get_installed_rom(_ROM_ID) is None
+    assert harness.plugin.get_installed_rom(_ROM_ID) is None
 
 
 async def test_overwrite_replaces_the_taken_name_and_completes_the_adoption(harness):
@@ -755,7 +755,7 @@ async def test_a_named_pipe_at_the_target_path_is_never_offered_as_this_game(har
     assert result["adoptable"] is False
     assert adopted["success"] is False
     assert adopted["reason"] == "unexpected_content_kind"
-    assert await harness.plugin.get_installed_rom(_ROM_ID) is None
+    assert harness.plugin.get_installed_rom(_ROM_ID) is None
     # And it is still a pipe: nothing wrote over it, and nothing removed it.
     assert stat.S_ISFIFO(os.lstat(str(pipe)).st_mode)
 
@@ -774,7 +774,7 @@ async def test_a_symlink_at_the_target_path_cannot_be_adopted_either(harness):
 
     assert adopted["success"] is False
     assert adopted["reason"] == "unexpected_content_kind"
-    assert await harness.plugin.get_installed_rom(_ROM_ID) is None
+    assert harness.plugin.get_installed_rom(_ROM_ID) is None
     assert link.is_symlink()
     assert real.read_bytes() == b"my own dump"
 

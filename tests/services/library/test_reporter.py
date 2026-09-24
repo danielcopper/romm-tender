@@ -93,7 +93,7 @@ class TestGetSyncStats:
             "virtual": {"abc": False},  # disabled — not counted
         }
 
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["platforms"] == 2
         # 3 enabled across two buckets (user["3"], smart["5"]); virtual["abc"] is False.
         assert stats["collections"] == 2
@@ -105,7 +105,7 @@ class TestGetSyncStats:
 
     @pytest.mark.asyncio
     async def test_empty_registry(self, plugin):
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["platforms"] == 0
         assert stats["roms"] == 0
         assert stats["total_shortcuts"] == 0
@@ -119,7 +119,7 @@ class TestGetSyncStats:
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64", name="Game A")
         _seed_rom(uow, 20, app_id=None, platform_slug="snes", name="Game B (stale)")
 
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["roms"] == 1
         assert stats["total_shortcuts"] == 1
 
@@ -132,7 +132,7 @@ class TestGetSyncStats:
 
         await plugin.report_removal_results([10, 20], None)
 
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["roms"] == 0
         assert stats["total_shortcuts"] == 0
         # Rows survive (ADR-0007): they're unbound, not deleted.
@@ -182,7 +182,7 @@ class TestGetSyncStatsLastAttempt:
 
     @pytest.mark.asyncio
     async def test_no_runs_reports_no_attempt(self, plugin):
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["last_sync"] is None
         assert stats["last_attempt"] is None
 
@@ -191,7 +191,7 @@ class TestGetSyncStatsLastAttempt:
         """A cancelled run with no completed run ever → last_sync None, last_attempt set."""
         self._cancelled(plugin._uow, id="run-c", started="2025-06-01T17:00:00", finished="2025-06-01T17:48:00")
 
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["last_sync"] is None
         assert stats["last_attempt"] == {"finished_at": "2025-06-01T17:48:00", "status": "cancelled"}
 
@@ -205,7 +205,7 @@ class TestGetSyncStatsLastAttempt:
         with run_uow:
             run_uow.sync_runs.save(run)
 
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["last_sync"] is None
         assert stats["last_attempt"] == {"finished_at": "2025-06-01T10:05:00", "status": "errored"}
 
@@ -215,7 +215,7 @@ class TestGetSyncStatsLastAttempt:
         self._completed(plugin._uow, id="run-ok", started="2025-06-01T09:00:00", finished="2025-06-01T09:30:00")
         self._cancelled(plugin._uow, id="run-c", started="2025-06-02T08:00:00", finished="2025-06-02T08:20:00")
 
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["last_sync"] == "2025-06-01T09:30:00"
         assert stats["last_attempt"] == {"finished_at": "2025-06-02T08:20:00", "status": "cancelled"}
 
@@ -227,7 +227,7 @@ class TestGetSyncStatsLastAttempt:
         self._completed(plugin._uow, id="run-ok", started="2025-06-01T09:00:00", finished="2025-06-01T09:30:00")
         self._interrupted(plugin._uow, id="run-i", started="2025-06-02T08:00:00", finished="2025-06-02T08:20:00")
 
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["last_sync"] == "2025-06-01T09:30:00"
         assert stats["last_attempt"] == {"finished_at": "2025-06-02T08:20:00", "status": "interrupted"}
 
@@ -237,7 +237,7 @@ class TestGetSyncStatsLastAttempt:
         self._cancelled(plugin._uow, id="run-c", started="2025-06-01T08:00:00", finished="2025-06-01T08:20:00")
         self._completed(plugin._uow, id="run-ok", started="2025-06-02T09:00:00", finished="2025-06-02T09:30:00")
 
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["last_sync"] == "2025-06-02T09:30:00"
         assert stats["last_attempt"] is None
 
@@ -249,7 +249,7 @@ class TestGetSyncStatsLastAttempt:
         self._completed(plugin._uow, id="run-ok", started="2025-07-11T09:00:00", finished="2025-07-11T09:30:00")
         self._paused(plugin._uow, id="run-p", started="2025-07-11T10:00:00", finished="2025-07-11T10:20:00")
 
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["last_sync"] == "2025-07-11T09:30:00"
         assert stats["last_attempt"] == {"finished_at": "2025-07-11T10:20:00", "status": "paused"}
 
@@ -264,7 +264,7 @@ class TestGetRegistryPlatforms:
         # Live name cache resolves slugs → display names.
         _seed_platform_names(uow, {"n64": "Nintendo 64", "snes": "Super Nintendo"})
 
-        result = await plugin.get_registry_platforms()
+        result = plugin.get_registry_platforms()
         assert len(result["platforms"]) == 2
         # Sorted by display name
         assert result["platforms"][0]["name"] == "Nintendo 64"
@@ -276,7 +276,7 @@ class TestGetRegistryPlatforms:
 
     @pytest.mark.asyncio
     async def test_empty_registry(self, plugin):
-        result = await plugin.get_registry_platforms()
+        result = plugin.get_registry_platforms()
         assert result["platforms"] == []
 
     @pytest.mark.asyncio
@@ -287,7 +287,7 @@ class TestGetRegistryPlatforms:
         _seed_rom(uow, 20, app_id=None, platform_slug="snes", name="Unbound")
         _seed_platform_names(uow, {"n64": "Nintendo 64", "snes": "Super Nintendo"})
 
-        result = await plugin.get_registry_platforms()
+        result = plugin.get_registry_platforms()
         assert len(result["platforms"]) == 1
         assert result["platforms"][0]["slug"] == "n64"
 
@@ -297,7 +297,7 @@ class TestGetRegistryPlatforms:
         uow = plugin._uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64", name="Mario 64")
 
-        result = await plugin.get_registry_platforms()
+        result = plugin.get_registry_platforms()
         assert len(result["platforms"]) == 1
         assert result["platforms"][0]["name"] == "n64"
         assert result["platforms"][0]["slug"] == "n64"
@@ -313,7 +313,7 @@ class TestGetRegistryPlatforms:
         with uow:
             uow.kv_config.set("platform_names", blob)
 
-        result = await plugin.get_registry_platforms()
+        result = plugin.get_registry_platforms()
         assert len(result["platforms"]) == 1
         assert result["platforms"][0]["name"] == "n64"
         assert result["platforms"][0]["slug"] == "n64"
@@ -335,7 +335,7 @@ class TestRegistryPlatformsReachableCount:
         _seed_rom(uow, 11, app_id=None, platform_slug="sms", group_key="igdb:1:2")
         _seed_rom(uow, 12, app_id=None, platform_slug="sms", group_key="igdb:1:2")
 
-        entry = (await plugin.get_registry_platforms())["platforms"][0]
+        entry = plugin.get_registry_platforms()["platforms"][0]
         assert entry["count"] == 1
         assert entry["reachable_count"] == 3
 
@@ -352,7 +352,7 @@ class TestRegistryPlatformsReachableCount:
         _seed_rom(uow, 20, app_id=None, platform_slug="gba", group_key="igdb:9:2")
         _seed_rom(uow, 21, app_id=None, platform_slug="gba", group_key="igdb:9:2")
 
-        entry = (await plugin.get_registry_platforms())["platforms"][0]
+        entry = plugin.get_registry_platforms()["platforms"][0]
         assert entry["count"] == 1
         assert entry["reachable_count"] == 2
 
@@ -369,7 +369,7 @@ class TestRegistryPlatformsReachableCount:
         _seed_rom(uow, 10, app_id=1001, platform_slug="nes", group_key=None)
         _seed_rom(uow, 11, app_id=None, platform_slug="nes", group_key=None)
 
-        entry = (await plugin.get_registry_platforms())["platforms"][0]
+        entry = plugin.get_registry_platforms()["platforms"][0]
         assert entry["count"] == 1
         assert entry["reachable_count"] == 1
 
@@ -387,7 +387,7 @@ class TestRegistryPlatformsReachableCount:
         _seed_rom(uow, 11, app_id=None, platform_slug="dc", group_key="igdb:1:2")
         _stamp_fetch(uow, "dc", rom_count=1, fetch_id="fetch-2", seen=[10])
 
-        entry = (await plugin.get_registry_platforms())["platforms"][0]
+        entry = plugin.get_registry_platforms()["platforms"][0]
         assert entry["count"] == 1
         assert entry["reachable_count"] == 1
 
@@ -407,7 +407,7 @@ class TestRegistryPlatformsReachableCount:
         # The BOUND row is the one the fetch did not return.
         _stamp_fetch(uow, "dc", rom_count=1, fetch_id="fetch-2", seen=[11])
 
-        entry = (await plugin.get_registry_platforms())["platforms"][0]
+        entry = plugin.get_registry_platforms()["platforms"][0]
         assert entry["count"] == 1
         assert entry["reachable_count"] == 1
 
@@ -436,7 +436,7 @@ class TestRegistryPlatformsReachableCount:
         if stamp_args is not None:
             _stamp_fetch(uow, "dc", seen=[10], **stamp_args)
 
-        entry = (await plugin.get_registry_platforms())["platforms"][0]
+        entry = plugin.get_registry_platforms()["platforms"][0]
         assert entry["reachable_count"] == 2
 
 
@@ -1547,7 +1547,7 @@ class TestGetSyncStatsResumeInputs:
 
     @pytest.mark.asyncio
     async def test_pristine_install_has_neither(self, plugin):
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["resumable_games"] == 0
         assert stats["has_completion_stamp"] is False
 
@@ -1559,7 +1559,7 @@ class TestGetSyncStatsResumeInputs:
         _record_launch_options(uow, 10)
         _record_launch_options(uow, 20)
 
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["resumable_games"] == 2
 
     @pytest.mark.asyncio
@@ -1568,7 +1568,7 @@ class TestGetSyncStatsResumeInputs:
         uow = plugin._uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
 
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["roms"] == 1
         assert stats["resumable_games"] == 0
 
@@ -1583,7 +1583,7 @@ class TestGetSyncStatsResumeInputs:
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
         _record_launch_options(uow, 10, "")
 
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["resumable_games"] == 1
 
     @pytest.mark.asyncio
@@ -1600,11 +1600,11 @@ class TestGetSyncStatsResumeInputs:
         uow = plugin._uow
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
         _record_launch_options(uow, 10)
-        assert (await plugin.get_sync_stats())["resumable_games"] == 1
+        assert plugin.get_sync_stats()["resumable_games"] == 1
 
         await plugin.report_removal_results([10], None)
 
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["roms"] == 0
         assert stats["resumable_games"] == 0
         with uow:
@@ -1622,7 +1622,7 @@ class TestGetSyncStatsResumeInputs:
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
         _record_launch_options(uow, 10)
 
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["resumable_games"] == 1
         assert stats["has_completion_stamp"] is False
 
@@ -1638,7 +1638,7 @@ class TestGetSyncStatsResumeInputs:
         _seed_rom(uow, 10, app_id=1001, platform_slug="n64")
         _stamp_platform(uow, "n64")
 
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["resumable_games"] == 0
         assert stats["has_completion_stamp"] is True
 
@@ -1648,7 +1648,7 @@ class TestGetSyncStatsResumeInputs:
         uow = plugin._uow
         _stamp_collection(uow, "7", "smart")
 
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["has_completion_stamp"] is True
 
     @pytest.mark.asyncio
@@ -1656,11 +1656,11 @@ class TestGetSyncStatsResumeInputs:
         """Read live, not cached — an apply-start clear shows up at once."""
         uow = plugin._uow
         _stamp_platform(uow, "n64")
-        assert (await plugin.get_sync_stats())["has_completion_stamp"] is True
+        assert plugin.get_sync_stats()["has_completion_stamp"] is True
         with uow:
             uow.platform_sync_state.delete("n64")
 
-        assert (await plugin.get_sync_stats())["has_completion_stamp"] is False
+        assert plugin.get_sync_stats()["has_completion_stamp"] is False
 
     @pytest.mark.asyncio
     async def test_force_full_sync_takes_both_while_the_attempt_survives(self, plugin):
@@ -1683,13 +1683,13 @@ class TestGetSyncStatsResumeInputs:
         _stamp_platform(uow, "n64")
         _stamp_collection(uow, "7")
 
-        before = await plugin.get_sync_stats()
+        before = plugin.get_sync_stats()
         assert before["resumable_games"] == 1
         assert before["has_completion_stamp"] is True
 
         plugin._sync_service.clear_sync_cache()
 
-        after = await plugin.get_sync_stats()
+        after = plugin.get_sync_stats()
         assert after["resumable_games"] == 0
         assert after["has_completion_stamp"] is False
         # The shortcuts themselves are untouched — only the skip authority went.
@@ -2364,7 +2364,7 @@ class TestFinalizePerUnitRun:
             stale_rom_ids=[2, 3],
         )
 
-        stats = await plugin.get_sync_stats()
+        stats = plugin.get_sync_stats()
         assert stats["roms"] == 1
         assert stats["total_shortcuts"] == 1
 
@@ -2385,7 +2385,7 @@ class TestGetSyncRuns:
 
     @pytest.mark.asyncio
     async def test_no_runs_answers_an_empty_list(self, plugin):
-        assert await plugin.get_sync_runs() == {"success": True, "runs": []}
+        assert plugin.get_sync_runs() == {"success": True, "runs": []}
 
     @pytest.mark.asyncio
     async def test_completed_run_serialised_field_for_field(self, plugin):
@@ -2393,7 +2393,7 @@ class TestGetSyncRuns:
         run.complete("2026-01-01T09:30:00", ["N64", "SNES"], ["Favourites"])
         self._save(plugin._uow, run)
 
-        result = await plugin.get_sync_runs()
+        result = plugin.get_sync_runs()
         assert result["success"] is True
         assert result["runs"] == [
             {
@@ -2416,7 +2416,7 @@ class TestGetSyncRuns:
         run.mark_cancelled("2026-01-02T09:05:00", "Sync cancelled")
         self._save(plugin._uow, run)
 
-        record = (await plugin.get_sync_runs())["runs"][0]
+        record = plugin.get_sync_runs()["runs"][0]
         assert record["status"] == "cancelled"
         assert record["platforms_completed"] is None
         assert record["collections_completed"] is None
@@ -2426,7 +2426,7 @@ class TestGetSyncRuns:
     async def test_running_run_is_listed_with_null_terminal_fields(self, plugin):
         self._save(plugin._uow, self._start("run-live", "2026-01-03T09:00:00"))
 
-        record = (await plugin.get_sync_runs())["runs"][0]
+        record = plugin.get_sync_runs()["runs"][0]
         assert record["status"] == "running"
         assert record["finished_at"] is None
         assert record["error"] is None
@@ -2438,7 +2438,7 @@ class TestGetSyncRuns:
         for minute in range(SYNC_RUN_HISTORY_LIMIT + 3):
             self._save(plugin._uow, self._start(f"run-{minute:02d}", f"2026-01-01T09:{minute:02d}:00"))
 
-        runs = (await plugin.get_sync_runs())["runs"]
+        runs = plugin.get_sync_runs()["runs"]
         assert len(runs) == SYNC_RUN_HISTORY_LIMIT
         newest = SYNC_RUN_HISTORY_LIMIT + 2
         assert [run["id"] for run in runs] == [

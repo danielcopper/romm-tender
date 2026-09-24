@@ -118,7 +118,7 @@ class TestGetRomMetadata:
             ),
         )
         plugin.settings["log_level"] = "warn"
-        result = await plugin.get_rom_metadata(42)
+        result = plugin.get_rom_metadata(42)
         assert result["summary"] == "Cached summary"
         # Tuple fields flatten to lists for the wire shape.
         assert result["genres"] == ["RPG"]
@@ -132,7 +132,7 @@ class TestGetRomMetadata:
         """Cache miss returns empty defaults without calling the API."""
         plugin.settings["log_level"] = "warn"
 
-        result = await plugin.get_rom_metadata(42)
+        result = plugin.get_rom_metadata(42)
 
         assert result["summary"] == ""
         assert result["genres"] == []
@@ -155,7 +155,7 @@ class TestGetRomMetadata:
             _meta(summary="Old summary", genres=("Action",), cached_at=time.time() - (8 * 24 * 3600)),
         )
 
-        result = await plugin.get_rom_metadata(42)
+        result = plugin.get_rom_metadata(42)
 
         assert result["summary"] == "Old summary"
         assert result["genres"] == ["Action"]
@@ -168,7 +168,7 @@ class TestGetRomMetadata:
         plugin.settings["log_level"] = "warn"
 
         with patch.object(plugin._romm_api, "get_rom") as mock_get_rom:
-            await plugin.get_rom_metadata(42)
+            plugin.get_rom_metadata(42)
 
         mock_get_rom.assert_not_called()
 
@@ -182,7 +182,7 @@ class TestGetRomMetadata:
         _seed_metadata(uow, 42, _meta(summary="cached", cached_at=time.time()))
 
         with patch.object(logger, "info") as mock_info:
-            await plugin.get_rom_metadata(42)
+            plugin.get_rom_metadata(42)
             logged = [str(c) for c in mock_info.call_args_list]
             assert any("cache hit" in m.lower() for m in logged)
 
@@ -194,7 +194,7 @@ class TestGetRomMetadata:
         plugin.settings["log_level"] = "debug"
 
         with patch.object(logger, "info") as mock_info:
-            await plugin.get_rom_metadata(42)
+            plugin.get_rom_metadata(42)
             logged = [str(c) for c in mock_info.call_args_list]
             assert any("cache miss" in m.lower() for m in logged)
 
@@ -207,7 +207,7 @@ class TestGetMetadataCachePage:
         _seed_metadata(uow, 1, _meta(summary="Game 1", genres=("RPG",), cached_at=100.0))
         _seed_metadata(uow, 2, _meta(summary="Game 2", cached_at=200.0))
 
-        result = await plugin.get_metadata_cache_page(0, 500)
+        result = plugin.get_metadata_cache_page(0, 500)
 
         assert set(result.keys()) == {"items", "total"}
         assert result["total"] == 2
@@ -226,9 +226,9 @@ class TestGetMetadataCachePage:
         for rom_id in (5, 1, 3, 4, 2):
             _seed_metadata(uow, rom_id, _meta(summary=f"Game {rom_id}"))
 
-        first = await plugin.get_metadata_cache_page(0, 2)
-        second = await plugin.get_metadata_cache_page(2, 2)
-        third = await plugin.get_metadata_cache_page(4, 2)
+        first = plugin.get_metadata_cache_page(0, 2)
+        second = plugin.get_metadata_cache_page(2, 2)
+        third = plugin.get_metadata_cache_page(4, 2)
 
         # Every page reports the full total, not the page size.
         assert first["total"] == second["total"] == third["total"] == 5
@@ -242,7 +242,7 @@ class TestGetMetadataCachePage:
         _seed_metadata(uow, 1, _meta(summary="Game 1"))
         _seed_metadata(uow, 2, _meta(summary="Game 2"))
 
-        result = await plugin.get_metadata_cache_page(500, 500)
+        result = plugin.get_metadata_cache_page(500, 500)
 
         assert result["items"] == {}
         assert result["total"] == 2
@@ -252,17 +252,17 @@ class TestGetMetadataCachePage:
         _seed_metadata(uow, 1, _meta(summary="Game 1"))
 
         # Negative offset clamps to 0; negative limit clamps to 0 (empty page).
-        neg_limit = await plugin.get_metadata_cache_page(-10, -1)
+        neg_limit = plugin.get_metadata_cache_page(-10, -1)
         assert neg_limit["items"] == {}
         assert neg_limit["total"] == 1
 
-        neg_offset = await plugin.get_metadata_cache_page(-10, 500)
+        neg_offset = plugin.get_metadata_cache_page(-10, 500)
         assert list(neg_offset["items"].keys()) == ["1"]
         assert neg_offset["total"] == 1
 
     @pytest.mark.asyncio
     async def test_returns_empty_when_no_cache(self, plugin):
-        result = await plugin.get_metadata_cache_page(0, 500)
+        result = plugin.get_metadata_cache_page(0, 500)
         assert result == {"items": {}, "total": 0}
 
 

@@ -376,12 +376,12 @@ class TestCancelDownload:
         plugin._download_service._download_tasks[42] = fut
         plugin._download_service._download_queue[42] = {"status": "downloading"}
 
-        result = await plugin.cancel_download(42)
+        result = plugin.cancel_download(42)
         assert result["success"] is True
 
     @pytest.mark.asyncio
     async def test_cancel_nonexistent_returns_error(self, plugin):
-        result = await plugin.cancel_download(999)
+        result = plugin.cancel_download(999)
         assert result["success"] is False
         assert "No active download" in result["message"]
 
@@ -413,7 +413,7 @@ class TestCancelDownload:
             "_target_path": target_path,
         }
 
-        result = await plugin.cancel_download(42)
+        result = plugin.cancel_download(42)
         await asyncio.sleep(0)  # let the scheduled cancelled-frame emit run + drain
 
         assert result == {"success": True, "message": "Download cancelled"}
@@ -440,7 +440,7 @@ class TestCancelDownload:
             "status": "paused",
         }
 
-        result = await plugin.cancel_download(42)
+        result = plugin.cancel_download(42)
         await asyncio.sleep(0)
 
         assert result == {"success": True, "message": "Download cancelled"}
@@ -451,7 +451,7 @@ class TestCancelDownload:
         """No live task AND the entry isn't paused → canonical failure shape, and
         the non-paused entry is left untouched (not evicted)."""
         plugin._download_service._download_queue[42] = {"rom_id": 42, "status": "downloading"}
-        result = await plugin.cancel_download(42)
+        result = plugin.cancel_download(42)
         assert result == {
             "success": False,
             "reason": "no_active_download",
@@ -463,7 +463,7 @@ class TestCancelDownload:
 class TestGetDownloadQueue:
     @pytest.mark.asyncio
     async def test_returns_empty_queue(self, plugin):
-        result = await plugin.get_download_queue()
+        result = plugin.get_download_queue()
         assert result["downloads"] == []
 
     @pytest.mark.asyncio
@@ -474,7 +474,7 @@ class TestGetDownloadQueue:
             "status": "downloading",
             "progress": 0.5,
         }
-        result = await plugin.get_download_queue()
+        result = plugin.get_download_queue()
         assert len(result["downloads"]) == 1
         assert result["downloads"][0]["status"] == "downloading"
         assert result["downloads"][0]["progress"] == pytest.approx(0.5)
@@ -493,7 +493,7 @@ class TestGetDownloadQueue:
             "status": "completed",
             "progress": 1.0,
         }
-        result = await plugin.get_download_queue()
+        result = plugin.get_download_queue()
         assert len(result["downloads"]) == 2
         statuses = {d["status"] for d in result["downloads"]}
         assert statuses == {"downloading", "completed"}
@@ -508,7 +508,7 @@ class TestGetDownloadQueue:
             "status": "paused",
             "_target_path": "/games/n64/game.z64",
         }
-        result = await plugin.get_download_queue()
+        result = plugin.get_download_queue()
         assert len(result["downloads"]) == 1
         assert "_target_path" not in result["downloads"][0]
         assert result["downloads"][0] == {"rom_id": 1, "rom_name": "Game A", "status": "paused"}
@@ -528,7 +528,7 @@ class TestClearCompletedDownloads:
         queue[6] = {"rom_id": 6, "status": "paused"}
         queue[7] = {"rom_id": 7, "status": "extracting"}
 
-        result = await plugin.clear_completed_downloads()
+        result = plugin.clear_completed_downloads()
 
         assert result == {"success": True, "cleared": 3}
         assert set(queue.keys()) == {4, 5, 6, 7}
@@ -536,7 +536,7 @@ class TestClearCompletedDownloads:
 
     @pytest.mark.asyncio
     async def test_idempotent_on_empty_queue(self, plugin):
-        result = await plugin.clear_completed_downloads()
+        result = plugin.clear_completed_downloads()
         assert result == {"success": True, "cleared": 0}
         assert plugin._download_service._download_queue == {}
 
@@ -546,7 +546,7 @@ class TestClearCompletedDownloads:
         queue[1] = {"rom_id": 1, "status": "downloading"}
         queue[2] = {"rom_id": 2, "status": "paused"}
 
-        result = await plugin.clear_completed_downloads()
+        result = plugin.clear_completed_downloads()
 
         assert result == {"success": True, "cleared": 0}
         assert set(queue.keys()) == {1, 2}
@@ -566,7 +566,7 @@ class TestGetInstalledRom:
                 installed_at="2026-01-01T00:00:00+00:00",
             )
         )
-        result = await plugin.get_installed_rom(42)
+        result = plugin.get_installed_rom(42)
         assert result is not None
         assert result["rom_id"] == 42
         assert result["system"] == "n64"
@@ -577,7 +577,7 @@ class TestGetInstalledRom:
 
     @pytest.mark.asyncio
     async def test_returns_none_not_installed(self, plugin):
-        result = await plugin.get_installed_rom(999)
+        result = plugin.get_installed_rom(999)
         assert result is None
 
 
@@ -884,7 +884,7 @@ class TestResumingAReplaceDownload:
         self._stage(plugin, _SINGLE_DETAIL, occupied_path=target)
         await plugin.start_download(1, True)
 
-        (item,) = (await plugin.get_download_queue())["downloads"]
+        (item,) = plugin.get_download_queue()["downloads"]
 
         assert "_replace_existing" not in item
 
@@ -5044,7 +5044,7 @@ class TestCooperativeCancel:
         await asyncio.sleep(0)  # let it start waiting
         plugin._download_service._download_tasks[42] = task
 
-        result = await plugin.cancel_download(42)
+        result = plugin.cancel_download(42)
         assert result["success"] is True
         # The token is flipped so the executor transfer thread aborts (#144) —
         # not just the asyncio wrapper.
@@ -5425,7 +5425,7 @@ class TestPauseResume:
 
     @pytest.mark.asyncio
     async def test_pause_no_active_returns_no_active_download(self, plugin):
-        result = await plugin.pause_download(999)
+        result = plugin.pause_download(999)
         assert result == {
             "success": False,
             "reason": "no_active_download",
@@ -5446,7 +5446,7 @@ class TestPauseResume:
         await asyncio.sleep(0)
         plugin._download_service._download_tasks[42] = task
 
-        result = await plugin.pause_download(42)
+        result = plugin.pause_download(42)
         assert result["success"] is True
         assert result["message"] == "Download paused"
         # paused flag set (not cancelled) so the terminal handler keeps the .tmp.

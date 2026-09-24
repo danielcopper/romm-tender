@@ -336,31 +336,31 @@ class Plugin:
         return self._settings_service.save_custom_headers(headers)
 
     @route
-    async def frontend_log(self, level, message):
+    def frontend_log(self, level, message):
         self._settings_service.frontend_log(level, message)
 
     @route
-    async def debug_log(self, message):
+    def debug_log(self, message):
         self._settings_service.frontend_log("debug", message)
 
     @route
-    async def save_log_level(self, level):
+    def save_log_level(self, level):
         return self._settings_service.save_log_level(level)
 
     @route
-    async def save_steam_input_setting(self, mode):
+    def save_steam_input_setting(self, mode):
         return self._settings_service.save_steam_input_setting(mode)
 
     @route
-    async def save_preferred_region(self, region):
+    def save_preferred_region(self, region):
         return self._settings_service.save_preferred_region(region)
 
     @route
-    async def save_skip_preview(self, enabled):
+    def save_skip_preview(self, enabled):
         return self._settings_service.save_skip_preview(enabled)
 
     @route
-    async def get_known_regions(self):
+    def get_known_regions(self):
         return self._settings_service.get_known_regions()
 
     @route
@@ -369,15 +369,15 @@ class Plugin:
         return self._settings_service.apply_steam_input_setting()
 
     @route
-    async def fix_retroarch_input_driver(self):
+    def fix_retroarch_input_driver(self):
         return self._settings_service.fix_retroarch_input_driver()
 
     @route
-    async def get_settings(self):
+    def get_settings(self):
         return self._settings_service.get_settings()
 
     @route
-    async def get_retrodeck_status(self):
+    def get_retrodeck_status(self):
         """Report RetroDECK path-resolution health for the frontend banner.
 
         Discriminated-status union (Callable response shapes carve-out):
@@ -392,11 +392,11 @@ class Plugin:
         }
 
     @route
-    async def get_whitelist_settings(self):
+    def get_whitelist_settings(self):
         return self._settings_service.get_whitelist_settings()
 
     @route
-    async def update_whitelist_settings(self, disabled_defaults, custom_names):
+    def update_whitelist_settings(self, disabled_defaults, custom_names):
         return self._settings_service.update_whitelist_settings(disabled_defaults, custom_names)
 
     @route
@@ -615,15 +615,15 @@ class Plugin:
         return self._sync_service.save_collections_sync(collection_ids, kind, enabled)
 
     @route
-    async def save_collection_platform_groups(self, enabled):
+    def save_collection_platform_groups(self, enabled):
         return self._settings_service.save_collection_platform_groups(enabled)
 
     @route
-    async def set_collection_owner_scope(self, scope):
+    def set_collection_owner_scope(self, scope):
         return self._settings_service.set_collection_owner_scope(scope)
 
     @route
-    async def set_collection_naming_mode(self, mode):
+    def set_collection_naming_mode(self, mode):
         return self._settings_service.set_collection_naming_mode(mode)
 
     @route
@@ -633,11 +633,11 @@ class Plugin:
         return self._sync_service.start_sync()
 
     @route
-    async def cancel_sync(self, run_id):
+    def cancel_sync(self, run_id):
         return self._sync_service.cancel_sync(run_id)
 
     @route
-    async def sync_heartbeat(self):
+    def sync_heartbeat(self):
         return self._sync_service.sync_heartbeat()
 
     @route
@@ -653,15 +653,15 @@ class Plugin:
         return await self._sync_service.sync_apply_delta(preview_id)
 
     @route
-    async def sync_cancel_preview(self):
+    def sync_cancel_preview(self):
         return self._sync_service.sync_cancel_preview()
 
     @route
-    async def get_pending_preview(self):
+    def get_pending_preview(self):
         return self._sync_service.get_pending_preview()
 
     @route
-    async def get_sync_status(self):
+    def get_sync_status(self):
         return self._sync_service.get_sync_status()
 
     @route
@@ -674,7 +674,7 @@ class Plugin:
         return await self._sync_service.report_unit_results(rom_id_to_app_id, run_id, unit_id, chunk_index)
 
     @route
-    async def get_registry_platforms(self):
+    def get_registry_platforms(self):
         return self._sync_service.get_registry_platforms()
 
     @route
@@ -739,7 +739,7 @@ class Plugin:
         return self._sync_service.clear_sync_cache()
 
     @route
-    async def get_sync_stats(self):
+    def get_sync_stats(self):
         return self._sync_service.get_sync_stats()
 
     @route
@@ -747,7 +747,7 @@ class Plugin:
         return await self._data_inventory_service.get_data_inventory()
 
     @route
-    async def get_sync_runs(self):
+    def get_sync_runs(self):
         return self._sync_service.get_sync_runs()
 
     @route
@@ -868,11 +868,11 @@ class Plugin:
         return await self._rom_adoption_service.verify_existing_content(rom_id, candidate_path)
 
     @route
-    async def cancel_download(self, rom_id):
+    def cancel_download(self, rom_id):
         return self._download_service.cancel_download(rom_id)
 
     @route
-    async def pause_download(self, rom_id):
+    def pause_download(self, rom_id):
         return self._download_service.pause_download(rom_id)
 
     @route
@@ -886,15 +886,15 @@ class Plugin:
         return result
 
     @route
-    async def get_download_queue(self):
+    def get_download_queue(self):
         return self._download_service.get_download_queue()
 
     @route
-    async def clear_completed_downloads(self):
+    def clear_completed_downloads(self):
         return self._download_service.clear_completed_downloads()
 
     @route
-    async def get_installed_rom(self, rom_id):
+    def get_installed_rom(self, rom_id):
         return self._download_service.get_installed_rom(rom_id)
 
     @route
@@ -932,7 +932,7 @@ class Plugin:
         return await self._save_sync_service.get_save_status(rom_id)
 
     @route
-    async def check_core_change(self, rom_id):
+    def check_core_change(self, rom_id):
         return self._save_sync_service.check_core_change(rom_id)
 
     @route
@@ -973,7 +973,7 @@ class Plugin:
         return await self._save_sync_service.delete_slot(rom_id, slot)
 
     @route
-    async def is_save_tracking_configured(self, rom_id):
+    def is_save_tracking_configured(self, rom_id):
         return self._save_sync_service.is_save_tracking_configured(rom_id)
 
     @route
@@ -1003,7 +1003,7 @@ class Plugin:
         return await self._save_sync_service.resolve_sync_conflict(rom_id, filename, server_save_id, action)
 
     @route
-    async def get_save_sync_settings(self):
+    def get_save_sync_settings(self):
         return self._save_sync_service.get_save_sync_settings()
 
     @route
@@ -1072,7 +1072,7 @@ class Plugin:
         return task
 
     @route
-    async def get_all_playtime(self):
+    def get_all_playtime(self):
         return self._playtime_service.get_all_playtime()
 
     @route
@@ -1081,7 +1081,7 @@ class Plugin:
         return await self._playtime_service.reconcile_playtime(int(rom_id))
 
     @route
-    async def get_playtime_scope_notice(self):
+    def get_playtime_scope_notice(self):
         """Report whether the token lacks the play-session read scope.
 
         Returns ``{"pending": bool}``. ``pending`` is set when a reconcile GET
@@ -1109,7 +1109,7 @@ class Plugin:
         return await self._sgdb_service.verify_sgdb_api_key(api_key)
 
     @route
-    async def save_sgdb_api_key(self, api_key):
+    def save_sgdb_api_key(self, api_key):
         return self._sgdb_service.save_sgdb_api_key(api_key)
 
     @route
@@ -1134,15 +1134,15 @@ class Plugin:
     # ── Metadata delegation to MetadataService ────────────────
 
     @route
-    async def get_rom_metadata(self, rom_id):
+    def get_rom_metadata(self, rom_id):
         return self._metadata_service.get_rom_metadata(rom_id)
 
     @route
-    async def get_metadata_cache_page(self, offset, limit):
+    def get_metadata_cache_page(self, offset, limit):
         return self._metadata_service.get_metadata_cache_page(offset, limit)
 
     @route
-    async def get_app_id_rom_id_map(self):
+    def get_app_id_rom_id_map(self):
         return self._metadata_service.get_app_id_rom_id_map()
 
     @route
@@ -1178,7 +1178,7 @@ class Plugin:
         return await self._migration_service.get_migration_status()
 
     @route
-    async def dismiss_retrodeck_migration(self):
+    def dismiss_retrodeck_migration(self):
         return self._migration_service.dismiss_retrodeck_migration()
 
     @route
@@ -1186,7 +1186,7 @@ class Plugin:
         return await self._migration_service.refresh_state()
 
     @route
-    async def get_settings_reset_notice(self):
+    def get_settings_reset_notice(self):
         """Report whether a corrupt ``settings.json`` was reset at boot.
 
         Reads the persistent ``_settings_reset_notice`` marker from the live
@@ -1202,7 +1202,7 @@ class Plugin:
         return {"pending": notice is not None, "backed_up_to": (notice or {}).get("backed_up_to")}
 
     @route
-    async def dismiss_settings_reset_notice(self):
+    def dismiss_settings_reset_notice(self):
         """Acknowledge the corrupt-settings reset, clearing the persistent marker.
 
         The user's explicit ack in the QAM — pops ``_settings_reset_notice`` and
@@ -1233,7 +1233,7 @@ class Plugin:
         return await self._shortcut_relocation_service.get_shortcut_relocation()
 
     @route
-    async def get_host_status(self):
+    def get_host_status(self):
         """Report what only the process hosting this backend knows about its own run.
 
         Returns ``{"port": int, "failed_startup_steps": [str],

@@ -24,7 +24,7 @@ from ._seed import seed_install
 
 async def test_get_download_queue_empty_shape(harness):
     """Empty queue: downloads key present and an empty list."""
-    result = await harness.plugin.get_download_queue()
+    result = harness.plugin.get_download_queue()
     assert result == {"downloads": []}
     assert isinstance(result["downloads"], list)
 
@@ -38,14 +38,14 @@ async def test_get_installed_rom_not_installed_is_literal_none(harness):
     #1004-class guard: the frontend's ``InstalledRom | null`` contract relies
     on the backend returning ``None`` here.
     """
-    result = await harness.plugin.get_installed_rom(999)
+    result = harness.plugin.get_installed_rom(999)
     assert result is None
 
 
 async def test_get_installed_rom_installed_shape(harness):
     """Installed → InstalledRom dict with the documented keys."""
     seed_install(harness, 42, system="gba", platform_slug="gba", file_name="pokemon.gba")
-    result = await harness.plugin.get_installed_rom(42)
+    result = harness.plugin.get_installed_rom(42)
     assert result is not None
     assert set(result.keys()) == {
         "rom_id",
@@ -72,7 +72,7 @@ async def test_pause_download_no_active_failure_shape(harness):
     ``pauseDownload = callable<[number], {success, message}>`` — the failure
     branch carries the canonical ``{success: False, reason, message}``.
     """
-    result = await harness.plugin.pause_download(999)
+    result = harness.plugin.pause_download(999)
     assert result == {
         "success": False,
         "reason": "no_active_download",
@@ -92,7 +92,7 @@ async def test_resume_download_not_paused_failure_shape(harness):
 
 async def test_cancel_no_active_download_failure_shape(harness):
     """Cancelling a ROM with no active or paused download → canonical failure shape."""
-    result = await harness.plugin.cancel_download(999)
+    result = harness.plugin.cancel_download(999)
     assert result == {
         "success": False,
         "reason": "no_active_download",
@@ -120,11 +120,11 @@ async def test_cancel_paused_download_evicts_and_get_queue_omits_it(harness):
         "resumable": True,
     }
 
-    result = await harness.plugin.cancel_download(7)
+    result = harness.plugin.cancel_download(7)
     await asyncio.sleep(0)  # let the scheduled cancelled-frame emit run + drain
 
     assert result == {"success": True, "message": "Download cancelled"}
-    after = await harness.plugin.get_download_queue()
+    after = harness.plugin.get_download_queue()
     assert all(d["rom_id"] != 7 for d in after["downloads"])
 
 
@@ -137,7 +137,7 @@ async def test_clear_completed_downloads_empty_queue_shape(harness):
     ``clearCompletedDownloads = callable<[], {success, cleared}>`` — the success
     payload carries the eviction count.
     """
-    result = await harness.plugin.clear_completed_downloads()
+    result = harness.plugin.clear_completed_downloads()
     assert result == {"success": True, "cleared": 0}
 
 
@@ -155,9 +155,9 @@ async def test_clear_completed_downloads_evicts_terminal_and_get_queue_omits_the
     queue[3] = {"rom_id": 3, "rom_name": "Stopped", "status": "cancelled"}
     queue[4] = {"rom_id": 4, "rom_name": "Live", "status": "downloading"}
 
-    result = await harness.plugin.clear_completed_downloads()
+    result = harness.plugin.clear_completed_downloads()
     assert result == {"success": True, "cleared": 3}
 
-    after = await harness.plugin.get_download_queue()
+    after = harness.plugin.get_download_queue()
     assert [d["rom_id"] for d in after["downloads"]] == [4]
     assert after["downloads"][0]["status"] == "downloading"

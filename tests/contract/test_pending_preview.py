@@ -29,14 +29,14 @@ def _seed_one_platform(harness):
 
 async def test_nothing_pending_is_a_success_not_a_failure(harness):
     """No preview staged is a normal answer — the failure shape is for failures."""
-    assert await harness.plugin.get_pending_preview() == {"success": True, "preview": None}
+    assert harness.plugin.get_pending_preview() == {"success": True, "preview": None}
 
 
 async def test_restores_the_payload_sync_preview_answered_with(harness):
     _seed_one_platform(harness)
 
     fresh = await harness.plugin.sync_preview()
-    restored = await harness.plugin.get_pending_preview()
+    restored = harness.plugin.get_pending_preview()
 
     assert fresh["success"] is True
     assert restored == {"success": True, "preview": fresh}
@@ -52,7 +52,7 @@ async def test_restored_preview_id_still_applies(harness):
     _seed_one_platform(harness)
     await harness.plugin.sync_preview()
 
-    restored = await harness.plugin.get_pending_preview()
+    restored = harness.plugin.get_pending_preview()
     preview = restored["preview"]
     assert preview is not None
 
@@ -74,7 +74,7 @@ async def test_withheld_while_a_run_is_in_flight_then_handed_back(harness):
     box = harness.plugin._sync_service._box
     assert box.try_begin_run("run-1", kind=SyncRunKind.APPLY) is True
 
-    assert await harness.plugin.get_pending_preview() == {"success": True, "preview": None}
+    assert harness.plugin.get_pending_preview() == {"success": True, "preview": None}
     assert box.pending_delta is not None
 
     # An overlapping apply keeps its own refusal — the withholding is the
@@ -83,7 +83,7 @@ async def test_withheld_while_a_run_is_in_flight_then_handed_back(harness):
     assert rejected == {"success": False, "reason": "sync_in_progress", "message": "Sync already in progress"}
 
     box.finish_run("run-1")
-    assert await harness.plugin.get_pending_preview() == {"success": True, "preview": fresh}
+    assert harness.plugin.get_pending_preview() == {"success": True, "preview": fresh}
 
 
 async def test_over_age_snapshot_is_dropped(harness):
@@ -96,5 +96,5 @@ async def test_over_age_snapshot_is_dropped(harness):
 
     harness.plugin._sync_service._orchestrator._clock.advance(1801)
 
-    assert await harness.plugin.get_pending_preview() == {"success": True, "preview": None}
+    assert harness.plugin.get_pending_preview() == {"success": True, "preview": None}
     assert box.pending_delta is None

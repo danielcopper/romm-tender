@@ -75,11 +75,11 @@ async def test_unbind_drops_row_from_app_id_rom_id_map(harness):
     seed_rom(harness, 1, shortcut_app_id=100)
     seed_rom(harness, 2, shortcut_app_id=200)
 
-    before = await harness.plugin.get_app_id_rom_id_map()
+    before = harness.plugin.get_app_id_rom_id_map()
     assert before == {"100": 1, "200": 2}
 
     await harness.plugin.reconcile_shortcuts([100])
 
-    after = await harness.plugin.get_app_id_rom_id_map()
+    after = harness.plugin.get_app_id_rom_id_map()
     assert after == {"100": 1}
     assert "200" not in after
