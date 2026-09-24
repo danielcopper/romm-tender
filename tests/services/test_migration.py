@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 from datetime import UTC, datetime
 from typing import Any
@@ -7,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-# conftest.py patches decky before this import; use _make_testable_plugin for test-only attrs
+# Use _make_testable_plugin for test-only attrs
 from _factories import _make_testable_plugin
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
@@ -55,15 +56,13 @@ class RecordingEmitter:
 
 
 @pytest.fixture
-def plugin(tmp_path, fake_romm_api):
+def plugin(tmp_path, fake_romm_api, emit, logger, home):
     p = _make_testable_plugin()
     p.settings = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
     p._http_adapter = MagicMock()
 
-    import decky
-
-    p._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
-    steam_config = SteamConfigAdapter(user_home=decky.DECKY_USER_HOME, logger=decky.logger)
+    p._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
+    steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
     p._steam_config = steam_config
 
     p._romm_api = fake_romm_api
@@ -86,14 +85,14 @@ def plugin(tmp_path, fake_romm_api):
             sandbox_launcher=FakeSandboxLauncher(),
             platform_core_reader=FakePlatformCoreReader(),
             resolve_system=lambda platform_slug, platform_fs_slug=None: platform_slug,
-            logger=decky.logger,
+            logger=logger,
         ),
     )
     p._firmware_service = FirmwareService(
         config=FirmwareServiceConfig(
             romm_api=fake_romm_api,
             loop=running_loop(),
-            logger=decky.logger,
+            logger=logger,
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             firmware_file_store=FirmwareFileAdapter(),
             firmware_resolver=FakeFirmwareResolver(),
@@ -112,9 +111,9 @@ def plugin(tmp_path, fake_romm_api):
             steam_config=steam_config,
             settings=p.settings,
             loop=running_loop(),
-            logger=decky.logger,
-            launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/tender-rom-launcher",
-            emit=decky.emit,
+            logger=logger,
+            launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
+            emit=emit,
             clock=FakeClock(),
             uuid_gen=FakeUuidGen(),
             sleeper=FakeSleeper(),
@@ -152,7 +151,7 @@ def plugin(tmp_path, fake_romm_api):
             migration_file_store=MigrationFileAdapter(),
             settings=p.settings,
             loop=running_loop(),
-            logger=decky.logger,
+            logger=logger,
             settings_persister=p._settings_persister,
             emit=RecordingEmitter(),
             firmware_resolver=firmware_resolver,
@@ -255,12 +254,10 @@ class _RecordingLoop:
 
 
 class TestPathChangeDetection:
-    def test_first_run_stores_path(self, plugin, tmp_path):
+    def test_first_run_stores_path(self, plugin, tmp_path, logger):
         """First run (empty stored path) stores current path, no event."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         loop = _RecordingLoop()
         plugin._migration_service._loop = loop
@@ -277,12 +274,10 @@ class TestPathChangeDetection:
         assert loop.tasks == []
         assert plugin._migration_service._emit.calls == []
 
-    def test_no_change_no_notification(self, plugin, tmp_path):
+    def test_no_change_no_notification(self, plugin, tmp_path, logger):
         """Same path as stored — no event, no state change."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         fake_home = str(tmp_path / "retrodeck")
         os.makedirs(fake_home, exist_ok=True)
@@ -297,7 +292,7 @@ class TestPathChangeDetection:
         assert loop.tasks == []
         assert plugin._migration_service._emit.calls == []
 
-    def test_two_spellings_of_one_home_are_not_a_move(self, plugin, tmp_path):
+    def test_two_spellings_of_one_home_are_not_a_move(self, plugin, tmp_path, logger):
         """#1838: a marker naming the live home through a symlink is the same directory.
 
         A home stored before the roots were resolved is spelled the way
@@ -305,10 +300,8 @@ class TestPathChangeDetection:
         migration banner and offer to relocate a directory onto itself — whose
         Overwrite branch deletes the destination first.
         """
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         base = tmp_path.resolve()
         real_home = base / "var" / "home" / "player" / "retrodeck"
@@ -334,16 +327,14 @@ class TestPathChangeDetection:
             # spelling it was stored with and is resolved again next startup.
             assert uow.kv_config.get("retrodeck_home_path") == stored_home
 
-    def test_a_pending_marker_naming_the_live_home_is_cleared(self, plugin, tmp_path):
+    def test_a_pending_marker_naming_the_live_home_is_cleared(self, plugin, tmp_path, logger):
         """A marker naming the home RetroDECK is already on is dropped.
 
         Otherwise it stands until the user migrates or dismisses, over a home
         that was never left.
         """
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         base = tmp_path.resolve()
         real_home = base / "var" / "home" / "player" / "retrodeck"
@@ -366,12 +357,10 @@ class TestPathChangeDetection:
         assert plugin._migration_service.is_retrodeck_migration_pending() is False
         assert loop.tasks == []
 
-    def test_a_pending_hop_that_was_really_left_survives_the_clear(self, plugin, tmp_path):
+    def test_a_pending_hop_that_was_really_left_survives_the_clear(self, plugin, tmp_path, logger):
         """Only the marker naming the live home is dropped; a genuine hop stays pending."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         home = str(tmp_path / "retrodeck")
         os.makedirs(home, exist_ok=True)
@@ -388,7 +377,7 @@ class TestPathChangeDetection:
             assert uow.kv_config.get("retrodeck_home_path_previous") == str(tmp_path / "sd-card" / "retrodeck")
             assert uow.kv_config.get("retrodeck_home_path_hops") is None
 
-    async def test_a_home_that_really_moved_is_still_a_change(self, plugin, tmp_path):
+    async def test_a_home_that_really_moved_is_still_a_change(self, plugin, tmp_path, logger):
         """Comparing directories must not swallow a real move, including one already gone.
 
         The gone home sits under a symlinked prefix, so ``realpath`` really does
@@ -397,10 +386,8 @@ class TestPathChangeDetection:
         directory from the one RetroDECK reports now, which is what makes this a
         move rather than a spelling.
         """
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         base = tmp_path.resolve()
         (base / "var" / "home" / "player").mkdir(parents=True)
@@ -431,12 +418,10 @@ class TestPathChangeDetection:
         assert args[0]["old_path"] == resolved_gone
         assert args[0]["new_path"] == new_home
 
-    async def test_path_change_emits_event(self, plugin, tmp_path):
+    async def test_path_change_emits_event(self, plugin, tmp_path, logger):
         """Path changed — stores both old and new, emits event."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old_retrodeck")
         new_home = str(tmp_path / "new_retrodeck")
@@ -469,9 +454,6 @@ class TestPathChangeDetection:
 
     def test_empty_current_home_no_action(self, plugin, tmp_path):
         """If ``retrodeck_paths`` returns empty string, do nothing."""
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
 
         loop = _RecordingLoop()
         plugin._migration_service._loop = loop
@@ -484,12 +466,10 @@ class TestPathChangeDetection:
         with plugin._uow as uow:
             assert uow.kv_config.get("retrodeck_home_path") is None
 
-    async def test_detect_path_change_auto_clears_when_reverted_to_previous(self, plugin, tmp_path):
+    async def test_detect_path_change_auto_clears_when_reverted_to_previous(self, plugin, tmp_path, logger):
         """User reverted RetroDECK to the previous home — drop the marker, emit cleared event."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old_retrodeck")
         new_home = str(tmp_path / "new_retrodeck")
@@ -520,13 +500,11 @@ class TestPathChangeDetection:
         assert payload["old_path"] == old_home
         assert payload["new_path"] == old_home
 
-    async def test_detect_path_change_auto_clear_emits_cleared_event(self, plugin, tmp_path):
+    async def test_detect_path_change_auto_clear_emits_cleared_event(self, plugin, tmp_path, logger):
         """Auto-clear MUST emit retrodeck_path_changed with cleared=True so the
         frontend listener can dismiss any pending migration UI."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old_retrodeck")
         new_home = str(tmp_path / "new_retrodeck")
@@ -572,10 +550,8 @@ class TestIsRetroDeckMigrationPending:
 
 
 class TestDismissRetroDeckMigration:
-    def test_dismiss_retrodeck_migration_clears_marker(self, plugin, tmp_path):
-        import decky
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+    def test_dismiss_retrodeck_migration_clears_marker(self, plugin, tmp_path, logger):
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
         with plugin._uow as uow:
             uow.kv_config.set("retrodeck_home_path_previous", "/old/path")
 
@@ -585,10 +561,8 @@ class TestDismissRetroDeckMigration:
         with plugin._uow as uow:
             assert uow.kv_config.get("retrodeck_home_path_previous") is None
 
-    def test_dismiss_retrodeck_migration_idempotent_when_no_marker(self, plugin, tmp_path):
-        import decky
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+    def test_dismiss_retrodeck_migration_idempotent_when_no_marker(self, plugin, tmp_path, logger):
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
         with plugin._uow as uow:
             uow.kv_config.delete("retrodeck_home_path_previous")
 
@@ -601,23 +575,20 @@ class TestDismissRetroDeckMigration:
 
 class TestMigrateRetroDeckFiles:
     @pytest.mark.asyncio
-    async def test_no_migration_needed(self, plugin, tmp_path):
+    async def test_no_migration_needed(self, plugin, tmp_path, logger):
         """No previous path — nothing to migrate."""
-        import decky
 
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         result = await plugin.migrate_retrodeck_files()
         assert result["success"] is False
         assert "No path migration needed" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_migrate_roms(self, plugin, tmp_path):
+    async def test_migrate_roms(self, plugin, tmp_path, logger):
         """Moves ROM files from old to new path, updates state."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -646,7 +617,7 @@ class TestMigrateRetroDeckFiles:
             assert install.rom_dir is None
 
     @pytest.mark.asyncio
-    async def test_a_pending_home_that_is_the_live_home_moves_and_destroys_nothing(self, plugin, tmp_path):
+    async def test_a_pending_home_that_is_the_live_home_moves_and_destroys_nothing(self, plugin, tmp_path, logger):
         """Acting on such a marker must not treat the live home as a move source.
 
         Source and destination would be the same path, and Overwrite removes the
@@ -654,10 +625,8 @@ class TestMigrateRetroDeckFiles:
         pending home equal to the live one — a comparison that only holds
         because both sides are resolved.
         """
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         base = tmp_path.resolve()
         rom = base / "var" / "home" / "player" / "retrodeck" / "roms" / "n64" / "zelda.z64"
@@ -678,7 +647,7 @@ class TestMigrateRetroDeckFiles:
         assert rom.read_text() == "rom data"
 
     @pytest.mark.asyncio
-    async def test_migrating_into_a_symlinked_home_records_the_resolved_path(self, plugin, tmp_path):
+    async def test_migrating_into_a_symlinked_home_records_the_resolved_path(self, plugin, tmp_path, logger):
         """#1838: both markers name directories, so what is recorded is the resolved path.
 
         A migration left pending across the upgrade carries markers spelled the
@@ -686,10 +655,8 @@ class TestMigrateRetroDeckFiles:
         gets is built from the destination marker, and a path recorded through a
         symlink is one the uninstall guard later refuses.
         """
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         base = tmp_path.resolve()
         old_rom = base / "old" / "roms" / "n64" / "zelda.z64"
@@ -713,14 +680,12 @@ class TestMigrateRetroDeckFiles:
             assert uow.rom_installs.get(1).file_path == str(base / "new" / "retrodeck" / "roms" / "n64" / "zelda.z64")
 
     @pytest.mark.asyncio
-    async def test_migration_records_applied_launch_options_for_bound_rom(self, plugin, tmp_path):
+    async def test_migration_records_applied_launch_options_for_bound_rom(self, plugin, tmp_path, logger):
         """After the home-move re-bake, each bound ROM's recorded applied state is
         updated to the emitted relaunch command, so the next sync skips the
         now-correct (relocated) shortcut instead of re-touching it (#1383)."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -750,7 +715,7 @@ class TestMigrateRetroDeckFiles:
         assert rom.applied_launch_options != ""  # a real re-baked command, not the placeholder
 
     @pytest.mark.asyncio
-    async def test_migrate_multi_file_moves_whole_rom_dir_with_siblings(self, plugin, tmp_path):
+    async def test_migrate_multi_file_moves_whole_rom_dir_with_siblings(self, plugin, tmp_path, logger):
         """Regression (#784 data-loss): a multi-file ROM moves its WHOLE rom_dir.
 
         The launch file (an auto-generated ``.m3u``) sits directly in the
@@ -760,10 +725,8 @@ class TestMigrateRetroDeckFiles:
         the whole directory migrates as a unit — every sibling (here
         ``disc2.bin``) must land at the new location.
         """
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -806,16 +769,14 @@ class TestMigrateRetroDeckFiles:
             assert install.file_path == new_launch
 
     @pytest.mark.asyncio
-    async def test_migrate_single_file_moves_only_the_file(self, plugin, tmp_path):
+    async def test_migrate_single_file_moves_only_the_file(self, plugin, tmp_path, logger):
         """A single-file ROM (``rom_dir`` is ``None``) moves only its launch file.
 
         Sibling ROMs sharing the platform's flat ``<roms>/<system>`` directory
         must NOT be dragged along — only this ROM's file moves.
         """
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -849,12 +810,10 @@ class TestMigrateRetroDeckFiles:
             assert install.rom_dir is None
 
     @pytest.mark.asyncio
-    async def test_migrate_bios(self, plugin, tmp_path):
+    async def test_migrate_bios(self, plugin, tmp_path, logger):
         """Moves tracked BIOS files from old to new path."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -883,12 +842,10 @@ class TestMigrateRetroDeckFiles:
         assert plugin._uow.committed is True
 
     @pytest.mark.asyncio
-    async def test_migrate_conflicts_need_confirmation(self, plugin, tmp_path):
+    async def test_migrate_conflicts_need_confirmation(self, plugin, tmp_path, logger):
         """Destination file already exists — first call returns conflicts for user decision."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -919,12 +876,10 @@ class TestMigrateRetroDeckFiles:
             assert f.read() == "old data"
 
     @pytest.mark.asyncio
-    async def test_migrate_conflict_overwrite(self, plugin, tmp_path):
+    async def test_migrate_conflict_overwrite(self, plugin, tmp_path, logger):
         """Overwrite strategy replaces destination with source."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -952,12 +907,10 @@ class TestMigrateRetroDeckFiles:
             assert uow.rom_installs.get(1).file_path == new_rom
 
     @pytest.mark.asyncio
-    async def test_migrate_conflict_skip(self, plugin, tmp_path):
+    async def test_migrate_conflict_skip(self, plugin, tmp_path, logger):
         """Skip strategy keeps destination file, updates state path."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -987,12 +940,10 @@ class TestMigrateRetroDeckFiles:
             assert uow.rom_installs.get(1).file_path == new_rom
 
     @pytest.mark.asyncio
-    async def test_migrate_source_missing(self, plugin, tmp_path):
+    async def test_migrate_source_missing(self, plugin, tmp_path, logger):
         """Source file gone — skip silently."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1007,12 +958,10 @@ class TestMigrateRetroDeckFiles:
         assert result["success"] is True
 
     @pytest.mark.asyncio
-    async def test_migrate_creates_subdirs(self, plugin, tmp_path):
+    async def test_migrate_creates_subdirs(self, plugin, tmp_path, logger):
         """Target subdirectories are created as needed."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1033,12 +982,10 @@ class TestMigrateRetroDeckFiles:
         assert os.path.exists(new_bios)
 
     @pytest.mark.asyncio
-    async def test_clears_previous_on_success(self, plugin, tmp_path):
+    async def test_clears_previous_on_success(self, plugin, tmp_path, logger):
         """After successful migration, retrodeck_home_path_previous is cleared."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1058,12 +1005,10 @@ class TestMigrateSaveFiles:
     """Tests for save file migration."""
 
     @pytest.mark.asyncio
-    async def test_migrate_saves(self, plugin, tmp_path):
+    async def test_migrate_saves(self, plugin, tmp_path, logger):
         """Save files are moved from old to new saves directory."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1089,12 +1034,10 @@ class TestMigrateSaveFiles:
             assert f.read() == "save data"
 
     @pytest.mark.asyncio
-    async def test_save_conflict_needs_confirmation(self, plugin, tmp_path):
+    async def test_save_conflict_needs_confirmation(self, plugin, tmp_path, logger):
         """Save files at both locations trigger conflict confirmation."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1120,12 +1063,10 @@ class TestMigrateSaveFiles:
         assert "gba/game.srm" in result["conflicts"]
 
     @pytest.mark.asyncio
-    async def test_save_conflict_overwrite(self, plugin, tmp_path):
+    async def test_save_conflict_overwrite(self, plugin, tmp_path, logger):
         """Overwrite strategy replaces destination save with source."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1152,12 +1093,10 @@ class TestMigrateSaveFiles:
             assert f.read() == "old save"
 
     @pytest.mark.asyncio
-    async def test_save_conflict_skip(self, plugin, tmp_path):
+    async def test_save_conflict_skip(self, plugin, tmp_path, logger):
         """Skip strategy keeps destination save file."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1184,12 +1123,10 @@ class TestMigrateSaveFiles:
             assert f.read() == "new save"
 
     @pytest.mark.asyncio
-    async def test_hidden_dirs_skipped(self, plugin, tmp_path):
+    async def test_hidden_dirs_skipped(self, plugin, tmp_path, logger):
         """Hidden directories like .romm-backup are not migrated."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1213,12 +1150,10 @@ class TestMigrateSaveFiles:
         assert result["saves_moved"] == 1  # only the real save, not the backup
 
     @pytest.mark.asyncio
-    async def test_status_includes_saves_count(self, plugin, tmp_path):
+    async def test_status_includes_saves_count(self, plugin, tmp_path, logger):
         """get_migration_status includes saves_count."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1239,12 +1174,10 @@ class TestMigrateSaveFiles:
         assert status["saves_count"] == 1
 
     @pytest.mark.asyncio
-    async def test_status_counts_tracked_bios_from_sqlite(self, plugin, tmp_path):
+    async def test_status_counts_tracked_bios_from_sqlite(self, plugin, tmp_path, logger):
         """get_migration_status counts tracked BIOS from the SQLite ``BiosFile`` snapshot."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1300,14 +1233,12 @@ class TestMigrationRelaunchOptions:
             )
 
     @pytest.mark.asyncio
-    async def test_relocated_installed_bound_rom_emits_new_launch_options(self, plugin, tmp_path):
+    async def test_relocated_installed_bound_rom_emits_new_launch_options(self, plugin, tmp_path, logger):
         """Happy path: a relocated installed+bound ROM emits its app_id + NEW-path command."""
-        import decky
 
         from domain.shortcut_data import build_launch_options, resolve_emulator_invocation
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1335,12 +1266,10 @@ class TestMigrationRelaunchOptions:
         assert old_rom not in payload["items"][0]["launch_options"]
 
     @pytest.mark.asyncio
-    async def test_relocated_rom_with_override_rebakes_e_form(self, plugin, tmp_path):
+    async def test_relocated_rom_with_override_rebakes_e_form(self, plugin, tmp_path, logger):
         """A relocated ROM with a resolvable ``emulator_override`` re-bakes the ``-e`` form."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
         plugin._core_info.available_cores = [
             {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
         ]
@@ -1377,14 +1306,11 @@ class TestMigrationRelaunchOptions:
         ]
 
     @pytest.mark.asyncio
-    async def test_relocated_rom_with_stale_override_rebakes_plain_and_warns(self, plugin, tmp_path, caplog):
+    async def test_relocated_rom_with_stale_override_rebakes_plain_and_warns(self, plugin, tmp_path, caplog, logger):
         """A stale override LABEL re-bakes the PLAIN launch + WARNs (B4) — never ``None.so``."""
         import logging
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
         # available_cores does not carry the pinned label → resolution returns None.
         plugin._core_info.available_cores = [
             {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
@@ -1420,12 +1346,10 @@ class TestMigrationRelaunchOptions:
         assert "no longer resolves" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_installed_unbound_rom_excluded(self, plugin, tmp_path):
+    async def test_installed_unbound_rom_excluded(self, plugin, tmp_path, logger):
         """Edge: installed but UNBOUND (shortcut_app_id None) is excluded from items."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1450,12 +1374,10 @@ class TestMigrationRelaunchOptions:
         assert payload["items"] == []
 
     @pytest.mark.asyncio
-    async def test_bound_uninstalled_rom_excluded(self, plugin, tmp_path):
+    async def test_bound_uninstalled_rom_excluded(self, plugin, tmp_path, logger):
         """Edge: bound but NOT installed (no rom_installs row) is excluded."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1474,14 +1396,12 @@ class TestMigrationRelaunchOptions:
         assert payload["items"] == []
 
     @pytest.mark.asyncio
-    async def test_mixed_batch_includes_only_installed_and_bound(self, plugin, tmp_path):
+    async def test_mixed_batch_includes_only_installed_and_bound(self, plugin, tmp_path, logger):
         """Edge: mixed batch — only the installed+bound ROM appears in items."""
-        import decky
 
         from domain.shortcut_data import build_launch_options, resolve_emulator_invocation
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1514,12 +1434,10 @@ class TestMigrationRelaunchOptions:
         assert payload["items"] == [{"app_id": 1111, "launch_options": expected_cmd}]
 
     @pytest.mark.asyncio
-    async def test_zero_eligible_roms_emits_empty_items(self, plugin, tmp_path):
+    async def test_zero_eligible_roms_emits_empty_items(self, plugin, tmp_path, logger):
         """Edge: zero eligible ROMs — still emits (sync_stale convention) with empty items."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1537,16 +1455,14 @@ class TestMigrationRelaunchOptions:
         assert payload["items"] == []
 
     @pytest.mark.asyncio
-    async def test_no_relaunch_emit_on_needs_confirmation(self, plugin, tmp_path):
+    async def test_no_relaunch_emit_on_needs_confirmation(self, plugin, tmp_path, logger):
         """The needs-confirmation early return must NOT emit relaunch options.
 
         Nothing was relocated and no paths were persisted, so re-resolving and
         rewriting shortcuts would point them at files that did not move.
         """
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1571,19 +1487,17 @@ class TestMigrationRelaunchOptions:
         assert self._relaunch_emit(plugin) is None
 
     @pytest.mark.asyncio
-    async def test_relaunch_options_built_from_persisted_new_paths(self, plugin, tmp_path):
+    async def test_relaunch_options_built_from_persisted_new_paths(self, plugin, tmp_path, logger):
         """The event fires only after the relocated path is persisted to rom_installs.
 
         Asserting the emitted command equals the command for the persisted
         ``rom_installs.file_path`` ties the emit to post-commit state — a
         pre-commit emit would carry the stale old path.
         """
-        import decky
 
         from domain.shortcut_data import build_launch_options, resolve_emulator_invocation
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old")
         new_home = str(tmp_path / "new")
@@ -1736,13 +1650,11 @@ class TestMigrationFailureInjection:
     """
 
     def _make_service(self, fake_files, *, uow=None, **overrides):
-        import decky
-
         uow = uow if uow is not None else FakeUnitOfWork()
         defaults: dict[str, Any] = {
             "settings": {},
             "loop": running_loop(),
-            "logger": decky.logger,
+            "logger": logging.getLogger("test"),
             "settings_persister": FakeSettingsPersister(),
             "emit": RecordingEmitter(),
             "firmware_resolver": FakeFirmwareResolver(),
@@ -1945,12 +1857,10 @@ class TestBackgroundTaskTracking:
     """
 
     @pytest.mark.asyncio
-    async def test_spawned_task_added_to_background_set(self, plugin, tmp_path):
+    async def test_spawned_task_added_to_background_set(self, plugin, tmp_path, logger):
         """``detect_retrodeck_path_change`` adds its emit task to the set."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old_retrodeck")
         new_home = str(tmp_path / "new_retrodeck")
@@ -1973,12 +1883,10 @@ class TestBackgroundTaskTracking:
         await asyncio.gather(*plugin._migration_service._background_tasks, return_exceptions=True)
 
     @pytest.mark.asyncio
-    async def test_done_callback_removes_task_on_natural_completion(self, plugin, tmp_path):
+    async def test_done_callback_removes_task_on_natural_completion(self, plugin, tmp_path, logger):
         """When the spawned coro completes naturally, the done-callback prunes the set."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         old_home = str(tmp_path / "old_retrodeck")
         new_home = str(tmp_path / "new_retrodeck")
@@ -2053,9 +1961,7 @@ class TestChainedPathChangeDetection:
 
     async def test_chained_change_appends_hop_and_keeps_previous(self, plugin, tmp_path):
         """A→B→C before migrating: previous stays A, B lands in hops, home is C."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         for d in (a, b, c):
             os.makedirs(d, exist_ok=True)
@@ -2079,9 +1985,7 @@ class TestChainedPathChangeDetection:
 
     async def test_triple_chain_accumulates_all_homes(self, plugin, tmp_path):
         """A→B→C→D: previous stays A, hops = [B, C]."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
         a, b, c, d = (str(tmp_path / x) for x in ("A", "B", "C", "D"))
         for path in (a, b, c, d):
             os.makedirs(path, exist_ok=True)
@@ -2100,9 +2004,7 @@ class TestChainedPathChangeDetection:
 
     async def test_simple_revert_still_auto_clears(self, plugin, tmp_path):
         """A→B then back to A (no hops) still fully clears — shipped UX preserved."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
         a, b = (str(tmp_path / x) for x in ("A", "B"))
         for path in (a, b):
             os.makedirs(path, exist_ok=True)
@@ -2121,9 +2023,7 @@ class TestChainedPathChangeDetection:
 
     async def test_chained_revert_keeps_pending(self, plugin, tmp_path):
         """A→B→C then back to A while B remains a hop → NOT cleared; pending = [B, C]."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         for path in (a, b, c):
             os.makedirs(path, exist_ok=True)
@@ -2143,9 +2043,7 @@ class TestChainedPathChangeDetection:
 
     async def test_move_back_to_hop_removes_it(self, plugin, tmp_path):
         """A→B→C then back to B: B leaves the pending set, pending = [A, C]."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         for path in (a, b, c):
             os.makedirs(path, exist_ok=True)
@@ -2181,14 +2079,12 @@ class TestChainedMigration:
         uow.kv_config.set("retrodeck_home_path", home)
 
     @pytest.mark.asyncio
-    async def test_rows_and_files_at_oldest_home_migrate_to_current(self, plugin, tmp_path):
+    async def test_rows_and_files_at_oldest_home_migrate_to_current(self, plugin, tmp_path, logger):
         """Headline #1042 fix: rows+files at A after A→B→C reach C, both keys cleared."""
-        import decky
 
         from domain.shortcut_data import build_launch_options, resolve_emulator_invocation
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         old_rom = os.path.join(a, "roms", "n64", "zelda.z64")
@@ -2220,12 +2116,10 @@ class TestChainedMigration:
         assert payload["items"] == [{"app_id": 4242, "launch_options": expected}]
 
     @pytest.mark.asyncio
-    async def test_file_already_at_current_is_bookkept(self, plugin, tmp_path):
+    async def test_file_already_at_current_is_bookkept(self, plugin, tmp_path, logger):
         """Row says A but the file is already at C → DB path updated, counted, no move error."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         old_rom = os.path.join(a, "roms", "n64", "zelda.z64")
@@ -2247,12 +2141,10 @@ class TestChainedMigration:
             assert uow.rom_installs.get(1).file_path == new_rom
 
     @pytest.mark.asyncio
-    async def test_file_stranded_at_hop_is_found_and_moved(self, plugin, tmp_path):
+    async def test_file_stranded_at_hop_is_found_and_moved(self, plugin, tmp_path, logger):
         """Row says A but the file physically sits at hop B → probed, moved A-mapped path to C."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         recorded_rom = os.path.join(a, "roms", "n64", "zelda.z64")  # DB path (missing on disk)
@@ -2279,12 +2171,10 @@ class TestChainedMigration:
             assert uow.rom_installs.get(1).file_path == new_rom
 
     @pytest.mark.asyncio
-    async def test_file_missing_everywhere_is_surfaced_marker_cleared(self, plugin, tmp_path):
+    async def test_file_missing_everywhere_is_surfaced_marker_cleared(self, plugin, tmp_path, logger):
         """Row exists but the file is at no known home → missing surfaced, marker still clears."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
 
@@ -2304,12 +2194,10 @@ class TestChainedMigration:
         assert hops == []
 
     @pytest.mark.asyncio
-    async def test_mixed_rows_at_two_homes_drained_in_one_run(self, plugin, tmp_path):
+    async def test_mixed_rows_at_two_homes_drained_in_one_run(self, plugin, tmp_path, logger):
         """One row under A, another under hop B → both drain to C in a single migrate."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         rom_a = os.path.join(a, "roms", "n64", "a.z64")
@@ -2339,12 +2227,10 @@ class TestChainedMigration:
             assert uow.rom_installs.get(2).file_path == new_b
 
     @pytest.mark.asyncio
-    async def test_same_save_under_two_homes_newest_wins(self, plugin, tmp_path):
+    async def test_same_save_under_two_homes_newest_wins(self, plugin, tmp_path, logger):
         """Same save rel-path under A and B → only the newest-mtime copy migrates."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         save_a = os.path.join(a, "saves", "gba", "game.srm")
@@ -2372,12 +2258,10 @@ class TestChainedMigration:
             assert f.read() == "fresh"
 
     @pytest.mark.asyncio
-    async def test_untracked_bios_probed_across_homes(self, plugin, tmp_path):
+    async def test_untracked_bios_probed_across_homes(self, plugin, tmp_path, logger):
         """An untracked BIOS file living under a hop home is found and migrated."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         bios_b = os.path.join(b, "bios", "scph5501.bin")
@@ -2402,12 +2286,10 @@ class TestChainedMigration:
         assert os.path.exists(new_bios)
 
     @pytest.mark.asyncio
-    async def test_status_counts_across_homes(self, plugin, tmp_path):
+    async def test_status_counts_across_homes(self, plugin, tmp_path, logger):
         """get_migration_status counts a row under A and a save under B; old_path = A."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         rom_a = os.path.join(a, "roms", "n64", "a.z64")
@@ -2447,12 +2329,10 @@ class TestChainedMigration:
         assert hops == []
 
     @pytest.mark.asyncio
-    async def test_rerun_converges_to_no_migration_needed(self, plugin, tmp_path):
+    async def test_rerun_converges_to_no_migration_needed(self, plugin, tmp_path, logger):
         """After a clean migrate clears the markers, a second run is a no-op."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         a, b, c = (str(tmp_path / x) for x in ("A", "B", "C"))
         old_rom = os.path.join(a, "roms", "n64", "zelda.z64")

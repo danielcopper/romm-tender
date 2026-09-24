@@ -10,8 +10,6 @@ from domain.rom import Rom
 from domain.sync_diff import classify_roms
 from domain.sync_run_kind import SyncRunKind
 from services.library._state import CollectionMembership
-
-# conftest.py patches decky before this import
 from tests.services.library._helpers import (
     _make_collections_loop,
     _make_loop_raising,
@@ -930,9 +928,6 @@ class TestReportRemovalResults:
 
     @pytest.mark.asyncio
     async def test_cleans_up_artwork_cover_path(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         art_file = tmp_path / "cover.png"
         art_file.write_text("fake")
         _seed_rom(plugin._uow, 10, app_id=1001, platform_slug="n64", name="Game A")

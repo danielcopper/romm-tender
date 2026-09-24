@@ -4,7 +4,9 @@ import os
 import shutil
 import sys
 import tempfile
-from unittest.mock import AsyncMock, MagicMock
+from collections.abc import Callable, Iterator
+from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 from hypothesis import HealthCheck, settings
@@ -20,7 +22,8 @@ settings.register_profile(
 )
 settings.load_profile("ci")
 
-# Mirror Decky's sys.path setup: add backend/ so `from lib.xxx import` works
+# `backend/` is the import root the backend runs under (`python backend/main.py`),
+# so `from lib.xxx import` resolves here the same way it does in production.
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _tests_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_project_root, "backend"))
@@ -28,40 +31,89 @@ sys.path.insert(0, os.path.join(_project_root, "backend"))
 sys.path.insert(0, _tests_root)
 
 
-# Import-time temp dirs, so the mock module is complete before anything imports
-# main. The settings/runtime pair is replaced per test by `_reset_decky_mock_paths`;
-# the log dir lives for the whole process.
-_process_settings_dir = tempfile.mkdtemp()
-_process_runtime_dir = tempfile.mkdtemp()
-_process_log_dir = tempfile.mkdtemp()
+def _drop_directory_variables(delete: Callable[[str], object]) -> None:
+    for name in [name for name in os.environ if name.startswith(("XDG_", "TENDER_"))]:
+        delete(name)
 
 
-@atexit.register
-def _cleanup_process_temp_dirs() -> None:
-    """Drop the import-time temp dirs — ``mkdtemp`` never cleans up after itself.
+# What runs before any test's own fixtures — collection, module- and
+# session-scoped fixtures — runs under this home, for the reason
+# `_isolated_environment` gives.
+_suite_home = tempfile.mkdtemp(prefix="tests-home-")
+atexit.register(shutil.rmtree, _suite_home, True)
+os.environ["HOME"] = _suite_home
+_drop_directory_variables(os.environ.pop)
 
-    Deliberately ``atexit`` rather than a session-scoped fixture: a fixture
-    only tears down once at least one test is collected, so a run that
-    collects nothing — pointing pytest at a directory that holds only
-    fixtures or vectors — would leak all three. atexit also stays correct
-    if this module is ever executed more than once, since each execution
-    releases exactly what it created.
+
+@pytest.fixture
+def home(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
+    """This test's home directory: fresh, empty, and what ``HOME`` names while the test runs.
+
+    It is not ``tmp_path``: adapter tests assert the exact contents of their
+    ``tmp_path`` (``listdir(...) == []``), and the contract harness lays its own
+    directories out under it, a ``home`` among them.
     """
-    for path in (_process_settings_dir, _process_runtime_dir, _process_log_dir):
-        shutil.rmtree(path, ignore_errors=True)
+    path = tmp_path_factory.mktemp("home")
+    yield path
+    shutil.rmtree(path, ignore_errors=True)
 
 
-# Create mock decky module before any imports of main
-mock_decky = MagicMock()
-mock_decky.DECKY_PLUGIN_DIR = _project_root
-mock_decky.DECKY_PLUGIN_SETTINGS_DIR = _process_settings_dir
-mock_decky.DECKY_PLUGIN_RUNTIME_DIR = _process_runtime_dir
-mock_decky.DECKY_PLUGIN_LOG_DIR = _process_log_dir
-mock_decky.DECKY_USER_HOME = os.path.expanduser("~")
-mock_decky.logger = logging.getLogger("test_romm")
-mock_decky.emit = AsyncMock()
+@pytest.fixture(autouse=True)
+def _isolated_environment(home: Path) -> Iterator[None]:
+    """Point ``HOME`` at the test's own home and drop every ``XDG_*`` and ``TENDER_*`` variable.
 
-sys.modules["decky"] = mock_decky
+    ``HOME`` is what ``os.path.expanduser`` and ``Path.home()`` answer from, so
+    nothing a test runs can reach the developer's real Steam, RetroDECK or
+    settings tree. ``TENDER_*`` and the XDG base directories are the rungs
+    ``domain/app_directories.py`` reads before the home, so one inherited from
+    the shell would point a test back at a real directory; the rest of the
+    ``XDG_*`` family goes with them, because a test has no business reading the
+    desktop session it was started from either. The process itself starts under
+    a home of its own too (``_suite_home``), so the same holds for everything
+    that runs before this fixture.
+
+    **One named exception:** ``TestTheRealMachineAnswers`` in
+    ``tests/adapters/test_atlas_saves.py`` reads the real home, because it pins
+    what the real resolver answers over the RetroDECK installed on this machine
+    and no fabricated tree can stand in. It takes that home from the password
+    database, never from ``HOME``, and only reads.
+    ``tests/test_conftest_isolation.py`` holds every other test to the rule.
+
+    A ``MonkeyPatch`` of its own rather than the ``monkeypatch`` fixture: an
+    autouse fixture that requested it would set it up before the test's
+    ``tmp_path``, so a test's ``monkeypatch.setattr(os, "unlink", ...)`` would
+    still be in force when ``tmp_path`` is removed.
+    """
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("HOME", str(home))
+        _drop_directory_variables(patch.delenv)
+        yield
+
+
+@pytest.fixture
+def project_root() -> str:
+    """The repository root — the code root the backend runs from in a checkout."""
+    return _project_root
+
+
+@pytest.fixture
+def data_dir(tmp_path_factory: pytest.TempPathFactory) -> Iterator[str]:
+    """A per-test data directory that is not ``tmp_path``, for the same reason the home is not."""
+    path = tmp_path_factory.mktemp("data")
+    yield str(path)
+    shutil.rmtree(path, ignore_errors=True)
+
+
+@pytest.fixture
+def emit() -> AsyncMock:
+    """This test's own event sink — the ``emit`` seam a service is built with."""
+    return AsyncMock()
+
+
+@pytest.fixture
+def logger(request: pytest.FixtureRequest) -> logging.Logger:
+    """This test's own logger, named after the test so ``caplog`` can select it by ``logger.name``."""
+    return logging.getLogger(f"tests.{request.node.nodeid}")
 
 
 @pytest.fixture
@@ -103,29 +155,3 @@ def restore_root_logger():
     for handler in saved:
         root.addHandler(handler)
     root.setLevel(level)
-
-
-@pytest.fixture(autouse=True)
-def _reset_decky_mock_paths():
-    """Refresh per-test temp dirs on the mock decky module.
-
-    Fresh ``DECKY_PLUGIN_SETTINGS_DIR`` and ``DECKY_PLUGIN_RUNTIME_DIR``
-    per test prevents cross-test pollution from persistence-touching
-    tests. Both are removed again on teardown — ``mkdtemp`` leaves the
-    directory behind by design, and two leaked dirs per test across a
-    suite this size exhaust the tmpfs inode table in days, not months.
-
-    They deliberately do not live under ``tmp_path``: adapter tests assert
-    on the exact contents of their ``tmp_path`` (``listdir(...) == []``),
-    and ``tests/contract`` already owns ``tmp_path/settings`` and
-    ``tmp_path/runtime``.
-    """
-    mock_decky.DECKY_USER_HOME = os.path.expanduser("~")
-    mock_decky.DECKY_PLUGIN_DIR = _project_root
-    settings_dir = tempfile.mkdtemp()
-    runtime_dir = tempfile.mkdtemp()
-    mock_decky.DECKY_PLUGIN_SETTINGS_DIR = settings_dir
-    mock_decky.DECKY_PLUGIN_RUNTIME_DIR = runtime_dir
-    yield
-    shutil.rmtree(settings_dir, ignore_errors=True)
-    shutil.rmtree(runtime_dir, ignore_errors=True)

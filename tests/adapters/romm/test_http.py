@@ -2,6 +2,7 @@ import asyncio
 import http.client
 import io
 import json
+import logging
 import ssl
 import urllib.error
 from typing import ClassVar
@@ -35,8 +36,6 @@ from lib.errors import (
     classify_error,
 )
 from lib.list_result import ErrorCode
-
-# conftest.py patches decky before this import
 from main import _CODE_DIR_FALLBACK, Plugin
 from services.connection import ConnectionService, ConnectionServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
@@ -69,21 +68,18 @@ def _entity_404(detail: str = "Rom with id '4375' not found") -> urllib.error.HT
 
 
 @pytest.fixture
-def plugin():
-    import logging
-
+def plugin(emit, logger, home, project_root):
     p = Plugin()
     p.settings = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
-    import decky
 
     p._http_adapter = RommHttpAdapter(
-        p.settings, decky.DECKY_PLUGIN_DIR, logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
+        p.settings, project_root, logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
     )
     p._romm_api = MagicMock()
     p._prune_service = MagicMock()
     p._prune_service.is_active.return_value = False
 
-    steam_config = SteamConfigAdapter(user_home=decky.DECKY_USER_HOME, logger=decky.logger)
+    steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
     p._steam_config = steam_config
 
     p._sync_service = LibraryService(
@@ -92,9 +88,9 @@ def plugin():
             steam_config=steam_config,
             settings=p.settings,
             loop=running_loop(),
-            logger=decky.logger,
-            launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/tender-rom-launcher",
-            emit=decky.emit,
+            logger=logger,
+            launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
+            emit=emit,
             clock=FakeClock(),
             uuid_gen=FakeUuidGen(),
             sleeper=FakeSleeper(),
@@ -115,7 +111,7 @@ def plugin():
             romm_api=p._romm_api,
             settings_persister=MagicMock(),
             loop=running_loop(),
-            logger=decky.logger,
+            logger=logger,
             min_required_version=Plugin._MIN_REQUIRED_VERSION,
             forget_device=MagicMock(),
             clear_playtime_scope_notice=MagicMock(),
@@ -1083,7 +1079,6 @@ def _setup_plugin(plugin):
     creates a fresh loop per test in auto mode, so the loop the fixture
     captured at setup time is not the loop the test runs on.
     """
-    import decky
 
     plugin.settings["romm_url"] = "http://romm.local"
     plugin.settings["romm_user"] = "user"
@@ -1097,7 +1092,7 @@ def _setup_plugin(plugin):
             romm_api=plugin._romm_api,
             settings_persister=MagicMock(),
             loop=plugin.loop,
-            logger=decky.logger,
+            logger=logging.getLogger("test"),
             min_required_version=Plugin._MIN_REQUIRED_VERSION,
             forget_device=MagicMock(),
             clear_playtime_scope_notice=MagicMock(),

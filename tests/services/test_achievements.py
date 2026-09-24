@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# conftest.py patches decky before this import; use _make_testable_plugin for test-only attrs
+# Use _make_testable_plugin for test-only attrs
 from _factories import _make_testable_plugin
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
@@ -55,7 +55,7 @@ def clock():
 
 
 @pytest.fixture
-def plugin(clock):
+def plugin(clock, emit, logger, home):
     p = _make_testable_plugin()
     p.settings = {
         "romm_url": "http://romm.local",
@@ -72,9 +72,7 @@ def plugin(clock):
     uow = FakeUnitOfWork()
     p._uow = uow
 
-    import decky
-
-    steam_config = SteamConfigAdapter(user_home=decky.DECKY_USER_HOME, logger=decky.logger)
+    steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
     p._steam_config = steam_config
 
     p._sync_service = LibraryService(
@@ -83,9 +81,9 @@ def plugin(clock):
             steam_config=steam_config,
             settings=p.settings,
             loop=running_loop(),
-            logger=decky.logger,
-            launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/tender-rom-launcher",
-            emit=decky.emit,
+            logger=logger,
+            launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
+            emit=emit,
             clock=clock,
             uuid_gen=FakeUuidGen(),
             sleeper=FakeSleeper(),
@@ -104,7 +102,7 @@ def plugin(clock):
             romm_api=p._romm_api,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
             loop=running_loop(),
-            logger=decky.logger,
+            logger=logger,
             clock=clock,
             log_debug=p._log_debug,
         ),
@@ -114,7 +112,7 @@ def plugin(clock):
     p._game_detail_service = GameDetailService(
         config=GameDetailServiceConfig(
             settings=p.settings,
-            logger=decky.logger,
+            logger=logger,
             clock=clock,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
             bios_checker=bios_checker,

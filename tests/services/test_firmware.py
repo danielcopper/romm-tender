@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+import logging
 import os
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -8,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-# conftest.py patches decky before this import; use _make_testable_plugin for test-only attrs
+# Use _make_testable_plugin for test-only attrs
 from _factories import _make_testable_plugin
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import (
@@ -157,7 +158,6 @@ def _make_firmware_service(
     reached it is not what it is pinning. ``FakeFirmwareResolver.calls`` records
     the systems it was asked about, for the tests where that IS the point.
     """
-    import decky
 
     store = firmware_file_store if firmware_file_store is not None else FirmwareFileAdapter()
     paths = retrodeck_paths if retrodeck_paths is not None else FakeRetroDeckPaths()
@@ -170,7 +170,7 @@ def _make_firmware_service(
         config=FirmwareServiceConfig(
             romm_api=romm_api if romm_api is not None else MagicMock(),
             loop=running_loop(),
-            logger=logger if logger is not None else decky.logger,
+            logger=logger if logger is not None else logging.getLogger("test"),
             clock=clock if clock is not None else _make_clock(),
             firmware_file_store=store,
             firmware_resolver=resolver,
@@ -318,15 +318,13 @@ def _test_core_info() -> FakeCoreInfoProvider:
 
 
 @pytest.fixture
-def plugin():
+def plugin(emit, logger, home):
     p = _make_testable_plugin()
     p.settings = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
     p._http_adapter = MagicMock()
     p._romm_api = MagicMock()
 
-    import decky
-
-    steam_config = SteamConfigAdapter(user_home=decky.DECKY_USER_HOME, logger=decky.logger)
+    steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
     p._steam_config = steam_config
 
     # Shared fake Unit of Work — firmware persistence flows through it, and tests
@@ -346,9 +344,9 @@ def plugin():
             steam_config=steam_config,
             settings=p.settings,
             loop=running_loop(),
-            logger=decky.logger,
-            launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/tender-rom-launcher",
-            emit=decky.emit,
+            logger=logger,
+            launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
+            emit=emit,
             clock=FakeClock(),
             uuid_gen=FakeUuidGen(),
             sleeper=FakeSleeper(),
@@ -3173,12 +3171,12 @@ def _rom_scoped_surfaces(
     thing a disagreement between them can come from is one half reading a
     different field of the one answer, which is exactly the defect this pins.
     """
-    import decky
 
     # ES-DE's three, but with the standalone one IDENTIFIED. The platform-scoped
     # fixture leaves it unidentified on purpose, which makes a standalone pick
     # and an unresolvable one the same ``None`` — and a ROM pinned to it would
     # then agree with the picker vacuously, both halves holding nothing.
+    logger = logging.getLogger("test")
     fw = _psx_platform_service(
         platform_core=platform_pick,
         options=[
@@ -3209,13 +3207,13 @@ def _rom_scoped_surfaces(
             sandbox_launcher=FakeSandboxLauncher(),
             platform_core_reader=_platform_core_reader(fw),
             resolve_system=resolve_system,
-            logger=decky.logger,
+            logger=logger,
         )
     )
     cores = CoreService(
         config=CoreServiceConfig(
             loop=asyncio.get_running_loop(),
-            logger=decky.logger,
+            logger=logger,
             core_info=core_info,
             resolve_system=resolve_system,
             settings={},
@@ -3229,7 +3227,7 @@ def _rom_scoped_surfaces(
     detail = GameDetailService(
         config=GameDetailServiceConfig(
             settings={},
-            logger=decky.logger,
+            logger=logger,
             clock=_make_clock(),
             uow_factory=uow_factory,
             bios_checker=fw,

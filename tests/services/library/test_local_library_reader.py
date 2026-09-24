@@ -13,8 +13,6 @@ here pin the projection shapes those flows read through.
 """
 
 from domain.work_unit import WorkUnit
-
-# conftest.py patches decky before this import
 from tests.services.library._helpers import _seed_rom_row
 
 

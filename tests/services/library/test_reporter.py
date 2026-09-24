@@ -10,8 +10,6 @@ from domain.rom import Rom
 from domain.sync_diff import BIND_ROM_ID_KEY
 from services.library._state import CollectionMembership
 
-# conftest.py patches decky before this import
-
 
 def _seed_rom(
     uow, rom_id, *, app_id, platform_slug, name="Game", cover_path=None, sgdb_id=None, igdb_id=None, group_key=None
@@ -1705,10 +1703,7 @@ class TestFinalizePerUnitRun:
     LAST by the orchestrator after the SyncRun write, #39)."""
 
     @pytest.mark.asyncio
-    async def test_builds_platform_collections_from_roms(self, plugin):
-        import decky
-
-        decky.emit.reset_mock()
+    async def test_builds_platform_collections_from_roms(self, plugin, emit):
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -1720,7 +1715,7 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
         )
 
-        collections_events = [c for c in decky.emit.call_args_list if c[0][0] == "sync_collections"]
+        collections_events = [c for c in emit.call_args_list if c[0][0] == "sync_collections"]
         assert len(collections_events) == 1
         payload = collections_events[0][0][1]
         # Keyed by live display names; the kv_config cache was refreshed.
@@ -1732,11 +1727,9 @@ class TestFinalizePerUnitRun:
             }
 
     @pytest.mark.asyncio
-    async def test_builds_romm_collection_app_ids_excluding_unbound(self, plugin):
+    async def test_builds_romm_collection_app_ids_excluding_unbound(self, plugin, emit):
         """RomM collections resolve rom_id→app_id via uow.roms and skip unbound rows."""
-        import decky
 
-        decky.emit.reset_mock()
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=None, platform_slug="snes", name="B (unbound)")
@@ -1749,18 +1742,16 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64"},
         )
 
-        collections_events = [c for c in decky.emit.call_args_list if c[0][0] == "sync_collections"]
+        collections_events = [c for c in emit.call_args_list if c[0][0] == "sync_collections"]
         payload = collections_events[0][0][1]
         # rom 2 is unbound AND has no sibling group → excluded; only rom 1 appears.
         assert payload["romm_collection_app_ids"] == {"Faves": [1001]}
 
     @pytest.mark.asyncio
-    async def test_romm_collection_group_fallback_maps_unbound_sibling(self, plugin):
+    async def test_romm_collection_group_fallback_maps_unbound_sibling(self, plugin, emit):
         """A collection membership on an UNBOUND sibling maps to its group's bound
         sibling's appId (ADR-0021) — collecting any version collects the game."""
-        import decky
 
-        decky.emit.reset_mock()
         uow = plugin._uow
         # A bound representative + an unbound sibling in the SAME group.
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="Game (USA)", group_key="g")
@@ -1775,17 +1766,15 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64"},
         )
 
-        payload = next(c for c in decky.emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
         # rom 2 is unbound, but its group's bound sibling (rom 1 → 1001) stands in.
         assert payload["romm_collection_app_ids"] == {"Faves": [1001]}
 
     @pytest.mark.asyncio
-    async def test_romm_collection_dedups_group_members_onto_one_shortcut(self, plugin):
+    async def test_romm_collection_dedups_group_members_onto_one_shortcut(self, plugin, emit):
         """A collection holding several siblings of one group yields the group's
         single shortcut appId once, not duplicated."""
-        import decky
 
-        decky.emit.reset_mock()
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="Game (USA)", group_key="g")
         _seed_rom(uow, 2, app_id=None, platform_slug="n64", name="Game (JP)", group_key="g")
@@ -1799,11 +1788,11 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64"},
         )
 
-        payload = next(c for c in decky.emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
         assert payload["romm_collection_app_ids"] == {"Faves": [1001]}
 
     @pytest.mark.asyncio
-    async def test_same_named_collections_union_their_members(self, plugin):
+    async def test_same_named_collections_union_their_members(self, plugin, emit):
         """Two same-named DIFFERENT-kind collections UNION into one Steam collection (#1503).
 
         RomM permits same-named collections across kinds/users. Steam's collection
@@ -1811,9 +1800,7 @@ class TestFinalizePerUnitRun:
         the UNION of their members. Load-bearing: against the pre-#1503 name-keyed
         overwrite, only the last-synced collection's member would survive.
         """
-        import decky
 
-        decky.emit.reset_mock()
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -1827,16 +1814,14 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
         )
 
-        payload = next(c for c in decky.emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
         # UNION of both collections' resolved appIds, order-preserving, deduped.
         assert payload["romm_collection_app_ids"] == {"X": [1001, 1002]}
 
     @pytest.mark.asyncio
-    async def test_same_named_union_dedups_shared_member_across_collections(self, plugin):
+    async def test_same_named_union_dedups_shared_member_across_collections(self, plugin, emit):
         """A member shared by two same-named collections contributes its appId once."""
-        import decky
 
-        decky.emit.reset_mock()
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -1850,21 +1835,19 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
         )
 
-        payload = next(c for c in decky.emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
         # app 1001 is shared by both collections but appears once; 1002 follows it.
         # (Also non-vacuous vs the old overwrite: last-write-wins would drop 1002.)
         assert payload["romm_collection_app_ids"] == {"X": [1001, 1002]}
 
     @pytest.mark.asyncio
-    async def test_distinct_named_collections_unchanged_common_case(self, plugin):
+    async def test_distinct_named_collections_unchanged_common_case(self, plugin, emit):
         """The all-distinct-names common case is byte-for-byte the pre-#1503 output.
 
         Each name unions a set of one, so distinct collections keep their own
         member sets — no merge, no reordering.
         """
-        import decky
 
-        decky.emit.reset_mock()
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -1878,19 +1861,17 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
         )
 
-        payload = next(c for c in decky.emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
         assert payload["romm_collection_app_ids"] == {"Alpha": [1001], "Beta": [1002]}
 
     @pytest.mark.asyncio
-    async def test_by_label_keys_a_single_collection_with_its_fine_label(self, plugin):
+    async def test_by_label_keys_a_single_collection_with_its_fine_label(self, plugin, emit):
         """``by_label`` mode appends the fine type label to the reporter key.
 
         The key becomes ``"<name> (<Label>)"`` so the frontend builds
         ``RomM: [<name> (Label)]``. Default ``merge`` would key by the bare name.
         """
-        import decky
 
-        decky.emit.reset_mock()
         plugin.settings["collection_naming_mode"] = "by_label"
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
@@ -1905,19 +1886,17 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64"},
         )
 
-        payload = next(c for c in decky.emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
         assert payload["romm_collection_app_ids"] == {"coll-a (Franchise)": [1001]}
 
     @pytest.mark.asyncio
-    async def test_by_label_keeps_same_name_different_label_separate(self, plugin):
+    async def test_by_label_keeps_same_name_different_label_separate(self, plugin, emit):
         """A standard and a virtual collection sharing a name stay SEPARATE under by_label.
 
         The load-bearing behavior: same name + different type → two distinct Steam
         collections, not a union (which is what ``merge`` does).
         """
-        import decky
 
-        decky.emit.reset_mock()
         plugin.settings["collection_naming_mode"] = "by_label"
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
@@ -1934,18 +1913,16 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
         )
 
-        payload = next(c for c in decky.emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
         assert payload["romm_collection_app_ids"] == {
             "shared-name (Standard)": [1001],
             "shared-name (IGDB Collection)": [1002],
         }
 
     @pytest.mark.asyncio
-    async def test_by_label_franchise_vs_igdb_collection_same_name_two_keys(self, plugin):
+    async def test_by_label_franchise_vs_igdb_collection_same_name_two_keys(self, plugin, emit):
         """Two virtual collections of the same name but different virtual_type split apart."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.settings["collection_naming_mode"] = "by_label"
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
@@ -1964,22 +1941,20 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
         )
 
-        payload = next(c for c in decky.emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
         assert payload["romm_collection_app_ids"] == {
             "shared-name (Franchise)": [1001],
             "shared-name (IGDB Collection)": [1002],
         }
 
     @pytest.mark.asyncio
-    async def test_by_label_same_name_same_label_still_unions(self, plugin):
+    async def test_by_label_same_name_same_label_still_unions(self, plugin, emit):
         """Two collections of the SAME name AND same label still UNION under by_label.
 
         Same-name-within-one-label is accepted as merged (two standard "Faves"),
         so the key ``"Faves (Standard)"`` unions both member sets.
         """
-        import decky
 
-        decky.emit.reset_mock()
         plugin.settings["collection_naming_mode"] = "by_label"
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
@@ -1994,19 +1969,17 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
         )
 
-        payload = next(c for c in decky.emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
         assert payload["romm_collection_app_ids"] == {"Faves (Standard)": [1001, 1002]}
 
     @pytest.mark.asyncio
-    async def test_merge_mode_unions_same_name_across_kinds(self, plugin):
+    async def test_merge_mode_unions_same_name_across_kinds(self, plugin, emit):
         """Default ``merge`` still unions the same-named standard + virtual pair by bare name.
 
         The complement to ``test_by_label_keeps_same_name_different_label_separate``:
         with the default mode the exact same input collapses onto one bare-name key.
         """
-        import decky
 
-        decky.emit.reset_mock()
         plugin.settings["collection_naming_mode"] = "merge"
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
@@ -2023,11 +1996,11 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
         )
 
-        payload = next(c for c in decky.emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
         assert payload["romm_collection_app_ids"] == {"shared-name": [1001, 1002]}
 
     @pytest.mark.asyncio
-    async def test_merge_unions_case_differing_names(self, plugin):
+    async def test_merge_unions_case_differing_names(self, plugin, emit):
         """Two names differing ONLY by case union into ONE key under merge (#1569).
 
         The data-loss guard: Steam collapses "7 up" and "7 Up" onto one
@@ -2035,9 +2008,7 @@ class TestFinalizePerUnitRun:
         BOTH member sets — otherwise the second Steam create overwrites the first
         and its games are lost. First-seen casing wins for display.
         """
-        import decky
 
-        decky.emit.reset_mock()
         plugin.settings["collection_naming_mode"] = "merge"
         uow = plugin._uow
         # collection A ("7 up") → 2 apps; collection B ("7 Up") → 5 apps.
@@ -2055,16 +2026,14 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64"},
         )
 
-        payload = next(c for c in decky.emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
         # ONE key (first-seen casing "7 up"), 2 + 5 = 7 apps unioned, neither set dropped.
         assert payload["romm_collection_app_ids"] == {"7 up": [1001, 1002, 1003, 1004, 1005, 1006, 1007]}
 
     @pytest.mark.asyncio
-    async def test_by_label_merges_same_type_case_variants(self, plugin):
+    async def test_by_label_merges_same_type_case_variants(self, plugin, emit):
         """Under by_label, same-TYPE case variants merge (labels match → folded keys match)."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.settings["collection_naming_mode"] = "by_label"
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
@@ -2079,16 +2048,14 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
         )
 
-        payload = next(c for c in decky.emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
         # One key ("abc (Standard)", first-seen casing), both apps unioned.
         assert payload["romm_collection_app_ids"] == {"abc (Standard)": [1001, 1002]}
 
     @pytest.mark.asyncio
-    async def test_by_label_keeps_different_type_case_variants_separate(self, plugin):
+    async def test_by_label_keeps_different_type_case_variants_separate(self, plugin, emit):
         """Under by_label, DIFFERENT-type case variants stay separate (labels differ)."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.settings["collection_naming_mode"] = "by_label"
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
@@ -2105,18 +2072,16 @@ class TestFinalizePerUnitRun:
             platform_names={"n64": "Nintendo 64", "snes": "Super Nintendo"},
         )
 
-        payload = next(c for c in decky.emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
         assert payload["romm_collection_app_ids"] == {
             "abc (Standard)": [1001],
             "ABC (IGDB Collection)": [1002],
         }
 
     @pytest.mark.asyncio
-    async def test_platform_names_union_case_insensitively(self, plugin):
+    async def test_platform_names_union_case_insensitively(self, plugin, emit):
         """Two platform display names differing only by case union into one bucket (#1569)."""
-        import decky
 
-        decky.emit.reset_mock()
         uow = plugin._uow
         # Two distinct slugs whose live display names collide only by case.
         _seed_rom(uow, 1, app_id=1001, platform_slug="a", name="A")
@@ -2128,7 +2093,7 @@ class TestFinalizePerUnitRun:
             platform_names={"a": "Retro", "b": "retro"},
         )
 
-        payload = next(c for c in decky.emit.call_args_list if c[0][0] == "sync_collections")[0][1]
+        payload = next(c for c in emit.call_args_list if c[0][0] == "sync_collections")[0][1]
         platform_map = payload["platform_app_ids"]
         # ONE bucket, both appIds present, keyed by a case-variant of "retro".
         assert len(platform_map) == 1
@@ -2137,11 +2102,7 @@ class TestFinalizePerUnitRun:
         assert set(app_ids) == {1001, 1002}
 
     @pytest.mark.asyncio
-    async def test_emit_sync_complete_terminal(self, plugin):
-        import decky
-
-        decky.emit.reset_mock()
-
+    async def test_emit_sync_complete_terminal(self, plugin, emit):
         await plugin._sync_service._reporter.emit_sync_complete(
             platform_app_ids={},
             romm_collection_app_ids={},
@@ -2151,7 +2112,7 @@ class TestFinalizePerUnitRun:
             restart_recommended=False,
         )
 
-        complete_events = [c for c in decky.emit.call_args_list if c[0][0] == "sync_complete"]
+        complete_events = [c for c in emit.call_args_list if c[0][0] == "sync_complete"]
         assert len(complete_events) == 1
         assert "cancelled" not in complete_events[0][0][1]
         assert "interrupted" not in complete_events[0][0][1]
@@ -2160,11 +2121,7 @@ class TestFinalizePerUnitRun:
         assert "memory_delta_kb" not in complete_events[0][0][1]
 
     @pytest.mark.asyncio
-    async def test_emit_sync_complete_carries_restart_recommended_on_clean_run(self, plugin):
-        import decky
-
-        decky.emit.reset_mock()
-
+    async def test_emit_sync_complete_carries_restart_recommended_on_clean_run(self, plugin, emit):
         await plugin._sync_service._reporter.emit_sync_complete(
             platform_app_ids={},
             romm_collection_app_ids={},
@@ -2174,16 +2131,14 @@ class TestFinalizePerUnitRun:
             restart_recommended=True,
         )
 
-        complete = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_complete"]
+        complete = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_complete"]
         assert complete and complete[-1]["restart_recommended"] is True
 
     @pytest.mark.asyncio
-    async def test_emit_sync_complete_cancelled_frame_says_cancelled_when_not_interrupted(self, plugin):
+    async def test_emit_sync_complete_cancelled_frame_says_cancelled_when_not_interrupted(self, plugin, emit):
         """A user cancel (box.run_interrupted False) → the terminal CANCELLED frame
         leads with 'Sync cancelled:' and the payload carries no ``interrupted``."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin._sync_service._box.run_interrupted = False
 
         await plugin._sync_service._reporter.emit_sync_complete(
@@ -2195,22 +2150,20 @@ class TestFinalizePerUnitRun:
             restart_recommended=False,
         )
 
-        complete = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_complete"]
+        complete = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_complete"]
         assert "interrupted" not in complete[-1]
         progress = plugin._sync_service._sync_progress
         assert progress["stage"] == "cancelled"
         assert progress["message"].startswith("Sync cancelled: ")
 
     @pytest.mark.asyncio
-    async def test_emit_sync_complete_frame_says_interrupted_when_run_interrupted(self, plugin):
+    async def test_emit_sync_complete_frame_says_interrupted_when_run_interrupted(self, plugin, emit):
         """A heartbeat-timeout run routes through the same cancelled emit; with
         box.run_interrupted set the payload carries ``interrupted: True`` and the
         terminal frame leads with 'Sync interrupted:' (stage stays CANCELLED — no
         new SyncStage). The frame's denominator is the PLANNED total from the
         box, not the bound-ROM count (#1384)."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin._sync_service._box.run_interrupted = True
         plugin._sync_service._box.run_total_items = 10
 
@@ -2223,7 +2176,7 @@ class TestFinalizePerUnitRun:
             restart_recommended=False,
         )
 
-        complete = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_complete"]
+        complete = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_complete"]
         assert complete[-1]["interrupted"] is True
         progress = plugin._sync_service._sync_progress
         assert progress["stage"] == "cancelled"
@@ -2231,12 +2184,9 @@ class TestFinalizePerUnitRun:
         assert progress["total"] == 10
 
     @pytest.mark.asyncio
-    async def test_emit_sync_complete_uses_interrupt_reason_verbatim(self, plugin):
+    async def test_emit_sync_complete_uses_interrupt_reason_verbatim(self, plugin, emit):
         """A budget-pause interrupt_reason rides the payload AND becomes the terminal
         frame message verbatim (resume-friendly guidance, #1383)."""
-        import decky
-
-        decky.emit.reset_mock()
 
         await plugin._sync_service._reporter.emit_sync_complete(
             platform_app_ids={},
@@ -2247,7 +2197,7 @@ class TestFinalizePerUnitRun:
             restart_recommended=False,
         )
 
-        complete = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_complete"]
+        complete = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_complete"]
         assert complete[-1]["interrupt_reason"] == "Sync paused: restart Steam, then sync again."
         # A budget pause sets run_paused + interrupt_reason, never run_interrupted —
         # the payload must not read as a heartbeat interrupt (#1384).
@@ -2255,13 +2205,11 @@ class TestFinalizePerUnitRun:
         assert plugin._sync_service._sync_progress["message"] == "Sync paused: restart Steam, then sync again."
 
     @pytest.mark.asyncio
-    async def test_emit_sync_complete_frame_total_falls_back_to_bound_count(self, plugin):
+    async def test_emit_sync_complete_frame_total_falls_back_to_bound_count(self, plugin, emit):
         """With no planned total in the box (``run_total_items`` None — pre-plan or
         the box wiped by a plugin reload), the terminal frame's denominator falls
         back to the bound-ROM registry count (#1384)."""
-        import decky
 
-        decky.emit.reset_mock()
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="Game A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="n64", name="Game B")
@@ -2283,18 +2231,16 @@ class TestFinalizePerUnitRun:
         assert progress["total"] == 2
 
     @pytest.mark.asyncio
-    async def test_finalize_does_not_reset_run_lifecycle(self, plugin):
+    async def test_finalize_does_not_reset_run_lifecycle(self, plugin, emit):
         """finalize_per_unit_run + emit_sync_complete never touch the run lifecycle (#1202).
 
         The IDLE/None reset lives in the orchestrator's single run-scoped
         ``finally: box.finish_run(run_id)``; the reporter only unbinds/collects and
         emits, leaving ``sync_state`` / ``current_sync_id`` untouched.
         """
-        import decky
 
         from domain.sync_state import SyncState
 
-        decky.emit.reset_mock()
         plugin._sync_service._box.sync_state = SyncState.RUNNING
         plugin._sync_service._box.current_sync_id = "sync-xyz"
 
@@ -2308,11 +2254,9 @@ class TestFinalizePerUnitRun:
         assert plugin._sync_service._current_sync_id == "sync-xyz"
 
     @pytest.mark.asyncio
-    async def test_unbinds_stale_rom_ids_keeping_rows(self, plugin):
+    async def test_unbinds_stale_rom_ids_keeping_rows(self, plugin, emit):
         """stale_rom_ids are UNBOUND (NULL app_id) — the rows survive (ADR-0007), never deleted."""
-        import decky
 
-        decky.emit.reset_mock()
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -2334,11 +2278,9 @@ class TestFinalizePerUnitRun:
             assert {r.rom_id for r in uow.roms.iter_all()} == {1, 2, 3}
 
     @pytest.mark.asyncio
-    async def test_stale_unbind_excludes_them_from_collections(self, plugin):
+    async def test_stale_unbind_excludes_them_from_collections(self, plugin, emit):
         """Collections built from uow.roms must skip NULL-app_id (just-unbound) rows."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.settings["collection_create_platform_groups"] = True
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
@@ -2351,17 +2293,15 @@ class TestFinalizePerUnitRun:
             stale_rom_ids=[2],
         )
 
-        collections_events = [c for c in decky.emit.call_args_list if c[0][0] == "sync_collections"]
+        collections_events = [c for c in emit.call_args_list if c[0][0] == "sync_collections"]
         payload = collections_events[0][0][1]
         assert set(payload["platform_app_ids"].keys()) == {"Nintendo 64"}
 
     @pytest.mark.asyncio
-    async def test_stale_unbind_skips_missing_and_already_unbound(self, plugin):
+    async def test_stale_unbind_skips_missing_and_already_unbound(self, plugin, emit):
         """A stale_rom_id with no row (missing) or already-unbound row is skipped
         without error; the genuinely-bound stale rows still unbind."""
-        import decky
 
-        decky.emit.reset_mock()
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="Kept")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="Stale bound")
@@ -2385,11 +2325,9 @@ class TestFinalizePerUnitRun:
             assert {r.rom_id for r in uow.roms.iter_all()} == {1, 2, 5}
 
     @pytest.mark.asyncio
-    async def test_no_unbind_when_stale_rom_ids_default(self, plugin):
+    async def test_no_unbind_when_stale_rom_ids_default(self, plugin, emit):
         """Default stale_rom_ids=None unbinds nothing — every bound row stays bound."""
-        import decky
 
-        decky.emit.reset_mock()
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")
@@ -2405,13 +2343,11 @@ class TestFinalizePerUnitRun:
             assert uow.roms.get(2).shortcut_app_id == 1002
 
     @pytest.mark.asyncio
-    async def test_get_sync_stats_reflects_unbound_count(self, plugin):
+    async def test_get_sync_stats_reflects_unbound_count(self, plugin, emit):
         """After a normal finalize unbinds stale rows, get_sync_stats counts only bound ones."""
-        import decky
 
         from domain.sync_run import SyncRun
 
-        decky.emit.reset_mock()
         uow = plugin._uow
         _seed_rom(uow, 1, app_id=1001, platform_slug="n64", name="A")
         _seed_rom(uow, 2, app_id=1002, platform_slug="snes", name="B")

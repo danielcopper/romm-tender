@@ -20,8 +20,6 @@ import pytest
 
 from domain.sync_state import SyncState
 
-# conftest.py patches decky before this import
-
 
 class TestSessionBudgetMonitor:
     """Measurement, the chunk-boundary pause verdict, and the QAM status payload (#1383)."""

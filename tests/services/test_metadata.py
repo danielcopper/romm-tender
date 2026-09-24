@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# conftest.py patches decky before this import; use _make_testable_plugin for test-only attrs
+# Use _make_testable_plugin for test-only attrs
 from _factories import _make_testable_plugin
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
@@ -68,22 +68,20 @@ def uow() -> FakeUnitOfWork:
 
 
 @pytest.fixture
-def plugin(uow):
+def plugin(uow, logger, home):
     p = _make_testable_plugin()
     p.settings = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
     p._romm_api = MagicMock()
     p._uow = uow
 
-    import decky
-
-    p._debug_logger = SettingsAwareDebugLogger(settings=p.settings, logger=decky.logger)
-    steam_config = SteamConfigAdapter(user_home=decky.DECKY_USER_HOME, logger=decky.logger)
+    p._debug_logger = SettingsAwareDebugLogger(settings=p.settings, logger=logger)
+    steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
     p._steam_config = steam_config
 
     metadata_service = MetadataService(
         config=MetadataServiceConfig(
             loop=running_loop(),
-            logger=decky.logger,
+            logger=logger,
             log_debug=p._log_debug,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
         ),
@@ -177,31 +175,27 @@ class TestGetRomMetadata:
         mock_get_rom.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_debug_logging_on_cache_hit(self, plugin, uow):
+    async def test_debug_logging_on_cache_hit(self, plugin, uow, logger):
         """Verify _log_debug is called during cache hit."""
         import time
         from unittest.mock import patch
 
-        import decky
-
         plugin.settings["log_level"] = "debug"
         _seed_metadata(uow, 42, _meta(summary="cached", cached_at=time.time()))
 
-        with patch.object(decky.logger, "info") as mock_info:
+        with patch.object(logger, "info") as mock_info:
             await plugin.get_rom_metadata(42)
             logged = [str(c) for c in mock_info.call_args_list]
             assert any("cache hit" in m.lower() for m in logged)
 
     @pytest.mark.asyncio
-    async def test_debug_logging_on_cache_miss(self, plugin):
+    async def test_debug_logging_on_cache_miss(self, plugin, logger):
         """Verify _log_debug is called during cache miss."""
         from unittest.mock import patch
 
-        import decky
-
         plugin.settings["log_level"] = "debug"
 
-        with patch.object(decky.logger, "info") as mock_info:
+        with patch.object(logger, "info") as mock_info:
             await plugin.get_rom_metadata(42)
             logged = [str(c) for c in mock_info.call_args_list]
             assert any("cache miss" in m.lower() for m in logged)

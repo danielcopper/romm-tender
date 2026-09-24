@@ -28,8 +28,6 @@ import pytest
 
 from domain.sync_state import SyncState
 from domain.work_unit import WorkUnit
-
-# conftest.py patches decky before this import
 from tests.services.library._helpers import _fake_wait_set_event, _seed_platform, _seed_rom_row, _use_fake_romm
 
 
@@ -44,15 +42,13 @@ class TestApplyChunking:
     """
 
     @pytest.mark.asyncio
-    async def test_large_unit_emits_one_event_and_commit_per_chunk(self, plugin, fake_romm_api, monkeypatch):
+    async def test_large_unit_emits_one_event_and_commit_per_chunk(self, plugin, fake_romm_api, monkeypatch, emit):
         """Five singletons at chunk size 2 → three ``sync_apply_unit`` events with
         continuous unit-wide chunk fields, and one commit per chunk carrying only
         that chunk's rows."""
-        import decky
 
         from services.library import chunk_dispatcher
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
@@ -86,7 +82,7 @@ class TestApplyChunking:
             platform_rom_ids=set(),
         )
 
-        unit_events = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 3
         assert [e["chunk_index"] for e in unit_events] == [0, 1, 2]
         assert all(e["chunk_count"] == 3 for e in unit_events)
@@ -97,12 +93,10 @@ class TestApplyChunking:
         assert commit_rows == [[1, 2], [3, 4], [5]]
 
     @pytest.mark.asyncio
-    async def test_small_unit_emits_exactly_one_chunk(self, plugin, fake_romm_api):
+    async def test_small_unit_emits_exactly_one_chunk(self, plugin, fake_romm_api, emit):
         """A unit under the chunk size emits a single chunk — regression guard that
         the chunk fields collapse to the today's one-shot behaviour."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -130,7 +124,7 @@ class TestApplyChunking:
             platform_rom_ids=set(),
         )
 
-        unit_events = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 1
         event = unit_events[0]
         assert event["chunk_index"] == 0
@@ -196,7 +190,7 @@ class TestApplyChunking:
         assert box.abandoned_chunk is None
 
     @pytest.mark.asyncio
-    async def test_cancel_in_inter_chunk_window_never_emits_next_chunk(self, plugin, fake_romm_api, monkeypatch):
+    async def test_cancel_in_inter_chunk_window_never_emits_next_chunk(self, plugin, fake_romm_api, monkeypatch, emit):
         """A cancel landing AFTER chunk 0's commit but BEFORE chunk 1's emit stops
         the unit at the top of the loop: chunk 1 is never emitted, chunk 0's commit
         persists, staging cleared. Complements
@@ -204,11 +198,9 @@ class TestApplyChunking:
         the wait) — this is the inter-chunk window, where an un-guarded loop would
         still emit chunk 1 and leave ~200 shortcuts orphaned until the next sync
         (#1025)."""
-        import decky
 
         from services.library import chunk_dispatcher
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         monkeypatch.setattr(chunk_dispatcher, "_APPLY_CHUNK_SIZE", 2)
@@ -249,7 +241,7 @@ class TestApplyChunking:
 
         # Chunk 1 is never emitted — the loop stopped at its top before any emit —
         # so the frontend has no orphaned chunk to churn and later fail the ack on.
-        unit_events = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 1
         assert unit_events[0]["chunk_index"] == 0
         # Chunk 0's commit persists.
@@ -633,12 +625,9 @@ class TestInterChunkCancelGuard:
     """
 
     @pytest.mark.asyncio
-    async def test_cancel_near_the_ceiling_is_recorded_as_cancelled(self, plugin, fake_romm_api, monkeypatch):
-        import decky
-
+    async def test_cancel_near_the_ceiling_is_recorded_as_cancelled(self, plugin, fake_romm_api, monkeypatch, emit):
         from services.library import chunk_dispatcher
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
@@ -686,6 +675,6 @@ class TestInterChunkCancelGuard:
         assert box.interrupt_reason is None
         # The guard returned at the top of the loop, so chunk 1 was never emitted
         # and the gate it would have passed through never ran for it.
-        apply_events = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        apply_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(apply_events) == 1
         assert apply_events[0]["chunk_index"] == 0

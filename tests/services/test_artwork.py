@@ -7,8 +7,6 @@ import os
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-# conftest.py patches decky before this import
-import decky
 import pytest
 from fakes.fake_cover_art_file_store import FakeCoverArtFileStore
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
@@ -163,7 +161,7 @@ def uow() -> FakeUnitOfWork:
 
 
 @pytest.fixture
-def artwork_service(steam_config, file_store, romm_api, pending_sync_data, uow, cover_cache_dir):
+def artwork_service(steam_config, file_store, romm_api, pending_sync_data, uow, cover_cache_dir, logger):
     return ArtworkService(
         config=ArtworkServiceConfig(
             romm_api=romm_api,
@@ -171,7 +169,7 @@ def artwork_service(steam_config, file_store, romm_api, pending_sync_data, uow, 
             cover_art_file_store=file_store,
             cover_cache_dir=cover_cache_dir,
             loop=running_loop(),
-            logger=decky.logger,
+            logger=logger,
             get_pending_sync=lambda: pending_sync_data,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
         ),

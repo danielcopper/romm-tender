@@ -15,7 +15,6 @@ from fakes.system_time import FakeClock
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-# conftest.py patches decky before this import
 from adapters.recovery_bundle import RecoveryBundleAdapter
 from adapters.rom_files import RomFileAdapter
 from domain.prune import BundleReadmeContext

@@ -59,10 +59,6 @@ from domain.app_directories import AppDirectories
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-# Imported lazily inside the builder so ``conftest`` import order (which sets
-# up ``sys.path`` and the mock ``decky`` module) is respected before ``main``
-# is touched.
-
 # The service attributes ``main.py:_main`` binds onto ``Plugin``. The harness
 # binds the same set; the loud-failure assert below checks every one is present
 # so a wiring drift (a renamed/added service key) fails the fixture instead of

@@ -14,7 +14,6 @@ import pytest
 
 from adapters.es_find_rules import EsFindRulesAdapter, emulator_token
 
-# conftest.py patches decky before this import.
 # main.py adds backend to sys.path (provides lib, domain, _vendor, …).
 from main import Plugin  # noqa: F401
 

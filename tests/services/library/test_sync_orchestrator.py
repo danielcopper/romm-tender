@@ -4,7 +4,7 @@ The migrated layout drives the orchestrator end-to-end through
 ``FakeRommApi``: tests seed in-memory platforms/ROMs/collections on the
 fake, then exercise the public callable surface (``sync_preview``,
 ``sync_apply_delta``, ``_do_sync_per_unit``, etc.) and assert on the
-**observable outputs** — ``decky.emit`` calls, state mutations, persister
+**observable outputs** — ``emit`` calls, state mutations, persister
 counts.
 
 Two production seams remain mockable per test:
@@ -17,7 +17,7 @@ Two production seams remain mockable per test:
   with an ``AsyncMock``.
 
 ``emit_progress`` is intentionally **not** mocked when the test asserts on
-``decky.emit.call_args_list`` — driving real emissions keeps the
+``emit.call_args_list`` — driving real emissions keeps the
 assertions honest. The fetcher's runtime methods (``build_work_queue``,
 ``fetch_platform_unit``, ``fetch_collection_unit``) are reached through
 the real fetcher against the seeded fake — that is the whole point of the
@@ -41,8 +41,6 @@ from domain.sync_stage import SyncStage
 from domain.sync_state import SyncState
 from domain.work_unit import WorkUnit
 from lib.romm_paging import LIST_PAGE_SIZE
-
-# conftest.py patches decky before this import
 from tests.services.library._helpers import (
     _fake_wait_set_event,
     _seed_install,
@@ -198,11 +196,8 @@ class TestSyncPreview:
     fix for #738)."""
 
     @pytest.mark.asyncio
-    async def test_returns_correct_summary(self, plugin, fake_romm_api):
-        import decky
-
+    async def test_returns_correct_summary(self, plugin, fake_romm_api, emit):
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -245,7 +240,7 @@ class TestSyncPreview:
         ]
 
     @pytest.mark.asyncio
-    async def test_terminal_frame_is_emitted_before_the_snapshot_goes_idle(self, plugin, fake_romm_api):
+    async def test_terminal_frame_is_emitted_before_the_snapshot_goes_idle(self, plugin, fake_romm_api, emit):
         """The run's ending reaches the panel as an EVENT; what it leaves behind is idle.
 
         Ordering, not merely outcome: the terminal frame is emitted while the run
@@ -255,10 +250,8 @@ class TestSyncPreview:
         is watching now — that frame's message and run id were what turned a live
         preview into a green "Preview ready" over its own progress rows.
         """
-        import decky
 
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -272,7 +265,7 @@ class TestSyncPreview:
         result = await plugin.sync_preview()
         assert result["success"] is True
 
-        frames = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_progress"]
+        frames = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_progress"]
         assert frames[-1]["stage"] == "done"
         assert frames[-1]["message"] == "Preview ready"
         assert frames[-1]["running"] is False
@@ -288,11 +281,8 @@ class TestSyncPreview:
         assert status["runId"] == ""
 
     @pytest.mark.asyncio
-    async def test_populates_pending_delta(self, plugin, fake_romm_api):
-        import decky
-
+    async def test_populates_pending_delta(self, plugin, fake_romm_api, emit):
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -310,7 +300,7 @@ class TestSyncPreview:
         assert plugin._sync_service._pending_delta.created_at == plugin._sync_service._orchestrator._clock.time()
 
     @pytest.mark.asyncio
-    async def test_does_not_write_metadata(self, plugin, fake_romm_api):
+    async def test_does_not_write_metadata(self, plugin, fake_romm_api, emit):
         """Preview MUST NOT persist ``rom_metadata`` (#738 regression).
 
         The bug: preview wrote metadata as a side-effect, and the per-unit
@@ -321,10 +311,8 @@ class TestSyncPreview:
         The fix: preview is read-only. The metadata stamp happens in the
         reporter's per-unit commit during apply, not at preview time.
         """
-        import decky
 
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -343,7 +331,7 @@ class TestSyncPreview:
             assert uow.rom_metadata.get(1) is None
 
     @pytest.mark.asyncio
-    async def test_excludes_unbound_rows_from_baseline(self, plugin, fake_romm_api):
+    async def test_excludes_unbound_rows_from_baseline(self, plugin, fake_romm_api, emit):
         """An unbound (NULL ``shortcut_app_id``) row must NOT enter the
         classify baseline, so it cannot inflate ``remove_count`` (R1xR3).
 
@@ -353,10 +341,8 @@ class TestSyncPreview:
         would be classified as stale (not in the current fetch) and reported
         as a removal. The NULL-exclusion guard keeps ``remove_count`` at 0.
         """
-        import decky
 
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -389,11 +375,8 @@ class TestSyncPreview:
         assert "already in progress" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_resets_sync_running_on_completion(self, plugin, fake_romm_api):
-        import decky
-
+    async def test_resets_sync_running_on_completion(self, plugin, fake_romm_api, emit):
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
 
         _seed_platform(
@@ -424,10 +407,7 @@ class TestPreviewCoverRefreshCount:
 
     @staticmethod
     def _preview_setup(plugin, fake_romm_api):
-        import decky
-
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
 
     @pytest.mark.asyncio
@@ -534,10 +514,7 @@ class TestPreviewRestampPlatformCount:
 
     @staticmethod
     def _preview_setup(plugin, fake_romm_api):
-        import decky
-
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
 
     @pytest.mark.asyncio
@@ -684,13 +661,11 @@ class TestSyncApplyDelta:
         assert plugin._sync_service._pending_delta is None
 
     @pytest.mark.asyncio
-    async def test_accepts_when_preview_just_under_max_age(self, plugin, tmp_path):
+    async def test_accepts_when_preview_just_under_max_age(self, plugin, tmp_path, emit, logger):
         """Snapshots within the TTL window apply normally."""
-        import decky
 
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
         self._setup_pending_delta(plugin, "preview-xyz")
         # Apply runs the per-unit pipeline as a fire-and-forget task; stub
         # it out so the test can assert dispatch without driving the full
@@ -704,13 +679,11 @@ class TestSyncApplyDelta:
         assert result["success"] is True
 
     @pytest.mark.asyncio
-    async def test_dispatches_per_unit_without_cached_queue(self, plugin, tmp_path):
+    async def test_dispatches_per_unit_without_cached_queue(self, plugin, tmp_path, emit, logger):
         """Apply dispatches ``_do_sync_per_unit`` with no prefetched cache (always live fetch)."""
-        import decky
 
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
         self._setup_pending_delta(plugin)
         do_sync = AsyncMock()
         plugin._sync_service._orchestrator._do_sync_per_unit = do_sync
@@ -728,17 +701,15 @@ class TestSyncApplyDelta:
         assert do_sync.call_args.kwargs == {}
 
     @pytest.mark.asyncio
-    async def test_apply_dispatches_per_unit_task(self, plugin, tmp_path):
+    async def test_apply_dispatches_per_unit_task(self, plugin, tmp_path, emit, logger):
         """Apply transitions to RUNNING and dispatches the per-unit pipeline.
 
         The planned platform/rom counts are no longer written to a JSON
         ``sync_stats`` scalar — they land on the ``SyncRun`` record opened
         inside ``_do_sync_per_unit`` (covered in TestDoSyncPerUnit)."""
-        import decky
 
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
         self._setup_pending_delta(plugin)
         plugin._sync_service._orchestrator._do_sync_per_unit = AsyncMock()
 
@@ -748,12 +719,9 @@ class TestSyncApplyDelta:
         assert plugin._sync_service._sync_state == SyncState.RUNNING
 
     @pytest.mark.asyncio
-    async def test_clears_pending_delta(self, plugin, tmp_path):
-        import decky
-
+    async def test_clears_pending_delta(self, plugin, tmp_path, emit, logger):
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
 
         self._setup_pending_delta(plugin)
         plugin._sync_service._orchestrator._do_sync_per_unit = AsyncMock()
@@ -793,10 +761,7 @@ class TestGetPendingPreview:
 
     @staticmethod
     def _preview_setup(plugin, fake_romm_api):
-        import decky
-
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -995,10 +960,7 @@ class TestFinishSync:
     """
 
     @pytest.mark.asyncio
-    async def test_emits_cancelled_progress_snapshot(self, plugin):
-        import decky
-
-        decky.emit.reset_mock()
+    async def test_emits_cancelled_progress_snapshot(self, plugin, emit):
         plugin._sync_service._box.sync_state = SyncState.RUNNING
         plugin._sync_service._sync_progress = {"running": True, "current": 5, "total": 10}
 
@@ -1097,14 +1059,12 @@ class TestGetSyncStatus:
         assert status["running"] is False
 
     @pytest.mark.asyncio
-    async def test_emit_progress_sub_stage_rides_event_and_status(self, plugin):
+    async def test_emit_progress_sub_stage_rides_event_and_status(self, plugin, emit):
         """The ``sub_stage`` kwarg rides the payload as the camelCase ``subStage``
         key (matching ``totalSteps`` / ``runId``) on BOTH the emitted
         ``sync_progress`` event and the persisted snapshot that
         ``get_sync_status`` re-seeds a remounted QAM from (#1407)."""
-        import decky
 
-        decky.emit.reset_mock()
         await plugin._sync_service._orchestrator.emit_progress(
             SyncStage.FETCHING,
             current=2,
@@ -1115,19 +1075,17 @@ class TestGetSyncStatus:
             sub_stage="fetch",
         )
 
-        event_payloads = [c.args[1] for c in decky.emit.call_args_list if c.args and c.args[0] == "sync_progress"]
+        event_payloads = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_progress"]
         assert event_payloads, "emit_progress must emit a sync_progress event"
         assert event_payloads[-1]["subStage"] == "fetch"
         # Same value re-seeds a remounted QAM through get_sync_status.
         assert plugin._sync_service.get_sync_status()["subStage"] == "fetch"
 
     @pytest.mark.asyncio
-    async def test_emit_progress_defaults_sub_stage_empty(self, plugin):
+    async def test_emit_progress_defaults_sub_stage_empty(self, plugin, emit):
         """A frame that names no phase carries an empty ``subStage`` — the bar
         reads it as "rest at the unit floor", never a stale phase (#1407)."""
-        import decky
 
-        decky.emit.reset_mock()
         await plugin._sync_service._orchestrator.emit_progress(
             SyncStage.FETCHING, message="Fetching GBA", step=3, total_steps=8
         )
@@ -1146,10 +1104,8 @@ class TestRunKindOnTheWire:
     the per-unit ERROR terminal.
     """
 
-    def _frames(self):
-        import decky
-
-        return [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_progress"]
+    def _frames(self, emit):
+        return [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_progress"]
 
     def test_start_sync_claims_the_slot_as_an_apply_run(self, plugin):
         plugin.loop = running_loop()
@@ -1174,11 +1130,8 @@ class TestRunKindOnTheWire:
         assert plugin._sync_service._box.run_kind is SyncRunKind.APPLY
 
     @pytest.mark.asyncio
-    async def test_every_preview_frame_says_preview_including_the_terminal(self, plugin, fake_romm_api):
-        import decky
-
+    async def test_every_preview_frame_says_preview_including_the_terminal(self, plugin, fake_romm_api, emit):
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -1191,7 +1144,7 @@ class TestRunKindOnTheWire:
 
         assert (await plugin.sync_preview())["success"] is True
 
-        frames = self._frames()
+        frames = self._frames(emit)
         assert len(frames) > 1, "a preview emits a discovering frame and one per unit"
         assert {f["runKind"] for f in frames} == {"preview"}
         # The terminal frame carries it too — it is the one a panel that arrived
@@ -1200,9 +1153,7 @@ class TestRunKindOnTheWire:
         assert frames[-1]["runKind"] == "preview"
 
     @pytest.mark.asyncio
-    async def test_every_apply_frame_says_apply(self, plugin, fake_romm_api):
-        import decky
-
+    async def test_every_apply_frame_says_apply(self, plugin, fake_romm_api, emit):
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
@@ -1216,11 +1167,10 @@ class TestRunKindOnTheWire:
         plugin._sync_service._cover_preparer._download_artwork = AsyncMock(return_value={})
         plugin._sync_service._chunk_dispatcher._wait_for_unit_complete = _fake_wait_set_event
         assert plugin._sync_service._box.try_begin_run("run-apply", kind=SyncRunKind.APPLY) is True
-        decky.emit.reset_mock()
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        frames = self._frames()
+        frames = self._frames(emit)
         assert frames, "an apply run narrates its units"
         assert {f["runKind"] for f in frames} == {"apply"}
 
@@ -1239,22 +1189,17 @@ class TestRunKindOnTheWire:
         assert plugin._sync_service.get_sync_status()["runKind"] == "preview"
 
     @pytest.mark.asyncio
-    async def test_the_cancelled_terminal_carries_it(self, plugin):
-        import decky
-
+    async def test_the_cancelled_terminal_carries_it(self, plugin, emit):
         assert plugin._sync_service._box.try_begin_run("run-cancel", kind=SyncRunKind.PREVIEW) is True
-        decky.emit.reset_mock()
 
         await plugin._sync_service._orchestrator._finish_sync("Sync cancelled")
 
-        frames = self._frames()
+        frames = self._frames(emit)
         assert frames[-1]["stage"] == "cancelled"
         assert frames[-1]["runKind"] == "preview"
 
     @pytest.mark.asyncio
-    async def test_the_per_unit_error_terminal_carries_it(self, plugin, fake_romm_api):
-        import decky
-
+    async def test_the_per_unit_error_terminal_carries_it(self, plugin, fake_romm_api, emit):
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
@@ -1269,11 +1214,10 @@ class TestRunKindOnTheWire:
         # path builds is a dict literal of its own, not an ``emit_progress``.
         plugin._sync_service._orchestrator._sync_one_unit = AsyncMock(side_effect=RuntimeError("boom"))
         assert plugin._sync_service._box.try_begin_run("run-err", kind=SyncRunKind.APPLY) is True
-        decky.emit.reset_mock()
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        frames = self._frames()
+        frames = self._frames(emit)
         assert frames[-1]["stage"] == "error"
         assert frames[-1]["runKind"] == "apply"
 
@@ -1318,7 +1262,7 @@ class TestSyncPreviewErrorHandling:
         assert plugin._sync_service._pending_delta is None
 
     @pytest.mark.asyncio
-    async def test_cancelled_error_returns_canonical_failure(self, plugin, fake_romm_api):
+    async def test_cancelled_error_returns_canonical_failure(self, plugin, fake_romm_api, emit):
         """A cooperative cancel during sync_preview RETURNS the canonical failure
         shape — it does NOT re-raise out of the callable (#1035).
 
@@ -1333,11 +1277,9 @@ class TestSyncPreviewErrorHandling:
         into ``except SyncCancelled``, which sits above the generic
         ``except Exception``.
         """
-        import decky
 
         from domain.sync_state import SyncCancelled
 
-        decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
 
         fake_romm_api.list_platforms = MagicMock(side_effect=SyncCancelled("Sync cancelled"))
@@ -1534,10 +1476,7 @@ class TestDoSyncPerUnit:
     """End-to-end orchestration of the per-unit pipeline."""
 
     @pytest.mark.asyncio
-    async def test_empty_queue_terminates_cleanly(self, plugin, fake_romm_api):
-        import decky
-
-        decky.emit.reset_mock()
+    async def test_empty_queue_terminates_cleanly(self, plugin, fake_romm_api, emit):
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         # No platforms enabled → empty work queue.
@@ -1549,15 +1488,12 @@ class TestDoSyncPerUnit:
 
         assert plugin._sync_service._sync_state == SyncState.IDLE
         # Sync plan was emitted with empty units
-        plan_events = [c for c in decky.emit.call_args_list if c[0][0] == "sync_plan"]
+        plan_events = [c for c in emit.call_args_list if c[0][0] == "sync_plan"]
         assert len(plan_events) == 1
         assert plan_events[0][0][1]["total_units"] == 0
 
     @pytest.mark.asyncio
-    async def test_emits_sync_plan_with_queue(self, plugin, fake_romm_api):
-        import decky
-
-        decky.emit.reset_mock()
+    async def test_emits_sync_plan_with_queue(self, plugin, fake_romm_api, emit):
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -1571,7 +1507,7 @@ class TestDoSyncPerUnit:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        plan_events = [c for c in decky.emit.call_args_list if c[0][0] == "sync_plan"]
+        plan_events = [c for c in emit.call_args_list if c[0][0] == "sync_plan"]
         assert len(plan_events) == 1
         payload = plan_events[0][0][1]
         assert payload["total_units"] == 1
@@ -1580,14 +1516,12 @@ class TestDoSyncPerUnit:
         assert payload["run_id"] == "run-plan"
 
     @pytest.mark.asyncio
-    async def test_sync_plan_carries_skip_aware_estimate_fields(self, plugin, fake_romm_api):
+    async def test_sync_plan_carries_skip_aware_estimate_fields(self, plugin, fake_romm_api, emit):
         """#1382: platform units ride predicted_skip / collapsed_count, the raw
         ``total_roms`` stays untouched (backward compat), and the additive
         ``total_estimated_items`` zero-weights predicted skips and prices the
         rest at their collapsed count (raw fallback)."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -1616,7 +1550,7 @@ class TestDoSyncPerUnit:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        plan_events = [c for c in decky.emit.call_args_list if c[0][0] == "sync_plan"]
+        plan_events = [c for c in emit.call_args_list if c[0][0] == "sync_plan"]
         assert len(plan_events) == 1
         payload = plan_events[0][0][1]
         # Raw planned total is untouched: 2 + 5 + 3.
@@ -1633,7 +1567,7 @@ class TestDoSyncPerUnit:
         assert "bound_count" not in units["Faves"]
 
     @pytest.mark.asyncio
-    async def test_unstamped_zero_delta_platform_restamps_and_records_run(self, plugin, fake_romm_api):
+    async def test_unstamped_zero_delta_platform_restamps_and_records_run(self, plugin, fake_romm_api, emit):
         """#1416: an unstamped platform with a 0 shortcut delta still runs the apply.
 
         A late-ack recovery leaves the platform complete but unstamped. The next
@@ -1642,9 +1576,7 @@ class TestDoSyncPerUnit:
         stamp, and the run records a fresh completed ``SyncRun`` — so the platform
         stops full-fetching forever and the "interrupted" status heals.
         """
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -1670,7 +1602,7 @@ class TestDoSyncPerUnit:
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
         # The apply ran despite the empty delta: a single empty final chunk fired.
-        unit_events = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 1
         assert unit_events[0]["shortcuts"] == []
         assert unit_events[0]["chunk_count"] == 1
@@ -1686,10 +1618,7 @@ class TestDoSyncPerUnit:
             assert completed.id == "run-restamp"
 
     @pytest.mark.asyncio
-    async def test_processes_each_unit_in_order(self, plugin, fake_romm_api):
-        import decky
-
-        decky.emit.reset_mock()
+    async def test_processes_each_unit_in_order(self, plugin, fake_romm_api, emit):
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -1722,7 +1651,7 @@ class TestDoSyncPerUnit:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        unit_events = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 2
         assert unit_events[0]["unit_name"] == "N64"
         assert unit_events[1]["unit_name"] == "GBA"
@@ -1730,15 +1659,13 @@ class TestDoSyncPerUnit:
         assert unit_events[1]["unit_index"] == 1
 
     @pytest.mark.asyncio
-    async def test_emitted_unit_carries_run_id(self, plugin, fake_romm_api):
+    async def test_emitted_unit_carries_run_id(self, plugin, fake_romm_api, emit):
         """Each ``sync_apply_unit`` payload carries the run's ``current_sync_id``.
 
         The frontend keys its once-per-run existing-shortcut scan cache off
         ``run_id``, so every unit emitted within a run must carry the same id.
         """
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -1766,21 +1693,19 @@ class TestDoSyncPerUnit:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        unit_events = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 2
         assert all(e["run_id"] == "run-abc" for e in unit_events)
 
     @pytest.mark.asyncio
-    async def test_emitted_shortcuts_carry_install_launch_options(self, plugin, fake_romm_api):
+    async def test_emitted_shortcuts_carry_install_launch_options(self, plugin, fake_romm_api, emit):
         """Installed ROMs get the full launch command; uninstalled ROMs get ``""``.
 
         The orchestrator builds the ``{rom_id: file_path}`` map from
         ``rom_installs`` and passes it to ``build_shortcuts_data`` so the
         emitted ``sync_apply_unit`` shortcuts carry per-ROM launch options.
         """
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -1802,23 +1727,21 @@ class TestDoSyncPerUnit:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        unit_events = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 1
         by_rom = {s["rom_id"]: s for s in unit_events[0]["shortcuts"]}
         assert by_rom[10]["launch_options"] == 'flatpak run net.retrodeck.retrodeck "/roms/n64/installed.z64"'
         assert by_rom[11]["launch_options"] == ""
 
     @pytest.mark.asyncio
-    async def test_apply_bakes_emulator_override_into_launch_options(self, plugin, fake_romm_api):
+    async def test_apply_bakes_emulator_override_into_launch_options(self, plugin, fake_romm_api, emit):
         """A pinned ``emulator_override`` bakes the ``-e`` form; a NULL pin stays plain (R6).
 
         Two installed ROMs on the same platform: rom 10 carries a resolvable
         override (``-e`` baked), rom 11 has none (plain launch). Proves the
         sync-apply ``core_overrides`` map drives ``build_shortcuts_data`` per-ROM.
         """
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         plugin._core_info.available_cores = [
@@ -1845,7 +1768,7 @@ class TestDoSyncPerUnit:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        unit_events = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         by_rom = {s["rom_id"]: s for s in unit_events[0]["shortcuts"]}
         assert by_rom[10]["launch_options"] == (
             "flatpak run net.retrodeck.retrodeck "
@@ -1856,11 +1779,9 @@ class TestDoSyncPerUnit:
         assert "-e" not in by_rom[11]["launch_options"]
 
     @pytest.mark.asyncio
-    async def test_apply_stale_override_bakes_plain_with_warning(self, plugin, fake_romm_api, caplog):
+    async def test_apply_stale_override_bakes_plain_with_warning(self, plugin, fake_romm_api, caplog, emit):
         """A stale override LABEL (no longer in available_cores) bakes PLAIN + WARNs (B4)."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         # The options no longer carry the pinned label → label_to_invocation → None.
@@ -1890,7 +1811,7 @@ class TestDoSyncPerUnit:
         with caplog.at_level(logging.WARNING):
             await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        unit_events = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         by_rom = {s["rom_id"]: s for s in unit_events[0]["shortcuts"]}
         # Stale → PLAIN launch, never -e with a bogus core.
         assert by_rom[10]["launch_options"] == 'flatpak run net.retrodeck.retrodeck "/roms/psx/stale.chd"'
@@ -1899,7 +1820,7 @@ class TestDoSyncPerUnit:
         assert "no longer resolves" in caplog.text
 
     @pytest.mark.asyncio
-    async def test_skipped_unit_short_circuits_apply(self, plugin, fake_romm_api):
+    async def test_skipped_unit_short_circuits_apply(self, plugin, fake_romm_api, emit):
         """``skipped=True`` from the fetcher short-circuits the whole apply+commit branch.
 
         For a unit whose registry already matches the server-side ROM
@@ -1909,9 +1830,7 @@ class TestDoSyncPerUnit:
         The unit's reconstructed ROMs still join ``synced_rom_ids`` so
         the final stale-cleanup pass doesn't mistakenly remove them.
         """
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -1934,14 +1853,14 @@ class TestDoSyncPerUnit:
         # Nothing on the apply branch ran.
         download_artwork.assert_not_called()
         wait_mock.assert_not_called()
-        apply_events = [c for c in decky.emit.call_args_list if c.args and c.args[0] == "sync_apply_unit"]
+        apply_events = [c for c in emit.call_args_list if c.args and c.args[0] == "sync_apply_unit"]
         assert apply_events == [], f"sync_apply_unit must not be emitted for a skipped unit, got: {apply_events}"
         commit_mock.assert_not_called()
 
         # Stale-cleanup still emits with an empty remove list — the
         # skipped unit's reconstructed ROMs joined synced_rom_ids so
         # rom_id 10 is not classified as stale.
-        stale_events = [c.args[1] for c in decky.emit.call_args_list if c.args and c.args[0] == "sync_stale"]
+        stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         assert len(stale_events) == 1
         assert stale_events[0] == {"remove": []}
 
@@ -1950,12 +1869,12 @@ class TestDoSyncPerUnit:
         # must still appear in the rebuilt ``platform_app_ids`` — the
         # collection is rebuilt from the full ``roms`` table, so a skipped
         # unit's rows survive and are re-emitted under their live name.
-        collection_events = [c.args[1] for c in decky.emit.call_args_list if c.args and c.args[0] == "sync_collections"]
+        collection_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_collections"]
         assert len(collection_events) == 1
         assert collection_events[0]["platform_app_ids"] == {"N64": [1010]}
 
     @pytest.mark.asyncio
-    async def test_stale_entries_unbound_but_rows_kept_after_finalize(self, plugin, fake_romm_api):
+    async def test_stale_entries_unbound_but_rows_kept_after_finalize(self, plugin, fake_romm_api, emit):
         """End-to-end: a stale ROM (disabled platform) is unbound during finalize —
         its ``shortcut_app_id`` is NULLed while the row survives (ADR-0007), not just
         dropped from the frontend via ``sync_stale``.
@@ -1965,9 +1884,7 @@ class TestDoSyncPerUnit:
         same rom_ids in ``uow.roms`` (NULL ``shortcut_app_id``, keep the row) so the
         bound-shortcut count matches the still-synced ROMs.
         """
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -1989,7 +1906,7 @@ class TestDoSyncPerUnit:
 
         # Frontend was told to remove rom_id 99, carrying its bound app_id
         # captured before the finalize unbind NULLed the binding.
-        stale_events = [c.args[1] for c in decky.emit.call_args_list if c.args and c.args[0] == "sync_stale"]
+        stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         assert stale_events == [{"remove": [{"rom_id": 99, "app_id": 9900}]}]
 
         # rom 99 was unbound (NULL app_id) but its row survives; only the
@@ -2005,7 +1922,7 @@ class TestDoSyncPerUnit:
         assert stats["total_shortcuts"] == 1
 
     @pytest.mark.asyncio
-    async def test_sync_stale_excludes_unbound_roms(self, plugin, fake_romm_api):
+    async def test_sync_stale_excludes_unbound_roms(self, plugin, fake_romm_api, emit):
         """An already-unbound stale ROM (NULL ``shortcut_app_id``) is excluded
         from the ``sync_stale`` payload — it has no Steam shortcut to remove.
 
@@ -2013,9 +1930,7 @@ class TestDoSyncPerUnit:
         app_id), and rom 77 is an unbound leftover (cleared on a prior run). Only
         the bound stale ROM appears in ``remove``, each entry carrying its app_id.
         """
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -2034,12 +1949,12 @@ class TestDoSyncPerUnit:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        stale_events = [c.args[1] for c in decky.emit.call_args_list if c.args and c.args[0] == "sync_stale"]
+        stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         # Only the bound stale ROM (99) is emitted; the unbound leftover (77) is excluded.
         assert stale_events == [{"remove": [{"rom_id": 99, "app_id": 9900}]}]
 
     @pytest.mark.asyncio
-    async def test_appid_reuse_collision_excluded_from_sync_stale(self, plugin, fake_romm_api):
+    async def test_appid_reuse_collision_excluded_from_sync_stale(self, plugin, fake_romm_api, emit):
         """A new server-issued rom_id reusing an old appId must NOT be wiped (#1036).
 
         Old row (rom 1, app 5000) survives a server switch / re-import; the new
@@ -2049,9 +1964,7 @@ class TestDoSyncPerUnit:
         scan flags old rom 1 — but ``select_stale_removals`` excludes app 5000
         (bound this run), so ``sync_stale`` carries NO removal and the live
         shortcut survives."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -2084,7 +1997,7 @@ class TestDoSyncPerUnit:
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
         # The load-bearing assertion: app 5000 is NOT emitted for removal.
-        stale_events = [c.args[1] for c in decky.emit.call_args_list if c.args and c.args[0] == "sync_stale"]
+        stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         assert stale_events == [{"remove": []}], (
             f"appId-reuse collision leaked a removal that would wipe the live shortcut: {stale_events}"
         )
@@ -2095,13 +2008,11 @@ class TestDoSyncPerUnit:
             assert {r.rom_id for r in uow.roms.iter_all()} == {1, 2}
 
     @pytest.mark.asyncio
-    async def test_genuinely_stale_still_removed_alongside_collision(self, plugin, fake_romm_api):
+    async def test_genuinely_stale_still_removed_alongside_collision(self, plugin, fake_romm_api, emit):
         """A genuinely-stale ROM (its appId NOT bound this run) is still removed,
         even while a colliding appId is excluded — the fix narrows removals, it
         does not disable the stale path (#1036)."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -2130,17 +2041,15 @@ class TestDoSyncPerUnit:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        stale_events = [c.args[1] for c in decky.emit.call_args_list if c.args and c.args[0] == "sync_stale"]
+        stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         # rom 99 (app 9900) is removed; the colliding app 5000 is excluded.
         assert stale_events == [{"remove": [{"rom_id": 99, "app_id": 9900}]}]
 
     @pytest.mark.asyncio
-    async def test_group_emits_one_shortcut_per_sibling_group(self, plugin, fake_romm_api):
+    async def test_group_emits_one_shortcut_per_sibling_group(self, plugin, fake_romm_api, emit):
         """A platform with a 3-version sibling group emits ONE shortcut for the
         game (ADR-0021); the non-representative dumps are persisted unbound."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
@@ -2174,7 +2083,7 @@ class TestDoSyncPerUnit:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        unit_events = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 1
         emitted_ids = {sd["rom_id"] for sd in unit_events[0]["shortcuts"]}
         # ONE shortcut for the Zelda group (rep = the RomM default, rom 10) + Mario.
@@ -2187,12 +2096,9 @@ class TestDoSyncPerUnit:
             assert uow.roms.get(12).shortcut_app_id is None
             assert uow.roms.get(11).sibling_group_key == "igdb:100:1"
 
-    async def _apply_group_and_get_shortcuts(self, plugin, fake_romm_api, roms):
+    async def _apply_group_and_get_shortcuts(self, plugin, fake_romm_api, emit, roms):
         """Seed a single-platform sibling group, run one apply unit, return the
         emitted ``sync_apply_unit`` shortcut dicts. Shared by the region tests."""
-        import decky
-
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=roms)
@@ -2207,18 +2113,19 @@ class TestDoSyncPerUnit:
         plugin._sync_service._box.sync_state = SyncState.RUNNING
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        unit_events = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 1
         return unit_events[0]["shortcuts"]
 
     @pytest.mark.asyncio
-    async def test_region_priority_picks_and_names_representative(self, plugin, fake_romm_api):
+    async def test_region_priority_picks_and_names_representative(self, plugin, fake_romm_api, emit):
         """No default/installed/bound: region priority binds the USA dump AND
         names the shortcut after it, even though Japan sorts first alphabetically
         (ADR-0021 §3 region leg + canonical naming)."""
         shortcuts = await self._apply_group_and_get_shortcuts(
             plugin,
             fake_romm_api,
+            emit,
             [
                 {"id": 10, "name": "Zelda (JP)", "igdb_id": 100, "fs_name_no_ext": "zelda_jp", "regions": ["Japan"]},
                 {"id": 11, "name": "Zelda (USA)", "igdb_id": 100, "fs_name_no_ext": "zelda_usa", "regions": ["USA"]},
@@ -2229,7 +2136,7 @@ class TestDoSyncPerUnit:
         assert shortcuts[0]["name"] == "Zelda (USA)"
 
     @pytest.mark.asyncio
-    async def test_preferred_region_setting_threads_into_apply_collapse(self, plugin, fake_romm_api):
+    async def test_preferred_region_setting_threads_into_apply_collapse(self, plugin, fake_romm_api, emit):
         """Setting ``preferred_region`` re-heads the ranking: with Japan preferred,
         the Japanese dump becomes the representative + shortcut name — proving the
         setting is threaded into the apply collapse call site."""
@@ -2237,6 +2144,7 @@ class TestDoSyncPerUnit:
         shortcuts = await self._apply_group_and_get_shortcuts(
             plugin,
             fake_romm_api,
+            emit,
             [
                 {"id": 10, "name": "Zelda (JP)", "igdb_id": 100, "fs_name_no_ext": "zelda_jp", "regions": ["Japan"]},
                 {"id": 11, "name": "Zelda (USA)", "igdb_id": 100, "fs_name_no_ext": "zelda_usa", "regions": ["USA"]},
@@ -2247,13 +2155,11 @@ class TestDoSyncPerUnit:
         assert shortcuts[0]["name"] == "Zelda (JP)"
 
     @pytest.mark.asyncio
-    async def test_preview_new_names_follow_region_canonical(self, plugin, fake_romm_api):
+    async def test_preview_new_names_follow_region_canonical(self, plugin, fake_romm_api, emit):
         """The preview collapse call site also applies region priority: the new
         game's reported name is the region-canonical (USA) name."""
-        import decky
 
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -2273,13 +2179,11 @@ class TestDoSyncPerUnit:
         assert result["new_names"] == ["Zelda (USA)"]
 
     @pytest.mark.asyncio
-    async def test_vanished_bound_sibling_rebinds_without_stale_removal(self, plugin, fake_romm_api):
+    async def test_vanished_bound_sibling_rebinds_without_stale_removal(self, plugin, fake_romm_api, emit):
         """A bound sibling that disappears while its group survives rebinds to a
         surviving sibling — the appId is preserved (no sync_stale removal), and the
         binding moves onto the representative (ADR-0021 §2)."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         # rom 1 was the bound USA dump (app 5000); it is GONE from the server now.
@@ -2325,7 +2229,7 @@ class TestDoSyncPerUnit:
 
         # ONE shortcut emitted, keyed to the vanished sibling (rom 1) for reuse,
         # rebinding to the RomM default (rom 2).
-        unit_events = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 1
         emitted = unit_events[0]["shortcuts"]
         assert len(emitted) == 1
@@ -2336,7 +2240,7 @@ class TestDoSyncPerUnit:
         assert BIND_ROM_ID_KEY not in emitted[0]
 
         # No stale removal — the appId is preserved, not wiped.
-        stale_events = [c.args[1] for c in decky.emit.call_args_list if c.args and c.args[0] == "sync_stale"]
+        stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         assert stale_events == [{"remove": []}]
 
         # The binding moved onto the surviving representative (rom 2); the vanished
@@ -2346,7 +2250,7 @@ class TestDoSyncPerUnit:
             assert uow.roms.get(1).shortcut_app_id is None
 
     @pytest.mark.asyncio
-    async def test_skipped_platform_collection_unbound_sibling_never_rebinds(self, plugin, fake_romm_api):
+    async def test_skipped_platform_collection_unbound_sibling_never_rebinds(self, plugin, fake_romm_api, emit):
         """#1296 CRITICAL: a skipped platform + a collection holding an UNBOUND
         sibling of a group must NEVER rebind the live installed game.
 
@@ -2358,9 +2262,7 @@ class TestDoSyncPerUnit:
         binding as "vanished" and rebind it onto the uninstalled sibling (which
         would blank the launch options and orphan the installed ROM).
         """
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -2421,13 +2323,13 @@ class TestDoSyncPerUnit:
 
         # The platform skipped its apply; the collection emitted but grandfathered
         # the group → NO shortcut entry, and above all NO rebind entry.
-        unit_events = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         all_emitted = [sd for e in unit_events for sd in e["shortcuts"]]
         assert all(BIND_ROM_ID_KEY not in sd for sd in all_emitted)
         assert all(sd["rom_id"] != 11 for sd in all_emitted)
 
         # No stale removal of the live binding.
-        stale_events = [c.args[1] for c in decky.emit.call_args_list if c.args and c.args[0] == "sync_stale"]
+        stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         assert stale_events == [{"remove": []}]
 
         # Binding + version untouched: rom 10 still bound to app 5000, rom 11 stays
@@ -2437,7 +2339,9 @@ class TestDoSyncPerUnit:
             assert uow.roms.get(11).shortcut_app_id is None
 
     @pytest.mark.asyncio
-    async def test_disabled_platform_bound_row_stale_removed_collection_does_not_rebind(self, plugin, fake_romm_api):
+    async def test_disabled_platform_bound_row_stale_removed_collection_does_not_rebind(
+        self, plugin, fake_romm_api, emit
+    ):
         """Disabled-platform variant of #1296: the bound row is stale-removed by the
         normal path; the collection still does NOT rebind in the same run.
 
@@ -2449,9 +2353,7 @@ class TestDoSyncPerUnit:
         sync re-establishes the group's shortcut; nothing is rebound off a partial
         view here.
         """
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -2494,12 +2396,12 @@ class TestDoSyncPerUnit:
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
         # rom 10 is stale-removed by the normal path (its platform is gone).
-        stale_events = [c.args[1] for c in decky.emit.call_args_list if c.args and c.args[0] == "sync_stale"]
+        stale_events = [c.args[1] for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         assert stale_events == [{"remove": [{"rom_id": 10, "app_id": 5000}]}]
 
         # The collection did NOT rebind onto the freed appId — no rebind entry, no
         # shortcut for the unbound sibling.
-        unit_events = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         all_emitted = [sd for e in unit_events for sd in e["shortcuts"]]
         assert all(BIND_ROM_ID_KEY not in sd for sd in all_emitted)
         assert all(sd["rom_id"] != 11 for sd in all_emitted)
@@ -2510,10 +2412,7 @@ class TestDoSyncPerUnit:
             assert uow.roms.get(11).shortcut_app_id is None
 
     @pytest.mark.asyncio
-    async def test_downloads_artwork_when_not_skipped(self, plugin, fake_romm_api):
-        import decky
-
-        decky.emit.reset_mock()
+    async def test_downloads_artwork_when_not_skipped(self, plugin, fake_romm_api, emit):
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -2536,7 +2435,7 @@ class TestDoSyncPerUnit:
         download_artwork.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_cancel_between_units_stops_processing(self, plugin, fake_romm_api):
+    async def test_cancel_between_units_stops_processing(self, plugin, fake_romm_api, emit):
         """Cancel flipped during the first unit's ack stops the queue mid-flight.
 
         Both platforms take the live-fetch path (no ``last_sync``) so
@@ -2545,9 +2444,7 @@ class TestDoSyncPerUnit:
         exactly one ``sync_apply_unit`` and a ``cancelled=True``
         ``sync_complete``.
         """
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -2581,19 +2478,17 @@ class TestDoSyncPerUnit:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        unit_events = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+        unit_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
         assert len(unit_events) == 1  # cancel observed between units
-        complete_events = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_complete"]
+        complete_events = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_complete"]
         assert len(complete_events) == 1
         assert complete_events[0].get("cancelled") is True
 
     @pytest.mark.asyncio
-    async def test_normal_completion_emits_finalizing_running(self, plugin, fake_romm_api):
+    async def test_normal_completion_emits_finalizing_running(self, plugin, fake_romm_api, emit):
         """A normal-completion run emits a non-terminal finalizing snapshot
         after the unit loop, before the reporter's terminal done emit."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -2614,7 +2509,7 @@ class TestDoSyncPerUnit:
 
         finalizing = [
             c.args[1]
-            for c in decky.emit.call_args_list
+            for c in emit.call_args_list
             if c.args and c.args[0] == "sync_progress" and c.args[1].get("stage") == "finalizing"
         ]
         assert len(finalizing) == 1
@@ -2622,19 +2517,17 @@ class TestDoSyncPerUnit:
         # The terminal done snapshot still follows it (running:false).
         done = [
             c.args[1]
-            for c in decky.emit.call_args_list
+            for c in emit.call_args_list
             if c.args and c.args[0] == "sync_progress" and c.args[1].get("stage") == "done"
         ]
         assert len(done) == 1
         assert done[0]["running"] is False
 
     @pytest.mark.asyncio
-    async def test_cancelled_run_does_not_emit_finalizing(self, plugin, fake_romm_api):
+    async def test_cancelled_run_does_not_emit_finalizing(self, plugin, fake_romm_api, emit):
         """A cancelled run skips the finalizing snapshot — its terminal emit
         is the reporter's cancelled snapshot."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -2668,7 +2561,7 @@ class TestDoSyncPerUnit:
 
         finalizing = [
             c.args[1]
-            for c in decky.emit.call_args_list
+            for c in emit.call_args_list
             if c.args and c.args[0] == "sync_progress" and c.args[1].get("stage") == "finalizing"
         ]
         assert finalizing == []
@@ -3225,10 +3118,7 @@ class TestRealOrchestratorLateAckRecovery:
     state is hand-set; the commit is observed through the shared UoW."""
 
     @pytest.mark.asyncio
-    async def test_heartbeat_timeout_then_late_ack_commits_binding(self, plugin, fake_romm_api):
-        import decky
-
-        decky.emit.reset_mock()
+    async def test_heartbeat_timeout_then_late_ack_commits_binding(self, plugin, fake_romm_api, emit):
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -3270,7 +3160,7 @@ class TestRealOrchestratorLateAckRecovery:
         assert terminal.status == "interrupted"
 
         # Capture the identity the frontend echoes back from the emitted event.
-        apply_events = [c.args[1] for c in decky.emit.call_args_list if c.args[0] == "sync_apply_unit"]
+        apply_events = [c.args[1] for c in emit.call_args_list if c.args[0] == "sync_apply_unit"]
         assert len(apply_events) == 1
         ev = apply_events[0]
 
@@ -3287,12 +3177,10 @@ class TestRealOrchestratorLateAckRecovery:
         assert box.abandoned_chunk is None
 
     @pytest.mark.asyncio
-    async def test_next_run_start_drops_an_unacked_stash(self, plugin, fake_romm_api):
+    async def test_next_run_start_drops_an_unacked_stash(self, plugin, fake_romm_api, emit):
         """If the frontend crash never acks, the abandoned chunk is inert until the
         next run's ``try_begin_run`` drops it — bounded lifetime (#1367)."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -3415,11 +3303,9 @@ class TestDoSyncPerUnitErrors:
     """Tests for error/cancel paths inside _do_sync_per_unit."""
 
     @pytest.mark.asyncio
-    async def test_build_work_queue_cancelled_error_finishes_sync(self, plugin, fake_romm_api):
+    async def test_build_work_queue_cancelled_error_finishes_sync(self, plugin, fake_romm_api, emit):
         """CancelledError during build_work_queue triggers _finish_sync + re-raise."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         # ``list_platforms`` runs in the executor; the fake raises
@@ -3436,16 +3322,14 @@ class TestDoSyncPerUnitErrors:
         assert plugin._sync_service._sync_state == SyncState.IDLE
         assert plugin._sync_service._current_sync_id is None
         progress_stages = [
-            c.args[1].get("stage") for c in decky.emit.call_args_list if c.args and c.args[0] == "sync_progress"
+            c.args[1].get("stage") for c in emit.call_args_list if c.args and c.args[0] == "sync_progress"
         ]
         assert "cancelled" in progress_stages
 
     @pytest.mark.asyncio
-    async def test_build_work_queue_general_exception_emits_error(self, plugin, fake_romm_api):
+    async def test_build_work_queue_general_exception_emits_error(self, plugin, fake_romm_api, emit):
         """A non-cancellation exception during build_work_queue is logged + surfaced."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         fake_romm_api.list_platforms_side_effect = RuntimeError("RomM down")
@@ -3458,18 +3342,16 @@ class TestDoSyncPerUnitErrors:
         # error phase was emitted via sync_progress.
         error_events = [
             c
-            for c in decky.emit.call_args_list
+            for c in emit.call_args_list
             if c.args and c.args[0] == "sync_progress" and c.args[1].get("stage") == "error"
         ]
         assert len(error_events) >= 1
         assert plugin._sync_service._sync_state == SyncState.IDLE
 
     @pytest.mark.asyncio
-    async def test_outer_exception_handler_emits_error_progress(self, plugin, fake_romm_api):
+    async def test_outer_exception_handler_emits_error_progress(self, plugin, fake_romm_api, emit):
         """An exception raised after build_work_queue (e.g. during a unit) hits the outer except."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -3488,7 +3370,7 @@ class TestDoSyncPerUnitErrors:
         # sync_progress with phase=error was scheduled.
         error_events = [
             c
-            for c in decky.emit.call_args_list
+            for c in emit.call_args_list
             if c.args and c.args[0] == "sync_progress" and c.args[1].get("stage") == "error"
         ]
         assert len(error_events) >= 1
@@ -3496,7 +3378,7 @@ class TestDoSyncPerUnitErrors:
         assert plugin._sync_service._sync_state == SyncState.IDLE
 
     @pytest.mark.asyncio
-    async def test_pagination_failure_does_not_emit_partial_stale_removal(self, plugin, fake_romm_api):
+    async def test_pagination_failure_does_not_emit_partial_stale_removal(self, plugin, fake_romm_api, emit):
         """#630 safety invariant: a fetch_platform_unit failure must NOT trigger
         the stale-cleanup pass with a partial ROM set.
 
@@ -3510,9 +3392,7 @@ class TestDoSyncPerUnitErrors:
         in ``_do_sync_per_unit`` BEFORE ``_finalize_per_unit`` runs, so no
         ``sync_stale`` event is ever emitted.
         """
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -3528,7 +3408,7 @@ class TestDoSyncPerUnitErrors:
             await asyncio.sleep(0)
 
         # The load-bearing assertion: sync_stale must never have been emitted.
-        stale_events = [c for c in decky.emit.call_args_list if c.args and c.args[0] == "sync_stale"]
+        stale_events = [c for c in emit.call_args_list if c.args and c.args[0] == "sync_stale"]
         assert stale_events == [], (
             f"Pagination failure leaked a partial sync_stale event: {stale_events}. "
             "This is the #630 wipe-the-library bug."
@@ -3536,7 +3416,7 @@ class TestDoSyncPerUnitErrors:
         # The error path was taken instead.
         error_events = [
             c
-            for c in decky.emit.call_args_list
+            for c in emit.call_args_list
             if c.args and c.args[0] == "sync_progress" and c.args[1].get("stage") == "error"
         ]
         assert len(error_events) >= 1
@@ -3706,11 +3586,9 @@ class TestDoSyncPerUnitErrors:
         assert plugin._sync_service._sync_state == SyncState.IDLE
 
     @pytest.mark.asyncio
-    async def test_cancelling_state_before_first_unit_skips_processing(self, plugin, fake_romm_api):
+    async def test_cancelling_state_before_first_unit_skips_processing(self, plugin, fake_romm_api, emit):
         """If state is CANCELLING when the unit loop starts, no units run."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -3729,10 +3607,10 @@ class TestDoSyncPerUnitErrors:
         # No units were processed because the CANCELLING check fired before
         # the loop entered the per-unit body — sync_apply_unit is the
         # cleanest observable for "did the unit dispatch run?".
-        apply_events = [c for c in decky.emit.call_args_list if c.args and c.args[0] == "sync_apply_unit"]
+        apply_events = [c for c in emit.call_args_list if c.args and c.args[0] == "sync_apply_unit"]
         assert apply_events == []
         # _finalize_per_unit still ran; sync_complete is emitted with cancelled=True.
-        complete = [c for c in decky.emit.call_args_list if c.args and c.args[0] == "sync_complete"]
+        complete = [c for c in emit.call_args_list if c.args and c.args[0] == "sync_complete"]
         assert len(complete) == 1
         assert complete[0].args[1].get("cancelled") is True
 
@@ -3741,11 +3619,9 @@ class TestSyncOneUnitCollectionAndCancel:
     """Tests for _sync_one_unit branches: collection units + mid-unit cancel."""
 
     @pytest.mark.asyncio
-    async def test_collection_unit_records_membership(self, plugin, fake_romm_api):
+    async def test_collection_unit_records_membership(self, plugin, fake_romm_api, emit):
         """A collection unit populates collection_memberships with its rom_ids."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
 
@@ -3771,7 +3647,7 @@ class TestSyncOneUnitCollectionAndCancel:
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
         # sync_complete fired (collection_memberships flowed through to finalize).
-        complete = [c for c in decky.emit.call_args_list if c.args and c.args[0] == "sync_complete"]
+        complete = [c for c in emit.call_args_list if c.args and c.args[0] == "sync_complete"]
         assert len(complete) == 1
 
     @pytest.mark.asyncio
@@ -4851,10 +4727,7 @@ class TestFetchNarrationInterplay:
     """
 
     @pytest.mark.asyncio
-    async def test_unit_anchor_is_fetching_stage(self, plugin, fake_romm_api):
-        import decky
-
-        decky.emit.reset_mock()
+    async def test_unit_anchor_is_fetching_stage(self, plugin, fake_romm_api, emit):
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
@@ -4865,7 +4738,7 @@ class TestFetchNarrationInterplay:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        progress_frames = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_progress"]
+        progress_frames = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_progress"]
         # The unit's first progress frame anchors the coarse bar under FETCHING,
         # not the old APPLYING that read as a frozen "Applying shortcuts".
         first = progress_frames[0]
@@ -4875,10 +4748,7 @@ class TestFetchNarrationInterplay:
         assert first["totalSteps"] == 1
 
     @pytest.mark.asyncio
-    async def test_no_fetching_frame_after_first_chunk_emit(self, plugin, fake_romm_api):
-        import decky
-
-        decky.emit.reset_mock()
+    async def test_no_fetching_frame_after_first_chunk_emit(self, plugin, fake_romm_api, emit):
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
@@ -4895,10 +4765,10 @@ class TestFetchNarrationInterplay:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        first_chunk_idx = next(i for i, c in enumerate(decky.emit.call_args_list) if c[0][0] == "sync_apply_unit")
+        first_chunk_idx = next(i for i, c in enumerate(emit.call_args_list) if c[0][0] == "sync_apply_unit")
         fetching_after_chunk = [
             i
-            for i, c in enumerate(decky.emit.call_args_list)
+            for i, c in enumerate(emit.call_args_list)
             if c[0][0] == "sync_progress" and c[0][1].get("stage") == "fetching" and i > first_chunk_idx
         ]
         assert fetching_after_chunk == []
@@ -4906,7 +4776,7 @@ class TestFetchNarrationInterplay:
         # vacuous pass where no fetching frame was ever emitted).
         fetching_before_chunk = [
             i
-            for i, c in enumerate(decky.emit.call_args_list)
+            for i, c in enumerate(emit.call_args_list)
             if c[0][0] == "sync_progress" and c[0][1].get("stage") == "fetching" and i < first_chunk_idx
         ]
         assert fetching_before_chunk
@@ -4974,9 +4844,6 @@ class TestDeltaRestrictedApply:
 
     @staticmethod
     def _apply_setup(plugin, fake_romm_api):
-        import decky
-
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         plugin._sync_service._cover_preparer._download_artwork = AsyncMock(return_value={})
@@ -4985,13 +4852,11 @@ class TestDeltaRestrictedApply:
         plugin._sync_service._box.current_sync_id = "run-delta"
 
     @staticmethod
-    def _apply_unit_events():
-        import decky
-
-        return [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+    def _apply_unit_events(emit):
+        return [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
 
     @pytest.mark.asyncio
-    async def test_unchanged_item_skipped_but_row_committed_and_stamped(self, plugin, fake_romm_api):
+    async def test_unchanged_item_skipped_but_row_committed_and_stamped(self, plugin, fake_romm_api, emit):
         # rom 10 is content-unchanged (identity + recorded applied "" both match the
         # uninstalled built ""); rom 11 changed its name. Only rom 11 is emitted; both
         # rows still commit and the platform is stamped.
@@ -5012,7 +4877,7 @@ class TestDeltaRestrictedApply:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        events = self._apply_unit_events()
+        events = self._apply_unit_events(emit)
         assert len(events) == 1
         emitted_ids = [s["rom_id"] for s in events[0]["shortcuts"]]
         assert emitted_ids == [11], "only the changed item is emitted; the unchanged one is skipped"
@@ -5029,7 +4894,7 @@ class TestDeltaRestrictedApply:
             assert uow.platform_sync_state.get("n64") is not None
 
     @pytest.mark.asyncio
-    async def test_empty_delta_platform_still_stamps_and_commits_all_rows(self, plugin, fake_romm_api):
+    async def test_empty_delta_platform_still_stamps_and_commits_all_rows(self, plugin, fake_romm_api, emit):
         # Every item content-unchanged → an empty delta. The pipeline still emits one
         # empty chunk (unit_total 0), commits every row, and writes the platform stamp.
         self._apply_setup(plugin, fake_romm_api)
@@ -5049,7 +4914,7 @@ class TestDeltaRestrictedApply:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        events = self._apply_unit_events()
+        events = self._apply_unit_events(emit)
         assert len(events) == 1, "the empty-delta platform still round-trips exactly one (empty) chunk"
         assert events[0]["shortcuts"] == []
         assert events[0]["unit_total"] == 0
@@ -5059,7 +4924,7 @@ class TestDeltaRestrictedApply:
             assert uow.platform_sync_state.get("n64") is not None
 
     @pytest.mark.asyncio
-    async def test_null_recorded_applied_forces_reapply(self, plugin, fake_romm_api):
+    async def test_null_recorded_applied_forces_reapply(self, plugin, fake_romm_api, emit):
         # A bound row whose applied_launch_options is NULL (pre-migration-015 /
         # never recorded) is unknown → always re-applied, even with matching identity.
         self._apply_setup(plugin, fake_romm_api)
@@ -5073,7 +4938,7 @@ class TestDeltaRestrictedApply:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        events = self._apply_unit_events()
+        events = self._apply_unit_events(emit)
         assert len(events) == 1
         assert [s["rom_id"] for s in events[0]["shortcuts"]] == [10], "NULL recorded state forces a re-apply"
 
@@ -5110,9 +4975,9 @@ class TestSessionBudgetGate:
         plugin._sync_service._box.current_sync_id = "run-budget"
 
     @pytest.mark.asyncio
-    async def test_pause_at_second_chunk_persists_paused_with_budget_reason(self, plugin, fake_romm_api, monkeypatch):
-        import decky
-
+    async def test_pause_at_second_chunk_persists_paused_with_budget_reason(
+        self, plugin, fake_romm_api, monkeypatch, emit
+    ):
         from services.library.session_budget import SYNC_PAUSED_BUDGET
 
         self._arm_two_chunk_apply(plugin, fake_romm_api, monkeypatch)
@@ -5122,7 +4987,6 @@ class TestSessionBudgetGate:
         # the second chunk's predictive-vs-ceiling check (+2500 ≥ 2.2 GB) crosses.
         plugin._renderer_rss.rss_kb = 2_199_000
 
-        decky.emit.reset_mock()
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
         with plugin._uow as uow:
@@ -5138,7 +5002,7 @@ class TestSessionBudgetGate:
         assert plugin._renderer_gc.calls >= 2
         # The distinct pause reason reaches the frontend via sync_complete so the
         # toast + QAM status read the resume-friendly guidance, not "cancelled".
-        complete = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_complete"]
+        complete = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_complete"]
         assert complete
         assert complete[-1].get("interrupt_reason") == SYNC_PAUSED_BUDGET
         assert complete[-1].get("cancelled") is True
@@ -5225,11 +5089,8 @@ class TestSessionBudgetGate:
     # ── Preview prognosis + post-run advisory ────────────────────
 
     @pytest.mark.asyncio
-    async def test_preview_flags_pause_likely_when_run_would_cross(self, plugin, fake_romm_api):
-        import decky
-
+    async def test_preview_flags_pause_likely_when_run_would_cross(self, plugin, fake_romm_api, emit):
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
         plugin.settings["enabled_platforms"] = {"1": True}
@@ -5241,11 +5102,8 @@ class TestSessionBudgetGate:
         assert result["pause_likely"] is True
 
     @pytest.mark.asyncio
-    async def test_preview_pause_likely_false_with_headroom(self, plugin, fake_romm_api):
-        import decky
-
+    async def test_preview_pause_likely_false_with_headroom(self, plugin, fake_romm_api, emit):
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
         plugin.settings["enabled_platforms"] = {"1": True}
@@ -5256,11 +5114,8 @@ class TestSessionBudgetGate:
         assert result["pause_likely"] is False
 
     @pytest.mark.asyncio
-    async def test_preview_pause_likely_false_when_rss_unavailable(self, plugin, fake_romm_api):
-        import decky
-
+    async def test_preview_pause_likely_false_when_rss_unavailable(self, plugin, fake_romm_api, emit):
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 1, "name": "A"}])
         plugin.settings["enabled_platforms"] = {"1": True}
@@ -5271,14 +5126,12 @@ class TestSessionBudgetGate:
         assert result["pause_likely"] is False
 
     @pytest.mark.asyncio
-    async def test_preview_large_unchanged_resync_does_not_warn(self, plugin, fake_romm_api):
+    async def test_preview_large_unchanged_resync_does_not_warn(self, plugin, fake_romm_api, emit):
         # MEDIUM-1: unchanged items are not priced, so a fully-unchanged re-sync
         # near the ceiling does NOT warn — even though the OLD all-touches formula
         # (which priced unchanged at the create rate) would have crossed here.
-        import decky
 
         plugin.loop = asyncio.get_running_loop()
-        decky.emit.reset_mock()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(
             fake_romm_api,
@@ -5309,9 +5162,7 @@ class TestSessionBudgetGate:
         assert result["pause_likely"] is False
 
     @pytest.mark.asyncio
-    async def test_completed_run_recommends_restart_when_rss_high(self, plugin, fake_romm_api):
-        import decky
-
+    async def test_completed_run_recommends_restart_when_rss_high(self, plugin, fake_romm_api, emit):
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         _seed_platform(fake_romm_api, platform_id=1, name="N64", slug="n64", roms=[{"id": 10, "name": "A"}])
@@ -5327,10 +5178,9 @@ class TestSessionBudgetGate:
         plugin._sync_service._box.sync_state = SyncState.RUNNING
         plugin._sync_service._box.current_sync_id = "run-restart"
 
-        decky.emit.reset_mock()
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        complete = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_complete"]
+        complete = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_complete"]
         assert complete, "sync_complete must be emitted"
         assert complete[-1].get("restart_recommended") is True
 
@@ -5435,10 +5285,9 @@ class TestSessionBudgetGate:
     # ── Terminal emit ordering (#39): sync_complete AFTER the SyncRun write ──
 
     @staticmethod
-    async def _capture_run_status_at_sync_complete(plugin, run_id: str) -> str | None:
-        """Run the pipeline with a decky.emit hook that reads the run's persisted
+    async def _capture_run_status_at_sync_complete(plugin, emit, run_id: str) -> str | None:
+        """Run the pipeline with an ``emit`` hook that reads the run's persisted
         status the instant ``sync_complete`` is emitted; return that status."""
-        import decky
 
         seen: dict[str, str | None] = {}
 
@@ -5448,33 +5297,32 @@ class TestSessionBudgetGate:
                     run = uow.sync_runs.get(run_id)
                     seen["value"] = run.status if run is not None else None
 
-        decky.emit.side_effect = _hook
-        try:
-            await plugin._sync_service._orchestrator._do_sync_per_unit()
-        finally:
-            decky.emit.side_effect = None
+        emit.side_effect = _hook
+        await plugin._sync_service._orchestrator._do_sync_per_unit()
         return seen.get("value")
 
     @pytest.mark.asyncio
-    async def test_sync_complete_emits_after_completed_syncrun_persisted(self, plugin, fake_romm_api, monkeypatch):
+    async def test_sync_complete_emits_after_completed_syncrun_persisted(
+        self, plugin, fake_romm_api, monkeypatch, emit
+    ):
         # A clean run: when sync_complete fires, the SyncRun is ALREADY 'completed', so
         # a frontend stats refetch can't read the prior run's status (#39).
         self._arm_single_chunk_apply(plugin, fake_romm_api, monkeypatch, run_id="run-order-done")
         plugin._renderer_rss.rss_kb = 440_000  # low → completes
 
-        status = await self._capture_run_status_at_sync_complete(plugin, "run-order-done")
+        status = await self._capture_run_status_at_sync_complete(plugin, emit, "run-order-done")
 
         assert status == "completed"
 
     @pytest.mark.asyncio
-    async def test_sync_complete_emits_after_paused_syncrun_persisted(self, plugin, fake_romm_api, monkeypatch):
+    async def test_sync_complete_emits_after_paused_syncrun_persisted(self, plugin, fake_romm_api, monkeypatch, emit):
         # A budget-paused run: when sync_complete fires, the SyncRun is ALREADY 'paused'
         # — the emit-last ordering that closes the emit-before-persist race (#39).
         self._arm_two_chunk_apply(plugin, fake_romm_api, monkeypatch)  # run id "run-budget"
         plugin._renderer_gc.result = True
         plugin._renderer_rss.rss_kb = 2_199_000  # first chunk passes, second pauses
 
-        status = await self._capture_run_status_at_sync_complete(plugin, "run-budget")
+        status = await self._capture_run_status_at_sync_complete(plugin, emit, "run-budget")
 
         assert status == "paused"
 
@@ -5489,9 +5337,6 @@ class TestRunProgressCounters:
 
     @staticmethod
     def _arm(plugin, fake_romm_api, *, run_id="run-progress"):
-        import decky
-
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         plugin._sync_service._cover_preparer._download_artwork = AsyncMock(return_value={})
@@ -5696,9 +5541,6 @@ class TestProcessedGamesNumerator:
 
     @staticmethod
     def _arm(plugin, fake_romm_api, *, run_id):
-        import decky
-
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         plugin._sync_service._cover_preparer._download_artwork = AsyncMock(return_value={})
@@ -5706,8 +5548,7 @@ class TestProcessedGamesNumerator:
         plugin._sync_service._box.current_sync_id = run_id
 
     @pytest.mark.asyncio
-    async def test_clean_run_payload_counts_delta_skips(self, plugin, fake_romm_api):
-        import decky
+    async def test_clean_run_payload_counts_delta_skips(self, plugin, fake_romm_api, emit):
 
         # rom 10 is content-unchanged (delta-skipped), rom 11 changed and is
         # acked — both are processed, so the sync_complete payload reports 2.
@@ -5734,17 +5575,16 @@ class TestProcessedGamesNumerator:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        complete = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_complete"]
+        complete = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_complete"]
         assert complete[-1]["total_games"] == 2, "1 delta-skipped + 1 applied are both processed"
 
     @pytest.mark.asyncio
-    async def test_resumed_run_interrupt_frame_counts_delta_skips(self, plugin, fake_romm_api, monkeypatch):
+    async def test_resumed_run_interrupt_frame_counts_delta_skips(self, plugin, fake_romm_api, monkeypatch, emit):
         """The resume-then-interrupt shape: a platform the prior run finished
         wholesale-skips, the partial platform delta-skips its already-applied
         ROM and commits one more chunk, then the heartbeat times out. The
         terminal frame's numerator counts all three kinds of processed ROM
         (and agrees with the paused banner's ``run_done_items``)."""
-        import decky
 
         from services.library import chunk_dispatcher
 
@@ -5790,12 +5630,12 @@ class TestProcessedGamesNumerator:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        complete = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_complete"]
+        complete = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_complete"]
         assert complete[-1]["total_games"] == 3, "1 wholesale-skipped + 1 delta-skipped + 1 committed"
         assert complete[-1]["interrupted"] is True
         # The terminal frame as EMITTED — the snapshot the box holds is back at
         # the idle default by now, because the run has finished (``finish_run``).
-        progress = [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_progress"][-1]
+        progress = [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_progress"][-1]
         assert progress["stage"] == "cancelled"
         assert progress["message"] == "Sync interrupted: 3 of 4 games processed"
         assert progress["current"] == 3

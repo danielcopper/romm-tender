@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-# conftest.py patches decky before this import; use _make_testable_plugin for test-only attrs
+# Use _make_testable_plugin for test-only attrs
 from _factories import _make_retry, _make_testable_plugin
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
@@ -43,7 +43,7 @@ _GAVEL = GavelNativeAdapter()
 
 
 @pytest.fixture
-def plugin(tmp_path):
+def plugin(tmp_path, logger, home, project_root):
     p = _make_testable_plugin()
     p.settings = {
         "romm_url": "http://romm.local",
@@ -54,7 +54,7 @@ def plugin(tmp_path):
     }
     p._http_adapter = RommHttpAdapter(
         p.settings,
-        __import__("decky").DECKY_PLUGIN_DIR,
+        project_root,
         logging.getLogger("test"),
         "romm-tender/9.9.9",
         log_debug=lambda _msg: None,
@@ -62,9 +62,7 @@ def plugin(tmp_path):
     p._romm_api = MagicMock()
     p._event_sink = FakeEventSink()
 
-    import decky
-
-    steam_config = SteamConfigAdapter(user_home=decky.DECKY_USER_HOME, logger=decky.logger)
+    steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
     p._steam_config = steam_config
 
     p._sync_service = LibraryService(
@@ -73,8 +71,8 @@ def plugin(tmp_path):
             steam_config=steam_config,
             settings=p.settings,
             loop=running_loop(),
-            logger=decky.logger,
-            launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/tender-rom-launcher",
+            logger=logger,
+            launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
             # The service seam is fire-and-forget (``EventEmitter`` answers
             # ``None``); the plugin's own sink answers whether anybody heard.
             # Two seams, deliberately not one.
@@ -92,7 +90,6 @@ def plugin(tmp_path):
             renderer_gc=FakeRendererGc(),
         ),
     )
-    decky.DECKY_USER_HOME = str(tmp_path)
 
     # Wire services with FakeSaveApi sharing the SaveFileAdapter so download
     # bytes land on the same filesystem view the service inspects.

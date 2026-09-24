@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import os
+import pwd
 from typing import Any, cast
 
 import pytest
@@ -663,7 +664,8 @@ _UNDECLARED_SYSTEMS = frozenset({"atarijaguarcd", "xbox360"})
 
 @pytest.fixture(scope="module")
 def machine() -> Any:
-    installation = first_detected_installation(os.path.expanduser("~"))
+    # The suite's one named reader of the real home — see tests/conftest.py.
+    installation = first_detected_installation(pwd.getpwuid(os.getuid()).pw_dir)
     if installation is None:
         pytest.skip("no emulator installation on this machine — the real-resolver tier cannot run")
     return installation

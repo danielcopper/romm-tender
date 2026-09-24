@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-# conftest.py patches decky before this import; use _make_testable_plugin for test-only attrs
+# Use _make_testable_plugin for test-only attrs
 from _factories import _make_testable_plugin
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
@@ -53,15 +53,13 @@ def _seed_rom(uow, rom_id, *, app_id=1, sgdb_id=None, platform_slug="n64", name=
 
 
 @pytest.fixture
-def plugin(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow):
+def plugin(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow, emit, logger, home):
     p = _make_testable_plugin()
     p.settings = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
     p._romm_api = fake_romm_api
 
-    import decky
-
-    p._debug_logger = SettingsAwareDebugLogger(settings=p.settings, logger=decky.logger)
-    steam_config = SteamConfigAdapter(user_home=decky.DECKY_USER_HOME, logger=decky.logger)
+    p._debug_logger = SettingsAwareDebugLogger(settings=p.settings, logger=logger)
+    steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
     p._steam_config = steam_config
 
     p._settings_persister = FakeSettingsPersister()
@@ -71,9 +69,9 @@ def plugin(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow):
             steam_config=steam_config,
             settings=p.settings,
             loop=running_loop(),
-            logger=decky.logger,
-            launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/tender-rom-launcher",
-            emit=decky.emit,
+            logger=logger,
+            launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
+            emit=emit,
             clock=FakeClock(),
             uuid_gen=FakeUuidGen(),
             sleeper=FakeSleeper(),
@@ -100,7 +98,7 @@ def plugin(sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, uow):
             sgdb_artwork_cache=sgdb_artwork_cache,
             settings=p.settings,
             loop=running_loop(),
-            logger=decky.logger,
+            logger=logger,
             settings_persister=FakeSettingsPersister(),
             get_pending_sync=lambda: p._sync_service._pending_sync,
             log_debug=p._log_debug,
@@ -938,9 +936,8 @@ class TestDebugLoggerProtocolSeam:
     """
 
     @pytest.fixture
-    def plugin_with_captured_log(self, sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api):
+    def plugin_with_captured_log(self, sgdb_artwork_cache, fake_romm_api, fake_steamgrid_db_api, emit, logger, home):
         """Plugin fixture where ``log_debug`` is a list-capturing fake."""
-        import decky
 
         p = _make_testable_plugin()
         p.settings = {"log_level": "debug", "steamgriddb_api_key": ""}
@@ -951,7 +948,7 @@ class TestDebugLoggerProtocolSeam:
         def capture(msg: str) -> None:
             captured.append(msg)
 
-        steam_config = SteamConfigAdapter(user_home=decky.DECKY_USER_HOME, logger=decky.logger)
+        steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
         p._steam_config = steam_config
 
         p._sync_service = LibraryService(
@@ -960,9 +957,9 @@ class TestDebugLoggerProtocolSeam:
                 steam_config=steam_config,
                 settings=p.settings,
                 loop=running_loop(),
-                logger=decky.logger,
-                launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/tender-rom-launcher",
-                emit=decky.emit,
+                logger=logger,
+                launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
+                emit=emit,
                 clock=FakeClock(),
                 uuid_gen=FakeUuidGen(),
                 sleeper=FakeSleeper(),
@@ -986,7 +983,7 @@ class TestDebugLoggerProtocolSeam:
                 sgdb_artwork_cache=sgdb_artwork_cache,
                 settings=p.settings,
                 loop=running_loop(),
-                logger=decky.logger,
+                logger=logger,
                 settings_persister=FakeSettingsPersister(),
                 get_pending_sync=lambda: p._sync_service._pending_sync,
                 log_debug=capture,
@@ -1008,8 +1005,8 @@ class TestDebugLoggerProtocolSeam:
         assert sgdb_msgs, f"Expected SGDB debug messages on injected seam, got: {captured}"
 
     @pytest.mark.asyncio
-    async def test_sgdb_debug_does_not_call_logger_info_directly(self, plugin_with_captured_log):
-        """SGDB debug must reach the injected callback only — never ``decky.logger.info``.
+    async def test_sgdb_debug_does_not_call_logger_info_directly(self, plugin_with_captured_log, logger):
+        """SGDB debug must reach the injected callback only — never ``logger.info``.
 
         Regression for #354: pre-consolidation, ``SteamGridService._log_debug``
         was a per-service method that re-read settings and called
@@ -1021,12 +1018,10 @@ class TestDebugLoggerProtocolSeam:
         sink is what bootstrap (or this fixture) provides.
 
         Would fail on ``main``: there a debug-level config would push
-        every SGDB message through ``decky.logger.info`` in addition
+        every SGDB message through ``logger.info`` in addition
         to (and bypassing) the injected callback.
         """
         from unittest.mock import patch
-
-        import decky
 
         plugin, captured = plugin_with_captured_log
         plugin._sgdb_service._loop = asyncio.get_running_loop()
@@ -1034,14 +1029,14 @@ class TestDebugLoggerProtocolSeam:
         # per-service ``_log_debug`` emitted via ``self._logger.info``.
         plugin.settings["log_level"] = "debug"
 
-        with patch.object(decky.logger, "info") as mock_info:
+        with patch.object(logger, "info") as mock_info:
             await plugin.get_sgdb_artwork_base64(42, 1)
 
         # SGDB messages MUST land on the injected seam …
         assert any("SGDB artwork" in m for m in captured), (
             f"SGDB debug must reach the injected log_debug; captured={captured}"
         )
-        # … and NOT on decky.logger.info.
+        # … and NOT on logger.info.
         sgdb_info_calls = [c for c in mock_info.call_args_list if "SGDB artwork" in str(c)]
         assert not sgdb_info_calls, (
             "SGDB debug must NOT leak to logger.info — the injected "

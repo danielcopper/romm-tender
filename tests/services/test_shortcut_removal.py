@@ -4,8 +4,6 @@ import asyncio
 import json
 from unittest.mock import MagicMock
 
-# conftest.py patches decky before this import
-import decky
 import pytest
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop
@@ -73,8 +71,8 @@ def uow_factory(uow) -> FakeUnitOfWorkFactory:
 
 
 @pytest.fixture
-def steam_config():
-    return SteamConfigAdapter(user_home=decky.DECKY_USER_HOME, logger=decky.logger)
+def steam_config(logger, home):
+    return SteamConfigAdapter(user_home=str(home), logger=logger)
 
 
 @pytest.fixture
@@ -83,12 +81,12 @@ def artwork_remover_mock():
 
 
 @pytest.fixture
-def svc(steam_config, artwork_remover_mock, uow_factory):
+def svc(steam_config, artwork_remover_mock, uow_factory, logger):
     return ShortcutRemovalService(
         config=ShortcutRemovalServiceConfig(
             steam_config=steam_config,
             loop=running_loop(),
-            logger=decky.logger,
+            logger=logger,
             artwork_remover=artwork_remover_mock,
             uow_factory=uow_factory,
         ),
@@ -396,7 +394,7 @@ class TestRemovalCleansUpArtwork:
     """Integration: report_removal_results drives the real ArtworkService remover."""
 
     @pytest.mark.asyncio
-    async def test_removes_app_id_artwork(self, uow, steam_config, tmp_path):
+    async def test_removes_app_id_artwork(self, uow, steam_config, tmp_path, logger):
         grid_dir = tmp_path / "grid"
         grid_dir.mkdir()
         art_file = grid_dir / "100001p.png"
@@ -405,12 +403,12 @@ class TestRemovalCleansUpArtwork:
         _seed_rom(uow, 10, app_id=100001, name="Game A")
         steam_config.grid_dir = lambda: str(grid_dir)
 
-        svc = _artwork_integration_service(uow, steam_config, tmp_path)
+        svc = _artwork_integration_service(uow, steam_config, tmp_path, logger)
         await svc.report_removal_results([10])
         assert not art_file.exists()
 
     @pytest.mark.asyncio
-    async def test_removes_staging_leftover(self, uow, steam_config, tmp_path):
+    async def test_removes_staging_leftover(self, uow, steam_config, tmp_path, logger):
         grid_dir = tmp_path / "grid"
         grid_dir.mkdir()
         staging = grid_dir / "romm_10_cover.png"
@@ -419,12 +417,12 @@ class TestRemovalCleansUpArtwork:
         _seed_rom(uow, 10, app_id=100001, name="Game A")
         steam_config.grid_dir = lambda: str(grid_dir)
 
-        svc = _artwork_integration_service(uow, steam_config, tmp_path)
+        svc = _artwork_integration_service(uow, steam_config, tmp_path, logger)
         await svc.report_removal_results([10])
         assert not staging.exists()
 
 
-def _artwork_integration_service(uow, steam_config, tmp_path) -> ShortcutRemovalService:
+def _artwork_integration_service(uow, steam_config, tmp_path, logger) -> ShortcutRemovalService:
     """Wire a ShortcutRemovalService backed by the real ArtworkService remover."""
     from fakes.fake_unit_of_work import FakeUnitOfWorkFactory
 
@@ -438,7 +436,7 @@ def _artwork_integration_service(uow, steam_config, tmp_path) -> ShortcutRemoval
             cover_art_file_store=CoverArtFileStoreAdapter(),
             cover_cache_dir=str(tmp_path / "covers"),
             loop=asyncio.get_running_loop(),
-            logger=decky.logger,
+            logger=logger,
             get_pending_sync=dict,
             uow_factory=FakeUnitOfWorkFactory(uow),
         ),
@@ -447,7 +445,7 @@ def _artwork_integration_service(uow, steam_config, tmp_path) -> ShortcutRemoval
         config=ShortcutRemovalServiceConfig(
             steam_config=steam_config,
             loop=asyncio.get_running_loop(),
-            logger=decky.logger,
+            logger=logger,
             artwork_remover=artwork_svc,
             uow_factory=FakeUnitOfWorkFactory(uow),
         ),

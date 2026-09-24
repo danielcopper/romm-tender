@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-# conftest.py patches decky before this import; use _make_testable_plugin for test-only attrs
+# Use _make_testable_plugin for test-only attrs
 from _factories import _make_retry, _make_testable_plugin
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_core_info_provider import FakeCoreInfoProvider
@@ -47,7 +47,7 @@ _ROMS_BASE = "/fake/retrodeck/roms"
 
 
 @pytest.fixture
-def plugin(tmp_path):
+def plugin(tmp_path, emit, logger, home):
     p = _make_testable_plugin()
     p.settings = {
         "romm_url": "http://romm.local",
@@ -57,15 +57,13 @@ def plugin(tmp_path):
         "log_level": "warn",
     }
 
-    import decky
-
     # Shared UoW so a metadata row seeded by a test is visible to the
     # GameDetailService read (both wrap the same instance via the factory).
     uow = FakeUnitOfWork()
     p._uow = uow
     p._tmp_path = tmp_path
 
-    steam_config = SteamConfigAdapter(user_home=decky.DECKY_USER_HOME, logger=decky.logger)
+    steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
     p._steam_config = steam_config
 
     p._sync_service = LibraryService(
@@ -74,9 +72,9 @@ def plugin(tmp_path):
             steam_config=steam_config,
             settings=p.settings,
             loop=running_loop(),
-            logger=decky.logger,
-            launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/tender-rom-launcher",
-            emit=decky.emit,
+            logger=logger,
+            launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
+            emit=emit,
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             uuid_gen=FakeUuidGen(),
             sleeper=FakeSleeper(),
@@ -90,7 +88,6 @@ def plugin(tmp_path):
             renderer_gc=FakeRendererGc(),
         ),
     )
-    decky.DECKY_USER_HOME = str(tmp_path)
 
     # Wire services with FakeSaveApi
     fake_api = FakeSaveApi()

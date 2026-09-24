@@ -3,8 +3,8 @@
 These live outside ``conftest.py`` on purpose. A conftest is imported by
 pytest under its own module name; importing it a second time by plain name
 (`from conftest import ...`) creates a *separate* module object that re-runs
-the module body — including ``sys.modules["decky"] = mock_decky``, which
-would then shadow the mock whose paths the autouse fixtures refresh.
+the module body — which would move the process's ``HOME`` to a second suite
+home.
 Anything a test module needs to import belongs here instead.
 
 Import as ``from _factories import _make_retry`` — ``tests/`` is on the path
@@ -45,7 +45,6 @@ def _make_testable_plugin():
     override ``_debug_logger`` after construction (e.g. with the real
     ``SettingsAwareDebugLogger`` bound to a settings dict they control).
     """
-    # Import here to ensure decky mock is already installed
     from main import Plugin
 
     class TestablePlugin(Plugin):

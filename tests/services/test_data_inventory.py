@@ -1,7 +1,5 @@
 """Tests for DataInventoryService."""
 
-# conftest.py patches decky before this import
-import decky  # noqa: F401
 import pytest
 from fakes.fake_unit_of_work import FakeUnitOfWork, FakeUnitOfWorkFactory
 from fakes.running_loop import running_loop

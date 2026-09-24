@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# conftest.py patches decky before this import; use _make_testable_plugin for test-only attrs
+# Use _make_testable_plugin for test-only attrs
 from _factories import _make_testable_plugin
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
@@ -116,7 +116,7 @@ def _seed_group_member(
 
 
 @pytest.fixture
-def plugin():
+def plugin(emit, logger, home):
     p = _make_testable_plugin()
     p.settings = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
     p._http_adapter = MagicMock()
@@ -130,9 +130,7 @@ def plugin():
     # the launch-target check treats as launchable.
     p._system_extensions = {}
 
-    import decky
-
-    steam_config = SteamConfigAdapter(user_home=decky.DECKY_USER_HOME, logger=decky.logger)
+    steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
     p._steam_config = steam_config
 
     # Shared fake Unit of Work — install records flow through it, and tests
@@ -151,7 +149,7 @@ def plugin():
             sandbox_launcher=FakeSandboxLauncher(),
             platform_core_reader=FakePlatformCoreReader(),
             resolve_system=p._resolve_system,
-            logger=decky.logger,
+            logger=logger,
         ),
     )
 
@@ -161,9 +159,9 @@ def plugin():
             steam_config=steam_config,
             settings=p.settings,
             loop=running_loop(),
-            logger=decky.logger,
-            launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/tender-rom-launcher",
-            emit=decky.emit,
+            logger=logger,
+            launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
+            emit=emit,
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             uuid_gen=FakeUuidGen(),
             sleeper=FakeSleeper(),
@@ -184,7 +182,7 @@ def plugin():
     download_file_store = DownloadFileAdapter()
     p._install_recorder = RomInstallRecorder(
         config=RomInstallRecorderConfig(
-            logger=decky.logger,
+            logger=logger,
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             uow_factory=FakeUnitOfWorkFactory(p._uow),
             # Default-empty ("ES-DE could not answer") so the launch-target check
@@ -218,9 +216,9 @@ def plugin():
             sibling_supersede=lambda: p._download_service.supersede_sibling_installs,
             uow_factory=FakeUnitOfWorkFactory(p._uow),
             loop=running_loop(),
-            logger=decky.logger,
+            logger=logger,
             log_debug=lambda msg: None,
-            emit=decky.emit,
+            emit=emit,
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
         ),
     )
@@ -230,8 +228,8 @@ def plugin():
             download_file_store=download_file_store,
             resolve_system=p._resolve_system,
             loop=running_loop(),
-            logger=decky.logger,
-            emit=decky.emit,
+            logger=logger,
+            emit=emit,
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
             sleeper=FakeSleeper(),
             retrodeck_paths=retrodeck_paths,
@@ -248,10 +246,10 @@ def plugin():
     )
     p._rom_removal_service = RomRemovalService(
         config=RomRemovalServiceConfig(
-            logger=decky.logger,
+            logger=logger,
             loop=running_loop(),
             clock=FakeClock(now=datetime(2026, 1, 1, tzinfo=UTC)),
-            emit=decky.emit,
+            emit=emit,
             rom_file_store=RomFileAdapter(),
             retrodeck_paths=FakeRetroDeckPaths(
                 roms=os.path.join(os.path.expanduser("~"), "retrodeck", "roms"),
@@ -282,9 +280,6 @@ class TestStartDownload:
     async def test_starts_download_task(self, plugin, tmp_path):
         from unittest.mock import AsyncMock
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -348,9 +343,6 @@ class TestStartDownload:
     async def test_checks_disk_space(self, plugin, tmp_path):
         from unittest.mock import AsyncMock
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -399,13 +391,11 @@ class TestCancelDownload:
         assert "No active download" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_cancels_paused_download_deletes_tmp_evicts_and_emits(self, plugin, tmp_path):
+    async def test_cancels_paused_download_deletes_tmp_evicts_and_emits(self, plugin, tmp_path, emit):
         """A paused download has no live task: cancel deletes the partial .tmp,
         emits the terminal cancelled frame, and evicts the entry (#149
         downloads-round finding A/B). Previously this was a silent no-op."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin._download_service._loop = asyncio.get_running_loop()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
@@ -435,21 +425,17 @@ class TestCancelDownload:
         assert 42 not in plugin._download_service._download_queue  # evicted, no residue
         assert not os.path.exists(tmp_file)  # partial deleted (no resume)
         cancelled = [
-            c
-            for c in decky.emit.call_args_list
-            if c[0][0] == "download_progress" and c[0][1].get("status") == "cancelled"
+            c for c in emit.call_args_list if c[0][0] == "download_progress" and c[0][1].get("status") == "cancelled"
         ]
         assert len(cancelled) == 1
         assert cancelled[0][0][1]["rom_id"] == 42
 
     @pytest.mark.asyncio
-    async def test_cancels_paused_download_without_recorded_target_still_evicts(self, plugin):
+    async def test_cancels_paused_download_without_recorded_target_still_evicts(self, plugin, emit):
         """A paused entry lacking ``_target_path`` (defensive) still cancels: no
         tmp removal attempted, entry evicted, success returned. The startup sweep
         reaps any orphaned .tmp."""
-        import decky
 
-        decky.emit.reset_mock()
         plugin._download_service._loop = asyncio.get_running_loop()
         plugin._download_service._download_queue[42] = {
             "rom_id": 42,
@@ -911,9 +897,6 @@ class TestResumingAReplaceDownload:
 class TestRemoveRom:
     @pytest.mark.asyncio
     async def test_deletes_file_and_clears_state(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -950,9 +933,6 @@ class TestRemoveRom:
 class TestUninstallAllRoms:
     @pytest.mark.asyncio
     async def test_removes_all_installed(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -979,9 +959,6 @@ class TestUninstallAllRoms:
 
     @pytest.mark.asyncio
     async def test_clears_state(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -1002,9 +979,6 @@ class TestUninstallAllRoms:
 
     @pytest.mark.asyncio
     async def test_handles_missing_files(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -1145,9 +1119,6 @@ class TestDiskSpaceMultiFile:
     async def test_multi_file_rom_requires_double_space(self, plugin, tmp_path):
         from unittest.mock import AsyncMock
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -1181,9 +1152,6 @@ class TestDiskSpaceMultiFile:
     async def test_single_file_rom_uses_normal_space_check(self, plugin, tmp_path):
         from unittest.mock import AsyncMock
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -1226,9 +1194,6 @@ class TestDiskSpaceMultiFile:
         """#855: nested-multi (has_multiple_files=False, len(files) > 1) reserves 2x."""
         from unittest.mock import AsyncMock
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -1270,9 +1235,7 @@ class TestMultiFileRomDeletion:
     @pytest.mark.asyncio
     async def test_remove_rom_deletes_rom_dir(self, plugin, tmp_path):
         """Multi-file ROM with rom_dir should delete the entire directory."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -1304,9 +1267,7 @@ class TestMultiFileRomDeletion:
     @pytest.mark.asyncio
     async def test_uninstall_all_deletes_rom_dirs(self, plugin, tmp_path):
         """uninstall_all_roms should delete multi-file ROM directories."""
-        import decky
 
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -1522,12 +1483,9 @@ class TestDoDownloadSingleFile:
     """Tests for _do_download happy path — single file."""
 
     @pytest.mark.asyncio
-    async def test_single_file_happy_path(self, plugin, tmp_path):
+    async def test_single_file_happy_path(self, plugin, tmp_path, emit):
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -1535,7 +1493,6 @@ class TestDoDownloadSingleFile:
         plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -1575,7 +1532,7 @@ class TestDoDownloadSingleFile:
         assert installed.platform_slug == "n64"
         assert installed.installed_at
         # download_complete event emitted
-        emit_calls = [c for c in decky.emit.call_args_list if c[0][0] == "download_complete"]
+        emit_calls = [c for c in emit.call_args_list if c[0][0] == "download_complete"]
         assert len(emit_calls) == 1
         payload = emit_calls[0][0][1]
         assert payload["rom_id"] == 42
@@ -1589,7 +1546,7 @@ class TestDoDownloadSingleFile:
         assert plugin._download_service._download_queue[42]["status"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_download_complete_app_id_null_when_unbound(self, plugin, tmp_path):
+    async def test_download_complete_app_id_null_when_unbound(self, plugin, tmp_path, emit):
         """A ROM downloaded before it's synced (no Steam shortcut) emits ``app_id: None``.
 
         The ROM row exists (FK parent for the install) but its
@@ -1598,14 +1555,10 @@ class TestDoDownloadSingleFile:
         """
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -1642,25 +1595,21 @@ class TestDoDownloadSingleFile:
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
             await plugin._download_service._do_download(7, rom_detail, target_path, "n64", "metroid.z64")
 
-        emit_calls = [c for c in decky.emit.call_args_list if c[0][0] == "download_complete"]
+        emit_calls = [c for c in emit.call_args_list if c[0][0] == "download_complete"]
         assert len(emit_calls) == 1
         assert emit_calls[0][0][1]["app_id"] is None
 
     @pytest.mark.asyncio
-    async def test_download_complete_records_applied_launch_options_for_bound_rom(self, plugin, tmp_path):
+    async def test_download_complete_records_applied_launch_options_for_bound_rom(self, plugin, tmp_path, emit):
         """A bound ROM's freshly baked launch command (the value the frontend
         confirm-sets onto its shortcut) is recorded as the applied state, so the
         next sync skips the now-correct shortcut instead of re-touching it (#1383)."""
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -1678,7 +1627,7 @@ class TestDoDownloadSingleFile:
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
             await plugin._download_service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
 
-        payload = next(c[0][1] for c in decky.emit.call_args_list if c[0][0] == "download_complete")
+        payload = next(c[0][1] for c in emit.call_args_list if c[0][0] == "download_complete")
         with plugin._uow as uow:
             rom = uow.roms.get(42)
         assert rom is not None
@@ -1686,19 +1635,15 @@ class TestDoDownloadSingleFile:
         assert rom.applied_launch_options == f'flatpak run net.retrodeck.retrodeck "{target_path}"'
 
     @pytest.mark.asyncio
-    async def test_download_complete_does_not_record_applied_for_unbound_rom(self, plugin, tmp_path):
+    async def test_download_complete_does_not_record_applied_for_unbound_rom(self, plugin, tmp_path, emit):
         """A ROM downloaded before it is synced (no shortcut) records nothing — there
         is no shortcut to reflect; the next sync creates it and records the value."""
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -1745,18 +1690,14 @@ class TestDoDownloadOverrideRebake:
     it survives uninstall → reinstall, and reinstall flows through ``_do_download``.
     """
 
-    async def _run_single_download(self, plugin, tmp_path, *, rom_id, override):
+    async def _run_single_download(self, plugin, tmp_path, emit, *, rom_id, override):
         """Download one single-file ROM (bound) with ``override`` pre-pinned; return payload."""
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "psx"
         roms_dir.mkdir(parents=True)
@@ -1784,17 +1725,19 @@ class TestDoDownloadOverrideRebake:
         with patch.object(plugin._romm_api, "download_rom_content", side_effect=fake_download):
             await plugin._download_service._do_download(rom_id, rom_detail, target_path, "psx", "game.chd")
 
-        emit_calls = [c for c in decky.emit.call_args_list if c[0][0] == "download_complete"]
+        emit_calls = [c for c in emit.call_args_list if c[0][0] == "download_complete"]
         assert len(emit_calls) == 1
         return emit_calls[0][0][1], target_path
 
     @pytest.mark.asyncio
-    async def test_reinstall_with_override_rebakes_e_form(self, plugin, tmp_path):
+    async def test_reinstall_with_override_rebakes_e_form(self, plugin, tmp_path, emit):
         """An override-set ROM's reinstall emits ``-e`` baked launch_options (B2)."""
         plugin._core_info.available_cores = [
             {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
         ]
-        payload, target_path = await self._run_single_download(plugin, tmp_path, rom_id=42, override="PCSX ReARMed")
+        payload, target_path = await self._run_single_download(
+            plugin, tmp_path, emit, rom_id=42, override="PCSX ReARMed"
+        )
         assert payload["app_id"] == 1042
         assert payload["launch_options"] == (
             "flatpak run net.retrodeck.retrodeck "
@@ -1803,17 +1746,17 @@ class TestDoDownloadOverrideRebake:
         )
 
     @pytest.mark.asyncio
-    async def test_reinstall_without_override_is_plain(self, plugin, tmp_path):
+    async def test_reinstall_without_override_is_plain(self, plugin, tmp_path, emit):
         """A NULL-override ROM's reinstall emits the plain launch — no ``-e`` (B2)."""
         plugin._core_info.available_cores = [
             {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
         ]
-        payload, target_path = await self._run_single_download(plugin, tmp_path, rom_id=43, override=None)
+        payload, target_path = await self._run_single_download(plugin, tmp_path, emit, rom_id=43, override=None)
         assert payload["launch_options"] == f'flatpak run net.retrodeck.retrodeck "{target_path}"'
         assert "-e" not in payload["launch_options"]
 
     @pytest.mark.asyncio
-    async def test_reinstall_with_stale_override_rebakes_plain_and_warns(self, plugin, tmp_path, caplog):
+    async def test_reinstall_with_stale_override_rebakes_plain_and_warns(self, plugin, tmp_path, caplog, emit):
         """A stale override LABEL reinstall emits the PLAIN launch + WARNs (B4)."""
 
         # available_cores does not carry the pinned label → resolution returns None.
@@ -1821,7 +1764,9 @@ class TestDoDownloadOverrideRebake:
             {"core_so": "pcsx_rearmed_libretro", "label": "PCSX ReARMed", "is_default": True},
         ]
         with caplog.at_level(logging.WARNING):
-            payload, target_path = await self._run_single_download(plugin, tmp_path, rom_id=44, override="Removed Core")
+            payload, target_path = await self._run_single_download(
+                plugin, tmp_path, emit, rom_id=44, override="Removed Core"
+            )
         assert payload["launch_options"] == f'flatpak run net.retrodeck.retrodeck "{target_path}"'
         assert "-e" not in payload["launch_options"]
         assert "Removed Core" in caplog.text
@@ -1832,13 +1777,10 @@ class TestDoDownloadMultiFile:
     """Tests for _do_download happy path — multi-file (ZIP)."""
 
     @pytest.mark.asyncio
-    async def test_multi_file_happy_path(self, plugin, tmp_path):
+    async def test_multi_file_happy_path(self, plugin, tmp_path, emit):
         import zipfile as zf
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -1846,7 +1788,6 @@ class TestDoDownloadMultiFile:
         plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "psx"
         roms_dir.mkdir(parents=True)
@@ -1901,7 +1842,7 @@ class TestDoDownloadMultiFile:
         # inside the renamed dir.
         assert installed.file_path == str(extract_dir / "FF7.m3u")
         # download_complete carries the launch command for the detected launch file.
-        emit_calls = [c for c in decky.emit.call_args_list if c[0][0] == "download_complete"]
+        emit_calls = [c for c in emit.call_args_list if c[0][0] == "download_complete"]
         assert len(emit_calls) == 1
         payload = emit_calls[0][0][1]
         assert payload["file_path"] == installed.file_path
@@ -1910,7 +1851,7 @@ class TestDoDownloadMultiFile:
         assert plugin._download_service._download_queue[55]["status"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_nested_multi_file_takes_extract_path(self, plugin, tmp_path):
+    async def test_nested_multi_file_takes_extract_path(self, plugin, tmp_path, emit):
         """#855: one top-level file but len(files) > 1 → RomM zips → EXTRACT path.
 
         Switch base/update/DLC: ``has_multiple_files=False`` (single top-level
@@ -1921,9 +1862,6 @@ class TestDoDownloadMultiFile:
         import zipfile as zf
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -1931,7 +1869,6 @@ class TestDoDownloadMultiFile:
         plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "switch"
         roms_dir.mkdir(parents=True)
@@ -1998,7 +1935,7 @@ class TestDoDownloadMultiFile:
         assert plugin._download_service._download_queue[99]["status"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_nested_multi_file_cleanup_removes_extract_dir(self, plugin, tmp_path):
+    async def test_nested_multi_file_cleanup_removes_extract_dir(self, plugin, tmp_path, emit):
         """#855: a nested-multi download failure must remove the extract dir.
 
         The partial-download cleanup keys on the same multi-file gate, so a
@@ -2007,9 +1944,6 @@ class TestDoDownloadMultiFile:
         """
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -2017,7 +1951,6 @@ class TestDoDownloadMultiFile:
         plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "switch"
         roms_dir.mkdir(parents=True)
@@ -2057,7 +1990,7 @@ class TestDoDownloadMultiFile:
         assert plugin._download_service._download_queue[99]["status"] == "failed"
 
     @pytest.mark.asyncio
-    async def test_nested_multi_file_names_dir_from_identity_not_files_zero(self, plugin, tmp_path):
+    async def test_nested_multi_file_names_dir_from_identity_not_files_zero(self, plugin, tmp_path, emit):
         """#1292: a folder game served as a nested-single ZIP (PS3 MGS4) must name
         its extract dir after the ROM identity, never after ``files[0]``.
 
@@ -2070,9 +2003,6 @@ class TestDoDownloadMultiFile:
         import zipfile as zf
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -2080,7 +2010,6 @@ class TestDoDownloadMultiFile:
         plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "ps3"
         roms_dir.mkdir(parents=True)
@@ -2141,7 +2070,7 @@ class TestDoDownloadMultiFile:
         assert plugin._download_service._download_queue[4778]["status"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_nested_multi_file_cleanup_targets_identity_dir_not_files_zero(self, plugin, tmp_path):
+    async def test_nested_multi_file_cleanup_targets_identity_dir_not_files_zero(self, plugin, tmp_path, emit):
         """#1292: a failed folder-game download tears down the identity-named
         extract dir, not a ``files[0]``-derived stale name.
 
@@ -2151,9 +2080,6 @@ class TestDoDownloadMultiFile:
         """
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -2161,7 +2087,6 @@ class TestDoDownloadMultiFile:
         plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "ps3"
         roms_dir.mkdir(parents=True)
@@ -2204,7 +2129,7 @@ class TestDoDownloadMultiFile:
         assert plugin._download_service._download_queue[4778]["status"] == "failed"
 
     @pytest.mark.asyncio
-    async def test_multi_file_emits_extracting_progress(self, plugin, tmp_path):
+    async def test_multi_file_emits_extracting_progress(self, plugin, tmp_path, emit):
         """A multi-file download emits ``download_progress`` ``status:"extracting"``
         frames after the byte transfer, then ``download_complete`` after.
 
@@ -2215,15 +2140,12 @@ class TestDoDownloadMultiFile:
         """
         from unittest.mock import patch
 
-        import decky
         from fakes.fake_download_file_store import FakeDownloadFileStore
 
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        decky.emit.reset_mock()
 
         roms_base = str(tmp_path / "retrodeck" / "roms")
         target_path = os.path.join(roms_base, "psx", "FF7.zip")
@@ -2271,7 +2193,7 @@ class TestDoDownloadMultiFile:
         await asyncio.sleep(0)
         await asyncio.sleep(0)
 
-        progress_calls = [c for c in decky.emit.call_args_list if c[0][0] == "download_progress"]
+        progress_calls = [c for c in emit.call_args_list if c[0][0] == "download_progress"]
         extracting = [c[0][1] for c in progress_calls if c[0][1].get("status") == "extracting"]
         assert extracting, "expected at least one extracting download_progress frame"
         frame = extracting[-1]
@@ -2286,7 +2208,7 @@ class TestDoDownloadMultiFile:
 
         # The queue entry reflects the extracting phase's last tick.
         # download_complete still fires after extraction.
-        complete = [c for c in decky.emit.call_args_list if c[0][0] == "download_complete"]
+        complete = [c for c in emit.call_args_list if c[0][0] == "download_complete"]
         assert len(complete) == 1
         assert plugin._download_service._download_queue[55]["status"] == "completed"
 
@@ -2302,15 +2224,12 @@ class TestDoDownloadBundledM3uPlatformGate:
     """
 
     @pytest.mark.asyncio
-    async def test_bundled_m3u_ignored_on_non_m3u_platform(self, plugin, tmp_path):
+    async def test_bundled_m3u_ignored_on_non_m3u_platform(self, plugin, tmp_path, emit):
         """Switch ZIP with a bundled .m3u + real .nsp, m3u unsupported → launch
         is the .nsp and the collapse dir is ``<Game>.nsp/``, NOT ``<Game>.m3u/``."""
         import zipfile as zf
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -2318,7 +2237,6 @@ class TestDoDownloadBundledM3uPlatformGate:
         plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
-        decky.emit.reset_mock()
         # Switch does not list .m3u in ES-DE's es_systems.xml.
         plugin._m3u_supported = False
 
@@ -2368,15 +2286,12 @@ class TestDoDownloadBundledM3uPlatformGate:
         assert plugin._download_service._download_queue[111]["status"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_disc_platform_still_generates_and_uses_m3u(self, plugin, tmp_path):
+    async def test_disc_platform_still_generates_and_uses_m3u(self, plugin, tmp_path, emit):
         """Mirror positive: a disc system (m3u supported) still generates/keeps
         the m3u and names the collapse dir ``<Game>.m3u/``."""
         import zipfile as zf
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -2384,7 +2299,6 @@ class TestDoDownloadBundledM3uPlatformGate:
         plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
-        decky.emit.reset_mock()
         # psx lists .m3u in ES-DE's es_systems.xml.
         plugin._m3u_supported = True
 
@@ -2434,9 +2348,6 @@ class TestEsDeCollapseRename:
     """Tests for the ES-DE directory-collapse rename on new multi-file downloads (#943)."""
 
     def _wire_paths(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -2444,7 +2355,6 @@ class TestEsDeCollapseRename:
         plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
-        decky.emit.reset_mock()
 
     async def _run_multi(self, plugin, tmp_path, *, rom_id, platform, archive_name, zip_members, rom_detail):
         import zipfile as zf
@@ -2726,9 +2636,6 @@ class TestDoDownloadNestedSingleFile:
         """Regression: simple-single-file still uses fs_name as the local filename."""
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -2775,9 +2682,6 @@ class TestDoDownloadNestedSingleFile:
         """Happy path: has_nested_single_file derives the local filename from files[0].file_name."""
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -2829,9 +2733,6 @@ class TestDoDownloadNestedSingleFile:
         """start_download: nested-single-file enters the queue with the resolved filename."""
         from unittest.mock import AsyncMock
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -2868,13 +2769,10 @@ class TestDoDownloadNestedSingleFile:
         assert plugin._download_service._download_queue[7]["file_name"] == "Resident Evil.chd"
 
     @pytest.mark.asyncio
-    async def test_nested_single_file_empty_files_falls_back(self, plugin, tmp_path, caplog):
+    async def test_nested_single_file_empty_files_falls_back(self, plugin, tmp_path, caplog, logger):
         """Defensive: empty files list falls back to fs_name and logs a warning."""
         from unittest.mock import AsyncMock
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -2905,7 +2803,7 @@ class TestDoDownloadNestedSingleFile:
         plugin._download_service._loop.create_task = _close_coro_task
         plugin._download_service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
 
-        with caplog.at_level(logging.WARNING, logger="test_romm"):
+        with caplog.at_level(logging.WARNING, logger=logger.name):
             result = await plugin.start_download(8)
 
         assert result["success"] is True
@@ -2913,13 +2811,10 @@ class TestDoDownloadNestedSingleFile:
         assert any("has_nested_single_file" in rec.message for rec in caplog.records)
 
     @pytest.mark.asyncio
-    async def test_nested_single_file_missing_files_key_falls_back(self, plugin, tmp_path, caplog):
+    async def test_nested_single_file_missing_files_key_falls_back(self, plugin, tmp_path, caplog, logger):
         """Defensive: missing files key falls back to fs_name and logs a warning."""
         from unittest.mock import AsyncMock
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -2950,7 +2845,7 @@ class TestDoDownloadNestedSingleFile:
         plugin._download_service._loop.create_task = _close_coro_task
         plugin._download_service._download_file_store.disk_free = lambda _path: 500 * 1024 * 1024
 
-        with caplog.at_level(logging.WARNING, logger="test_romm"):
+        with caplog.at_level(logging.WARNING, logger=logger.name):
             result = await plugin.start_download(9)
 
         assert result["success"] is True
@@ -2962,9 +2857,6 @@ class TestDoDownloadNestedSingleFile:
         """Defensive: path traversal in files[0].file_name is sanitized via os.path.basename."""
         from unittest.mock import AsyncMock
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -3008,9 +2900,6 @@ class TestPathTraversalDeleteRomFiles:
 
     @pytest.mark.asyncio
     async def test_rejects_rom_dir_outside_roms_base(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -3042,9 +2931,6 @@ class TestPathTraversalDeleteRomFiles:
 
     @pytest.mark.asyncio
     async def test_rejects_file_path_outside_roms_base(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -3077,9 +2963,6 @@ class TestPathTraversalFsName:
     async def test_fs_name_traversal_sanitized(self, plugin, tmp_path):
         from unittest.mock import AsyncMock
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -3123,9 +3006,6 @@ class TestPathTraversalFsName:
         resolve to the platform dir's parent (the roms root)."""
         from unittest.mock import AsyncMock
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -3164,16 +3044,12 @@ class TestPathTraversalPlatformSlug:
     """#967: an unmapped server platform slug must not escape roms_path."""
 
     @pytest.mark.asyncio
-    async def test_traversal_slug_rejected_before_make_dirs(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
+    async def test_traversal_slug_rejected_before_make_dirs(self, plugin, tmp_path, emit):
         roms_root = tmp_path / "retrodeck" / "roms"
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(roms_root),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        decky.emit.reset_mock()
 
         rom_detail = {
             "id": 77,
@@ -3208,7 +3084,7 @@ class TestPathTraversalPlatformSlug:
         # The rom is no longer marked in-progress (cleaned up on rejection).
         assert 77 not in plugin._download_service._download_in_progress
         # download_failed event fired so the UI doesn't hang on "downloading".
-        failed = [c for c in decky.emit.call_args_list if c[0][0] == "download_failed"]
+        failed = [c for c in emit.call_args_list if c[0][0] == "download_failed"]
         assert len(failed) == 1
         assert failed[0][0][1]["rom_id"] == 77
 
@@ -3270,37 +3146,35 @@ class TestResolveSafeExtractDirName:
         name = plugin._download_service._resolve_safe_extract_dir_name({"fs_name_no_ext": "Metal Gear Solid 4"})
         assert name == "Metal Gear Solid 4"
 
-    def test_sanitizes_relative_traversal(self, plugin, caplog):
-
-        with caplog.at_level(logging.WARNING, logger="test_romm"):
+    def test_sanitizes_relative_traversal(self, plugin, caplog, logger):
+        with caplog.at_level(logging.WARNING, logger=logger.name):
             name = plugin._download_service._resolve_safe_extract_dir_name({"fs_name_no_ext": "../../etc/pwned"})
         assert name == "pwned"
         assert any("Sanitized extract dir name" in rec.message for rec in caplog.records)
 
-    def test_sanitizes_absolute_path(self, plugin, caplog):
-
-        with caplog.at_level(logging.WARNING, logger="test_romm"):
+    def test_sanitizes_absolute_path(self, plugin, caplog, logger):
+        with caplog.at_level(logging.WARNING, logger=logger.name):
             name = plugin._download_service._resolve_safe_extract_dir_name({"fs_name": "/etc/passwd"})
         assert name == "passwd"
         assert any("Sanitized extract dir name" in rec.message for rec in caplog.records)
 
     @pytest.mark.parametrize("degenerate", ["..", ".", "foo/", "   "])
-    def test_degenerate_component_falls_back_to_synthetic(self, plugin, caplog, degenerate):
+    def test_degenerate_component_falls_back_to_synthetic(self, plugin, caplog, degenerate, logger):
         """A server-supplied name that basenames to ``..``/``.``/empty/whitespace
         must NOT resolve to the roms root or platform dir — it falls back to the
         synthetic rom_<id> identity + one warning (the HIGH-severity guard)."""
 
-        with caplog.at_level(logging.WARNING, logger="test_romm"):
+        with caplog.at_level(logging.WARNING, logger=logger.name):
             name = plugin._download_service._resolve_safe_extract_dir_name({"id": 4778, "fs_name_no_ext": degenerate})
         assert name == "rom_4778"
         assert any("Sanitized extract dir name" in rec.message for rec in caplog.records)
 
-    def test_empty_fs_name_no_ext_yields_synthetic_without_warning(self, plugin, caplog):
+    def test_empty_fs_name_no_ext_yields_synthetic_without_warning(self, plugin, caplog, logger):
         """An empty ``fs_name_no_ext`` is upstream-handled by
         ``resolve_extract_dir_name`` (it falls through to the synthetic name), so
         the guard sees an already-clean component — safe result, no coercion warning."""
 
-        with caplog.at_level(logging.WARNING, logger="test_romm"):
+        with caplog.at_level(logging.WARNING, logger=logger.name):
             name = plugin._download_service._resolve_safe_extract_dir_name({"id": 4778, "fs_name_no_ext": ""})
         assert name == "rom_4778"
         assert not any("Sanitized extract dir name" in rec.message for rec in caplog.records)
@@ -3313,9 +3187,6 @@ class TestDoDownloadCancelled:
     async def test_cancelled_sets_status_and_cleans_up(self, plugin, tmp_path):
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -3363,9 +3234,6 @@ class TestDoDownloadZipFailure:
     async def test_zip_failure_sets_failed_and_cleans_up(self, plugin, tmp_path):
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -3407,13 +3275,10 @@ class TestDoDownloadPostDecodeTraversal:
     """#968: a ZIP member that passes the ZIP-slip check but decodes to a traversal."""
 
     @pytest.mark.asyncio
-    async def test_decoded_traversal_aborts_cleans_up_and_emits(self, plugin, tmp_path):
+    async def test_decoded_traversal_aborts_cleans_up_and_emits(self, plugin, tmp_path, emit):
         import zipfile as zf
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -3421,7 +3286,6 @@ class TestDoDownloadPostDecodeTraversal:
         plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "psx"
         roms_dir.mkdir(parents=True)
@@ -3472,22 +3336,19 @@ class TestDoDownloadPostDecodeTraversal:
         # Queue marked failed.
         assert plugin._download_service._download_queue[88]["status"] == "failed"
         # download_failed fired (UI doesn't hang); offending name surfaced.
-        failed = [c for c in decky.emit.call_args_list if c[0][0] == "download_failed"]
+        failed = [c for c in emit.call_args_list if c[0][0] == "download_failed"]
         assert len(failed) == 1
         assert failed[0][0][1]["rom_id"] == 88
         assert "evil.sh" in failed[0][0][1]["error_message"]
         # No download_complete.
-        assert not [c for c in decky.emit.call_args_list if c[0][0] == "download_complete"]
+        assert not [c for c in emit.call_args_list if c[0][0] == "download_complete"]
 
     @pytest.mark.asyncio
-    async def test_legit_multi_file_subdir_still_extracts(self, plugin, tmp_path):
+    async def test_legit_multi_file_subdir_still_extracts(self, plugin, tmp_path, emit):
         """The #968 fix must not break a legitimate nested-subdir multi-file ROM."""
         import zipfile as zf
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -3495,7 +3356,6 @@ class TestDoDownloadPostDecodeTraversal:
         plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "switch"
         roms_dir.mkdir(parents=True)
@@ -3538,19 +3398,16 @@ class TestDoDownloadPostDecodeTraversal:
         assert rom_dir is not None
         assert os.path.exists(os.path.join(rom_dir, "Game Base.nsp"))
         assert os.path.exists(os.path.join(rom_dir, "update", "Game Update.nsp"))
-        assert [c for c in decky.emit.call_args_list if c[0][0] == "download_complete"]
+        assert [c for c in emit.call_args_list if c[0][0] == "download_complete"]
 
 
 class TestDoDownloadFailureEmit:
     """Tests for _do_download — ``download_failed`` event emission."""
 
     @pytest.mark.asyncio
-    async def test_failure_emits_download_failed(self, plugin, tmp_path):
+    async def test_failure_emits_download_failed(self, plugin, tmp_path, emit):
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -3558,7 +3415,6 @@ class TestDoDownloadFailureEmit:
         plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -3583,7 +3439,7 @@ class TestDoDownloadFailureEmit:
             await plugin._download_service._do_download(42, rom_detail, target_path, "n64", "zelda.z64")
 
         # download_failed event emitted with the expected payload shape
-        emit_calls = [c for c in decky.emit.call_args_list if c[0][0] == "download_failed"]
+        emit_calls = [c for c in emit.call_args_list if c[0][0] == "download_failed"]
         assert len(emit_calls) == 1
         payload = emit_calls[0][0][1]
         assert payload["rom_id"] == 42
@@ -3591,7 +3447,7 @@ class TestDoDownloadFailureEmit:
         assert payload["platform_name"] == "Nintendo 64"
         assert payload["error_message"] == "simulated network drop"
         # No download_complete in the failure path
-        assert not [c for c in decky.emit.call_args_list if c[0][0] == "download_complete"]
+        assert not [c for c in emit.call_args_list if c[0][0] == "download_complete"]
         # Queue status reflects the failure
         assert plugin._download_service._download_queue[42]["status"] == "failed"
         assert plugin._download_service._download_queue[42]["error"] == "simulated network drop"
@@ -3606,17 +3462,13 @@ class TestDoDownloadInvariantFailure:
     """
 
     @pytest.mark.asyncio
-    async def test_single_file_invariant_failure_cleans_up_and_persists_nothing(self, plugin, tmp_path):
+    async def test_single_file_invariant_failure_cleans_up_and_persists_nothing(self, plugin, tmp_path, emit):
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -3651,22 +3503,18 @@ class TestDoDownloadInvariantFailure:
         assert plugin._uow.rom_installs.get(0) is None
         assert list(plugin._uow.rom_installs.iter_all()) == []
         # download_failed emitted, no download_complete.
-        assert [c for c in decky.emit.call_args_list if c[0][0] == "download_failed"]
-        assert not [c for c in decky.emit.call_args_list if c[0][0] == "download_complete"]
+        assert [c for c in emit.call_args_list if c[0][0] == "download_failed"]
+        assert not [c for c in emit.call_args_list if c[0][0] == "download_complete"]
 
     @pytest.mark.asyncio
-    async def test_multi_file_invariant_failure_removes_extract_dir(self, plugin, tmp_path):
+    async def test_multi_file_invariant_failure_removes_extract_dir(self, plugin, tmp_path, emit):
         import zipfile as zf
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "psx"
         roms_dir.mkdir(parents=True)
@@ -3718,9 +3566,6 @@ class TestStartDownloadReDownload:
     async def test_re_download_after_completed(self, plugin, tmp_path):
         from unittest.mock import AsyncMock
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -3808,9 +3653,6 @@ class TestUninstallAllRomsMixedResults:
 
     @pytest.mark.asyncio
     async def test_mixed_success_and_failure(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -3851,9 +3693,6 @@ class TestRemoveRomFileAlreadyGone:
 
     @pytest.mark.asyncio
     async def test_file_already_gone_cleans_state(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -3879,13 +3718,10 @@ class TestUrlEncodedFilenameRename:
     """Tests for URL-encoded filename fix after ZIP extraction."""
 
     @pytest.mark.asyncio
-    async def test_renames_url_encoded_files_after_extract(self, plugin, tmp_path):
+    async def test_renames_url_encoded_files_after_extract(self, plugin, tmp_path, emit):
         import zipfile as zf
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -3893,7 +3729,6 @@ class TestUrlEncodedFilenameRename:
         plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "psx"
         roms_dir.mkdir(parents=True)
@@ -3937,13 +3772,10 @@ class TestUrlEncodedFilenameRename:
         assert not (extract_dir / "Vagrant%20Story%20%28USA%29%20%28Disc%201%29.chd").exists()
 
     @pytest.mark.asyncio
-    async def test_leaves_normal_filenames_alone(self, plugin, tmp_path):
+    async def test_leaves_normal_filenames_alone(self, plugin, tmp_path, emit):
         import zipfile as zf
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -3951,7 +3783,6 @@ class TestUrlEncodedFilenameRename:
         plugin._rom_removal_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "psx"
         roms_dir.mkdir(parents=True)
@@ -3997,9 +3828,6 @@ class TestUrlEncodedFilenameRename:
 
 class TestCleanupLeftoverTmpFiles:
     def test_removes_tmp_file(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -4017,9 +3845,6 @@ class TestCleanupLeftoverTmpFiles:
         assert not tmp_file.exists()
 
     def test_removes_zip_tmp_file(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -4037,9 +3862,6 @@ class TestCleanupLeftoverTmpFiles:
         assert not tmp_file.exists()
 
     def test_keeps_real_rom_files(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -4063,9 +3885,6 @@ class TestCleanupLeftoverTmpFiles:
         assert cue_file.exists()
 
     def test_removes_bios_tmp(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -4083,9 +3902,6 @@ class TestCleanupLeftoverTmpFiles:
         assert not tmp_file.exists()
 
     def test_no_roms_dir_no_crash(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -4096,12 +3912,9 @@ class TestCleanupLeftoverTmpFiles:
         # No retrodeck/roms directory exists — should not crash
         plugin._download_service.cleanup_leftover_tmp_files()
 
-    def test_handles_permission_error(self, plugin, tmp_path, caplog):
-
-        import decky
+    def test_handles_permission_error(self, plugin, tmp_path, caplog, logger):
         from fakes.fake_download_file_store import FakeDownloadFileStore
 
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -4124,7 +3937,7 @@ class TestCleanupLeftoverTmpFiles:
         fake.remove_failures.add(tmp_file_path)
         plugin._download_service._download_file_store = fake
 
-        with caplog.at_level(logging.WARNING, logger="test_romm"):
+        with caplog.at_level(logging.WARNING, logger=logger.name):
             plugin._download_service.cleanup_leftover_tmp_files()
 
         # Per-file warning must be emitted; sister-PR pattern in
@@ -4213,9 +4026,6 @@ class TestStartDownloadCreateTaskFailure:
     async def test_create_task_failure_returns_error(self, plugin, tmp_path):
         from unittest.mock import AsyncMock
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -4456,8 +4266,7 @@ class TestCleanupPartialDownloadFailureInjection:
     warning, no re-raise).
     """
 
-    def test_remove_failures_are_logged_and_other_paths_still_removed(self, plugin, caplog):
-
+    def test_remove_failures_are_logged_and_other_paths_still_removed(self, plugin, caplog, logger):
         from fakes.fake_download_file_store import FakeDownloadFileStore
 
         fake = FakeDownloadFileStore()
@@ -4471,7 +4280,7 @@ class TestCleanupPartialDownloadFailureInjection:
         fake.remove_failures.add(target + _TMP_EXT_LITERAL)
         plugin._download_service._download_file_store = fake
 
-        with caplog.at_level(logging.WARNING, logger="test_romm"):
+        with caplog.at_level(logging.WARNING, logger=logger.name):
             plugin._download_service._cleanup_partial_download(target, False, "")
 
         # The failing transient is still in the fake (remove raised); the
@@ -4486,8 +4295,7 @@ class TestCleanupPartialDownloadFailureInjection:
             "Cleanup failed for" in rec.message and (target + _TMP_EXT_LITERAL) in rec.message for rec in caplog.records
         )
 
-    def test_remove_tree_failure_is_logged_and_swallowed(self, plugin, caplog):
-
+    def test_remove_tree_failure_is_logged_and_swallowed(self, plugin, caplog, logger):
         from fakes.fake_download_file_store import FakeDownloadFileStore
 
         fake = FakeDownloadFileStore()
@@ -4500,7 +4308,7 @@ class TestCleanupPartialDownloadFailureInjection:
         fake.remove_tree_failures.add(extract_dir)
         plugin._download_service._download_file_store = fake
 
-        with caplog.at_level(logging.WARNING, logger="test_romm"):
+        with caplog.at_level(logging.WARNING, logger=logger.name):
             # Must NOT raise even though remove_tree raises.
             plugin._download_service._cleanup_partial_download(target, True, "game")
 
@@ -4522,9 +4330,6 @@ class TestStartDownloadInProgressLeak:
     """
 
     def _wire(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -4694,17 +4499,13 @@ class TestDoDownloadRedownloadPreservesExisting:
     """#1049 scenario 2: a re-download that fails mid-transfer must NOT delete the existing install."""
 
     @pytest.mark.asyncio
-    async def test_failed_redownload_keeps_preexisting_file(self, plugin, tmp_path):
+    async def test_failed_redownload_keeps_preexisting_file(self, plugin, tmp_path, emit):
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -4751,18 +4552,14 @@ class TestDoDownloadCancelReconcile:
     """
 
     @pytest.mark.asyncio
-    async def test_cancel_during_commit_surfaces_completed_single_file(self, plugin, tmp_path):
+    async def test_cancel_during_commit_surfaces_completed_single_file(self, plugin, tmp_path, emit):
         import threading
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -4824,24 +4621,20 @@ class TestDoDownloadCancelReconcile:
         installed = plugin._uow.rom_installs.get(42)
         assert installed is not None
         assert installed.file_path == target_path
-        assert [c for c in decky.emit.call_args_list if c[0][0] == "download_complete"]
-        assert not [c for c in decky.emit.call_args_list if c[0][0] == "download_failed"]
+        assert [c for c in emit.call_args_list if c[0][0] == "download_complete"]
+        assert not [c for c in emit.call_args_list if c[0][0] == "download_failed"]
 
     @pytest.mark.asyncio
-    async def test_cancel_during_commit_keeps_committed_install_multi_file(self, plugin, tmp_path):
+    async def test_cancel_during_commit_keeps_committed_install_multi_file(self, plugin, tmp_path, emit):
         """The data-loss path: a committed multi-file extract dir must SURVIVE a
         racing cancel — cleanup would otherwise ``remove_tree`` the live install."""
         import threading
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "psx"
         roms_dir.mkdir(parents=True)
@@ -4921,24 +4714,20 @@ class TestDoDownloadCancelReconcile:
         # Surfaced as completed, install row present, download_complete emitted.
         assert plugin._download_service._download_queue[77]["status"] == "completed"
         assert plugin._uow.rom_installs.get(77) is not None
-        assert [c for c in decky.emit.call_args_list if c[0][0] == "download_complete"]
+        assert [c for c in emit.call_args_list if c[0][0] == "download_complete"]
 
 
 class TestDoDownloadCancelEmitsEvent:
     """#1017: a clean cancel must emit a terminal download_progress(cancelled) frame."""
 
     @pytest.mark.asyncio
-    async def test_cancel_emits_cancelled_progress_event(self, plugin, tmp_path):
+    async def test_cancel_emits_cancelled_progress_event(self, plugin, tmp_path, emit):
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -4973,9 +4762,7 @@ class TestDoDownloadCancelEmitsEvent:
 
         # A terminal cancelled frame reached the frontend (was silent before #1017).
         cancelled = [
-            c
-            for c in decky.emit.call_args_list
-            if c[0][0] == "download_progress" and c[0][1].get("status") == "cancelled"
+            c for c in emit.call_args_list if c[0][0] == "download_progress" and c[0][1].get("status") == "cancelled"
         ]
         assert len(cancelled) == 1
         payload = cancelled[0][0][1]
@@ -4992,9 +4779,6 @@ class TestConcurrencyReservation:
     """#1053: bounded concurrency + reserved-bytes preflight + queued status."""
 
     def _wire(self, plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -5047,17 +4831,13 @@ class TestConcurrencyReservation:
         assert 2 not in plugin._download_service._download_in_progress
 
     @pytest.mark.asyncio
-    async def test_reservation_released_after_download(self, plugin, tmp_path):
+    async def test_reservation_released_after_download(self, plugin, tmp_path, emit):
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -5089,17 +4869,13 @@ class TestConcurrencyReservation:
         assert 42 not in plugin._download_service._reserved_bytes
 
     @pytest.mark.asyncio
-    async def test_third_download_emits_queued_while_two_run(self, plugin, tmp_path):
+    async def test_third_download_emits_queued_while_two_run(self, plugin, tmp_path, emit):
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -5142,9 +4918,7 @@ class TestConcurrencyReservation:
 
             # It emitted a queued frame and is still waiting (status queued).
             queued = [
-                c
-                for c in decky.emit.call_args_list
-                if c[0][0] == "download_progress" and c[0][1].get("status") == "queued"
+                c for c in emit.call_args_list if c[0][0] == "download_progress" and c[0][1].get("status") == "queued"
             ]
             assert len(queued) == 1
             assert queued[0][0][1]["rom_id"] == 3
@@ -5213,9 +4987,6 @@ class TestCooperativeCancel:
         """
         from unittest.mock import patch
 
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
@@ -5342,22 +5113,16 @@ class TestPauseResume:
 
     @staticmethod
     def _retrodeck(plugin, tmp_path):
-        import decky
-
-        decky.DECKY_USER_HOME = str(tmp_path)
         plugin._download_service._retrodeck_paths = FakeRetroDeckPaths(
             roms=str(tmp_path / "retrodeck" / "roms"),
             bios=str(tmp_path / "retrodeck" / "bios"),
         )
 
     @pytest.mark.asyncio
-    async def test_pause_sets_status_and_keeps_tmp(self, plugin, tmp_path):
+    async def test_pause_sets_status_and_keeps_tmp(self, plugin, tmp_path, emit):
         from unittest.mock import patch
 
-        import decky
-
         self._retrodeck(plugin, tmp_path)
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -5403,7 +5168,7 @@ class TestPauseResume:
         assert os.path.exists(target_path + _TMP_EXT_LITERAL)
         # A terminal "paused" frame reached the frontend, carrying resumable.
         paused_frames = [
-            c for c in decky.emit.call_args_list if c[0][0] == "download_progress" and c[0][1].get("status") == "paused"
+            c for c in emit.call_args_list if c[0][0] == "download_progress" and c[0][1].get("status") == "paused"
         ]
         assert len(paused_frames) == 1
         assert paused_frames[0][0][1]["resumable"] is True
@@ -5451,14 +5216,11 @@ class TestPauseResume:
         assert not os.path.exists(target_path + _TMP_EXT_LITERAL)
 
     @pytest.mark.asyncio
-    async def test_on_meta_sets_resumable_and_emits(self, plugin, tmp_path):
+    async def test_on_meta_sets_resumable_and_emits(self, plugin, tmp_path, emit):
         """The adapter's on_meta(True) callback flips resumable and emits it live."""
         from unittest.mock import patch
 
-        import decky
-
         self._retrodeck(plugin, tmp_path)
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -5497,19 +5259,16 @@ class TestPauseResume:
         assert plugin._download_service._download_queue[42]["resumable"] is True
         # ...and emitted a download_progress frame carrying resumable: True.
         meta_frames = [
-            c for c in decky.emit.call_args_list if c[0][0] == "download_progress" and c[0][1].get("resumable") is True
+            c for c in emit.call_args_list if c[0][0] == "download_progress" and c[0][1].get("resumable") is True
         ]
         assert meta_frames
 
     @pytest.mark.asyncio
-    async def test_non_resumable_stays_false(self, plugin, tmp_path):
+    async def test_non_resumable_stays_false(self, plugin, tmp_path, emit):
         """on_meta(False) leaves resumable False (mod_zip / Cloudflare path)."""
         from unittest.mock import patch
 
-        import decky
-
         self._retrodeck(plugin, tmp_path)
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)
@@ -5599,14 +5358,11 @@ class TestPauseResume:
         assert plugin._download_service._download_queue[42]["resumable"] is True
 
     @pytest.mark.asyncio
-    async def test_resume_threads_resume_true_into_do_download(self, plugin, tmp_path):
+    async def test_resume_threads_resume_true_into_do_download(self, plugin, tmp_path, emit):
         """End-to-end: the resumed transfer reaches download_rom_content with resume=True."""
         from unittest.mock import patch
 
-        import decky
-
         self._retrodeck(plugin, tmp_path)
-        decky.emit.reset_mock()
 
         roms_dir = tmp_path / "retrodeck" / "roms" / "n64"
         roms_dir.mkdir(parents=True)

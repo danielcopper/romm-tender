@@ -30,8 +30,6 @@ import pytest
 from domain.sync_diff import BIND_ROM_ID_KEY
 from domain.sync_state import SyncState
 from domain.work_unit import WorkUnit
-
-# conftest.py patches decky before this import
 from tests.services.library._helpers import _fake_wait_set_event, _seed_platform, _seed_rom_row, _use_fake_romm
 
 
@@ -193,9 +191,6 @@ class TestCoverRefreshPass:
 
     @staticmethod
     def _apply_setup(plugin, fake_romm_api):
-        import decky
-
-        decky.emit.reset_mock()
         plugin.loop = asyncio.get_running_loop()
         _use_fake_romm(plugin, fake_romm_api)
         plugin._sync_service._cover_preparer._download_artwork = AsyncMock(return_value={})
@@ -204,10 +199,8 @@ class TestCoverRefreshPass:
         plugin._sync_service._box.current_sync_id = "run-cover"
 
     @staticmethod
-    def _apply_unit_events():
-        import decky
-
-        return [c[0][1] for c in decky.emit.call_args_list if c[0][0] == "sync_apply_unit"]
+    def _apply_unit_events(emit):
+        return [c[0][1] for c in emit.call_args_list if c[0][0] == "sync_apply_unit"]
 
     @staticmethod
     def _cache_file(plugin, rom_id):
@@ -216,7 +209,7 @@ class TestCoverRefreshPass:
         return Path(plugin._artwork_service._cover_cache_dir) / f"{rom_id}.png"
 
     @pytest.mark.asyncio
-    async def test_changed_cover_on_delta_skipped_rom_rides_first_chunk(self, plugin, fake_romm_api):
+    async def test_changed_cover_on_delta_skipped_rom_rides_first_chunk(self, plugin, fake_romm_api, emit):
         # rom 10 is content-unchanged (delta-skipped: no shortcut emitted) but its
         # server cover source changed. The pass re-downloads the cache, persists
         # the fresh fingerprint, and the {rom_id, app_id} entry rides chunk 0 so
@@ -237,7 +230,7 @@ class TestCoverRefreshPass:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        events = self._apply_unit_events()
+        events = self._apply_unit_events(emit)
         assert len(events) == 1
         assert events[0]["shortcuts"] == [], "the item stays delta-skipped — a cover change never re-applies it"
         assert events[0]["cover_refreshes"] == [{"rom_id": 10, "app_id": 1010}]
@@ -247,7 +240,7 @@ class TestCoverRefreshPass:
             assert uow.roms.get(10).cover_source == self._NEW
 
     @pytest.mark.asyncio
-    async def test_null_fingerprint_adopts_without_refresh_entry(self, plugin, fake_romm_api):
+    async def test_null_fingerprint_adopts_without_refresh_entry(self, plugin, fake_romm_api, emit):
         # A pre-#1386 row (fingerprint NULL) with an existing cache file adopts
         # the fresh fingerprint silently: no download, no refresh entry.
         self._apply_setup(plugin, fake_romm_api)
@@ -266,7 +259,7 @@ class TestCoverRefreshPass:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        events = self._apply_unit_events()
+        events = self._apply_unit_events(emit)
         assert len(events) == 1
         assert events[0]["cover_refreshes"] == []
         assert cache.read_bytes() == b"pre-existing cache", "NULL-adopt never re-downloads"
@@ -275,7 +268,7 @@ class TestCoverRefreshPass:
             assert uow.roms.get(10).cover_source == self._NEW
 
     @pytest.mark.asyncio
-    async def test_refreshes_ride_only_the_first_chunk(self, plugin, fake_romm_api, monkeypatch):
+    async def test_refreshes_ride_only_the_first_chunk(self, plugin, fake_romm_api, monkeypatch, emit):
         # Four changed items at chunk size 2 → two chunks; rom 1's cover also
         # changed. The refresh entry rides chunk 0 only; chunk 1 carries [].
         from services.library import chunk_dispatcher
@@ -312,13 +305,13 @@ class TestCoverRefreshPass:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        events = self._apply_unit_events()
+        events = self._apply_unit_events(emit)
         assert len(events) == 2
         assert events[0]["cover_refreshes"] == [{"rom_id": 1, "app_id": 1001}]
         assert events[1]["cover_refreshes"] == []
 
     @pytest.mark.asyncio
-    async def test_headroom_clips_refresh_list_before_emit(self, plugin, fake_romm_api):
+    async def test_headroom_clips_refresh_list_before_emit(self, plugin, fake_romm_api, emit):
         # A live RSS reading leaves headroom for exactly ONE transient cover after
         # the (empty) chunk's own cost: two refreshes clip to one — never a pause.
         from domain.session_budget import CLIFF_KB, COVER_TRANSIENT_KB
@@ -347,7 +340,7 @@ class TestCoverRefreshPass:
 
         await plugin._sync_service._orchestrator._do_sync_per_unit()
 
-        events = self._apply_unit_events()
+        events = self._apply_unit_events(emit)
         assert len(events) == 1, "the refreshes must never pause the run"
         assert events[0]["cover_refreshes"] == [{"rom_id": 1, "app_id": 1001}], "clipped to the headroom allowance"
         # Both grid-side caches were still refreshed backend-side; only the

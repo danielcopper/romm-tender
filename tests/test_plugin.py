@@ -27,8 +27,6 @@ from adapters.persistence import PersistenceAdapter, SettingsPersisterAdapter
 from adapters.steam_config import SteamConfigAdapter
 from host import HostStatus
 from lib.retrodeck_health import RetroDeckConfigHealth
-
-# conftest.py patches decky before this import
 from main import Plugin
 from services.connection import ConnectionService, ConnectionServiceConfig
 from services.library import LibraryService, LibraryServiceConfig
@@ -116,7 +114,7 @@ async def test_terminal_prune_completion_holds_publication_lease_before_release_
 
 
 @pytest.fixture
-def plugin():
+def plugin(logger, home, data_dir):
     p = Plugin()
     p.settings = {"romm_url": "", "romm_user": "", "romm_pass": "", "enabled_platforms": {}}
     p._http_adapter = MagicMock()
@@ -133,10 +131,8 @@ def plugin():
     p._prune_service.is_active.return_value = False
     p._event_sink = FakeEventSink()
 
-    import decky
-
-    p._debug_logger = SettingsAwareDebugLogger(settings=p.settings, logger=decky.logger)
-    steam_config = SteamConfigAdapter(user_home=decky.DECKY_USER_HOME, logger=decky.logger)
+    p._debug_logger = SettingsAwareDebugLogger(settings=p.settings, logger=logger)
+    steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
     p._steam_config = steam_config
 
     p._settings_persister = FakeSettingsPersister()
@@ -147,8 +143,8 @@ def plugin():
             steam_config=steam_config,
             settings=p.settings,
             loop=running_loop(),
-            logger=decky.logger,
-            launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/tender-rom-launcher",
+            logger=logger,
+            launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
             # The service seam is fire-and-forget (``EventEmitter`` answers
             # ``None``); the plugin's own sink answers whether anybody heard.
             # Two seams, deliberately not one.
@@ -172,10 +168,10 @@ def plugin():
             sgdb_api=MagicMock(),
             romm_api=p._romm_api,
             steam_config=steam_config,
-            sgdb_artwork_cache=FakeSgdbArtworkCache(cache_root=decky.DECKY_PLUGIN_RUNTIME_DIR),
+            sgdb_artwork_cache=FakeSgdbArtworkCache(cache_root=data_dir),
             settings=p.settings,
             loop=running_loop(),
-            logger=decky.logger,
+            logger=logger,
             settings_persister=FakeSettingsPersister(),
             get_pending_sync=lambda: p._sync_service._pending_sync,
             log_debug=p._log_debug,
@@ -187,7 +183,7 @@ def plugin():
         config=SettingsServiceConfig(
             settings=p.settings,
             uow_factory=FakeUnitOfWorkFactory(),
-            logger=decky.logger,
+            logger=logger,
             settings_persister=p._settings_persister,
             steam_config=steam_config,
         ),
@@ -199,7 +195,7 @@ def plugin():
             romm_api=p._romm_api,
             settings_persister=p._settings_persister,
             loop=running_loop(),
-            logger=decky.logger,
+            logger=logger,
             min_required_version=Plugin._MIN_REQUIRED_VERSION,
             forget_device=MagicMock(),
             clear_playtime_scope_notice=MagicMock(),
@@ -208,7 +204,7 @@ def plugin():
 
     p._startup_healing_service = StartupHealingService(
         config=StartupHealingServiceConfig(
-            logger=decky.logger,
+            logger=logger,
             clock=FakeClock(),
             retrodeck_paths=p._retrodeck_paths,
             path_probe=FakePathExistsReader(),
@@ -263,19 +259,15 @@ class TestSettings:
         assert result["has_token"] is False
 
     @pytest.mark.asyncio
-    async def test_save_server_url_persists_url(self, plugin, tmp_path):
-        import decky
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), decky.DECKY_PLUGIN_RUNTIME_DIR, decky.logger)
+    async def test_save_server_url_persists_url(self, plugin, tmp_path, logger, data_dir):
+        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
         result = await plugin.save_server_url("http://example.com")
         assert result["success"] is True
         assert plugin.settings["romm_url"] == "http://example.com"
 
     @pytest.mark.asyncio
-    async def test_save_server_url_does_not_touch_token(self, plugin, tmp_path):
-        import decky
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), decky.DECKY_PLUGIN_RUNTIME_DIR, decky.logger)
+    async def test_save_server_url_does_not_touch_token(self, plugin, tmp_path, logger, data_dir):
+        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
         plugin.settings["romm_api_token"] = "rmm_keep"
         await plugin.save_server_url("http://example.com")
         assert plugin.settings["romm_api_token"] == "rmm_keep"
@@ -283,9 +275,7 @@ class TestSettings:
 
 class TestConnection:
     @pytest.mark.asyncio
-    async def test_test_connection_sets_version_on_romm_api(self, plugin):
-        import decky
-
+    async def test_test_connection_sets_version_on_romm_api(self, plugin, logger):
         plugin.loop = asyncio.get_running_loop()
         plugin.settings["romm_url"] = "http://romm.local"
         plugin.settings["romm_api_token"] = "rmm_token"
@@ -299,7 +289,7 @@ class TestConnection:
                 romm_api=plugin._romm_api,
                 settings_persister=MagicMock(),
                 loop=plugin.loop,
-                logger=decky.logger,
+                logger=logger,
                 min_required_version=Plugin._MIN_REQUIRED_VERSION,
                 forget_device=MagicMock(),
                 clear_playtime_scope_notice=MagicMock(),
@@ -311,76 +301,62 @@ class TestConnection:
 
 
 class TestLogLevel:
-    def test_log_debug_enabled(self, plugin):
+    def test_log_debug_enabled(self, plugin, logger):
         """_log_debug logs when log_level is 'debug'."""
         from unittest.mock import patch
 
-        import decky
-
         plugin.settings["log_level"] = "debug"
-        with patch.object(decky.logger, "info") as mock_info:
+        with patch.object(logger, "info") as mock_info:
             plugin._log_debug("test message")
             mock_info.assert_called_once_with("test message")
 
-    def test_log_debug_disabled_at_warn(self, plugin):
+    def test_log_debug_disabled_at_warn(self, plugin, logger):
         """_log_debug does not log when log_level is 'warn' (default)."""
         from unittest.mock import patch
 
-        import decky
-
         plugin.settings["log_level"] = "warn"
-        with patch.object(decky.logger, "info") as mock_info:
+        with patch.object(logger, "info") as mock_info:
             plugin._log_debug("test message")
             mock_info.assert_not_called()
 
-    def test_log_debug_disabled_at_info(self, plugin):
+    def test_log_debug_disabled_at_info(self, plugin, logger):
         """_log_debug does not log when log_level is 'info'."""
         from unittest.mock import patch
 
-        import decky
-
         plugin.settings["log_level"] = "info"
-        with patch.object(decky.logger, "info") as mock_info:
+        with patch.object(logger, "info") as mock_info:
             plugin._log_debug("test message")
             mock_info.assert_not_called()
 
-    def test_log_debug_disabled_at_error(self, plugin):
+    def test_log_debug_disabled_at_error(self, plugin, logger):
         """_log_debug does not log when log_level is 'error'."""
         from unittest.mock import patch
 
-        import decky
-
         plugin.settings["log_level"] = "error"
-        with patch.object(decky.logger, "info") as mock_info:
+        with patch.object(logger, "info") as mock_info:
             plugin._log_debug("test message")
             mock_info.assert_not_called()
 
-    def test_log_debug_missing_setting_defaults_warn(self, plugin):
+    def test_log_debug_missing_setting_defaults_warn(self, plugin, logger):
         """_log_debug does not log when log_level key is missing (defaults to warn)."""
         from unittest.mock import patch
 
-        import decky
-
         plugin.settings.pop("log_level", None)
-        with patch.object(decky.logger, "info") as mock_info:
+        with patch.object(logger, "info") as mock_info:
             plugin._log_debug("test message")
             mock_info.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_save_log_level_valid(self, plugin, tmp_path):
-        import decky
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), decky.DECKY_PLUGIN_RUNTIME_DIR, decky.logger)
+    async def test_save_log_level_valid(self, plugin, tmp_path, logger, data_dir):
+        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
         for level in ("debug", "info", "warn", "error"):
             result = await plugin.save_log_level(level)
             assert result["success"] is True
             assert plugin.settings["log_level"] == level
 
     @pytest.mark.asyncio
-    async def test_save_log_level_invalid(self, plugin, tmp_path):
-        import decky
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), decky.DECKY_PLUGIN_RUNTIME_DIR, decky.logger)
+    async def test_save_log_level_invalid(self, plugin, tmp_path, logger, data_dir):
+        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
         plugin.settings["log_level"] = "warn"
         result = await plugin.save_log_level("verbose")
         assert result["success"] is False
@@ -471,29 +447,25 @@ class TestLogLevel:
         assert plugin.settings["log_level"] == "warn"
 
     @pytest.mark.asyncio
-    async def test_sgdb_artwork_silent_when_debug_off(self, plugin, tmp_path):
+    async def test_sgdb_artwork_silent_when_debug_off(self, plugin, tmp_path, logger):
         """SGDB artwork info calls should not log when log_level is 'warn'."""
         from unittest.mock import patch
 
-        import decky
-
         plugin.settings["log_level"] = "warn"
-        with patch.object(decky.logger, "info") as mock_info:
+        with patch.object(logger, "info") as mock_info:
             result = await plugin.get_sgdb_artwork_base64(1, 99)
             assert result["base64"] is None
             for call in mock_info.call_args_list:
                 assert "SGDB artwork" not in str(call)
 
     @pytest.mark.asyncio
-    async def test_sgdb_artwork_logs_when_debug_enabled(self, plugin, tmp_path):
+    async def test_sgdb_artwork_logs_when_debug_enabled(self, plugin, tmp_path, logger):
         """SGDB artwork info calls should log when log_level is 'debug'."""
         from unittest.mock import patch
 
-        import decky
-
         plugin.settings["log_level"] = "debug"
         plugin.settings["steamgriddb_api_key"] = ""
-        with patch.object(decky.logger, "info") as mock_info:
+        with patch.object(logger, "info") as mock_info:
             result = await plugin.get_sgdb_artwork_base64(1, 1)
             assert result["no_api_key"] is True
             logged_msgs = [str(c) for c in mock_info.call_args_list]
@@ -527,27 +499,21 @@ class TestInsecureSslSetting:
         assert result["romm_allow_insecure_ssl"] is False
 
     @pytest.mark.asyncio
-    async def test_save_server_url_with_insecure_ssl(self, plugin, tmp_path):
-        import decky
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), decky.DECKY_PLUGIN_RUNTIME_DIR, decky.logger)
+    async def test_save_server_url_with_insecure_ssl(self, plugin, tmp_path, logger, data_dir):
+        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
         await plugin.save_server_url("https://romm.local", True)
         assert plugin.settings["romm_allow_insecure_ssl"] is True
 
     @pytest.mark.asyncio
-    async def test_save_server_url_without_param_preserves(self, plugin, tmp_path):
-        import decky
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), decky.DECKY_PLUGIN_RUNTIME_DIR, decky.logger)
+    async def test_save_server_url_without_param_preserves(self, plugin, tmp_path, logger, data_dir):
+        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
         plugin.settings["romm_allow_insecure_ssl"] = True
         await plugin.save_server_url("https://romm.local")
         assert plugin.settings["romm_allow_insecure_ssl"] is True
 
     @pytest.mark.asyncio
-    async def test_save_server_url_explicit_false(self, plugin, tmp_path):
-        import decky
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), decky.DECKY_PLUGIN_RUNTIME_DIR, decky.logger)
+    async def test_save_server_url_explicit_false(self, plugin, tmp_path, logger, data_dir):
+        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
         plugin.settings["romm_allow_insecure_ssl"] = True
         await plugin.save_server_url("https://romm.local", False)
         assert plugin.settings["romm_allow_insecure_ssl"] is False
@@ -622,10 +588,8 @@ class TestDismissSettingsResetNotice:
 
 
 class TestSettingsFilePermissions:
-    def test_save_settings_creates_file_with_0600(self, plugin, tmp_path):
-        import decky
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+    def test_save_settings_creates_file_with_0600(self, plugin, tmp_path, logger):
+        plugin._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
         plugin.settings = {"romm_url": "http://example.com"}
         SettingsPersisterAdapter(plugin._persistence, plugin.settings).save_settings()
         settings_path = tmp_path / "settings.json"
@@ -650,10 +614,8 @@ class TestSettingsFilePermissions:
 
 
 class TestAtomicSettingsWrite:
-    def test_settings_written_atomically(self, plugin, tmp_path):
-        import decky
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), decky.DECKY_PLUGIN_RUNTIME_DIR, decky.logger)
+    def test_settings_written_atomically(self, plugin, tmp_path, logger, data_dir):
+        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
 
         plugin.settings = {"romm_url": "http://example.com", "romm_user": "user"}
         SettingsPersisterAdapter(plugin._persistence, plugin.settings).save_settings()
@@ -664,10 +626,8 @@ class TestAtomicSettingsWrite:
         assert data["romm_url"] == "http://example.com"
         assert data["romm_user"] == "user"
 
-    def test_settings_no_tmp_left_after_write(self, plugin, tmp_path):
-        import decky
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), decky.DECKY_PLUGIN_RUNTIME_DIR, decky.logger)
+    def test_settings_no_tmp_left_after_write(self, plugin, tmp_path, logger, data_dir):
+        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
 
         plugin.settings = {"romm_url": "http://example.com"}
         SettingsPersisterAdapter(plugin._persistence, plugin.settings).save_settings()
@@ -675,12 +635,10 @@ class TestAtomicSettingsWrite:
         tmp_file = tmp_path / "settings.json.tmp"
         assert not tmp_file.exists()
 
-    def test_settings_crash_preserves_original(self, plugin, tmp_path):
+    def test_settings_crash_preserves_original(self, plugin, tmp_path, logger, data_dir):
         from unittest.mock import patch
 
-        import decky
-
-        plugin._persistence = PersistenceAdapter(str(tmp_path), decky.DECKY_PLUGIN_RUNTIME_DIR, decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
 
         # Write initial settings
         plugin.settings = {"romm_url": "http://original.com"}
@@ -709,11 +667,10 @@ class TestWhitelistSettings:
         assert result == {"disabled_defaults": [], "custom_names": []}
 
     @pytest.mark.asyncio
-    async def test_update_and_get_whitelist(self, plugin, tmp_path):
+    async def test_update_and_get_whitelist(self, plugin, tmp_path, logger, data_dir):
         """Round-trip: update then get returns the stored values."""
-        import decky
 
-        plugin._persistence = PersistenceAdapter(str(tmp_path), decky.DECKY_PLUGIN_RUNTIME_DIR, decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
         await plugin.update_whitelist_settings(["chrome"], ["My App"])
         result = await plugin.get_whitelist_settings()
         assert result["disabled_defaults"] == ["chrome"]
@@ -745,11 +702,10 @@ class TestWhitelistSettings:
         assert "custom_names" in result_cn["message"]
 
     @pytest.mark.asyncio
-    async def test_update_whitelist_persists(self, plugin, tmp_path):
+    async def test_update_whitelist_persists(self, plugin, tmp_path, logger, data_dir):
         """Verifies values are stored in plugin.settings dict after update."""
-        import decky
 
-        plugin._persistence = PersistenceAdapter(str(tmp_path), decky.DECKY_PLUGIN_RUNTIME_DIR, decky.logger)
+        plugin._persistence = PersistenceAdapter(str(tmp_path), data_dir, logger)
         result = await plugin.update_whitelist_settings(["moonlight"], ["Custom Game"])
         assert result["success"] is True
         assert plugin.settings["whitelist_disabled_defaults"] == ["moonlight"]
@@ -998,7 +954,7 @@ _MIGRATION_BLOCKED_WHITELIST: set[str] = {
 
 
 class TestMigrationBlockedDecoratorCoverage:
-    """Every Decky callable on Plugin must be classified: either explicitly
+    """Every callable on Plugin must be classified: either explicitly
     whitelisted (read-only / unblock pathway / non-retrodeck) or decorated
     with @migration_blocked. Prevents new callables from being silently
     unguarded against pending migration corruption (#251)."""

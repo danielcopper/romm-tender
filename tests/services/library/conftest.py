@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# conftest.py patches decky before this import; use _make_testable_plugin for test-only attrs
+# Use _make_testable_plugin for test-only attrs
 from _factories import _make_testable_plugin
 from fakes.fake_core_info_provider import FakeCoreInfoProvider, FakeSandboxLauncher
 from fakes.fake_disc_resolver import FakeDiscResolver
@@ -38,7 +38,7 @@ from tests.services.library._helpers import rebind_loop
 
 
 @pytest.fixture
-def plugin(tmp_path):
+def plugin(tmp_path, emit, logger, home):
     p = _make_testable_plugin()
     p.settings = {
         "romm_url": "",
@@ -49,13 +49,11 @@ def plugin(tmp_path):
     }
     p._romm_api = MagicMock()
 
-    import decky
-
     # _persistence is wired so disk-touching tests round-trip through the real
     # adapter (settings + firmware cache). The settings persister is faked.
-    p._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), decky.logger)
+    p._persistence = PersistenceAdapter(str(tmp_path), str(tmp_path), logger)
     p._settings_persister = FakeSettingsPersister()
-    steam_config = SteamConfigAdapter(user_home=decky.DECKY_USER_HOME, logger=decky.logger)
+    steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
     p._steam_config = steam_config
 
     # ONE shared FakeUnitOfWork across every sub-service + peer service so a
@@ -69,7 +67,7 @@ def plugin(tmp_path):
     metadata_service = MetadataService(
         config=MetadataServiceConfig(
             loop=running_loop(),
-            logger=decky.logger,
+            logger=logger,
             log_debug=p._log_debug,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
         ),
@@ -83,7 +81,7 @@ def plugin(tmp_path):
             cover_art_file_store=CoverArtFileStoreAdapter(),
             cover_cache_dir=str(tmp_path / "covers"),
             loop=running_loop(),
-            logger=decky.logger,
+            logger=logger,
             get_pending_sync=dict,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
         ),
@@ -104,7 +102,7 @@ def plugin(tmp_path):
             sandbox_launcher=FakeSandboxLauncher(),
             platform_core_reader=p._platform_core_reader,
             resolve_system=lambda platform_slug, platform_fs_slug=None: platform_slug,
-            logger=decky.logger,
+            logger=logger,
         ),
     )
 
@@ -120,9 +118,9 @@ def plugin(tmp_path):
             steam_config=steam_config,
             settings=p.settings,
             loop=running_loop(),
-            logger=decky.logger,
-            launcher_exe=f"{decky.DECKY_USER_HOME}/.local/share/romm-tender/bin/tender-rom-launcher",
-            emit=decky.emit,
+            logger=logger,
+            launcher_exe=f"{home}/.local/bin/tender-rom-launcher",
+            emit=emit,
             clock=FakeClock(),
             uuid_gen=FakeUuidGen(),
             sleeper=FakeSleeper(),
@@ -141,7 +139,7 @@ def plugin(tmp_path):
         config=ShortcutRemovalServiceConfig(
             steam_config=steam_config,
             loop=running_loop(),
-            logger=decky.logger,
+            logger=logger,
             artwork_remover=artwork_service,
             uow_factory=FakeUnitOfWorkFactory(uow=uow),
         ),

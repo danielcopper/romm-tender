@@ -15,8 +15,6 @@ hold a Unit of Work open across the resolver's directory listing.
 from fakes.uow_open_probe import record_uow_open
 
 from domain.shortcut_data import EmulatorInvocation
-
-# conftest.py patches decky before this import
 from tests.services.library._helpers import _seed_install
 
 
