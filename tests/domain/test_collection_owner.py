@@ -50,7 +50,10 @@ class TestKnownIdentityOwnership:
 
 
 class TestListingIsOwn:
-    """The tag a get_collections row carries: unknown identity is None, never own."""
+    """The tag a get_collections row carries.
+
+    Unknown identity leaves a standard or smart collection None; a virtual one stays own.
+    """
 
     @pytest.mark.parametrize("kind", ["standard", "smart"])
     def test_none_while_identity_unknown(self, kind):

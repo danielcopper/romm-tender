@@ -781,23 +781,23 @@ rather than changing how the union works.
 the ownership-carrying first kind **Standard** (the plugin's earlier name for it was `user`, a misnomer renamed
 internally by #1539 — display "My" → "Standard"; see the enabled-bucket migration note below). The `virtual` kind is
 RomM's ownerless `VirtualCollection` (base64 id, no `user_id`, no stable `updated_at` — never stamped), and it carries a
-`virtual_type` sub-field on each collection dict/setting so the UI can label the row. RomM's `VirtualCollection` has
-five `type` values, but the plugin syncs only the **two RomM itself surfaces as browsable collections**: IGDB
-`franchise` and the default IGDB `collection` (series). `genre`, `company`, and `mode` are **intentionally excluded** —
-RomM treats `genre`/`company` as ROM _filter facets_ (not collections) and `mode` as neither, so they never appear in
-RomM's Collections view. The supported set is a single constant (`services/library/fetcher._SUPPORTED_VIRTUAL_TYPES`);
-the fetcher fetches each supported type (per-type fail-open) and merges them under the one `virtual` bucket. Because the
-type is baked into the base64 id, ids are globally unique across types, so one enabled-bucket keyed by id cannot
-collide. The owner filter, stamp-exclusion, and per-unit ROM-fetch dispatch all stay a **single `kind == "virtual"`
-branch**, not fanned out per type. On disk the enabled-collections bucket was renamed `franchise → virtual` by the
-lossless `settings.json` migration **v10 → v11** (`domain/state_migrations._migrate_v10_to_v11`): it renames the bucket
-key while preserving every enabled id, so a previously-enabled franchise collection stays enabled and no re-login is
-required. (The historical v2 → v3 split still produces the `franchise` bucket; the v10 → v11 step renames it afterwards,
-so that frozen step is untouched.) The ownership-carrying bucket was likewise renamed `user → standard` by the lossless
-`settings.json` migration **v12 → v13** (`domain/state_migrations._migrate_v12_to_v13`, same merge-into-existing
-semantics), and old `collection_sync_state` completion stamps keyed `collection_kind = 'user'` are rewritten to
-`'standard'` by SQLite migration **022** so an unchanged standard collection still takes the incremental skip across the
-upgrade (#1539).
+`virtual_type` sub-field on each collection dict/setting so the Collections tab can list it under Franchises or IGDB
+collections. RomM's `VirtualCollection` has five `type` values, but the plugin syncs only the **two RomM itself surfaces
+as browsable collections**: IGDB `franchise` and the default IGDB `collection` (series). `genre`, `company`, and `mode`
+are **intentionally excluded** — RomM treats `genre`/`company` as ROM _filter facets_ (not collections) and `mode` as
+neither, so they never appear in RomM's Collections view. The supported set is a single constant
+(`services/library/fetcher._SUPPORTED_VIRTUAL_TYPES`); the fetcher fetches each supported type (per-type fail-open) and
+merges them under the one `virtual` bucket. Because the type is baked into the base64 id, ids are globally unique across
+types, so one enabled-bucket keyed by id cannot collide. The owner scope, stamp-exclusion, and per-unit ROM-fetch
+dispatch all stay a **single `kind == "virtual"` branch**, not fanned out per type. On disk the enabled-collections
+bucket was renamed `franchise → virtual` by the lossless `settings.json` migration **v10 → v11**
+(`domain/state_migrations._migrate_v10_to_v11`): it renames the bucket key while preserving every enabled id, so a
+previously-enabled franchise collection stays enabled and no re-login is required. (The historical v2 → v3 split still
+produces the `franchise` bucket; the v10 → v11 step renames it afterwards, so that frozen step is untouched.) The
+ownership-carrying bucket was likewise renamed `user → standard` by the lossless `settings.json` migration **v12 → v13**
+(`domain/state_migrations._migrate_v12_to_v13`, same merge-into-existing semantics), and old `collection_sync_state`
+completion stamps keyed `collection_kind = 'user'` are rewritten to `'standard'` by SQLite migration **022** so an
+unchanged standard collection still takes the incremental skip across the upgrade (#1539).
 
 **Batch collection enable — `save_collections_sync` (#1539).** A single settings write that stamps every id it is given
 into one `kind` bucket and touches nothing else in it; the Collections tab's **Enable all / Disable all** send it the
@@ -814,14 +814,13 @@ survive), when the plugin's own identity is unknown (the **unknown-identity fall
 the collection's `user_id` equals the stored `romm_user_id`; only standard and smart collections carry a `user_id` to
 compare. `get_collections` tags each row with `is_own` from the same rule with one difference
 (`domain/collection_owner.listing_is_own`): while the identity is unknown a standard or smart row carries `is_own: null`
-rather than `true`, because nothing established that it is the user's, and the frontend reads `null` as "not hidden, not
-yours" — it neither hides the row under `own` nor calls it the user's own. Virtual rows are always `true`.
-`build_work_queue` applies the same predicate: under `"own"` **with a known identity** it drops foreign standard/smart
-units from the queue — so a foreign collection enabled earlier is never synced — while virtual units and every unit
-under `"all"` pass through unchanged. The scope applies **over** the per-kind enable state without mutating it, so
-switching back to `"all"` restores the prior enables. Because an **unknown identity drops nothing**, the feature is
-non-breaking: it silently no-ops until `romm_user_id` is stamped (see the ConnectionService lazy-identity note), then
-takes effect — no re-login required.
+rather than `true`, because nothing established that it is the user's; how the page reads it is
+`docs/architecture/qam-panel.md` § Library. Virtual rows are always `true`. `build_work_queue` applies the same
+predicate: under `"own"` **with a known identity** it drops foreign standard/smart units from the queue — so a foreign
+collection enabled earlier is never synced — while virtual units and every unit under `"all"` pass through unchanged.
+The scope applies **over** the per-kind enable state without mutating it, so switching back to `"all"` restores the
+prior enables. Because an **unknown identity drops nothing**, the feature is non-breaking: it silently no-ops until
+`romm_user_id` is stamped (see the ConnectionService lazy-identity note), then takes effect — no re-login required.
 
 **Each collection row states how many of its members are already in Steam, and who owns it (#1833).** `get_collections`
 adds two fields to its rows. `in_steam_count`, on all three kinds, counts the collection's member ROM ids (RomM's

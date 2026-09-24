@@ -404,8 +404,10 @@ setting:
   `RomM: [<name> (Franchise)]` and `RomM: [<name> (IGDB Collection)]` — separate Steam collections. Two collections that
   share **both** name and label still union.
 
-The frontend holds no copy of the label strings and the Collections page does not quote them; the user guide's
-"Collections that share a name" names them, so a label change is a change there. The reporter needs the
+The Collections page does not quote the label strings. They are spelled in two other places, and a label change is a
+change in both: the user guide's "Collections that share a name", and the description of the Steam Library setting that
+turns the mode on (`frontend/src/bigpicture/settings/LibrarySection.tsx`), which gives two as examples; the
+`CollectionNamingMode` doc comment in `frontend/src/types/sync.ts` quotes one as well. The reporter needs the
 kind/virtual_type at its union key, so `WorkUnit.virtual_type` and `CollectionMembership.kind` +
 `CollectionMembership.virtual_type` thread that identity through the fetcher → orchestrator → reporter.
 

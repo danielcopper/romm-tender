@@ -307,7 +307,7 @@ async def test_get_collections_happy_shape(harness):
     assert c["kind"] == "standard"
     assert isinstance(c["sync_enabled"], bool)
     # No stored identity: ownership is not established, so the wire says so
-    # rather than calling another user's collection yours.
+    # rather than calling it yours.
     assert c["is_own"] is None
 
 

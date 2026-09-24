@@ -355,8 +355,8 @@ out from under you.
 
 A **Search** box beside the buttons narrows the table with a **fuzzy** name match, so a loose or partial query still
 finds a name. The table shows at most 50 rows; when more match, a line under the table says how many more there are —
-type in the search to bring them into view. If a kind lists nothing while **Other users' collections** is off, a line
-says how many of other users' collections it is hiding.
+type in the search to bring them into view. If a kind lists nothing with the search empty, and **Other users'
+collections** is off and hiding some of it, a line says how many of other users' collections it is hiding.
 
 **Enable all** and **Disable all** switch every collection the table lists, including any past the first 50. With the
 search empty they ask for confirmation first, on every kind; with a search, they switch exactly the collections the
@@ -408,9 +408,9 @@ called the same thing, or (on a shared server) another account's public collecti
   their members rather than dropping one. Names that differ only in **capitalisation** ("7 up" vs "7 Up") count as the
   same name and merge too — Steam itself treats collection names case-insensitively.
 - **On** — the plugin appends the collection **type** to the Steam name, so same-named collections of different types
-  stay **separate**. A franchise and an IGDB collection that share a name become `RomM: [<name> (Franchise)]` and
-  `RomM: [<name> (IGDB Collection)]`. The types are `(Standard)` for Collections and Favorites, `(Smart)`, `(Franchise)`
-  and `(IGDB Collection)`. Collections that share both a name **and** a type still merge.
+  stay **separate**. A franchise and an IGDB collection that share a name become `RomM: [<name> (Franchise)] (<device>)`
+  and `RomM: [<name> (IGDB Collection)] (<device>)`. The types are `(Standard)` for Collections and Favorites,
+  `(Smart)`, `(Franchise)` and `(IGDB Collection)`. Collections that share both a name **and** a type still merge.
 
 The setting applies on the **next normal sync** — no Force Full Sync is needed. After flipping it, run a sync and the
 plugin renames the affected Steam collections (and removes the old-named ones) as part of its normal end-of-sync

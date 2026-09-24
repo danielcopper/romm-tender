@@ -113,8 +113,8 @@ class TestSettingsSchema:
         assert DEFAULT_SETTINGS["enabled_collections"] == {"standard": {}, "smart": {}, "virtual": {}}
 
     def test_default_settings_carry_owner_scope_defaults(self):
-        # Identity unknown and scope "all" by default → the "Mine" filter is inert
-        # on a fresh install, matching today's behaviour (#1532).
+        # Identity unknown and scope "all" by default → the owner scope drops
+        # nothing on a fresh install (#1532).
         assert DEFAULT_SETTINGS["romm_user_id"] is None
         assert DEFAULT_SETTINGS["collection_owner_scope"] == "all"
 
