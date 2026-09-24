@@ -597,8 +597,8 @@ class ConnectionService:
 
         The value rides the sign-in's single atomic token-persist save, so
         identity lands on disk together with the token (never a second write). A
-        malformed payload yields ``None`` — "Own" then degrades to "All" until
-        the lazy backfill re-derives it.
+        malformed payload yields ``None`` — the ``own`` owner scope then hides
+        nothing until the lazy backfill re-derives it.
         """
         self._settings["romm_user_id"] = self._extract_user_id(user_data)
 
@@ -626,8 +626,8 @@ class ConnectionService:
         collection owner-scope filter can activate without a re-login. Fires only
         when the id is missing (a known id needs no network) and a token exists;
         persists in its own save (no token write is in flight here). Best-effort
-        — a failure or malformed payload leaves the id unknown, so "Own" keeps
-        behaving like "All".
+        — a failure or malformed payload leaves the id unknown, so the ``own``
+        owner scope keeps hiding nothing.
         """
         if self._settings.get("romm_user_id") is not None:
             return
