@@ -3,7 +3,7 @@
 Shaped from one item of a RomM collection listing — standard, smart or virtual,
 which all carry ``id``, ``name``, ``rom_count`` and ``rom_ids`` — plus what only
 this device knows about it: whether its sync is enabled, and how many of its
-members are reachable from Steam (CONTEXT.md → Reachable).
+members are in Steam (CONTEXT.md → Reachable).
 """
 
 from __future__ import annotations

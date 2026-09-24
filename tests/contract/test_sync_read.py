@@ -311,10 +311,9 @@ async def test_get_collections_happy_shape(harness):
 
 
 async def test_get_collections_states_each_collections_reach_into_steam_and_its_owner(harness):
-    """``in_steam_count`` counts members reachable from Steam; ``owner_username`` is RomM's.
+    """``in_steam_count`` and ``owner_username`` over the real wiring and SQLite rows.
 
-    A member counts through its own binding or its sibling group's, over the real
-    SQLite rows: 30 is bound, 31 is an unbound version of the same game, 40 is an
+    30 is bound, 31 is an unbound version of the same game, 40 is an
     unbound version of a game nobody bound, and 50 has no row at all.
     """
     seed_group_member(harness, 30, group_key="igdb:9:gba", shortcut_app_id=3030)

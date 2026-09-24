@@ -1470,7 +1470,7 @@ The Favorites pane has no table: the sentence and the game count. What the Favor
 more than one favorites collection is left for the build: today the tab then disables its favorites toggle and lists
 them all under Standard, and another user's public favorites collection is enough to cause it.
 
-**In Steam counts how many of a collection's games are already in Steam** (CONTEXT.md → Reachable). It costs no RomM
+**In Steam counts how many of a collection's ROMs are already in Steam** (CONTEXT.md → Reachable). It costs no RomM
 request of its own. RomM's collection listings carry each collection's member ROM ids, on all three kinds, and the count
 is those ids looked up against the rows Tender keeps — the test the sync uses when it files a collection member into a
 Steam collection, so a member it counts is one turning the collection on files under a shortcut Tender already made. It

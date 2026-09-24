@@ -110,7 +110,7 @@ class LibraryFetcherConfig:
     cancel signal), an ``_emit_progress`` callback the fetcher uses
     to surface long paginated fetches to the frontend, and the
     ``LocalLibraryReader`` peer the collections listing asks which ROMs
-    are reachable from Steam.
+    the sync's collection filing resolves to a shortcut.
     """
 
     romm_api: RommLibraryApi
