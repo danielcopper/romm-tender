@@ -225,7 +225,9 @@ class TestSaveStatusContentDir:
         assert result["save_resolution"]["content_installed"] is False
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("caveat", ["save-inside-content", "save-inside-image"], ids=["amiga-adf", "atari-st"])
+    @pytest.mark.parametrize(
+        "caveat", ["save-inside-content", "save-inside-image"], ids=["inside-the-game-file", "inside-the-disk-image"]
+    )
     async def test_a_save_inside_the_game_file_keeps_its_own_explanation(self, tmp_path, caveat):
         # Anchored in the content's directory, but inside the file rather than
         # beside it: the answer stays the resolver's, not a fabricated not_asked.

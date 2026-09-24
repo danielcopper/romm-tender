@@ -376,8 +376,8 @@ class VersionsService:
             if info["save_answer"].in_content_directory:
                 self._log_debug(f"rollback_to_version: rom {rom_id} saves beside its content; refusing")
                 return {"status": "unsupported", "reason": SAVE_SYNC_CONTENT_DIR_REASON}
-            if info["saves_dir"] is None:
-                self._log_debug(f"rollback_to_version: no save directory for rom {rom_id}; refusing")
+            if info["save_answer"].sync_directory is None:
+                self._log_debug(f"rollback_to_version: rom {rom_id} has no save a sync could carry; refusing")
                 return {"status": "unsupported", "reason": SAVE_SHAPE_UNSUPPORTED_REASON}
 
             save_state, device_id = await self._loop.run_in_executor(None, self._read_inputs, rom_id)

@@ -234,15 +234,16 @@ class SaveAnswer:
 
     @property
     def in_content_directory(self) -> bool:
-        """Whether the emulator writes this game's save as a file beside its content file.
+        """Whether sitting beside the content is the one reason this save may not be synced.
 
-        Save sync stays off there whatever the state says: the directory is the
-        ROM's own, outside what the plugin syncs, and syncing it is a decision
-        this answer does not make. A save written INSIDE the content file is
-        anchored in the same directory and is not beside it: its own refusal,
-        ``inside_content``, is the one that applies.
+        The answer names a per-game file set a sync could carry, but anchored in
+        the content's own directory — outside what the plugin syncs, and syncing
+        there is a decision this answer does not make. Any answer that would not
+        be syncable anyway (inside the content file, writes discarded, nothing
+        named) is answered by its own refusal instead, wherever it is anchored:
+        that is what reading :attr:`syncable` here guarantees.
         """
-        return self.root_kind == ROOT_CONTENT_DIRECTORY and self.state != SAVE_STATE_INSIDE_CONTENT
+        return self.root_kind == ROOT_CONTENT_DIRECTORY and self.syncable
 
     @property
     def sync_directory(self) -> str | None:

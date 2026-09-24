@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
-from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON, SaveAnswer, SaveComponent
+from domain.save_answer import SAVE_SHAPE_UNSUPPORTED_REASON, SaveAnswer, SaveComponent, build_save_answer
 
 if TYPE_CHECKING:
     from fakes.fake_save_location_reader import FakeSaveLocationReader
@@ -29,6 +29,7 @@ from tests.services.saves._helpers import (
     _enable_sync_with_device,
     _install_rom,
     _seed_save_state_dict,
+    _server_save,
     _uow,
     make_service,
 )
@@ -445,3 +446,138 @@ class TestTheRefusalIsASkipAndNotAFailure:
 
         assert [call for call in fake.call_log if call[0] == "list_saves"] != []
         assert _saved_files(svc) != {}
+
+
+def _anchored_in_the_rom_folder(tmp_path, **overrides: Any) -> SaveAnswer:
+    """An answer rooted in the ROM's own folder, classified the way the resolver's answer is."""
+    kwargs: dict[str, Any] = {
+        "emulator": "PUAE",
+        "directory": str(tmp_path / "retrodeck" / "roms" / "gba"),
+        "backing_directory": None,
+        "granularity": None,
+        "needs": (),
+        "file_set_state": "declared",
+        "files": (),
+        "groups": (),
+        "caveats": (),
+        "content_installed": True,
+        "root_kind": "content_directory",
+    }
+    kwargs.update(overrides)
+    return build_save_answer(**kwargs)
+
+
+# Answers anchored in the ROM's folder that a sync would not carry anyway: the
+# save inside the game file, and the writes discarded outright.
+_NOT_SYNCABLE_BESIDE_THE_ROM = [
+    pytest.param({"caveats": ("save-inside-content",)}, id="amiga-adf-inside-the-floppy"),
+    pytest.param({"caveats": ("save-inside-image",), "emulator": "xemu"}, id="xbox-inside-the-disk-image"),
+    pytest.param(
+        {"caveats": ("save-writes-discarded",), "granularity": "none"}, id="amiga-adz-floppy-format-discarded"
+    ),
+    pytest.param(
+        {"caveats": ("save-writes-discarded",), "granularity": "none", "emulator": "Hatari"},
+        id="atari-st-write-protected",
+    ),
+]
+
+
+class TestOnlyBesideTheContentGetsTheContentDirectorySkip:
+    """R1: the content-directory message appears only where it is the reason."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("overrides", _NOT_SYNCABLE_BESIDE_THE_ROM)
+    async def test_a_sync_gets_the_answers_own_refusal(self, tmp_path, overrides):
+        svc, _store, _fake = _service(tmp_path, _anchored_in_the_rom_folder(tmp_path, **overrides))
+
+        result = await svc.sync_rom_saves(42)
+
+        assert result["reason"] == SAVE_SHAPE_UNSUPPORTED_REASON
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("overrides", _NOT_SYNCABLE_BESIDE_THE_ROM)
+    async def test_the_status_keeps_the_answers_own_explanation(self, tmp_path, overrides):
+        answer = _anchored_in_the_rom_folder(tmp_path, **overrides)
+        svc, _store, _fake = _service(tmp_path, answer)
+
+        result = await svc.get_save_status(42)
+
+        assert result["savefiles_in_content_dir"] is False
+        assert result["save_resolution"]["state"] == answer.state
+        assert result["save_resolution"]["caveats"] == list(answer.caveats)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("overrides", _NOT_SYNCABLE_BESIDE_THE_ROM)
+    async def test_the_sweep_does_not_count_them_as_beside_the_content(self, tmp_path, overrides):
+        svc, _store, _fake = _service(tmp_path, _anchored_in_the_rom_folder(tmp_path, **overrides))
+        _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True})
+
+        result = await svc.sync_all_saves()
+
+        assert result.get("reason") != "savefiles_in_content_dir"
+        assert "skipped" not in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_a_syncable_save_beside_the_content_still_gets_the_content_directory_skip(self, tmp_path):
+        beside = _anchored_in_the_rom_folder(tmp_path, emulator="mGBA", files=("pokemon.srm",))
+        svc, _store, _fake = _service(tmp_path, beside)
+
+        result = await svc.sync_rom_saves(42)
+        status = await svc.get_save_status(42)
+
+        assert beside.syncable is True
+        assert result["reason"] == "savefiles_in_content_dir"
+        assert status["savefiles_in_content_dir"] is True
+
+
+class TestAWritePathRefusesWhatASyncWouldNotCarry:
+    """R1: a write path refuses an answer inside the game file before it writes into the ROM's folder."""
+
+    @staticmethod
+    def _rom_folder_saves(tmp_path) -> list[str]:
+        rom_dir = tmp_path / "retrodeck" / "roms" / "gba"
+        return sorted(p.name for p in rom_dir.glob("pokemon.*")) if rom_dir.exists() else []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("call", "refused"),
+        [
+            pytest.param(
+                lambda svc: svc.switch_slot(42, "other"),
+                lambda result: result["reason"] == SAVE_SHAPE_UNSUPPORTED_REASON,
+                id="switch-slot",
+            ),
+            pytest.param(
+                lambda svc: svc.copy_save_to_slot(42, 100, "other"),
+                lambda result: result == {"status": "unsupported", "reason": SAVE_SHAPE_UNSUPPORTED_REASON},
+                id="copy-to-slot",
+            ),
+            pytest.param(
+                lambda svc: svc.rollback_to_version(42, "default", 100),
+                lambda result: result == {"status": "unsupported", "reason": SAVE_SHAPE_UNSUPPORTED_REASON},
+                id="rollback",
+            ),
+            pytest.param(
+                lambda svc: svc.confirm_slot_choice(42, "default", True, None),
+                lambda result: result["reason"] == SAVE_SHAPE_UNSUPPORTED_REASON,
+                id="confirm-migrate",
+            ),
+            pytest.param(
+                lambda svc: svc.resolve_sync_conflict(42, "pokemon.srm", 100, "use_server"),
+                lambda result: result["reason"] == SAVE_SHAPE_UNSUPPORTED_REASON,
+                id="resolve-conflict",
+            ),
+        ],
+    )
+    async def test_nothing_lands_in_the_roms_folder(self, tmp_path, call, refused):
+        svc, _store, fake = _service(tmp_path, _anchored_in_the_rom_folder(tmp_path, caveats=("save-inside-content",)))
+        _seed_save_state_dict(svc, 42, {"active_slot": "default", "slot_confirmed": True})
+        for slot in ("default", "other", None):
+            save_id = {"default": 100, "other": 101, None: 102}[slot]
+            fake.saves[save_id] = _server_save(save_id=save_id, slot=slot)
+            fake.set_server_save_content(save_id, b"server progress")
+
+        result = await call(svc)
+
+        assert refused(result), result
+        assert self._rom_folder_saves(tmp_path) == []

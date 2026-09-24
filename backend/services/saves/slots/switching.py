@@ -157,9 +157,10 @@ class SlotSwitcher:
         3. ROM must be installed.
         4. The emulator must not write this game's save beside its content —
            the switch's writes would land where the sync leaves alone. The
-           refusal carries ``reason="savefiles_in_content_dir"``. Where no save
-           directory could be resolved at all it carries
-           ``reason="save_shape_unsupported"``.
+           refusal carries ``reason="savefiles_in_content_dir"``. Any other
+           answer a sync would not carry — a save inside the game file, a
+           shared card, nothing established — carries
+           ``reason="save_shape_unsupported"`` with that answer's own message.
         5. No local files with pending changes (changed since last sync to current slot).
         6. Server must be reachable.
 
@@ -194,7 +195,7 @@ class SlotSwitcher:
         # The emulator writes this game's save beside its content, which the
         # sync leaves alone — switching slots would download/delete files there,
         # so the switch could not take effect. Refuse before any file write or
-        # server fetch; likewise where no save directory could be resolved.
+        # server fetch; likewise for any answer a sync would not carry.
         save_answer = info["save_answer"]
         if save_answer.in_content_directory:
             self._log_debug(f"switch_slot: rom {rom_id} saves beside its content; refusing")
@@ -203,8 +204,8 @@ class SlotSwitcher:
                 "reason": SAVE_SYNC_CONTENT_DIR_REASON,
                 "message": SAVE_SYNC_IN_CONTENT_DIR,
             }
-        if info["saves_dir"] is None:
-            self._log_debug(f"switch_slot: no save directory for rom {rom_id}; refusing")
+        if save_answer.sync_directory is None:
+            self._log_debug(f"switch_slot: rom {rom_id} has no save a sync could carry; refusing")
             return {
                 "success": False,
                 "reason": SAVE_SHAPE_UNSUPPORTED_REASON,

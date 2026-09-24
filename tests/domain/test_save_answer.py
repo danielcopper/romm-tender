@@ -268,13 +268,32 @@ class TestWhereASyncMayReadAndWrite:
 
     @pytest.mark.parametrize("caveat", ["save-inside-content", "save-inside-image"])
     def test_a_save_inside_the_content_is_not_one_beside_it(self, caveat):
-        # PUAE on an .adf, Hatari on a .st: anchored in the content's directory,
-        # refused for being inside the file, never for sitting beside it.
+        # PUAE on an .adf, xemu's disk image: anchored in the content's
+        # directory, refused for being inside the file, never for sitting beside it.
         answer = _answer(caveats=(caveat,), files=(), root_kind="content_directory")
 
         assert answer.state == SAVE_STATE_INSIDE_CONTENT
         assert answer.in_content_directory is False
         assert answer.sync_directory is None
+
+    def test_discarded_writes_beside_the_content_are_not_the_content_directory_case(self):
+        # PUAE on an .adz, Hatari with write protection on: nothing is kept, so
+        # the refusal is the answer's own and never "saves beside the game".
+        answer = _answer(
+            caveats=("save-writes-discarded",), files=(), granularity="none", root_kind="content_directory"
+        )
+
+        assert answer.syncable is False
+        assert answer.in_content_directory is False
+        assert answer.sync_directory is None
+
+    def test_only_a_syncable_answer_beside_the_content_is_the_content_directory_case(self):
+        # Derived from the syncable rule, not from a caveat list: any refusing
+        # state anchored there is not this case.
+        for overrides in ({"needs": ("save_id",)}, {"granularity": "shared-card"}, {"files": ()}):
+            answer = _answer(root_kind="content_directory", **overrides)
+            assert answer.syncable is False
+            assert answer.in_content_directory is False
 
     def test_a_refusing_answer_keeps_its_directory_and_syncs_none(self):
         answer = _answer(granularity="shared-card", files=("Mcd001.ps2",), root_kind="savefile_directory")

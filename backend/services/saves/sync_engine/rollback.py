@@ -138,10 +138,9 @@ class RollbackOrchestrator:
         if not info:
             return {"success": False, "reason": "not_installed", "message": "ROM not installed"}
         system = info["system"]
-        saves_dir = info["saves_dir"]
-        # No save directory could be resolved: there is nowhere to write either
-        # side of the resolution, and a guessed one is where the emulator never
-        # looks. The refusal the sync entry points give for the same answer.
+        saves_dir = info["save_answer"].sync_directory
+        # An answer a sync would not carry has nowhere to write either side of
+        # the resolution — the refusal the sync entry points give for it.
         if saves_dir is None:
             return {
                 "success": False,

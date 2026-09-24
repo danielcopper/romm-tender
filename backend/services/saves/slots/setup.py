@@ -369,10 +369,10 @@ class SetupWizard:
                     "needs_conflict_resolution": False,
                     "message": "ROM is not installed",
                 }
-            # No save directory could be resolved: the same refusal as the
-            # content-directory one above, and the slot is confirmed all the same.
-            if info["saves_dir"] is None:
-                self._log_debug(f"confirm_slot_choice: no save directory for rom {rom_id}; skipping migration")
+            # Any other answer a sync would not carry is refused for what it is,
+            # and the slot is confirmed all the same.
+            if info["save_answer"].sync_directory is None:
+                self._log_debug(f"confirm_slot_choice: rom {rom_id} has no save a sync could carry; skipping migration")
                 save_state.confirm_slot(normalized_slot)
                 await self._loop.run_in_executor(None, self._write_save_state, rom_id, save_state)
                 return {

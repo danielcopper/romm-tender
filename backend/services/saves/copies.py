@@ -312,10 +312,12 @@ class SaveCopyService:
             if info["save_answer"].in_content_directory:
                 self._log_debug(f"copy_save_to_slot: rom {rom_id} saves beside its content; refusing")
                 return {"status": "unsupported", "reason": SAVE_SYNC_CONTENT_DIR_REASON}
-            # No save directory could be resolved at all: there is nowhere to
-            # write the copy, and a guessed one is where the emulator never looks.
-            if info["saves_dir"] is None:
-                self._log_debug(f"copy_save_to_slot: no save directory for rom {rom_id}; refusing")
+            # Any other answer a sync would not carry is refused for what it is:
+            # a copy written where a sync never reads is where the emulator may
+            # never look, or — for a save inside the game file — into the ROM's
+            # own folder.
+            if info["save_answer"].sync_directory is None:
+                self._log_debug(f"copy_save_to_slot: rom {rom_id} has no save a sync could carry; refusing")
                 return {"status": "unsupported", "reason": SAVE_SHAPE_UNSUPPORTED_REASON}
 
             core_so = await self._loop.run_in_executor(None, self._resolve_core, rom_id)
