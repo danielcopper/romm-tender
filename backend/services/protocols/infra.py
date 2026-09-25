@@ -2,9 +2,10 @@
 
 Narrow callable seams that don't belong to a specific I/O surface or
 external system: frontend event emission, debug logging, generic
-filesystem existence probes, and the small cross-service read/cleanup
-hooks (LibraryService pending-sync map, download queue cleanup) that
-would otherwise require service-to-service concrete imports.
+filesystem existence probes, the prune conflict gate as the prune
+service sees it, and the small cross-service read/cleanup hooks
+(LibraryService pending-sync map, download queue cleanup) that would
+otherwise require service-to-service concrete imports.
 """
 
 from __future__ import annotations
@@ -246,3 +247,14 @@ class DownloadQueueCleanup(Protocol):
     def evict(self, rom_id: int) -> None: ...
 
     def clear(self) -> None: ...
+
+
+class PruneRunClaim(Protocol):
+    """Where a removed-game cleanup registers its run for as long as the run lasts.
+
+    Releasing a run that is not registered changes nothing.
+    """
+
+    def register_run(self, run_id: str) -> None: ...
+
+    def release_run(self, run_id: str) -> None: ...

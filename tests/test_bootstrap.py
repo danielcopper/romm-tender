@@ -49,6 +49,7 @@ from adapters.steam_config import SteamConfigAdapter
 from domain.app_directories import AppDirectories
 from domain.identity import PACKAGE_NAME, VERSION
 from domain.update_release import UpdateSource
+from lib.prune_gate import PruneConflicts
 from main import Plugin
 from services.achievements import AchievementsService
 from services.cores import CoreService
@@ -580,7 +581,8 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(result) == 28
+        assert len(result) == 29
+        assert isinstance(result["prune_conflicts"], PruneConflicts)
         assert "migration_service" in result
         assert "game_detail_service" in result
         assert "rom_removal_service" in result

@@ -5,6 +5,7 @@ import os
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _factories import _make_prune_conflicts
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_event_sink import FakeEventSink
@@ -51,10 +52,10 @@ async def test_continuation_events_hold_a_renewable_prune_lease(plugin, event, p
     token = plugin._event_sink.last_payload["prune_lease_token"]
     assert token.startswith(f"{event}:")
     assert "prune_lease_token" not in payload
-    assert plugin._prune_admission_gate.conflicting_operations == 1
+    assert plugin._prune_conflicts.conflicting_operations == 1
     assert (await plugin.renew_prune_conflict_lease(token))["success"] is True
     assert (await plugin.release_prune_conflict_lease(token))["success"] is True
-    assert plugin._prune_admission_gate.conflicting_operations == 0
+    assert plugin._prune_conflicts.conflicting_operations == 0
 
 
 @pytest.mark.asyncio
@@ -64,8 +65,7 @@ async def test_rejected_continuation_event_releases_its_unreachable_lease(plugin
     with pytest.raises(RuntimeError, match="transport rejected event"):
         await plugin._emit_with_prune_continuation("download_complete", {"app_id": 42})
 
-    assert plugin._prune_admission_gate.conflicting_operations == 0
-    assert plugin._prune_admission_gate.leases == {}
+    assert plugin._prune_conflicts.conflicting_operations == 0
 
 
 @pytest.mark.asyncio
@@ -76,8 +76,7 @@ async def test_a_continuation_event_nobody_heard_releases_its_lease(plugin):
     await plugin._emit_with_prune_continuation("download_complete", {"app_id": 42})
 
     assert plugin._event_sink.last_payload["prune_lease_token"].startswith("download_complete:")
-    assert plugin._prune_admission_gate.conflicting_operations == 0
-    assert plugin._prune_admission_gate.leases == {}
+    assert plugin._prune_conflicts.conflicting_operations == 0
 
 
 @pytest.mark.asyncio
@@ -85,7 +84,7 @@ async def test_a_delivered_continuation_event_keeps_its_lease(plugin):
     """The control for the case above — the release must follow the answer, not the send."""
     await plugin._emit_with_prune_continuation("download_complete", {"app_id": 42})
 
-    assert plugin._prune_admission_gate.conflicting_operations == 1
+    assert plugin._prune_conflicts.conflicting_operations == 1
 
 
 @pytest.mark.asyncio
@@ -93,7 +92,7 @@ async def test_download_without_a_bound_shortcut_emits_no_continuation_lease(plu
     await plugin._emit_with_prune_continuation("download_complete", {"app_id": None})
 
     assert "prune_lease_token" not in plugin._event_sink.last_payload
-    assert not hasattr(plugin, "_prune_admission_gate")
+    assert plugin._prune_conflicts.conflicting_operations == 0
 
 
 @pytest.mark.asyncio
@@ -128,7 +127,7 @@ def plugin(logger, home, data_dir):
     p._migration_service = MagicMock()
     p._migration_service.is_retrodeck_migration_pending.return_value = False
     p._prune_service = MagicMock()
-    p._prune_service.is_active.return_value = False
+    p._prune_conflicts = _make_prune_conflicts()
     p._event_sink = FakeEventSink()
 
     p._debug_logger = SettingsAwareDebugLogger(settings=p.settings, logger=logger)
@@ -1068,6 +1067,7 @@ class TestMainStartupOrdering:
         connection_service.migrate_legacy_credentials = AsyncMock()
 
         wired_services = {
+            "prune_conflicts": _make_prune_conflicts(),
             "save_sync_service": save_sync_service,
             "playtime_service": MagicMock(),
             "sync_service": MagicMock(),
@@ -1265,8 +1265,7 @@ class TestPlaytimeFlushTaskLifecycle:
         p.loop = asyncio.get_running_loop()
         p._playtime_service = MagicMock()
         p._playtime_service.record_session_start.return_value = {"success": True}
-        p._prune_service = MagicMock()
-        p._prune_service.is_active.return_value = False
+        p._prune_conflicts = _make_prune_conflicts()
         return p
 
     @pytest.mark.asyncio

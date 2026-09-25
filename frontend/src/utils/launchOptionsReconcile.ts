@@ -23,8 +23,8 @@ export type RelaunchOptionsReconfirmResult =
 
 /**
  * Keep watching a re-confirm that timed out: its lease is still held by the
- * backend, so a late success has to hand it back or it pins the admission gate
- * until its TTL.
+ * backend, so a late success has to hand it back or it pins the prune
+ * conflict gate until its TTL.
  */
 function releaseLateReconfirmLease(
   fetchOutcome: Promise<{ kind: "result"; item: RelaunchOptionsResult } | { kind: "error"; error: unknown }>,

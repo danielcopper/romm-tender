@@ -1049,6 +1049,22 @@ Format: **invariant** — tier — enforced by.
   preview rebuild does not), and frontend-owned Steam work holds a heartbeated, generation-tombstoned lease through
   every continuation's final write** — test + prompt-only — prune service/gate race tests + contract callable-entry
   matrix; new conflicting entry points are prompt-only
+- **A removed-game cleanup's run claim is registered on the prune conflict gate before the start's reservation is given
+  back, so the two windows overlap and no conflicting endpoint runs in a gap between them** — test + prompt-only —
+  `tests/services/prune/test_service.py::test_a_started_run_holds_its_claim_on_the_gate_until_it_ends` and
+  `tests/contract/test_prune.py::test_a_cleanup_refuses_conflicting_endpoints_from_its_start_to_its_end`. A gap would
+  let a conflicting endpoint change local state after the start revalidated its preview and before the run acts on it.
+  The reservation belongs to the decorator, which gives it back in its `finally` once `Plugin.start_prune` returns; the
+  run claim belongs to the prune service, which registers it in `start_prune`'s second lock hold, where it sets
+  `_run_id`. The order holds only because the second happens inside the first's call. Prompt-only:
+  `PruneService.start_prune` is reached only through the endpoint marked `@prune_exclusive_start` — a caller that
+  reached it another way would skip the refusal on held operations and leases, and would run the start's validation with
+  no reservation in front of it, open to every conflicting endpoint that could change the local state the refreshed
+  preview is checked against. The service test checks that the run is registered by the time `start_prune` returns,
+  which is what keeps the order; the contract test holds a real start inside its preview rebuild and checks the refusal
+  during validation and after the start returns, and its lifting once the run ends — it does not see a registration
+  moved into the run task's first step, because that step runs before the start's caller resumes. Neither sees a second
+  caller
 - **A prune frontend action mutates Steam only after atomically claiming its exact run/token/discriminant/binding;
   repeats are idempotent and an outcome lost in transit is ambiguous, never success** — test + prompt-only — prune
   service claim tests + `frontend/src/utils/pruneActions.test.ts`; new action kinds are prompt-only

@@ -66,11 +66,13 @@ from domain.update_release import UpdateSource
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-# The service attributes ``main.py:_main`` binds onto ``Plugin``. The harness
-# binds the same set; the loud-failure assert below checks every one is present
-# so a wiring drift (a renamed/added service key) fails the fixture instead of
-# surfacing as a confusing ``AttributeError`` mid-test.
+# The wired attributes ``main.py:_main`` binds onto ``Plugin`` — every service
+# and the prune conflict gate. The harness binds the same set; the loud-failure
+# assert below checks every one is present so a wiring drift (a renamed/added
+# service key) fails the fixture instead of surfacing as a confusing
+# ``AttributeError`` mid-test.
 _BOUND_SERVICE_ATTRS = {
+    "_prune_conflicts": "prune_conflicts",
     "_save_sync_service": "save_sync_service",
     "_playtime_service": "playtime_service",
     "_sync_service": "sync_service",
@@ -346,16 +348,20 @@ def hold_sync_in_flight(harness: ContractHarness, state: SyncState = SyncState.R
         box.request_cancel("held-sync-run")
 
 
+_HELD_PRUNE_RUN = "held-prune-run"
+
+
 def hold_prune_active(harness: ContractHarness) -> None:
     """Leave a removed-game cleanup holding its run claim.
 
-    A poke at the prune service's private claim flag, not a real path: holding a
-    real run open takes a seeded candidate, a preview and a run parked on a
-    Steam action it waits for the frontend to claim.
+    Registered on the prune conflict gate the way the prune service registers a
+    run it starts, without starting one: holding a real run open takes a seeded
+    candidate, a preview and a run parked on a Steam action it waits for the
+    frontend to claim.
     """
-    harness.plugin._prune_service._starting = True
+    harness.plugin._prune_conflicts.register_run(_HELD_PRUNE_RUN)
 
 
 def release_prune_active(harness: ContractHarness) -> None:
-    """Let go of the claim ``hold_prune_active`` left, through the same poke."""
-    harness.plugin._prune_service._starting = False
+    """Let go of the run claim ``hold_prune_active`` registered, the way a run's end releases it."""
+    harness.plugin._prune_conflicts.release_run(_HELD_PRUNE_RUN)

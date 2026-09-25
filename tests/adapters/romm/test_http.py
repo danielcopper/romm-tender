@@ -9,6 +9,7 @@ from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
+from _factories import _make_prune_conflicts
 from fakes.fake_active_core_resolver import FakeActiveCoreResolver
 from fakes.fake_disc_resolver import FakeDiscResolver
 from fakes.fake_renderer_gc import FakeRendererGc
@@ -76,8 +77,7 @@ def plugin(emit, logger, home, project_root):
         p.settings, project_root, logging.getLogger("test"), _USER_AGENT, log_debug=lambda _msg: None
     )
     p._romm_api = MagicMock()
-    p._prune_service = MagicMock()
-    p._prune_service.is_active.return_value = False
+    p._prune_conflicts = _make_prune_conflicts()
 
     steam_config = SteamConfigAdapter(user_home=str(home), logger=logger)
     p._steam_config = steam_config

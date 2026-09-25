@@ -45,7 +45,7 @@ is invisible at the citation site), so reach it through the page that owns the t
 - Save-file sync — slots, conflict resolution, negotiate transport, version history —
   [save-file-sync-architecture.md](docs/architecture/save-file-sync-architecture.md)
 - Save-sync coverage matrix — [save-sync-coverage.md](docs/architecture/save-sync-coverage.md)
-- Removed-game cleanup — deletion authority, admission/leases, claims, recovery bundles —
+- Removed-game cleanup — deletion authority, prune conflicts and leases, claims, recovery bundles —
   [removed-game-cleanup.md](docs/architecture/removed-game-cleanup.md)
 - Services, adapters, wiring; connection/token and settings-persistence internals —
   [backend-architecture.md](docs/architecture/backend-architecture.md)
@@ -674,6 +674,13 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   preview rebuild does not), and frontend-owned Steam work holds a heartbeated, generation-tombstoned lease through
   every continuation's final write** — test + prompt-only — prune service/gate race tests + contract callable-entry
   matrix; new conflicting entry points are prompt-only
+- **A removed-game cleanup's run claim is registered on the prune conflict gate before the start's reservation is given
+  back, so the two windows overlap and no conflicting endpoint runs in a gap between them** — test + prompt-only —
+  `tests/services/prune/test_service.py::test_a_started_run_holds_its_claim_on_the_gate_until_it_ends` (registered by
+  the time `start_prune` returns) and
+  `tests/contract/test_prune.py::test_a_cleanup_refuses_conflicting_endpoints_from_its_start_to_its_end` (refused across
+  a real start); prompt-only: `PruneService.start_prune` is reached only through the endpoint marked
+  `@prune_exclusive_start`
 - **A prune frontend action mutates Steam only after atomically claiming its exact run/token/discriminant/binding;
   repeats are idempotent and an outcome lost in transit is ambiguous, never success** — test + prompt-only — prune
   service claim tests + `frontend/src/utils/pruneActions.test.ts`; new action kinds are prompt-only

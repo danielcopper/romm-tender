@@ -25,7 +25,7 @@ where their detail lives. Save-side path resolution and quarantine mechanics bel
 | `services/prune/save_locks.py`    | Holds save locks over an ownership set proven stable under them         |
 | `services/prune/results.py`       | Shapes progress/completion frames and terminal group results            |
 | `services/prune/requests.py`      | Parses and validates the wire payloads                                  |
-| `lib/prune_gate.py`               | The admission gate — reservations, conflicting-callable refusal, leases |
+| `lib/prune_gate.py`               | The conflict gate — its operations, leases, reservations and run claims |
 | `adapters/recovery_bundle.py`     | Writes, checksums, seals and publishes a recovery bundle                |
 | `adapters/steam_recovery.py`      | Captures Steam-only state; edits the controller value in `localconfig`  |
 | `adapters/descriptor_paths.py`    | Descriptor-relative, no-follow claim capture and claimed mutation       |
@@ -125,29 +125,38 @@ server that dropped ids also reports a different `rom_count`, and the fetcher's 
 forces the re-fetch. Clearing the stamp would cost the platform its incremental skip and disable further bulk discovery
 until a new complete fetch landed.
 
-## Admission and conflicting operations
+## Prune conflicts
 
-A prune claim excludes library sync, downloads and resumes, migrations, version switches, core/disc/controller writes,
-launch evaluation, save mutations, session writes, uninstalls, connection identity changes, and affected cache cleanup.
-Each conflicting callable registers its own activity before its first `await`, and detached work retains that
-registration for the task's lifetime.
+A running cleanup excludes library sync, downloads and resumes, migrations, version switches, core/disc/controller
+writes, launch evaluation, save mutations, session writes, uninstalls, connection identity changes, and affected cache
+cleanup. Each conflicting endpoint holds an operation before its first `await`, and detached work retains that operation
+for the task's lifetime.
 
-Admission is atomic in the part that matters: `prune_exclusive_start` takes the gate lock, refuses if any conflicting
-callable is registered, and reserves the prune claim — all in one lock hold, so no registration can slip between the
-check and the reservation. The run then proceeds **without** the lock. The reservation alone already refuses every
-conflicting callable, and holding the lock across the run's preview rebuild would make Play, save status, and downloads
-wait for that rebuild rather than learning their verdict immediately.
+Every prune conflict is recorded on one object, `PruneConflicts` (its four kinds are defined in CONTEXT.md → Prune
+conflicts). The composition root builds it before any service and hands it on: the prune service registers its run
+there, and `Plugin` reads it for the two decorators, the event funnel, and every endpoint that takes, renews or releases
+a lease or retains an operation for detached work. The reservation lasts from the moment a start gets past the gate
+until the start returns; the run claim, from the moment the revalidated preview becomes a run until that run ends — in
+the run's own `finally`, or, for a run task cancelled before it first ran, in the task's done callback. The run is
+registered before the reservation is given back, so the two overlap and a conflicting endpoint finds no gap between
+them.
 
-Every claim on the gate is **named**. A callable registration carries the callable's own name, detached work carries the
-name of the callable that spawned it, and a lease carries its acquisition key plus the time it was taken. A refusal logs
-the complete holder inventory at INFO — label, kind, age, and a lease's remaining time — and names the holder in the
-refused message itself when its key has a user-facing name, falling back to the generic text rather than putting an
+The start is atomic in the part that matters: `prune_exclusive_start` takes the gate lock, refuses if any operation or
+lease is held, and takes the reservation — all in one lock hold, so no claim can slip between the check and the
+reservation. The start then continues **without** the lock. The reservation alone already refuses every conflicting
+endpoint, and holding the lock across the start's preview rebuild would make Play, save status, and downloads wait for
+that rebuild rather than learning their verdict immediately.
+
+Every operation and lease on the gate is **named**. An operation carries its endpoint's own name, detached work carries
+the name of the endpoint that spawned it, and a lease carries its acquisition key plus the time it was taken. A refusal
+logs the complete holder inventory at INFO — label, kind, age, and a lease's remaining time — and names the holder in
+the refused message itself when its key has a user-facing name, falling back to the generic text rather than putting an
 internal token in front of the user. Acquire, renew and release are logged at debug; a lease that reaches its deadline
-is logged at INFO instead, because an expiry means its owner never released it. Without this a blocked cleanup is
-indistinguishable from a plugin that has stopped responding, and the holder cannot be identified after the fact.
+is logged at INFO instead, because an expiry means its owner never released it. Without this a refused start is
+indistinguishable from a backend that has stopped answering, and the holder cannot be identified after the fact.
 
-The live-claim count is derived from the holder registry rather than tracked beside it: a counter that can drift from
-the registry is exactly what made an unexplained refusal unattributable.
+The count of live operations and leases is derived from the holder registry rather than tracked beside it: a counter
+that can drift from the registry leaves a refusal with no holder to name.
 
 Frontend-owned Steam work spans many calls, so it holds a globally registered, bounded, tokenized lease that it
 heartbeats through every sibling continuation's final write — including each paced `sync_stale` removal and the terminal
@@ -161,7 +170,7 @@ A frontend that has just mounted disowns every lease outstanding at that moment,
 one. A continuation whose JS context is torn down mid-call — the double mount at plugin load does this — never reaches
 its release and never renews either, so its lease pins the gate for a full TTL with nobody behind it. A fresh mount is
 the proof that no earlier continuation survives, which makes it the one moment such an orphan is provably safe to drop;
-run claims and callable registrations are untouched, because only the frontend's own leases are the frontend's to
+run claims, reservations and operations are untouched, because only the frontend's own leases are the frontend's to
 disown. Each one released this way is logged at INFO, since it means a leak happened.
 
 A lease is the frontend's to release, so every path that receives one must give it back — including the paths that do no
@@ -374,7 +383,7 @@ yet. Terminal results distinguish exact success, skipped work, known partial mut
 removed ids and affected appIds stay truthful even after cancellation or a failed event delivery.
 
 `cancel_prune(run_id)` is the wire entry point, reachable from the confirmation dialog and from the Gone from RomM pane
-while a run is live. It is deliberately **not** gated by the prune claim — stopping the run is the one operation that
+while a run is live. It is deliberately **not** gated by the run claim, like the run's other endpoints: stopping the run
 must stay available while that claim is held. It cancels only the run whose id matches, is idempotent for repeat
 requests, and answers the canonical failure shape for an unknown, finished, or malformed id. Nothing is rolled back: the
 group already executing runs to its own verdict and reports what it committed.
@@ -396,9 +405,9 @@ Past the line nothing changes: the group runs to its own terminal verdict and re
 half-finished mutation that nobody recorded is worse than a slow stop. A cancellation arriving during a Steam action or
 the cascade therefore still waits, by design.
 
-The claim's release is bound to the run **task**, not to the run body. A task cancelled before the event loop first
+The run claim's release is bound to the run **task**, not to the run body. A task cancelled before the event loop first
 schedules it never enters the body whose `finally` normally releases the claim, so a done-callback releases a claim
-stranded that way — otherwise the run id would stay set for the process's lifetime and every conflicting callable would
+stranded that way — otherwise the run id would stay set for the process's lifetime and every conflicting endpoint would
 keep being refused with no run left to release it.
 
 ## Audit trail
