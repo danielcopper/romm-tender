@@ -25,7 +25,7 @@ where their detail lives. Save-side path resolution and quarantine mechanics bel
 | `services/prune/save_locks.py`    | Holds save locks over an ownership set proven stable under them         |
 | `services/prune/results.py`       | Shapes progress/completion frames and terminal group results            |
 | `services/prune/requests.py`      | Parses and validates the wire payloads                                  |
-| `lib/prune_gate.py`               | The admission gate — reservations, conflicting-callable refusal, leases |
+| `lib/prune_gate.py`               | The conflict gate — records every operation, lease, reservation and run |
 | `adapters/recovery_bundle.py`     | Writes, checksums, seals and publishes a recovery bundle                |
 | `adapters/steam_recovery.py`      | Captures Steam-only state; edits the controller value in `localconfig`  |
 | `adapters/descriptor_paths.py`    | Descriptor-relative, no-follow claim capture and claimed mutation       |
@@ -131,6 +131,15 @@ A prune claim excludes library sync, downloads and resumes, migrations, version 
 launch evaluation, save mutations, session writes, uninstalls, connection identity changes, and affected cache cleanup.
 Each conflicting callable registers its own activity before its first `await`, and detached work retains that
 registration for the task's lifetime.
+
+Every claim on this page is recorded on one object, `PruneConflicts` (its four kinds are defined in
+[CONTEXT.md](../../CONTEXT.md#prune-conflicts-operation-lease-reservation-run-claim)). The composition root builds it
+before any service and hands it on: the prune service registers its run there, and `Plugin` reads it for the two
+decorators and the event funnel. A cleanup is running while a start's reservation or a registered run is held. The
+reservation lasts from the moment a start gets past the gate until the start returns; the run claim, from the moment the
+revalidated preview becomes a run until that run ends — in the run's own `finally`, or, for a run task cancelled before
+it first ran, in the task's done callback. The run is registered before the reservation is given back, so the two
+overlap and a conflicting endpoint finds no gap between them.
 
 Admission is atomic in the part that matters: `prune_exclusive_start` takes the gate lock, refuses if any conflicting
 callable is registered, and reserves the prune claim — all in one lock hold, so no registration can slip between the
