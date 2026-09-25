@@ -376,8 +376,9 @@ class VersionSwitchService:
         also decides by, so a listed row the switch would reject is rendered
         non-switchable rather than a dead-end. ``vanished`` is independent of
         membership: retained rows keep their switchable verdict but are excluded
-        from default ranking and disabled by the frontend. A single-version group
-        renders no picker while preserving its bound/server verdicts.
+        from default ranking, and the picker refuses a switch to them. A
+        single-version group renders no picker while preserving its bound/server
+        verdicts.
         """
         entries: list[dict[str, Any]] = [
             {

@@ -53,10 +53,12 @@ a not-yet-synced version whose match conflicts, are both shown (so you know they
 either would move the shortcut onto a different game. To make one selectable, fix its metadata match in RomM so it
 agrees with this game's, then re-sync.
 
-A retained local version that RomM has positively confirmed it no longer has is also shown dimmed and disabled, with the
-separate label _"No longer available on RomM"_. Its **active** and **Downloaded** markers remain visible so it is clear
-what the shortcut and local files still refer to, but it never receives the **Default** badge. If the shortcut is still
-active on that unavailable id, choose any live alternative in the same list to recover the game.
+A retained local version that RomM has positively confirmed it no longer has is also shown dimmed, with the separate
+label _"No longer available on RomM"_, and it cannot be switched to: selecting it instead opens the cleanup confirmation
+described under [Cleaning up versions removed from RomM](#cleaning-up-versions-removed-from-romm). Its **active** and
+**Downloaded** markers remain visible so it is clear what the shortcut and local files still refer to, but it never
+receives the **Default** badge. If the shortcut is still active on that unavailable id, choose any live alternative in
+the same list to recover the game.
 
 When the version the shortcut is bound to is the one confirmed gone, the **Download** button is greyed out as well — it
 stays visible, like the version row, but downloading it could only ever fail. Pick a live version in the version list,
