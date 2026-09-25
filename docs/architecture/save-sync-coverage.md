@@ -192,15 +192,13 @@ decides on ambiguity" stance:
 
 ## Roadmap mapping
 
-- **(a)** — nothing to add: the resolver names these files already. Verification tracked in
-  [#237](https://github.com/danielcopper/romm-tender/issues/237).
-- **(b)** — infix-aware per-game discovery (PS1 multi-card, Flycast per-game VMU —
-  [#1645](https://github.com/danielcopper/romm-tender/issues/1645) — 3DO NVRAM); research in
+- **(b)** — infix-aware per-game discovery (PS1 multi-card, Flycast per-game VMU, 3DO NVRAM); research in
   [#237](https://github.com/danielcopper/romm-tender/issues/237), implementation under the save-format epic
   [#255](https://github.com/danielcopper/romm-tender/issues/255).
 - **(c)** — shared/system-dir handling under [#255](https://github.com/danielcopper/romm-tender/issues/255) (save
   formats), [#901](https://github.com/danielcopper/romm-tender/issues/901) (shared cards, Dreamcast's default VMUs among
-  them), and [#129](https://github.com/danielcopper/romm-tender/issues/129) (standalone emulators) — all v2.0.
+  them), and [#129](https://github.com/danielcopper/romm-tender/issues/129) (standalone emulators) — all v2.0. Switching
+  Flycast onto per-game VMUs is [#1645](https://github.com/danielcopper/romm-tender/issues/1645).
 
 ## Evidence level, and where the audit has since disagreed
 

@@ -33,7 +33,7 @@ library into Steam as Non-Steam shortcuts. Games launch through [RetroDECK](http
 5. **[BIOS Management](user-guide/bios-management.md)** — What BIOS files are, checking status, downloading per-platform
 6. **[Save Sync](user-guide/save-sync.md)** — Auto-sync, conflict resolution modes, manual sync, failed sync retries
 7. **[Save File Extensions](user-guide/save-file-extensions.md)** — Which save file extensions RetroDECK's cores
-   produce, and the record of the original extension decision
+   produce: the research behind the retired per-system extension list
 8. **[Save Sync Support Matrix](user-guide/save-sync-support-matrix.md)** — What syncs today, what's planned, and what
    doesn't fit the per-game model
 9. **[RetroDECK Path Migration](user-guide/retrodeck-path-migration.md)** — Moving your RetroDECK installation between

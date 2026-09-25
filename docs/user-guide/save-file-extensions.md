@@ -8,6 +8,7 @@ informs the implementation of [#196](https://github.com/danielcopper/romm-tender
     The plugin held a per-system list of save extensions, and this page is the research behind it. **That list is
     retired.** The plugin now asks the machine which files a game's save consists of, per game and per the emulator
     that will launch it, and reads the answer fresh on every sync — see
+    [Save File Discovery](../architecture/save-file-sync-architecture.md#save-file-discovery),
     [Save sync coverage](../architecture/save-sync-coverage.md) and
     [ADR-0034](https://github.com/danielcopper/romm-tender/blob/main/docs/adr/0034-a-save-is-answered-by-the-emulator-that-writes-it.md).
 
@@ -18,9 +19,9 @@ informs the implementation of [#196](https://github.com/danielcopper/romm-tender
     version digit (`<rom>.0.srm`) the table never had, and Saturn's third extension turned out to be console
     configuration rather than progress, and is no longer synced.
 
-    Keep this page as the record of how the original `.srm`/`.dsv`/`.brm` decision was reached. Do not use it to
-    predict what syncs today — the [Save sync support matrix](save-sync-support-matrix.md) is the broader view, and
-    your own machine is the authority.
+    What stays here is the research: which extensions each core writes, and what was recommended for each at the time.
+    Do not use it to predict what syncs today — the [Save sync support matrix](save-sync-support-matrix.md) is the
+    broader view, and your own machine is the authority.
 
 ## How RetroArch Save Extensions Work
 
@@ -88,9 +89,9 @@ These cores all produce `.srm` (and optionally `.rtc`). No additional extensions
 - No `libretro_saves` field in core info -- uses its own VMU format
 - Produces `vmu_save_{A1-D1}.bin` files and `dc_nvmem.bin`
 - Multi-slot VMU support (games can produce multiple `.bin` files)
-- **Today**: the save answer refuses Flycast's cards (see [Save sync coverage](../architecture/save-sync-coverage.md)).
-  Syncing a shared card is [#901](https://github.com/danielcopper/romm-tender/issues/901); switching a core off its
-  shared card, onto per-game VMUs, is [#1645](https://github.com/danielcopper/romm-tender/issues/1645).
+- **Action**: Not included in extension expansion. Syncing a shared card is
+  [#901](https://github.com/danielcopper/romm-tender/issues/901); switching Flycast onto per-game VMUs is
+  [#1645](https://github.com/danielcopper/romm-tender/issues/1645).
 
 #### MAME / FBNeo (Arcade) -- `.nv`
 
@@ -141,9 +142,3 @@ Uses a **per-emulator** mapping:
 | MAME                        | `.nv`                          |
 
 Again, standalone emulator formats that don't apply to RetroDECK's RetroArch-based setup.
-
-## What decides a game's save files
-
-The save answer, read per ROM from the emulator that will launch it.
-[Save File Discovery](../architecture/save-file-sync-architecture.md#save-file-discovery) documents how the sync uses
-it, and [Save sync coverage](../architecture/save-sync-coverage.md) which systems it lets through.
