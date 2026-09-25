@@ -18,6 +18,8 @@ import pytest
 
 from domain.sync_state import SyncState
 
+from ._harness import hold_sync_in_flight
+
 _IN_FLIGHT_STATES = [SyncState.RUNNING, SyncState.CANCELLING]
 
 
@@ -32,21 +34,21 @@ def _assert_sync_active_refusal(result):
 
 @pytest.mark.parametrize("state", _IN_FLIGHT_STATES)
 async def test_remove_all_shortcuts_refused_while_in_flight(harness, state):
-    harness.plugin._sync_service._box.sync_state = state
+    hold_sync_in_flight(harness, state)
     result = await harness.plugin.remove_all_shortcuts()
     _assert_sync_active_refusal(result)
 
 
 @pytest.mark.parametrize("state", _IN_FLIGHT_STATES)
 async def test_remove_platform_shortcuts_refused_while_in_flight(harness, state):
-    harness.plugin._sync_service._box.sync_state = state
+    hold_sync_in_flight(harness, state)
     result = await harness.plugin.remove_platform_shortcuts("n64")
     _assert_sync_active_refusal(result)
 
 
 @pytest.mark.parametrize("state", _IN_FLIGHT_STATES)
 async def test_uninstall_all_roms_refused_while_in_flight(harness, state):
-    harness.plugin._sync_service._box.sync_state = state
+    hold_sync_in_flight(harness, state)
     result = await harness.plugin.uninstall_all_roms()
     _assert_sync_active_refusal(result)
 

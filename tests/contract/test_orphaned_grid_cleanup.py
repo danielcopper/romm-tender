@@ -16,6 +16,7 @@ import pytest
 
 from domain.sync_state import SyncState
 
+from ._harness import hold_sync_in_flight
 from ._seed import seed_rom
 
 # In-range non-Steam shortcut appIds (high bit set — Steam's assignment range).
@@ -104,7 +105,7 @@ async def test_refused_while_sync_in_flight(harness, state):
     grid = _make_grid(harness)
     orphan = grid / f"{_ORPHAN_APP_ID}p.png"
     orphan.write_bytes(b"art")
-    harness.plugin._sync_service._box.sync_state = state
+    hold_sync_in_flight(harness, state)
 
     result = await harness.plugin.cleanup_orphaned_grid_images([], False)
 

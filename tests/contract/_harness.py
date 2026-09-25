@@ -59,6 +59,8 @@ from fakes.fake_steamgrid_db_api import FakeSteamGridDbApi
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from domain.app_directories import AppDirectories
+from domain.sync_run_kind import SyncRunKind
+from domain.sync_state import SyncState
 from domain.update_release import UpdateSource
 
 if TYPE_CHECKING:
@@ -310,3 +312,43 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
         cache_dir=result.directories.cache_dir,
         bin_dir=result.directories.bin_dir,
     )
+
+
+# The conditions a gated endpoint refuses on. Each is reached here and nowhere
+# else, so moving where a condition lives changes one helper rather than every
+# test that needs the condition. None of them is released: each test gets a
+# fresh harness.
+
+
+def hold_migration_pending(harness: ContractHarness) -> None:
+    """Leave a RetroDECK home migration pending.
+
+    Written where a detected home change writes it: the previous-home marker in
+    ``kv_config`` that ``MigrationService.is_retrodeck_migration_pending`` reads.
+    """
+    with harness.uow_factory() as uow:
+        uow.kv_config.set("retrodeck_home_path_previous", str(harness.tmp_path / "previous-retrodeck-home"))
+
+
+def hold_sync_in_flight(harness: ContractHarness, state: SyncState = SyncState.RUNNING) -> None:
+    """Leave a library sync in flight, RUNNING or CANCELLING.
+
+    Claimed through the run-lifecycle box's own verbs rather than by starting a
+    run: a real run over the fake server finishes on its own schedule, so the
+    state would not hold still for the endpoint under test.
+    """
+    assert state in (SyncState.RUNNING, SyncState.CANCELLING), state
+    box = harness.plugin._sync_service._box
+    assert box.try_begin_run("held-sync-run", kind=SyncRunKind.APPLY)
+    if state is SyncState.CANCELLING:
+        box.request_cancel("held-sync-run")
+
+
+def hold_prune_active(harness: ContractHarness) -> None:
+    """Leave a removed-game cleanup holding its run claim.
+
+    A poke at the prune service's private claim flag, not a real path: holding a
+    real run open takes a seeded candidate, a preview and a run parked on a
+    Steam action it waits for the frontend to claim.
+    """
+    harness.plugin._prune_service._starting = True

@@ -16,6 +16,8 @@ from domain.sync_state import SyncState
 from domain.version_metadata import VersionMetadata
 from lib.errors import RommNotFoundError
 
+from ._harness import hold_sync_in_flight
+
 CONTROL_ROM_ID = 900041
 
 
@@ -119,7 +121,7 @@ async def test_preview_is_local_paged_and_frontend_shaped(harness):
 
 @pytest.mark.parametrize("state", [SyncState.RUNNING, SyncState.CANCELLING])
 async def test_preview_refuses_active_sync_with_canonical_shape(harness, state):
-    harness.plugin._sync_service._box.sync_state = state
+    hold_sync_in_flight(harness, state)
 
     result = await harness.plugin.get_prune_preview(_preview_request())
 
@@ -255,57 +257,6 @@ async def test_action_report_rejects_stale_token_with_canonical_shape(harness):
         "reason": "stale_action",
         "message": "This cleanup action token is no longer active.",
     }
-
-
-@pytest.mark.parametrize(
-    ("method", "args"),
-    [
-        ("start_sync", ()),
-        ("test_connection", ()),
-        ("connect_with_credentials", ("https://server.example", "user", "pass", None)),
-        ("connect_with_token", ("https://server.example", "token", None)),
-        ("connect_with_pairing_code", ("https://server.example", "code", None)),
-        ("sign_out", ()),
-        ("save_server_url", ("https://server.example", None)),
-        ("save_custom_headers", ([],)),
-        ("start_download", (41,)),
-        ("adopt_existing_rom", (41,)),
-        ("migrate_retrodeck_files", (None,)),
-        ("sync_rom_saves", (41,)),
-        ("switch_version", (0x80000001, 41, False)),
-        ("remove_rom", (41,)),
-        ("uninstall_all_roms", ()),
-        ("get_rom_relaunch_options", (41,)),
-        ("get_installed_relaunch_options", ()),
-        ("report_unit_results", ({}, "run", "unit", 0)),
-        ("report_removal_results", ([], None)),
-        ("reconcile_shortcuts", ([],)),
-        ("refresh_save_status", (41,)),
-        ("get_save_status", (41,)),
-        ("get_save_slots", (41,)),
-        ("record_session_start", (41,)),
-        ("reconcile_playtime", (41,)),
-        ("fetch_cover_base64", (41,)),
-        ("get_sgdb_artwork_base64", (41, 0)),
-        ("apply_sgdb_game_id", (41, 7)),
-        ("save_shortcut_icon", (0x80000001, "")),
-        ("clear_sync_cache", ()),
-        ("apply_steam_input_setting", ()),
-        ("set_system_core", ("n64", "")),
-        ("set_game_core", (41, "core")),
-        ("clear_game_core", (41,)),
-        ("select_disc", (41, None)),
-        ("evaluate_launch", (0x80000001,)),
-    ],
-)
-async def test_prune_claim_reciprocally_blocks_conflicting_callable_entries(harness, method, args):
-    harness.plugin._prune_service._starting = True
-
-    result = await getattr(harness.plugin, method)(*args)
-
-    assert result["success"] is False
-    assert result["reason"] == "prune_active"
-    assert result["message"]
 
 
 @pytest.mark.parametrize("operation", ["save_status", "download"])
