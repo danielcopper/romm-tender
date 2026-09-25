@@ -32,6 +32,7 @@ import { DownloadProgressRow } from "./DownloadProgressRow";
 import { MigrationBlockedPage } from "./MigrationBlockedPage";
 import { SettingsResetBanner } from "./SettingsResetBanner";
 import { PlaytimeScopeBanner } from "./PlaytimeScopeBanner";
+import { UpdateNotice } from "./UpdateNotice";
 import type { SyncPreview, SyncProgress, SyncRunKind, SyncStats, NavTarget } from "../types";
 import { detach } from "../utils/detach";
 import { wrapText } from "../utils/textStyles";
@@ -762,6 +763,9 @@ export const MainPage: FC<MainPageProps> = ({ onNavigate }) => {
             </PanelSectionRow>
           </>
         )}
+        {/* Last of the notices: nothing here is outstanding about this install,
+            a newer release simply exists. */}
+        <UpdateNotice onOpenUpdates={() => onNavigate({ page: "settings", section: "updates" })} />
         <BlockSeparator />
       </PanelSection>
 

@@ -198,15 +198,16 @@ locally with `mise run docs`.
 - **RomM minimum version**: Requires RomM >= 5.3.0, hard-rejected in `test_connection()` (`_MIN_REQUIRED_VERSION` in
   `main.py`) — the plugin is inert until the server is updated.
 - **User-Agent on outgoing HTTP**: SteamGridDB **and** RomM behind Cloudflare Tunnel reject the default `Python-urllib`
-  UA with 403. Both adapters that talk to a server off this machine (`adapters/romm/http.py`, `adapters/steamgriddb.py`)
-  take a `user_agent: str` ctor param; bootstrap threads `<package name>/<version>`, both halves from
-  `domain/identity.py` — no hardcoded name and no hardcoded version at the format site, so the UA and the recovery root
-  come from that one module rather than from two literals that could drift (the root additionally through
-  `sanitize_package_name`, which is the identity for a name shaped like this one). Those two are everything
-  `PACKAGE_NAME` reaches; the folder the program ships as is not decided by it. **The UA has no fallback and no failure
-  mode**: both halves are constants, so a UA naming anything but this program is a code change, never a deployment
-  accident. `VERSION` is machine-stamped by release-please (`x-release-please-version` on its line) and never edited by
-  hand. `adapters/renderer_gc.py` also speaks HTTP — to Steam's debugger on `localhost` — and takes none.
+  UA with 403, and GitHub's API refuses a request with no UA at all. The three adapters that talk to a server off this
+  machine (`adapters/romm/http.py`, `adapters/steamgriddb.py`, `adapters/github_releases.py`) take a `user_agent: str`
+  ctor param; bootstrap threads `<package name>/<version>`, both halves from `domain/identity.py` — no hardcoded name
+  and no hardcoded version at the format site, so the UA and the recovery root come from that one module rather than
+  from two literals that could drift (the root additionally through `sanitize_package_name`, which is the identity for a
+  name shaped like this one). Those two are everything `PACKAGE_NAME` reaches; the folder the program ships as is not
+  decided by it. **The UA has no fallback and no failure mode**: both halves are constants, so a UA naming anything but
+  this program is a code change, never a deployment accident. `VERSION` is machine-stamped by release-please
+  (`x-release-please-version` on its line) and never edited by hand. `adapters/renderer_gc.py` also speaks HTTP — to
+  Steam's debugger on `localhost` — and takes none.
 - **Large payloads**: two caps, and they fail differently — `host/dispatch.py` refuses an encoded answer over ~12 MiB as
   an ordinary error for that one call, while `host/connection.py` closes the socket on a frame over 16 MiB, which
   rejects every call in flight with it. So a bulk payload is chunked rather than sent: per-item callables, and bulk
@@ -361,7 +362,9 @@ entry — why the rule exists, what breaks without it, and where it lives — is
   `AppDirectories`** — prompt-only — `domain/app_directories.py` is the pure ladder (`TENDER_*`, then XDG, then the
   built-in defaults); `Plugin.run` resolves it once and hands it to `bootstrap()`, which derives nothing, and
   `RuntimeBundle` carries no directory. Re-derivable data goes under `cache_dir`, data that is not re-derivable under
-  `data_dir`, and nothing under `bin_dir` is ours to remove. Nothing mechanical tells its seven `str` fields apart
+  `data_dir`, and nothing under `bin_dir` is ours to remove. Nothing mechanical tells its seven `str` fields apart. A
+  second read of `TENDER_CODE_DIR` is deliberate: `domain/update_release.py::resolve_update_source` asks whether the
+  variable was SET, which `AppDirectories.code_dir` has already erased
 - **The identifier's three homes are never derived from one another — in particular `APP_DIR_NAME`
   (`domain/user_data_location.py`) is never read from `PACKAGE_NAME` (`domain/identity.py`)** — test + prompt-only —
   `tests/domain/test_identity.py::TestTheIdentifierStaysInTwoPlaces`, which requires `APP_DIR_NAME` to be a string

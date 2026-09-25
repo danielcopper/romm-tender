@@ -24,6 +24,7 @@ from fakes.fake_firmware_file_store import FakeFirmwareFileStore
 from fakes.fake_firmware_resolver import FakeFirmwareResolver
 from fakes.fake_game_process_control import FakeGameProcessControlAdapter
 from fakes.fake_hostname_reader import FakeHostnameReader
+from fakes.fake_latest_release import FakeLatestRelease
 from fakes.fake_machine_id_reader import FakeMachineIdReader
 from fakes.fake_migration_file_store import FakeMigrationFileStore
 from fakes.fake_path_exists_reader import FakePathExistsReader
@@ -47,6 +48,7 @@ from adapters.romm.romm_api import RommApiAdapter
 from adapters.steam_config import SteamConfigAdapter
 from domain.app_directories import AppDirectories
 from domain.identity import PACKAGE_NAME, VERSION
+from domain.update_release import UpdateSource
 from main import Plugin
 from services.achievements import AchievementsService
 from services.cores import CoreService
@@ -61,6 +63,7 @@ from services.playtime import PlaytimeService
 from services.prune import PruneService
 from services.saves import SaveService
 from services.steamgrid import SteamGridService
+from services.update_check import UpdateCheckService
 from services.version_switch import VersionSwitchService
 
 _GAVEL = GavelNativeAdapter()
@@ -88,9 +91,14 @@ def _directories_at(tmp_path) -> AppDirectories:
     )
 
 
+# A release API nothing answers on: bootstrap builds the adapter and never calls it.
+_UPDATE_SOURCE = UpdateSource(release_api="http://127.0.0.1:9/releases/latest", installed_program=False)
+
+
 def _bootstrap_for(tmp_path) -> BootstrapResult:
     return bootstrap(
         directories=_directories_at(tmp_path),
+        update_source=_UPDATE_SOURCE,
         user_home=str(tmp_path / "home"),
         logger=logging.getLogger("test"),
     )
@@ -261,6 +269,7 @@ class TestTheCacheRootAndTheDataRootStayApart:
                 min_required_version=Plugin._MIN_REQUIRED_VERSION,
                 directories=directories,
                 launcher=result.launcher,
+                update_source=_UPDATE_SOURCE,
             )
         )
 
@@ -421,6 +430,7 @@ class TestWireServices:
             "recovery_store": MagicMock(),
             "prune_artifacts": MagicMock(),
             "steam_recovery": MagicMock(),
+            "latest_release": FakeLatestRelease(),
             "settings": settings,
             "loop": asyncio.new_event_loop(),
             "logger": logger,
@@ -486,6 +496,7 @@ class TestWireServices:
                 recovery_inventory=deps["recovery_store"],
                 prune_artifacts=deps["prune_artifacts"],
                 steam_recovery=deps["steam_recovery"],
+                latest_release=deps["latest_release"],
             ),
             stores=StateBundle(
                 settings=deps["settings"],
@@ -515,6 +526,7 @@ class TestWireServices:
             min_required_version=deps["min_required_version"],
             directories=deps["directories"],
             launcher=deps["launcher"],
+            update_source=_UPDATE_SOURCE,
         )
 
     def test_returns_all_services(self, tmp_path):
@@ -568,7 +580,7 @@ class TestWireServices:
     def test_returns_expected_services(self, tmp_path):
         deps = self._make_deps(tmp_path)
         result = wire_services(self._make_config(deps))
-        assert len(result) == 27
+        assert len(result) == 28
         assert "migration_service" in result
         assert "game_detail_service" in result
         assert "rom_removal_service" in result
@@ -588,6 +600,7 @@ class TestWireServices:
         assert "game_process_service" in result
         assert isinstance(result["game_process_service"], GameProcessService)
         assert "relaunch_options_resolver" in result
+        assert isinstance(result["update_check_service"], UpdateCheckService)
         deps["loop"].close()
 
     def test_pending_sync_binding_observes_library_rebinds(self, tmp_path):

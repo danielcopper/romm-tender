@@ -14,6 +14,7 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from domain.identity import VERSION
 from domain.shortcut_data import RETRODECK_APP_ID
 from lib.late_binding import LateBinding
 from services.achievements import AchievementsService, AchievementsServiceConfig
@@ -45,6 +46,7 @@ from services.shortcut_relocation import ShortcutRelocationService, ShortcutRelo
 from services.shortcut_removal import ShortcutRemovalService, ShortcutRemovalServiceConfig
 from services.startup_healing import StartupHealingService, StartupHealingServiceConfig
 from services.steamgrid import SteamGridService, SteamGridServiceConfig
+from services.update_check import UpdateCheckService, UpdateCheckServiceConfig
 from services.version_switch import VersionSwitchService, VersionSwitchServiceConfig
 
 if TYPE_CHECKING:
@@ -53,6 +55,7 @@ if TYPE_CHECKING:
     from models.shortcut_launcher import ShortcutLauncher
 
     from domain.app_directories import AppDirectories
+    from domain.update_release import UpdateSource
     from services.protocols import InstalledRomRemoverFn, SaveDirectoriesRecorderFn, SiblingSupersedeFn
 
     from .adapters import AdapterBundle, CallbackBundle, RuntimeBundle, StateBundle
@@ -75,7 +78,10 @@ class WiringConfig:
     it for the same reason: it says where the launcher a Steam shortcut
     runs through lives, and whether this start got it there. Its path is
     the data directory's only where this start actually put the launcher
-    under it — otherwise it is the copy the release ships.
+    under it — otherwise it is the copy the release ships. ``update_source``
+    is the entry point's other environment answer — where releases are asked
+    for, and whether this process is the installed program — handed to
+    ``bootstrap()`` too.
     """
 
     adapters: AdapterBundle
@@ -85,6 +91,7 @@ class WiringConfig:
     min_required_version: tuple[int, ...]
     directories: AppDirectories
     launcher: ShortcutLauncher
+    update_source: UpdateSource
 
 
 def wire_services(cfg: WiringConfig) -> dict[str, Any]:
@@ -584,6 +591,20 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         )
     )
 
+    update_check_service = UpdateCheckService(
+        config=UpdateCheckServiceConfig(
+            latest_release=cfg.adapters.latest_release,
+            current_version=VERSION,
+            installed_program=cfg.update_source.installed_program,
+            clock=cfg.runtime.clock,
+            uow_factory=cfg.callbacks.uow_factory,
+            settings=cfg.stores.settings,
+            settings_persister=cfg.callbacks.settings_persister,
+            loop=cfg.runtime.loop,
+            log_debug=cfg.callbacks.log_debug,
+        ),
+    )
+
     return {
         "save_sync_service": save_sync_service,
         "playtime_service": playtime_service,
@@ -608,6 +629,7 @@ def wire_services(cfg: WiringConfig) -> dict[str, Any]:
         "connection_service": connection_service,
         "startup_healing_service": startup_healing_service,
         "shortcut_relocation_service": shortcut_relocation_service,
+        "update_check_service": update_check_service,
         "launch_gate_service": launch_gate_service,
         "session_lifecycle_service": session_lifecycle_service,
         "game_process_service": game_process_service,

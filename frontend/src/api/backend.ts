@@ -1173,6 +1173,45 @@ export const getHostStatus = callable<[], HostStatus>("get_host_status");
 // and pull-only — no backend dismiss callable, the QAM banner's Dismiss is local.
 export const getPlaytimeScopeNotice = callable<[], { pending: boolean }>("get_playtime_scope_notice");
 
+/**
+ * What the backend knows about a newer release of this program.
+ *
+ * `available` is the card on Main: a newer release with its tarball attached
+ * exists, this exact version was not dismissed, and the check is switched on.
+ * `newer` is the first of those alone, for the Settings section, which states
+ * the versions whether or not the card was dismissed. Every failure is silent.
+ */
+export interface UpdateNotice {
+  available: boolean;
+  newer: boolean;
+  /** The last available release a check saw, `null` until a check established one or while the check is off. */
+  latest_version: string | null;
+  current_version: string;
+  enabled: boolean;
+  /** This process is the installed program an update could replace — false for a run from a checkout. */
+  installed_program: boolean;
+}
+
+export const getUpdateNotice = callable<[], UpdateNotice>("get_update_notice");
+
+/** The same notice, plus whether the read behind it answered at all. */
+export interface UpdateCheckNow extends UpdateNotice {
+  /** False when GitHub gave no usable answer — and for a switched-off check, which asks nothing. */
+  reached: boolean;
+}
+
+/** Ask now, past the daily throttle and past a dismissal; never past the switch. */
+export const checkForUpdateNow = callable<[], UpdateCheckNow>("check_for_update_now");
+
+/** A settings write the backend accepted, or the reason it refused one. */
+export type UpdateSettingWrite = { success: true } | CallableFailure;
+
+/** Wave the card away for one release version; the next release raises it again. */
+export const dismissUpdateNotice = callable<[string], UpdateSettingWrite>("dismiss_update_notice");
+
+/** Switch the daily release check on or off. On by default. */
+export const setUpdateCheckEnabled = callable<[boolean], UpdateSettingWrite>("set_update_check_enabled");
+
 // End-of-session orchestration — collapses recordSessionEnd + syncAchievementsAfterSession
 // + postExitSync + refreshMigrationState into a single backend round-trip.
 // See SessionLifecycleService in backend/services/session_lifecycle.py.

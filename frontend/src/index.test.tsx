@@ -18,6 +18,7 @@ import { toaster } from "./api/host";
 import { emitHostEvent, hostEventListenerCount } from "./test-utils/host-event-bus";
 import {
   getSettingsResetNotice,
+  getUpdateNotice,
   getAllPlaytime,
   getAppIdRomIdMap,
   getInstalledRelaunchOptions,
@@ -29,6 +30,7 @@ import {
 import { registerGameDetailPatch } from "./bigpicture/patches/gameDetailPatch";
 import { registerLaunchInterceptor } from "./utils/launchInterceptor";
 import { getSettingsResetState, setSettingsResetState } from "./utils/settingsResetStore";
+import { getUpdateNoticeState, resetUpdateNoticeStoreForTests } from "./utils/updateNoticeStore";
 import { getDownloadState, setDownloads } from "./utils/downloadStore";
 import { getSyncProgress, setSyncProgress } from "./utils/syncProgress";
 import { estimateApplySeconds } from "./utils/syncEstimate";
@@ -1460,6 +1462,50 @@ describe("index.tsx — corrupt-settings reset notice", () => {
 
     expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to check settings reset notice"));
     expect(toaster.toast).not.toHaveBeenCalled();
+    plugin.onDismount();
+  });
+});
+
+describe("index.tsx — the release check at panel load", () => {
+  beforeEach(() => {
+    logError.mockClear();
+    vi.mocked(getUpdateNotice).mockReset();
+    resetUpdateNoticeStoreForTests();
+  });
+
+  it("asks once and fills the store the card and the section read", async () => {
+    vi.mocked(getUpdateNotice).mockResolvedValue({
+      available: true,
+      newer: true,
+      latest_version: "0.34.0",
+      current_version: "0.33.0",
+      enabled: true,
+      installed_program: true,
+    });
+    const plugin = pluginFactory();
+    await flush();
+
+    expect(getUpdateNotice).toHaveBeenCalledTimes(1);
+    expect(getUpdateNoticeState().available).toBe(true);
+    plugin.onDismount();
+  });
+
+  it("does not hold the panel up while GitHub is slow to answer", () => {
+    vi.mocked(getUpdateNotice).mockReturnValue(new Promise(() => {}));
+    const plugin = pluginFactory();
+
+    expect(plugin.content).toBeDefined();
+    expect(getUpdateNoticeState().available).toBe(false);
+    plugin.onDismount();
+  });
+
+  it("logs a check that rejected and shows no card", async () => {
+    vi.mocked(getUpdateNotice).mockRejectedValue(new Error("boom"));
+    const plugin = pluginFactory();
+    await flush();
+
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining("Failed to check for a newer release"));
+    expect(getUpdateNoticeState().available).toBe(false);
     plugin.onDismount();
   });
 });

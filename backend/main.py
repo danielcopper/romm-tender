@@ -23,6 +23,7 @@ from bootstrap.startup import StartupSteps
 
 from domain.app_directories import resolve_directories
 from domain.identity import VERSION
+from domain.update_release import resolve_update_source
 from host import (
     LOCK_FILENAME,
     PORT_FILENAME,
@@ -148,7 +149,7 @@ class Plugin:
         if lease_token is not None and not delivered:
             await release_prune_gate_lease(self, lease_token)
 
-    async def _main(self, *, directories, user_home, logger, events: PluginEventSink, status):
+    async def _main(self, *, directories, update_source, user_home, logger, events: PluginEventSink, status):
         """Bring the backend up: adapters, services, then the start-up repairs.
 
         Everything here must be through before the port is bound, which is what
@@ -165,6 +166,7 @@ class Plugin:
         # so RommHttpAdapter binds the live, migrated dict in one pass.
         result = bootstrap(
             directories=directories,
+            update_source=update_source,
             user_home=user_home,
             logger=logger,
         )
@@ -198,6 +200,7 @@ class Plugin:
                 min_required_version=self._MIN_REQUIRED_VERSION,
                 directories=directories,
                 launcher=result.launcher,
+                update_source=update_source,
             )
         )
         self._save_sync_service = services["save_sync_service"]
@@ -223,6 +226,7 @@ class Plugin:
         self._connection_service = services["connection_service"]
         self._startup_healing_service = services["startup_healing_service"]
         self._shortcut_relocation_service = services["shortcut_relocation_service"]
+        self._update_check_service = services["update_check_service"]
         self._launch_gate_service = services["launch_gate_service"]
         self._session_lifecycle_service = services["session_lifecycle_service"]
         self._game_process_service = services["game_process_service"]
@@ -1211,6 +1215,59 @@ class Plugin:
         return self._settings_service.dismiss_settings_reset_notice()
 
     @route
+    async def get_update_notice(self):
+        """Report the last available release a check saw, and whether the card should say so.
+
+        Returns ``{"available", "newer", "latest_version", "current_version",
+        "enabled", "installed_program"}``. ``available`` is the card itself: a
+        newer release with its tarball attached exists, the user has not
+        dismissed that exact version, and the check is switched on. ``newer`` is
+        the first of those alone, for the Settings section that states the
+        versions whether or not the card was dismissed. ``installed_program``
+        says whether this process is the installed program an update could
+        replace — False for a run from a checkout.
+
+        GitHub is asked at most once a day and the answer is kept, so a reload
+        inside that window shows the card without a request. Every failure is
+        silent: no network, an unreadable answer or a release whose tarball is
+        not attached yet leave the previous answer standing.
+        """
+        return await self._update_check_service.get_update_notice()
+
+    @route
+    async def check_for_update_now(self):
+        """Ask GitHub now, past the daily throttle and past any dismissal.
+
+        Answers everything :meth:`get_update_notice` does, plus ``reached`` —
+        whether the release read answered at all, which is what lets the Settings
+        section tell "nothing newer" from "nothing found out". A dismissed card
+        comes back. With the check switched off nothing is requested and nothing
+        is forgotten: the answer carries ``enabled: False`` and ``reached:
+        False``.
+        """
+        return await self._update_check_service.check_for_update_now()
+
+    @route
+    def dismiss_update_notice(self, version):
+        """Record that the user waved away the card for one release version.
+
+        Per version, so the next release raises the card again. Returns
+        ``{"success": True}``, or the canonical failure shape for a version that
+        is not a non-empty string.
+        """
+        return self._update_check_service.dismiss_update_notice(version)
+
+    @route
+    def set_update_check_enabled(self, enabled):
+        """Persist whether the daily release check may ask GitHub.
+
+        On by default; with it off nothing is fetched at all. Returns
+        ``{"success": True}``, or the canonical failure shape for a non-boolean
+        value.
+        """
+        return self._update_check_service.set_update_check_enabled(enabled)
+
+    @route
     async def get_shortcut_relocation(self):
         """Report which Steam shortcuts still have to be pointed at the launcher.
 
@@ -1269,6 +1326,7 @@ class Plugin:
         """
         user_home = os.path.expanduser("~")
         directories = resolve_directories(os.environ, user_home, _CODE_DIR_FALLBACK)
+        update_source = resolve_update_source(os.environ, _CODE_DIR_FALLBACK)
         token = new_token()
         logger = configure_logging(directories.state_dir, token)
         logger.info(f"host: code {directories.code_dir}, data {directories.data_dir}, cache {directories.cache_dir}")
@@ -1280,6 +1338,7 @@ class Plugin:
         async def build() -> BackendBuild:
             user_agent = await plugin._main(
                 directories=directories,
+                update_source=update_source,
                 user_home=user_home,
                 logger=logger,
                 events=events,

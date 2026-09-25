@@ -15,7 +15,14 @@ export type Page = "main" | "sync" | "settings" | "library" | "data" | "download
  * added here is a section the page's list has to label, and the type stops a
  * navigation naming one that does not exist.
  */
-export const SETTINGS_SECTIONS = ["connections", "save-sync", "controller", "steam-library", "advanced"] as const;
+export const SETTINGS_SECTIONS = [
+  "connections",
+  "save-sync",
+  "controller",
+  "steam-library",
+  "updates",
+  "advanced",
+] as const;
 
 /** One section of the Settings page, as a navigation may name it. */
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];

@@ -17,6 +17,8 @@ a pytest ``tmp_path`` and wires the **real** services via the real
   seed library/saves/server state and inject failures without HTTP).
 * ``sgdb_adapter`` → :class:`FakeSteamGridDbApi` (the SteamGridDB
   network transport).
+* ``latest_release`` → :class:`FakeLatestRelease` (the GitHub releases read
+  behind the update check).
 * ``clock`` / ``uuid_gen`` / ``sleeper`` → the deterministic fakes from
   ``tests.fakes.system_time`` so timestamped responses are assertable.
 * ``http_adapter.with_retry`` → a single-attempt pass-through so a
@@ -48,6 +50,7 @@ from bootstrap import (
     wire_services,
 )
 from fakes.fake_game_process_control import FakeGameProcessControlAdapter
+from fakes.fake_latest_release import FakeLatestRelease
 from fakes.fake_renderer_gc import FakeRendererGc
 from fakes.fake_renderer_rss import FakeRendererRss
 from fakes.fake_romm_api import FakeRommApi
@@ -56,6 +59,7 @@ from fakes.fake_steamgrid_db_api import FakeSteamGridDbApi
 from fakes.system_time import FakeClock, FakeSleeper, FakeUuidGen
 
 from domain.app_directories import AppDirectories
+from domain.update_release import UpdateSource
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -88,6 +92,7 @@ _BOUND_SERVICE_ATTRS = {
     "_connection_service": "connection_service",
     "_startup_healing_service": "startup_healing_service",
     "_shortcut_relocation_service": "shortcut_relocation_service",
+    "_update_check_service": "update_check_service",
     "_launch_gate_service": "launch_gate_service",
     "_session_lifecycle_service": "session_lifecycle_service",
     "_game_process_service": "game_process_service",
@@ -102,7 +107,8 @@ class ContractHarness:
     ``plugin`` is the real :class:`main.Plugin` with every service wired.
     ``romm`` is the :class:`FakeRommApi` the plugin's services talk to —
     tests seed library/saves/server state on it and arm its failure seams.
-    ``sgdb`` is the :class:`FakeSteamGridDbApi`. ``emit`` is the
+    ``sgdb`` is the :class:`FakeSteamGridDbApi`. ``releases`` is the
+    :class:`FakeLatestRelease` standing in for GitHub. ``emit`` is the
     ``AsyncMock`` the runtime emits through. ``clock`` is the deterministic
     :class:`FakeClock`. ``tmp_path`` is the per-test root every real adapter
     writes under.
@@ -111,6 +117,7 @@ class ContractHarness:
     plugin: Any
     romm: FakeRommApi
     sgdb: FakeSteamGridDbApi
+    releases: FakeLatestRelease
     emit: AsyncMock
     clock: FakeClock
     tmp_path: Any
@@ -154,6 +161,11 @@ def _single_attempt_pass_through(fn: Callable[..., Any], *args: Any, **kwargs: A
 _SHIPPED_LAUNCHER = b'#!/bin/bash\nexec "$@"\n'
 
 
+# Replaced by a fake below before anything can call it; the address answers
+# nothing either way. Not the installed program, as a test run never is.
+_UPDATE_SOURCE = UpdateSource(release_api="http://127.0.0.1:9/releases/latest", installed_program=False)
+
+
 def build_contract_harness(tmp_path: Any) -> ContractHarness:
     """Build the real ``Plugin`` over the real ``bootstrap()``, faking only the edges.
 
@@ -185,6 +197,7 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
             code_dir=str(tmp_path / "plugin"),
             bin_dir=str(tmp_path / "home" / ".local" / "bin"),
         ),
+        update_source=_UPDATE_SOURCE,
         user_home=str(tmp_path / "home"),
         logger=logger,
     )
@@ -214,6 +227,10 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
     # and the unsorted states root for savestates;
     # that the real adapter refuses on a machine it cannot read is pinned in
     # ``tests/adapters/test_atlas_saves.py``.
+    # The only edge aimed at a server neither the user nor this repo runs: left
+    # real, every test that opens the update check would reach github.com and
+    # spend a share of an IP-wide hourly budget.
+    fake_releases = FakeLatestRelease()
     patched_adapters = dataclasses.replace(
         result.adapters,
         romm_api=fake_romm,
@@ -225,6 +242,7 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
             saves_root=result.callbacks.retrodeck_paths.saves_path(),
             states_root=os.path.join(result.callbacks.retrodeck_paths.retrodeck_home(), "states"),
         ),
+        latest_release=fake_releases,
     )
 
     # Deterministic time/uuid/sleep seams so timestamped responses assert cleanly.
@@ -257,6 +275,7 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
         min_required_version=Plugin._MIN_REQUIRED_VERSION,
         directories=result.directories,
         launcher=result.launcher,
+        update_source=_UPDATE_SOURCE,
     )
     services = wire_services(cfg)
 
@@ -279,6 +298,7 @@ def build_contract_harness(tmp_path: Any) -> ContractHarness:
         plugin=plugin,
         romm=fake_romm,
         sgdb=fake_sgdb,
+        releases=fake_releases,
         emit=emit,
         clock=fake_clock,
         tmp_path=tmp_path,

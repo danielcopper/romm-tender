@@ -32,6 +32,7 @@ from adapters.es_find_rules import EsFindRulesAdapter
 from adapters.firmware_file import FirmwareFileAdapter
 from adapters.game_process import GameProcessAdapter
 from adapters.gavel_native import GavelNativeAdapter
+from adapters.github_releases import GithubReleaseAdapter
 from adapters.hostname import HostnameAdapter
 from adapters.launcher_install import LauncherInstallAdapter
 from adapters.machine_id import MachineIdAdapter
@@ -69,6 +70,7 @@ if TYPE_CHECKING:
     from typing import Any
 
     from domain.app_directories import AppDirectories
+    from domain.update_release import UpdateSource
     from services.protocols import (
         AdoptionMoveStore,
         Clock,
@@ -84,6 +86,7 @@ if TYPE_CHECKING:
         FirmwareResolver,
         GameProcessControl,
         HostnameReader,
+        LatestReleaseFn,
         MachineIdReader,
         MigrationFileStore,
         PathExistsReader,
@@ -154,6 +157,7 @@ class AdapterBundle:
     recovery_inventory: RecoveryBundleInventoryReader
     prune_artifacts: PruneArtifactStore
     steam_recovery: SteamRecoveryStore
+    latest_release: LatestReleaseFn
 
 
 @dataclass(frozen=True)
@@ -269,6 +273,7 @@ class BootstrapResult:
 def bootstrap(
     *,
     directories: AppDirectories,
+    update_source: UpdateSource,
     user_home: str,
     logger: logging.Logger,
 ) -> BootstrapResult:
@@ -287,6 +292,9 @@ def bootstrap(
         the entry point and handed in, never derived here. Bootstrap composing
         them itself is what used to make packaging decide where a user's library
         lived.
+    update_source:
+        Where the newest release is asked for — resolved from the environment
+        by the entry point, like ``directories``.
     user_home:
         The user's home directory, for RetroDECK and Steam path lookups and for
         the recovery root.
@@ -374,9 +382,10 @@ def bootstrap(
     # the freshly-written value, not a snapshot.
     platform_core_reader = PlatformCoreReaderAdapter(settings)
     # Single source of truth for outgoing User-Agent — thread the string to the
-    # two adapters that talk to a server off this machine (RomM and
-    # SteamGridDB). ``RendererGcAdapter`` also speaks HTTP, to Steam's own
-    # debugger on localhost, and takes no UA. Bot Fight Mode on Cloudflare
+    # three adapters that talk to a server off this machine (RomM, SteamGridDB
+    # and GitHub's releases API, which refuses a request with none).
+    # ``RendererGcAdapter`` also speaks HTTP, to Steam's own debugger on
+    # localhost, and takes no UA. Bot Fight Mode on Cloudflare
     # blocks the default ``Python-urllib`` UA before requests reach self-hosted
     # RomM (#249). Both halves come from ``domain/identity.py``, and so does the
     # recovery root built out of the same name below: a literal spelled here
@@ -412,6 +421,11 @@ def bootstrap(
     resolve_path = ResolvedPathAdapter()
     renderer_rss = RendererRssAdapter()
     renderer_gc = RendererGcAdapter(logger=logger)
+    github_releases = GithubReleaseAdapter(
+        api_url=update_source.release_api,
+        user_agent=user_agent,
+        log_debug=debug_logger,
+    )
     game_process = GameProcessAdapter()
     # The compiled gavel core owns both save-sync decisions — the per-file sync
     # action and the upload-409 resolution. Loaded eagerly so a missing /
@@ -474,6 +488,7 @@ def bootstrap(
         recovery_inventory=recovery_store,
         prune_artifacts=prune_artifacts,
         steam_recovery=steam_recovery,
+        latest_release=github_releases.get_latest_release,
     )
     stores = StateBundle(
         settings=settings,

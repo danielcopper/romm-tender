@@ -55,6 +55,7 @@ import {
 } from "./utils/collections";
 import { setMigrationStatus } from "./utils/migrationStore";
 import { fetchSettingsResetState } from "./utils/settingsResetStore";
+import { fetchUpdateNotice } from "./utils/updateNoticeStore";
 import { relocateShortcutsToLauncher } from "./utils/launcherRelocation";
 import { setLauncherRelocated } from "./utils/launcherStore";
 import { resetSyncDelta, recordSyncRemoved, getSyncDelta } from "./utils/syncDeltaStore";
@@ -549,6 +550,18 @@ const tender = definePlugin(() => {
         await fetchSettingsResetState();
       } catch (e) {
         logError(`Failed to check settings reset notice: ${e}`);
+      }
+    })(),
+  );
+
+  // Whether a newer release is out. Detached, never awaited — why is at
+  // fetchUpdateNotice.
+  detach(
+    (async () => {
+      try {
+        await fetchUpdateNotice();
+      } catch (e) {
+        logError(`Failed to check for a newer release: ${e}`);
       }
     })(),
   );

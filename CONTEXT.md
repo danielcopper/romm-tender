@@ -1001,12 +1001,25 @@ card, banner (a **notice** names a condition that needs the user; this states wh
 
 A **notice** is Main's standing statement of a condition that needs the user (settings were reset, the RetroArch input
 driver is wrong, a sync paused on the session budget). Most are cards and the input-driver one is a row; the shape is
-not what makes it a notice. They do not all sit at the top: three lead the panel above the status rows, and three more
-sit inside the status block, below the conditional slot — `docs/architecture/qam-panel.md`'s Main section has the order.
-The **home** of a condition is the one page where it is acted on. A notice names the condition and jumps to its home;
-the action exists only there, never on the notice — with one exception today, the RetroArch input driver, whose **Fix**
-still applies in place behind a confirmation until Settings (#1816) gives it a home. A condition answered **once and for
-all** — the user picks between named outcomes, and answering ends the condition for good — has no page to return to, so
-its home is a modal opened from the notice; that modal _is_ the home, not a second exception to the rule. A condition
-with no home in the plugin stays a notice without a jump, with Dismiss where there is a sensible end to it. _Avoid_:
-banner (component names only), warning, alert.
+not what makes it a notice. They do not all sit at the top: four lead the panel above the status rows — two sections of
+their own, then two warnings at the head of the status block — and three more sit inside the status block, below the
+conditional slot. `docs/architecture/qam-panel.md`'s Main section has the order. The **home** of a condition is the one
+page where it is acted on. A notice names the condition and jumps to its home; the action exists only there, never on
+the notice — with one exception today, the RetroArch input driver, whose **Fix** still applies in place behind a
+confirmation until Settings (#1816) gives it a home. A condition answered **once and for all** — the user picks between
+named outcomes, and answering ends the condition for good — has no page to return to, so its home is a modal opened from
+the notice; that modal _is_ the home, not a second exception to the rule. A condition with no home in the plugin stays a
+notice without a jump, with Dismiss where there is a sensible end to it. _Avoid_: banner (component names only),
+warning, alert.
+
+### Available release / installed program
+
+An **available release** is a Tender release a user could install: GitHub calls it latest, its tag is
+`tender-v<version>`, and its `romm-tender-<version>.tar.gz` is attached with a valid sha256 `digest`. A release
+published without the tarball yet — the assets job uploads it minutes later — is not available, and neither is one whose
+tarball carries no valid digest, since it could not be verified. The **update notice** on Main names only an available
+release that is strictly newer than the running version and not the version the user dismissed. The **installed
+program** is the process the installed service runs, the one an update can replace; a run from a checkout checks and
+shows the notice like any other, and is never offered an install. `domain/update_release.py` answers which process is
+the installed program; `services/update_check.py` keeps the last available release a check saw and decides whether the
+notice shows. _Avoid_: "new version" for a release that is merely published.
