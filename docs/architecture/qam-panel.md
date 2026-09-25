@@ -1015,6 +1015,25 @@ asking for a preview and starting the run is made on the frontend, by this page'
 
 Wide, two tabs.
 
+**Every sync write on either tab is optimistic, and a write that does not take says so.** A switch shows its new value
+before the backend answers. A refusal or a rejection is one outcome — none of these callables throws to refuse: the
+switch goes back to the value last stored for it, and a line says why, carrying the backend's own message, or a short
+fixed sentence where there is none (`SYNC_WRITE_FAILED`), and taking no space otherwise. Without the line a switch that
+goes back is indistinguishable from one that never moved. A later write in the same place that succeeds takes the line
+back, within the rule below. Which writes each tab makes, and where its lines sit, is under the tab below.
+
+**Only the latest write speaks** — on a switch's value, and on a line. **A switch** — a platform, a collection, the
+owner toggle — keeps the value last stored for it, taken from the read and moved on by every write that succeeds, and
+numbers the writes issued to it. Enable all / Disable all number every switch they write. An answer changes what the
+switch shows only while its write is still the latest for that switch: a success leaves the value the write showed, and
+a failure puts back the stored value. An answer that is no longer the latest only moves the stored value on, when it is
+a success, and never touches what is shown. So two refused writes to one switch leave it showing what is stored, a
+refusal of an older write cannot undo a newer one still in flight, and a refused Enable all puts back only the switches
+no later write has touched. **A line** numbers the writes issued in its place, and an answer sets or clears that line
+only while it is still the latest write there. So a slow refusal cannot stand a line over a write that has since
+succeeded, and a slow success cannot take back a newer refusal's line. The bookkeeping is
+`frontend/src/bigpicture/library/latestWrites.ts`, shared by both tabs' hooks.
+
 **Platforms** is list and detail. The list holds every platform RomM reports with at least one ROM — what
 `get_platforms` returns; a platform with nothing to sync is not listed — in two groups, **Synced** (the toggle is on)
 above **Available**, each alphabetical: **a dot, the name, the toggle, and nothing else**. The dot is the row's whole
@@ -1034,12 +1053,10 @@ is made of. The layout study still draws it; on this point the study is supersed
 finding. Do not restore it as a regression. Enable all and Disable all sit above the groups, in the list column and
 outside every row, so reaching them reports no selection. The order freezes while the page is open.
 
-**Every sync write is optimistic, and a write that does not take says so.** The row flips before the backend answers, so
-a write that is refused or never lands puts the row — or, for Enable all and Disable all, the whole list — back where it
-was, and states why in a line under those two buttons: in the list column, scrolling with the rows, plain text rather
-than a focus stop. It carries the backend's own message, or a short fixed sentence where there is none, and the next
-write that succeeds takes it back. A refusal resolves rather than throwing (the migration gate answers one, and so does
-the RomM listing Enable all needs), so without the line a revert is indistinguishable from a toggle that never moved.
+**The sync writes are a row's toggle and Enable all / Disable all, which write every row in the list**, and they follow
+the rule this section opens with (**Only the latest write speaks**). Both report in one line, under those two buttons:
+in the list column, scrolling with the rows, plain text rather than a focus stop. Either write is refused while a
+RetroDECK path migration is pending, and Enable all / Disable all also when the RomM listing they need fails.
 
 The detail offers no sync control of its own — the row already is one, focus is already there and A works the toggle,
 and the list's two header buttons act on every row at once — so it opens with one header line instead of a Sync section:
@@ -1580,27 +1597,16 @@ for the owner toggle's setting where that read failed; a read that answered is k
 as the page is open, and a read still out is not asked twice. While the collections read is out the list and the owner
 toggle are already standing, and each pane shows a spinner where its table goes.
 
-**The four writes are optimistic** — a table row's switch, the Favorites switch, Enable all / Disable all, and the owner
-toggle. A refusal or a rejection is one outcome: the control goes back to the value last stored for it while the write
-is still the latest for that control, and a line says why **where the write was made** while it is still the latest
-write there (both below), the line taking no space otherwise. A refused owner toggle or Favorites switch is reported in
-the list column, under the owner toggle; a refused table switch or Enable all / Disable all in the pane, under the
-search line. Each line is taken back by the next write in the same place that succeeds. The pane's line also goes when
-another row is selected, and both go when the tab is entered again. Selecting another row also clears the search, since
-a search is about the row it was typed on.
+**The four writes** are a table row's switch, the Favorites switch, Enable all / Disable all, and the owner toggle, and
+they follow the rule § Library opens with (**Only the latest write speaks**). Each is reported **where it was made**,
+and each place has a line of its own: a refused owner toggle or Favorites switch in the list column, under the owner
+toggle; a refused table switch or Enable all / Disable all in the pane, under the search line. The pane's line also goes
+when another row is selected, and both go when the tab is entered again. Selecting another row also clears the search,
+since a search is about the row it was typed on.
 
-**Only the latest write speaks** — on a control's value, and on a line. **A control** — each collection, and the owner
-toggle — keeps the value last stored for it, taken from the read and moved on by every write that succeeds, and numbers
-the writes issued to it. Enable all / Disable all number every collection they write. An answer changes what the control
-shows only while its write is still the latest for that control: a success leaves the value the write showed, and a
-failure puts back the stored value. An answer that is no longer the latest only moves the stored value on, when it is a
-success, and never touches what is shown. So two refused switches of one row leave it showing what is stored, a refusal
-of an older write cannot undo a newer one still in flight, and a refused Enable all puts back only the collections no
-later write has touched. **A line** — the list column's and the pane's — numbers the writes issued in its place, and an
-answer sets or clears that line only while it is still the latest write there and the tab has not been entered again
-since it was issued; a pane answer also only while no other row has been selected since it was issued, a round trip back
-to the same row included. So a slow refusal cannot stand a line over a write that has since succeeded, a slow success
-cannot take back a newer refusal's line, and nothing lands on a pane entered since, or on a view entered afresh.
+**Two more things keep an answer off a line here.** An answer sets or clears a line only while the tab has not been
+entered again since its write was issued, and a pane answer also only while no other row has been selected since, a
+round trip back to the same row included. So nothing lands on a pane entered since, or on a view entered afresh.
 
 ## Settings
 

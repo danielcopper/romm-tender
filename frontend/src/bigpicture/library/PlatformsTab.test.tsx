@@ -215,6 +215,41 @@ function buttonByText(container: HTMLElement, text: string): HTMLButtonElement |
   return [...container.querySelectorAll("button")].find((b) => b.textContent === text);
 }
 
+/** A list row's sync toggle, found the way {@link focusRow} finds the row. */
+function rowToggle(container: HTMLElement, name: string): HTMLInputElement {
+  const row = [...container.querySelectorAll<HTMLElement>('[data-testid="focusable"]')].find(
+    (el) => el.textContent.includes(name) && el.querySelectorAll('[data-testid="toggle-input"]').length === 1,
+  );
+  if (!row) throw new Error(`no list row for ${name}`);
+  return row.querySelector<HTMLInputElement>('[data-testid="toggle-input"]')!;
+}
+
+async function press(el: HTMLElement): Promise<void> {
+  await act(async () => {
+    fireEvent.click(el);
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+  });
+}
+
+type WriteAnswer = { success: boolean; reason?: string; message?: string };
+
+/** A sync write held open until the test answers it. */
+function held(): { promise: Promise<WriteAnswer>; answer: (value: WriteAnswer) => Promise<void> } {
+  let resolve: (value: WriteAnswer) => void = () => {};
+  const promise = new Promise<WriteAnswer>((r) => {
+    resolve = r;
+  });
+  return {
+    promise,
+    answer: async (value: WriteAnswer) => {
+      await act(async () => {
+        resolve(value);
+        for (let i = 0; i < 6; i++) await Promise.resolve();
+      });
+    },
+  };
+}
+
 /** The pane's own On-disk palette, spelled out here so a silent change to one of
  *  the four states the device pass asked for fails rather than passes. */
 const GREEN = "#5ba32b";
@@ -748,6 +783,101 @@ describe("Library › Platforms", () => {
       await flushAsync();
 
       expect(container.textContent).toContain("Could not read your platforms");
+    });
+
+    describe("a sync write that answers late", () => {
+      const REFUSED = { success: false, reason: "blocked_by_migration", message: "Migration pending" };
+      const listStatus = (c: HTMLElement) => c.querySelector('[data-testid="status-list"]')?.textContent ?? null;
+
+      beforeEach(() => {
+        vi.mocked(backend.getPlatforms).mockResolvedValue({ success: true, platforms: threePlatforms });
+      });
+
+      it("shows what is stored after a platform is switched twice and both writes are refused", async () => {
+        const on = held();
+        const off = held();
+        vi.mocked(backend.savePlatformSync).mockReturnValueOnce(on.promise).mockReturnValueOnce(off.promise);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        await press(rowToggle(container, "Nintendo 64"));
+        await press(rowToggle(container, "Nintendo 64"));
+
+        await on.answer(REFUSED);
+        await off.answer(REFUSED);
+
+        expect(rowToggle(container, "Nintendo 64").checked).toBe(false);
+      });
+
+      it("keeps a platform's newest value when an older write is refused, and shows it once the newest is stored", async () => {
+        const first = held();
+        const second = held();
+        const third = held();
+        vi.mocked(backend.savePlatformSync)
+          .mockReturnValueOnce(first.promise)
+          .mockReturnValueOnce(second.promise)
+          .mockReturnValueOnce(third.promise);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        for (let i = 0; i < 3; i++) await press(rowToggle(container, "Nintendo 64"));
+
+        await first.answer(REFUSED);
+        expect(rowToggle(container, "Nintendo 64").checked).toBe(true);
+        await second.answer({ success: true });
+        await third.answer({ success: true });
+
+        expect(rowToggle(container, "Nintendo 64").checked).toBe(true);
+      });
+
+      it("leaves a platform switched on its own since alone when an earlier Enable all is refused", async () => {
+        const batch = held();
+        vi.mocked(backend.setAllPlatformsSync).mockReturnValueOnce(batch.promise);
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        await press(buttonByText(container, "Enable all")!);
+        // Dreamcast was on before the batch, and is switched off and stored
+        // on its own while the batch is out.
+        await press(rowToggle(container, "Dreamcast"));
+
+        await batch.answer(REFUSED);
+
+        expect(rowToggle(container, "Dreamcast").checked).toBe(false);
+        expect(rowToggle(container, "Game Boy Advance").checked).toBe(true);
+        expect(rowToggle(container, "Nintendo 64").checked).toBe(false);
+        // The single switch is the later write in the list column, and it was
+        // stored, so the batch's refusal has nothing left to say there.
+        expect(listStatus(container)).toBeNull();
+      });
+
+      it("says nothing in the list column once a later write has succeeded", async () => {
+        const first = held();
+        vi.mocked(backend.savePlatformSync).mockReturnValueOnce(first.promise).mockResolvedValueOnce({ success: true });
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        await press(rowToggle(container, "Nintendo 64"));
+        await press(rowToggle(container, "Game Boy Advance"));
+
+        await first.answer({ success: false, message: "Too late" });
+
+        expect(listStatus(container)).toBeNull();
+        expect(rowToggle(container, "Nintendo 64").checked).toBe(false);
+      });
+
+      it("does not take back a later refusal's line when an earlier write succeeds", async () => {
+        const first = held();
+        vi.mocked(backend.savePlatformSync)
+          .mockReturnValueOnce(first.promise)
+          .mockResolvedValueOnce({ success: false, message: "Refused" });
+        const { container } = render(<LibraryPage onBack={vi.fn()} />);
+        await flushAsync();
+        await press(rowToggle(container, "Nintendo 64"));
+        await press(rowToggle(container, "Game Boy Advance"));
+        expect(listStatus(container)).toBe("Refused");
+
+        await first.answer({ success: true });
+
+        expect(listStatus(container)).toBe("Refused");
+        expect(rowToggle(container, "Nintendo 64").checked).toBe(true);
+      });
     });
   });
 
